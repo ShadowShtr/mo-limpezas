@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { Search, Filter, ChevronLeft, ChevronRight, MoreHorizontal } from "lucide-react";
+import { Search, Filter, ChevronLeft, ChevronRight, MoreHorizontal, ExternalLink } from "lucide-react";
+import Link from "next/link";
 import { ColaboradorSheet } from "./sheet";
 
 type Colaborador = {
@@ -177,15 +178,24 @@ export function ColaboradoresTable({ colaboradores, companyId }: Props) {
 
                     {/* Ações */}
                     <td className="px-4 py-3">
-                      <ColaboradorSheet
-                        companyId={companyId}
-                        colaborador={c}
-                        trigger={
-                          <button className="p-1.5 rounded-lg text-[var(--color-text-muted)] hover:bg-[var(--color-background)] hover:text-[var(--color-text-main)] transition-colors">
-                            <MoreHorizontal className="w-4 h-4" />
-                          </button>
-                        }
-                      />
+                      <div className="flex items-center gap-1">
+                        <Link
+                          href={`/dashboard/colaboradores/${c.id}`}
+                          className="p-1.5 rounded-lg text-[var(--color-text-muted)] hover:bg-[var(--color-background)] hover:text-[var(--color-text-main)] transition-colors"
+                          title="Ver detalhe"
+                        >
+                          <ExternalLink className="w-4 h-4" />
+                        </Link>
+                        <ColaboradorSheet
+                          companyId={companyId}
+                          colaborador={c}
+                          trigger={
+                            <button className="p-1.5 rounded-lg text-[var(--color-text-muted)] hover:bg-[var(--color-background)] hover:text-[var(--color-text-main)] transition-colors">
+                              <MoreHorizontal className="w-4 h-4" />
+                            </button>
+                          }
+                        />
+                      </div>
                     </td>
                   </tr>
                 );

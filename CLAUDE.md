@@ -52,7 +52,7 @@ Aplicar as migrations no Supabase (se ainda não foi feito):
 Dashboard → SQL Editor → executar cada ficheiro em `supabase/migrations/` por ordem (001 → 010)
 Depois executar `supabase/seed.sql` para dados de teste.
 
-**Próxima task de código:** `[1.5] Página /colaboradores: tabela + pesquisa + paginação`
+**Próxima task de código:** `[2.1] Página /contratos: lista + criar/editar + preview ocorrências`
 
 ---
 
@@ -88,12 +88,11 @@ Depois executar `supabase/seed.sql` para dados de teste.
 - [x] [1.4] Layout dashboard + loading skeletons + 404
 - [x] [1.5] Página /colaboradores: tabela + pesquisa + filtros + paginação
 - [x] [1.5] Sheet criar/editar colaborador + gestão de skills + enviar convite
-- [ ] [1.5] Detalhe colaborador: histórico + exportação PDF
-- [ ] [1.5] Inicialização saldo de férias por colaboradora
-- [ ] [1.6] Página /clientes + histórico de serviços
-- [ ] [1.7] Página /locais + geocoding + histórico
-- [ ] [1.8] Página /equipas + disponibilidade semanal
-- [ ] [1.8] COMMIT Fase 1
+- [x] [1.5] Detalhe colaborador: histórico de presenças + saldo férias editável
+- [x] [1.6] Página /clientes: tabela + sheet criar/editar
+- [x] [1.7] Página /locais: tabela + sheet com geocoding (Nominatim)
+- [x] [1.8] Página /equipas: grid de cards + sheet com selector de membros
+- [x] [1.8] COMMIT Fase 1
 
 ### FASE 2 — Calendário
 - [ ] [2.1] Página /contratos: lista + criar/editar + preview ocorrências

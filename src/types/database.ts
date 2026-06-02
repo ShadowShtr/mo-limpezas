@@ -24,19 +24,19 @@ export type Database = {
       };
       clients: {
         Row: { id: string; company_id: string; name: string; contact_name: string | null; contact_email: string | null; contact_phone: string | null; nif: string | null; notes: string | null; active: boolean; created_at: string; updated_at: string };
-        Insert: { company_id: string; name: string; contact_name?: string | null; contact_email?: string | null; contact_phone?: string | null };
+        Insert: { company_id: string; name: string; contact_name?: string | null; contact_email?: string | null; contact_phone?: string | null; nif?: string | null; notes?: string | null; active?: boolean };
         Update: { name?: string; contact_name?: string | null; contact_email?: string | null; contact_phone?: string | null; nif?: string | null; notes?: string | null; active?: boolean };
         Relationships: [];
       };
       locations: {
         Row: { id: string; company_id: string; client_id: string; name: string; address: string; lat: number | null; lng: number | null; access_code: string | null; instructions: string | null; hourly_rate: number | null; active: boolean; created_at: string; updated_at: string };
-        Insert: { company_id: string; client_id: string; name: string; address: string; lat?: number | null; lng?: number | null; access_code?: string | null; instructions?: string | null; hourly_rate?: number | null };
+        Insert: { company_id: string; client_id: string; name: string; address: string; lat?: number | null; lng?: number | null; access_code?: string | null; instructions?: string | null; hourly_rate?: number | null; active?: boolean };
         Update: { name?: string; address?: string; lat?: number | null; lng?: number | null; access_code?: string | null; instructions?: string | null; hourly_rate?: number | null; active?: boolean };
         Relationships: [];
       };
       teams: {
         Row: { id: string; company_id: string; name: string; color: string; leader_id: string | null; active: boolean; created_at: string; updated_at: string };
-        Insert: { company_id: string; name: string; color?: string; leader_id?: string | null };
+        Insert: { company_id: string; name: string; color?: string; leader_id?: string | null; active?: boolean };
         Update: { name?: string; color?: string; leader_id?: string | null; active?: boolean };
         Relationships: [];
       };
