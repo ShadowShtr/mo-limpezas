@@ -48,26 +48,21 @@ Lê este ficheiro no início de CADA sessão antes de fazer qualquer coisa.
 ## ⚡ PRÓXIMA TASK A EXECUTAR
 
 **[PRÉ-REQUISITO — AÇÃO DO USER]**
-Preencher o ficheiro `.env.local` com as credenciais reais do Supabase:
-```
-NEXT_PUBLIC_SUPABASE_URL=https://SEU-PROJETO.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=...
-SUPABASE_SERVICE_ROLE_KEY=...
-```
-Depois aplicar as migrations no Supabase:
+Aplicar as migrations no Supabase (se ainda não foi feito):
 Dashboard → SQL Editor → executar cada ficheiro em `supabase/migrations/` por ordem (001 → 010)
 Depois executar `supabase/seed.sql` para dados de teste.
 
-**Próxima task de código:** `[1.3] Página /login + autenticação`
+**Próxima task de código:** `[1.5] Página /colaboradores: tabela + pesquisa + paginação`
 
 ---
 
 ## Lista Completa de Tasks
 
 ### FASE 1 — Fundação
-- [ ] PRÉ-REQUISITO: Preencher .env.local + aplicar migrations no Supabase
+- [x] PRÉ-REQUISITO: .env.local preenchido com credenciais Supabase
+- [ ] PRÉ-REQUISITO: Aplicar migrations no Supabase SQL Editor (001→010) + seed.sql
 - [x] [1.1] Reorganizar repo: mover planning docs para pasta planning/
-- [x] [1.1] Inicializar Next.js 16 + TypeScript na raiz
+- [x] [1.1] Inicializar Next.js 15 + TypeScript na raiz
 - [x] [1.1] Instalar Tailwind v4 + shadcn/ui (tema verde #16A34A)
 - [x] [1.1] Instalar Supabase client + criar lib/supabase/
 - [x] [1.1] Criar .env.local + .gitignore + .env.example
@@ -83,14 +78,14 @@ Depois executar `supabase/seed.sql` para dados de teste.
 - [x] [1.2] Migration 010: views (services_full, monthly_hours, teams_with_members)
 - [x] [1.2] RLS policies em todas as tabelas (incluídas nas migrations)
 - [x] [1.2] Seed.sql: 1 empresa, 3 equipas, 5 clientes, 6 locais
-- [ ] [1.3] Página /login + recuperação de password
-- [ ] [1.3] Magic link colaboradoras + fluxo de convite por email
-- [ ] [1.3] Middleware Next.js: proteger rotas por role
-- [ ] [1.3] Ecrã onboarding colaboradora (boas-vindas + instalar PWA)
-- [ ] [1.4] Dashboard operacional: visão do dia
-- [ ] [1.4] Centro de notificações (sino no header)
-- [ ] [1.4] Sidebar + Header
-- [ ] [1.4] Layout dashboard + loading skeletons + 404
+- [x] [1.3] Página /login + recuperação de password
+- [x] [1.3] Magic link colaboradoras + fluxo de convite (inviteCollaborator action)
+- [x] [1.3] Middleware Next.js: proteger rotas por role
+- [x] [1.3] Ecrã onboarding colaboradora (boas-vindas + instalar PWA)
+- [x] [1.4] Dashboard operacional: visão do dia (KPIs + serviços + alertas)
+- [x] [1.4] Centro de notificações (sino no header com Realtime)
+- [x] [1.4] Sidebar + Header
+- [x] [1.4] Layout dashboard + loading skeletons + 404
 - [ ] [1.5] Página /colaboradores: tabela + pesquisa + paginação
 - [ ] [1.5] Sheet criar/editar colaborador + upload foto + skills
 - [ ] [1.5] Detalhe colaborador: histórico + exportação PDF

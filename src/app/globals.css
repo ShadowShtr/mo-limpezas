@@ -6,7 +6,7 @@
 
 @theme inline {
   /* Fonte */
-  --font-sans:          var(--font-sans);
+  --font-sans:          var(--font-inter);
 
   /* Cor primária — verde Escala */
   --color-primary:          #16A34A;
