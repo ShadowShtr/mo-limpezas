@@ -21,8 +21,8 @@ export default function LoginPage() {
 
     setLoading(false);
 
-    if (result && "error" in result) setMessage({ type: "error", text: result.error });
-    if (result && "success" in result) setMessage({ type: "success", text: result.success });
+    if (result && "error" in result) setMessage({ type: "error", text: result.error as string });
+    if (result && "success" in result) setMessage({ type: "success", text: result.success as string });
   }
 
   return (

@@ -86,8 +86,8 @@ Depois executar `supabase/seed.sql` para dados de teste.
 - [x] [1.4] Centro de notificações (sino no header com Realtime)
 - [x] [1.4] Sidebar + Header
 - [x] [1.4] Layout dashboard + loading skeletons + 404
-- [ ] [1.5] Página /colaboradores: tabela + pesquisa + paginação
-- [ ] [1.5] Sheet criar/editar colaborador + upload foto + skills
+- [x] [1.5] Página /colaboradores: tabela + pesquisa + filtros + paginação
+- [x] [1.5] Sheet criar/editar colaborador + gestão de skills + enviar convite
 - [ ] [1.5] Detalhe colaborador: histórico + exportação PDF
 - [ ] [1.5] Inicialização saldo de férias por colaboradora
 - [ ] [1.6] Página /clientes + histórico de serviços
