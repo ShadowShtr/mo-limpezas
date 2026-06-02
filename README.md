@@ -64,22 +64,34 @@ Deploy:     Vercel
 - [x] Escolha da stack tecnológica
 - [x] Esquema da base de dados (draft)
 - [x] Roadmap de desenvolvimento
-- [ ] Validação do módulo financeiro com o user ← **PRÓXIMO PASSO**
-- [ ] Wireframes aprovados
-- [ ] Início do desenvolvimento
+- [x] Módulo financeiro definido
+- [x] Fluxos operacionais confirmados (calendário, app, substituições, relatórios)
+- [x] Identidade do produto: **Escala**, cor verde `#16A34A`
+- [ ] Sub. férias/natal: junho/novembro ou diluído? ← pendente (menor)
+- [ ] Horas extra: acréscimo percentual? ← pendente (menor)
+- [ ] Início do desenvolvimento ← **PRÓXIMO PASSO**
 
 ---
 
-## Perguntas em Aberto
+## Decisões Principais Tomadas
 
-Antes de iniciar o desenvolvimento, o user precisa responder:
+Ver [docs/08-decisions-log.md](docs/08-decisions-log.md) para o registo completo de todas as decisões.
 
-1. **Salários:** Como são calculados? Hora extra tem valor diferente? Existe subsídio de alimentação?
-2. **Faturação:** A empresa emite faturas? Precisa de integração com software contabilístico (Moloni, InvoiceXpress)?
-3. **Escala:** Quantos colaboradores? Quantos locais/edifícios?
-4. **IVA:** Qual a taxa de IVA aplicada aos serviços?
-5. **Notificações:** SMS ou apenas push/email?
-6. **Âmbito:** Só Mó Limpezas, ou plataforma SaaS para várias empresas?
+| Tema | Decisão |
+|------|---------|
+| Produto | **Escala** — verde `#16A34A`, multi-empresa desde o início (`company_id`) |
+| Colaboradores | Funcionários com contrato, mesmo valor hora para todos |
+| Sub. alimentação | Transferência no salário — `dias × €9,60` configurável |
+| Faturação | Por serviço, IVA 23%, contabilista emite a fatura legal |
+| Calendário | Contratos Fixos + Serviços Pontuais. Editar = só aquela ocorrência. |
+| App mobile | Core do sistema — relógio de ponto GPS (Registar Entrada / Saída) |
+| Notificações | Push na app (principal) + Email (fallback) |
+| Substituições | Gestor escolhe da lista → notifica. Sem cobertura = alerta ao gestor. |
+
+## Perguntas Menores em Aberto
+
+1. **Sub. férias/natal:** Pagos em junho/novembro (padrão PT) ou diluídos mensalmente?
+2. **Horas extra:** Existe acréscimo percentual além do contratado?
 
 ---
 
