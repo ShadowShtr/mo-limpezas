@@ -47,37 +47,42 @@ Lê este ficheiro no início de CADA sessão antes de fazer qualquer coisa.
 
 ## ⚡ PRÓXIMA TASK A EXECUTAR
 
-**[PRÉ-REQUISITO]** O user precisa de criar o projeto Supabase e partilhar:
-- Project URL
-- anon public key
-- service_role key
+**[PRÉ-REQUISITO — AÇÃO DO USER]**
+Preencher o ficheiro `.env.local` com as credenciais reais do Supabase:
+```
+NEXT_PUBLIC_SUPABASE_URL=https://SEU-PROJETO.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=...
+SUPABASE_SERVICE_ROLE_KEY=...
+```
+Depois aplicar as migrations no Supabase:
+Dashboard → SQL Editor → executar cada ficheiro em `supabase/migrations/` por ordem (001 → 010)
+Depois executar `supabase/seed.sql` para dados de teste.
 
-Quando o user fornecer as credenciais, a primeira task de código é:
-
-**[1.1] Reorganizar repo + inicializar Next.js 15**
+**Próxima task de código:** `[1.3] Página /login + autenticação`
 
 ---
 
 ## Lista Completa de Tasks
 
 ### FASE 1 — Fundação
-- [ ] PRÉ-REQUISITO: Credenciais Supabase
-- [ ] [1.1] Reorganizar repo: mover planning docs para pasta planning/
-- [ ] [1.1] Inicializar Next.js 15 + TypeScript na raiz
-- [ ] [1.1] Instalar Tailwind CSS v4 + shadcn/ui (tema verde #16A34A)
-- [ ] [1.1] Instalar Supabase client + criar lib/supabase/
-- [ ] [1.1] Criar .env.local + .gitignore + verificar deploy Vercel
-- [ ] [1.2] Migration: companies + company_settings
-- [ ] [1.2] Migration: profiles (roles, contrato, valor hora, skills)
-- [ ] [1.2] Migration: clients + locations
-- [ ] [1.2] Migration: teams + team_members
-- [ ] [1.2] Migration: contracts (array [{dia, hora, duracao, equipa_id}])
-- [ ] [1.2] Migration: services + service_reinforcements + service_price_audit
-- [ ] [1.2] Migration: timesheets + absences + vacation_requests
-- [ ] [1.2] Migration: invoices + invoice_items + payroll_records
-- [ ] [1.2] Migration: notifications + push_subscriptions
-- [ ] [1.2] RLS policies por role + trigger criar profile
-- [ ] [1.2] Seed.sql: 1 empresa, 3 equipas, 6 colaboradores, 5 clientes, 10 locais
+- [ ] PRÉ-REQUISITO: Preencher .env.local + aplicar migrations no Supabase
+- [x] [1.1] Reorganizar repo: mover planning docs para pasta planning/
+- [x] [1.1] Inicializar Next.js 16 + TypeScript na raiz
+- [x] [1.1] Instalar Tailwind v4 + shadcn/ui (tema verde #16A34A)
+- [x] [1.1] Instalar Supabase client + criar lib/supabase/
+- [x] [1.1] Criar .env.local + .gitignore + .env.example
+- [x] [1.2] Migration 001: companies + company_settings
+- [x] [1.2] Migration 002: profiles + auth trigger
+- [x] [1.2] Migration 003: clients + locations
+- [x] [1.2] Migration 004: teams + team_members
+- [x] [1.2] Migration 005: contracts (schedule_days JSONB por dia)
+- [x] [1.2] Migration 006: services + reinforcements + price_audit
+- [x] [1.2] Migration 007: timesheets + absences + vacation_requests
+- [x] [1.2] Migration 008: invoices + invoice_items + payroll_records
+- [x] [1.2] Migration 009: notifications + push_subscriptions
+- [x] [1.2] Migration 010: views (services_full, monthly_hours, teams_with_members)
+- [x] [1.2] RLS policies em todas as tabelas (incluídas nas migrations)
+- [x] [1.2] Seed.sql: 1 empresa, 3 equipas, 5 clientes, 6 locais
 - [ ] [1.3] Página /login + recuperação de password
 - [ ] [1.3] Magic link colaboradoras + fluxo de convite por email
 - [ ] [1.3] Middleware Next.js: proteger rotas por role
