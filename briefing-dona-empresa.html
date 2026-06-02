@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Briefing — Plataforma Escala | Mó Limpezas</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Segoe UI', Arial, sans-serif;
+    font-size: 13px;
+    color: #1a1a1a;
+    background: #fff;
+    padding: 40px;
+    max-width: 800px;
+    margin: 0 auto;
+  }
+
+  .header {
+    background: #16A34A;
+    color: white;
+    padding: 28px 32px;
+    border-radius: 10px;
+    margin-bottom: 32px;
+  }
+
+  .header h1 {
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: -0.3px;
+  }
+
+  .header p {
+    font-size: 13px;
+    opacity: 0.85;
+    margin-top: 6px;
+  }
+
+  .header .meta {
+    margin-top: 14px;
+    display: flex;
+    gap: 24px;
+    font-size: 12px;
+    opacity: 0.75;
+  }
+
+  .section {
+    margin-bottom: 28px;
+  }
+
+  .section-title {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: #16A34A;
+    border-bottom: 2px solid #16A34A;
+    padding-bottom: 6px;
+    margin-bottom: 14px;
+  }
+
+  .question-block {
+    margin-bottom: 16px;
+    padding: 14px 16px;
+    background: #f9fafb;
+    border-left: 3px solid #d1fae5;
+    border-radius: 0 6px 6px 0;
+  }
+
+  .question-block.confirmed {
+    background: #f0fdf4;
+    border-left-color: #16A34A;
+  }
+
+  .question-block.open {
+    background: #fffbeb;
+    border-left-color: #f59e0b;
+  }
+
+  .question-label {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: #6b7280;
+    margin-bottom: 4px;
+  }
+
+  .question-text {
+    font-size: 13px;
+    font-weight: 600;
+    color: #111827;
+    margin-bottom: 8px;
+    line-height: 1.4;
+  }
+
+  .options {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+  }
+
+  .option {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    font-size: 12px;
+    color: #374151;
+    line-height: 1.4;
+  }
+
+  .checkbox {
+    width: 14px;
+    height: 14px;
+    border: 1.5px solid #9ca3af;
+    border-radius: 3px;
+    flex-shrink: 0;
+    margin-top: 1px;
+  }
+
+  .answer-line {
+    border-bottom: 1px solid #d1d5db;
+    min-height: 28px;
+    margin-top: 6px;
+    width: 100%;
+  }
+
+  .answer-lines {
+    margin-top: 6px;
+  }
+
+  .confirmed-badge {
+    display: inline-block;
+    font-size: 10px;
+    font-weight: 700;
+    color: #16A34A;
+    background: #dcfce7;
+    padding: 2px 8px;
+    border-radius: 10px;
+    margin-bottom: 4px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .confirmed-value {
+    font-size: 13px;
+    color: #166534;
+    font-weight: 600;
+  }
+
+  .summary-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+    font-size: 12px;
+  }
+
+  .summary-table th {
+    background: #f0fdf4;
+    color: #166534;
+    font-weight: 700;
+    padding: 8px 10px;
+    text-align: left;
+    border-bottom: 2px solid #16A34A;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .summary-table td {
+    padding: 8px 10px;
+    border-bottom: 1px solid #f3f4f6;
+    vertical-align: top;
+    line-height: 1.4;
+  }
+
+  .summary-table tr:last-child td {
+    border-bottom: none;
+  }
+
+  .tag-confirmed { color: #16A34A; font-weight: 700; }
+  .tag-open { color: #d97706; font-weight: 700; }
+
+  .footer {
+    margin-top: 36px;
+    padding-top: 16px;
+    border-top: 1px solid #e5e7eb;
+    font-size: 11px;
+    color: #9ca3af;
+    text-align: center;
+  }
+
+  .notes-box {
+    border: 1.5px solid #e5e7eb;
+    border-radius: 8px;
+    padding: 14px;
+    min-height: 80px;
+    margin-top: 8px;
+    background: #fafafa;
+  }
+
+  @media print {
+    body { padding: 20px; font-size: 12px; }
+    .header { border-radius: 6px; }
+    .question-block { break-inside: avoid; }
+    .section { break-inside: avoid; }
+    @page { margin: 1.5cm; }
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>Briefing — Plataforma Escala</h1>
+  <p>Questionário para a Dona da Empresa — Mó Limpezas</p>
+  <div class="meta">
+    <span>📅 Data: _____ / _____ / _______</span>
+    <span>👤 Entrevistado/a: _______________________</span>
+    <span>🕐 Duração estimada: 20–30 min</span>
+  </div>
+</div>
+
+<!-- RESUMO DO QUE JÁ SABEMOS -->
+<div class="section">
+  <div class="section-title">✅ Já Confirmado — Validar com a Dona</div>
+
+  <table class="summary-table">
+    <thead>
+      <tr>
+        <th>Tema</th>
+        <th>Decisão tomada</th>
+        <th>Confirmar?</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>Tipo de contrato colaboradores</strong></td>
+        <td>Contrato de trabalho (funcionários com SS e IRS)</td>
+        <td><div class="checkbox"></div></td>
+      </tr>
+      <tr>
+        <td><strong>Estrutura salarial</strong></td>
+        <td>Mesmo valor hora para todos os colaboradores</td>
+        <td><div class="checkbox"></div></td>
+      </tr>
+      <tr>
+        <td><strong>Subsídio de alimentação</strong></td>
+        <td>Transferência junto ao salário (€9,60/dia — ajustável)</td>
+        <td><div class="checkbox"></div></td>
+      </tr>
+      <tr>
+        <td><strong>Faturação a clientes</strong></td>
+        <td>Por serviço individual; contabilista emite a fatura legal</td>
+        <td><div class="checkbox"></div></td>
+      </tr>
+      <tr>
+        <td><strong>IVA dos serviços</strong></td>
+        <td>23% (comércio e escritórios)</td>
+        <td><div class="checkbox"></div></td>
+      </tr>
+      <tr>
+        <td><strong>Tipo de clientes maioritários</strong></td>
+        <td>Comércio / Escritórios</td>
+        <td><div class="checkbox"></div></td>
+      </tr>
+      <tr>
+        <td><strong>Escala operacional</strong></td>
+        <td>4–8 equipas, 20–60 locais</td>
+        <td><div class="checkbox"></div></td>
+      </tr>
+      <tr>
+        <td><strong>Horas extra</strong></td>
+        <td>Pagas com acréscimo (padrão 25%)</td>
+        <td><div class="checkbox"></div></td>
+      </tr>
+      <tr>
+        <td><strong>Stock de materiais</strong></td>
+        <td>Empresa fornece mas não precisa controlar no sistema</td>
+        <td><div class="checkbox"></div></td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- FINANCEIRO — QUESTÕES EM ABERTO -->
+<div class="section">
+  <div class="section-title">💰 Módulo Financeiro — Em Aberto</div>
+
+  <div class="question-block open">
+    <div class="question-label">Questão 1 — Subsídio de Férias e Natal</div>
+    <div class="question-text">Os subsídios de férias (junho) e natal (novembro) são pagos separadamente ou diluídos no salário mensal?</div>
+    <div class="options">
+      <div class="option"><div class="checkbox"></div> <span><strong>Separados em junho e novembro</strong> — um mês extra em cada. É o mais comum em Portugal e o que os colaboradores esperam.</span></div>
+      <div class="option"><div class="checkbox"></div> <span><strong>Diluídos mensalmente</strong> — o salário mensal já inclui 1/14 dos subsídios. Mais fácil de gerir mas menos comum.</span></div>
+    </div>
+    <div class="answer-lines">
+      <div style="font-size:11px; color:#6b7280; margin-top:8px;">Notas adicionais:</div>
+      <div class="answer-line"></div>
+    </div>
+  </div>
+
+  <div class="question-block open">
+    <div class="question-label">Questão 2 — Taxa de Hora Extra</div>
+    <div class="question-text">Quando um colaborador trabalha além das horas contratadas no mês, qual o acréscimo pago?</div>
+    <div class="options">
+      <div class="option"><div class="checkbox"></div> <span><strong>25%</strong> — mínimo legal em Portugal (primeiras 100h anuais)</span></div>
+      <div class="option"><div class="checkbox"></div> <span><strong>50%</strong> — acima de 100h extras anuais</span></div>
+      <div class="option"><div class="checkbox"></div> <span><strong>Valor fixo da empresa:</strong> _______% </span></div>
+      <div class="option"><div class="checkbox"></div> <span><strong>Não aplicável</strong> — nunca há horas extra (escala é sempre ajustada)</span></div>
+    </div>
+  </div>
+
+  <div class="question-block open">
+    <div class="question-label">Questão 3 — Valor Hora Atual</div>
+    <div class="question-text">Qual o valor hora pago atualmente aos colaboradores? (Para configurar o sistema)</div>
+    <div class="answer-line"></div>
+    <div style="font-size:11px; color:#6b7280; margin-top:6px;">€ _______ / hora bruto</div>
+  </div>
+
+  <div class="question-block open">
+    <div class="question-label">Questão 4 — Valor Hora Cobrado aos Clientes</div>
+    <div class="question-text">Qual o preço hora cobrado aos clientes? É o mesmo para todos ou varia por cliente/tipo de serviço?</div>
+    <div class="options">
+      <div class="option"><div class="checkbox"></div> <span><strong>Mesmo preço para todos os clientes:</strong> € _______ / hora por pessoa</span></div>
+      <div class="option"><div class="checkbox"></div> <span><strong>Preço diferente por cliente</strong> — cada cliente tem o seu preço negociado</span></div>
+      <div class="option"><div class="checkbox"></div> <span><strong>Preço diferente por tipo de serviço</strong> — limpeza regular ≠ pós-obra ≠ vidros</span></div>
+    </div>
+    <div class="answer-lines">
+      <div style="font-size:11px; color:#6b7280; margin-top:8px;">Notas:</div>
+      <div class="answer-line"></div>
+    </div>
+  </div>
+
+  <div class="question-block open">
+    <div class="question-label">Questão 5 — Como é feito o Pagamento dos Colaboradores?</div>
+    <div class="question-text">Qual o dia do mês em que é feito o pagamento? E como (transferência bancária individual)?</div>
+    <div class="options">
+      <div class="option"><div class="checkbox"></div> <span><strong>Transferência bancária até ao dia _____ do mês</strong></span></div>
+      <div class="option"><div class="checkbox"></div> <span><strong>Outro método:</strong> _______________________</span></div>
+    </div>
+    <div style="font-size:11px; color:#6b7280; margin-top:8px; font-style:italic;">O sistema vai ter IBAN de cada colaborador para gerar a lista de transferências do mês.</div>
+  </div>
+</div>
+
+<!-- OPERACIONAL -->
+<div class="section">
+  <div class="section-title">⚙️ Operacional — Detalhes a Confirmar</div>
+
+  <div class="question-block open">
+    <div class="question-label">Questão 6 — Horário de Trabalho</div>
+    <div class="question-text">Qual o horário habitual de início e fim dos serviços? Há serviços noturnos ou ao fim de semana?</div>
+    <div class="options">
+      <div class="option"><div class="checkbox"></div> <span>Horário mais cedo do dia: _______ h</span></div>
+      <div class="option"><div class="checkbox"></div> <span>Horário mais tarde do dia: _______ h</span></div>
+      <div class="option"><div class="checkbox"></div> <span><strong>Serviços ao fim de semana:</strong> Sim / Não — Se sim, qual dia: ____________</span></div>
+    </div>
+  </div>
+
+  <div class="question-block open">
+    <div class="question-label">Questão 7 — Dimensão das Equipas</div>
+    <div class="question-text">Qual o número habitual de pessoas por equipa? As equipas têm sempre o mesmo número ou varia?</div>
+    <div class="options">
+      <div class="option"><div class="checkbox"></div> <span><strong>1 pessoa por equipa</strong></span></div>
+      <div class="option"><div class="checkbox"></div> <span><strong>2 pessoas por equipa</strong></span></div>
+      <div class="option"><div class="checkbox"></div> <span><strong>3 pessoas por equipa</strong></span></div>
+      <div class="option"><div class="checkbox"></div> <span><strong>Varia</strong> — depende do serviço / edifício</span></div>
+    </div>
+  </div>
+
+  <div class="question-block open">
+    <div class="question-label">Questão 8 — Comunicação com Clientes</div>
+    <div class="question-text">Como é feita a comunicação com os clientes hoje? Quando há uma alteração de serviço, como o cliente é avisado?</div>
+    <div class="options">
+      <div class="option"><div class="checkbox"></div> <span>WhatsApp / Mensagem</span></div>
+      <div class="option"><div class="checkbox"></div> <span>Telefonema</span></div>
+      <div class="option"><div class="checkbox"></div> <span>Email</span></div>
+    </div>
+    <div style="font-size:11px; color:#6b7280; margin-top:6px; font-style:italic;">Pergunta: queres que o sistema envie email automático ao cliente quando um serviço é criado, alterado ou cancelado?</div>
+    <div class="options" style="margin-top:6px;">
+      <div class="option"><div class="checkbox"></div> <span><strong>Sim</strong> — email automático ao cliente</span></div>
+      <div class="option"><div class="checkbox"></div> <span><strong>Não</strong> — a empresa comunica ela mesma</span></div>
+    </div>
+  </div>
+
+  <div class="question-block open">
+    <div class="question-label">Questão 9 — Dias de Férias Anuais</div>
+    <div class="question-text">Quantos dias de férias têm os colaboradores por ano? (Mínimo legal PT: 22 dias úteis)</div>
+    <div class="options">
+      <div class="option"><div class="checkbox"></div> <span><strong>22 dias úteis</strong> (mínimo legal)</span></div>
+      <div class="option"><div class="checkbox"></div> <span><strong>Outro:</strong> _______ dias</span></div>
+    </div>
+  </div>
+
+  <div class="question-block open">
+    <div class="question-label">Questão 10 — Zona Geográfica</div>
+    <div class="question-text">Em que zona(s) do país operam? Será útil para configurar o mapa inicial.</div>
+    <div class="answer-line"></div>
+    <div style="font-size:11px; color:#6b7280; margin-top:4px;">Ex: Grande Porto, Lisboa, Braga...</div>
+  </div>
+</div>
+
+<!-- COLABORADORES -->
+<div class="section">
+  <div class="section-title">👤 Colaboradores e Equipas</div>
+
+  <div class="question-block open">
+    <div class="question-label">Questão 11 — Dados a Registar por Colaborador</div>
+    <div class="question-text">Além de nome, telefone e email, que outros dados são importantes guardar? (Selecionar todos que se aplicam)</div>
+    <div class="options">
+      <div class="option"><div class="checkbox"></div> <span>NIF</span></div>
+      <div class="option"><div class="checkbox"></div> <span>IBAN (para transferência de salário)</span></div>
+      <div class="option"><div class="checkbox"></div> <span>Número de Segurança Social</span></div>
+      <div class="option"><div class="checkbox"></div> <span>Data de nascimento</span></div>
+      <div class="option"><div class="checkbox"></div> <span>Morada de residência</span></div>
+      <div class="option"><div class="checkbox"></div> <span>Carta de condução (tem ou não tem)</span></div>
+      <div class="option"><div class="checkbox"></div> <span>Outros: _______________________________</span></div>
+    </div>
+  </div>
+
+  <div class="question-block open">
+    <div class="question-label">Questão 12 — Nome das Equipas Atuais</div>
+    <div class="question-text">Listar as equipas existentes e quantas pessoas cada uma tem. (Será o seed data inicial do sistema)</div>
+    <div class="notes-box">
+      <div style="color:#9ca3af; font-size:11px;">Ex: Equipa 01 — 3 pessoas (Ana, Rui, Maria)</div>
+    </div>
+  </div>
+</div>
+
+<!-- NOTAS FINAIS -->
+<div class="section">
+  <div class="section-title">📝 Notas Gerais / Dúvidas da Dona</div>
+  <div class="notes-box"></div>
+</div>
+
+<div class="section">
+  <div class="section-title">✍️ Assinatura e Aprovação</div>
+  <div style="display:flex; gap:60px; margin-top:16px;">
+    <div>
+      <div style="font-size:11px; color:#6b7280; margin-bottom:4px;">Data:</div>
+      <div style="border-bottom:1px solid #d1d5db; width:180px; height:28px;"></div>
+    </div>
+    <div>
+      <div style="font-size:11px; color:#6b7280; margin-bottom:4px;">Nome da Dona da Empresa:</div>
+      <div style="border-bottom:1px solid #d1d5db; width:240px; height:28px;"></div>
+    </div>
+  </div>
+</div>
+
+<div class="footer">
+  Plataforma Escala — Desenvolvida para Mó Limpezas | Documento de Briefing v1.0 | 2026
+</div>
+
+</body>
+</html>
