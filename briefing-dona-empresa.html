@@ -2,453 +2,792 @@
 <html lang="pt">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Briefing — Plataforma Escala | Mó Limpezas</title>
+<title>Briefing Completo — Plataforma Escala | Mó Limpezas</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Segoe UI', Arial, sans-serif; font-size: 12.5px; color: #1a1a1a; background: #fff; padding: 36px; max-width: 820px; margin: 0 auto; }
 
-  body {
-    font-family: 'Segoe UI', Arial, sans-serif;
-    font-size: 13px;
-    color: #1a1a1a;
-    background: #fff;
-    padding: 40px;
-    max-width: 800px;
-    margin: 0 auto;
-  }
+  .header { background: #15803d; color: white; padding: 26px 30px; border-radius: 10px; margin-bottom: 30px; }
+  .header h1 { font-size: 20px; font-weight: 700; }
+  .header p { font-size: 12px; opacity: 0.85; margin-top: 5px; }
+  .header .meta { margin-top: 14px; display: flex; gap: 30px; font-size: 11px; opacity: 0.75; flex-wrap: wrap; }
 
-  .header {
-    background: #16A34A;
-    color: white;
-    padding: 28px 32px;
-    border-radius: 10px;
-    margin-bottom: 32px;
-  }
+  .section { margin-bottom: 26px; page-break-inside: avoid; }
+  .section-title { font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: #15803d; border-bottom: 2px solid #15803d; padding-bottom: 5px; margin-bottom: 12px; }
 
-  .header h1 {
-    font-size: 22px;
-    font-weight: 700;
-    letter-spacing: -0.3px;
-  }
+  .q { margin-bottom: 13px; border-radius: 6px; overflow: hidden; border: 1px solid #e5e7eb; }
+  .q-head { padding: 9px 13px 5px; display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
+  .q-num { font-size: 10px; font-weight: 700; color: #6b7280; white-space: nowrap; }
+  .q-text { font-size: 12.5px; font-weight: 600; color: #111827; line-height: 1.4; flex: 1; }
+  .q-body { padding: 0 13px 10px; }
 
-  .header p {
-    font-size: 13px;
-    opacity: 0.85;
-    margin-top: 6px;
-  }
+  .status-done { background: #f0fdf4; }
+  .status-done .q-head { background: #dcfce7; }
+  .status-open { background: #fffbeb; }
+  .status-open .q-head { background: #fef3c7; }
 
-  .header .meta {
-    margin-top: 14px;
-    display: flex;
-    gap: 24px;
-    font-size: 12px;
-    opacity: 0.75;
-  }
+  .badge { font-size: 9.5px; font-weight: 700; padding: 2px 7px; border-radius: 10px; white-space: nowrap; }
+  .badge-done { background: #16a34a; color: white; }
+  .badge-open { background: #d97706; color: white; }
 
-  .section {
-    margin-bottom: 28px;
-  }
+  .options { margin-top: 7px; display: flex; flex-direction: column; gap: 4px; }
+  .opt { display: flex; align-items: flex-start; gap: 8px; font-size: 12px; color: #374151; line-height: 1.4; padding: 3px 0; }
+  .opt.selected { color: #166534; font-weight: 600; }
 
-  .section-title {
-    font-size: 11px;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 1px;
-    color: #16A34A;
-    border-bottom: 2px solid #16A34A;
-    padding-bottom: 6px;
-    margin-bottom: 14px;
-  }
+  .box { width: 13px; height: 13px; border: 1.5px solid #9ca3af; border-radius: 3px; flex-shrink: 0; margin-top: 1px; background: white; }
+  .box.checked { background: #16a34a; border-color: #16a34a; position: relative; }
+  .box.checked::after { content: '✓'; color: white; font-size: 9px; position: absolute; top: -1px; left: 1px; font-weight: 900; }
 
-  .question-block {
-    margin-bottom: 16px;
-    padding: 14px 16px;
-    background: #f9fafb;
-    border-left: 3px solid #d1fae5;
-    border-radius: 0 6px 6px 0;
-  }
+  .answer-line { border-bottom: 1px solid #d1d5db; min-height: 24px; margin-top: 5px; }
+  .notes-box { border: 1px solid #e5e7eb; border-radius: 5px; min-height: 56px; margin-top: 6px; padding: 6px; background: #fafafa; font-size: 11px; color: #9ca3af; }
 
-  .question-block.confirmed {
-    background: #f0fdf4;
-    border-left-color: #16A34A;
-  }
+  table.summary { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 6px; }
+  table.summary th { background: #f0fdf4; color: #166534; font-weight: 700; padding: 7px 10px; text-align: left; border-bottom: 2px solid #16a34a; font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.4px; }
+  table.summary td { padding: 7px 10px; border-bottom: 1px solid #f3f4f6; vertical-align: middle; line-height: 1.4; }
+  table.summary tr:last-child td { border-bottom: none; }
 
-  .question-block.open {
-    background: #fffbeb;
-    border-left-color: #f59e0b;
-  }
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .note-small { font-size: 10.5px; color: #6b7280; font-style: italic; margin-top: 5px; padding: 5px 8px; background: #f8fafc; border-radius: 4px; border-left: 2px solid #cbd5e1; }
 
-  .question-label {
-    font-size: 11px;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    color: #6b7280;
-    margin-bottom: 4px;
-  }
-
-  .question-text {
-    font-size: 13px;
-    font-weight: 600;
-    color: #111827;
-    margin-bottom: 8px;
-    line-height: 1.4;
-  }
-
-  .options {
-    display: flex;
-    flex-direction: column;
-    gap: 5px;
-  }
-
-  .option {
-    display: flex;
-    align-items: flex-start;
-    gap: 8px;
-    font-size: 12px;
-    color: #374151;
-    line-height: 1.4;
-  }
-
-  .checkbox {
-    width: 14px;
-    height: 14px;
-    border: 1.5px solid #9ca3af;
-    border-radius: 3px;
-    flex-shrink: 0;
-    margin-top: 1px;
-  }
-
-  .answer-line {
-    border-bottom: 1px solid #d1d5db;
-    min-height: 28px;
-    margin-top: 6px;
-    width: 100%;
-  }
-
-  .answer-lines {
-    margin-top: 6px;
-  }
-
-  .confirmed-badge {
-    display: inline-block;
-    font-size: 10px;
-    font-weight: 700;
-    color: #16A34A;
-    background: #dcfce7;
-    padding: 2px 8px;
-    border-radius: 10px;
-    margin-bottom: 4px;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-  }
-
-  .confirmed-value {
-    font-size: 13px;
-    color: #166534;
-    font-weight: 600;
-  }
-
-  .summary-table {
-    width: 100%;
-    border-collapse: collapse;
-    margin-top: 8px;
-    font-size: 12px;
-  }
-
-  .summary-table th {
-    background: #f0fdf4;
-    color: #166534;
-    font-weight: 700;
-    padding: 8px 10px;
-    text-align: left;
-    border-bottom: 2px solid #16A34A;
-    font-size: 11px;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-  }
-
-  .summary-table td {
-    padding: 8px 10px;
-    border-bottom: 1px solid #f3f4f6;
-    vertical-align: top;
-    line-height: 1.4;
-  }
-
-  .summary-table tr:last-child td {
-    border-bottom: none;
-  }
-
-  .tag-confirmed { color: #16A34A; font-weight: 700; }
-  .tag-open { color: #d97706; font-weight: 700; }
-
-  .footer {
-    margin-top: 36px;
-    padding-top: 16px;
-    border-top: 1px solid #e5e7eb;
-    font-size: 11px;
-    color: #9ca3af;
-    text-align: center;
-  }
-
-  .notes-box {
-    border: 1.5px solid #e5e7eb;
-    border-radius: 8px;
-    padding: 14px;
-    min-height: 80px;
-    margin-top: 8px;
-    background: #fafafa;
-  }
+  .page-break { page-break-before: always; }
+  .footer { margin-top: 30px; padding-top: 14px; border-top: 1px solid #e5e7eb; font-size: 10.5px; color: #9ca3af; text-align: center; }
+  .sign-row { display: flex; gap: 40px; margin-top: 14px; }
+  .sign-field { flex: 1; }
+  .sign-label { font-size: 10.5px; color: #6b7280; margin-bottom: 3px; }
+  .sign-line { border-bottom: 1px solid #9ca3af; height: 26px; }
 
   @media print {
-    body { padding: 20px; font-size: 12px; }
-    .header { border-radius: 6px; }
-    .question-block { break-inside: avoid; }
-    .section { break-inside: avoid; }
-    @page { margin: 1.5cm; }
+    body { padding: 16px; }
+    .q { page-break-inside: avoid; }
+    .section { page-break-inside: avoid; }
+    @page { margin: 1.2cm 1.5cm; size: A4; }
   }
 </style>
 </head>
 <body>
 
 <div class="header">
-  <h1>Briefing — Plataforma Escala</h1>
-  <p>Questionário para a Dona da Empresa — Mó Limpezas</p>
+  <h1>Briefing Completo — Plataforma Escala</h1>
+  <p>Documento de levantamento de requisitos para a Mó Limpezas. Todas as perguntas do planeamento com respostas já dadas e questões ainda em aberto.</p>
   <div class="meta">
     <span>📅 Data: _____ / _____ / _______</span>
-    <span>👤 Entrevistado/a: _______________________</span>
-    <span>🕐 Duração estimada: 20–30 min</span>
+    <span>👤 Nome: ___________________________</span>
+    <span>🕐 Duração estimada: 30–45 min</span>
   </div>
 </div>
 
-<!-- RESUMO DO QUE JÁ SABEMOS -->
+<!-- ═══════════════════════════════════════════════════════════
+     SECÇÃO 1 — PRODUTO E ESTRATÉGIA
+════════════════════════════════════════════════════════════════ -->
 <div class="section">
-  <div class="section-title">✅ Já Confirmado — Validar com a Dona</div>
+  <div class="section-title">1. Produto e Estratégia</div>
 
-  <table class="summary-table">
-    <thead>
-      <tr>
-        <th>Tema</th>
-        <th>Decisão tomada</th>
-        <th>Confirmar?</th>
-      </tr>
-    </thead>
-    <tbody>
-      <tr>
-        <td><strong>Tipo de contrato colaboradores</strong></td>
-        <td>Contrato de trabalho (funcionários com SS e IRS)</td>
-        <td><div class="checkbox"></div></td>
-      </tr>
-      <tr>
-        <td><strong>Estrutura salarial</strong></td>
-        <td>Mesmo valor hora para todos os colaboradores</td>
-        <td><div class="checkbox"></div></td>
-      </tr>
-      <tr>
-        <td><strong>Subsídio de alimentação</strong></td>
-        <td>Transferência junto ao salário (€9,60/dia — ajustável)</td>
-        <td><div class="checkbox"></div></td>
-      </tr>
-      <tr>
-        <td><strong>Faturação a clientes</strong></td>
-        <td>Por serviço individual; contabilista emite a fatura legal</td>
-        <td><div class="checkbox"></div></td>
-      </tr>
-      <tr>
-        <td><strong>IVA dos serviços</strong></td>
-        <td>23% (comércio e escritórios)</td>
-        <td><div class="checkbox"></div></td>
-      </tr>
-      <tr>
-        <td><strong>Tipo de clientes maioritários</strong></td>
-        <td>Comércio / Escritórios</td>
-        <td><div class="checkbox"></div></td>
-      </tr>
-      <tr>
-        <td><strong>Escala operacional</strong></td>
-        <td>4–8 equipas, 20–60 locais</td>
-        <td><div class="checkbox"></div></td>
-      </tr>
-      <tr>
-        <td><strong>Horas extra</strong></td>
-        <td>Pagas com acréscimo (padrão 25%)</td>
-        <td><div class="checkbox"></div></td>
-      </tr>
-      <tr>
-        <td><strong>Stock de materiais</strong></td>
-        <td>Empresa fornece mas não precisa controlar no sistema</td>
-        <td><div class="checkbox"></div></td>
-      </tr>
-    </tbody>
-  </table>
+  <div class="q status-done">
+    <div class="q-head">
+      <div><div class="q-num">Q1</div><div class="q-text">A plataforma é exclusivamente para a Mó Limpezas, ou com possibilidade de expandir para outras empresas no futuro (modelo SaaS)?</div></div>
+      <span class="badge badge-done">Respondido</span>
+    </div>
+    <div class="q-body">
+      <div class="options">
+        <div class="opt"><div class="box"></div>Só para a Mó Limpezas — sistema interno fechado</div>
+        <div class="opt selected"><div class="box checked"></div><strong>Mó Limpezas primeiro, SaaS depois</strong> — preparar arquitetura para escalar a outras empresas</div>
+        <div class="opt"><div class="box"></div>SaaS desde o início — várias empresas em simultâneo</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="q status-done">
+    <div class="q-head">
+      <div><div class="q-num">Q2</div><div class="q-text">Nome e identidade visual da plataforma?</div></div>
+      <span class="badge badge-done">Respondido</span>
+    </div>
+    <div class="q-body">
+      <div class="options">
+        <div class="opt selected"><div class="box checked"></div><strong>Nome: Escala</strong> — cor principal verde #16A34A</div>
+        <div class="opt"><div class="box"></div>Turno</div>
+        <div class="opt"><div class="box"></div>Shifta</div>
+        <div class="opt"><div class="box"></div>Outro: _______________</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="q status-done">
+    <div class="q-head">
+      <div><div class="q-num">Q3</div><div class="q-text">Qual a escala atual (ou prevista para o arranque) da operação?</div></div>
+      <span class="badge badge-done">Respondido</span>
+    </div>
+    <div class="q-body">
+      <div class="options">
+        <div class="opt"><div class="box"></div>Pequena: 1–3 equipas, até 20 locais</div>
+        <div class="opt selected"><div class="box checked"></div><strong>Média: 4–8 equipas, 20–60 locais</strong></div>
+        <div class="opt"><div class="box"></div>Grande: 9+ equipas, 60+ locais</div>
+      </div>
+      <div class="note-small">Confirmar: quantas equipas exatamente? Quantos locais? _____ equipas · _____ locais</div>
+    </div>
+  </div>
+
 </div>
 
-<!-- FINANCEIRO — QUESTÕES EM ABERTO -->
+<!-- ═══════════════════════════════════════════════════════════
+     SECÇÃO 2 — COLABORADORES E CONTRATOS
+════════════════════════════════════════════════════════════════ -->
 <div class="section">
-  <div class="section-title">💰 Módulo Financeiro — Em Aberto</div>
+  <div class="section-title">2. Colaboradores e Contratos de Trabalho</div>
 
-  <div class="question-block open">
-    <div class="question-label">Questão 1 — Subsídio de Férias e Natal</div>
-    <div class="question-text">Os subsídios de férias (junho) e natal (novembro) são pagos separadamente ou diluídos no salário mensal?</div>
-    <div class="options">
-      <div class="option"><div class="checkbox"></div> <span><strong>Separados em junho e novembro</strong> — um mês extra em cada. É o mais comum em Portugal e o que os colaboradores esperam.</span></div>
-      <div class="option"><div class="checkbox"></div> <span><strong>Diluídos mensalmente</strong> — o salário mensal já inclui 1/14 dos subsídios. Mais fácil de gerir mas menos comum.</span></div>
+  <div class="q status-done">
+    <div class="q-head">
+      <div><div class="q-num">Q4</div><div class="q-text">Qual o tipo de vínculo laboral dos colaboradores?</div></div>
+      <span class="badge badge-done">Respondido</span>
     </div>
-    <div class="answer-lines">
-      <div style="font-size:11px; color:#6b7280; margin-top:8px;">Notas adicionais:</div>
+    <div class="q-body">
+      <div class="options">
+        <div class="opt selected"><div class="box checked"></div><strong>Contrato de trabalho (funcionários)</strong> — têm SS, IRS, subsídio de férias e natal</div>
+        <div class="opt"><div class="box"></div>Recibos verdes (independentes) — emitem fatura/recibo mensalmente</div>
+        <div class="opt"><div class="box"></div>Misto — parte funcionários, parte recibos verdes</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="q status-done">
+    <div class="q-head">
+      <div><div class="q-num">Q5</div><div class="q-text">Como funciona a estrutura salarial?</div></div>
+      <span class="badge badge-done">Respondido</span>
+    </div>
+    <div class="q-body">
+      <div class="options">
+        <div class="opt"><div class="box"></div>Salário fixo mensal por colaborador</div>
+        <div class="opt"><div class="box"></div>Valor hora individual — cada um tem o seu €/hora</div>
+        <div class="opt selected"><div class="box checked"></div><strong>Mesmo valor hora para todos</strong> — campo global configurável pelo administrador</div>
+      </div>
+      <div class="note-small">Qual o valor hora atual? € _______ / hora bruto</div>
+    </div>
+  </div>
+
+  <div class="q status-done">
+    <div class="q-head">
+      <div><div class="q-num">Q6</div><div class="q-text">Como é pago o subsídio de alimentação?</div></div>
+      <span class="badge badge-done">Respondido</span>
+    </div>
+    <div class="q-body">
+      <div class="options">
+        <div class="opt selected"><div class="box checked"></div><strong>Transferência junto ao salário</strong> — calculado por dias trabalhados × valor/dia (padrão €9,60)</div>
+        <div class="opt"><div class="box"></div>Cartão refeição (Ticket, Coverflex...) — carregado separadamente</div>
+        <div class="opt"><div class="box"></div>Não existe subsídio de alimentação</div>
+      </div>
+      <div class="note-small">Valor por dia utilizado atualmente? € _______ / dia</div>
+    </div>
+  </div>
+
+  <div class="q status-open">
+    <div class="q-head">
+      <div><div class="q-num">Q7</div><div class="q-text">Os subsídios de férias (junho) e natal (novembro) são pagos separadamente ou diluídos mensalmente?</div></div>
+      <span class="badge badge-open">Em Aberto</span>
+    </div>
+    <div class="q-body">
+      <div class="options">
+        <div class="opt"><div class="box"></div>Separados em junho e novembro — um mês extra em cada (padrão em Portugal)</div>
+        <div class="opt"><div class="box"></div>Diluídos mensalmente — o salário mensal já inclui 1/14 de cada subsídio</div>
+        <div class="opt"><div class="box"></div>Ainda não definido</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="q status-open">
+    <div class="q-head">
+      <div><div class="q-num">Q8</div><div class="q-text">Quando um colaborador trabalha mais horas do que as contratadas, o que acontece?</div></div>
+      <span class="badge badge-open">Em Aberto</span>
+    </div>
+    <div class="q-body">
+      <div class="options">
+        <div class="opt"><div class="box"></div>Banco de horas — acumula e compensa noutro mês (folgas ou redução de horas)</div>
+        <div class="opt selected"><div class="box checked"></div><strong>Hora extra paga</strong> — com acréscimo. Qual a percentagem? <span style="display:inline-block; border-bottom:1px solid #9ca3af; width:40px;">&nbsp;</span> % (mínimo legal PT: 25%)</div>
+        <div class="opt"><div class="box"></div>Não acontece — a escala é sempre ajustada ao contrato</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="q status-open">
+    <div class="q-head">
+      <div><div class="q-num">Q9</div><div class="q-text">Quantos dias de férias por ano têm os colaboradores?</div></div>
+      <span class="badge badge-open">Em Aberto</span>
+    </div>
+    <div class="q-body">
+      <div class="options">
+        <div class="opt"><div class="box"></div>22 dias úteis (mínimo legal português)</div>
+        <div class="opt"><div class="box"></div>Outro: _______ dias úteis</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="q status-open">
+    <div class="q-head">
+      <div><div class="q-num">Q10</div><div class="q-text">Que dados são importantes guardar por colaborador? (assinalar todos)</div></div>
+      <span class="badge badge-open">Em Aberto</span>
+    </div>
+    <div class="q-body">
+      <div class="options" style="display:grid; grid-template-columns: 1fr 1fr; gap:4px;">
+        <div class="opt"><div class="box"></div>Nome completo</div>
+        <div class="opt"><div class="box"></div>Telefone</div>
+        <div class="opt"><div class="box"></div>Email</div>
+        <div class="opt"><div class="box"></div>NIF</div>
+        <div class="opt"><div class="box"></div>IBAN (para transferência de salário)</div>
+        <div class="opt"><div class="box"></div>Nº Segurança Social</div>
+        <div class="opt"><div class="box"></div>Data de nascimento</div>
+        <div class="opt"><div class="box"></div>Morada de residência</div>
+        <div class="opt"><div class="box"></div>Carta de condução (sim/não)</div>
+        <div class="opt"><div class="box"></div>Foto de perfil</div>
+      </div>
+      <div style="margin-top:6px; font-size:11px; color:#374151;">Outros campos necessários: <div class="answer-line"></div></div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════
+     SECÇÃO 3 — EQUIPAS E OPERAÇÃO
+════════════════════════════════════════════════════════════════ -->
+<div class="section page-break">
+  <div class="section-title">3. Equipas e Operação Diária</div>
+
+  <div class="q status-done">
+    <div class="q-head">
+      <div><div class="q-num">Q11</div><div class="q-text">Quando um serviço é atribuído a uma equipa, como são definidos os colaboradores?</div></div>
+      <span class="badge badge-done">Respondido</span>
+    </div>
+    <div class="q-body">
+      <div class="options">
+        <div class="opt selected"><div class="box checked"></div><strong>A equipa toda vai sempre junta</strong> — é uma unidade indivisível</div>
+        <div class="opt"><div class="box"></div>Gestor escolhe quais membros vão neste serviço específico</div>
+        <div class="opt"><div class="box"></div>Equipa é só um rótulo — gestor escolhe individualmente sempre</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="q status-done">
+    <div class="q-head">
+      <div><div class="q-num">Q12</div><div class="q-text">O que acontece quando um serviço precisa de mais pessoas do que a equipa tem?</div></div>
+      <span class="badge badge-done">Respondido</span>
+    </div>
+    <div class="q-body">
+      <div class="options">
+        <div class="opt"><div class="box"></div>Juntam-se duas equipas no mesmo serviço</div>
+        <div class="opt"><div class="box"></div>A equipa tem tamanho fixo — nunca muda</div>
+        <div class="opt selected"><div class="box checked"></div><strong>Gestor adiciona colaboradores avulso</strong> — equipa base + reforços específicos para esse serviço</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="q status-done">
+    <div class="q-head">
+      <div><div class="q-num">Q13</div><div class="q-text">No mesmo Contrato Fixo recorrente, pode haver equipas diferentes por dia da semana?</div></div>
+      <span class="badge badge-done">Respondido</span>
+    </div>
+    <div class="q-body">
+      <div class="options">
+        <div class="opt selected"><div class="box checked"></div><strong>Sim</strong> — 2ª-feira = Equipa 01, 4ª-feira = Equipa 02 (igual ao ServiSync)</div>
+        <div class="opt"><div class="box"></div>Não — um contrato = uma equipa fixa para todos os dias</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="q status-done">
+    <div class="q-head">
+      <div><div class="q-num">Q14</div><div class="q-text">Como é o dia típico de um colaborador?</div></div>
+      <span class="badge badge-done">Respondido</span>
+    </div>
+    <div class="q-body">
+      <div class="options">
+        <div class="opt"><div class="box"></div>1 local por dia — vai direto de casa, limpa, termina</div>
+        <div class="opt selected"><div class="box checked"></div><strong>2–3 locais por dia</strong> — com deslocamentos entre eles. A escala define a ordem.</div>
+        <div class="opt"><div class="box"></div>Varia muito — às vezes 1, às vezes 3</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="q status-done">
+    <div class="q-head">
+      <div><div class="q-num">Q15</div><div class="q-text">O colaborador sabe a escala com antecedência ou só no próprio dia?</div></div>
+      <span class="badge badge-done">Respondido</span>
+    </div>
+    <div class="q-body">
+      <div class="options">
+        <div class="opt"><div class="box"></div>Com dias ou semanas de antecedência — escala estável</div>
+        <div class="opt"><div class="box"></div>Só no próprio dia ou véspera — escala muda muito</div>
+        <div class="opt selected"><div class="box checked"></div><strong>Misto</strong> — base fixa mas com alterações frequentes</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="q status-open">
+    <div class="q-head">
+      <div><div class="q-num">Q16</div><div class="q-text">Qual o horário habitual dos serviços? Há serviços ao fim de semana?</div></div>
+      <span class="badge badge-open">Em Aberto</span>
+    </div>
+    <div class="q-body">
+      <div class="two-col" style="margin-top:6px;">
+        <div>Hora mais cedo do dia: _______ h</div>
+        <div>Hora mais tarde do dia: _______ h</div>
+      </div>
+      <div class="options" style="margin-top:8px;">
+        <div class="opt"><div class="box"></div>Sem serviços ao fim de semana</div>
+        <div class="opt"><div class="box"></div>Sábados — apenas manhã / tarde / dia inteiro</div>
+        <div class="opt"><div class="box"></div>Sábados e domingos</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="q status-open">
+    <div class="q-head">
+      <div><div class="q-num">Q17</div><div class="q-text">Qual o número habitual de pessoas por equipa?</div></div>
+      <span class="badge badge-open">Em Aberto</span>
+    </div>
+    <div class="q-body">
+      <div class="options">
+        <div class="opt"><div class="box"></div>1 pessoa por equipa</div>
+        <div class="opt"><div class="box"></div>2 pessoas por equipa</div>
+        <div class="opt"><div class="box"></div>3 pessoas por equipa</div>
+        <div class="opt"><div class="box"></div>Varia conforme o edifício / tipo de serviço</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="q status-open">
+    <div class="q-head">
+      <div><div class="q-num">Q18</div><div class="q-text">Listar as equipas existentes e os colaboradores de cada uma (seed data inicial do sistema)</div></div>
+      <span class="badge badge-open">Em Aberto</span>
+    </div>
+    <div class="q-body">
+      <div class="notes-box">Ex: Equipa 01 — Ana Martins, Rui Costa, Maria Silva<br>Equipa 02 — ...</div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════
+     SECÇÃO 4 — AGENDAMENTO E CALENDÁRIO
+════════════════════════════════════════════════════════════════ -->
+<div class="section">
+  <div class="section-title">4. Agendamento e Calendário</div>
+
+  <div class="q status-done">
+    <div class="q-head">
+      <div><div class="q-num">Q19</div><div class="q-text">Como preferes gerir os serviços recorrentes?</div></div>
+      <span class="badge badge-done">Respondido</span>
+    </div>
+    <div class="q-body">
+      <div class="options">
+        <div class="opt"><div class="box"></div>Integrado no calendário — criar serviço e marcar repetição no mesmo passo</div>
+        <div class="opt selected"><div class="box checked"></div><strong>Secção separada de Contratos Fixos</strong> — lista de todos os contratos ativos. Calendário mostra as ocorrências geradas. Melhor para 20+ locais recorrentes.</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="q status-done">
+    <div class="q-head">
+      <div><div class="q-num">Q20</div><div class="q-text">Ao editar uma ocorrência no calendário, o que acontece?</div></div>
+      <span class="badge badge-done">Respondido</span>
+    </div>
+    <div class="q-body">
+      <div class="options">
+        <div class="opt selected"><div class="box checked"></div><strong>Só altera aquela ocorrência</strong> — para mudar o padrão, vai a Contratos Fixos</div>
+        <div class="opt"><div class="box"></div>Pergunta: só esta / esta e todas as futuras (como Google Calendar)</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="q status-done">
+    <div class="q-head">
+      <div><div class="q-num">Q21</div><div class="q-text">Os serviços devem ter um número de referência único?</div></div>
+      <span class="badge badge-done">Respondido</span>
+    </div>
+    <div class="q-body">
+      <div class="options">
+        <div class="opt selected"><div class="box checked"></div><strong>Sim</strong> — gerado automaticamente (#0001, #0042...). Útil para comunicar com clientes e equipa.</div>
+        <div class="opt"><div class="box"></div>Não — data + local já identifica suficientemente</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════
+     SECÇÃO 5 — APP DO COLABORADOR
+════════════════════════════════════════════════════════════════ -->
+<div class="section page-break">
+  <div class="section-title">5. App do Colaborador (Telemóvel)</div>
+
+  <div class="q status-done">
+    <div class="q-head">
+      <div><div class="q-num">Q22</div><div class="q-text">O que é mais importante mostrar ao colaborador no detalhe de cada serviço?</div></div>
+      <span class="badge badge-done">Respondido</span>
+    </div>
+    <div class="q-body">
+      <div class="note-small">Resposta: foco no registo de ponto (entrada/saída com hora e GPS). Informações complementares: morada, código de acesso, colegas.</div>
+    </div>
+  </div>
+
+  <div class="q status-done">
+    <div class="q-head">
+      <div><div class="q-num">Q23</div><div class="q-text">O colaborador precisa de fazer algo ao terminar o serviço além do clock-out?</div></div>
+      <span class="badge badge-done">Respondido</span>
+    </div>
+    <div class="q-body">
+      <div class="options">
+        <div class="opt selected"><div class="box checked"></div><strong>Só clock-out</strong> — simples e rápido</div>
+        <div class="opt"><div class="box"></div>Clock-out + confirmar checklist de tarefas</div>
+        <div class="opt"><div class="box"></div>Clock-out + foto do local terminado</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="q status-done">
+    <div class="q-head">
+      <div><div class="q-num">Q24</div><div class="q-text">O que acontece se um colaborador não fizer clock-out?</div></div>
+      <span class="badge badge-done">Respondido</span>
+    </div>
+    <div class="q-body">
+      <div class="options">
+        <div class="opt"><div class="box"></div>Fecha automaticamente 1h após o fim previsto + aviso ao gestor</div>
+        <div class="opt selected"><div class="box checked"></div><strong>Gestor fecha manualmente</strong> no painel com a hora correta</div>
+        <div class="opt"><div class="box"></div>Colaborador pode fazer clock-out retroativo na app</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="q status-done">
+    <div class="q-head">
+      <div><div class="q-num">Q25</div><div class="q-text">Como deve funcionar a validação de localização no clock-in?</div></div>
+      <span class="badge badge-done">Respondido</span>
+    </div>
+    <div class="q-body">
+      <div class="options">
+        <div class="opt selected"><div class="box checked"></div><strong>Só avisa</strong> — clock-in funciona em qualquer lugar. Gestor vê flag de localização incorreta.</div>
+        <div class="opt"><div class="box"></div>Bloqueia se estiver longe do local</div>
+        <div class="opt"><div class="box"></div>Avisa mas permite override com justificação</div>
+      </div>
+      <div class="note-small">Raio de validação (distância máxima ao local para não gerar flag): _______ metros (padrão: 200m)</div>
+    </div>
+  </div>
+
+  <div class="q status-done">
+    <div class="q-head">
+      <div><div class="q-num">Q26</div><div class="q-text">Como chegam as notificações aos colaboradores?</div></div>
+      <span class="badge badge-done">Respondido</span>
+    </div>
+    <div class="q-body">
+      <div class="options">
+        <div class="opt"><div class="box"></div>Push notification na app (PWA) — grátis</div>
+        <div class="opt"><div class="box"></div>WhatsApp Business API — ~€0,05 por mensagem</div>
+        <div class="opt"><div class="box"></div>Email</div>
+        <div class="opt selected"><div class="box checked"></div><strong>Push na app + Email como backup</strong></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="q status-done">
+    <div class="q-head">
+      <div><div class="q-num">Q27</div><div class="q-text">O colaborador tem cobranças no terreno? (registar se cliente pagou em dinheiro/MBWay no local)</div></div>
+      <span class="badge badge-done">Respondido</span>
+    </div>
+    <div class="q-body">
+      <div class="options">
+        <div class="opt"><div class="box"></div>Sim — alguns clientes pagam presencialmente</div>
+        <div class="opt selected"><div class="box checked"></div><strong>Não</strong> — todos os clientes pagam por transferência/fatura</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="q status-done">
+    <div class="q-head">
+      <div><div class="q-num">Q28</div><div class="q-text">A app precisa de checklists de tarefas por serviço?</div></div>
+      <span class="badge badge-done">Respondido</span>
+    </div>
+    <div class="q-body">
+      <div class="options">
+        <div class="opt"><div class="box"></div>Sim — cada local tem uma checklist configurada</div>
+        <div class="opt selected"><div class="box checked"></div><strong>Não</strong> — confiamos na equipa, só o ponto é suficiente</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════
+     SECÇÃO 6 — GESTÃO DE PESSOAS
+════════════════════════════════════════════════════════════════ -->
+<div class="section">
+  <div class="section-title">6. Gestão de Presenças e Absentismo</div>
+
+  <div class="q status-done">
+    <div class="q-head">
+      <div><div class="q-num">Q29</div><div class="q-text">Como funciona o fluxo de substituição quando um colaborador falta?</div></div>
+      <span class="badge badge-done">Respondido</span>
+    </div>
+    <div class="q-body">
+      <div class="options">
+        <div class="opt selected"><div class="box checked"></div><strong>Gestor escolhe da lista de sugestões → substituto é notificado diretamente</strong></div>
+        <div class="opt"><div class="box"></div>Gestor escolhe, colaborador aceita/recusa na app</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="q status-done">
+    <div class="q-head">
+      <div><div class="q-num">Q30</div><div class="q-text">O que acontece se não houver nenhum substituto disponível?</div></div>
+      <span class="badge badge-done">Respondido</span>
+    </div>
+    <div class="q-body">
+      <div class="options">
+        <div class="opt selected"><div class="box checked"></div><strong>Serviço marcado "sem cobertura" + alerta ao gestor</strong> — gestor resolve manualmente</div>
+        <div class="opt"><div class="box"></div>Sistema sugere fazer o serviço com menos pessoas e ajusta o preço</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="q status-open">
+    <div class="q-head">
+      <div><div class="q-num">Q31</div><div class="q-text">Tipos de ausência utilizados (assinalar os relevantes para a empresa)</div></div>
+      <span class="badge badge-open">Em Aberto</span>
+    </div>
+    <div class="q-body">
+      <div class="options" style="display:grid; grid-template-columns: 1fr 1fr; gap:4px;">
+        <div class="opt"><div class="box"></div>Doença com baixa médica</div>
+        <div class="opt"><div class="box"></div>Doença sem baixa médica</div>
+        <div class="opt"><div class="box"></div>Pessoal justificado</div>
+        <div class="opt"><div class="box"></div>Pessoal injustificado</div>
+        <div class="opt"><div class="box"></div>Férias</div>
+        <div class="opt"><div class="box"></div>Feriado</div>
+        <div class="opt"><div class="box"></div>Formação</div>
+        <div class="opt"><div class="box"></div>Outro: _______________</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════
+     SECÇÃO 7 — CLIENTES E FATURAÇÃO
+════════════════════════════════════════════════════════════════ -->
+<div class="section page-break">
+  <div class="section-title">7. Clientes, Locais e Faturação</div>
+
+  <div class="q status-done">
+    <div class="q-head">
+      <div><div class="q-num">Q32</div><div class="q-text">Qual o tipo de clientes/locais servidos pela Mó Limpezas?</div></div>
+      <span class="badge badge-done">Respondido</span>
+    </div>
+    <div class="q-body">
+      <div class="options">
+        <div class="opt selected"><div class="box checked"></div><strong>Comércio / Escritórios</strong> (IVA 23%)</div>
+        <div class="opt"><div class="box"></div>Habitação particular (IVA 6%)</div>
+        <div class="opt"><div class="box"></div>Indústria / Armazéns (IVA 23%)</div>
+        <div class="opt"><div class="box"></div>Condomínios / Partes comuns (IVA 23%)</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="q status-done">
+    <div class="q-head">
+      <div><div class="q-num">Q33</div><div class="q-text">Como é feita a cobrança aos clientes?</div></div>
+      <span class="badge badge-done">Respondido</span>
+    </div>
+    <div class="q-body">
+      <div class="options">
+        <div class="opt"><div class="box"></div>Fatura mensal consolidada — tudo do mês numa fatura</div>
+        <div class="opt selected"><div class="box checked"></div><strong>Por serviço individual</strong> — cada limpeza gera um documento de cobrança</div>
+        <div class="opt"><div class="box"></div>Ainda informal / só transferência</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="q status-done">
+    <div class="q-head">
+      <div><div class="q-num">Q34</div><div class="q-text">A empresa já emite faturas formais com NIF e IVA através de algum software?</div></div>
+      <span class="badge badge-done">Respondido</span>
+    </div>
+    <div class="q-body">
+      <div class="options">
+        <div class="opt"><div class="box"></div>Sim — Moloni / InvoiceXpress / outro: _______________</div>
+        <div class="opt selected"><div class="box checked"></div><strong>Não — o contabilista emite as faturas</strong>. O sistema gera documentos de cobrança (PDF + CSV) para entregar ao contabilista.</div>
+        <div class="opt"><div class="box"></div>Não emitimos faturas formais ainda</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="q status-open">
+    <div class="q-head">
+      <div><div class="q-num">Q35</div><div class="q-text">Qual o preço hora cobrado aos clientes? É igual para todos?</div></div>
+      <span class="badge badge-open">Em Aberto</span>
+    </div>
+    <div class="q-body">
+      <div class="options">
+        <div class="opt"><div class="box"></div>Mesmo preço para todos os clientes: € _______ / hora por pessoa</div>
+        <div class="opt"><div class="box"></div>Preço diferente por cliente — cada um tem o seu preço negociado</div>
+        <div class="opt"><div class="box"></div>Preço diferente por tipo de serviço (regular ≠ pós-obra ≠ vidros)</div>
+      </div>
+      <div class="note-small">O sistema suporta preço diferente por local/cliente. Qual o preço base mais comum? € _______ /h</div>
+    </div>
+  </div>
+
+  <div class="q status-open">
+    <div class="q-head">
+      <div><div class="q-num">Q36</div><div class="q-text">A empresa quer enviar email automático ao cliente quando um serviço é criado, alterado ou cancelado?</div></div>
+      <span class="badge badge-open">Em Aberto</span>
+    </div>
+    <div class="q-body">
+      <div class="options">
+        <div class="opt"><div class="box"></div>Sim — email automático de confirmação/alteração ao cliente</div>
+        <div class="opt"><div class="box"></div>Não — a empresa comunica ela mesma (WhatsApp/telefone)</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="q status-open">
+    <div class="q-head">
+      <div><div class="q-num">Q37</div><div class="q-text">Como é feita a comunicação com os clientes hoje?</div></div>
+      <span class="badge badge-open">Em Aberto</span>
+    </div>
+    <div class="q-body">
+      <div class="options">
+        <div class="opt"><div class="box"></div>WhatsApp / Mensagem</div>
+        <div class="opt"><div class="box"></div>Telefonema</div>
+        <div class="opt"><div class="box"></div>Email</div>
+        <div class="opt"><div class="box"></div>Misto</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════
+     SECÇÃO 8 — PAINEL DO GESTOR
+════════════════════════════════════════════════════════════════ -->
+<div class="section">
+  <div class="section-title">8. Painel do Gestor e Relatórios</div>
+
+  <div class="q status-done">
+    <div class="q-head">
+      <div><div class="q-num">Q38</div><div class="q-text">O que o gestor mais precisa de ver no painel em tempo real?</div></div>
+      <span class="badge badge-done">Respondido</span>
+    </div>
+    <div class="q-body">
+      <div class="options">
+        <div class="opt"><div class="box"></div>Lista de estado por equipa (tabela: equipa, estado, último check-in)</div>
+        <div class="opt"><div class="box"></div>Mapa com posição do último clock-in de cada equipa</div>
+        <div class="opt selected"><div class="box checked"></div><strong>Os dois — lista + mapa lado a lado</strong></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="q status-done">
+    <div class="q-head">
+      <div><div class="q-num">Q39</div><div class="q-text">Quais relatórios são mais úteis para gerir o negócio?</div></div>
+      <span class="badge badge-done">Respondido</span>
+    </div>
+    <div class="q-body">
+      <div class="options">
+        <div class="opt selected"><div class="box checked"></div><strong>Horas por colaborador no mês</strong> — base para salário e ocupação %</div>
+        <div class="opt selected"><div class="box checked"></div><strong>Receita por cliente no mês</strong></div>
+        <div class="opt selected"><div class="box checked"></div><strong>Absentismo por colaborador</strong></div>
+        <div class="opt selected"><div class="box checked"></div><strong>Serviços concluídos vs cancelados</strong></div>
+        <div class="opt selected"><div class="box checked"></div><strong>Extrato mensal por cliente</strong> — PDF para enviar com a cobrança</div>
+      </div>
+      <div class="note-small">Todos com exportação PDF + Excel/CSV</div>
+    </div>
+  </div>
+
+  <div class="q status-done">
+    <div class="q-head">
+      <div><div class="q-num">Q40</div><div class="q-text">Vista da tabela de horas dos colaboradores?</div></div>
+      <span class="badge badge-done">Respondido</span>
+    </div>
+    <div class="q-body">
+      <div class="note-small">Decisão: dois níveis — tabela de totais mensais (rápido) + grelha diária com células coloridas ao clicar (detalhe). Melhor dos dois mundos.</div>
+    </div>
+  </div>
+
+  <div class="q status-open">
+    <div class="q-head">
+      <div><div class="q-num">Q41</div><div class="q-text">CRM — histórico de interações com clientes, feedback pós-serviço e reclamações. Para esta fase?</div></div>
+      <span class="badge badge-open">Em Aberto</span>
+    </div>
+    <div class="q-body">
+      <div class="options">
+        <div class="opt selected"><div class="box checked"></div><strong>Não por agora</strong> — foco no operacional. Fase 2 se necessário.</div>
+        <div class="opt"><div class="box"></div>Sim — quero registo de reclamações e feedback dos clientes</div>
+      </div>
+      <div class="note-small">Confirmar com a dona: há muitas reclamações que precisam de acompanhamento? Feedback formal dos clientes é importante?</div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════
+     SECÇÃO 9 — DADOS EXISTENTES E MIGRAÇÃO
+════════════════════════════════════════════════════════════════ -->
+<div class="section">
+  <div class="section-title">9. Dados Existentes e Arranque</div>
+
+  <div class="q status-done">
+    <div class="q-head">
+      <div><div class="q-num">Q42</div><div class="q-text">Tens dados para migrar quando o sistema arrancar?</div></div>
+      <span class="badge badge-done">Respondido</span>
+    </div>
+    <div class="q-body">
+      <div class="options">
+        <div class="opt selected"><div class="box checked"></div><strong>Sim — listas em Excel / WhatsApp</strong>. O sistema terá importação por CSV.</div>
+        <div class="opt"><div class="box"></div>Poucos dados — insiro manualmente</div>
+        <div class="opt"><div class="box"></div>Começa do zero</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="q status-open">
+    <div class="q-head">
+      <div><div class="q-num">Q43</div><div class="q-text">Em que zona geográfica operam? (Para configurar o mapa inicial)</div></div>
+      <span class="badge badge-open">Em Aberto</span>
+    </div>
+    <div class="q-body">
       <div class="answer-line"></div>
+      <div style="font-size:11px; color:#6b7280; margin-top:4px;">Ex: Grande Porto, Lisboa e Vale do Tejo, Braga...</div>
     </div>
   </div>
 
-  <div class="question-block open">
-    <div class="question-label">Questão 2 — Taxa de Hora Extra</div>
-    <div class="question-text">Quando um colaborador trabalha além das horas contratadas no mês, qual o acréscimo pago?</div>
-    <div class="options">
-      <div class="option"><div class="checkbox"></div> <span><strong>25%</strong> — mínimo legal em Portugal (primeiras 100h anuais)</span></div>
-      <div class="option"><div class="checkbox"></div> <span><strong>50%</strong> — acima de 100h extras anuais</span></div>
-      <div class="option"><div class="checkbox"></div> <span><strong>Valor fixo da empresa:</strong> _______% </span></div>
-      <div class="option"><div class="checkbox"></div> <span><strong>Não aplicável</strong> — nunca há horas extra (escala é sempre ajustada)</span></div>
+  <div class="q status-open">
+    <div class="q-head">
+      <div><div class="q-num">Q44</div><div class="q-text">Qual o dia do mês em que é feito o pagamento dos colaboradores?</div></div>
+      <span class="badge badge-open">Em Aberto</span>
+    </div>
+    <div class="q-body">
+      <div class="options">
+        <div class="opt"><div class="box"></div>Dia _____ do mês (ex: dia 25, dia último)</div>
+        <div class="opt"><div class="box"></div>Varia</div>
+      </div>
+      <div class="note-small">O sistema vai gerar a lista de transferências com IBAN de cada colaborador.</div>
     </div>
   </div>
 
-  <div class="question-block open">
-    <div class="question-label">Questão 3 — Valor Hora Atual</div>
-    <div class="question-text">Qual o valor hora pago atualmente aos colaboradores? (Para configurar o sistema)</div>
-    <div class="answer-line"></div>
-    <div style="font-size:11px; color:#6b7280; margin-top:6px;">€ _______ / hora bruto</div>
-  </div>
-
-  <div class="question-block open">
-    <div class="question-label">Questão 4 — Valor Hora Cobrado aos Clientes</div>
-    <div class="question-text">Qual o preço hora cobrado aos clientes? É o mesmo para todos ou varia por cliente/tipo de serviço?</div>
-    <div class="options">
-      <div class="option"><div class="checkbox"></div> <span><strong>Mesmo preço para todos os clientes:</strong> € _______ / hora por pessoa</span></div>
-      <div class="option"><div class="checkbox"></div> <span><strong>Preço diferente por cliente</strong> — cada cliente tem o seu preço negociado</span></div>
-      <div class="option"><div class="checkbox"></div> <span><strong>Preço diferente por tipo de serviço</strong> — limpeza regular ≠ pós-obra ≠ vidros</span></div>
-    </div>
-    <div class="answer-lines">
-      <div style="font-size:11px; color:#6b7280; margin-top:8px;">Notas:</div>
-      <div class="answer-line"></div>
-    </div>
-  </div>
-
-  <div class="question-block open">
-    <div class="question-label">Questão 5 — Como é feito o Pagamento dos Colaboradores?</div>
-    <div class="question-text">Qual o dia do mês em que é feito o pagamento? E como (transferência bancária individual)?</div>
-    <div class="options">
-      <div class="option"><div class="checkbox"></div> <span><strong>Transferência bancária até ao dia _____ do mês</strong></span></div>
-      <div class="option"><div class="checkbox"></div> <span><strong>Outro método:</strong> _______________________</span></div>
-    </div>
-    <div style="font-size:11px; color:#6b7280; margin-top:8px; font-style:italic;">O sistema vai ter IBAN de cada colaborador para gerar a lista de transferências do mês.</div>
-  </div>
 </div>
 
-<!-- OPERACIONAL -->
+<!-- NOTAS GERAIS -->
 <div class="section">
-  <div class="section-title">⚙️ Operacional — Detalhes a Confirmar</div>
-
-  <div class="question-block open">
-    <div class="question-label">Questão 6 — Horário de Trabalho</div>
-    <div class="question-text">Qual o horário habitual de início e fim dos serviços? Há serviços noturnos ou ao fim de semana?</div>
-    <div class="options">
-      <div class="option"><div class="checkbox"></div> <span>Horário mais cedo do dia: _______ h</span></div>
-      <div class="option"><div class="checkbox"></div> <span>Horário mais tarde do dia: _______ h</span></div>
-      <div class="option"><div class="checkbox"></div> <span><strong>Serviços ao fim de semana:</strong> Sim / Não — Se sim, qual dia: ____________</span></div>
-    </div>
-  </div>
-
-  <div class="question-block open">
-    <div class="question-label">Questão 7 — Dimensão das Equipas</div>
-    <div class="question-text">Qual o número habitual de pessoas por equipa? As equipas têm sempre o mesmo número ou varia?</div>
-    <div class="options">
-      <div class="option"><div class="checkbox"></div> <span><strong>1 pessoa por equipa</strong></span></div>
-      <div class="option"><div class="checkbox"></div> <span><strong>2 pessoas por equipa</strong></span></div>
-      <div class="option"><div class="checkbox"></div> <span><strong>3 pessoas por equipa</strong></span></div>
-      <div class="option"><div class="checkbox"></div> <span><strong>Varia</strong> — depende do serviço / edifício</span></div>
-    </div>
-  </div>
-
-  <div class="question-block open">
-    <div class="question-label">Questão 8 — Comunicação com Clientes</div>
-    <div class="question-text">Como é feita a comunicação com os clientes hoje? Quando há uma alteração de serviço, como o cliente é avisado?</div>
-    <div class="options">
-      <div class="option"><div class="checkbox"></div> <span>WhatsApp / Mensagem</span></div>
-      <div class="option"><div class="checkbox"></div> <span>Telefonema</span></div>
-      <div class="option"><div class="checkbox"></div> <span>Email</span></div>
-    </div>
-    <div style="font-size:11px; color:#6b7280; margin-top:6px; font-style:italic;">Pergunta: queres que o sistema envie email automático ao cliente quando um serviço é criado, alterado ou cancelado?</div>
-    <div class="options" style="margin-top:6px;">
-      <div class="option"><div class="checkbox"></div> <span><strong>Sim</strong> — email automático ao cliente</span></div>
-      <div class="option"><div class="checkbox"></div> <span><strong>Não</strong> — a empresa comunica ela mesma</span></div>
-    </div>
-  </div>
-
-  <div class="question-block open">
-    <div class="question-label">Questão 9 — Dias de Férias Anuais</div>
-    <div class="question-text">Quantos dias de férias têm os colaboradores por ano? (Mínimo legal PT: 22 dias úteis)</div>
-    <div class="options">
-      <div class="option"><div class="checkbox"></div> <span><strong>22 dias úteis</strong> (mínimo legal)</span></div>
-      <div class="option"><div class="checkbox"></div> <span><strong>Outro:</strong> _______ dias</span></div>
-    </div>
-  </div>
-
-  <div class="question-block open">
-    <div class="question-label">Questão 10 — Zona Geográfica</div>
-    <div class="question-text">Em que zona(s) do país operam? Será útil para configurar o mapa inicial.</div>
-    <div class="answer-line"></div>
-    <div style="font-size:11px; color:#6b7280; margin-top:4px;">Ex: Grande Porto, Lisboa, Braga...</div>
-  </div>
+  <div class="section-title">Notas Gerais / Outras Necessidades</div>
+  <div class="notes-box" style="min-height:100px;"></div>
 </div>
 
-<!-- COLABORADORES -->
+<!-- ASSINATURA -->
 <div class="section">
-  <div class="section-title">👤 Colaboradores e Equipas</div>
-
-  <div class="question-block open">
-    <div class="question-label">Questão 11 — Dados a Registar por Colaborador</div>
-    <div class="question-text">Além de nome, telefone e email, que outros dados são importantes guardar? (Selecionar todos que se aplicam)</div>
-    <div class="options">
-      <div class="option"><div class="checkbox"></div> <span>NIF</span></div>
-      <div class="option"><div class="checkbox"></div> <span>IBAN (para transferência de salário)</span></div>
-      <div class="option"><div class="checkbox"></div> <span>Número de Segurança Social</span></div>
-      <div class="option"><div class="checkbox"></div> <span>Data de nascimento</span></div>
-      <div class="option"><div class="checkbox"></div> <span>Morada de residência</span></div>
-      <div class="option"><div class="checkbox"></div> <span>Carta de condução (tem ou não tem)</span></div>
-      <div class="option"><div class="checkbox"></div> <span>Outros: _______________________________</span></div>
-    </div>
-  </div>
-
-  <div class="question-block open">
-    <div class="question-label">Questão 12 — Nome das Equipas Atuais</div>
-    <div class="question-text">Listar as equipas existentes e quantas pessoas cada uma tem. (Será o seed data inicial do sistema)</div>
-    <div class="notes-box">
-      <div style="color:#9ca3af; font-size:11px;">Ex: Equipa 01 — 3 pessoas (Ana, Rui, Maria)</div>
-    </div>
-  </div>
-</div>
-
-<!-- NOTAS FINAIS -->
-<div class="section">
-  <div class="section-title">📝 Notas Gerais / Dúvidas da Dona</div>
-  <div class="notes-box"></div>
-</div>
-
-<div class="section">
-  <div class="section-title">✍️ Assinatura e Aprovação</div>
-  <div style="display:flex; gap:60px; margin-top:16px;">
-    <div>
-      <div style="font-size:11px; color:#6b7280; margin-bottom:4px;">Data:</div>
-      <div style="border-bottom:1px solid #d1d5db; width:180px; height:28px;"></div>
-    </div>
-    <div>
-      <div style="font-size:11px; color:#6b7280; margin-bottom:4px;">Nome da Dona da Empresa:</div>
-      <div style="border-bottom:1px solid #d1d5db; width:240px; height:28px;"></div>
-    </div>
+  <div class="section-title">Confirmação</div>
+  <div class="sign-row">
+    <div class="sign-field"><div class="sign-label">Data</div><div class="sign-line"></div></div>
+    <div class="sign-field"><div class="sign-label">Nome da Dona da Empresa</div><div class="sign-line"></div></div>
+    <div class="sign-field"><div class="sign-label">Assinatura</div><div class="sign-line"></div></div>
   </div>
 </div>
 
 <div class="footer">
-  Plataforma Escala — Desenvolvida para Mó Limpezas | Documento de Briefing v1.0 | 2026
+  Plataforma Escala — Desenvolvida para Mó Limpezas · Documento de Briefing Completo v2.0 · 2026<br>
+  <span style="font-size:10px;">44 questões · Respondidas: 30 · Em aberto: 14</span>
 </div>
 
 </body>
