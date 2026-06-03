@@ -39,6 +39,7 @@ interface CalendarViewProps {
   userId: string;
   clients: Client[];
   locations: Loc[];
+  isDemo?: boolean;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -118,6 +119,7 @@ function GridLines({
 export function CalendarView({
   services, teams, weekStartISO, selectedDateISO,
   companyId, userId, clients, locations,
+  isDemo = false,
 }: CalendarViewProps) {
   const router    = useRouter();
   const weekStart = parseISO(weekStartISO);
@@ -288,15 +290,37 @@ export function CalendarView({
               {format(selectedDate, "EEEE, d 'de' MMMM yyyy", { locale: pt })}
             </span>
             <span className="text-xs text-[var(--color-text-muted)] hidden md:block">{weekRange}</span>
-            <button
-              onClick={() => setCreateSheet({ date: selectedDate, startTime: "09:00", teamId: teams[0]?.id ?? "" })}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[var(--color-primary)] text-white text-xs font-semibold hover:bg-[var(--color-primary-hover)] transition-colors"
-            >
-              <Plus className="w-3.5 h-3.5" />
-              Novo serviço
-            </button>
+            {!isDemo && (
+              <button
+                onClick={() => setCreateSheet({ date: selectedDate, startTime: "09:00", teamId: teams[0]?.id ?? "" })}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[var(--color-primary)] text-white text-xs font-semibold hover:bg-[var(--color-primary-hover)] transition-colors"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                Novo serviço
+              </button>
+            )}
+            {isDemo && (
+              <a
+                href="/dashboard/equipas"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500 text-white text-xs font-semibold hover:bg-amber-600 transition-colors"
+              >
+                Criar equipas para começar
+              </a>
+            )}
           </div>
         </div>
+
+        {/* Banner de demonstração */}
+        {isDemo && (
+          <div className="flex items-center gap-2 px-6 py-2 bg-amber-50 border-b border-amber-200 shrink-0">
+            <span className="text-xs font-medium text-amber-700">
+              👁 Modo de demonstração — dados de exemplo para visualização. Aplica as migrations e cria equipas para começar a usar.
+            </span>
+            <a href="/dashboard/equipas" className="text-xs font-semibold text-amber-800 underline ml-auto shrink-0">
+              Criar equipas →
+            </a>
+          </div>
+        )}
 
         {/* ── Grid do calendário — sempre visível ────────────────────────── */}
         <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
@@ -340,11 +364,19 @@ export function CalendarView({
               <div className="w-14 shrink-0 border-r border-[var(--color-border)] relative bg-white">
                 {Array.from({ length: TOTAL_HOURS + 1 }, (_, i) => {
                   const hour = START_HOUR + i;
+                  // i=0 (07:00): alinhar ao topo para não ficar cortado
+                  // último label (22:00): alinhar ao fundo
+                  // restantes: centrar na linha
+                  const transform = i === 0
+                    ? "translateY(2px)"
+                    : i === TOTAL_HOURS
+                    ? "translateY(-100%)"
+                    : "translateY(-50%)";
                   return (
                     <div
                       key={hour}
                       className="absolute right-2 select-none"
-                      style={{ top: `${i * SLOTS_PER_HOUR * SLOT_HEIGHT}px`, transform: "translateY(-50%)" }}
+                      style={{ top: `${i * SLOTS_PER_HOUR * SLOT_HEIGHT}px`, transform }}
                     >
                       <span className="text-[11px] text-[var(--color-text-muted)] font-medium">
                         {String(hour).padStart(2, "0")}:00

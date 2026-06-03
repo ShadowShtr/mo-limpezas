@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { startOfWeek, parseISO } from "date-fns";
 import { Header } from "@/components/layout/header";
 import { CalendarView } from "./_components/calendar-view";
+import { getDemoServices, DEMO_TEAMS } from "./_demo/mock-data";
 import type { Database } from "@/types/database";
 
 type ServiceFull = Database["public"]["Views"]["services_full"]["Row"];
@@ -69,23 +70,32 @@ export default async function CalendarioPage({
       .order("name"),
   ]);
 
-  const totalServices = services?.length ?? 0;
+  // Modo de demonstração: usar dados de exemplo quando não há equipas configuradas
+  const isDemo = !teams || teams.length === 0;
+  const finalTeams  = isDemo ? DEMO_TEAMS : (teams as Team[]);
+  const finalSvcs   = isDemo ? getDemoServices() : (services ?? []) as ServiceFull[];
+  const totalServices = finalSvcs.length;
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
       <Header
         title="Calendário"
-        subtitle={`${totalServices} serviço${totalServices !== 1 ? "s" : ""} esta semana`}
+        subtitle={
+          isDemo
+            ? `Modo de demonstração — ${totalServices} serviços de exemplo`
+            : `${totalServices} serviço${totalServices !== 1 ? "s" : ""} esta semana`
+        }
       />
       <CalendarView
-        services={(services ?? []) as ServiceFull[]}
-        teams={(teams ?? []) as Team[]}
+        services={finalSvcs}
+        teams={finalTeams}
         weekStartISO={weekStart.toISOString()}
         selectedDateISO={baseDate.toISOString()}
         companyId={companyId}
         userId={user.id}
         clients={clients ?? []}
         locations={locations ?? []}
+        isDemo={isDemo}
       />
     </div>
   );
