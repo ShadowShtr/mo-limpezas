@@ -47,12 +47,26 @@ Lê este ficheiro no início de CADA sessão antes de fazer qualquer coisa.
 
 ## ⚡ PRÓXIMA TASK A EXECUTAR
 
-**[PRÉ-REQUISITO — AÇÃO DO USER]**
-1. Aplicar a nova migration no Supabase Dashboard → SQL Editor → `supabase/migrations/011_conflict_detection.sql`
-2. Adicionar `CRON_SECRET` ao `.env.local` (e às variáveis de ambiente do Vercel)
-3. Testar manualmente: `GET /api/cron/generate-services?secret=<CRON_SECRET>&month=2026-07`
-
 **Próxima task de código:** `[3.1] Layout /app/* + bottom navigation + deteção mobile`
+
+---
+
+## 📍 PONTO DE PARAGEM — 2026-06-03
+
+**Última sessão completou (Fase 2 encerrada):**
+- [2.5] Cron `/api/cron/generate-services` — gera serviços do mês seguinte (Vercel, dia 25)
+- [2.6] Modal "Equipas" — viaturas, disponíveis e ausentes
+- [2.7] Vista de lista do calendário + toggle + exportar CSV
+- [2.8] Modal "Avisos" a clientes + página `/clientes/[id]` com aba Comunicação
+
+**Último commit:** `d6a5b8d` — github.com/ShadowShtr/mo-limpezas
+
+**Migrations pendentes (aplicar no Supabase antes de testar 2.5–2.8):**
+- `supabase/migrations/011_conflict_detection.sql`
+- `supabase/migrations/012_teams_vehicle.sql`
+- `supabase/migrations/013_client_notifications.sql`
+
+**A seguir: FASE 3 — App Mobile PWA**
 
 ---
 
