@@ -47,7 +47,7 @@ Lê este ficheiro no início de CADA sessão antes de fazer qualquer coisa.
 
 ## ⚡ PRÓXIMA TASK A EXECUTAR
 
-**Próxima task de código:** `[3.1] Layout /app/* + bottom navigation + deteção mobile`
+**Próxima task de código:** `[3.2] Ecrã Home: serviços do dia`
 
 ---
 
@@ -59,7 +59,7 @@ Lê este ficheiro no início de CADA sessão antes de fazer qualquer coisa.
 - [2.7] Vista de lista do calendário + toggle + exportar CSV
 - [2.8] Modal "Avisos" a clientes + página `/clientes/[id]` com aba Comunicação
 
-**Último commit:** `d6a5b8d` — github.com/ShadowShtr/mo-limpezas
+**Último commit:** `[3.1]` — github.com/ShadowShtr/mo-limpezas
 
 **Migrations pendentes (aplicar no Supabase antes de testar 2.5–2.8):**
 - `supabase/migrations/011_conflict_detection.sql`
@@ -126,7 +126,7 @@ Lê este ficheiro no início de CADA sessão antes de fazer qualquer coisa.
 - [x] [2.8] Aba "Comunicação" na ficha do cliente (histórico + enviar aviso)
 
 ### FASE 3 — App Mobile (PWA)
-- [ ] [3.1] Layout /app/* + bottom navigation + deteção mobile
+- [x] [3.1] Layout /app/* + bottom navigation + deteção mobile
 - [ ] [3.2] Ecrã Home: serviços do dia
 - [ ] [3.2] Ecrã detalhe do serviço + botão Navegar
 - [ ] [3.2] Ecrã escala semanal + perfil

@@ -98,6 +98,11 @@ body {
 ::-webkit-scrollbar-thumb { background: var(--color-border); border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--color-text-muted); }
 
+/* Safe area para iOS (notch / home indicator) */
+.safe-area-pb {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
 :root {
   --background:                  oklch(0.984 0.003 247);   /* #F8FAFC */
   --foreground:                  oklch(0.129 0.018 264);   /* #0F172A */
