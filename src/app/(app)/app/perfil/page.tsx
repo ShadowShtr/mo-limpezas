@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { Phone, Clock, CalendarDays, User } from "lucide-react";
+import { Phone, Clock, CalendarDays, User, Download } from "lucide-react";
 import { SignOutButton } from "./_components/sign-out-button";
 
 export default async function PerfilPage() {
@@ -114,6 +114,16 @@ export default async function PerfilPage() {
           </div>
         </div>
       )}
+
+      {/* Calendário */}
+      <a
+        href="/api/app/calendar.ics"
+        download="escala.ics"
+        className="flex items-center justify-center gap-2 w-full py-3.5 rounded-2xl border border-[var(--color-border)] bg-white text-sm font-medium text-[var(--color-text-main)] active:bg-[var(--color-background)] transition-colors"
+      >
+        <Download className="w-4 h-4 text-[var(--color-primary)]" />
+        Exportar escala para calendário
+      </a>
 
       {/* Terminar sessão */}
       <SignOutButton />

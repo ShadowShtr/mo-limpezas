@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { AppHeader } from "@/components/layout/app-header";
 import { BottomNav } from "@/components/layout/bottom-nav";
+import { PwaRegister } from "./_components/pwa-register";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient();
@@ -22,6 +23,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   return (
     <div className="flex flex-col min-h-screen bg-[var(--color-background)]">
+      <PwaRegister />
       <AppHeader userName={profile.full_name} avatarUrl={profile.avatar_url} />
       <main className="flex-1 overflow-y-auto pb-20 px-4 pt-4">
         {children}

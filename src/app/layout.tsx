@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import { cn } from "@/lib/utils";
 import "./globals.css";
@@ -10,8 +10,22 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "Escala",
+  title: "Mó Limpezas — Escala",
   description: "Plataforma de gestão operacional para equipas de limpeza",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "Mó Limpezas",
+  },
+  formatDetection: { telephone: false },
+};
+
+export const viewport: Viewport = {
+  themeColor: "#16A34A",
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
 };
 
 export default function RootLayout({
