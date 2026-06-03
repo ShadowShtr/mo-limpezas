@@ -106,6 +106,8 @@ Depois executar `supabase/seed.sql` para dados de teste.
 - [ ] [2.4] Deteção de conflito de horário
 - [ ] [2.5] Edge Function: gerar ocorrências dia 25
 - [ ] [2.5] COMMIT Fase 2
+- [ ] [2.6] Modal de alocação de equipas a viaturas (botão "Equipas" no calendário)
+- [ ] [2.7] Vista de lista do calendário (toggle tabela/calendário)
 
 ### FASE 3 — App Mobile (PWA)
 - [ ] [3.1] Layout /app/* + bottom navigation + deteção mobile

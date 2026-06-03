@@ -87,6 +87,62 @@ Desenvolvimento em fases incrementais — cada fase entrega valor utilizável, m
 - [ ] Gerar ocorrências do mês seguinte automaticamente
 - [ ] Correr dia 25 de cada mês
 
+### Bloco 2.6 — Modal de Alocação de Equipas a Viaturas
+
+**Referência visual:** ServiSync → botão "Equipas" na barra do calendário → modal
+
+**O que faz:**
+- Botão **"Equipas"** na barra de navegação do calendário (ao lado de "Novo serviço")
+- Abre um modal com duas colunas:
+  - **Esquerda — ALOCADAS:** lista de equipas com os seus membros (tags coloridas) e dropdown de viatura (Opel / Corsa / Berlingo / próprio / etc.)
+  - **Direita — DISPONÍVEL:** colaboradoras sem equipa atribuída para aquele dia
+  - **Direita (baixo) — AUSENTES:** colaboradoras com falta/férias registada + horário
+- Botão "Refazer" para recalcular sugestões de alocação
+- Botão "+" junto a ALOCADAS para criar uma equipa temporária ad-hoc
+- Guardar: persiste as viaturas na tabela `teams` (campo `vehicle`) e as ausências já vêm da tabela `absences`
+
+**Dados necessários:**
+- Adicionar coluna `vehicle varchar(50)` à tabela `teams`
+- Query: colaboradoras disponíveis = profiles da empresa sem ausência no dia
+- Query: ausentes = absences WHERE absence_date = selected_date
+
+**Componentes a criar:**
+- `src/app/(dashboard)/dashboard/calendario/_components/team-allocation-modal.tsx`
+- Botão "Equipas" em `calendar-view.tsx` na barra de navegação
+
+---
+
+### Bloco 2.7 — Vista de Lista do Calendário
+
+**Referência visual:** ServiSync → página "Supervisão" com tabela de presenças do dia
+
+**O que faz:**
+- Toggle entre **vista calendário** (atual) e **vista lista** na barra do calendário
+- Filtros no topo: Data, Equipas (multi-select), Supervisores
+- Tabela com colunas:
+  - **NI** — número interno do colaborador
+  - **Colaborador** — nome (link para detalhe)
+  - **Abs.** — ícone de câmara/checkin (botão para abrir registo de ponto)
+  - **Iníc. Prev. / Fim Prev.** — horário agendado do serviço
+  - **→** — botão para propagar hora real (preencher início/fim real com o agendado)
+  - **Início Real / Fim Real** — campos editáveis com timepicker + ícone de relógio
+  - **Equipa** — badge colorida
+  - **#Serviço** — referência do serviço (link para detalhe)
+  - **Cliente** — nome + tipo de serviço + localidade
+  - **NI Serv.** — número interno do serviço
+- Botões: **Exportar** (CSV) e **Guardar** (salva edições de hora real em batch)
+- Linhas com fundo colorido por equipa (igual ao ServiSync)
+
+**Dados necessários:**
+- Join: services × timesheets × profiles × teams × locations
+- Server action para guardar edições em batch de `clock_in_at` / `clock_out_at`
+
+**Componentes a criar:**
+- `src/app/(dashboard)/dashboard/calendario/_components/calendar-list-view.tsx`
+- `src/app/(dashboard)/dashboard/calendario/_components/list-row.tsx`
+- Toggle de vista em `calendar-view.tsx`
+- Server action: `app/actions/timesheets.ts` → `saveTimesheetBatch()`
+
 ---
 
 ## Fase 3 — App do Colaborador (PWA)
