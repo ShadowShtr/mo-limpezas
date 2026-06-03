@@ -17,9 +17,7 @@ export default async function CalendarioPage({
   const supabase = await createClient();
   const admin = createAdminClient();
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
   const { data: me } = await admin
@@ -35,11 +33,15 @@ export default async function CalendarioPage({
   const params = await searchParams;
   const baseDate = params.date ? parseISO(params.date) : new Date();
   const weekStart = startOfWeek(baseDate, { weekStartsOn: 1 });
-  // fetch Mon–Sun inclusive
   const weekEndExclusive = new Date(weekStart);
   weekEndExclusive.setDate(weekEndExclusive.getDate() + 7);
 
-  const [{ data: services }, { data: teams }] = await Promise.all([
+  const [
+    { data: services },
+    { data: teams },
+    { data: clients },
+    { data: locations },
+  ] = await Promise.all([
     supabase
       .from("services_full")
       .select("*")
@@ -50,6 +52,18 @@ export default async function CalendarioPage({
     supabase
       .from("teams")
       .select("id, name, color")
+      .eq("company_id", companyId)
+      .eq("active", true)
+      .order("name"),
+    supabase
+      .from("clients")
+      .select("id, name")
+      .eq("company_id", companyId)
+      .eq("active", true)
+      .order("name"),
+    supabase
+      .from("locations")
+      .select("id, client_id, name, address, hourly_rate")
       .eq("company_id", companyId)
       .eq("active", true)
       .order("name"),
@@ -68,6 +82,10 @@ export default async function CalendarioPage({
         teams={(teams ?? []) as Team[]}
         weekStartISO={weekStart.toISOString()}
         selectedDateISO={baseDate.toISOString()}
+        companyId={companyId}
+        userId={user.id}
+        clients={clients ?? []}
+        locations={locations ?? []}
       />
     </div>
   );

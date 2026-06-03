@@ -59,7 +59,7 @@ export function ServiceBlock({ service, slotHeight, startHour, onClick }: Servic
     <div
       role="button"
       tabIndex={0}
-      onClick={() => onClick?.(service)}
+      onClick={(e) => { e.stopPropagation(); onClick?.(service); }}
       onKeyDown={(e) => e.key === "Enter" && onClick?.(service)}
       className="absolute left-1 right-1 rounded-lg overflow-hidden cursor-pointer transition-all select-none focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] hover:brightness-95 hover:shadow-sm"
       style={{
