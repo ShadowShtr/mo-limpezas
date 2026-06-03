@@ -8,7 +8,7 @@ import {
   endOfWeek,
 } from "date-fns";
 import { pt } from "date-fns/locale";
-import { ChevronLeft, ChevronRight, Plus, AlertTriangle, X, Users } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, AlertTriangle, X, Users, LayoutGrid, List } from "lucide-react";
 import {
   DndContext, DragOverlay,
   PointerSensor, useSensor, useSensors,
@@ -19,6 +19,7 @@ import { DroppableColumn } from "./droppable-column";
 import { ServiceCreateSheet } from "./service-create-sheet";
 import { ServiceDetailSheet } from "./service-detail-sheet";
 import { TeamAllocationModal } from "./team-allocation-modal";
+import { CalendarListView } from "./calendar-list-view";
 import { rescheduleService } from "../_actions/reschedule";
 import type { Database } from "@/types/database";
 
@@ -151,6 +152,7 @@ export function CalendarView({
   const [createSheet,       setCreateSheet]       = useState<{ date: Date; startTime: string; teamId: string } | null>(null);
   const [detailSvc,         setDetailSvc]         = useState<ServiceFull | null>(null);
   const [allocationOpen,    setAllocationOpen]    = useState(false);
+  const [viewMode,          setViewMode]          = useState<"calendar" | "list">("calendar");
 
   // ── Drag state ───────────────────────────────────────────────────────────
   const [draggingBlock, setDraggingBlock] = useState<{ service: ServiceForBlock; teamId: string } | null>(null);
@@ -376,11 +378,28 @@ export function CalendarView({
             Hoje
           </button>
 
-          <div className="ml-auto flex items-center gap-3">
+          <div className="ml-auto flex items-center gap-2">
             <span className="text-sm font-medium text-[var(--color-text-main)] hidden sm:block">
               {format(selectedDate, "EEEE, d 'de' MMMM yyyy", { locale: pt })}
             </span>
-            <span className="text-xs text-[var(--color-text-muted)] hidden md:block">{weekRange}</span>
+            <span className="text-xs text-[var(--color-text-muted)] hidden md:block mr-1">{weekRange}</span>
+            {/* Toggle calendário / lista */}
+            <div className="flex rounded-lg border border-[var(--color-border)] overflow-hidden">
+              <button
+                onClick={() => setViewMode("calendar")}
+                title="Vista calendário"
+                className={`p-1.5 transition-colors ${viewMode === "calendar" ? "bg-[var(--color-primary)] text-white" : "text-[var(--color-text-sub)] hover:bg-[var(--color-background)]"}`}
+              >
+                <LayoutGrid className="w-3.5 h-3.5" />
+              </button>
+              <button
+                onClick={() => setViewMode("list")}
+                title="Vista lista"
+                className={`p-1.5 transition-colors ${viewMode === "list" ? "bg-[var(--color-primary)] text-white" : "text-[var(--color-text-sub)] hover:bg-[var(--color-background)]"}`}
+              >
+                <List className="w-3.5 h-3.5" />
+              </button>
+            </div>
             {!isDemo && (
               <>
                 <button
@@ -433,7 +452,18 @@ export function CalendarView({
           </div>
         )}
 
-        {/* ── Grid do calendário — sempre visível ────────────────────────── */}
+        {/* ── Vista Lista ────────────────────────────────────────────────── */}
+        {viewMode === "list" && (
+          <CalendarListView
+            services={services}
+            teams={teams}
+            selectedDate={selectedDate}
+            onChanged={handleChanged}
+          />
+        )}
+
+        {/* ── Grid do calendário ─────────────────────────────────────────── */}
+        {viewMode === "calendar" ?
         <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
 
           {/* Cabeçalho das equipas */}
@@ -555,6 +585,8 @@ export function CalendarView({
             </div>
           </div>
         </div>
+        : null}
+
       </div>
 
       {/* Overlay flutuante durante o drag */}
