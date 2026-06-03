@@ -52,7 +52,7 @@ Aplicar as migrations no Supabase (se ainda não foi feito):
 Dashboard → SQL Editor → executar cada ficheiro em `supabase/migrations/` por ordem (001 → 010)
 Depois executar `supabase/seed.sql` para dados de teste.
 
-**Próxima task de código:** `[2.4] Drag & drop reagendar + mudar equipa + deteção de conflito`
+**Próxima task de código:** `[2.5] Edge Function: gerar ocorrências dia 25`
 
 ---
 
@@ -102,8 +102,8 @@ Depois executar `supabase/seed.sql` para dados de teste.
 - [x] [2.3] Criar serviço pontual (clique em célula)
 - [x] [2.3] Painel lateral de detalhe do serviço
 - [x] [2.3] Gestão de estado: cancelar, falta, corrigir clock-out
-- [ ] [2.4] Drag & drop reagendar + mudar equipa
-- [ ] [2.4] Deteção de conflito de horário
+- [x] [2.4] Drag & drop reagendar + mudar equipa
+- [x] [2.4] Deteção de conflito de horário
 - [ ] [2.5] Edge Function: gerar ocorrências dia 25
 - [ ] [2.5] COMMIT Fase 2
 - [ ] [2.6] Modal de alocação de equipas a viaturas (botão "Equipas" no calendário)

@@ -3,15 +3,22 @@
 import { useState, useMemo, useCallback, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import {
-  addWeeks, subWeeks, addDays,
-  isSameDay, parseISO, format,
+  addWeeks, subWeeks, addDays, addMinutes,
+  isSameDay, parseISO, format, differenceInMinutes,
   endOfWeek,
 } from "date-fns";
 import { pt } from "date-fns/locale";
-import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, AlertTriangle, X } from "lucide-react";
+import {
+  DndContext, DragOverlay,
+  PointerSensor, useSensor, useSensors,
+  type DragStartEvent, type DragEndEvent,
+} from "@dnd-kit/core";
 import { ServiceBlock, type ServiceForBlock } from "./service-block";
+import { DroppableColumn } from "./droppable-column";
 import { ServiceCreateSheet } from "./service-create-sheet";
 import { ServiceDetailSheet } from "./service-detail-sheet";
+import { rescheduleService } from "../_actions/reschedule";
 import type { Database } from "@/types/database";
 
 // ─── Constantes ───────────────────────────────────────────────────────────────
@@ -125,6 +132,15 @@ export function CalendarView({
   const weekStart = parseISO(weekStartISO);
   const scrollRef = useRef<HTMLDivElement>(null);
 
+  // Previne o onClick da coluna de disparar imediatamente após um drag terminar
+  const wasDragging = useRef(false);
+
+  // ── dnd-kit sensors ──────────────────────────────────────────────────────
+  // activationConstraint: distance 8px — click não ativa drag
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+  );
+
   // ── State ────────────────────────────────────────────────────────────────
   const [selectedDate, setSelectedDate] = useState(() => parseISO(selectedDateISO));
   // null no servidor — calculado só no cliente (evita hydration mismatch com new Date())
@@ -133,6 +149,10 @@ export function CalendarView({
   const [today,        setToday]        = useState<Date | null>(null);
   const [createSheet,  setCreateSheet]  = useState<{ date: Date; startTime: string; teamId: string } | null>(null);
   const [detailSvc,    setDetailSvc]    = useState<ServiceFull | null>(null);
+
+  // ── Drag state ───────────────────────────────────────────────────────────
+  const [draggingBlock, setDraggingBlock] = useState<{ service: ServiceForBlock; teamId: string } | null>(null);
+  const [conflictMsg,   setConflictMsg]   = useState<string | null>(null);
 
   // Inicializar today e currentTop no cliente (evita hydration mismatch)
   useEffect(() => {
@@ -216,12 +236,81 @@ export function CalendarView({
   }
 
   function handleColumnClick(teamId: string, e: React.MouseEvent<HTMLDivElement>) {
+    // Ignorar click que vem imediatamente a seguir a um drag
+    if (wasDragging.current) { wasDragging.current = false; return; }
     const rect = e.currentTarget.getBoundingClientRect();
     const y = e.clientY - rect.top;
     setCreateSheet({ date: selectedDate, startTime: yToTime(y), teamId: teamId === "__sem__" ? "" : teamId });
   }
 
   function handleChanged() { router.refresh(); }
+
+  // ── Drag handlers ────────────────────────────────────────────────────────
+
+  function handleDragStart(event: DragStartEvent) {
+    const data = event.active.data.current as { service: ServiceForBlock; teamId: string } | undefined;
+    if (data) setDraggingBlock(data);
+    setConflictMsg(null);
+  }
+
+  async function handleDragEnd(event: DragEndEvent) {
+    wasDragging.current = true;
+    setDraggingBlock(null);
+
+    const { active, over, delta } = event;
+    if (!over || !active.data.current) return;
+
+    const { service } = active.data.current as { service: ServiceForBlock; teamId: string };
+    const newTeamId = over.id === "__sem__" ? null : (over.id as string);
+
+    // Calcular novo horário a partir do delta Y (cada SLOT_HEIGHT px = 30 min)
+    const minutesDelta = Math.round((delta.y / SLOT_HEIGHT) * 30);
+    // Arredondar aos 15 min mais próximos
+    const roundedDelta = Math.round(minutesDelta / 15) * 15;
+    if (roundedDelta === 0 && newTeamId === (active.data.current as { teamId: string }).teamId) return;
+
+    const origStart   = parseISO(service.scheduled_start);
+    const origEnd     = parseISO(service.scheduled_end);
+    const duration    = differenceInMinutes(origEnd, origStart);
+
+    let newStart = addMinutes(origStart, roundedDelta);
+    let newEnd   = addMinutes(newStart, duration);
+
+    // Clamp: não permitir sair das horas visíveis (07:00 – 22:00)
+    const dayBase   = new Date(newStart);
+    dayBase.setHours(START_HOUR, 0, 0, 0);
+    const dayEnd    = new Date(newStart);
+    dayEnd.setHours(END_HOUR, 0, 0, 0);
+
+    if (newStart < dayBase) {
+      newStart = dayBase;
+      newEnd   = addMinutes(newStart, duration);
+    }
+    if (newEnd > dayEnd) {
+      newEnd   = dayEnd;
+      newStart = addMinutes(newEnd, -duration);
+    }
+
+    // Atualizar optimisticamente na UI e depois confirmar no servidor
+    const result = await rescheduleService(
+      service.id,
+      newStart.toISOString(),
+      newEnd.toISOString(),
+      newTeamId,
+    );
+
+    if (!result.ok) {
+      setConflictMsg(`Erro ao reagendar: ${result.error}`);
+      return;
+    }
+
+    if (result.conflicts.length > 0) {
+      const names = result.conflicts.map((c) => `#${c.reference_number} ${c.location_name}`).join(", ");
+      setConflictMsg(`Conflito de horário com: ${names}`);
+    }
+
+    router.refresh();
+  }
 
   // today é null no SSR — guards abaixo garantem segurança
   const isToday  = today !== null && isSameDay(selectedDate, today);
@@ -230,7 +319,7 @@ export function CalendarView({
   // ─── Render ───────────────────────────────────────────────────────────────
 
   return (
-    <>
+    <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
       <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
 
         {/* ── Barra de navegação semanal ─────────────────────────────────── */}
@@ -322,6 +411,17 @@ export function CalendarView({
           </div>
         )}
 
+        {/* Banner de conflito de horário */}
+        {conflictMsg && (
+          <div className="flex items-center gap-2 px-4 py-2 bg-amber-50 border-b border-amber-200 shrink-0">
+            <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+            <span className="text-xs font-medium text-amber-700 flex-1">{conflictMsg}</span>
+            <button onClick={() => setConflictMsg(null)} className="p-0.5 text-amber-500 hover:text-amber-700">
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        )}
+
         {/* ── Grid do calendário — sempre visível ────────────────────────── */}
         <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
 
@@ -364,9 +464,6 @@ export function CalendarView({
               <div className="w-14 shrink-0 border-r border-[var(--color-border)] relative bg-white">
                 {Array.from({ length: TOTAL_HOURS + 1 }, (_, i) => {
                   const hour = START_HOUR + i;
-                  // i=0 (07:00): alinhar ao topo para não ficar cortado
-                  // último label (22:00): alinhar ao fundo
-                  // restantes: centrar na linha
                   const transform = i === 0
                     ? "translateY(2px)"
                     : i === TOTAL_HOURS
@@ -388,8 +485,9 @@ export function CalendarView({
 
               {/* Colunas das equipas (ou coluna vazia se não houver equipas) */}
               {columns.length > 0 ? columns.map((col) => (
-                <div
+                <DroppableColumn
                   key={col.key}
+                  id={col.key}
                   className="flex-1 min-w-[160px] relative border-l border-[var(--color-border)] cursor-crosshair"
                   style={{ height: `${TOTAL_SLOTS * SLOT_HEIGHT}px` }}
                   onClick={(e) => handleColumnClick(col.key, e)}
@@ -414,12 +512,13 @@ export function CalendarView({
                     <ServiceBlock
                       key={svc.id}
                       service={svc}
+                      teamId={col.key}
                       slotHeight={SLOT_HEIGHT}
                       startHour={START_HOUR}
                       onClick={(b) => setDetailSvc(services.find((s) => s.id === b.id) ?? null)}
                     />
                   ))}
-                </div>
+                </DroppableColumn>
               )) : (
                 /* Coluna vazia com grades — para quando não há equipas ainda */
                 <div
@@ -447,6 +546,19 @@ export function CalendarView({
         </div>
       </div>
 
+      {/* Overlay flutuante durante o drag */}
+      <DragOverlay dropAnimation={null}>
+        {draggingBlock && (
+          <ServiceBlock
+            service={draggingBlock.service}
+            teamId={draggingBlock.teamId}
+            slotHeight={SLOT_HEIGHT}
+            startHour={START_HOUR}
+            isOverlay
+          />
+        )}
+      </DragOverlay>
+
       {/* Sheets */}
       <ServiceCreateSheet
         open={createSheet !== null}
@@ -466,7 +578,7 @@ export function CalendarView({
         onClose={() => setDetailSvc(null)}
         onChanged={handleChanged}
       />
-    </>
+    </DndContext>
   );
 }
 

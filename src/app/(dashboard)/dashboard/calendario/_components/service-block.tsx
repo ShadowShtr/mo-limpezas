@@ -3,6 +3,8 @@
 import { useState, useEffect } from "react";
 import { parseISO, format, differenceInMinutes } from "date-fns";
 import { MapPin, Clock, Euro, FileText, Lock, Users } from "lucide-react";
+import { useDraggable } from "@dnd-kit/core";
+import { CSS } from "@dnd-kit/utilities";
 
 export type ServiceForBlock = {
   id: string;
@@ -178,18 +180,32 @@ interface ServiceBlockProps {
   service: ServiceForBlock;
   slotHeight: number;
   startHour: number;
+  teamId: string;
   onClick?: (service: ServiceForBlock) => void;
+  /** Quando true, renderiza como overlay de drag (sem useDraggable, sem tooltip) */
+  isOverlay?: boolean;
 }
 
-export function ServiceBlock({ service, slotHeight, startHour, onClick }: ServiceBlockProps) {
+export function ServiceBlock({ service, slotHeight, startHour, teamId, onClick, isOverlay = false }: ServiceBlockProps) {
   const [tooltip, setTooltip] = useState<TooltipState | null>(null);
+
+  const isDraggable = !isOverlay &&
+    service.status !== "concluido" &&
+    service.status !== "cancelado" &&
+    service.status !== "falta";
+
+  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
+    id: service.id,
+    data: { service, teamId },
+    disabled: !isDraggable,
+  });
 
   const start = parseISO(service.scheduled_start);
   const end   = parseISO(service.scheduled_end);
 
-  const startMin  = start.getHours() * 60 + start.getMinutes();
-  const endMin    = end.getHours()   * 60 + end.getMinutes();
-  const offsetMin = startMin - startHour * 60;
+  const startMin    = start.getHours() * 60 + start.getMinutes();
+  const endMin      = end.getHours()   * 60 + end.getMinutes();
+  const offsetMin   = startMin - startHour * 60;
   const durationMin = endMin - startMin;
 
   const top    = (offsetMin / 30) * slotHeight;
@@ -197,56 +213,73 @@ export function ServiceBlock({ service, slotHeight, startHour, onClick }: Servic
 
   const s = STATUS_BG[service.status] ?? STATUS_BG.agendado;
   const borderColor = service.team_color ?? s.fallbackBorder;
-  const isShort = height <= slotHeight; // ≤ 30 min
+  const isShort = height <= slotHeight;
+
+  // Overlay não usa transform nem posição absoluta — é controlado pelo DragOverlay
+  const overlayStyle: React.CSSProperties = isOverlay ? {
+    width: "100%",
+    height: `${height - 2}px`,
+    backgroundColor: s.bg,
+    borderLeft: `3px solid ${borderColor}`,
+    border: `1px solid ${borderColor}30`,
+    borderLeftWidth: "3px",
+    borderRadius: "4px",
+    boxShadow: "0 8px 24px rgba(0,0,0,0.18)",
+    cursor: "grabbing",
+  } : {
+    position: "absolute",
+    top: `${top + 1}px`,
+    height: `${height - 2}px`,
+    left: "2px",
+    right: "2px",
+    backgroundColor: s.bg,
+    borderLeft: `3px solid ${borderColor}`,
+    border: `1px solid ${borderColor}30`,
+    borderLeftWidth: "3px",
+    zIndex: isDragging ? 50 : 1,
+    opacity: isDragging ? 0.35 : 1,
+    transform: CSS.Translate.toString(transform),
+    cursor: isDraggable ? (isDragging ? "grabbing" : "grab") : "pointer",
+    transition: isDragging ? undefined : "opacity 0.15s ease",
+  };
 
   return (
     <>
       <div
+        ref={isOverlay ? undefined : setNodeRef}
         role="button"
         tabIndex={0}
-        onClick={(e) => { e.stopPropagation(); onClick?.(service); }}
-        onKeyDown={(e) => e.key === "Enter" && onClick?.(service)}
-        onMouseEnter={(e) => setTooltip({ x: e.clientX, y: e.clientY })}
-        onMouseLeave={() => setTooltip(null)}
-        onMouseMove={(e) => setTooltip({ x: e.clientX, y: e.clientY })}
-        className="absolute left-0.5 right-0.5 rounded overflow-hidden cursor-pointer transition-all select-none focus:outline-none focus:ring-1 focus:ring-[var(--color-primary)] hover:brightness-95 hover:shadow-md"
-        style={{
-          top:    `${top + 1}px`,
-          height: `${height - 2}px`,
-          backgroundColor: s.bg,
-          borderLeft: `3px solid ${borderColor}`,
-          border: `1px solid ${borderColor}30`,
-          borderLeftWidth: "3px",
-          zIndex: 1,
+        onClick={(e) => {
+          if (isDragging) return;
+          e.stopPropagation();
+          onClick?.(service);
         }}
+        onKeyDown={(e) => e.key === "Enter" && onClick?.(service)}
+        onMouseEnter={(e) => !isDragging && setTooltip({ x: e.clientX, y: e.clientY })}
+        onMouseLeave={() => setTooltip(null)}
+        onMouseMove={(e) => !isDragging && setTooltip({ x: e.clientX, y: e.clientY })}
+        className="rounded overflow-hidden select-none focus:outline-none focus:ring-1 focus:ring-[var(--color-primary)] hover:brightness-95 hover:shadow-md"
+        style={overlayStyle}
+        {...(isOverlay ? {} : { ...listeners, ...attributes })}
       >
         <div className="px-1.5 py-0.5 h-full flex flex-col overflow-hidden">
-          <span
-            className="text-[11px] font-semibold leading-tight truncate"
-            style={{ color: s.text }}
-          >
+          <span className="text-[11px] font-semibold leading-tight truncate" style={{ color: s.text }}>
             {service.location_name}
           </span>
           {!isShort && (
-            <span
-              className="text-[10px] leading-tight truncate"
-              style={{ color: s.text, opacity: 0.75 }}
-            >
+            <span className="text-[10px] leading-tight truncate" style={{ color: s.text, opacity: 0.75 }}>
               {format(start, "HH:mm")}–{format(end, "HH:mm")}
             </span>
           )}
           {!isShort && service.team_name && (
-            <span
-              className="text-[10px] leading-tight truncate mt-auto"
-              style={{ color: s.text, opacity: 0.6 }}
-            >
+            <span className="text-[10px] leading-tight truncate mt-auto" style={{ color: s.text, opacity: 0.6 }}>
               {service.team_name}
             </span>
           )}
         </div>
       </div>
 
-      {tooltip && <ServiceTooltip service={service} pos={tooltip} />}
+      {!isOverlay && tooltip && !isDragging && <ServiceTooltip service={service} pos={tooltip} />}
     </>
   );
 }
