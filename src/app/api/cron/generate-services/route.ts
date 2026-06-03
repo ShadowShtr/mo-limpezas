@@ -17,6 +17,17 @@ interface ContractRow {
   locations: { hourly_rate: number | null } | null;
 }
 
+interface ConflictRow {
+  company_id: string;
+  team_id: string;
+  service1_id: string;
+  service2_id: string;
+  service1_start: string;
+  service1_end: string;
+  service2_start: string;
+  service2_end: string;
+}
+
 const DOW_TO_KEY: Record<number, ScheduleDay["day"]> = {
   0: "sun", 1: "mon", 2: "tue", 3: "wed", 4: "thu", 5: "fri", 6: "sat",
 };
@@ -222,7 +233,7 @@ export async function GET(req: NextRequest) {
 
       // Calcular valor
       const hourlyRate =
-        (contract.locations as { hourly_rate: number | null } | null)
+        (contract.locations as unknown as { hourly_rate: number | null } | null)
           ?.hourly_rate ?? null;
       const calculatedValue =
         hourlyRate != null
@@ -253,13 +264,16 @@ export async function GET(req: NextRequest) {
   }
 
   // Detetar conflitos: mesma equipa, horários sobrepostos, no mês gerado
-  const { data: conflicts } = await supabase.rpc("detect_schedule_conflicts", {
+  const { data: rawConflicts } = await supabase.rpc("detect_schedule_conflicts", {
     p_start: monthStartStr,
     p_end: monthEndStr,
   });
+  const conflicts = Array.isArray(rawConflicts)
+    ? (rawConflicts as ConflictRow[])
+    : [];
 
   // Notificar gestores/admins de cada empresa com conflitos
-  if (Array.isArray(conflicts) && conflicts.length > 0) {
+  if (conflicts.length > 0) {
     const byCompany: Record<string, typeof conflicts> = {};
     for (const c of conflicts) {
       if (!byCompany[c.company_id]) byCompany[c.company_id] = [];
