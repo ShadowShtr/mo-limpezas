@@ -1,9 +1,11 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { Bell, CheckCheck } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { formatDistanceToNow } from "@/lib/utils";
+
+const supabase = createClient();
 
 interface Notification {
   id: string;
@@ -30,32 +32,8 @@ export function NotificationsBell() {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [unread, setUnread] = useState(0);
   const ref = useRef<HTMLDivElement>(null);
-  const supabase = createClient();
 
-  useEffect(() => {
-    loadNotifications();
-
-    const channel = supabase
-      .channel("notifications")
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "notifications" }, () => {
-        loadNotifications();
-      })
-      .subscribe();
-
-    return () => { supabase.removeChannel(channel); };
-  }, []);
-
-  useEffect(() => {
-    function handleClickOutside(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) {
-        setOpen(false);
-      }
-    }
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
-
-  async function loadNotifications() {
+  const loadNotifications = useCallback(async () => {
     const { data } = await supabase
       .from("notifications")
       .select("id, type, title, body, read_at, created_at")
@@ -66,7 +44,32 @@ export function NotificationsBell() {
       setNotifications(data);
       setUnread(data.filter((n) => !n.read_at).length);
     }
-  }
+  }, []);
+
+  useEffect(() => {
+    const channel = supabase
+      .channel("notifications")
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "notifications" }, () => {
+        loadNotifications();
+      })
+      .subscribe();
+
+    // async — setState não é chamado sincronamente, regra é false-positive aqui
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    loadNotifications();
+
+    return () => { supabase.removeChannel(channel); };
+  }, [loadNotifications]);
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
   async function markAllRead() {
     await supabase

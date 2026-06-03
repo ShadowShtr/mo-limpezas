@@ -9,20 +9,29 @@ export default function LoginPage() {
   const [mode, setMode] = useState<"login" | "recover">("login");
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<{ type: "error" | "success"; text: string } | null>(null);
-
-  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+  async function handleSubmit(e: React.SyntheticEvent<HTMLFormElement>) {
     e.preventDefault();
     setLoading(true);
     setMessage(null);
 
     const formData = new FormData(e.currentTarget);
-    const action = mode === "login" ? login : resetPassword;
-    const result = await action(formData);
 
+    if (mode === "recover") {
+      const result = await resetPassword(formData);
+      setLoading(false);
+      if (result && "error" in result) setMessage({ type: "error", text: result.error as string });
+      if (result && "success" in result) setMessage({ type: "success", text: result.success as string });
+      return;
+    }
+
+    const result = await login(formData);
     setLoading(false);
 
-    if (result && "error" in result) setMessage({ type: "error", text: result.error as string });
-    if (result && "success" in result) setMessage({ type: "success", text: result.success as string });
+    if (!result) return;
+
+    if ("error" in result) {
+      setMessage({ type: "error", text: result.error as string });
+    }
   }
 
   return (
@@ -87,7 +96,6 @@ export default function LoginPage() {
               </div>
             )}
 
-            {/* Mensagem de erro ou sucesso */}
             {message && (
               <div className={`text-sm px-3 py-2 rounded-lg ${
                 message.type === "error"

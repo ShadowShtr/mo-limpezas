@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { Sidebar } from "@/components/layout/sidebar";
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
@@ -8,7 +9,9 @@ export default async function DashboardLayout({ children }: { children: React.Re
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const { data: profile } = await supabase
+  // Admin client bypassa RLS — evita recursão infinita na policy de profiles
+  const admin = createAdminClient();
+  const { data: profile } = await admin
     .from("profiles")
     .select("full_name, role, avatar_url")
     .eq("id", user.id)

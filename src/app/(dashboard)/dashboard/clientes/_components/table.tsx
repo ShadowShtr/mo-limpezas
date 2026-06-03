@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Search, ChevronLeft, ChevronRight, ExternalLink, MoreHorizontal } from "lucide-react";
+import { Search, ChevronLeft, ChevronRight, MoreHorizontal } from "lucide-react";
 import { ClienteSheet } from "./sheet";
 
 type Cliente = {

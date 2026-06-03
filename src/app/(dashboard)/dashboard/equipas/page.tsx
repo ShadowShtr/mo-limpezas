@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { Header } from "@/components/layout/header";
 import { EquipasGrid } from "./_components/grid";
 import { EquipaSheet } from "./_components/sheet";
@@ -6,11 +7,14 @@ import { Plus } from "lucide-react";
 
 export default async function EquipasPage() {
   const supabase = await createClient();
+  const admin = createAdminClient();
 
-  const { data: me } = await supabase
+  const { data: { user } } = await supabase.auth.getUser();
+
+  const { data: me } = await admin
     .from("profiles")
     .select("company_id")
-    .eq("id", (await supabase.auth.getUser()).data.user!.id)
+    .eq("id", user!.id)
     .single();
 
   const [equipasRes, colaboradoresRes] = await Promise.all([
@@ -19,9 +23,10 @@ export default async function EquipasPage() {
       .select("*")
       .eq("company_id", me?.company_id ?? "")
       .order("name"),
-    supabase
+    admin
       .from("profiles")
       .select("id, full_name, avatar_url, role, status")
+      .eq("company_id", me?.company_id ?? "")
       .eq("role", "colaborador")
       .eq("status", "ativo")
       .order("full_name"),

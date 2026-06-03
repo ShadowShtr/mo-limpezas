@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { Header } from "@/components/layout/header";
 import { ClientesTable } from "./_components/table";
 import { ClienteSheet } from "./_components/sheet";
@@ -6,17 +7,20 @@ import { Plus } from "lucide-react";
 
 export default async function ClientesPage() {
   const supabase = await createClient();
+  const admin = createAdminClient();
+
+  const { data: { user } } = await supabase.auth.getUser();
+
+  const { data: me } = await admin
+    .from("profiles")
+    .select("company_id")
+    .eq("id", user!.id)
+    .single();
 
   const { data: clientes } = await supabase
     .from("clients")
     .select("id, name, contact_name, contact_email, contact_phone, nif, active, created_at")
     .order("name");
-
-  const { data: me } = await supabase
-    .from("profiles")
-    .select("company_id")
-    .eq("id", (await supabase.auth.getUser()).data.user!.id)
-    .single();
 
   return (
     <div>

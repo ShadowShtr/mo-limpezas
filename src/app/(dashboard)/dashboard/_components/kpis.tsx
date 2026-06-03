@@ -9,10 +9,9 @@ interface KPIs {
 
 interface Props {
   kpis: KPIs;
-  teamsOnField: number;
 }
 
-export function DashboardKPIs({ kpis, teamsOnField }: Props) {
+export function DashboardKPIs({ kpis }: Props) {
   const cards = [
     {
       label: "SERVIÇOS HOJE",

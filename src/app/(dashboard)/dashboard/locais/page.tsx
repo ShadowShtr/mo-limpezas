@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { Header } from "@/components/layout/header";
 import { LocaisTable } from "./_components/table";
 import { LocalSheet } from "./_components/sheet";
@@ -6,23 +7,30 @@ import { Plus } from "lucide-react";
 
 export default async function LocaisPage() {
   const supabase = await createClient();
+  const admin = createAdminClient();
 
-  const { data: locais } = await supabase
-    .from("locations")
-    .select("id, name, address, lat, lng, hourly_rate, active, client_id, access_code")
-    .order("name");
+  const { data: { user } } = await supabase.auth.getUser();
 
-  const { data: clientes } = await supabase
-    .from("clients")
-    .select("id, name")
-    .eq("active", true)
-    .order("name");
-
-  const { data: me } = await supabase
+  const { data: me } = await admin
     .from("profiles")
     .select("company_id")
-    .eq("id", (await supabase.auth.getUser()).data.user!.id)
+    .eq("id", user!.id)
     .single();
+
+  const [locaisRes, clientesRes] = await Promise.all([
+    supabase
+      .from("locations")
+      .select("id, name, address, lat, lng, hourly_rate, active, client_id, access_code")
+      .order("name"),
+    supabase
+      .from("clients")
+      .select("id, name")
+      .eq("active", true)
+      .order("name"),
+  ]);
+
+  const locais = locaisRes.data;
+  const clientes = clientesRes.data;
 
   return (
     <div>

@@ -45,7 +45,7 @@ export default async function DashboardPage() {
       <Header title="Dashboard" subtitle={subtitle} />
 
       <div className="p-6 space-y-6 max-w-[1400px]">
-        <DashboardKPIs kpis={kpis} teamsOnField={teams.length} />
+        <DashboardKPIs kpis={kpis} />
 
         <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
           <div className="xl:col-span-2">

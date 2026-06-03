@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { Header } from "@/components/layout/header";
 import { ColaboradoresTable } from "./_components/table";
 import { ColaboradorSheet } from "./_components/sheet";
@@ -6,18 +7,22 @@ import { UserPlus } from "lucide-react";
 
 export default async function ColaboradoresPage() {
   const supabase = await createClient();
+  const admin = createAdminClient();
 
-  const { data: colaboradores } = await supabase
-    .from("profiles")
-    .select("id, full_name, email, phone, role, status, contracted_hours_month, skills, avatar_url, created_at, invited_at, invite_accepted_at")
-    .not("role", "eq", "admin")
-    .order("full_name");
+  const { data: { user } } = await supabase.auth.getUser();
 
-  const { data: company } = await supabase
+  const { data: company } = await admin
     .from("profiles")
     .select("company_id")
-    .eq("id", (await supabase.auth.getUser()).data.user!.id)
+    .eq("id", user!.id)
     .single();
+
+  const { data: colaboradores } = await admin
+    .from("profiles")
+    .select("id, full_name, email, phone, role, status, contracted_hours_month, skills, avatar_url, created_at, invited_at, invite_accepted_at")
+    .eq("company_id", company?.company_id ?? "")
+    .not("role", "eq", "admin")
+    .order("full_name");
 
   return (
     <div>
