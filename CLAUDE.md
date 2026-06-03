@@ -47,7 +47,7 @@ Lê este ficheiro no início de CADA sessão antes de fazer qualquer coisa.
 
 ## ⚡ PRÓXIMA TASK A EXECUTAR
 
-**Próxima task de código:** `[3.3] Clock-in com GPS`
+**Próxima task de código:** `[3.4] PWA: manifest + service worker`
 
 ---
 
@@ -59,7 +59,7 @@ Lê este ficheiro no início de CADA sessão antes de fazer qualquer coisa.
 - [2.7] Vista de lista do calendário + toggle + exportar CSV
 - [2.8] Modal "Avisos" a clientes + página `/clientes/[id]` com aba Comunicação
 
-**Último commit:** `[3.1]` — github.com/ShadowShtr/mo-limpezas
+**Último commit:** `[3.3]` — github.com/ShadowShtr/mo-limpezas
 
 **Migrations pendentes (aplicar no Supabase antes de testar 2.5–2.8):**
 - `supabase/migrations/011_conflict_detection.sql`
@@ -130,9 +130,9 @@ Lê este ficheiro no início de CADA sessão antes de fazer qualquer coisa.
 - [x] [3.2] Ecrã Home: serviços do dia
 - [x] [3.2] Ecrã detalhe do serviço + botão Navegar
 - [x] [3.2] Ecrã escala semanal + perfil
-- [ ] [3.3] Clock-in com GPS
-- [ ] [3.3] Clock-out com GPS
-- [ ] [3.3] Painel tempo real (Supabase Realtime)
+- [x] [3.3] Clock-in com GPS
+- [x] [3.3] Clock-out com GPS
+- [x] [3.3] Painel tempo real (Supabase Realtime)
 - [ ] [3.4] PWA: manifest + service worker
 - [ ] [3.4] Web Push: VAPID + notificações
 - [ ] [3.4] Google Calendar API

@@ -1,9 +1,12 @@
 import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
-import { ArrowLeft, MapPin, Clock, Key, FileText, Navigation, Users } from "lucide-react";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { ArrowLeft, MapPin, Clock, Key, FileText, Navigation } from "lucide-react";
 import { formatTime, formatDate } from "@/lib/utils";
 import { StatusBadge } from "../../_components/status-badge";
+import { ClockButton } from "./_components/clock-button";
+import { TeamRealtime } from "./_components/team-realtime";
 
 interface Props {
   params: Promise<{ id: string }>;
@@ -13,14 +16,16 @@ export default async function ServicoDetailPage({ params }: Props) {
   const { id } = await params;
   const supabase = await createClient();
 
-  const { data: { user } } = await supabase.auth.getUser();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
   const { data: s } = await supabase
     .from("services_full")
     .select(`
       id, scheduled_start, scheduled_end, actual_start, actual_end,
-      status, notes,
+      status, notes, team_id,
       client_name, client_id,
       location_name, location_address, location_lat, location_lng,
       location_access_code, location_instructions,
@@ -31,9 +36,77 @@ export default async function ServicoDetailPage({ params }: Props) {
 
   if (!s) notFound();
 
-  const mapsUrl = s.location_lat && s.location_lng
-    ? `https://www.google.com/maps/dir/?api=1&destination=${s.location_lat},${s.location_lng}`
-    : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(s.location_address ?? s.location_name)}`;
+  const admin = createAdminClient();
+
+  type TimesheetRow = {
+    id: string;
+    clock_in_at: string;
+    clock_out_at: string | null;
+    location_warning: boolean | null;
+    clock_in_distance_m: number | null;
+  };
+
+  // Timesheet do utilizador atual para este serviço
+  const { data: myTimesheetRaw } = await admin
+    .from("timesheets")
+    .select("id, clock_in_at, clock_out_at, location_warning, clock_in_distance_m")
+    .eq("service_id", id)
+    .eq("collaborator_id", user.id)
+    .maybeSingle();
+
+  const myTimesheet = myTimesheetRaw as unknown as TimesheetRow | null;
+
+  type MemberRow = { id: string; full_name: string };
+
+  // Membros da equipa com os seus timesheets
+  const { data: membershipsRaw } = s.team_id
+    ? await admin
+        .from("team_members")
+        .select("collaborator_id, profiles(id, full_name)")
+        .eq("team_id", s.team_id)
+        .is("left_at", null)
+    : { data: [] };
+
+  const memberships = (membershipsRaw ?? []) as unknown as {
+    collaborator_id: string;
+    profiles: MemberRow | null;
+  }[];
+
+  const memberIds = memberships
+    .map((m) => m.profiles?.id)
+    .filter(Boolean) as string[];
+
+  const { data: teamTimesheetsRaw } = memberIds.length
+    ? await admin
+        .from("timesheets")
+        .select("collaborator_id, clock_in_at, clock_out_at")
+        .eq("service_id", id)
+        .in("collaborator_id", memberIds)
+    : { data: [] };
+
+  type TeamTs = { collaborator_id: string; clock_in_at: string | null; clock_out_at: string | null };
+  const teamTimesheets = (teamTimesheetsRaw ?? []) as unknown as TeamTs[];
+
+  const teamMembers = memberships
+    .map((m) => {
+      const p = m.profiles;
+      if (!p) return null;
+      const ts = teamTimesheets.find((t) => t.collaborator_id === p.id);
+      return {
+        id: p.id,
+        full_name: p.full_name,
+        clockIn: ts?.clock_in_at ?? null,
+        clockOut: ts?.clock_out_at ?? null,
+      };
+    })
+    .filter(Boolean) as { id: string; full_name: string; clockIn: string | null; clockOut: string | null }[];
+
+  const mapsUrl =
+    s.location_lat && s.location_lng
+      ? `https://www.google.com/maps/dir/?api=1&destination=${s.location_lat},${s.location_lng}`
+      : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+          s.location_address ?? s.location_name
+        )}`;
 
   const dateLabel = formatDate(s.scheduled_start);
 
@@ -42,7 +115,10 @@ export default async function ServicoDetailPage({ params }: Props) {
 
       {/* Voltar */}
       <div className="flex items-center gap-2">
-        <Link href="/app" className="p-1.5 rounded-lg hover:bg-[var(--color-border)] transition-colors">
+        <Link
+          href="/app"
+          className="p-1.5 rounded-lg hover:bg-[var(--color-border)] transition-colors"
+        >
           <ArrowLeft className="w-5 h-5 text-[var(--color-text-sub)]" />
         </Link>
         <span className="text-sm text-[var(--color-text-sub)]">Hoje</span>
@@ -50,14 +126,12 @@ export default async function ServicoDetailPage({ params }: Props) {
 
       {/* Card principal */}
       <div className="bg-white rounded-2xl border border-[var(--color-border)] overflow-hidden">
-        {/* Cabeçalho colorido */}
         <div
           className="h-1.5"
           style={{ backgroundColor: s.team_color ?? "var(--color-primary)" }}
         />
 
         <div className="p-5 space-y-4">
-          {/* Título + estado */}
           <div className="flex items-start justify-between gap-3">
             <div>
               <h1 className="text-lg font-bold text-[var(--color-text-main)]">{s.client_name}</h1>
@@ -66,7 +140,6 @@ export default async function ServicoDetailPage({ params }: Props) {
             <StatusBadge status={s.status} />
           </div>
 
-          {/* Data e hora */}
           <div className="flex items-center gap-2 text-sm text-[var(--color-text-sub)]">
             <Clock className="w-4 h-4 text-[var(--color-primary)] shrink-0" />
             <span className="capitalize">{dateLabel}</span>
@@ -76,23 +149,30 @@ export default async function ServicoDetailPage({ params }: Props) {
             </span>
           </div>
 
-          {/* Morada */}
           {s.location_address && (
             <div className="flex items-start gap-2 text-sm text-[var(--color-text-sub)]">
               <MapPin className="w-4 h-4 text-[var(--color-primary)] shrink-0 mt-0.5" />
               <span>{s.location_address}</span>
             </div>
           )}
-
-          {/* Equipa */}
-          {s.team_name && (
-            <div className="flex items-center gap-2 text-sm text-[var(--color-text-sub)]">
-              <Users className="w-4 h-4 text-[var(--color-primary)] shrink-0" />
-              <span>{s.team_name}</span>
-            </div>
-          )}
         </div>
       </div>
+
+      {/* Clock-in / Clock-out */}
+      <ClockButton
+        serviceId={id}
+        initialTimesheet={
+          myTimesheet
+            ? {
+                id: myTimesheet.id,
+                clock_in_at: myTimesheet.clock_in_at,
+                clock_out_at: myTimesheet.clock_out_at,
+                location_warning: myTimesheet.location_warning ?? false,
+                clock_in_distance_m: myTimesheet.clock_in_distance_m,
+              }
+            : null
+        }
+      />
 
       {/* Botão Navegar */}
       <a
@@ -104,6 +184,11 @@ export default async function ServicoDetailPage({ params }: Props) {
         <Navigation className="w-4 h-4" />
         Navegar para o local
       </a>
+
+      {/* Painel realtime da equipa */}
+      {teamMembers.length > 0 && (
+        <TeamRealtime serviceId={id} initialMembers={teamMembers} />
+      )}
 
       {/* Acesso */}
       {s.location_access_code && (
@@ -131,7 +216,7 @@ export default async function ServicoDetailPage({ params }: Props) {
         </div>
       )}
 
-      {/* Notas do serviço */}
+      {/* Notas */}
       {s.notes && (
         <div className="bg-white rounded-2xl border border-[var(--color-border)] p-4">
           <div className="flex items-center gap-2 mb-2">
@@ -141,13 +226,6 @@ export default async function ServicoDetailPage({ params }: Props) {
           <p className="text-sm text-[var(--color-text-sub)] leading-relaxed">{s.notes}</p>
         </div>
       )}
-
-      {/* Placeholder clock-in/out — implementado em [3.3] */}
-      <div className="bg-[var(--color-primary-light)] rounded-2xl border border-[var(--color-primary-muted)] p-4 text-center">
-        <p className="text-xs text-[var(--color-primary)] font-medium">
-          Registo de ponto disponível em breve
-        </p>
-      </div>
     </div>
   );
 }
