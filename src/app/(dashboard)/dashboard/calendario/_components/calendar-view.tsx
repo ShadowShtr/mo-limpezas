@@ -8,7 +8,7 @@ import {
   endOfWeek,
 } from "date-fns";
 import { pt } from "date-fns/locale";
-import { ChevronLeft, ChevronRight, Plus, AlertTriangle, X, Users, LayoutGrid, List } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, AlertTriangle, X, Users, LayoutGrid, List, Bell } from "lucide-react";
 import {
   DndContext, DragOverlay,
   PointerSensor, useSensor, useSensors,
@@ -20,6 +20,7 @@ import { ServiceCreateSheet } from "./service-create-sheet";
 import { ServiceDetailSheet } from "./service-detail-sheet";
 import { TeamAllocationModal } from "./team-allocation-modal";
 import { CalendarListView } from "./calendar-list-view";
+import { ClientNotificationsModal } from "./client-notifications-modal";
 import { rescheduleService } from "../_actions/reschedule";
 import type { Database } from "@/types/database";
 
@@ -152,6 +153,7 @@ export function CalendarView({
   const [createSheet,       setCreateSheet]       = useState<{ date: Date; startTime: string; teamId: string } | null>(null);
   const [detailSvc,         setDetailSvc]         = useState<ServiceFull | null>(null);
   const [allocationOpen,    setAllocationOpen]    = useState(false);
+  const [avisosOpen,        setAvisosOpen]        = useState(false);
   const [viewMode,          setViewMode]          = useState<"calendar" | "list">("calendar");
 
   // ── Drag state ───────────────────────────────────────────────────────────
@@ -403,6 +405,13 @@ export function CalendarView({
             {!isDemo && (
               <>
                 <button
+                  onClick={() => setAvisosOpen(true)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[var(--color-border)] text-[var(--color-text-sub)] text-xs font-semibold hover:bg-[var(--color-background)] transition-colors"
+                >
+                  <Bell className="w-3.5 h-3.5" />
+                  Avisos
+                </button>
+                <button
                   onClick={() => setAllocationOpen(true)}
                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[var(--color-border)] text-[var(--color-text-sub)] text-xs font-semibold hover:bg-[var(--color-background)] transition-colors"
                 >
@@ -627,6 +636,13 @@ export function CalendarView({
         companyId={companyId}
         selectedDate={selectedDate}
         teams={teams}
+      />
+      <ClientNotificationsModal
+        open={avisosOpen}
+        onClose={() => setAvisosOpen(false)}
+        companyId={companyId}
+        selectedDate={selectedDate}
+        userId={userId}
       />
     </DndContext>
   );

@@ -52,7 +52,7 @@ Lê este ficheiro no início de CADA sessão antes de fazer qualquer coisa.
 2. Adicionar `CRON_SECRET` ao `.env.local` (e às variáveis de ambiente do Vercel)
 3. Testar manualmente: `GET /api/cron/generate-services?secret=<CRON_SECRET>&month=2026-07`
 
-**Próxima task de código:** `[2.8] Botão "Avisos" no calendário`
+**Próxima task de código:** `[3.1] Layout /app/* + bottom navigation + deteção mobile`
 
 ---
 
@@ -108,8 +108,8 @@ Lê este ficheiro no início de CADA sessão antes de fazer qualquer coisa.
 - [x] [2.5] COMMIT Fase 2
 - [x] [2.6] Modal de alocação de equipas a viaturas (botão "Equipas" no calendário)
 - [x] [2.7] Vista de lista do calendário (toggle tabela/calendário)
-- [ ] [2.8] Botão "Avisos" no calendário — modal Notificar Clientes (SMS + Email)
-- [ ] [2.8] Aba "Comunicação" na ficha do cliente (histórico + enviar aviso)
+- [x] [2.8] Botão "Avisos" no calendário — modal Notificar Clientes (SMS + Email)
+- [x] [2.8] Aba "Comunicação" na ficha do cliente (histórico + enviar aviso)
 
 ### FASE 3 — App Mobile (PWA)
 - [ ] [3.1] Layout /app/* + bottom navigation + deteção mobile

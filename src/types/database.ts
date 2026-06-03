@@ -30,9 +30,15 @@ export type Database = {
         Relationships: [];
       };
       clients: {
-        Row: { id: string; company_id: string; name: string; contact_name: string | null; contact_email: string | null; contact_phone: string | null; nif: string | null; notes: string | null; active: boolean; created_at: string; updated_at: string };
-        Insert: { company_id: string; name: string; contact_name?: string | null; contact_email?: string | null; contact_phone?: string | null; nif?: string | null; notes?: string | null; active?: boolean };
-        Update: { name?: string; contact_name?: string | null; contact_email?: string | null; contact_phone?: string | null; nif?: string | null; notes?: string | null; active?: boolean };
+        Row: { id: string; company_id: string; name: string; contact_name: string | null; contact_email: string | null; contact_phone: string | null; nif: string | null; notes: string | null; active: boolean; notification_enabled: boolean; notification_method: string; notification_phone: string | null; notification_email: string | null; created_at: string; updated_at: string };
+        Insert: { company_id: string; name: string; contact_name?: string | null; contact_email?: string | null; contact_phone?: string | null; nif?: string | null; notes?: string | null; active?: boolean; notification_enabled?: boolean; notification_method?: string; notification_phone?: string | null; notification_email?: string | null };
+        Update: { name?: string; contact_name?: string | null; contact_email?: string | null; contact_phone?: string | null; nif?: string | null; notes?: string | null; active?: boolean; notification_enabled?: boolean; notification_method?: string; notification_phone?: string | null; notification_email?: string | null };
+        Relationships: [];
+      };
+      client_notifications: {
+        Row: { id: string; company_id: string; client_id: string; service_id: string | null; method: string; status: string; sent_at: string | null; message_body: string | null; contact_used: string | null; created_by: string | null; created_at: string };
+        Insert: { company_id: string; client_id: string; method: string; status?: string; service_id?: string | null; message_body?: string | null; contact_used?: string | null; created_by?: string | null };
+        Update: { status?: string; sent_at?: string | null };
         Relationships: [];
       };
       locations: {
