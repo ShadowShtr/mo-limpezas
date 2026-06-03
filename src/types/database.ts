@@ -1,6 +1,13 @@
 // Tipos manuais — serão substituídos pelos gerados automaticamente após as migrations:
 // npx supabase gen types typescript --project-id <project-id> > src/types/database.ts
 
+export type ScheduleDay = {
+  day: "mon" | "tue" | "wed" | "thu" | "fri" | "sat" | "sun" | "all";
+  start_time: string; // "HH:MM"
+  duration_min: number;
+  team_id: string | null;
+};
+
 export type Database = {
   public: {
     Tables: {
@@ -47,9 +54,9 @@ export type Database = {
         Relationships: [];
       };
       contracts: {
-        Row: { id: string; company_id: string; client_id: string; location_id: string; name: string | null; schedule_days: Record<string, unknown>[]; start_date: string; end_date: string | null; status: string; notes: string | null; created_by: string | null; created_at: string; updated_at: string };
-        Insert: { company_id: string; client_id: string; location_id: string; schedule_days: Record<string, unknown>[]; start_date: string; status?: string };
-        Update: { schedule_days?: Record<string, unknown>[]; end_date?: string | null; status?: string; notes?: string | null };
+        Row: { id: string; company_id: string; location_id: string; name: string | null; frequency: string; interval_days: number; weekdays: number[] | null; month_day: number | null; month_week: number | null; month_weekday: number | null; schedule_days: ScheduleDay[]; starts_on: string; ends_on: string | null; status: string; notes: string | null; created_by: string | null; created_at: string; updated_at: string };
+        Insert: { company_id: string; location_id: string; frequency: string; schedule_days: ScheduleDay[]; starts_on: string; name?: string | null; interval_days?: number; weekdays?: number[] | null; month_day?: number | null; ends_on?: string | null; status?: string; notes?: string | null; created_by?: string | null };
+        Update: { location_id?: string; name?: string | null; frequency?: string; interval_days?: number; weekdays?: number[] | null; schedule_days?: ScheduleDay[]; starts_on?: string; ends_on?: string | null; status?: string; notes?: string | null };
         Relationships: [];
       };
       services: {

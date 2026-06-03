@@ -52,7 +52,7 @@ Aplicar as migrations no Supabase (se ainda não foi feito):
 Dashboard → SQL Editor → executar cada ficheiro em `supabase/migrations/` por ordem (001 → 010)
 Depois executar `supabase/seed.sql` para dados de teste.
 
-**Próxima task de código:** `[2.1] Página /contratos: lista + criar/editar + preview ocorrências`
+**Próxima task de código:** `[2.2] Instalar dnd-kit + date-fns → Calendário CSS Grid`
 
 ---
 
@@ -60,7 +60,7 @@ Depois executar `supabase/seed.sql` para dados de teste.
 
 ### FASE 1 — Fundação
 - [x] PRÉ-REQUISITO: .env.local preenchido com credenciais Supabase
-- [ ] PRÉ-REQUISITO: Aplicar migrations no Supabase SQL Editor (001→010) + seed.sql
+- [x] PRÉ-REQUISITO: Migrations aplicadas + seed (companies, clients, locations, teams)
 - [x] [1.1] Reorganizar repo: mover planning docs para pasta planning/
 - [x] [1.1] Inicializar Next.js 15 + TypeScript na raiz
 - [x] [1.1] Instalar Tailwind v4 + shadcn/ui (tema verde #16A34A)
@@ -95,7 +95,7 @@ Depois executar `supabase/seed.sql` para dados de teste.
 - [x] [1.8] COMMIT Fase 1
 
 ### FASE 2 — Calendário
-- [ ] [2.1] Página /contratos: lista + criar/editar + preview ocorrências
+- [x] [2.1] Página /contratos: lista + criar/editar + preview ocorrências
 - [ ] [2.2] Instalar dnd-kit + date-fns
 - [ ] [2.2] Calendário CSS Grid: colunas por equipa × linhas por hora
 - [ ] [2.2] Blocos coloridos por estado + navegação semanal
