@@ -145,6 +145,98 @@ Desenvolvimento em fases incrementais — cada fase entrega valor utilizável, m
 
 ---
 
+### Bloco 2.8 — Avisos a Clientes (SMS + Email)
+
+**Referência visual:** ServiSync → modal "Notificar Clientes" (bell icon na barra do calendário)
+
+---
+
+#### Parte A — Botão "Avisos" no calendário
+
+**O que faz:**
+- Ícone de sino 🔔 na barra de navegação do calendário com badge de contagem (quantos pendentes)
+- Clique abre modal **"Notificar Clientes"** com:
+  - Tabs: **Hoje** / **Amanhã** / **Próximos 3 dias**
+  - Tabela com colunas: checkbox · **Estado** (badge Pendente/Enviado) · **Cliente** · **Data da Intervenção** · **Método** (SMS/Email) · **Contacto** (nº telemóvel ou email)
+  - Checkboxes individuais + "Selecionar todos"
+  - Botão **"Enviar"** — envia para todos os selecionados com estado Pendente
+  - Nota informativa no rodapé do modal
+  - Botão "Cancelar"
+
+**Comportamento:**
+- Só aparecem clientes com notificação ativa (`notification_enabled = true` na tabela `clients`)
+- Cada serviço tem no máximo 1 notificação por tipo por dia (não enviar duplicados)
+- Após enviar: estado muda para **Enviado** + timestamp registado
+- O badge do sino decrementa à medida que se enviam
+
+---
+
+#### Parte B — Aba "Comunicação" na ficha do cliente
+
+**Localização:** `/dashboard/clientes/[id]` → nova tab "Comunicação"
+
+**O que mostra:**
+- Toggle: notificações ativas/desativas para este cliente
+- Método preferido: SMS / Email / Ambos
+- Campo: número de telemóvel para SMS (pode ser diferente do contacto principal)
+- Campo: email para notificações (pode ser diferente do email de faturação)
+- **Histórico de avisos enviados:** tabela com data, tipo (serviço), método, estado (enviado/falhou), conteúdo da mensagem
+- Botão **"Enviar aviso agora"** para o próximo serviço deste cliente
+
+---
+
+#### Implementação técnica
+
+**Nova tabela: `client_notifications`**
+```sql
+id            uuid PK
+company_id    uuid FK companies
+service_id    uuid FK services
+client_id     uuid FK clients
+method        enum('sms', 'email')
+status        enum('pendente', 'enviado', 'falhou')
+sent_at       timestamptz nullable
+message_body  text
+error_message text nullable
+created_at    timestamptz
+```
+
+**Colunas novas em `clients`:**
+```sql
+notification_enabled   boolean default false
+notification_method    enum('sms','email','both') default 'sms'
+notification_phone     varchar(20) nullable   -- pode diferir de contact_phone
+notification_email     varchar(255) nullable  -- pode diferir de contact_email
+```
+
+**Providers de envio:**
+- **Email:** Resend (já planeado em Fase 6) — `resend.emails.send()`
+- **SMS:** [Twilio](https://www.twilio.com) ou [Link Mobility PT](https://www.linkmobility.com) — avaliar custo/país PT
+  - Alternativa mais barata: [Vonage](https://www.vonage.com) (têm cobertura PT)
+  - Custo estimado SMS PT: ~€0.04–0.07 por SMS
+
+**Template da mensagem SMS (configurável):**
+```
+Olá [CLIENTE], lembramos que amanhã dia [DATA] às [HORA] a equipa Mó Limpezas 
+estará em [MORADA]. Contacto: [TEL]. Obrigado!
+```
+
+**Template Email:** HTML simples com logo + info do serviço + link de confirmação opcional
+
+**Server actions a criar:**
+- `app/actions/notifications.ts`
+  - `getPendingNotifications(companyId, date)` — lista pendentes
+  - `sendNotification(notificationId)` — envia 1
+  - `sendBulkNotifications(ids[])` — envia vários
+  - `markNotificationSent(id)` — actualiza estado
+
+**Componentes a criar:**
+- `src/app/(dashboard)/dashboard/calendario/_components/notifications-modal.tsx`
+- `src/app/(dashboard)/dashboard/clientes/[id]/_components/communication-tab.tsx`
+- Badge no sino em `calendar-view.tsx` (query count de pendentes)
+
+---
+
 ## Fase 3 — App do Colaborador (PWA)
 
 **Duração estimada:** 2–3 semanas  

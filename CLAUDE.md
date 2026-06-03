@@ -108,6 +108,8 @@ Depois executar `supabase/seed.sql` para dados de teste.
 - [ ] [2.5] COMMIT Fase 2
 - [ ] [2.6] Modal de alocação de equipas a viaturas (botão "Equipas" no calendário)
 - [ ] [2.7] Vista de lista do calendário (toggle tabela/calendário)
+- [ ] [2.8] Botão "Avisos" no calendário — modal Notificar Clientes (SMS + Email)
+- [ ] [2.8] Aba "Comunicação" na ficha do cliente (histórico + enviar aviso)
 
 ### FASE 3 — App Mobile (PWA)
 - [ ] [3.1] Layout /app/* + bottom navigation + deteção mobile
