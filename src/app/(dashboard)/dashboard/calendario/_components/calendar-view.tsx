@@ -8,7 +8,7 @@ import {
   endOfWeek,
 } from "date-fns";
 import { pt } from "date-fns/locale";
-import { ChevronLeft, ChevronRight, Plus, Calendar } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
 import { ServiceBlock, type ServiceForBlock } from "./service-block";
 import { ServiceCreateSheet } from "./service-create-sheet";
 import { ServiceDetailSheet } from "./service-detail-sheet";
@@ -83,6 +83,35 @@ function yToTime(y: number): string {
 }
 
 const DAY_LABELS = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"];
+
+// ─── Linhas do grid (definido antes do componente para evitar forward-reference) ──
+
+function GridLines({
+  totalHours, slotsPerHour, slotHeight,
+}: { totalHours: number; slotsPerHour: number; slotHeight: number }) {
+  return (
+    <>
+      {Array.from({ length: totalHours + 1 }, (_, i) => (
+        <div
+          key={`h-${i}`}
+          className="absolute left-0 right-0 border-t border-[var(--color-border)] pointer-events-none"
+          style={{ top: `${i * slotsPerHour * slotHeight}px` }}
+        />
+      ))}
+      {Array.from({ length: totalHours }, (_, i) => (
+        <div
+          key={`hh-${i}`}
+          className="absolute left-0 right-0 pointer-events-none"
+          style={{
+            top: `${(i * slotsPerHour + 1) * slotHeight}px`,
+            borderTop: "1px dashed var(--color-border)",
+            opacity: 0.4,
+          }}
+        />
+      ))}
+    </>
+  );
+}
 
 // ─── Componente ───────────────────────────────────────────────────────────────
 
@@ -258,112 +287,121 @@ export function CalendarView({
           </div>
         </div>
 
-        {/* ── Grid do calendário ─────────────────────────────────────────── */}
-        {columns.length === 0 ? (
-          <EmptyTeams />
-        ) : (
-          <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
+        {/* ── Grid do calendário — sempre visível ────────────────────────── */}
+        <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
 
-            {/* Cabeçalho das equipas (sticky) */}
-            <div className="flex bg-white border-b border-[var(--color-border)] shrink-0">
-              {/* Espaço da coluna de horas */}
-              <div className="w-14 shrink-0 border-r border-[var(--color-border)]" />
-              {columns.map((col) => (
+          {/* Cabeçalho das equipas */}
+          <div className="flex bg-white border-b border-[var(--color-border)] shrink-0">
+            <div className="w-14 shrink-0 border-r border-[var(--color-border)]" />
+            {columns.length > 0 ? columns.map((col) => (
+              <div
+                key={col.key}
+                className="flex-1 min-w-[160px] px-3 py-2.5 border-l border-[var(--color-border)]"
+              >
+                <div className="flex items-center gap-2">
+                  <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: col.color }} />
+                  <span className="text-sm font-semibold text-[var(--color-text-main)] truncate">{col.name}</span>
+                  <span className="ml-auto text-xs font-medium text-[var(--color-text-muted)] tabular-nums">
+                    {byTeam[col.id]?.length ?? 0}
+                  </span>
+                </div>
+              </div>
+            )) : (
+              <div className="flex-1 px-4 py-2.5 border-l border-[var(--color-border)] flex items-center gap-2">
+                <span className="text-sm text-[var(--color-text-muted)]">Sem equipas —</span>
+                <a href="/dashboard/equipas" className="text-sm text-[var(--color-primary)] hover:underline font-medium">
+                  Criar equipas
+                </a>
+              </div>
+            )}
+          </div>
+
+          {/* Área de scroll vertical — sempre renderizada */}
+          <div ref={scrollRef} className="flex-1 overflow-auto">
+            <div
+              className="flex"
+              style={{
+                height: `${TOTAL_SLOTS * SLOT_HEIGHT}px`,
+                minWidth: `${56 + Math.max(columns.length, 1) * 160}px`,
+              }}
+            >
+              {/* Coluna de horas */}
+              <div className="w-14 shrink-0 border-r border-[var(--color-border)] relative bg-white">
+                {Array.from({ length: TOTAL_HOURS + 1 }, (_, i) => {
+                  const hour = START_HOUR + i;
+                  return (
+                    <div
+                      key={hour}
+                      className="absolute right-2 select-none"
+                      style={{ top: `${i * SLOTS_PER_HOUR * SLOT_HEIGHT}px`, transform: "translateY(-50%)" }}
+                    >
+                      <span className="text-[11px] text-[var(--color-text-muted)] font-medium">
+                        {String(hour).padStart(2, "0")}:00
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Colunas das equipas (ou coluna vazia se não houver equipas) */}
+              {columns.length > 0 ? columns.map((col) => (
                 <div
                   key={col.key}
-                  className="flex-1 min-w-[160px] px-3 py-2.5 border-l border-[var(--color-border)]"
+                  className="flex-1 min-w-[160px] relative border-l border-[var(--color-border)] cursor-crosshair"
+                  style={{ height: `${TOTAL_SLOTS * SLOT_HEIGHT}px` }}
+                  onClick={(e) => handleColumnClick(col.key, e)}
                 >
-                  <div className="flex items-center gap-2">
-                    <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: col.color }} />
-                    <span className="text-sm font-semibold text-[var(--color-text-main)] truncate">{col.name}</span>
-                    <span className="ml-auto text-xs font-medium text-[var(--color-text-muted)] tabular-nums">
-                      {byTeam[col.id]?.length ?? 0}
-                    </span>
-                  </div>
+                  <GridLines
+                    totalHours={TOTAL_HOURS}
+                    slotsPerHour={SLOTS_PER_HOUR}
+                    slotHeight={SLOT_HEIGHT}
+                  />
+
+                  {isToday && currentTop !== null && (
+                    <div
+                      className="absolute left-0 right-0 z-20 pointer-events-none"
+                      style={{ top: `${currentTop}px` }}
+                    >
+                      <div className="w-full h-0.5 bg-red-500" />
+                      <div className="absolute -left-1 -top-1.5 w-3 h-3 rounded-full bg-red-500" />
+                    </div>
+                  )}
+
+                  {(byTeam[col.id] ?? []).map((svc) => (
+                    <ServiceBlock
+                      key={svc.id}
+                      service={svc}
+                      slotHeight={SLOT_HEIGHT}
+                      startHour={START_HOUR}
+                      onClick={(b) => setDetailSvc(services.find((s) => s.id === b.id) ?? null)}
+                    />
+                  ))}
                 </div>
-              ))}
-            </div>
-
-            {/* Área de scroll vertical */}
-            <div ref={scrollRef} className="flex-1 overflow-auto">
-              <div
-                className="flex"
-                style={{ height: `${TOTAL_SLOTS * SLOT_HEIGHT}px`, minWidth: `${56 + columns.length * 160}px` }}
-              >
-                {/* Coluna de horas */}
-                <div className="w-14 shrink-0 border-r border-[var(--color-border)] relative bg-white">
-                  {Array.from({ length: TOTAL_HOURS + 1 }, (_, i) => {
-                    const hour = START_HOUR + i;
-                    return (
-                      <div
-                        key={hour}
-                        className="absolute right-2 select-none"
-                        style={{ top: `${i * SLOTS_PER_HOUR * SLOT_HEIGHT}px`, transform: "translateY(-50%)" }}
-                      >
-                        <span className="text-[11px] text-[var(--color-text-muted)] font-medium">
-                          {String(hour).padStart(2, "0")}:00
-                        </span>
-                      </div>
-                    );
-                  })}
+              )) : (
+                /* Coluna vazia com grades — para quando não há equipas ainda */
+                <div
+                  className="flex-1 min-w-[160px] relative border-l border-[var(--color-border)]"
+                  style={{ height: `${TOTAL_SLOTS * SLOT_HEIGHT}px` }}
+                >
+                  <GridLines
+                    totalHours={TOTAL_HOURS}
+                    slotsPerHour={SLOTS_PER_HOUR}
+                    slotHeight={SLOT_HEIGHT}
+                  />
+                  {isToday && currentTop !== null && (
+                    <div
+                      className="absolute left-0 right-0 z-20 pointer-events-none"
+                      style={{ top: `${currentTop}px` }}
+                    >
+                      <div className="w-full h-0.5 bg-red-500" />
+                      <div className="absolute -left-1 -top-1.5 w-3 h-3 rounded-full bg-red-500" />
+                    </div>
+                  )}
                 </div>
-
-                {/* Colunas das equipas */}
-                {columns.map((col) => (
-                  <div
-                    key={col.key}
-                    className="flex-1 min-w-[160px] relative border-l border-[var(--color-border)] cursor-crosshair"
-                    style={{ height: `${TOTAL_SLOTS * SLOT_HEIGHT}px` }}
-                    onClick={(e) => handleColumnClick(col.key, e)}
-                  >
-                    {/* Linhas de hora (sólidas) */}
-                    {Array.from({ length: TOTAL_HOURS + 1 }, (_, i) => (
-                      <div
-                        key={`h-${i}`}
-                        className="absolute left-0 right-0 border-t border-[var(--color-border)] pointer-events-none"
-                        style={{ top: `${i * SLOTS_PER_HOUR * SLOT_HEIGHT}px` }}
-                      />
-                    ))}
-                    {/* Linhas de meia hora (tracejadas) */}
-                    {Array.from({ length: TOTAL_HOURS }, (_, i) => (
-                      <div
-                        key={`hh-${i}`}
-                        className="absolute left-0 right-0 pointer-events-none"
-                        style={{
-                          top: `${(i * SLOTS_PER_HOUR + 1) * SLOT_HEIGHT}px`,
-                          borderTop: "1px dashed var(--color-border)",
-                          opacity: 0.4,
-                        }}
-                      />
-                    ))}
-
-                    {/* Linha de hora actual */}
-                    {isToday && currentTop !== null && (
-                      <div
-                        className="absolute left-0 right-0 z-20 pointer-events-none"
-                        style={{ top: `${currentTop}px` }}
-                      >
-                        <div className="w-full h-0.5 bg-red-500" />
-                        <div className="absolute -left-1 -top-1.5 w-3 h-3 rounded-full bg-red-500" />
-                      </div>
-                    )}
-
-                    {/* Blocos de serviço */}
-                    {(byTeam[col.id] ?? []).map((svc) => (
-                      <ServiceBlock
-                        key={svc.id}
-                        service={svc}
-                        slotHeight={SLOT_HEIGHT}
-                        startHour={START_HOUR}
-                        onClick={(b) => setDetailSvc(services.find((s) => s.id === b.id) ?? null)}
-                      />
-                    ))}
-                  </div>
-                ))}
-              </div>
+              )}
             </div>
           </div>
-        )}
+        </div>
       </div>
 
       {/* Sheets */}
@@ -389,22 +427,3 @@ export function CalendarView({
   );
 }
 
-// ─── Estado vazio ─────────────────────────────────────────────────────────────
-
-function EmptyTeams() {
-  return (
-    <div className="flex-1 flex flex-col items-center justify-center gap-3 text-center px-6">
-      <div className="w-12 h-12 rounded-full bg-[var(--color-primary-light)] flex items-center justify-center">
-        <Calendar className="w-6 h-6 text-[var(--color-primary)]" />
-      </div>
-      <div>
-        <p className="text-sm font-semibold text-[var(--color-text-main)]">Sem equipas criadas</p>
-        <p className="text-xs text-[var(--color-text-muted)] mt-1">
-          Cria equipas em{" "}
-          <a href="/dashboard/equipas" className="text-[var(--color-primary)] hover:underline">Equipas</a>{" "}
-          para começar a agendar serviços.
-        </p>
-      </div>
-    </div>
-  );
-}
