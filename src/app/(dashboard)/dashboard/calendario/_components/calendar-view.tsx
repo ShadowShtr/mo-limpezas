@@ -402,38 +402,35 @@ export function CalendarView({
                 <List className="w-3.5 h-3.5" />
               </button>
             </div>
-            {!isDemo && (
-              <>
-                <button
-                  onClick={() => setAvisosOpen(true)}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[var(--color-border)] text-[var(--color-text-sub)] text-xs font-semibold hover:bg-[var(--color-background)] transition-colors"
-                >
-                  <Bell className="w-3.5 h-3.5" />
-                  Avisos
-                </button>
-                <button
-                  onClick={() => setAllocationOpen(true)}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[var(--color-border)] text-[var(--color-text-sub)] text-xs font-semibold hover:bg-[var(--color-background)] transition-colors"
-                >
-                  <Users className="w-3.5 h-3.5" />
-                  Equipas
-                </button>
-                <button
-                  onClick={() => setCreateSheet({ date: selectedDate, startTime: "09:00", teamId: teams[0]?.id ?? "" })}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[var(--color-primary)] text-white text-xs font-semibold hover:bg-[var(--color-primary-hover)] transition-colors"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  Novo serviço
-                </button>
-              </>
-            )}
-            {isDemo && (
+            <button
+              onClick={() => setAvisosOpen(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[var(--color-border)] text-[var(--color-text-sub)] text-xs font-semibold hover:bg-[var(--color-background)] transition-colors"
+            >
+              <Bell className="w-3.5 h-3.5" />
+              Avisos
+            </button>
+            <button
+              onClick={() => setAllocationOpen(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[var(--color-border)] text-[var(--color-text-sub)] text-xs font-semibold hover:bg-[var(--color-background)] transition-colors"
+            >
+              <Users className="w-3.5 h-3.5" />
+              Equipas
+            </button>
+            {isDemo ? (
               <a
                 href="/dashboard/equipas"
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500 text-white text-xs font-semibold hover:bg-amber-600 transition-colors"
               >
                 Criar equipas para começar
               </a>
+            ) : (
+              <button
+                onClick={() => setCreateSheet({ date: selectedDate, startTime: "09:00", teamId: teams[0]?.id ?? "" })}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[var(--color-primary)] text-white text-xs font-semibold hover:bg-[var(--color-primary-hover)] transition-colors"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                Novo serviço
+              </button>
             )}
           </div>
         </div>
