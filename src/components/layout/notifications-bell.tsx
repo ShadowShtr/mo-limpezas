@@ -5,8 +5,6 @@ import { Bell, CheckCheck } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { formatDistanceToNow } from "@/lib/utils";
 
-const supabase = createClient();
-
 interface Notification {
   id: string;
   type: string;
@@ -32,6 +30,9 @@ export function NotificationsBell() {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [unread, setUnread] = useState(0);
   const ref = useRef<HTMLDivElement>(null);
+  const supabase = useRef(createClient()).current;
+  // Nome único por instância para evitar conflito quando dois NotificationsBell montam em simultâneo
+  const channelName = useRef(`notifications-${Math.random().toString(36).slice(2)}`).current;
 
   const loadNotifications = useCallback(async () => {
     const { data } = await supabase
@@ -48,7 +49,7 @@ export function NotificationsBell() {
 
   useEffect(() => {
     const channel = supabase
-      .channel("notifications")
+      .channel(channelName)
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "notifications" }, () => {
         loadNotifications();
       })
