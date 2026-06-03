@@ -3,6 +3,7 @@
 import { useState, useMemo } from "react";
 import { X, Loader2, ChevronDown } from "lucide-react";
 import { format } from "date-fns";
+import { pt } from "date-fns/locale";
 import { createClient } from "@/lib/supabase/client";
 
 type Client = { id: string; name: string };
@@ -134,7 +135,7 @@ export function ServiceCreateSheet({
           <div>
             <h2 className="text-base font-semibold text-[var(--color-text-main)]">Novo serviço</h2>
             <p className="text-xs text-[var(--color-text-muted)] mt-0.5">
-              {format(date, "EEEE, d 'de' MMMM yyyy", { locale: undefined })} · {startTime}–{endTime}
+              {format(date, "EEEE, d 'de' MMMM yyyy", { locale: pt })} · {startTime}–{endTime}
             </p>
           </div>
           <button

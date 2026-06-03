@@ -125,15 +125,26 @@ export function CalendarView({
 
   // ── State ────────────────────────────────────────────────────────────────
   const [selectedDate, setSelectedDate] = useState(() => parseISO(selectedDateISO));
-  const [currentTop,   setCurrentTop]   = useState(() => computeTimeTop(parseISO(selectedDateISO)));
+  // null no servidor — calculado só no cliente (evita hydration mismatch com new Date())
+  const [currentTop,   setCurrentTop]   = useState<number | null>(null);
+  // today calculado só no cliente (null no servidor para evitar hydration mismatch)
+  const [today,        setToday]        = useState<Date | null>(null);
   const [createSheet,  setCreateSheet]  = useState<{ date: Date; startTime: string; teamId: string } | null>(null);
   const [detailSvc,    setDetailSvc]    = useState<ServiceFull | null>(null);
+
+  // Inicializar today e currentTop no cliente (evita hydration mismatch)
+  useEffect(() => {
+    setToday(new Date());
+    setCurrentTop(computeTimeTop(parseISO(selectedDateISO)));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Sincronizar selectedDate quando o servidor re-renderiza (navegação de semana)
   useEffect(() => {
     const d = parseISO(selectedDateISO);
     setSelectedDate(d);
     setCurrentTop(computeTimeTop(d));
+    setToday(new Date());
   }, [selectedDateISO]);
 
   // Actualizar linha de hora actual a cada minuto
@@ -210,8 +221,8 @@ export function CalendarView({
 
   function handleChanged() { router.refresh(); }
 
-  const today    = new Date();
-  const isToday  = isSameDay(selectedDate, today);
+  // today é null no SSR — guards abaixo garantem segurança
+  const isToday  = today !== null && isSameDay(selectedDate, today);
   const weekRange = `${format(weekStart, "d MMM", { locale: pt })} – ${format(endOfWeek(weekStart, { weekStartsOn: 1 }), "d MMM yyyy", { locale: pt })}`;
 
   // ─── Render ───────────────────────────────────────────────────────────────
@@ -235,7 +246,7 @@ export function CalendarView({
           <div className="flex gap-1">
             {weekDays.map((day, i) => {
               const isSel  = isSameDay(day, selectedDate);
-              const isTody = isSameDay(day, today);
+              const isTody = today !== null && isSameDay(day, today);
               const count  = services.filter((s) => isSameDay(parseISO(s.scheduled_start), day)).length;
               return (
                 <button
@@ -411,7 +422,7 @@ export function CalendarView({
         onCreated={handleChanged}
         companyId={companyId}
         userId={userId}
-        date={createSheet?.date ?? today}
+        date={createSheet?.date ?? today ?? new Date()}
         initialStartTime={createSheet?.startTime ?? "09:00"}
         initialTeamId={createSheet?.teamId ?? ""}
         clients={clients}
