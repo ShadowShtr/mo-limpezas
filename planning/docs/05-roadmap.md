@@ -215,11 +215,47 @@ notification_email     varchar(255) nullable  -- pode diferir de contact_email
   - Alternativa mais barata: [Vonage](https://www.vonage.com) (têm cobertura PT)
   - Custo estimado SMS PT: ~€0.04–0.07 por SMS
 
-**Template da mensagem SMS (configurável):**
+**Templates de mensagem (configuráveis em Configurações da empresa)**
+
+> Variáveis disponíveis: `[NOME]` `[DIA_SEMANA]` `[DATA]` `[HORA]` `[MORADA]` `[TELEFONE_EMPRESA]`
+
+**Template SMS** (≤ 160 chars, sem acentos — compatível com todos os gateways):
 ```
-Olá [CLIENTE], lembramos que amanhã dia [DATA] às [HORA] a equipa Mó Limpezas 
-estará em [MORADA]. Contacto: [TEL]. Obrigado!
+Mo Limpezas: Ola [NOME], lembramos a sua limpeza amanha [DIA_SEMANA] as [HORA]
+em [MORADA]. Para cancelar ou reagendar: [TELEFONE_EMPRESA]. Obrigado!
 ```
+*Valor padrão de [TELEFONE_EMPRESA]: 925 780 509*
+
+**Template WhatsApp** (suporta markdown Bold/Italic, emojis, sem limite de chars):
+```
+Olá [NOME] 👋
+
+A *Mó Limpezas Lda* recorda-lhe o serviço agendado:
+
+📅 Amanhã, [DIA_SEMANA] [DATA]
+🕐 [HORA]
+📍 [MORADA]
+
+Caso não necessite do serviço ou queira reagendar, contacte-nos:
+📞 [TELEFONE_EMPRESA]
+
+Obrigado pela confiança! 🌿
+```
+
+**Template Email** — assunto + corpo HTML:
+```
+Assunto: Lembrete — Limpeza amanhã às [HORA] | Mó Limpezas Lda
+
+Corpo: logo da empresa + mesmo conteúdo do WhatsApp formatado em HTML
+       + botão CTA "Ligar agora" → tel:[TELEFONE_EMPRESA]
+       + rodapé com morada da empresa
+```
+
+**Notas de implementação dos templates:**
+- Templates guardados em `company_settings.notification_templates` (JSONB)
+- Editor de template em Configurações → Comunicação
+- Preview em tempo real com dados de exemplo ao editar
+- Se o template SMS ultrapassar 160 chars → aviso automático no editor
 
 **Template Email:** HTML simples com logo + info do serviço + link de confirmação opcional
 
