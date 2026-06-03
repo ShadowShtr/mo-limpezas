@@ -13,6 +13,7 @@ import {
   BarChart3,
   Settings,
   LogOut,
+  X,
 } from "lucide-react";
 import { logout } from "@/app/actions/auth";
 
@@ -31,9 +32,10 @@ interface SidebarProps {
   userName: string;
   userRole: string;
   avatarUrl?: string | null;
+  onClose?: () => void;
 }
 
-export function Sidebar({ userName, userRole, avatarUrl }: SidebarProps) {
+export function Sidebar({ userName, userRole, avatarUrl, onClose }: SidebarProps) {
   const pathname = usePathname();
 
   function isActive(href: string) {
@@ -53,10 +55,19 @@ export function Sidebar({ userName, userRole, avatarUrl }: SidebarProps) {
 
       {/* Logo */}
       <div className="flex items-center gap-3 px-5 h-16 border-b border-[var(--color-border)]">
-        <div className="w-8 h-8 rounded-lg bg-[var(--color-primary)] flex items-center justify-center">
+        <div className="w-8 h-8 rounded-lg bg-[var(--color-primary)] flex items-center justify-center shrink-0">
           <span className="text-white font-bold text-sm">E</span>
         </div>
-        <span className="font-bold text-[var(--color-text-main)] text-[15px]">Escala</span>
+        <span className="font-bold text-[var(--color-text-main)] text-[15px] flex-1">Escala</span>
+        {onClose && (
+          <button
+            onClick={onClose}
+            className="p-1.5 rounded-lg text-[var(--color-text-muted)] hover:bg-[var(--color-background)] transition-colors"
+            aria-label="Fechar menu"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        )}
       </div>
 
       {/* Navegação */}
@@ -67,6 +78,7 @@ export function Sidebar({ userName, userRole, avatarUrl }: SidebarProps) {
             <Link
               key={href}
               href={href}
+              onClick={onClose}
               className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
                 active
                   ? "bg-[var(--color-primary-light)] text-[var(--color-primary)] border-l-[3px] border-[var(--color-primary)] pl-[9px]"
