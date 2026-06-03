@@ -3,16 +3,12 @@
 import { useState, useMemo, useCallback, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import {
-  addWeeks,
-  subWeeks,
-  addDays,
-  isSameDay,
-  parseISO,
-  format,
+  addWeeks, subWeeks, addDays,
+  isSameDay, parseISO, format,
   endOfWeek,
 } from "date-fns";
 import { pt } from "date-fns/locale";
-import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, Calendar } from "lucide-react";
 import { ServiceBlock, type ServiceForBlock } from "./service-block";
 import { ServiceCreateSheet } from "./service-create-sheet";
 import { ServiceDetailSheet } from "./service-detail-sheet";
@@ -22,8 +18,8 @@ import type { Database } from "@/types/database";
 
 const START_HOUR = 7;
 const END_HOUR = 22;
-const TOTAL_HOURS = END_HOUR - START_HOUR; // 15
-const SLOT_HEIGHT = 40; // px por 30 min
+const TOTAL_HOURS = END_HOUR - START_HOUR;     // 15
+const SLOT_HEIGHT = 40;                         // px por 30 min
 const SLOTS_PER_HOUR = 2;
 const TOTAL_SLOTS = TOTAL_HOURS * SLOTS_PER_HOUR; // 30
 
@@ -64,6 +60,17 @@ function toBlock(s: ServiceFull): ServiceForBlock {
   };
 }
 
+/** Posição Y da hora actual para um determinado dia (null se não for hoje ou fora do range). */
+function computeTimeTop(date: Date): number | null {
+  if (!isSameDay(date, new Date())) return null;
+  const now = new Date();
+  const nowMin = now.getHours() * 60 + now.getMinutes();
+  const startMin = START_HOUR * 60;
+  const endMin = END_HOUR * 60;
+  if (nowMin < startMin || nowMin > endMin) return null;
+  return ((nowMin - startMin) / 30) * SLOT_HEIGHT;
+}
+
 function yToTime(y: number): string {
   const slot = Math.max(0, Math.min(Math.floor(y / SLOT_HEIGHT), TOTAL_SLOTS - 1));
   const totalMin = START_HOUR * 60 + slot * 30;
@@ -72,99 +79,108 @@ function yToTime(y: number): string {
   return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
 }
 
-function nowTop(): number | null {
-  const now = new Date();
-  const nowMin = now.getHours() * 60 + now.getMinutes();
-  const startMin = START_HOUR * 60;
-  if (nowMin < startMin || nowMin > END_HOUR * 60) return null;
-  return ((nowMin - startMin) / 30) * SLOT_HEIGHT;
-}
-
-const WEEK_DAYS_PT = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"];
+const DAY_LABELS = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"];
 
 // ─── Componente ───────────────────────────────────────────────────────────────
 
 export function CalendarView({
-  services,
-  teams,
-  weekStartISO,
-  selectedDateISO,
-  companyId,
-  userId,
-  clients,
-  locations,
+  services, teams, weekStartISO, selectedDateISO,
+  companyId, userId, clients, locations,
 }: CalendarViewProps) {
-  const router = useRouter();
+  const router    = useRouter();
   const weekStart = parseISO(weekStartISO);
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  // Semana actual (navegar muda o URL → re-render do server component)
-  // weekStart vem do URL; não precisamos de state local para a semana
+  // ── State ────────────────────────────────────────────────────────────────
+  const [selectedDate, setSelectedDate] = useState(() => parseISO(selectedDateISO));
+  const [currentTop,   setCurrentTop]   = useState(() => computeTimeTop(parseISO(selectedDateISO)));
+  const [createSheet,  setCreateSheet]  = useState<{ date: Date; startTime: string; teamId: string } | null>(null);
+  const [detailSvc,    setDetailSvc]    = useState<ServiceFull | null>(null);
 
-  const [createSheet, setCreateSheet] = useState<{ date: Date; startTime: string } | null>(null);
-  const [detailService, setDetailService] = useState<ServiceFull | null>(null);
-  const [currentTop, setCurrentTop] = useState<number | null>(() => nowTop());
-
-  // Actualiza a linha de hora actual a cada minuto
+  // Sincronizar selectedDate quando o servidor re-renderiza (navegação de semana)
   useEffect(() => {
-    const tick = () => setCurrentTop(nowTop());
+    const d = parseISO(selectedDateISO);
+    setSelectedDate(d);
+    setCurrentTop(computeTimeTop(d));
+  }, [selectedDateISO]);
+
+  // Actualizar linha de hora actual a cada minuto
+  useEffect(() => {
+    const tick = () => setCurrentTop(computeTimeTop(selectedDate));
     const id = setInterval(tick, 60_000);
     return () => clearInterval(id);
-  }, []);
+  }, [selectedDate]);
 
-  // Scroll automático para a hora actual (ou 08:00) ao montar
+  // Scroll automático para a hora actual ou para 08:00 ao montar e ao mudar de dia
   useEffect(() => {
     if (!scrollRef.current) return;
-    const target = currentTop !== null
-      ? Math.max(0, currentTop - 80)
-      : (1 * SLOTS_PER_HOUR * SLOT_HEIGHT); // 08:00
-    scrollRef.current.scrollTop = target;
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    const top = computeTimeTop(selectedDate);
+    const scrollTo = top !== null
+      ? Math.max(0, top - 100)
+      : 1 * SLOTS_PER_HOUR * SLOT_HEIGHT; // 08:00
+    scrollRef.current.scrollTop = scrollTo;
+  }, [selectedDate]);
+
+  // ── Dados derivados ───────────────────────────────────────────────────────
 
   const weekDays = useMemo(
     () => Array.from({ length: 7 }, (_, i) => addDays(weekStart, i)),
     [weekStart],
   );
 
-  // Agrupar serviços por dia
-  const byDay = useMemo(() => {
-    const map: Record<string, ServiceFull[]> = {};
-    weekDays.forEach((d) => { map[d.toISOString()] = []; });
-    services.forEach((s) => {
-      const day = weekDays.find((d) => isSameDay(d, parseISO(s.scheduled_start)));
-      if (day) map[day.toISOString()].push(s);
+  // Serviços do dia seleccionado, agrupados por equipa
+  const dayServices = useMemo(
+    () => services.filter((s) => isSameDay(parseISO(s.scheduled_start), selectedDate)),
+    [services, selectedDate],
+  );
+
+  const byTeam = useMemo(() => {
+    const map: Record<string, ServiceForBlock[]> = {};
+    teams.forEach((t) => { map[t.id] = []; });
+    map["__sem__"] = [];
+    dayServices.forEach((s) => {
+      const key = s.team_id ?? "__sem__";
+      if (!map[key]) map[key] = [];
+      map[key].push(toBlock(s));
     });
     return map;
-  }, [services, weekDays]);
+  }, [dayServices, teams]);
 
-  // Navegar semana
+  // Colunas visíveis: equipas + "sem equipa" se houver serviços sem atribuição
+  const columns = useMemo<Array<Team & { key: string }>>(() => {
+    const base = teams.map((t) => ({ ...t, key: t.id }));
+    if (byTeam["__sem__"]?.length > 0)
+      base.push({ id: "__sem__", name: "Sem equipa", color: "#94A3B8", key: "__sem__" });
+    return base;
+  }, [teams, byTeam]);
+
+  // ── Handlers ─────────────────────────────────────────────────────────────
+
   const navigateWeek = useCallback(
     (dir: 1 | -1) => {
       const fn = dir === 1 ? addWeeks : subWeeks;
-      const newDate = fn(parseISO(selectedDateISO), 1);
+      const newDate = fn(selectedDate, 1);
       router.push(`/dashboard/calendario?date=${format(newDate, "yyyy-MM-dd")}`);
     },
-    [selectedDateISO, router],
+    [selectedDate, router],
   );
 
-  const goToToday = useCallback(() => {
-    router.push("/dashboard/calendario");
-  }, [router]);
+  function handleSelectDay(day: Date) {
+    setSelectedDate(day);
+    setCurrentTop(computeTimeTop(day));
+  }
 
-  // Clique na coluna de um dia (célula vazia)
-  function handleColumnClick(day: Date, e: React.MouseEvent<HTMLDivElement>) {
+  function handleColumnClick(teamId: string, e: React.MouseEvent<HTMLDivElement>) {
     const rect = e.currentTarget.getBoundingClientRect();
     const y = e.clientY - rect.top;
-    setCreateSheet({ date: day, startTime: yToTime(y) });
+    setCreateSheet({ date: selectedDate, startTime: yToTime(y), teamId: teamId === "__sem__" ? "" : teamId });
   }
 
-  function handleChanged() {
-    router.refresh();
-  }
+  function handleChanged() { router.refresh(); }
 
-  const today = new Date();
-  const weekRange = `${format(weekStart, "d 'de' MMM", { locale: pt })} – ${format(endOfWeek(weekStart, { weekStartsOn: 1 }), "d 'de' MMM yyyy", { locale: pt })}`;
+  const today    = new Date();
+  const isToday  = isSameDay(selectedDate, today);
+  const weekRange = `${format(weekStart, "d MMM", { locale: pt })} – ${format(endOfWeek(weekStart, { weekStartsOn: 1 }), "d MMM yyyy", { locale: pt })}`;
 
   // ─── Render ───────────────────────────────────────────────────────────────
 
@@ -172,50 +188,65 @@ export function CalendarView({
     <>
       <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
 
-        {/* ── Barra de navegação ─────────────────────────────────────────── */}
-        <div className="flex items-center gap-3 px-6 py-3 bg-white border-b border-[var(--color-border)] shrink-0">
-          <div className="flex items-center gap-1">
-            <button
-              onClick={() => navigateWeek(-1)}
-              className="p-1.5 rounded-lg border border-[var(--color-border)] text-[var(--color-text-sub)] hover:bg-[var(--color-background)] transition-colors"
-              title="Semana anterior"
-            >
-              <ChevronLeft className="w-4 h-4" />
-            </button>
-            <button
-              onClick={() => navigateWeek(1)}
-              className="p-1.5 rounded-lg border border-[var(--color-border)] text-[var(--color-text-sub)] hover:bg-[var(--color-background)] transition-colors"
-              title="Próxima semana"
-            >
-              <ChevronRight className="w-4 h-4" />
-            </button>
+        {/* ── Barra de navegação semanal ─────────────────────────────────── */}
+        <div className="flex items-center gap-2 px-6 py-3 bg-white border-b border-[var(--color-border)] shrink-0">
+          {/* Navegação de semana */}
+          <button
+            onClick={() => navigateWeek(-1)}
+            className="p-1.5 rounded-lg border border-[var(--color-border)] text-[var(--color-text-sub)] hover:bg-[var(--color-background)] transition-colors"
+            title="Semana anterior"
+          >
+            <ChevronLeft className="w-4 h-4" />
+          </button>
+
+          {/* Tabs dos dias */}
+          <div className="flex gap-1">
+            {weekDays.map((day, i) => {
+              const isSel  = isSameDay(day, selectedDate);
+              const isTody = isSameDay(day, today);
+              const count  = services.filter((s) => isSameDay(parseISO(s.scheduled_start), day)).length;
+              return (
+                <button
+                  key={day.toISOString()}
+                  onClick={() => handleSelectDay(day)}
+                  className={`flex flex-col items-center px-3 py-1.5 rounded-lg transition-colors min-w-[50px] ${
+                    isSel  ? "bg-[var(--color-primary)] text-white"
+                    : isTody ? "bg-[var(--color-primary-light)] text-[var(--color-primary)]"
+                    : "text-[var(--color-text-sub)] hover:bg-[var(--color-background)]"
+                  }`}
+                >
+                  <span className="text-[10px] font-medium uppercase tracking-wide">{DAY_LABELS[i]}</span>
+                  <span className="text-sm font-bold leading-tight">{format(day, "d")}</span>
+                  <span className={`text-[10px] mt-0.5 font-semibold ${isSel ? "text-white/70" : "text-[var(--color-text-muted)]"} ${count === 0 ? "opacity-0" : ""}`}>
+                    {count}
+                  </span>
+                </button>
+              );
+            })}
           </div>
 
           <button
-            onClick={goToToday}
+            onClick={() => navigateWeek(1)}
+            className="p-1.5 rounded-lg border border-[var(--color-border)] text-[var(--color-text-sub)] hover:bg-[var(--color-background)] transition-colors"
+            title="Próxima semana"
+          >
+            <ChevronRight className="w-4 h-4" />
+          </button>
+
+          <button
+            onClick={() => router.push("/dashboard/calendario")}
             className="px-3 py-1.5 text-xs font-medium rounded-lg border border-[var(--color-border)] text-[var(--color-text-sub)] hover:bg-[var(--color-background)] transition-colors"
           >
             Hoje
           </button>
 
-          <span className="text-sm font-semibold text-[var(--color-text-main)]">
-            {weekRange}
-          </span>
-
           <div className="ml-auto flex items-center gap-3">
-            {/* Legenda de equipas */}
-            {teams.length > 0 && (
-              <div className="hidden lg:flex items-center gap-3">
-                {teams.map((t) => (
-                  <div key={t.id} className="flex items-center gap-1.5">
-                    <div className="w-2 h-2 rounded-full" style={{ backgroundColor: t.color }} />
-                    <span className="text-xs text-[var(--color-text-muted)]">{t.name}</span>
-                  </div>
-                ))}
-              </div>
-            )}
+            <span className="text-sm font-medium text-[var(--color-text-main)] hidden sm:block">
+              {format(selectedDate, "EEEE, d 'de' MMMM yyyy", { locale: pt })}
+            </span>
+            <span className="text-xs text-[var(--color-text-muted)] hidden md:block">{weekRange}</span>
             <button
-              onClick={() => setCreateSheet({ date: today, startTime: "09:00" })}
+              onClick={() => setCreateSheet({ date: selectedDate, startTime: "09:00", teamId: teams[0]?.id ?? "" })}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[var(--color-primary)] text-white text-xs font-semibold hover:bg-[var(--color-primary-hover)] transition-colors"
             >
               <Plus className="w-3.5 h-3.5" />
@@ -225,90 +256,62 @@ export function CalendarView({
         </div>
 
         {/* ── Grid do calendário ─────────────────────────────────────────── */}
-        <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
+        {columns.length === 0 ? (
+          <EmptyTeams />
+        ) : (
+          <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
 
-          {/* Cabeçalho dos dias (sticky) */}
-          <div className="flex bg-white border-b border-[var(--color-border)] shrink-0 z-10">
-            {/* Espaço da coluna de horas */}
-            <div className="w-14 shrink-0 border-r border-[var(--color-border)]" />
-
-            {weekDays.map((day, i) => {
-              const isToday = isSameDay(day, today);
-              const count = byDay[day.toISOString()]?.length ?? 0;
-              return (
+            {/* Cabeçalho das equipas (sticky) */}
+            <div className="flex bg-white border-b border-[var(--color-border)] shrink-0">
+              {/* Espaço da coluna de horas */}
+              <div className="w-14 shrink-0 border-r border-[var(--color-border)]" />
+              {columns.map((col) => (
                 <div
-                  key={day.toISOString()}
-                  className={`flex-1 min-w-[100px] flex flex-col items-center justify-center py-2 border-l border-[var(--color-border)] ${
-                    isToday ? "bg-[var(--color-primary-light)]" : ""
-                  }`}
+                  key={col.key}
+                  className="flex-1 min-w-[160px] px-3 py-2.5 border-l border-[var(--color-border)]"
                 >
-                  <span className={`text-[10px] font-medium uppercase tracking-wide ${isToday ? "text-[var(--color-primary)]" : "text-[var(--color-text-muted)]"}`}>
-                    {WEEK_DAYS_PT[i]}
-                  </span>
-                  <div
-                    className={`w-7 h-7 flex items-center justify-center rounded-full text-sm font-bold mt-0.5 ${
-                      isToday
-                        ? "bg-[var(--color-primary)] text-white"
-                        : "text-[var(--color-text-main)]"
-                    }`}
-                  >
-                    {format(day, "d")}
-                  </div>
-                  {count > 0 ? (
-                    <span className={`text-[10px] mt-0.5 font-medium ${isToday ? "text-[var(--color-primary)]" : "text-[var(--color-text-muted)]"}`}>
-                      {count} serv.
+                  <div className="flex items-center gap-2">
+                    <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: col.color }} />
+                    <span className="text-sm font-semibold text-[var(--color-text-main)] truncate">{col.name}</span>
+                    <span className="ml-auto text-xs font-medium text-[var(--color-text-muted)] tabular-nums">
+                      {byTeam[col.id]?.length ?? 0}
                     </span>
-                  ) : (
-                    <span className="text-[10px] mt-0.5 opacity-0">0</span>
-                  )}
+                  </div>
                 </div>
-              );
-            })}
-          </div>
+              ))}
+            </div>
 
-          {/* Área de scroll do grid */}
-          <div ref={scrollRef} className="flex-1 overflow-auto">
-            <div
-              className="flex"
-              style={{
-                height: `${TOTAL_SLOTS * SLOT_HEIGHT}px`,
-                minWidth: `${56 + 7 * 100}px`,
-              }}
-            >
-              {/* Coluna de horas */}
-              <div className="w-14 shrink-0 border-r border-[var(--color-border)] relative bg-white">
-                {Array.from({ length: TOTAL_HOURS + 1 }, (_, i) => {
-                  const hour = START_HOUR + i;
-                  return (
-                    <div
-                      key={hour}
-                      className="absolute right-2 select-none"
-                      style={{
-                        top: `${i * SLOTS_PER_HOUR * SLOT_HEIGHT}px`,
-                        transform: "translateY(-50%)",
-                      }}
-                    >
-                      <span className="text-[11px] text-[var(--color-text-muted)] font-medium">
-                        {String(hour).padStart(2, "0")}:00
-                      </span>
-                    </div>
-                  );
-                })}
-              </div>
+            {/* Área de scroll vertical */}
+            <div ref={scrollRef} className="flex-1 overflow-auto">
+              <div
+                className="flex"
+                style={{ height: `${TOTAL_SLOTS * SLOT_HEIGHT}px`, minWidth: `${56 + columns.length * 160}px` }}
+              >
+                {/* Coluna de horas */}
+                <div className="w-14 shrink-0 border-r border-[var(--color-border)] relative bg-white">
+                  {Array.from({ length: TOTAL_HOURS + 1 }, (_, i) => {
+                    const hour = START_HOUR + i;
+                    return (
+                      <div
+                        key={hour}
+                        className="absolute right-2 select-none"
+                        style={{ top: `${i * SLOTS_PER_HOUR * SLOT_HEIGHT}px`, transform: "translateY(-50%)" }}
+                      >
+                        <span className="text-[11px] text-[var(--color-text-muted)] font-medium">
+                          {String(hour).padStart(2, "0")}:00
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
 
-              {/* Colunas dos dias */}
-              {weekDays.map((day) => {
-                const isToday = isSameDay(day, today);
-                const dayServices = byDay[day.toISOString()] ?? [];
-
-                return (
+                {/* Colunas das equipas */}
+                {columns.map((col) => (
                   <div
-                    key={day.toISOString()}
-                    className={`flex-1 min-w-[100px] relative border-l border-[var(--color-border)] cursor-crosshair ${
-                      isToday ? "bg-[var(--color-primary-light)]/20" : ""
-                    }`}
+                    key={col.key}
+                    className="flex-1 min-w-[160px] relative border-l border-[var(--color-border)] cursor-crosshair"
                     style={{ height: `${TOTAL_SLOTS * SLOT_HEIGHT}px` }}
-                    onClick={(e) => handleColumnClick(day, e)}
+                    onClick={(e) => handleColumnClick(col.key, e)}
                   >
                     {/* Linhas de hora (sólidas) */}
                     {Array.from({ length: TOTAL_HOURS + 1 }, (_, i) => (
@@ -318,7 +321,6 @@ export function CalendarView({
                         style={{ top: `${i * SLOTS_PER_HOUR * SLOT_HEIGHT}px` }}
                       />
                     ))}
-
                     {/* Linhas de meia hora (tracejadas) */}
                     {Array.from({ length: TOTAL_HOURS }, (_, i) => (
                       <div
@@ -332,7 +334,7 @@ export function CalendarView({
                       />
                     ))}
 
-                    {/* Linha de hora actual (só hoje) */}
+                    {/* Linha de hora actual */}
                     {isToday && currentTop !== null && (
                       <div
                         className="absolute left-0 right-0 z-20 pointer-events-none"
@@ -344,27 +346,24 @@ export function CalendarView({
                     )}
 
                     {/* Blocos de serviço */}
-                    {dayServices.map((s) => (
+                    {(byTeam[col.id] ?? []).map((svc) => (
                       <ServiceBlock
-                        key={s.id}
-                        service={toBlock(s)}
+                        key={svc.id}
+                        service={svc}
                         slotHeight={SLOT_HEIGHT}
                         startHour={START_HOUR}
-                        onClick={(b) => {
-                          const full = services.find((sv) => sv.id === b.id) ?? null;
-                          setDetailService(full);
-                        }}
+                        onClick={(b) => setDetailSvc(services.find((s) => s.id === b.id) ?? null)}
                       />
                     ))}
                   </div>
-                );
-              })}
+                ))}
+              </div>
             </div>
           </div>
-        </div>
+        )}
       </div>
 
-      {/* Sheet de criação */}
+      {/* Sheets */}
       <ServiceCreateSheet
         open={createSheet !== null}
         onClose={() => setCreateSheet(null)}
@@ -373,18 +372,36 @@ export function CalendarView({
         userId={userId}
         date={createSheet?.date ?? today}
         initialStartTime={createSheet?.startTime ?? "09:00"}
-        initialTeamId=""
+        initialTeamId={createSheet?.teamId ?? ""}
         clients={clients}
         locations={locations}
         teams={teams}
       />
-
-      {/* Sheet de detalhe */}
       <ServiceDetailSheet
-        service={detailService}
-        onClose={() => setDetailService(null)}
+        service={detailSvc}
+        onClose={() => setDetailSvc(null)}
         onChanged={handleChanged}
       />
     </>
+  );
+}
+
+// ─── Estado vazio ─────────────────────────────────────────────────────────────
+
+function EmptyTeams() {
+  return (
+    <div className="flex-1 flex flex-col items-center justify-center gap-3 text-center px-6">
+      <div className="w-12 h-12 rounded-full bg-[var(--color-primary-light)] flex items-center justify-center">
+        <Calendar className="w-6 h-6 text-[var(--color-primary)]" />
+      </div>
+      <div>
+        <p className="text-sm font-semibold text-[var(--color-text-main)]">Sem equipas criadas</p>
+        <p className="text-xs text-[var(--color-text-muted)] mt-1">
+          Cria equipas em{" "}
+          <a href="/dashboard/equipas" className="text-[var(--color-primary)] hover:underline">Equipas</a>{" "}
+          para começar a agendar serviços.
+        </p>
+      </div>
+    </div>
   );
 }

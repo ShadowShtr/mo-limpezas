@@ -11,9 +11,8 @@ import { createClient } from "@/lib/supabase/client";
 import type { Database } from "@/types/database";
 
 type ServiceFull = Database["public"]["Views"]["services_full"]["Row"];
-type Timesheet = Database["public"]["Tables"]["timesheets"]["Row"] & {
-  profiles?: { full_name: string } | null;
-};
+// Usar só os campos base do timesheet, sem join (o FK para profiles não está mapeado no tipo)
+type Timesheet = Database["public"]["Tables"]["timesheets"]["Row"];
 
 // ─── Estilos de estado ────────────────────────────────────────────────────────
 
@@ -29,6 +28,17 @@ const INPUT_CLS =
   "w-full px-3 py-2 rounded-lg border border-[var(--color-border)] text-sm text-[var(--color-text-main)] " +
   "focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] focus:border-transparent bg-white";
 
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+async function fetchTimesheets(supabase: ReturnType<typeof createClient>, serviceId: string): Promise<Timesheet[]> {
+  const { data } = await supabase
+    .from("timesheets")
+    .select("*")
+    .eq("service_id", serviceId)
+    .order("clock_in_at");
+  return (data ?? []) as Timesheet[];
+}
+
 // ─── Componente principal ─────────────────────────────────────────────────────
 
 interface Props {
@@ -40,40 +50,35 @@ interface Props {
 export function ServiceDetailSheet({ service, onClose, onChanged }: Props) {
   const supabase = createClient();
   const [timesheets, setTimesheets] = useState<Timesheet[]>([]);
-  const [loadingTs, setLoadingTs] = useState(false);
-
-  // Estado para corrigir clock-out
+  const [loadingTs,  setLoadingTs]  = useState(false);
   const [fixClockOut, setFixClockOut] = useState(false);
   const [clockOutTime, setClockOutTime] = useState("");
-  const [clockOutServiceId, setClockOutServiceId] = useState<string | null>(null);
-
-  // Estado para loading de actions
+  const [clockOutTsId, setClockOutTsId] = useState<string>("");
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [actionMsg, setActionMsg] = useState<{ type: "error" | "success"; text: string } | null>(null);
 
-  // Buscar timesheets quando o serviço muda
   useEffect(() => {
     if (!service) { setTimesheets([]); return; }
     setTimesheets([]);
     setActionMsg(null);
     setFixClockOut(false);
+    setClockOutTime("");
+    setClockOutTsId("");
     setLoadingTs(true);
-    supabase
-      .from("timesheets")
-      .select("*, profiles:collaborator_id ( full_name )")
-      .eq("service_id", service.id)
-      .then(({ data }) => {
-        setTimesheets((data as Timesheet[]) ?? []);
-        setLoadingTs(false);
-      });
+    fetchTimesheets(supabase, service.id).then((rows) => {
+      setTimesheets(rows);
+      setLoadingTs(false);
+    });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [service?.id]);
 
   if (!service) return null;
 
-  const ss = STATUS_STYLE[service.status] ?? STATUS_STYLE.agendado;
-  const value = service.manual_value ?? service.calculated_value;
-  const canAct = service.status !== "concluido";
+  // Capturar em const para que o TypeScript saiba que não é null dentro das closures
+  const svc = service;
+  const ss   = STATUS_STYLE[svc.status] ?? STATUS_STYLE.agendado;
+  const value = svc.manual_value ?? svc.calculated_value;
+  const canAct = svc.status !== "concluido";
 
   // ─── Acções ──────────────────────────────────────────────────────────────
 
@@ -83,57 +88,40 @@ export function ServiceDetailSheet({ service, onClose, onChanged }: Props) {
 
     if (action === "cancelar") {
       const { error } = await supabase
-        .from("services")
-        .update({ status: "cancelado" })
-        .eq("id", service.id);
-      if (error) { setActionMsg({ type: "error", text: error.message }); }
+        .from("services").update({ status: "cancelado" }).eq("id", svc.id);
+      if (error) setActionMsg({ type: "error", text: error.message });
       else { setActionMsg({ type: "success", text: "Serviço cancelado." }); onChanged(); }
 
     } else if (action === "falta") {
       const { error } = await supabase
-        .from("services")
-        .update({ status: "falta" })
-        .eq("id", service.id);
-      if (error) { setActionMsg({ type: "error", text: error.message }); }
+        .from("services").update({ status: "falta" }).eq("id", svc.id);
+      if (error) setActionMsg({ type: "error", text: error.message });
       else { setActionMsg({ type: "success", text: "Marcado como falta." }); onChanged(); }
 
     } else if (action === "fixClockOut") {
-      if (!clockOutTime || !clockOutServiceId) {
+      if (!clockOutTime || !clockOutTsId) {
         setActionMsg({ type: "error", text: "Seleciona uma colaboradora e insere a hora." });
         setActionLoading(null);
         return;
       }
-      const dateStr = format(parseISO(service.scheduled_start), "yyyy-MM-dd");
+      const dateStr    = format(parseISO(svc.scheduled_start), "yyyy-MM-dd");
       const clockOutISO = `${dateStr}T${clockOutTime}:00`;
+      const tsRow      = timesheets.find((t) => t.id === clockOutTsId);
+      const durationMinutes = tsRow?.clock_in_at
+        ? Math.round((new Date(clockOutISO).getTime() - new Date(tsRow.clock_in_at).getTime()) / 60000)
+        : null;
 
-      // Calcular duração em minutos
-      const tsRow = timesheets.find((t) => t.id === clockOutServiceId);
-      let durationMinutes: number | null = null;
-      if (tsRow?.clock_in_at) {
-        const inMs = new Date(tsRow.clock_in_at).getTime();
-        const outMs = new Date(clockOutISO).getTime();
-        durationMinutes = Math.round((outMs - inMs) / 60000);
-      }
+      const { error } = await supabase.from("timesheets").update({
+        clock_out_at: clockOutISO,
+        duration_minutes: durationMinutes,
+        notes: "Hora de saída corrigida manualmente pelo gestor",
+      }).eq("id", clockOutTsId);
 
-      const { error } = await supabase
-        .from("timesheets")
-        .update({
-          clock_out_at: clockOutISO,
-          duration_minutes: durationMinutes,
-          notes: "Hora de saída corrigida manualmente pelo gestor",
-        })
-        .eq("id", clockOutServiceId);
-
-      if (error) { setActionMsg({ type: "error", text: error.message }); }
+      if (error) setActionMsg({ type: "error", text: error.message });
       else {
         setActionMsg({ type: "success", text: "Hora de saída corrigida." });
         setFixClockOut(false);
-        // Re-fetch timesheets
-        const { data } = await supabase
-          .from("timesheets")
-          .select("*, profiles:collaborator_id ( full_name )")
-          .eq("service_id", service.id);
-        setTimesheets((data as Timesheet[]) ?? []);
+        setTimesheets(await fetchTimesheets(supabase, svc.id));
         onChanged();
       }
     }
@@ -152,7 +140,7 @@ export function ServiceDetailSheet({ service, onClose, onChanged }: Props) {
         <div className="flex items-start justify-between px-6 py-4 border-b border-[var(--color-border)]">
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 mb-1">
-              <span className="font-mono text-xs text-[var(--color-text-muted)]">#{service.reference_number}</span>
+              <span className="font-mono text-xs text-[var(--color-text-muted)]">#{svc.reference_number}</span>
               <span
                 className="text-xs font-semibold px-2 py-0.5 rounded-full"
                 style={{ backgroundColor: ss.bg, color: ss.text, border: `1px solid ${ss.border}` }}
@@ -160,10 +148,8 @@ export function ServiceDetailSheet({ service, onClose, onChanged }: Props) {
                 {ss.label}
               </span>
             </div>
-            <h2 className="text-base font-bold text-[var(--color-text-main)] truncate">
-              {service.location_name}
-            </h2>
-            <p className="text-sm text-[var(--color-text-muted)] mt-0.5">{service.client_name}</p>
+            <h2 className="text-base font-bold text-[var(--color-text-main)] truncate">{svc.location_name}</h2>
+            <p className="text-sm text-[var(--color-text-muted)] mt-0.5">{svc.client_name}</p>
           </div>
           <button
             onClick={onClose}
@@ -180,28 +166,22 @@ export function ServiceDetailSheet({ service, onClose, onChanged }: Props) {
           <div className="space-y-3">
             <InfoRow icon={Clock} label="Horário">
               <span className="font-semibold">
-                {format(parseISO(service.scheduled_start), "HH:mm")} –{" "}
-                {format(parseISO(service.scheduled_end), "HH:mm")}
+                {format(parseISO(svc.scheduled_start), "HH:mm")} – {format(parseISO(svc.scheduled_end), "HH:mm")}
               </span>
               <span className="text-[var(--color-text-muted)] ml-1.5">
-                {format(parseISO(service.scheduled_start), "EEEE, d 'de' MMMM", { locale: pt })}
+                {format(parseISO(svc.scheduled_start), "EEEE, d 'de' MMMM", { locale: pt })}
               </span>
             </InfoRow>
 
-            <InfoRow icon={MapPin} label="Morada">
-              {service.location_address}
-            </InfoRow>
+            <InfoRow icon={MapPin} label="Morada">{svc.location_address}</InfoRow>
 
-            {service.team_name && (
+            {svc.team_name && (
               <InfoRow icon={Users} label="Equipa">
                 <div className="flex items-center gap-1.5">
-                  {service.team_color && (
-                    <div
-                      className="w-2.5 h-2.5 rounded-full shrink-0"
-                      style={{ backgroundColor: service.team_color }}
-                    />
+                  {svc.team_color && (
+                    <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: svc.team_color }} />
                   )}
-                  {service.team_name}
+                  {svc.team_name}
                 </div>
               </InfoRow>
             )}
@@ -209,37 +189,37 @@ export function ServiceDetailSheet({ service, onClose, onChanged }: Props) {
             {value != null && (
               <InfoRow icon={Euro} label="Valor">
                 <span className="font-semibold">€{value.toFixed(2)}</span>
-                {service.manual_value != null && service.calculated_value != null && (
+                {svc.manual_value != null && svc.calculated_value != null && (
                   <span className="text-xs text-[var(--color-text-muted)] ml-1.5">
-                    (manual · calculado: €{service.calculated_value.toFixed(2)})
+                    (manual · calculado: €{svc.calculated_value.toFixed(2)})
                   </span>
                 )}
               </InfoRow>
             )}
 
-            {service.notes && (
+            {svc.notes && (
               <InfoRow icon={FileText} label="Notas">
-                <p className="text-sm text-[var(--color-text-sub)] whitespace-pre-line">{service.notes}</p>
+                <p className="text-sm text-[var(--color-text-sub)] whitespace-pre-line">{svc.notes}</p>
               </InfoRow>
             )}
           </div>
 
-          {/* Tempos reais (actual_start / actual_end) */}
-          {(service.actual_start || service.actual_end) && (
+          {/* Tempos reais */}
+          {(svc.actual_start || svc.actual_end) && (
             <div className="p-3 rounded-lg bg-[var(--color-primary-light)] border border-[var(--color-primary-muted)]">
               <p className="text-xs font-semibold text-[var(--color-primary)] mb-1.5">Tempo real</p>
               <div className="flex gap-4 text-sm text-[var(--color-primary)]">
-                {service.actual_start && (
-                  <span>Entrada: <strong>{format(parseISO(service.actual_start), "HH:mm")}</strong></span>
+                {svc.actual_start && (
+                  <span>Entrada: <strong>{format(parseISO(svc.actual_start), "HH:mm")}</strong></span>
                 )}
-                {service.actual_end && (
-                  <span>Saída: <strong>{format(parseISO(service.actual_end), "HH:mm")}</strong></span>
+                {svc.actual_end && (
+                  <span>Saída: <strong>{format(parseISO(svc.actual_end), "HH:mm")}</strong></span>
                 )}
               </div>
             </div>
           )}
 
-          {/* Clock-ins das colaboradoras */}
+          {/* Registos de ponto */}
           <div>
             <p className="text-sm font-semibold text-[var(--color-text-main)] mb-2">Presenças</p>
             {loadingTs ? (
@@ -250,14 +230,12 @@ export function ServiceDetailSheet({ service, onClose, onChanged }: Props) {
               <p className="text-sm text-[var(--color-text-muted)] py-2">Sem registos de ponto.</p>
             ) : (
               <div className="space-y-2">
-                {timesheets.map((ts) => (
-                  <TimesheetRow key={ts.id} ts={ts} />
-                ))}
+                {timesheets.map((ts) => <TimesheetRow key={ts.id} ts={ts} />)}
               </div>
             )}
           </div>
 
-          {/* Corrigir clock-out */}
+          {/* Formulário de corrigir clock-out */}
           {fixClockOut && timesheets.length > 0 && (
             <div className="p-4 rounded-lg border border-[var(--color-border)] space-y-3">
               <p className="text-sm font-semibold text-[var(--color-text-main)]">Corrigir hora de saída</p>
@@ -265,14 +243,14 @@ export function ServiceDetailSheet({ service, onClose, onChanged }: Props) {
                 <label className="block text-xs font-medium text-[var(--color-text-muted)] mb-1">Colaboradora</label>
                 <div className="relative">
                   <select
-                    value={clockOutServiceId ?? ""}
-                    onChange={(e) => setClockOutServiceId(e.target.value)}
+                    value={clockOutTsId}
+                    onChange={(e) => setClockOutTsId(e.target.value)}
                     className={INPUT_CLS + " pr-8 appearance-none"}
                   >
                     <option value="">Selecionar...</option>
-                    {timesheets.map((ts) => (
+                    {timesheets.filter((t) => t.clock_in_at && !t.clock_out_at).map((ts) => (
                       <option key={ts.id} value={ts.id}>
-                        {(ts.profiles as { full_name: string } | null)?.full_name ?? ts.collaborator_id}
+                        {ts.collaborator_id.slice(0, 8)}… (entrou {ts.clock_in_at ? format(parseISO(ts.clock_in_at), "HH:mm") : "?"})
                       </option>
                     ))}
                   </select>
@@ -281,12 +259,7 @@ export function ServiceDetailSheet({ service, onClose, onChanged }: Props) {
               </div>
               <div>
                 <label className="block text-xs font-medium text-[var(--color-text-muted)] mb-1">Nova hora de saída</label>
-                <input
-                  type="time"
-                  value={clockOutTime}
-                  onChange={(e) => setClockOutTime(e.target.value)}
-                  className={INPUT_CLS}
-                />
+                <input type="time" value={clockOutTime} onChange={(e) => setClockOutTime(e.target.value)} className={INPUT_CLS} />
               </div>
               <div className="flex gap-2">
                 <button
@@ -309,22 +282,19 @@ export function ServiceDetailSheet({ service, onClose, onChanged }: Props) {
 
           {/* Feedback */}
           {actionMsg && (
-            <div
-              className={`text-sm px-3 py-2 rounded-lg border ${
-                actionMsg.type === "error"
-                  ? "bg-red-50 text-red-700 border-red-100"
-                  : "bg-[var(--color-primary-light)] text-[var(--color-primary)] border-[var(--color-primary-muted)]"
-              }`}
-            >
+            <div className={`text-sm px-3 py-2 rounded-lg border ${
+              actionMsg.type === "error"
+                ? "bg-red-50 text-red-700 border-red-100"
+                : "bg-[var(--color-primary-light)] text-[var(--color-primary)] border-[var(--color-primary-muted)]"
+            }`}>
               {actionMsg.text}
             </div>
           )}
         </div>
 
         {/* Footer — acções */}
-        {canAct && (
+        {canAct ? (
           <div className="border-t border-[var(--color-border)] px-6 py-4 space-y-2">
-            {/* Corrigir clock-out — só se houver timesheets sem clock-out */}
             {timesheets.some((t) => t.clock_in_at && !t.clock_out_at) && !fixClockOut && (
               <button
                 onClick={() => setFixClockOut(true)}
@@ -334,39 +304,28 @@ export function ServiceDetailSheet({ service, onClose, onChanged }: Props) {
                 Corrigir hora de saída
               </button>
             )}
-
-            {service.status !== "falta" && (
+            {svc.status !== "falta" && (
               <button
                 onClick={() => doAction("falta")}
                 disabled={actionLoading === "falta"}
                 className="w-full flex items-center gap-2 px-4 py-2 rounded-lg border border-amber-200 text-sm font-medium text-amber-700 hover:bg-amber-50 transition-colors disabled:opacity-50"
               >
-                {actionLoading === "falta"
-                  ? <Loader2 className="w-4 h-4 animate-spin" />
-                  : <AlertTriangle className="w-4 h-4" />
-                }
+                {actionLoading === "falta" ? <Loader2 className="w-4 h-4 animate-spin" /> : <AlertTriangle className="w-4 h-4" />}
                 Marcar como falta
               </button>
             )}
-
-            {service.status !== "cancelado" && (
+            {svc.status !== "cancelado" && (
               <button
                 onClick={() => doAction("cancelar")}
                 disabled={actionLoading === "cancelar"}
                 className="w-full flex items-center gap-2 px-4 py-2 rounded-lg border border-red-200 text-sm font-medium text-red-700 hover:bg-red-50 transition-colors disabled:opacity-50"
               >
-                {actionLoading === "cancelar"
-                  ? <Loader2 className="w-4 h-4 animate-spin" />
-                  : <Ban className="w-4 h-4" />
-                }
+                {actionLoading === "cancelar" ? <Loader2 className="w-4 h-4 animate-spin" /> : <Ban className="w-4 h-4" />}
                 Cancelar serviço
               </button>
             )}
           </div>
-        )}
-
-        {/* Serviço concluído — sem acções */}
-        {!canAct && (
+        ) : (
           <div className="border-t border-[var(--color-border)] px-6 py-4">
             <div className="flex items-center gap-2 text-sm text-[var(--color-text-muted)]">
               <CalendarX className="w-4 h-4" />
@@ -382,9 +341,7 @@ export function ServiceDetailSheet({ service, onClose, onChanged }: Props) {
 // ─── Subcomponentes ───────────────────────────────────────────────────────────
 
 function InfoRow({
-  icon: Icon,
-  label,
-  children,
+  icon: Icon, label, children,
 }: {
   icon: React.ComponentType<{ className?: string }>;
   label: string;
@@ -404,41 +361,37 @@ function InfoRow({
 }
 
 function TimesheetRow({ ts }: { ts: Timesheet }) {
-  const name = (ts.profiles as { full_name: string } | null)?.full_name ?? "—";
   const hasWarning = ts.location_warning;
+  const initial    = ts.collaborator_id.slice(0, 2).toUpperCase();
 
   return (
     <div className="flex items-center justify-between py-1.5 px-3 rounded-lg bg-[var(--color-background)] border border-[var(--color-border)]">
       <div className="flex items-center gap-2 min-w-0">
         <div className="w-6 h-6 rounded-full bg-[var(--color-primary-muted)] flex items-center justify-center shrink-0">
-          <span className="text-[10px] font-bold text-[var(--color-primary)]">
-            {name[0]?.toUpperCase() ?? "?"}
-          </span>
+          <span className="text-[10px] font-bold text-[var(--color-primary)]">{initial}</span>
         </div>
-        <span className="text-sm text-[var(--color-text-main)] truncate">{name}</span>
+        <span className="text-xs text-[var(--color-text-muted)] font-mono truncate">
+          {ts.collaborator_id.slice(0, 8)}…
+        </span>
         {hasWarning && (
-          <span title="Fora do raio GPS" className="shrink-0">
-            <AlertTriangle className="w-3.5 h-3.5 text-amber-500" />
+          <span title="Fora do raio GPS">
+            <AlertTriangle className="w-3.5 h-3.5 text-amber-500 shrink-0" />
           </span>
         )}
       </div>
-      <div className="flex items-center gap-3 text-xs text-[var(--color-text-muted)] shrink-0 ml-2">
+      <div className="flex items-center gap-3 text-xs shrink-0 ml-2">
         {ts.clock_in_at ? (
-          <span className="text-green-700 font-medium">
-            ↑ {format(parseISO(ts.clock_in_at), "HH:mm")}
-          </span>
+          <span className="text-green-700 font-medium">↑ {format(parseISO(ts.clock_in_at), "HH:mm")}</span>
         ) : (
-          <span className="opacity-50">↑ —</span>
+          <span className="text-[var(--color-text-muted)]">↑ —</span>
         )}
         {ts.clock_out_at ? (
-          <span className="font-medium">
-            ↓ {format(parseISO(ts.clock_out_at), "HH:mm")}
-          </span>
+          <span className="text-[var(--color-text-main)] font-medium">↓ {format(parseISO(ts.clock_out_at), "HH:mm")}</span>
         ) : (
           <span className="text-amber-600 font-medium">↓ em falta</span>
         )}
         {ts.duration_minutes != null && (
-          <span className="bg-[var(--color-border)] px-1.5 py-0.5 rounded">
+          <span className="bg-[var(--color-border)] px-1.5 py-0.5 rounded text-[var(--color-text-muted)]">
             {Math.round(ts.duration_minutes / 60 * 10) / 10}h
           </span>
         )}
