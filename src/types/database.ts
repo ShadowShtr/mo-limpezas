@@ -42,9 +42,9 @@ export type Database = {
         Relationships: [];
       };
       teams: {
-        Row: { id: string; company_id: string; name: string; color: string; leader_id: string | null; active: boolean; created_at: string; updated_at: string };
-        Insert: { company_id: string; name: string; color?: string; leader_id?: string | null; active?: boolean };
-        Update: { name?: string; color?: string; leader_id?: string | null; active?: boolean };
+        Row: { id: string; company_id: string; name: string; color: string; leader_id: string | null; active: boolean; vehicle: string | null; created_at: string; updated_at: string };
+        Insert: { company_id: string; name: string; color?: string; leader_id?: string | null; active?: boolean; vehicle?: string | null };
+        Update: { name?: string; color?: string; leader_id?: string | null; active?: boolean; vehicle?: string | null };
         Relationships: [];
       };
       team_members: {
@@ -78,9 +78,9 @@ export type Database = {
         Relationships: [];
       };
       absences: {
-        Row: { id: string; company_id: string; collaborator_id: string; service_id: string | null; absence_date: string; type: string; notes: string | null; approved_by: string | null; created_at: string };
-        Insert: { company_id: string; collaborator_id: string; absence_date: string; type: string; notes?: string | null; service_id?: string | null };
-        Update: { type?: string; notes?: string | null; approved_by?: string | null };
+        Row: { id: string; company_id: string; collaborator_id: string; absence_type: string; starts_on: string; ends_on: string; notes: string | null; document_url: string | null; replaced_by: string | null; approved_by: string | null; created_by: string | null; created_at: string };
+        Insert: { company_id: string; collaborator_id: string; absence_type: string; starts_on: string; ends_on: string; notes?: string | null; document_url?: string | null; replaced_by?: string | null; created_by?: string | null };
+        Update: { absence_type?: string; ends_on?: string; notes?: string | null; approved_by?: string | null; replaced_by?: string | null };
         Relationships: [];
       };
       vacation_requests: {

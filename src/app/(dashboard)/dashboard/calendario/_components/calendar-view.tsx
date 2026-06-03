@@ -8,7 +8,7 @@ import {
   endOfWeek,
 } from "date-fns";
 import { pt } from "date-fns/locale";
-import { ChevronLeft, ChevronRight, Plus, AlertTriangle, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, AlertTriangle, X, Users } from "lucide-react";
 import {
   DndContext, DragOverlay,
   PointerSensor, useSensor, useSensors,
@@ -18,6 +18,7 @@ import { ServiceBlock, type ServiceForBlock } from "./service-block";
 import { DroppableColumn } from "./droppable-column";
 import { ServiceCreateSheet } from "./service-create-sheet";
 import { ServiceDetailSheet } from "./service-detail-sheet";
+import { TeamAllocationModal } from "./team-allocation-modal";
 import { rescheduleService } from "../_actions/reschedule";
 import type { Database } from "@/types/database";
 
@@ -147,8 +148,9 @@ export function CalendarView({
   const [currentTop,   setCurrentTop]   = useState<number | null>(null);
   // today calculado só no cliente (null no servidor para evitar hydration mismatch)
   const [today,        setToday]        = useState<Date | null>(null);
-  const [createSheet,  setCreateSheet]  = useState<{ date: Date; startTime: string; teamId: string } | null>(null);
-  const [detailSvc,    setDetailSvc]    = useState<ServiceFull | null>(null);
+  const [createSheet,       setCreateSheet]       = useState<{ date: Date; startTime: string; teamId: string } | null>(null);
+  const [detailSvc,         setDetailSvc]         = useState<ServiceFull | null>(null);
+  const [allocationOpen,    setAllocationOpen]    = useState(false);
 
   // ── Drag state ───────────────────────────────────────────────────────────
   const [draggingBlock, setDraggingBlock] = useState<{ service: ServiceForBlock; teamId: string } | null>(null);
@@ -380,13 +382,22 @@ export function CalendarView({
             </span>
             <span className="text-xs text-[var(--color-text-muted)] hidden md:block">{weekRange}</span>
             {!isDemo && (
-              <button
-                onClick={() => setCreateSheet({ date: selectedDate, startTime: "09:00", teamId: teams[0]?.id ?? "" })}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[var(--color-primary)] text-white text-xs font-semibold hover:bg-[var(--color-primary-hover)] transition-colors"
-              >
-                <Plus className="w-3.5 h-3.5" />
-                Novo serviço
-              </button>
+              <>
+                <button
+                  onClick={() => setAllocationOpen(true)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[var(--color-border)] text-[var(--color-text-sub)] text-xs font-semibold hover:bg-[var(--color-background)] transition-colors"
+                >
+                  <Users className="w-3.5 h-3.5" />
+                  Equipas
+                </button>
+                <button
+                  onClick={() => setCreateSheet({ date: selectedDate, startTime: "09:00", teamId: teams[0]?.id ?? "" })}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[var(--color-primary)] text-white text-xs font-semibold hover:bg-[var(--color-primary-hover)] transition-colors"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  Novo serviço
+                </button>
+              </>
             )}
             {isDemo && (
               <a
@@ -577,6 +588,13 @@ export function CalendarView({
         service={detailSvc}
         onClose={() => setDetailSvc(null)}
         onChanged={handleChanged}
+      />
+      <TeamAllocationModal
+        open={allocationOpen}
+        onClose={() => setAllocationOpen(false)}
+        companyId={companyId}
+        selectedDate={selectedDate}
+        teams={teams}
       />
     </DndContext>
   );
