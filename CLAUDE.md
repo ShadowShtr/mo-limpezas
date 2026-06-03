@@ -47,7 +47,7 @@ Lê este ficheiro no início de CADA sessão antes de fazer qualquer coisa.
 
 ## ⚡ PRÓXIMA TASK A EXECUTAR
 
-**Próxima task de código:** `[3.2] Ecrã Home: serviços do dia`
+**Próxima task de código:** `[3.3] Clock-in com GPS`
 
 ---
 
@@ -127,9 +127,9 @@ Lê este ficheiro no início de CADA sessão antes de fazer qualquer coisa.
 
 ### FASE 3 — App Mobile (PWA)
 - [x] [3.1] Layout /app/* + bottom navigation + deteção mobile
-- [ ] [3.2] Ecrã Home: serviços do dia
-- [ ] [3.2] Ecrã detalhe do serviço + botão Navegar
-- [ ] [3.2] Ecrã escala semanal + perfil
+- [x] [3.2] Ecrã Home: serviços do dia
+- [x] [3.2] Ecrã detalhe do serviço + botão Navegar
+- [x] [3.2] Ecrã escala semanal + perfil
 - [ ] [3.3] Clock-in com GPS
 - [ ] [3.3] Clock-out com GPS
 - [ ] [3.3] Painel tempo real (Supabase Realtime)
