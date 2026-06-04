@@ -47,7 +47,7 @@ Lê este ficheiro no início de CADA sessão antes de fazer qualquer coisa.
 
 ## ⚡ PRÓXIMA TASK A EXECUTAR
 
-**Próxima task de código:** `[4.4] COMMIT Fase 4`
+**Próxima task de código:** `[4.5] Gestão de viaturas + alocação diária no modal "Equipas"`
 
 ---
 
@@ -145,6 +145,7 @@ Lê este ficheiro no início de CADA sessão antes de fazer qualquer coisa.
 - [x] [4.3] Mapa Mapbox + rotas otimizadas
 - [x] [4.4] Relatórios: horas, absentismo, receita, serviços
 - [x] [4.4] Extrato PDF por cliente + exportação CSV
+- [ ] [4.5] Gestão de viaturas + alocação diária no modal "Equipas"
 - [ ] [4.4] COMMIT Fase 4
 
 ### FASE 5 — Financeiro
