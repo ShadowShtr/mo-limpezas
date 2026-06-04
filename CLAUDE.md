@@ -47,7 +47,7 @@ Lê este ficheiro no início de CADA sessão antes de fazer qualquer coisa.
 
 ## ⚡ PRÓXIMA TASK A EXECUTAR
 
-**Próxima task de código:** `[5.1] Folha de pagamento + PDF`
+**Próxima task de código:** `[5.2] Documento de cobrança + PDF + CSV`
 
 ---
 
@@ -62,7 +62,7 @@ Lê este ficheiro no início de CADA sessão antes de fazer qualquer coisa.
   - `calendario/_components/team-allocation-modal.tsx` — viaturas do DB + dropdown de condutor
   - `src/components/layout/sidebar.tsx` — link "Viaturas" adicionado
 
-**Último commit:** `[4.5]` — github.com/ShadowShtr/mo-limpezas
+**Último commit:** `[5.1]` — github.com/ShadowShtr/mo-limpezas
 
 **Migrations pendentes (aplicar no Supabase antes de testar):**
 - `supabase/migrations/011_conflict_detection.sql`
@@ -70,7 +70,7 @@ Lê este ficheiro no início de CADA sessão antes de fazer qualquer coisa.
 - `supabase/migrations/013_client_notifications.sql`
 - `supabase/migrations/016_vehicles.sql`
 
-**A seguir: FASE 4 — [4.4] COMMIT Fase 4**
+**A seguir: FASE 5 — [5.2] Documento de cobrança + PDF + CSV**
 
 ---
 
@@ -152,7 +152,7 @@ Lê este ficheiro no início de CADA sessão antes de fazer qualquer coisa.
 - [x] [4.4] COMMIT Fase 4
 
 ### FASE 5 — Financeiro
-- [ ] [5.1] Folha de pagamento + PDF
+- [x] [5.1] Folha de pagamento + PDF
 - [ ] [5.2] Documento de cobrança + PDF + CSV
 - [ ] [5.3] Dashboard financeiro: KPIs + gráficos + projeção
 - [ ] [5.3] COMMIT Fase 5
