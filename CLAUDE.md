@@ -47,29 +47,28 @@ Lê este ficheiro no início de CADA sessão antes de fazer qualquer coisa.
 
 ## ⚡ PRÓXIMA TASK A EXECUTAR
 
-**Próxima task de código:** `[4.3] Mapa Mapbox + rotas otimizadas`
+**Próxima task de código:** `[4.4] Relatórios: horas, absentismo, receita, serviços`
 
 ---
 
 ## 📍 PONTO DE PARAGEM — 2026-06-04
 
 **Última sessão completou:**
-- [4.1] Registo de faltas + motor de substituição
-  - `src/app/actions/absences.ts` — server actions (criar, eliminar, substituto, sugestões)
-  - `src/app/(dashboard)/dashboard/faltas/page.tsx` — página com filtros por mês/colaborador
-  - `_components/absence-table.tsx` — tabela com badges por tipo + botão substituto
-  - `_components/absence-sheet.tsx` — sheet para registar nova falta
-  - `_components/substitution-panel.tsx` — motor de substituição com sugestões ordenadas por score
-  - Sidebar atualizado com link "Faltas"
+- [4.3] Mapa Mapbox + rotas otimizadas
+  - `src/app/actions/map.ts` — server action (serviços com coordenadas por data)
+  - `src/app/(dashboard)/dashboard/mapa/page.tsx` — página server component
+  - `_components/map-view.tsx` — mapa client-side com markers, filtros, popup e rotas
+  - Sidebar atualizado com link "Mapa"
+  - Requer `NEXT_PUBLIC_MAPBOX_TOKEN` no `.env.local`
 
-**Último commit:** `[4.1]` — github.com/ShadowShtr/mo-limpezas
+**Último commit:** `[4.3]` — github.com/ShadowShtr/mo-limpezas
 
 **Migrations pendentes (aplicar no Supabase antes de testar):**
 - `supabase/migrations/011_conflict_detection.sql`
 - `supabase/migrations/012_teams_vehicle.sql`
 - `supabase/migrations/013_client_notifications.sql`
 
-**A seguir: FASE 4 continua — [4.2] Mapa de férias**
+**A seguir: FASE 4 continua — [4.4] Relatórios**
 
 ---
 
@@ -144,7 +143,7 @@ Lê este ficheiro no início de CADA sessão antes de fazer qualquer coisa.
 ### FASE 4 — Operações
 - [x] [4.1] Registo de faltas + motor de substituição
 - [x] [4.2] ~~Mapa de férias~~ — removido a pedido (faltas integradas na ficha do colaborador)
-- [ ] [4.3] Mapa Mapbox + rotas otimizadas
+- [x] [4.3] Mapa Mapbox + rotas otimizadas
 - [ ] [4.4] Relatórios: horas, absentismo, receita, serviços
 - [ ] [4.4] Extrato PDF por cliente + exportação CSV
 - [ ] [4.4] COMMIT Fase 4
