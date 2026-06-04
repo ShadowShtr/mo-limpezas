@@ -47,21 +47,20 @@ Lê este ficheiro no início de CADA sessão antes de fazer qualquer coisa.
 
 ## ⚡ PRÓXIMA TASK A EXECUTAR
 
-**Próxima task de código:** `[4.4] Relatórios: horas, absentismo, receita, serviços`
+**Próxima task de código:** `[4.4] COMMIT Fase 4`
 
 ---
 
 ## 📍 PONTO DE PARAGEM — 2026-06-04
 
 **Última sessão completou:**
-- [4.3] Mapa Mapbox + rotas otimizadas
-  - `src/app/actions/map.ts` — server action (serviços com coordenadas por data)
-  - `src/app/(dashboard)/dashboard/mapa/page.tsx` — página server component
-  - `_components/map-view.tsx` — mapa client-side com markers, filtros, popup e rotas
-  - Sidebar atualizado com link "Mapa"
-  - Requer `NEXT_PUBLIC_MAPBOX_TOKEN` no `.env.local`
+- [4.4] Relatórios: horas, absentismo, receita, serviços + extrato PDF + CSV
+  - `src/app/actions/reports.ts` — server action com os 4 datasets
+  - `src/app/(dashboard)/dashboard/relatorios/page.tsx` — página com KPIs + filtro de mês
+  - `_components/reports-tabs.tsx` — tabs Horas/Absentismo/Receita/Serviços + export CSV + PDF por cliente
+  - Requer `jspdf` instalado (já adicionado ao package.json)
 
-**Último commit:** `[4.3]` — github.com/ShadowShtr/mo-limpezas
+**Último commit:** `[4.4]` — github.com/ShadowShtr/mo-limpezas
 
 **Migrations pendentes (aplicar no Supabase antes de testar):**
 - `supabase/migrations/011_conflict_detection.sql`
@@ -144,8 +143,8 @@ Lê este ficheiro no início de CADA sessão antes de fazer qualquer coisa.
 - [x] [4.1] Registo de faltas + motor de substituição
 - [x] [4.2] ~~Mapa de férias~~ — removido a pedido (faltas integradas na ficha do colaborador)
 - [x] [4.3] Mapa Mapbox + rotas otimizadas
-- [ ] [4.4] Relatórios: horas, absentismo, receita, serviços
-- [ ] [4.4] Extrato PDF por cliente + exportação CSV
+- [x] [4.4] Relatórios: horas, absentismo, receita, serviços
+- [x] [4.4] Extrato PDF por cliente + exportação CSV
 - [ ] [4.4] COMMIT Fase 4
 
 ### FASE 5 — Financeiro
