@@ -47,7 +47,7 @@ Lê este ficheiro no início de CADA sessão antes de fazer qualquer coisa.
 
 ## ⚡ PRÓXIMA TASK A EXECUTAR
 
-**Próxima task de código:** `[4.2] Mapa de férias + pedidos + aprovação + alerta simultâneas`
+**Próxima task de código:** `[4.3] Mapa Mapbox + rotas otimizadas`
 
 ---
 
@@ -143,7 +143,7 @@ Lê este ficheiro no início de CADA sessão antes de fazer qualquer coisa.
 
 ### FASE 4 — Operações
 - [x] [4.1] Registo de faltas + motor de substituição
-- [ ] [4.2] Mapa de férias + pedidos + aprovação + alerta simultâneas
+- [x] [4.2] ~~Mapa de férias~~ — removido a pedido (faltas integradas na ficha do colaborador)
 - [ ] [4.3] Mapa Mapbox + rotas otimizadas
 - [ ] [4.4] Relatórios: horas, absentismo, receita, serviços
 - [ ] [4.4] Extrato PDF por cliente + exportação CSV

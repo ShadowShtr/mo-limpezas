@@ -1,8 +1,9 @@
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { Header } from "@/components/layout/header";
 import { ColaboradorSheet } from "../_components/sheet";
-import { VacationBalanceForm } from "./_components/vacation-balance-form";
+import { ColaboradorAbsences } from "./_components/colaborador-absences";
 import { PresencaHistory } from "./_components/presenca-history";
 import {
   ArrowLeft, Mail, Phone, Calendar, Award, Edit2,
@@ -16,6 +17,7 @@ interface Props {
 export default async function ColaboradorDetailPage({ params }: Props) {
   const { id } = await params;
   const supabase = await createClient();
+  const admin = createAdminClient();
 
   const [profileRes, timesheetsRes] = await Promise.all([
     supabase
@@ -42,6 +44,34 @@ export default async function ColaboradorDetailPage({ params }: Props) {
     .select("company_id")
     .eq("id", (await supabase.auth.getUser()).data.user!.id)
     .single();
+
+  // Faltas do colaborador (últimas + futuras)
+  const { data: rawAbsences } = await admin
+    .from("absences")
+    .select("id, absence_type, starts_on, ends_on, notes, replaced_by")
+    .eq("collaborator_id", id)
+    .order("starts_on", { ascending: false })
+    .limit(20);
+
+  // Resolver nomes de substitutos
+  const replacedByIds = [...new Set((rawAbsences ?? []).map((a) => a.replaced_by).filter(Boolean))];
+  let substituteNames: Record<string, string> = {};
+  if (replacedByIds.length > 0) {
+    const { data: subs } = await admin
+      .from("profiles")
+      .select("id, full_name")
+      .in("id", replacedByIds);
+    substituteNames = Object.fromEntries((subs ?? []).map((s) => [s.id, s.full_name]));
+  }
+
+  const absences = (rawAbsences ?? []).map((a) => ({
+    id: a.id,
+    absence_type: a.absence_type,
+    starts_on: a.starts_on,
+    ends_on: a.ends_on,
+    notes: a.notes,
+    replaced_by_name: a.replaced_by ? (substituteNames[a.replaced_by] ?? null) : null,
+  }));
 
   const totalMinutes = timesheets
     .filter((t) => t.duration_minutes)
@@ -154,10 +184,11 @@ export default async function ColaboradorDetailPage({ params }: Props) {
               </div>
             )}
 
-            {/* Saldo de férias */}
-            <VacationBalanceForm
+            {/* Faltas */}
+            <ColaboradorAbsences
               colaboradorId={id}
-              currentBalance={profile.vacation_balance ?? 22}
+              colaboradorName={profile.full_name}
+              absences={absences}
             />
           </div>
 
