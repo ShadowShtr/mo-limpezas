@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, cloneElement, isValidElement } from "react";
+import { useRouter } from "next/navigation";
 import { X, Loader2, Check } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 
@@ -36,6 +37,7 @@ const COLORS = [
 ];
 
 export function EquipaSheet({ trigger, companyId, colaboradores, equipa }: Props) {
+  const router = useRouter();
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<{ type: "error" | "success"; text: string } | null>(null);
@@ -86,6 +88,7 @@ export function EquipaSheet({ trigger, companyId, colaboradores, equipa }: Props
 
     setLoading(false);
     setMessage({ type: "success", text: isEdit ? "Equipa atualizada." : "Equipa criada com sucesso." });
+    router.refresh();
   }
 
   const triggerWithOpen = isValidElement(trigger)

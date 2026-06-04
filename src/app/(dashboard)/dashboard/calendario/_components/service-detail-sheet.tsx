@@ -3,11 +3,12 @@
 import { useState, useEffect } from "react";
 import {
   X, MapPin, Users, Clock, Euro, FileText, Loader2,
-  AlertTriangle, Ban, CalendarX, CheckCircle2, ChevronDown,
+  AlertTriangle, Ban, CalendarX, CheckCircle2, ChevronDown, Bell,
 } from "lucide-react";
 import { format, parseISO } from "date-fns";
 import { pt } from "date-fns/locale";
 import { createClient } from "@/lib/supabase/client";
+import { notifyTeam } from "@/app/actions/notifications";
 import type { Database } from "@/types/database";
 
 type ServiceFull = Database["public"]["Views"]["services_full"]["Row"];
@@ -56,6 +57,8 @@ export function ServiceDetailSheet({ service, onClose, onChanged }: Props) {
   const [clockOutTsId, setClockOutTsId] = useState<string>("");
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [actionMsg, setActionMsg] = useState<{ type: "error" | "success"; text: string } | null>(null);
+  const [showNotify, setShowNotify] = useState(false);
+  const [notifyMsg, setNotifyMsg] = useState("");
 
   useEffect(() => {
     if (!service) { setTimesheets([]); return; }
@@ -64,6 +67,10 @@ export function ServiceDetailSheet({ service, onClose, onChanged }: Props) {
     setFixClockOut(false);
     setClockOutTime("");
     setClockOutTsId("");
+    setShowNotify(false);
+    setNotifyMsg(
+      `Serviço ${service.location_name} — ${format(parseISO(service.scheduled_start), "HH:mm")}–${format(parseISO(service.scheduled_end), "HH:mm")}`
+    );
     setLoadingTs(true);
     fetchTimesheets(supabase, service.id).then((rows) => {
       setTimesheets(rows);
@@ -127,6 +134,25 @@ export function ServiceDetailSheet({ service, onClose, onChanged }: Props) {
     }
 
     setActionLoading(null);
+  }
+
+  async function handleNotify() {
+    if (!notifyMsg.trim()) return;
+    setActionLoading("notify");
+    setActionMsg(null);
+    const res = await notifyTeam(svc.id, notifyMsg.trim());
+    setActionLoading(null);
+    setShowNotify(false);
+    if (res.ok) {
+      setActionMsg({
+        type: "success",
+        text: res.sent > 0
+          ? `Notificação enviada para ${res.sent} membro${res.sent !== 1 ? "s" : ""}.`
+          : "Nenhum membro com notificações ativas.",
+      });
+    } else {
+      setActionMsg({ type: "error", text: res.error });
+    }
   }
 
   // ─── Render ───────────────────────────────────────────────────────────────
@@ -280,6 +306,34 @@ export function ServiceDetailSheet({ service, onClose, onChanged }: Props) {
             </div>
           )}
 
+          {/* Painel de notificar equipa */}
+          {showNotify && (
+            <div className="p-4 rounded-lg border border-[var(--color-border)] space-y-3">
+              <p className="text-sm font-semibold text-[var(--color-text-main)]">Notificar equipa</p>
+              <textarea
+                value={notifyMsg}
+                onChange={(e) => setNotifyMsg(e.target.value)}
+                rows={3}
+                className={INPUT_CLS + " resize-none"}
+                placeholder="Mensagem para a equipa..."
+              />
+              <div className="flex gap-2">
+                <button
+                  onClick={handleNotify}
+                  disabled={actionLoading === "notify" || !notifyMsg.trim()}
+                  className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-[var(--color-primary)] text-white text-sm font-medium hover:bg-[var(--color-primary-hover)] transition-colors disabled:opacity-50"
+                >
+                  {actionLoading === "notify" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Bell className="w-3.5 h-3.5" />}
+                  Enviar
+                </button>
+                <button onClick={() => setShowNotify(false)}
+                  className="px-3 py-2 rounded-lg border border-[var(--color-border)] text-sm text-[var(--color-text-sub)] hover:bg-[var(--color-background)] transition-colors">
+                  Cancelar
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Feedback */}
           {actionMsg && (
             <div className={`text-sm px-3 py-2 rounded-lg border ${
@@ -295,6 +349,16 @@ export function ServiceDetailSheet({ service, onClose, onChanged }: Props) {
         {/* Footer — acções */}
         {canAct ? (
           <div className="border-t border-[var(--color-border)] px-6 py-4 space-y-2">
+            {/* Notificar equipa */}
+            {svc.team_id && !showNotify && (
+              <button
+                onClick={() => setShowNotify(true)}
+                className="w-full flex items-center gap-2 px-4 py-2 rounded-lg border border-[var(--color-border)] text-sm font-medium text-[var(--color-text-main)] hover:bg-[var(--color-background)] transition-colors"
+              >
+                <Bell className="w-4 h-4 text-[var(--color-primary)]" />
+                Notificar equipa
+              </button>
+            )}
             {timesheets.some((t) => t.clock_in_at && !t.clock_out_at) && !fixClockOut && (
               <button
                 onClick={() => setFixClockOut(true)}
@@ -326,10 +390,19 @@ export function ServiceDetailSheet({ service, onClose, onChanged }: Props) {
             )}
           </div>
         ) : (
-          <div className="border-t border-[var(--color-border)] px-6 py-4">
+          <div className="border-t border-[var(--color-border)] px-6 py-4 space-y-2">
+            {svc.team_id && !showNotify && (
+              <button
+                onClick={() => setShowNotify(true)}
+                className="w-full flex items-center gap-2 px-4 py-2 rounded-lg border border-[var(--color-border)] text-sm font-medium text-[var(--color-text-main)] hover:bg-[var(--color-background)] transition-colors"
+              >
+                <Bell className="w-4 h-4 text-[var(--color-primary)]" />
+                Notificar equipa
+              </button>
+            )}
             <div className="flex items-center gap-2 text-sm text-[var(--color-text-muted)]">
               <CalendarX className="w-4 h-4" />
-              Serviço concluído — sem acções disponíveis.
+              Serviço concluído.
             </div>
           </div>
         )}
