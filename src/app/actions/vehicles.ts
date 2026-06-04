@@ -108,7 +108,7 @@ export async function updateVehicle(id: string, input: {
   const companyId = await getCompanyId();
   const admin = createAdminClient();
 
-  const patch: Record<string, unknown> = {};
+  const patch: { model?: string; plate?: string; status?: string; notes?: string | null } = {};
   if (input.model !== undefined) patch.model = input.model.trim();
   if (input.plate !== undefined) patch.plate = input.plate.trim().toUpperCase();
   if (input.status !== undefined) patch.status = input.status;
@@ -155,7 +155,7 @@ export async function getAllocationsForDate(date: string) {
     .eq("date", date);
 
   if (error) throw error;
-  return data as VehicleAllocation[];
+  return data as unknown as VehicleAllocation[];
 }
 
 export async function upsertAllocation(input: {

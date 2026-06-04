@@ -258,7 +258,7 @@ export async function updateInvoiceStatus(
   status: Invoice["status"],
 ): Promise<{ ok: boolean; error?: string }> {
   const admin = createAdminClient();
-  const update: Record<string, unknown> = { status };
+  const update: { status: string; paid_at?: string } = { status };
   if (status === "pago") update.paid_at = new Date().toISOString();
 
   const { error } = await admin

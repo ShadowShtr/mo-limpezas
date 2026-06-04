@@ -24,7 +24,7 @@ export type Database = {
         Relationships: [];
       };
       profiles: {
-        Row: { id: string; company_id: string; full_name: string; phone: string | null; email: string | null; nif: string | null; iban: string | null; avatar_url: string | null; role: string; contracted_hours_month: number | null; contract_start: string | null; contract_end: string | null; vacation_balance: number | null; skills: string[]; availability: Record<string, boolean>; status: string; invited_at: string | null; invite_accepted_at: string | null; created_at: string; updated_at: string };
+        Row: { id: string; company_id: string; full_name: string; phone: string | null; email: string | null; nif: string | null; iban: string | null; avatar_url: string | null; role: string; contracted_hours_month: number | null; hourly_rate: number | null; contract_start: string | null; contract_end: string | null; vacation_balance: number | null; skills: string[]; availability: Record<string, boolean>; status: string; invited_at: string | null; invite_accepted_at: string | null; created_at: string; updated_at: string };
         Insert: { id?: string; company_id: string; full_name: string; email?: string | null; phone?: string | null; role?: string; status?: string; skills?: string[]; contracted_hours_month?: number | null; avatar_url?: string | null };
         Update: { full_name?: string; phone?: string | null; email?: string | null; nif?: string | null; iban?: string | null; avatar_url?: string | null; role?: string; contracted_hours_month?: number | null; contract_start?: string | null; contract_end?: string | null; vacation_balance?: number | null; skills?: string[]; availability?: Record<string, boolean>; status?: string; invited_at?: string | null; invite_accepted_at?: string | null; company_id?: string };
         Relationships: [];
@@ -96,21 +96,21 @@ export type Database = {
         Relationships: [];
       };
       invoices: {
-        Row: { id: string; company_id: string; client_id: string; reference_number: string; issue_date: string; due_date: string | null; subtotal: number; vat_amount: number; total: number; status: string; notes: string | null; created_by: string | null; created_at: string; updated_at: string };
-        Insert: { company_id: string; client_id: string; reference_number: string; issue_date: string; subtotal: number; vat_amount: number; total: number; status?: string };
-        Update: { status?: string; due_date?: string | null; notes?: string | null };
+        Row: { id: string; company_id: string; client_id: string; invoice_number: string; invoice_date: string; due_date: string | null; period_start: string | null; period_end: string | null; subtotal: number; vat_rate: number; vat_amount: number; total: number; status: string; paid_at: string | null; notes: string | null; created_by: string | null; created_at: string; updated_at: string };
+        Insert: { company_id: string; client_id: string; invoice_number: string; invoice_date: string; subtotal: number; vat_rate?: number; vat_amount: number; total: number; status?: string; due_date?: string | null; period_start?: string | null; period_end?: string | null; notes?: string | null; created_by?: string | null };
+        Update: { status?: string; paid_at?: string | null; due_date?: string | null; notes?: string | null };
         Relationships: [];
       };
       invoice_items: {
-        Row: { id: string; invoice_id: string; service_id: string | null; description: string; quantity: number; unit_price: number; total: number };
-        Insert: { invoice_id: string; description: string; quantity: number; unit_price: number; total: number; service_id?: string | null };
-        Update: { description?: string; quantity?: number; unit_price?: number; total?: number };
+        Row: { id: string; invoice_id: string; service_id: string | null; description: string; quantity: number; unit_price: number; total: number; sort_order: number };
+        Insert: { invoice_id: string; description: string; quantity: number; unit_price: number; total: number; service_id?: string | null; sort_order?: number };
+        Update: { description?: string; quantity?: number; unit_price?: number; total?: number; sort_order?: number };
         Relationships: [];
       };
       payroll_records: {
-        Row: { id: string; company_id: string; collaborator_id: string; period_month: string; base_hours: number; worked_hours: number; overtime_hours: number; hourly_rate: number; meal_allowance_days: number; meal_allowance_daily: number; gross_pay: number; deductions: number; net_pay: number; adjustments: number; status: string; notes: string | null; created_by: string | null; created_at: string; updated_at: string };
-        Insert: { company_id: string; collaborator_id: string; period_month: string; base_hours: number; worked_hours: number; hourly_rate: number; gross_pay: number; net_pay: number; status?: string };
-        Update: { adjustments?: number; status?: string; notes?: string | null };
+        Row: { id: string; company_id: string; collaborator_id: string; period_year: number; period_month: number; contracted_hours: number; worked_hours: number; overtime_hours: number; absence_hours: number; days_worked: number; hourly_rate: number; gross_salary: number; meal_allowance: number; overtime_bonus: number; absence_deductions: number; other_deductions: number; other_additions: number; net_salary: number; status: string; notes: string | null; approved_by: string | null; paid_at: string | null; created_at: string; updated_at: string };
+        Insert: { company_id: string; collaborator_id: string; period_year: number; period_month: number; contracted_hours?: number; worked_hours?: number; overtime_hours?: number; absence_hours?: number; days_worked?: number; hourly_rate?: number; gross_salary?: number; meal_allowance?: number; overtime_bonus?: number; absence_deductions?: number; other_deductions?: number; other_additions?: number; net_salary?: number; status?: string; notes?: string | null; approved_by?: string | null; paid_at?: string | null };
+        Update: { other_additions?: number; other_deductions?: number; net_salary?: number; status?: string; notes?: string | null; approved_by?: string | null; paid_at?: string | null };
         Relationships: [];
       };
       notifications: {
@@ -123,6 +123,18 @@ export type Database = {
         Row: { id: string; user_id: string; company_id: string; endpoint: string; p256dh: string; auth_key: string; user_agent: string | null; created_at: string };
         Insert: { user_id: string; company_id: string; endpoint: string; p256dh: string; auth_key: string; user_agent?: string | null };
         Update: Record<string, never>;
+        Relationships: [];
+      };
+      vehicles: {
+        Row: { id: string; company_id: string; model: string; plate: string; status: string; notes: string | null; created_at: string; updated_at: string };
+        Insert: { company_id: string; model: string; plate: string; status?: string; notes?: string | null; id?: string };
+        Update: { model?: string; plate?: string; status?: string; notes?: string | null };
+        Relationships: [];
+      };
+      vehicle_allocations: {
+        Row: { id: string; company_id: string; vehicle_id: string; team_id: string; driver_id: string | null; date: string; created_at: string };
+        Insert: { company_id: string; vehicle_id: string; team_id: string; date: string; driver_id?: string | null; id?: string };
+        Update: { vehicle_id?: string; team_id?: string; driver_id?: string | null };
         Relationships: [];
       };
     };
