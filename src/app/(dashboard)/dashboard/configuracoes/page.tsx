@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { Header } from "@/components/layout/header";
 import { getCompanySettings } from "@/app/actions/settings";
 import { SettingsForm } from "./_components/settings-form";
+import { SeedButton } from "./_components/seed-button";
 
 export default async function ConfiguracoesPage() {
   const supabase = await createClient();
@@ -24,8 +25,9 @@ export default async function ConfiguracoesPage() {
         title="Configurações"
         subtitle="Valores e percentagens que afetam cálculos em toda a plataforma"
       />
-      <div className="p-6 max-w-[900px]">
+      <div className="p-6 max-w-[900px] space-y-6">
         <SettingsForm initial={settings} />
+        <SeedButton />
       </div>
     </div>
   );

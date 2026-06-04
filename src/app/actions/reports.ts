@@ -1,7 +1,6 @@
 "use server";
 
 import { createAdminClient } from "@/lib/supabase/admin";
-import { getCompanySettings } from "./settings";
 
 export interface HorasRow {
   id: string;
@@ -249,7 +248,15 @@ export async function getReportsData(
 
   const servicosPorEquipa = Array.from(servicosMap.values()).sort((a, b) => b.total - a.total);
 
-  const settings = await getCompanySettings(companyId);
+  // Buscar IVA das configurações da empresa (sem import circular)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: settingsRow } = await (admin as any)
+    .from("company_settings")
+    .select("vat_rate")
+    .eq("company_id", companyId)
+    .single();
 
-  return { horas, absentismo, receita, servicosPorEquipa, vatRate: settings.vat_rate };
+  const vatRate: number = (settingsRow?.vat_rate as number | null | undefined) ?? 23;
+
+  return { horas, absentismo, receita, servicosPorEquipa, vatRate };
 }

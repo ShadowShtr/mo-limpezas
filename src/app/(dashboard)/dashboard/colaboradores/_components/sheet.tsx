@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, cloneElement, isValidElement } from "react";
+import { useState, useTransition, cloneElement, isValidElement } from "react";
 import { X, Loader2, Plus, Trash2 } from "lucide-react";
-import { createClient } from "@/lib/supabase/client";
+import { createColaborador, updateColaborador } from "@/app/actions/colaboradores";
 import { inviteCollaborator } from "@/app/actions/auth";
 
 type Colaborador = {
@@ -31,7 +31,7 @@ const SKILLS_SUGESTOES = [
 
 export function ColaboradorSheet({ trigger, companyId, colaborador }: Props) {
   const [open, setOpen] = useState(false);
-  const [loading, setLoading] = useState(false);
+  const [pending, startTransition] = useTransition();
   const [sending, setSending] = useState(false);
   const [message, setMessage] = useState<{ type: "error" | "success"; text: string } | null>(null);
 
@@ -45,61 +45,49 @@ export function ColaboradorSheet({ trigger, companyId, colaborador }: Props) {
   const [skillInput, setSkillInput] = useState("");
 
   const isEdit = !!colaborador;
-  const supabase = createClient();
 
   function addSkill(s: string) {
     const trimmed = s.trim();
-    if (trimmed && !skills.includes(trimmed)) {
-      setSkills((prev) => [...prev, trimmed]);
-    }
+    if (trimmed && !skills.includes(trimmed)) setSkills((prev) => [...prev, trimmed]);
     setSkillInput("");
   }
+  function removeSkill(s: string) { setSkills((prev) => prev.filter((sk) => sk !== s)); }
 
-  function removeSkill(s: string) {
-    setSkills((prev) => prev.filter((sk) => sk !== s));
-  }
-
-  async function handleSubmit(e: React.SyntheticEvent<HTMLFormElement>) {
+  function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    setLoading(true);
     setMessage(null);
+    startTransition(async () => {
+      const input = {
+        full_name: name,
+        email: email || undefined,
+        phone: phone || undefined,
+        role,
+        status,
+        contracted_hours_month: parseFloat(hours) || 168,
+        skills,
+      };
 
-    const data = {
-      full_name: name,
-      email,
-      phone: phone || null,
-      role,
-      status,
-      contracted_hours_month: parseFloat(hours) || 168,
-      skills,
-      company_id: companyId,
-    };
+      const res = isEdit
+        ? await updateColaborador(colaborador.id, input)
+        : await createColaborador({ ...input, company_id: companyId });
 
-    if (isEdit) {
-      const { error } = await supabase
-        .from("profiles")
-        .update(data)
-        .eq("id", colaborador.id);
-
-      if (error) {
-        setMessage({ type: "error", text: "Erro ao guardar. Tenta novamente." });
+      if (res.ok) {
+        setMessage({
+          type: "success",
+          text: isEdit ? "Colaborador atualizado." : "Colaborador criado com sucesso.",
+        });
+        if (!isEdit) {
+          setName(""); setEmail(""); setPhone(""); setRole("colaborador");
+          setStatus("ativo"); setHours("168"); setSkills([]);
+        }
       } else {
-        setMessage({ type: "success", text: "Colaborador atualizado com sucesso." });
+        setMessage({ type: "error", text: res.error });
       }
-    } else {
-      // Novo colaborador: criar sem convite ainda
-      const { error } = await supabase.from("profiles").upsert(data);
-      if (error) {
-        setMessage({ type: "error", text: "Erro ao criar colaborador." });
-      } else {
-        setMessage({ type: "success", text: "Colaborador criado. Podes enviar o convite abaixo." });
-      }
-    }
-
-    setLoading(false);
+    });
   }
 
   async function handleSendInvite() {
+    if (!email) return;
     setSending(true);
     setMessage(null);
     const fd = new FormData();
@@ -125,14 +113,9 @@ export function ColaboradorSheet({ trigger, companyId, colaborador }: Props) {
 
       {open && (
         <>
-          {/* Overlay */}
-          <div
-            className="fixed inset-0 bg-black/30 z-40 animate-in fade-in duration-150"
-            onClick={() => setOpen(false)}
-          />
-
-          {/* Panel */}
+          <div className="fixed inset-0 bg-black/30 z-40 animate-in fade-in duration-150" onClick={() => setOpen(false)} />
           <div className="fixed right-0 top-0 h-full w-full max-w-md bg-white shadow-xl z-50 flex flex-col animate-in slide-in-from-right duration-200">
+
             {/* Header */}
             <div className="flex items-center justify-between px-6 py-4 border-b border-[var(--color-border)]">
               <div>
@@ -140,13 +123,10 @@ export function ColaboradorSheet({ trigger, companyId, colaborador }: Props) {
                   {isEdit ? "Editar colaborador" : "Novo colaborador"}
                 </h2>
                 <p className="text-xs text-[var(--color-text-muted)] mt-0.5">
-                  {isEdit ? "Atualiza os dados abaixo." : "Preenche os dados e envia o convite."}
+                  {isEdit ? "Atualiza os dados abaixo." : "Preenche os dados. Email é opcional para testes."}
                 </p>
               </div>
-              <button
-                onClick={() => setOpen(false)}
-                className="p-1.5 rounded-lg text-[var(--color-text-muted)] hover:bg-[var(--color-background)] transition-colors"
-              >
+              <button onClick={() => setOpen(false)} className="p-1.5 rounded-lg text-[var(--color-text-muted)] hover:bg-[var(--color-background)] transition-colors">
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -157,65 +137,39 @@ export function ColaboradorSheet({ trigger, companyId, colaborador }: Props) {
               {/* Nome */}
               <div>
                 <label className="block text-sm font-medium text-[var(--color-text-main)] mb-1.5">Nome completo *</label>
-                <input
-                  required
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  className="w-full px-3 py-2 rounded-lg border border-[var(--color-border)] text-sm text-[var(--color-text-main)]
-                             focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] focus:border-transparent"
-                />
+                <input required value={name} onChange={(e) => setName(e.target.value)}
+                  className={inputCls} />
               </div>
 
-              {/* Email */}
+              {/* Email — opcional */}
               <div>
-                <label className="block text-sm font-medium text-[var(--color-text-main)] mb-1.5">Email *</label>
-                <input
-                  required
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="w-full px-3 py-2 rounded-lg border border-[var(--color-border)] text-sm text-[var(--color-text-main)]
-                             focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] focus:border-transparent"
-                />
+                <label className="block text-sm font-medium text-[var(--color-text-main)] mb-1.5">
+                  Email <span className="text-[var(--color-text-muted)] font-normal">(opcional)</span>
+                </label>
+                <input type="email" value={email} onChange={(e) => setEmail(e.target.value)}
+                  placeholder="nome@exemplo.com"
+                  className={inputCls} />
               </div>
 
               {/* Telefone */}
               <div>
                 <label className="block text-sm font-medium text-[var(--color-text-main)] mb-1.5">Telefone</label>
-                <input
-                  type="tel"
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
+                <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)}
                   placeholder="+351 900 000 000"
-                  className="w-full px-3 py-2 rounded-lg border border-[var(--color-border)] text-sm text-[var(--color-text-main)]
-                             focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] focus:border-transparent"
-                />
+                  className={inputCls} />
               </div>
 
               <div className="grid grid-cols-2 gap-4">
-                {/* Role */}
                 <div>
                   <label className="block text-sm font-medium text-[var(--color-text-main)] mb-1.5">Função</label>
-                  <select
-                    value={role}
-                    onChange={(e) => setRole(e.target.value)}
-                    className="w-full px-3 py-2 rounded-lg border border-[var(--color-border)] text-sm text-[var(--color-text-main)]
-                               focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
-                  >
+                  <select value={role} onChange={(e) => setRole(e.target.value)} className={selectCls}>
                     <option value="colaborador">Colaborador</option>
                     <option value="gestor">Gestor</option>
                   </select>
                 </div>
-
-                {/* Estado */}
                 <div>
                   <label className="block text-sm font-medium text-[var(--color-text-main)] mb-1.5">Estado</label>
-                  <select
-                    value={status}
-                    onChange={(e) => setStatus(e.target.value)}
-                    className="w-full px-3 py-2 rounded-lg border border-[var(--color-border)] text-sm text-[var(--color-text-main)]
-                               focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
-                  >
+                  <select value={status} onChange={(e) => setStatus(e.target.value)} className={selectCls}>
                     <option value="ativo">Ativo</option>
                     <option value="inativo">Inativo</option>
                     <option value="suspenso">Suspenso</option>
@@ -226,104 +180,63 @@ export function ColaboradorSheet({ trigger, companyId, colaborador }: Props) {
               {/* Horas/mês */}
               <div>
                 <label className="block text-sm font-medium text-[var(--color-text-main)] mb-1.5">Horas contratuais/mês</label>
-                <input
-                  type="number"
-                  min={0}
-                  max={300}
-                  value={hours}
-                  onChange={(e) => setHours(e.target.value)}
-                  className="w-full px-3 py-2 rounded-lg border border-[var(--color-border)] text-sm text-[var(--color-text-main)]
-                             focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] focus:border-transparent"
-                />
+                <input type="number" min={0} max={300} value={hours} onChange={(e) => setHours(e.target.value)}
+                  className={inputCls} />
               </div>
 
               {/* Skills */}
               <div>
                 <label className="block text-sm font-medium text-[var(--color-text-main)] mb-1.5">Skills</label>
                 <div className="flex gap-2 mb-2">
-                  <input
-                    value={skillInput}
-                    onChange={(e) => setSkillInput(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") { e.preventDefault(); addSkill(skillInput); }
-                    }}
-                    placeholder="Adicionar skill..."
-                    className="flex-1 px-3 py-2 rounded-lg border border-[var(--color-border)] text-sm text-[var(--color-text-main)]
-                               focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] focus:border-transparent"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => addSkill(skillInput)}
-                    className="p-2 rounded-lg bg-[var(--color-primary-light)] text-[var(--color-primary)] hover:bg-[var(--color-primary-muted)] transition-colors"
-                  >
+                  <input value={skillInput} onChange={(e) => setSkillInput(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addSkill(skillInput); } }}
+                    placeholder="Adicionar skill..." className={`${inputCls} flex-1`} />
+                  <button type="button" onClick={() => addSkill(skillInput)}
+                    className="p-2 rounded-lg bg-[var(--color-primary-light)] text-[var(--color-primary)] hover:bg-[var(--color-primary-muted)] transition-colors">
                     <Plus className="w-4 h-4" />
                   </button>
                 </div>
-
-                {/* Sugestões */}
                 <div className="flex flex-wrap gap-1.5 mb-2">
                   {SKILLS_SUGESTOES.filter((s) => !skills.includes(s)).map((s) => (
-                    <button
-                      key={s}
-                      type="button"
-                      onClick={() => addSkill(s)}
-                      className="text-xs px-2 py-1 rounded-full border border-[var(--color-border)] text-[var(--color-text-sub)] hover:bg-[var(--color-background)] transition-colors"
-                    >
+                    <button key={s} type="button" onClick={() => addSkill(s)}
+                      className="text-xs px-2 py-1 rounded-full border border-[var(--color-border)] text-[var(--color-text-sub)] hover:bg-[var(--color-background)] transition-colors">
                       + {s}
                     </button>
                   ))}
                 </div>
-
-                {/* Skills selecionadas */}
                 {skills.length > 0 && (
                   <div className="flex flex-wrap gap-1.5">
                     {skills.map((s) => (
                       <span key={s} className="flex items-center gap-1 text-xs px-2.5 py-1 rounded-full bg-[var(--color-primary-light)] text-[var(--color-primary)] font-medium">
                         {s}
-                        <button type="button" onClick={() => removeSkill(s)}>
-                          <Trash2 className="w-3 h-3" />
-                        </button>
+                        <button type="button" onClick={() => removeSkill(s)}><Trash2 className="w-3 h-3" /></button>
                       </span>
                     ))}
                   </div>
                 )}
               </div>
 
-              {/* Mensagem */}
               {message && (
                 <div className={`text-sm px-3 py-2 rounded-lg ${
                   message.type === "error"
                     ? "bg-red-50 text-[var(--color-danger)] border border-red-100"
                     : "bg-[var(--color-primary-light)] text-[var(--color-primary)] border border-[var(--color-primary-muted)]"
-                }`}>
-                  {message.text}
-                </div>
+                }`}>{message.text}</div>
               )}
             </form>
 
             {/* Footer */}
             <div className="border-t border-[var(--color-border)] px-6 py-4 space-y-2">
-              {/* Enviar convite (só se tem email) */}
               {email && (
-                <button
-                  type="button"
-                  onClick={handleSendInvite}
-                  disabled={sending}
-                  className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg border border-[var(--color-primary)] text-[var(--color-primary)] text-sm font-medium hover:bg-[var(--color-primary-light)] transition-colors disabled:opacity-50"
-                >
+                <button type="button" onClick={handleSendInvite} disabled={sending}
+                  className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg border border-[var(--color-primary)] text-[var(--color-primary)] text-sm font-medium hover:bg-[var(--color-primary-light)] transition-colors disabled:opacity-50">
                   {sending && <Loader2 className="w-4 h-4 animate-spin" />}
                   {isEdit && colaborador?.invited_at ? "Reenviar convite" : "Enviar convite por email"}
                 </button>
               )}
-
-              {/* Guardar */}
-              <button
-                form="colaborador-form"
-                type="submit"
-                disabled={loading}
-                className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-[var(--color-primary)] text-white text-sm font-medium hover:bg-[var(--color-primary-hover)] transition-colors disabled:opacity-50"
-              >
-                {loading && <Loader2 className="w-4 h-4 animate-spin" />}
+              <button form="colaborador-form" type="submit" disabled={pending}
+                className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-[var(--color-primary)] text-white text-sm font-medium hover:bg-[var(--color-primary-hover)] transition-colors disabled:opacity-50">
+                {pending && <Loader2 className="w-4 h-4 animate-spin" />}
                 {isEdit ? "Guardar alterações" : "Criar colaborador"}
               </button>
             </div>
@@ -333,3 +246,9 @@ export function ColaboradorSheet({ trigger, companyId, colaborador }: Props) {
     </>
   );
 }
+
+const inputCls =
+  "w-full px-3 py-2 rounded-lg border border-[var(--color-border)] bg-white text-sm text-[var(--color-text-main)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] focus:border-transparent";
+
+const selectCls =
+  "w-full px-3 py-2 rounded-lg border border-[var(--color-border)] bg-white text-sm text-[var(--color-text-main)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] appearance-auto";

@@ -76,8 +76,8 @@ export function EquipaSheet({ trigger, companyId, colaboradores, equipa }: Props
       teamId = data.id;
     }
 
-    // Atualizar membros: apagar os antigos e inserir os novos
-    await supabase.from("team_members").update({ left_at: new Date().toISOString() }).eq("team_id", teamId!).is("left_at", null);
+    // Apagar membros antigos e inserir os novos (evita conflito UNIQUE)
+    await supabase.from("team_members").delete().eq("team_id", teamId!);
     if (selectedMembers.length > 0) {
       await supabase.from("team_members").insert(
         selectedMembers.map((cid) => ({ team_id: teamId!, collaborator_id: cid }))
@@ -132,7 +132,7 @@ export function EquipaSheet({ trigger, companyId, colaboradores, equipa }: Props
               <div>
                 <label className="block text-sm font-medium text-[var(--color-text-main)] mb-1.5">Líder da equipa</label>
                 <select value={leaderId} onChange={(e) => setLeaderId(e.target.value)}
-                  className="w-full px-3 py-2 rounded-lg border border-[var(--color-border)] text-sm text-[var(--color-text-main)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]">
+                  className="w-full px-3 py-2 rounded-lg border border-[var(--color-border)] bg-white text-sm text-[var(--color-text-main)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] appearance-auto">
                   <option value="">Sem líder definido</option>
                   {selectedMembers.map((id) => {
                     const c = colaboradores.find((col) => col.id === id);
@@ -176,7 +176,7 @@ export function EquipaSheet({ trigger, companyId, colaboradores, equipa }: Props
               <div className="flex items-center gap-3">
                 <button type="button" onClick={() => setActive((a) => !a)}
                   className={`relative w-10 h-5 rounded-full transition-colors ${active ? "bg-[var(--color-primary)]" : "bg-[var(--color-border)]"}`}>
-                  <span className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-all ${active ? "left-5.5" : "left-0.5"}`} />
+                  <span className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-all ${active ? "translate-x-5" : "translate-x-0.5"}`} style={{ left: 0 }} />
                 </button>
                 <span className="text-sm text-[var(--color-text-main)]">{active ? "Equipa ativa" : "Equipa inativa"}</span>
               </div>
