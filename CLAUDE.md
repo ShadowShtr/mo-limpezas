@@ -47,20 +47,18 @@ Lê este ficheiro no início de CADA sessão antes de fazer qualquer coisa.
 
 ## ⚡ PRÓXIMA TASK A EXECUTAR
 
-**Próxima task de código:** `[5.3] Dashboard financeiro: KPIs + gráficos + projeção`
+**Próxima task de código:** `[5.3] COMMIT Fase 5`
 
 ---
 
 ## 📍 PONTO DE PARAGEM — 2026-06-04
 
 **Última sessão completou:**
-- [4.5] Gestão de viaturas + alocação diária no modal "Equipas"
-  - `supabase/migrations/016_vehicles.sql` — tabelas `vehicles` + `vehicle_allocations` com RLS
-  - `src/app/actions/vehicles.ts` — CRUD de viaturas + upsert/remove de alocações diárias
-  - `src/app/(dashboard)/dashboard/viaturas/page.tsx` — página CRUD viaturas
-  - `src/app/(dashboard)/dashboard/viaturas/_components/vehicles-client.tsx` — tabela + sheet criar/editar
-  - `calendario/_components/team-allocation-modal.tsx` — viaturas do DB + dropdown de condutor
-  - `src/components/layout/sidebar.tsx` — link "Viaturas" adicionado
+- [5.3] Dashboard financeiro: KPIs + gráficos + projeção
+  - `src/app/actions/financial-dashboard.ts` — server action com dados agregados (12 meses, por cliente, KPIs, projeção)
+  - `src/app/(dashboard)/dashboard/financeiro/page.tsx` — server component
+  - `src/app/(dashboard)/dashboard/financeiro/_components/financial-dashboard-client.tsx` — UI com KPI cards + gráficos SVG
+  - `src/components/layout/sidebar.tsx` — link "Financeiro" adicionado
 
 **Último commit:** `[5.1]` — github.com/ShadowShtr/mo-limpezas
 
@@ -70,7 +68,7 @@ Lê este ficheiro no início de CADA sessão antes de fazer qualquer coisa.
 - `supabase/migrations/013_client_notifications.sql`
 - `supabase/migrations/016_vehicles.sql`
 
-**A seguir: FASE 5 — [5.3] Dashboard financeiro: KPIs + gráficos + projeção**
+**A seguir: FASE 5 — [5.3] COMMIT Fase 5**
 
 ---
 
@@ -154,7 +152,7 @@ Lê este ficheiro no início de CADA sessão antes de fazer qualquer coisa.
 ### FASE 5 — Financeiro
 - [x] [5.1] Folha de pagamento + PDF
 - [x] [5.2] Documento de cobrança + PDF + CSV
-- [ ] [5.3] Dashboard financeiro: KPIs + gráficos + projeção
+- [x] [5.3] Dashboard financeiro: KPIs + gráficos + projeção
 - [ ] [5.3] COMMIT Fase 5
 
 ### FASE 6 — Produção

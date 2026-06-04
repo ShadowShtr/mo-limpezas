@@ -19,6 +19,7 @@ import {
   Car,
   Wallet,
   Receipt,
+  TrendingUp,
 } from "lucide-react";
 import { logout } from "@/app/actions/auth";
 
@@ -36,6 +37,7 @@ const NAV = [
   { href: "/dashboard/viaturas",           icon: Car,        label: "Viaturas" },
   { href: "/dashboard/folha-pagamento",    icon: Wallet,     label: "Pagamentos" },
   { href: "/dashboard/cobrancas",          icon: Receipt,    label: "Cobranças" },
+  { href: "/dashboard/financeiro",         icon: TrendingUp, label: "Financeiro" },
 ];
 
 interface SidebarProps {
