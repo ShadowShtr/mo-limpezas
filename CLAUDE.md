@@ -47,7 +47,7 @@ Lê este ficheiro no início de CADA sessão antes de fazer qualquer coisa.
 
 ## ⚡ PRÓXIMA TASK A EXECUTAR
 
-**Próxima task de código:** `[5.3] COMMIT Fase 5`
+**Próxima task de código:** `[6.1] Importação CSV (colaboradoras, clientes, locais)`
 
 ---
 
@@ -153,7 +153,7 @@ Lê este ficheiro no início de CADA sessão antes de fazer qualquer coisa.
 - [x] [5.1] Folha de pagamento + PDF
 - [x] [5.2] Documento de cobrança + PDF + CSV
 - [x] [5.3] Dashboard financeiro: KPIs + gráficos + projeção
-- [ ] [5.3] COMMIT Fase 5
+- [x] [5.3] COMMIT Fase 5
 
 ### FASE 6 — Produção
 - [ ] [6.1] Importação CSV (colaboradoras, clientes, locais)
