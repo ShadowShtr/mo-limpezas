@@ -1,0 +1,198 @@
+"use server";
+
+import { createAdminClient } from "@/lib/supabase/admin";
+import { createClient } from "@/lib/supabase/server";
+import { revalidatePath } from "next/cache";
+
+// ─── Tipos ────────────────────────────────────────────────────────────────────
+
+export type VehicleStatus = "ativo" | "manutencao" | "inativo";
+
+export interface Vehicle {
+  id: string;
+  company_id: string;
+  model: string;
+  plate: string;
+  status: VehicleStatus;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface VehicleAllocation {
+  id: string;
+  vehicle_id: string;
+  team_id: string;
+  driver_id: string | null;
+  date: string;
+  vehicle?: Vehicle;
+  driver?: { id: string; full_name: string } | null;
+}
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+async function getCompanyId(): Promise<string> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error("Não autenticado");
+
+  const admin = createAdminClient();
+  const { data: profile } = await admin
+    .from("profiles")
+    .select("company_id")
+    .eq("id", user.id)
+    .single();
+
+  if (!profile) throw new Error("Perfil não encontrado");
+  return profile.company_id;
+}
+
+// ─── Viaturas — CRUD ──────────────────────────────────────────────────────────
+
+export async function getVehicles() {
+  const companyId = await getCompanyId();
+  const admin = createAdminClient();
+
+  const { data, error } = await admin
+    .from("vehicles")
+    .select("*")
+    .eq("company_id", companyId)
+    .order("model");
+
+  if (error) throw error;
+  return data as Vehicle[];
+}
+
+export async function getActiveVehicles() {
+  const companyId = await getCompanyId();
+  const admin = createAdminClient();
+
+  const { data, error } = await admin
+    .from("vehicles")
+    .select("id, model, plate, status")
+    .eq("company_id", companyId)
+    .eq("status", "ativo")
+    .order("model");
+
+  if (error) throw error;
+  return data as Pick<Vehicle, "id" | "model" | "plate" | "status">[];
+}
+
+export async function createVehicle(input: {
+  model: string;
+  plate: string;
+  status: VehicleStatus;
+  notes?: string;
+}) {
+  const companyId = await getCompanyId();
+  const admin = createAdminClient();
+
+  const { error } = await admin.from("vehicles").insert({
+    company_id: companyId,
+    model: input.model.trim(),
+    plate: input.plate.trim().toUpperCase(),
+    status: input.status,
+    notes: input.notes?.trim() || null,
+  });
+
+  if (error) throw error;
+  revalidatePath("/dashboard/viaturas");
+}
+
+export async function updateVehicle(id: string, input: {
+  model?: string;
+  plate?: string;
+  status?: VehicleStatus;
+  notes?: string | null;
+}) {
+  const companyId = await getCompanyId();
+  const admin = createAdminClient();
+
+  const patch: Record<string, unknown> = {};
+  if (input.model !== undefined) patch.model = input.model.trim();
+  if (input.plate !== undefined) patch.plate = input.plate.trim().toUpperCase();
+  if (input.status !== undefined) patch.status = input.status;
+  if (input.notes !== undefined) patch.notes = input.notes?.trim() || null;
+
+  const { error } = await admin
+    .from("vehicles")
+    .update(patch)
+    .eq("id", id)
+    .eq("company_id", companyId);
+
+  if (error) throw error;
+  revalidatePath("/dashboard/viaturas");
+}
+
+export async function deleteVehicle(id: string) {
+  const companyId = await getCompanyId();
+  const admin = createAdminClient();
+
+  const { error } = await admin
+    .from("vehicles")
+    .delete()
+    .eq("id", id)
+    .eq("company_id", companyId);
+
+  if (error) throw error;
+  revalidatePath("/dashboard/viaturas");
+}
+
+// ─── Alocações diárias ────────────────────────────────────────────────────────
+
+export async function getAllocationsForDate(date: string) {
+  const companyId = await getCompanyId();
+  const admin = createAdminClient();
+
+  const { data, error } = await admin
+    .from("vehicle_allocations")
+    .select(`
+      id, vehicle_id, team_id, driver_id, date,
+      vehicle:vehicles(id, model, plate),
+      driver:profiles(id, full_name)
+    `)
+    .eq("company_id", companyId)
+    .eq("date", date);
+
+  if (error) throw error;
+  return data as VehicleAllocation[];
+}
+
+export async function upsertAllocation(input: {
+  vehicle_id: string;
+  team_id: string;
+  driver_id: string | null;
+  date: string;
+}) {
+  const companyId = await getCompanyId();
+  const admin = createAdminClient();
+
+  const { error } = await admin
+    .from("vehicle_allocations")
+    .upsert(
+      {
+        company_id: companyId,
+        vehicle_id: input.vehicle_id,
+        team_id: input.team_id,
+        driver_id: input.driver_id || null,
+        date: input.date,
+      },
+      { onConflict: "vehicle_id,date" },
+    );
+
+  if (error) throw error;
+}
+
+export async function removeAllocation(teamId: string, date: string) {
+  const companyId = await getCompanyId();
+  const admin = createAdminClient();
+
+  const { error } = await admin
+    .from("vehicle_allocations")
+    .delete()
+    .eq("company_id", companyId)
+    .eq("team_id", teamId)
+    .eq("date", date);
+
+  if (error) throw error;
+}

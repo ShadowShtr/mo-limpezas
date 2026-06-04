@@ -47,27 +47,30 @@ Lê este ficheiro no início de CADA sessão antes de fazer qualquer coisa.
 
 ## ⚡ PRÓXIMA TASK A EXECUTAR
 
-**Próxima task de código:** `[4.5] Gestão de viaturas + alocação diária no modal "Equipas"`
+**Próxima task de código:** `[4.4] COMMIT Fase 4`
 
 ---
 
 ## 📍 PONTO DE PARAGEM — 2026-06-04
 
 **Última sessão completou:**
-- [4.4] Relatórios: horas, absentismo, receita, serviços + extrato PDF + CSV
-  - `src/app/actions/reports.ts` — server action com os 4 datasets
-  - `src/app/(dashboard)/dashboard/relatorios/page.tsx` — página com KPIs + filtro de mês
-  - `_components/reports-tabs.tsx` — tabs Horas/Absentismo/Receita/Serviços + export CSV + PDF por cliente
-  - Requer `jspdf` instalado (já adicionado ao package.json)
+- [4.5] Gestão de viaturas + alocação diária no modal "Equipas"
+  - `supabase/migrations/016_vehicles.sql` — tabelas `vehicles` + `vehicle_allocations` com RLS
+  - `src/app/actions/vehicles.ts` — CRUD de viaturas + upsert/remove de alocações diárias
+  - `src/app/(dashboard)/dashboard/viaturas/page.tsx` — página CRUD viaturas
+  - `src/app/(dashboard)/dashboard/viaturas/_components/vehicles-client.tsx` — tabela + sheet criar/editar
+  - `calendario/_components/team-allocation-modal.tsx` — viaturas do DB + dropdown de condutor
+  - `src/components/layout/sidebar.tsx` — link "Viaturas" adicionado
 
-**Último commit:** `[4.4]` — github.com/ShadowShtr/mo-limpezas
+**Último commit:** `[4.5]` — github.com/ShadowShtr/mo-limpezas
 
 **Migrations pendentes (aplicar no Supabase antes de testar):**
 - `supabase/migrations/011_conflict_detection.sql`
 - `supabase/migrations/012_teams_vehicle.sql`
 - `supabase/migrations/013_client_notifications.sql`
+- `supabase/migrations/016_vehicles.sql`
 
-**A seguir: FASE 4 continua — [4.4] Relatórios**
+**A seguir: FASE 4 — [4.4] COMMIT Fase 4**
 
 ---
 
@@ -145,7 +148,7 @@ Lê este ficheiro no início de CADA sessão antes de fazer qualquer coisa.
 - [x] [4.3] Mapa Mapbox + rotas otimizadas
 - [x] [4.4] Relatórios: horas, absentismo, receita, serviços
 - [x] [4.4] Extrato PDF por cliente + exportação CSV
-- [ ] [4.5] Gestão de viaturas + alocação diária no modal "Equipas"
+- [x] [4.5] Gestão de viaturas + alocação diária no modal "Equipas"
 - [ ] [4.4] COMMIT Fase 4
 
 ### FASE 5 — Financeiro
