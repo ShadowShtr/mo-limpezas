@@ -1,6 +1,7 @@
 "use server";
 
 import { createAdminClient } from "@/lib/supabase/admin";
+import { getCompanySettings } from "./settings";
 
 export interface HorasRow {
   id: string;
@@ -52,6 +53,7 @@ export interface ReportsData {
   absentismo: AbsentismoRow[];
   receita: ReceitaRow[];
   servicosPorEquipa: ServicosRow[];
+  vatRate: number;
 }
 
 export async function getReportsData(
@@ -247,5 +249,7 @@ export async function getReportsData(
 
   const servicosPorEquipa = Array.from(servicosMap.values()).sort((a, b) => b.total - a.total);
 
-  return { horas, absentismo, receita, servicosPorEquipa };
+  const settings = await getCompanySettings(companyId);
+
+  return { horas, absentismo, receita, servicosPorEquipa, vatRate: settings.vat_rate };
 }

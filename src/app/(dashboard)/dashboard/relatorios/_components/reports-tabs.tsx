@@ -20,6 +20,7 @@ interface Props {
   servicosPorEquipa: ServicosRow[];
   mesLabel: string;
   mesParam: string;
+  vatRate: number;
 }
 
 function fmtHoras(minutes: number) {
@@ -43,7 +44,8 @@ function exportCsv(filename: string, headers: string[], rows: string[][]) {
   URL.revokeObjectURL(url);
 }
 
-async function exportClientePdf(row: ReceitaRow, mesLabel: string) {
+async function exportClientePdf(row: ReceitaRow, mesLabel: string, vatRate: number) {
+  const vatFactor = vatRate / 100;
   const { default: jsPDF } = await import("jspdf");
   const doc = new jsPDF({ unit: "mm", format: "a4" });
 
@@ -109,13 +111,13 @@ async function exportClientePdf(row: ReceitaRow, mesLabel: string) {
   y += 4;
   doc.line(margin, y, pageW - margin, y);
   y += 6;
-  const iva = row.total_receita * 0.23;
-  const total = row.total_receita * 1.23;
+  const iva = row.total_receita * vatFactor;
+  const total = row.total_receita * (1 + vatFactor);
 
   doc.setFont("helvetica", "bold");
   doc.text("Subtotal (s/ IVA):", margin + 100, y); doc.setFont("helvetica", "normal"); doc.text(row.total_receita.toFixed(2) + " €", margin + 150, y); y += 6;
   doc.setFont("helvetica", "bold");
-  doc.text("IVA 23%:", margin + 100, y); doc.setFont("helvetica", "normal"); doc.text(iva.toFixed(2) + " €", margin + 150, y); y += 6;
+  doc.text(`IVA ${vatRate}%:`, margin + 100, y); doc.setFont("helvetica", "normal"); doc.text(iva.toFixed(2) + " €", margin + 150, y); y += 6;
   doc.setFillColor(22, 163, 74);
   doc.rect(margin + 95, y - 5, pageW - margin * 2 - 95, 8, "F");
   doc.setTextColor(255, 255, 255);
@@ -141,7 +143,8 @@ const ABSENCE_LABELS: Record<string, string> = {
   outros:              "Outros",
 };
 
-export function ReportsTabs({ horas, absentismo, receita, servicosPorEquipa, mesLabel, mesParam }: Props) {
+export function ReportsTabs({ horas, absentismo, receita, servicosPorEquipa, mesLabel, mesParam, vatRate }: Props) {
+  const vatFactor = vatRate / 100;
   const [tab, setTab] = useState<Tab>("horas");
 
   return (
@@ -323,13 +326,13 @@ export function ReportsTabs({ horas, absentismo, receita, servicosPorEquipa, mes
               onClick={() =>
                 exportCsv(
                   `receita-${mesParam}.csv`,
-                  ["Cliente", "Serviços", "Receita (s/ IVA)", "IVA 23%", "Total (c/ IVA)"],
+                  ["Cliente", "Serviços", "Receita (s/ IVA)", `IVA ${vatRate}%`, "Total (c/ IVA)"],
                   receita.map((r) => [
                     r.client_name,
                     r.servicos_count.toString(),
                     r.total_receita.toFixed(2),
-                    (r.total_receita * 0.23).toFixed(2),
-                    (r.total_receita * 1.23).toFixed(2),
+                    (r.total_receita * vatFactor).toFixed(2),
+                    (r.total_receita * (1 + vatFactor)).toFixed(2),
                   ]),
                 )
               }
@@ -350,7 +353,7 @@ export function ReportsTabs({ horas, absentismo, receita, servicosPorEquipa, mes
                     <Th>Cliente</Th>
                     <Th align="right">Serviços</Th>
                     <Th align="right">Subtotal</Th>
-                    <Th align="right">IVA 23%</Th>
+                    <Th align="right">IVA {vatRate}%</Th>
                     <Th align="right">Total c/ IVA</Th>
                     <Th align="right">Extrato PDF</Th>
                   </tr>
@@ -361,13 +364,13 @@ export function ReportsTabs({ horas, absentismo, receita, servicosPorEquipa, mes
                       <Td>{r.client_name}</Td>
                       <Td align="right">{r.servicos_count}</Td>
                       <Td align="right">{fmtEuros(r.total_receita)}</Td>
-                      <Td align="right">{fmtEuros(r.total_receita * 0.23)}</Td>
+                      <Td align="right">{fmtEuros(r.total_receita * vatFactor)}</Td>
                       <Td align="right">
-                        <span className="font-semibold text-green-700">{fmtEuros(r.total_receita * 1.23)}</span>
+                        <span className="font-semibold text-green-700">{fmtEuros(r.total_receita * (1 + vatFactor))}</span>
                       </Td>
                       <Td align="right">
                         <button
-                          onClick={() => exportClientePdf(r, mesLabel)}
+                          onClick={() => exportClientePdf(r, mesLabel, vatRate)}
                           title="Gerar extrato PDF"
                           className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-[var(--color-border)] text-xs text-[var(--color-text-sub)] hover:bg-[var(--color-background)] hover:text-[var(--color-primary)] transition-colors"
                         >
@@ -388,10 +391,10 @@ export function ReportsTabs({ horas, absentismo, receita, servicosPorEquipa, mes
                       <span className="font-semibold">{fmtEuros(receita.reduce((s, r) => s + r.total_receita, 0))}</span>
                     </Td>
                     <Td align="right">
-                      <span className="font-semibold">{fmtEuros(receita.reduce((s, r) => s + r.total_receita * 0.23, 0))}</span>
+                      <span className="font-semibold">{fmtEuros(receita.reduce((s, r) => s + r.total_receita * vatFactor, 0))}</span>
                     </Td>
                     <Td align="right">
-                      <span className="font-bold text-green-700">{fmtEuros(receita.reduce((s, r) => s + r.total_receita * 1.23, 0))}</span>
+                      <span className="font-bold text-green-700">{fmtEuros(receita.reduce((s, r) => s + r.total_receita * (1 + vatFactor), 0))}</span>
                     </Td>
                     <Td />
                   </tr>

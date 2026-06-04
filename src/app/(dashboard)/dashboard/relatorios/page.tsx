@@ -101,6 +101,7 @@ export default async function RelatoriosPage({
           servicosPorEquipa={data.servicosPorEquipa}
           mesLabel={mesLabel}
           mesParam={mesParam}
+          vatRate={data.vatRate}
         />
       </div>
     </div>
