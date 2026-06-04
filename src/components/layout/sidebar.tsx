@@ -14,18 +14,20 @@ import {
   Settings,
   LogOut,
   X,
+  AlertTriangle,
 } from "lucide-react";
 import { logout } from "@/app/actions/auth";
 
 const NAV = [
-  { href: "/dashboard",           icon: LayoutDashboard, label: "Dashboard" },
-  { href: "/dashboard/calendario", icon: Calendar,        label: "Calendário" },
-  { href: "/dashboard/contratos",  icon: FileText,        label: "Contratos" },
-  { href: "/dashboard/colaboradores", icon: Users,        label: "Colaboradores" },
-  { href: "/dashboard/clientes",   icon: Building2,       label: "Clientes" },
-  { href: "/dashboard/locais",     icon: MapPin,          label: "Locais" },
-  { href: "/dashboard/equipas",    icon: UsersRound,      label: "Equipas" },
-  { href: "/dashboard/relatorios", icon: BarChart3,       label: "Relatórios" },
+  { href: "/dashboard",               icon: LayoutDashboard, label: "Dashboard" },
+  { href: "/dashboard/calendario",    icon: Calendar,        label: "Calendário" },
+  { href: "/dashboard/contratos",     icon: FileText,        label: "Contratos" },
+  { href: "/dashboard/colaboradores", icon: Users,           label: "Colaboradores" },
+  { href: "/dashboard/faltas",        icon: AlertTriangle,   label: "Faltas" },
+  { href: "/dashboard/clientes",      icon: Building2,       label: "Clientes" },
+  { href: "/dashboard/locais",        icon: MapPin,          label: "Locais" },
+  { href: "/dashboard/equipas",       icon: UsersRound,      label: "Equipas" },
+  { href: "/dashboard/relatorios",    icon: BarChart3,       label: "Relatórios" },
 ];
 
 interface SidebarProps {

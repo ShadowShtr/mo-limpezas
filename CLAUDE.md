@@ -47,26 +47,29 @@ Lê este ficheiro no início de CADA sessão antes de fazer qualquer coisa.
 
 ## ⚡ PRÓXIMA TASK A EXECUTAR
 
-**Próxima task de código:** `[4.1] Registo de faltas + motor de substituição`
+**Próxima task de código:** `[4.2] Mapa de férias + pedidos + aprovação + alerta simultâneas`
 
 ---
 
-## 📍 PONTO DE PARAGEM — 2026-06-03
+## 📍 PONTO DE PARAGEM — 2026-06-04
 
-**Última sessão completou (Fase 2 encerrada):**
-- [2.5] Cron `/api/cron/generate-services` — gera serviços do mês seguinte (Vercel, dia 25)
-- [2.6] Modal "Equipas" — viaturas, disponíveis e ausentes
-- [2.7] Vista de lista do calendário + toggle + exportar CSV
-- [2.8] Modal "Avisos" a clientes + página `/clientes/[id]` com aba Comunicação
+**Última sessão completou:**
+- [4.1] Registo de faltas + motor de substituição
+  - `src/app/actions/absences.ts` — server actions (criar, eliminar, substituto, sugestões)
+  - `src/app/(dashboard)/dashboard/faltas/page.tsx` — página com filtros por mês/colaborador
+  - `_components/absence-table.tsx` — tabela com badges por tipo + botão substituto
+  - `_components/absence-sheet.tsx` — sheet para registar nova falta
+  - `_components/substitution-panel.tsx` — motor de substituição com sugestões ordenadas por score
+  - Sidebar atualizado com link "Faltas"
 
-**Último commit:** `[3.4]` — github.com/ShadowShtr/mo-limpezas
+**Último commit:** `[4.1]` — github.com/ShadowShtr/mo-limpezas
 
-**Migrations pendentes (aplicar no Supabase antes de testar 2.5–2.8):**
+**Migrations pendentes (aplicar no Supabase antes de testar):**
 - `supabase/migrations/011_conflict_detection.sql`
 - `supabase/migrations/012_teams_vehicle.sql`
 - `supabase/migrations/013_client_notifications.sql`
 
-**A seguir: FASE 3 — App Mobile PWA**
+**A seguir: FASE 4 continua — [4.2] Mapa de férias**
 
 ---
 
@@ -139,7 +142,7 @@ Lê este ficheiro no início de CADA sessão antes de fazer qualquer coisa.
 - [x] [3.4] COMMIT Fase 3
 
 ### FASE 4 — Operações
-- [ ] [4.1] Registo de faltas + motor de substituição
+- [x] [4.1] Registo de faltas + motor de substituição
 - [ ] [4.2] Mapa de férias + pedidos + aprovação + alerta simultâneas
 - [ ] [4.3] Mapa Mapbox + rotas otimizadas
 - [ ] [4.4] Relatórios: horas, absentismo, receita, serviços
