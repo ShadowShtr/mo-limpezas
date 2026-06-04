@@ -18,6 +18,7 @@ import {
   AlertTriangle,
   Car,
   Wallet,
+  Receipt,
 } from "lucide-react";
 import { logout } from "@/app/actions/auth";
 
@@ -34,6 +35,7 @@ const NAV = [
   { href: "/dashboard/relatorios",         icon: BarChart3,  label: "Relatórios" },
   { href: "/dashboard/viaturas",           icon: Car,        label: "Viaturas" },
   { href: "/dashboard/folha-pagamento",    icon: Wallet,     label: "Pagamentos" },
+  { href: "/dashboard/cobrancas",          icon: Receipt,    label: "Cobranças" },
 ];
 
 interface SidebarProps {

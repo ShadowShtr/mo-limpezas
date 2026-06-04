@@ -47,7 +47,7 @@ Lê este ficheiro no início de CADA sessão antes de fazer qualquer coisa.
 
 ## ⚡ PRÓXIMA TASK A EXECUTAR
 
-**Próxima task de código:** `[5.2] Documento de cobrança + PDF + CSV`
+**Próxima task de código:** `[5.3] Dashboard financeiro: KPIs + gráficos + projeção`
 
 ---
 
@@ -70,7 +70,7 @@ Lê este ficheiro no início de CADA sessão antes de fazer qualquer coisa.
 - `supabase/migrations/013_client_notifications.sql`
 - `supabase/migrations/016_vehicles.sql`
 
-**A seguir: FASE 5 — [5.2] Documento de cobrança + PDF + CSV**
+**A seguir: FASE 5 — [5.3] Dashboard financeiro: KPIs + gráficos + projeção**
 
 ---
 
@@ -153,7 +153,7 @@ Lê este ficheiro no início de CADA sessão antes de fazer qualquer coisa.
 
 ### FASE 5 — Financeiro
 - [x] [5.1] Folha de pagamento + PDF
-- [ ] [5.2] Documento de cobrança + PDF + CSV
+- [x] [5.2] Documento de cobrança + PDF + CSV
 - [ ] [5.3] Dashboard financeiro: KPIs + gráficos + projeção
 - [ ] [5.3] COMMIT Fase 5
 
