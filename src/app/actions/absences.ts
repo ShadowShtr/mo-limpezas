@@ -111,7 +111,7 @@ export async function getSubstituteSuggestions(
   if (error) return { ok: false, error: error.message };
 
   // Para cada colaborador, verificar quantos serviços têm no período
-  const suggestions: SubstituteSuggestion[] = await Promise.all(
+  const suggestions: (SubstituteSuggestion | null)[] = await Promise.all(
     (allCollabs ?? []).map(async (c) => {
       // Contar serviços no período como conflito
       const { count: conflictCount } = await admin

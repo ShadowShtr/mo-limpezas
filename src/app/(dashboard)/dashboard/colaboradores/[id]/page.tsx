@@ -54,7 +54,7 @@ export default async function ColaboradorDetailPage({ params }: Props) {
     .limit(20);
 
   // Resolver nomes de substitutos
-  const replacedByIds = [...new Set((rawAbsences ?? []).map((a) => a.replaced_by).filter(Boolean))];
+  const replacedByIds = [...new Set((rawAbsences ?? []).map((a) => a.replaced_by).filter((id): id is string => !!id))];
   let substituteNames: Record<string, string> = {};
   if (replacedByIds.length > 0) {
     const { data: subs } = await admin
