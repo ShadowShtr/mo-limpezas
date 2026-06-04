@@ -17,10 +17,10 @@ export interface ColaboradorInput {
 export async function createColaborador(input: ColaboradorInput) {
   const admin = createAdminClient();
 
-  // Gera email placeholder se não fornecido (para testes)
+  // Gera email placeholder se não fornecido (formato válido obrigatório pelo GoTrue)
   const email =
     input.email?.trim() ||
-    `${input.full_name.toLowerCase().replace(/\s+/g, ".").replace(/[^a-z0-9.]/g, "")}.${Date.now()}@placeholder.escala`;
+    `${input.full_name.toLowerCase().replace(/\s+/g, ".").replace(/[^a-z0-9.]/g, "")}.${Date.now()}@demo.escala.pt`;
 
   const { data: authData, error: authError } = await admin.auth.admin.createUser({
     email,
@@ -34,18 +34,20 @@ export async function createColaborador(input: ColaboradorInput) {
 
   if (authError) return { ok: false as const, error: authError.message };
 
-  // O trigger handle_new_user cria o profile — atualizamos os campos extra
+  // Upsert do profile — cobre o caso em que o trigger falhou silenciosamente
   const { error: profileError } = await admin
     .from("profiles")
-    .update({
+    .upsert({
+      id: authData.user.id,
+      company_id: input.company_id,
+      role: input.role,
       full_name: input.full_name,
       email: input.email?.trim() || null,
       phone: input.phone || null,
       status: input.status,
       contracted_hours_month: input.contracted_hours_month,
       skills: input.skills,
-    })
-    .eq("id", authData.user.id);
+    }, { onConflict: "id" });
 
   if (profileError) return { ok: false as const, error: profileError.message };
 
