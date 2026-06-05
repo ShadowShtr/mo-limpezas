@@ -3,6 +3,10 @@
     {
       "path": "/api/cron/generate-services",
       "schedule": "0 6 25 * *"
+    },
+    {
+      "path": "/api/keep-alive",
+      "schedule": "0 8 * * *"
     }
   ]
 }

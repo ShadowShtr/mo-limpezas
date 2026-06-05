@@ -47,22 +47,19 @@ Lê este ficheiro no início de CADA sessão antes de fazer qualquer coisa.
 
 ## ⚡ PRÓXIMA TASK A EXECUTAR
 
-**Próxima task de código:** `[6.3] Anti-hibernação Supabase`
+**Próxima task de código:** `[6.4] Página de Configurações`
 
 ---
 
 ## 📍 PONTO DE PARAGEM — 2026-06-05
 
 **Última sessão completou:**
-- [6.2] Emails transacionais (Resend)
-  - `src/lib/email/index.ts` — cliente Resend singleton
-  - `src/lib/email/templates.ts` — templates HTML: lembrete de serviço ao cliente + convite de colaboradora
-  - `src/app/actions/email.ts` — `sendBulkClientNotifications()` envia emails via Resend e persiste em `client_notifications`
-  - `client-notifications-modal.tsx` — usa server action em vez de inserção direta no DB
-  - `src/app/actions/auth.ts` — `inviteCollaborator` gera link + envia email personalizado via Resend (fallback para Supabase)
-  - `.env.example` — adicionadas `RESEND_API_KEY`, `RESEND_FROM_EMAIL`, `COMPANY_PHONE`
+- [6.3] Anti-hibernação Supabase
+  - `src/app/api/keep-alive/route.ts` — endpoint GET que faz SELECT mínimo em `companies`
+  - `vercel.json` — cron `0 8 * * *` (todos os dias às 08h00 UTC) chama `/api/keep-alive`
+  - Usa `CRON_SECRET` já existente para autenticação (sem nova variável de ambiente)
 
-**Último commit:** `[6.2]` — github.com/ShadowShtr/mo-limpezas
+**Último commit:** `[6.3]` — github.com/ShadowShtr/mo-limpezas
 
 **Migrations pendentes (aplicar no Supabase antes de testar):**
 - `supabase/migrations/011_conflict_detection.sql`
@@ -75,7 +72,7 @@ Lê este ficheiro no início de CADA sessão antes de fazer qualquer coisa.
 - Verificar domínio `molimpezas.pt` no Resend (ou usar `onboarding@resend.dev` em dev)
 - Preencher `.env.local` com `RESEND_API_KEY` e `RESEND_FROM_EMAIL`
 
-**A seguir: FASE 6 — [6.3] Anti-hibernação Supabase**
+**A seguir: FASE 6 — [6.4] Página de Configurações**
 
 ---
 
@@ -165,7 +162,7 @@ Lê este ficheiro no início de CADA sessão antes de fazer qualquer coisa.
 ### FASE 6 — Produção
 - [x] [6.1] Importação CSV (colaboradoras, clientes, locais)
 - [x] [6.2] Emails transacionais (Resend)
-- [ ] [6.3] Anti-hibernação Supabase
+- [x] [6.3] Anti-hibernação Supabase
 - [ ] [6.4] Página de Configurações
 - [ ] [6.5] Testes com dados reais
 - [ ] [6.6] COMMIT final + deploy produção ✅
