@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useCallback, useEffect, useRef } from "react";
+import React, { useState, useMemo, useCallback, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import {
   addWeeks, subWeeks, addDays, addMinutes,
@@ -8,13 +8,14 @@ import {
   endOfWeek,
 } from "date-fns";
 import { pt } from "date-fns/locale";
-import { ChevronLeft, ChevronRight, Plus, AlertTriangle, X, Users, LayoutGrid, List, Bell } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, AlertTriangle, X, Users, LayoutGrid, List, Bell, FileDown, Loader2 } from "lucide-react";
 import {
   DndContext, DragOverlay,
   PointerSensor, useSensor, useSensors,
   type DragStartEvent, type DragEndEvent,
 } from "@dnd-kit/core";
 import { ServiceBlock, type ServiceForBlock } from "./service-block";
+import { travelMinutes, type TeamRoute } from "./day-pdf";
 import { DroppableColumn } from "./droppable-column";
 import { ServiceCreateSheet } from "./service-create-sheet";
 import { ServiceDetailSheet } from "./service-detail-sheet";
@@ -65,6 +66,8 @@ function toBlock(s: ServiceFull): ServiceForBlock {
     location_address: s.location_address,
     location_access_code: s.location_access_code ?? null,
     location_instructions: s.location_instructions ?? null,
+    location_lat: s.location_lat ?? null,
+    location_lng: s.location_lng ?? null,
     client_name: s.client_name,
     calculated_value: s.calculated_value,
     manual_value: s.manual_value,
@@ -72,6 +75,20 @@ function toBlock(s: ServiceFull): ServiceForBlock {
     team_color: s.team_color ?? null,
     team_name: s.team_name ?? null,
   };
+}
+
+/** Posição Y (px) do topo de um serviço na grelha. */
+function svcTopPx(svc: ServiceForBlock, startHour: number, slotH: number): number {
+  const start = parseISO(svc.scheduled_start);
+  const offsetMin = start.getHours() * 60 + start.getMinutes() - startHour * 60;
+  return (offsetMin / 30) * slotH;
+}
+
+/** Posição Y (px) do fundo de um serviço na grelha. */
+function svcBottomPx(svc: ServiceForBlock, startHour: number, slotH: number): number {
+  const end = parseISO(svc.scheduled_end);
+  const offsetMin = end.getHours() * 60 + end.getMinutes() - startHour * 60;
+  return (offsetMin / 30) * slotH;
 }
 
 /** Posição Y da hora actual para um determinado dia (null se não for hoje ou fora do range). */
@@ -159,6 +176,7 @@ export function CalendarView({
   // ── Drag state ───────────────────────────────────────────────────────────
   const [draggingBlock, setDraggingBlock] = useState<{ service: ServiceForBlock; teamId: string } | null>(null);
   const [conflictMsg,   setConflictMsg]   = useState<string | null>(null);
+  const [pdfLoading,    setPdfLoading]    = useState(false);
 
   // Inicializar today e currentTop no cliente (evita hydration mismatch)
   useEffect(() => {
@@ -214,6 +232,10 @@ export function CalendarView({
       if (!map[key]) map[key] = [];
       map[key].push(toBlock(s));
     });
+    // Ordenar cada coluna por hora de início
+    Object.keys(map).forEach((k) => {
+      map[k].sort((a, b) => a.scheduled_start.localeCompare(b.scheduled_start));
+    });
     return map;
   }, [dayServices, teams]);
 
@@ -250,6 +272,22 @@ export function CalendarView({
   }
 
   function handleChanged() { router.refresh(); }
+
+  async function handlePdf() {
+    setPdfLoading(true);
+    try {
+      const { generateDayPdf } = await import("./day-pdf");
+      const routes: TeamRoute[] = columns.map((col) => ({
+        teamId:    col.id,
+        teamName:  col.name,
+        teamColor: col.color,
+        services:  byTeam[col.id] ?? [],
+      }));
+      await generateDayPdf(selectedDate, routes);
+    } finally {
+      setPdfLoading(false);
+    }
+  }
 
   // ── Drag handlers ────────────────────────────────────────────────────────
 
@@ -403,6 +441,15 @@ export function CalendarView({
               </button>
             </div>
             <button
+              onClick={handlePdf}
+              disabled={pdfLoading || dayServices.length === 0}
+              title="Exportar plano do dia em PDF"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[var(--color-border)] text-[var(--color-text-sub)] text-xs font-semibold hover:bg-[var(--color-background)] transition-colors disabled:opacity-40"
+            >
+              {pdfLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <FileDown className="w-3.5 h-3.5" />}
+              PDF
+            </button>
+            <button
               onClick={() => setAvisosOpen(true)}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[var(--color-border)] text-[var(--color-text-sub)] text-xs font-semibold hover:bg-[var(--color-background)] transition-colors"
             >
@@ -555,16 +602,42 @@ export function CalendarView({
                     </div>
                   )}
 
-                  {(byTeam[col.id] ?? []).map((svc) => (
-                    <ServiceBlock
-                      key={svc.id}
-                      service={svc}
-                      teamId={col.key}
-                      slotHeight={SLOT_HEIGHT}
-                      startHour={START_HOUR}
-                      onClick={(b) => setDetailSvc(services.find((s) => s.id === b.id) ?? null)}
-                    />
-                  ))}
+                  {(byTeam[col.id] ?? []).map((svc, idx, arr) => {
+                    const next = arr[idx + 1];
+                    const showTravel =
+                      next != null &&
+                      svc.location_lat != null && svc.location_lng != null &&
+                      next.location_lat != null && next.location_lng != null;
+                    const travelMin = showTravel
+                      ? travelMinutes(svc.location_lat!, svc.location_lng!, next!.location_lat!, next!.location_lng!)
+                      : 0;
+                    const bottomY = svcBottomPx(svc, START_HOUR, SLOT_HEIGHT);
+                    const nextTopY = next ? svcTopPx(next, START_HOUR, SLOT_HEIGHT) : 0;
+                    const gapPx = nextTopY - bottomY;
+
+                    return (
+                      <React.Fragment key={svc.id}>
+                        <ServiceBlock
+                          service={svc}
+                          teamId={col.key}
+                          slotHeight={SLOT_HEIGHT}
+                          startHour={START_HOUR}
+                          stopIndex={arr.length > 1 ? idx + 1 : undefined}
+                          onClick={(b) => setDetailSvc(services.find((s) => s.id === b.id) ?? null)}
+                        />
+                        {showTravel && gapPx > 20 && (
+                          <div
+                            className="absolute left-0 right-0 flex items-center justify-center pointer-events-none z-10"
+                            style={{ top: `${bottomY + 2}px`, height: `${Math.max(gapPx - 4, 16)}px` }}
+                          >
+                            <span className="text-[9px] font-medium px-1.5 py-0.5 rounded-full bg-white border border-[var(--color-border)] text-[var(--color-text-muted)] shadow-sm whitespace-nowrap">
+                              ↓ ~{travelMin} min
+                            </span>
+                          </div>
+                        )}
+                      </React.Fragment>
+                    );
+                  })}
                 </DroppableColumn>
               )) : (
                 /* Coluna vazia com grades — para quando não há equipas ainda */

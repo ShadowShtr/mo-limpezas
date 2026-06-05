@@ -16,6 +16,8 @@ export type ServiceForBlock = {
   location_address: string;
   location_access_code: string | null;
   location_instructions: string | null;
+  location_lat: number | null;
+  location_lng: number | null;
   client_name: string;
   calculated_value: number | null;
   manual_value: number | null;
@@ -184,9 +186,11 @@ interface ServiceBlockProps {
   onClick?: (service: ServiceForBlock) => void;
   /** Quando true, renderiza como overlay de drag (sem useDraggable, sem tooltip) */
   isOverlay?: boolean;
+  /** Número da paragem da equipa neste dia (1, 2, 3...). Só mostrado se > 0 e a equipa tiver >1 serviço. */
+  stopIndex?: number;
 }
 
-export function ServiceBlock({ service, slotHeight, startHour, teamId, onClick, isOverlay = false }: ServiceBlockProps) {
+export function ServiceBlock({ service, slotHeight, startHour, teamId, onClick, isOverlay = false, stopIndex }: ServiceBlockProps) {
   const [tooltip, setTooltip] = useState<TooltipState | null>(null);
 
   const isDraggable = !isOverlay &&
@@ -262,8 +266,16 @@ export function ServiceBlock({ service, slotHeight, startHour, teamId, onClick, 
         style={overlayStyle}
         {...(isOverlay ? {} : { ...listeners, ...attributes })}
       >
-        <div className="px-1.5 py-0.5 h-full flex flex-col overflow-hidden">
-          <span className="text-[11px] font-semibold leading-tight truncate" style={{ color: s.text }}>
+        <div className="px-1.5 py-0.5 h-full flex flex-col overflow-hidden relative">
+          {stopIndex != null && stopIndex > 0 && (
+            <span
+              className="absolute top-0.5 right-0.5 w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-bold leading-none shrink-0"
+              style={{ backgroundColor: borderColor, color: "#fff", opacity: 0.9 }}
+            >
+              {stopIndex}
+            </span>
+          )}
+          <span className="text-[11px] font-semibold leading-tight truncate pr-4" style={{ color: s.text }}>
             {service.location_name}
           </span>
           {!isShort && (
