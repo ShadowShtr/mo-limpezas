@@ -65,12 +65,11 @@ export async function generateInvoices(
   const { start, end } = monthRange(year, month);
 
   // Configurações
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: settings } = await (admin as any)
+  const { data: settings } = await admin
     .from("company_settings")
     .select("vat_rate, invoice_prefix")
     .eq("company_id", companyId)
-    .single() as { data: { vat_rate: number; invoice_prefix: string } | null };
+    .single();
 
   const vatRate     = settings?.vat_rate    ?? 23;
   const prefix      = settings?.invoice_prefix ?? "F";

@@ -38,8 +38,7 @@ export async function notifyTeam(serviceId: string, message: string) {
   const memberIds = members.map((m) => m.collaborator_id);
 
   // Subscrições push de cada membro
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: subs } = await (admin as any)
+  const { data: subs } = await admin
     .from("push_subscriptions")
     .select("user_id, endpoint, p256dh, auth_key")
     .in("user_id", memberIds)

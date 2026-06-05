@@ -61,7 +61,7 @@ export async function sendBulkClientNotifications(
         .from("services_full")
         .select("location_address")
         .eq("id", p.serviceId)
-        .single() as { data: { location_address: string | null } | null };
+        .single();
 
       const address = svc?.location_address ?? "—";
 

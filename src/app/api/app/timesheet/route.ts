@@ -65,8 +65,7 @@ export async function POST(req: NextRequest) {
 
   const { data, error } = await admin
     .from("timesheets")
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    .insert(insertPayload as any)
+    .insert(insertPayload)
     .select()
     .single();
 

@@ -249,14 +249,13 @@ export async function getReportsData(
   const servicosPorEquipa = Array.from(servicosMap.values()).sort((a, b) => b.total - a.total);
 
   // Buscar IVA das configurações da empresa (sem import circular)
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: settingsRow } = await (admin as any)
+  const { data: settingsRow } = await admin
     .from("company_settings")
     .select("vat_rate")
     .eq("company_id", companyId)
     .single();
 
-  const vatRate: number = (settingsRow?.vat_rate as number | null | undefined) ?? 23;
+  const vatRate: number = settingsRow?.vat_rate ?? 23;
 
   return { horas, absentismo, receita, servicosPorEquipa, vatRate };
 }

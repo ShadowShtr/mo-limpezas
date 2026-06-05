@@ -100,8 +100,7 @@ export function ServiceCreateSheet({
     const scheduledStart = `${dateStr}T${startTime}:00`;
     const scheduledEnd = `${dateStr}T${endTime}:00`;
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { error } = await (supabase.from("services") as unknown as any).insert({
+    const { error } = await supabase.from("services").insert({
       company_id: companyId,
       location_id: locationId,
       reference_number: ref,

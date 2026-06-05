@@ -68,12 +68,11 @@ export async function calculateAndSavePayroll(
   if (!profiles?.length) return { ok: true, records: [] };
 
   // 2. Configurações da empresa (salário/hora e sub. alimentação por defeito)
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: settings } = await (admin as any)
+  const { data: settings } = await admin
     .from("company_settings")
     .select("hourly_rate, meal_allowance_day, overtime_rate_pct")
     .eq("company_id", companyId)
-    .single() as { data: { hourly_rate: number; meal_allowance_day: number; overtime_rate_pct: number } | null };
+    .single();
 
   const defaultHourlyRate = settings?.hourly_rate ?? 8;
   const mealAllowanceDay  = settings?.meal_allowance_day ?? 9.6;

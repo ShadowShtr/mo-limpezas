@@ -67,7 +67,7 @@ export type Database = {
       };
       services: {
         Row: { id: string; company_id: string; location_id: string; team_id: string | null; contract_id: string | null; reference_number: string; scheduled_start: string; scheduled_end: string; hourly_rate: number | null; calculated_value: number | null; manual_value: number | null; discount_pct: number; status: string; actual_start: string | null; actual_end: string | null; is_exception: boolean; original_date: string | null; notes: string | null; created_by: string | null; created_at: string; updated_at: string };
-        Insert: { company_id: string; location_id: string; reference_number: string; scheduled_start: string; scheduled_end: string; team_id?: string | null; contract_id?: string | null; hourly_rate?: number | null; calculated_value?: number | null; status?: string };
+        Insert: { company_id: string; location_id: string; reference_number: string; scheduled_start: string; scheduled_end: string; team_id?: string | null; contract_id?: string | null; hourly_rate?: number | null; calculated_value?: number | null; manual_value?: number | null; discount_pct?: number; status?: string; is_exception?: boolean; original_date?: string | null; notes?: string | null; created_by?: string | null };
         Update: { team_id?: string | null; status?: string; scheduled_start?: string; scheduled_end?: string; actual_start?: string | null; actual_end?: string | null; notes?: string | null; manual_value?: number | null; discount_pct?: number };
         Relationships: [];
       };
@@ -79,7 +79,7 @@ export type Database = {
       };
       timesheets: {
         Row: { id: string; service_id: string; collaborator_id: string; company_id: string; clock_in_at: string | null; clock_out_at: string | null; clock_in_lat: number | null; clock_in_lng: number | null; clock_out_lat: number | null; clock_out_lng: number | null; location_warning: boolean; duration_minutes: number | null; notes: string | null; created_at: string; updated_at: string };
-        Insert: { service_id: string; collaborator_id: string; company_id: string; clock_in_at?: string | null };
+        Insert: { service_id: string; collaborator_id: string; company_id: string; clock_in_at?: string | null; clock_in_lat?: number | null; clock_in_lng?: number | null; clock_in_distance_m?: number | null; location_warning?: boolean };
         Update: { clock_out_at?: string | null; clock_out_lat?: number | null; clock_out_lng?: number | null; location_warning?: boolean; duration_minutes?: number | null; notes?: string | null };
         Relationships: [];
       };
