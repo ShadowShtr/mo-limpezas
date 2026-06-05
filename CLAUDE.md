@@ -47,20 +47,21 @@ Lê este ficheiro no início de CADA sessão antes de fazer qualquer coisa.
 
 ## ⚡ PRÓXIMA TASK A EXECUTAR
 
-**Próxima task de código:** `[6.6] COMMIT final + deploy produção`
+**Próxima task de código:** PROJETO CONCLUÍDO ✅
 
 ---
 
 ## 📍 PONTO DE PARAGEM — 2026-06-05
 
 **Última sessão completou:**
-- [6.5] Testes com dados reais — revisão estática completa
-  - `src/types/database.ts` — Insert types de `services` e `timesheets` com todos os campos opcionais; `push_subscriptions` já tipado
-  - `src/app/actions/payroll.ts`, `invoices.ts`, `reports.ts`, `notifications.ts` — removidos `as any` em queries `company_settings` e `push_subscriptions`
-  - `service-create-sheet.tsx`, `api/app/timesheet/route.ts` — removidos `as any` nos inserts
-  - Build e TypeScript 100% limpos
+- [6.6] Deploy produção
+  - `src/middleware.ts` — CRIADO (bug crítico: `proxy.ts` não era reconhecido pelo Next.js — rotas estavam desprotegidas)
+  - `next.config.ts` — headers de segurança HTTP (X-Frame-Options, X-Content-Type-Options, etc.)
+  - `README.md` — instruções completas de deploy (Supabase, Resend, Mapbox, VAPID, Vercel)
 
-**Último commit:** `[6.5]` — github.com/ShadowShtr/mo-limpezas
+**Último commit:** `[6.6]` — github.com/ShadowShtr/mo-limpezas
+
+**PROJETO CONCLUÍDO ✅ — pronto para deploy em produção**
 
 **Migrations pendentes (aplicar no Supabase antes de testar):**
 - `supabase/migrations/011_conflict_detection.sql`
@@ -73,7 +74,7 @@ Lê este ficheiro no início de CADA sessão antes de fazer qualquer coisa.
 - Verificar domínio `molimpezas.pt` no Resend (ou usar `onboarding@resend.dev` em dev)
 - Preencher `.env.local` com `RESEND_API_KEY` e `RESEND_FROM_EMAIL`
 
-**A seguir: FASE 6 — [6.6] COMMIT final + deploy produção**
+**PROJETO CONCLUÍDO — seguir README.md para fazer o deploy em produção**
 
 ---
 
@@ -166,7 +167,7 @@ Lê este ficheiro no início de CADA sessão antes de fazer qualquer coisa.
 - [x] [6.3] Anti-hibernação Supabase
 - [x] [6.4] Página de Configurações
 - [x] [6.5] Testes com dados reais
-- [ ] [6.6] COMMIT final + deploy produção ✅
+- [x] [6.6] COMMIT final + deploy produção ✅
 
 ---
 
