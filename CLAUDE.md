@@ -47,20 +47,20 @@ Lê este ficheiro no início de CADA sessão antes de fazer qualquer coisa.
 
 ## ⚡ PRÓXIMA TASK A EXECUTAR
 
-**Próxima task de código:** `[6.5] Testes com dados reais`
+**Próxima task de código:** `[6.6] COMMIT final + deploy produção`
 
 ---
 
 ## 📍 PONTO DE PARAGEM — 2026-06-05
 
 **Última sessão completou:**
-- [6.4] Página de Configurações
-  - `src/types/database.ts` — tipos `company_settings` alinhados com migration (campos corretos: `meal_allowance_day`, `overtime_rate_pct`, `vacation_days_year`, `invoice_prefix`)
-  - `src/app/actions/settings.ts` — removidos `as any`, acesso tipado ao Supabase
-  - `src/app/actions/email.ts` — removido campo `error_message` (não existe na schema `client_notifications`)
-  - Build limpo sem erros TypeScript
+- [6.5] Testes com dados reais — revisão estática completa
+  - `src/types/database.ts` — Insert types de `services` e `timesheets` com todos os campos opcionais; `push_subscriptions` já tipado
+  - `src/app/actions/payroll.ts`, `invoices.ts`, `reports.ts`, `notifications.ts` — removidos `as any` em queries `company_settings` e `push_subscriptions`
+  - `service-create-sheet.tsx`, `api/app/timesheet/route.ts` — removidos `as any` nos inserts
+  - Build e TypeScript 100% limpos
 
-**Último commit:** `[6.4]` — github.com/ShadowShtr/mo-limpezas
+**Último commit:** `[6.5]` — github.com/ShadowShtr/mo-limpezas
 
 **Migrations pendentes (aplicar no Supabase antes de testar):**
 - `supabase/migrations/011_conflict_detection.sql`
@@ -73,7 +73,7 @@ Lê este ficheiro no início de CADA sessão antes de fazer qualquer coisa.
 - Verificar domínio `molimpezas.pt` no Resend (ou usar `onboarding@resend.dev` em dev)
 - Preencher `.env.local` com `RESEND_API_KEY` e `RESEND_FROM_EMAIL`
 
-**A seguir: FASE 6 — [6.5] Testes com dados reais**
+**A seguir: FASE 6 — [6.6] COMMIT final + deploy produção**
 
 ---
 
@@ -165,7 +165,7 @@ Lê este ficheiro no início de CADA sessão antes de fazer qualquer coisa.
 - [x] [6.2] Emails transacionais (Resend)
 - [x] [6.3] Anti-hibernação Supabase
 - [x] [6.4] Página de Configurações
-- [ ] [6.5] Testes com dados reais
+- [x] [6.5] Testes com dados reais
 - [ ] [6.6] COMMIT final + deploy produção ✅
 
 ---
