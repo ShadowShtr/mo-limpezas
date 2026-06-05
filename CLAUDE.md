@@ -47,7 +47,7 @@ Lê este ficheiro no início de CADA sessão antes de fazer qualquer coisa.
 
 ## ⚡ PRÓXIMA TASK A EXECUTAR
 
-**Próxima task de código:** `[6.1] Importação CSV (colaboradoras, clientes, locais)`
+**Próxima task de código:** `[6.2] Emails transacionais (Resend)`
 
 ---
 
@@ -156,7 +156,7 @@ Lê este ficheiro no início de CADA sessão antes de fazer qualquer coisa.
 - [x] [5.3] COMMIT Fase 5
 
 ### FASE 6 — Produção
-- [ ] [6.1] Importação CSV (colaboradoras, clientes, locais)
+- [x] [6.1] Importação CSV (colaboradoras, clientes, locais)
 - [ ] [6.2] Emails transacionais (Resend)
 - [ ] [6.3] Anti-hibernação Supabase
 - [ ] [6.4] Página de Configurações

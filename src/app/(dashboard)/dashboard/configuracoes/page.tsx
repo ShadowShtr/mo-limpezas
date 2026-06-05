@@ -4,6 +4,7 @@ import { Header } from "@/components/layout/header";
 import { getCompanySettings } from "@/app/actions/settings";
 import { SettingsForm } from "./_components/settings-form";
 import { SeedButton } from "./_components/seed-button";
+import { CsvImport } from "./_components/csv-import";
 
 export default async function ConfiguracoesPage() {
   const supabase = await createClient();
@@ -27,6 +28,7 @@ export default async function ConfiguracoesPage() {
       />
       <div className="p-6 max-w-[900px] space-y-6">
         <SettingsForm initial={settings} />
+        <CsvImport />
         <SeedButton />
       </div>
     </div>
