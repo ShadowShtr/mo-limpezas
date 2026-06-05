@@ -47,19 +47,20 @@ Lê este ficheiro no início de CADA sessão antes de fazer qualquer coisa.
 
 ## ⚡ PRÓXIMA TASK A EXECUTAR
 
-**Próxima task de código:** `[6.4] Página de Configurações`
+**Próxima task de código:** `[6.5] Testes com dados reais`
 
 ---
 
 ## 📍 PONTO DE PARAGEM — 2026-06-05
 
 **Última sessão completou:**
-- [6.3] Anti-hibernação Supabase
-  - `src/app/api/keep-alive/route.ts` — endpoint GET que faz SELECT mínimo em `companies`
-  - `vercel.json` — cron `0 8 * * *` (todos os dias às 08h00 UTC) chama `/api/keep-alive`
-  - Usa `CRON_SECRET` já existente para autenticação (sem nova variável de ambiente)
+- [6.4] Página de Configurações
+  - `src/types/database.ts` — tipos `company_settings` alinhados com migration (campos corretos: `meal_allowance_day`, `overtime_rate_pct`, `vacation_days_year`, `invoice_prefix`)
+  - `src/app/actions/settings.ts` — removidos `as any`, acesso tipado ao Supabase
+  - `src/app/actions/email.ts` — removido campo `error_message` (não existe na schema `client_notifications`)
+  - Build limpo sem erros TypeScript
 
-**Último commit:** `[6.3]` — github.com/ShadowShtr/mo-limpezas
+**Último commit:** `[6.4]` — github.com/ShadowShtr/mo-limpezas
 
 **Migrations pendentes (aplicar no Supabase antes de testar):**
 - `supabase/migrations/011_conflict_detection.sql`
@@ -72,7 +73,7 @@ Lê este ficheiro no início de CADA sessão antes de fazer qualquer coisa.
 - Verificar domínio `molimpezas.pt` no Resend (ou usar `onboarding@resend.dev` em dev)
 - Preencher `.env.local` com `RESEND_API_KEY` e `RESEND_FROM_EMAIL`
 
-**A seguir: FASE 6 — [6.4] Página de Configurações**
+**A seguir: FASE 6 — [6.5] Testes com dados reais**
 
 ---
 
@@ -163,7 +164,7 @@ Lê este ficheiro no início de CADA sessão antes de fazer qualquer coisa.
 - [x] [6.1] Importação CSV (colaboradoras, clientes, locais)
 - [x] [6.2] Emails transacionais (Resend)
 - [x] [6.3] Anti-hibernação Supabase
-- [ ] [6.4] Página de Configurações
+- [x] [6.4] Página de Configurações
 - [ ] [6.5] Testes com dados reais
 - [ ] [6.6] COMMIT final + deploy produção ✅
 

@@ -28,12 +28,11 @@ const DEFAULTS: CompanySettings = {
 
 export async function getCompanySettings(companyId: string): Promise<CompanySettings> {
   const admin = createAdminClient();
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data } = await (admin as any)
+  const { data } = await admin
     .from("company_settings")
     .select("vat_rate, invoice_prefix, hourly_rate, meal_allowance_day, overtime_rate_pct, vacation_days_year, gps_radius_meters, timezone")
     .eq("company_id", companyId)
-    .single() as { data: Partial<CompanySettings> | null };
+    .single();
 
   if (!data) return DEFAULTS;
 
@@ -70,8 +69,7 @@ export async function saveCompanySettings(settings: CompanySettings) {
     return { ok: false as const, error: "Sem permissão para alterar configurações." };
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { error } = await (admin as any)
+  const { error } = await admin
     .from("company_settings")
     .upsert(
       {

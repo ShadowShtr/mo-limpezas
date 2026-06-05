@@ -18,9 +18,9 @@ export type Database = {
         Relationships: [];
       };
       company_settings: {
-        Row: { id: string; company_id: string; hourly_rate: number; meal_allowance_daily: number; overtime_multiplier: number; vat_rate: number; gps_radius_meters: number; logo_url: string | null; timezone: string; created_at: string; updated_at: string };
-        Insert: { company_id: string; hourly_rate?: number; meal_allowance_daily?: number };
-        Update: { hourly_rate?: number; meal_allowance_daily?: number; overtime_multiplier?: number; vat_rate?: number; gps_radius_meters?: number; logo_url?: string | null };
+        Row: { id: string; company_id: string; hourly_rate: number; meal_allowance_day: number; overtime_rate_pct: number; vacation_days_year: number; vat_rate: number; invoice_prefix: string; gps_radius_meters: number; timezone: string; primary_color: string; currency: string; created_at: string; updated_at: string };
+        Insert: { company_id: string; hourly_rate?: number; meal_allowance_day?: number; overtime_rate_pct?: number; vacation_days_year?: number; vat_rate?: number; invoice_prefix?: string; gps_radius_meters?: number; timezone?: string; primary_color?: string; currency?: string };
+        Update: { hourly_rate?: number; meal_allowance_day?: number; overtime_rate_pct?: number; vacation_days_year?: number; vat_rate?: number; invoice_prefix?: string; gps_radius_meters?: number; timezone?: string; primary_color?: string; currency?: string };
         Relationships: [];
       };
       profiles: {
@@ -37,7 +37,7 @@ export type Database = {
       };
       client_notifications: {
         Row: { id: string; company_id: string; client_id: string; service_id: string | null; method: string; status: string; sent_at: string | null; message_body: string | null; contact_used: string | null; created_by: string | null; created_at: string };
-        Insert: { company_id: string; client_id: string; method: string; status?: string; service_id?: string | null; message_body?: string | null; contact_used?: string | null; created_by?: string | null };
+        Insert: { company_id: string; client_id: string; method: string; status?: string; service_id?: string | null; sent_at?: string | null; message_body?: string | null; contact_used?: string | null; created_by?: string | null };
         Update: { status?: string; sent_at?: string | null };
         Relationships: [];
       };

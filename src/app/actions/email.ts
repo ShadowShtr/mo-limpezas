@@ -105,7 +105,6 @@ export async function sendBulkClientNotifications(
       message_body: p.method === "email"
         ? `Lembrete de limpeza: ${p.serviceDate} às ${p.serviceTime}`
         : `SMS pendente para ${p.contact}`,
-      error_message: r.error ?? null,
       sent_at:      r.ok ? new Date().toISOString() : null,
       created_by:   user.id,
     };
