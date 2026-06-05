@@ -712,7 +712,6 @@ export function CalendarView({
         onClose={() => setAvisosOpen(false)}
         companyId={companyId}
         selectedDate={selectedDate}
-        userId={userId}
       />
     </DndContext>
   );

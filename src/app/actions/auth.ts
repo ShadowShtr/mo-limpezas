@@ -71,14 +71,39 @@ export async function inviteCollaborator(formData: FormData) {
   const name = formData.get("name") as string;
   const companyId = formData.get("company_id") as string;
 
-  const { data, error } = await admin.auth.admin.inviteUserByEmail(email, {
-    data: { role: "colaborador", full_name: name, company_id: companyId },
-    redirectTo: `${process.env.NEXT_PUBLIC_APP_URL}/auth/callback?next=/app/boas-vindas`,
+  // Gerar link de convite sem enviar o email padrão do Supabase
+  const { data: linkData, error: linkError } = await admin.auth.admin.generateLink({
+    type: "invite",
+    email,
+    options: {
+      data: { role: "colaborador", full_name: name, company_id: companyId },
+      redirectTo: `${process.env.NEXT_PUBLIC_APP_URL}/auth/callback?next=/app/boas-vindas`,
+    },
   });
 
-  if (error) {
-    return { error: "Não foi possível enviar o convite. Verifica o email." };
+  if (linkError || !linkData?.properties?.action_link) {
+    return { error: "Não foi possível gerar o convite. Verifica o email." };
   }
 
-  return { success: "Convite enviado.", userId: data.user.id };
+  // Enviar email personalizado via Resend
+  try {
+    const { getResend, FROM_EMAIL } = await import("@/lib/email");
+    const { collaboratorInviteTemplate } = await import("@/lib/email/templates");
+
+    const { subject, html } = collaboratorInviteTemplate({
+      collaboratorName: name,
+      inviteUrl: linkData.properties.action_link,
+    });
+
+    const resend = getResend();
+    await resend.emails.send({ from: FROM_EMAIL, to: email, subject, html });
+  } catch {
+    // Se o Resend falhar (ex: API key não configurada), usa o convite base do Supabase
+    await admin.auth.admin.inviteUserByEmail(email, {
+      data: { role: "colaborador", full_name: name, company_id: companyId },
+      redirectTo: `${process.env.NEXT_PUBLIC_APP_URL}/auth/callback?next=/app/boas-vindas`,
+    });
+  }
+
+  return { success: "Convite enviado.", userId: linkData.user.id };
 }

@@ -1,10 +1,11 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
-import { format, addDays, isSameDay, parseISO } from "date-fns";
+import { format, addDays, parseISO } from "date-fns";
 import { pt } from "date-fns/locale";
 import { X, Loader2, CheckSquare, Square, Send, Bell } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { sendBulkClientNotifications } from "@/app/actions/email";
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 
@@ -26,19 +27,12 @@ interface Props {
   onClose: () => void;
   companyId: string;
   selectedDate: Date;
-  userId: string;
-}
-
-// ─── Templates de mensagem ────────────────────────────────────────────────────
-
-function buildMessage(clientName: string, date: string, time: string): string {
-  return `Bom dia, ${clientName}. Confirmamos a sua limpeza agendada para ${date} às ${time}. Equipa Mó Limpezas.`;
 }
 
 // ─── Componente ───────────────────────────────────────────────────────────────
 
 export function ClientNotificationsModal({
-  open, onClose, companyId, selectedDate, userId,
+  open, onClose, companyId, selectedDate,
 }: Props) {
   const supabase = createClient();
 
@@ -159,27 +153,31 @@ export function ClientNotificationsModal({
     setSending(true);
     setMessage(null);
 
-    const records = toSend.map((r) => ({
-      company_id:   companyId,
-      client_id:    r.clientId,
-      service_id:   r.serviceId,
-      method:       r.method,
-      status:       "enviado",
-      contact_used: r.contact,
-      message_body: buildMessage(r.clientName, r.serviceDate, r.serviceTime),
-      created_by:   userId,
-    }));
-
-    const { error } = await supabase.from("client_notifications").insert(records);
+    const result = await sendBulkClientNotifications(
+      toSend.map((r) => ({
+        serviceId:   r.serviceId,
+        clientId:    r.clientId,
+        clientName:  r.clientName,
+        serviceDate: r.serviceDate,
+        serviceTime: r.serviceTime,
+        method:      r.method as "sms" | "email",
+        contact:     r.contact,
+      })),
+    );
 
     setSending(false);
-    if (error) {
-      setMessage({ ok: false, text: "Erro ao registar envios: " + error.message });
+
+    if (result.sent > 0 && result.failed === 0) {
+      setMessage({ ok: true, text: `${result.sent} email(s) enviado(s) com sucesso.` });
+    } else if (result.sent > 0) {
+      setMessage({ ok: true, text: `${result.sent} enviado(s), ${result.failed} falharam.` });
     } else {
-      setMessage({ ok: true, text: `${toSend.length} aviso(s) registado(s) como enviado(s).` });
-      setSelected(new Set());
-      fetchRows();
+      const detail = result.errors[0] ?? "Erro desconhecido";
+      setMessage({ ok: false, text: `Falha ao enviar: ${detail}` });
     }
+
+    setSelected(new Set());
+    fetchRows();
   }
 
   if (!open) return null;

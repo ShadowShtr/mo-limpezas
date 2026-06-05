@@ -47,19 +47,22 @@ Lê este ficheiro no início de CADA sessão antes de fazer qualquer coisa.
 
 ## ⚡ PRÓXIMA TASK A EXECUTAR
 
-**Próxima task de código:** `[6.2] Emails transacionais (Resend)`
+**Próxima task de código:** `[6.3] Anti-hibernação Supabase`
 
 ---
 
 ## 📍 PONTO DE PARAGEM — 2026-06-05
 
 **Última sessão completou:**
-- [6.1] Importação CSV — colaboradoras, clientes e locais
-  - `src/app/actions/csv-import.ts` — 3 server actions (importColaboradorasCSV, importClientesCSV, importLocaisCSV)
-  - `src/app/(dashboard)/dashboard/configuracoes/_components/csv-import.tsx` — UI com tabs, download modelo, preview, resultados por linha
-  - Adicionado à página `/configuracoes`
+- [6.2] Emails transacionais (Resend)
+  - `src/lib/email/index.ts` — cliente Resend singleton
+  - `src/lib/email/templates.ts` — templates HTML: lembrete de serviço ao cliente + convite de colaboradora
+  - `src/app/actions/email.ts` — `sendBulkClientNotifications()` envia emails via Resend e persiste em `client_notifications`
+  - `client-notifications-modal.tsx` — usa server action em vez de inserção direta no DB
+  - `src/app/actions/auth.ts` — `inviteCollaborator` gera link + envia email personalizado via Resend (fallback para Supabase)
+  - `.env.example` — adicionadas `RESEND_API_KEY`, `RESEND_FROM_EMAIL`, `COMPANY_PHONE`
 
-**Último commit:** `[6.1]` — github.com/ShadowShtr/mo-limpezas
+**Último commit:** `[6.2]` — github.com/ShadowShtr/mo-limpezas
 
 **Migrations pendentes (aplicar no Supabase antes de testar):**
 - `supabase/migrations/011_conflict_detection.sql`
@@ -67,7 +70,12 @@ Lê este ficheiro no início de CADA sessão antes de fazer qualquer coisa.
 - `supabase/migrations/013_client_notifications.sql`
 - `supabase/migrations/016_vehicles.sql`
 
-**A seguir: FASE 6 — [6.2] Emails transacionais (Resend)**
+**Config necessária antes de testar emails:**
+- Criar conta em resend.com + obter API key
+- Verificar domínio `molimpezas.pt` no Resend (ou usar `onboarding@resend.dev` em dev)
+- Preencher `.env.local` com `RESEND_API_KEY` e `RESEND_FROM_EMAIL`
+
+**A seguir: FASE 6 — [6.3] Anti-hibernação Supabase**
 
 ---
 
@@ -156,7 +164,7 @@ Lê este ficheiro no início de CADA sessão antes de fazer qualquer coisa.
 
 ### FASE 6 — Produção
 - [x] [6.1] Importação CSV (colaboradoras, clientes, locais)
-- [ ] [6.2] Emails transacionais (Resend)
+- [x] [6.2] Emails transacionais (Resend)
 - [ ] [6.3] Anti-hibernação Supabase
 - [ ] [6.4] Página de Configurações
 - [ ] [6.5] Testes com dados reais
