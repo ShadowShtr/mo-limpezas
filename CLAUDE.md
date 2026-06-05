@@ -51,16 +51,15 @@ Lê este ficheiro no início de CADA sessão antes de fazer qualquer coisa.
 
 ---
 
-## 📍 PONTO DE PARAGEM — 2026-06-04
+## 📍 PONTO DE PARAGEM — 2026-06-05
 
 **Última sessão completou:**
-- [5.3] Dashboard financeiro: KPIs + gráficos + projeção
-  - `src/app/actions/financial-dashboard.ts` — server action com dados agregados (12 meses, por cliente, KPIs, projeção)
-  - `src/app/(dashboard)/dashboard/financeiro/page.tsx` — server component
-  - `src/app/(dashboard)/dashboard/financeiro/_components/financial-dashboard-client.tsx` — UI com KPI cards + gráficos SVG
-  - `src/components/layout/sidebar.tsx` — link "Financeiro" adicionado
+- [6.1] Importação CSV — colaboradoras, clientes e locais
+  - `src/app/actions/csv-import.ts` — 3 server actions (importColaboradorasCSV, importClientesCSV, importLocaisCSV)
+  - `src/app/(dashboard)/dashboard/configuracoes/_components/csv-import.tsx` — UI com tabs, download modelo, preview, resultados por linha
+  - Adicionado à página `/configuracoes`
 
-**Último commit:** `[5.1]` — github.com/ShadowShtr/mo-limpezas
+**Último commit:** `[6.1]` — github.com/ShadowShtr/mo-limpezas
 
 **Migrations pendentes (aplicar no Supabase antes de testar):**
 - `supabase/migrations/011_conflict_detection.sql`
@@ -68,7 +67,7 @@ Lê este ficheiro no início de CADA sessão antes de fazer qualquer coisa.
 - `supabase/migrations/013_client_notifications.sql`
 - `supabase/migrations/016_vehicles.sql`
 
-**A seguir: FASE 5 — [5.3] COMMIT Fase 5**
+**A seguir: FASE 6 — [6.2] Emails transacionais (Resend)**
 
 ---
 
