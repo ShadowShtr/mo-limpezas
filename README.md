@@ -1,36 +1,106 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Escala — Plataforma de Gestão Mó Limpezas
 
-## Getting Started
+Plataforma de gestão operacional para empresa de limpeza: agendamento, equipas, folha de pagamento, faturação e app mobile PWA.
 
-First, run the development server:
+**Stack:** Next.js 15 · TypeScript · Tailwind · shadcn/ui · Supabase · Mapbox · Vercel
 
+---
+
+## Deploy em Produção
+
+### 1. Supabase
+
+1. Cria um projeto em [supabase.com](https://supabase.com)
+2. Aplica as migrations por ordem no SQL Editor:
+   ```
+   supabase/migrations/001_companies.sql
+   supabase/migrations/002_profiles.sql
+   supabase/migrations/003_clients_locations.sql
+   supabase/migrations/004_teams.sql
+   supabase/migrations/005_contracts.sql
+   supabase/migrations/006_services.sql
+   supabase/migrations/007_timesheets_absences.sql
+   supabase/migrations/008_financial.sql
+   supabase/migrations/009_notifications.sql
+   supabase/migrations/010_views.sql
+   supabase/migrations/011_conflict_detection.sql
+   supabase/migrations/012_teams_vehicle.sql
+   supabase/migrations/013_client_notifications.sql
+   supabase/migrations/014_fix_rls_recursion.sql
+   supabase/migrations/015_fix_trigger_resilient.sql
+   supabase/migrations/016_vehicles.sql
+   ```
+3. Cria o primeiro utilizador (admin) manualmente em Authentication → Users
+4. Copia o `project URL` e as chaves `anon` e `service_role`
+
+### 2. Resend (emails transacionais)
+
+1. Cria conta em [resend.com](https://resend.com)
+2. Verifica o domínio `molimpezas.pt` (DNS)
+3. Copia a API key
+
+### 3. Mapbox
+
+1. Cria conta em [mapbox.com](https://mapbox.com)
+2. Copia o `Default public token`
+
+### 4. Web Push (VAPID)
+
+Gera as chaves VAPID:
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npx web-push generate-vapid-keys
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### 5. Vercel
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+1. Importa o repositório GitHub em [vercel.com](https://vercel.com)
+2. Define as variáveis de ambiente (Settings → Environment Variables):
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+| Variável | Valor |
+|----------|-------|
+| `NEXT_PUBLIC_SUPABASE_URL` | URL do projeto Supabase |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Chave anon do Supabase |
+| `SUPABASE_SERVICE_ROLE_KEY` | Chave service_role do Supabase |
+| `NEXT_PUBLIC_MAPBOX_TOKEN` | Token público do Mapbox |
+| `NEXT_PUBLIC_VAPID_PUBLIC_KEY` | Chave pública VAPID |
+| `VAPID_PRIVATE_KEY` | Chave privada VAPID |
+| `NEXT_PUBLIC_APP_URL` | URL de produção (ex: `https://escala.molimpezas.pt`) |
+| `CRON_SECRET` | String aleatória longa para proteger os crons |
+| `RESEND_API_KEY` | API key do Resend |
+| `RESEND_FROM_EMAIL` | Ex: `Mó Limpezas <noreply@molimpezas.pt>` |
+| `COMPANY_PHONE` | Telefone da empresa para templates |
 
-## Learn More
+3. Em Supabase → Authentication → URL Configuration:
+   - **Site URL:** `https://escala.molimpezas.pt`
+   - **Redirect URLs:** `https://escala.molimpezas.pt/**`
 
-To learn more about Next.js, take a look at the following resources:
+4. Faz deploy — os crons do `vercel.json` são ativados automaticamente
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+---
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Desenvolvimento Local
 
-## Deploy on Vercel
+```bash
+# Instalar dependências
+npm install
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+# Copiar variáveis de ambiente
+cp .env.example .env.local
+# Preencher .env.local com as credenciais
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+# Iniciar servidor de desenvolvimento
+npm run dev
+```
+
+Abre [http://localhost:3000](http://localhost:3000).
+
+---
+
+## Crons Automáticos (Vercel)
+
+| Cron | Schedule | Descrição |
+|------|----------|-----------|
+| `/api/cron/generate-services` | `0 6 25 * *` | Gera serviços do mês seguinte (dia 25 de cada mês) |
+| `/api/keep-alive` | `0 8 * * *` | Ping diário para evitar hibernação do Supabase |
+
+Os crons requerem o header `x-cron-secret` com o valor de `CRON_SECRET`.
