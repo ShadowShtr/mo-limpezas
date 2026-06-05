@@ -306,16 +306,16 @@ export function ServiceDetailSheet({ service, onClose, onChanged }: Props) {
             </div>
           )}
 
-          {/* Painel de notificar equipa */}
+          {/* Painel de notificar estabelecimento */}
           {showNotify && (
             <div className="p-4 rounded-lg border border-[var(--color-border)] space-y-3">
-              <p className="text-sm font-semibold text-[var(--color-text-main)]">Notificar equipa</p>
+              <p className="text-sm font-semibold text-[var(--color-text-main)]">Notificar {svc.client_name}</p>
               <textarea
                 value={notifyMsg}
                 onChange={(e) => setNotifyMsg(e.target.value)}
                 rows={3}
                 className={INPUT_CLS + " resize-none"}
-                placeholder="Mensagem para a equipa..."
+                placeholder={`Mensagem para ${svc.client_name}...`}
               />
               <div className="flex gap-2">
                 <button
@@ -349,14 +349,14 @@ export function ServiceDetailSheet({ service, onClose, onChanged }: Props) {
         {/* Footer — acções */}
         {canAct ? (
           <div className="border-t border-[var(--color-border)] px-6 py-4 space-y-2">
-            {/* Notificar equipa */}
-            {svc.team_id && !showNotify && (
+            {/* Notificar estabelecimento */}
+            {!showNotify && (
               <button
                 onClick={() => setShowNotify(true)}
                 className="w-full flex items-center gap-2 px-4 py-2 rounded-lg border border-[var(--color-border)] text-sm font-medium text-[var(--color-text-main)] hover:bg-[var(--color-background)] transition-colors"
               >
                 <Bell className="w-4 h-4 text-[var(--color-primary)]" />
-                Notificar equipa
+                Notificar {svc.client_name}
               </button>
             )}
             {timesheets.some((t) => t.clock_in_at && !t.clock_out_at) && !fixClockOut && (

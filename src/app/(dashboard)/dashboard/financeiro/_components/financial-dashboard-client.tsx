@@ -1,9 +1,10 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import Link from "next/link";
 import {
   TrendingUp, TrendingDown, Euro, AlertCircle, Loader2,
-  ArrowUpRight, ArrowDownRight, RefreshCw,
+  ArrowUpRight, ArrowDownRight, RefreshCw, Receipt, Wallet,
 } from "lucide-react";
 import { getFinancialDashboard, type FinancialDashboardData } from "@/app/actions/financial-dashboard";
 
@@ -220,6 +221,34 @@ export function FinancialDashboardClient({ data: initialData, error: initialErro
 
   return (
     <div className="space-y-6">
+
+      {/* Atalhos para módulos financeiros */}
+      <div className="grid grid-cols-2 gap-3">
+        <Link
+          href="/dashboard/cobrancas"
+          className="flex items-center gap-3 p-4 bg-white rounded-xl border border-[var(--color-border)] hover:border-[var(--color-primary)] hover:bg-[var(--color-primary-light)] transition-colors group"
+        >
+          <div className="w-9 h-9 rounded-lg bg-green-50 flex items-center justify-center shrink-0 group-hover:bg-[var(--color-primary-muted)]">
+            <Receipt className="w-4 h-4 text-[var(--color-primary)]" />
+          </div>
+          <div>
+            <p className="text-sm font-semibold text-[var(--color-text-main)]">Cobranças</p>
+            <p className="text-xs text-[var(--color-text-muted)]">Faturas e documentos</p>
+          </div>
+        </Link>
+        <Link
+          href="/dashboard/folha-pagamento"
+          className="flex items-center gap-3 p-4 bg-white rounded-xl border border-[var(--color-border)] hover:border-[var(--color-primary)] hover:bg-[var(--color-primary-light)] transition-colors group"
+        >
+          <div className="w-9 h-9 rounded-lg bg-green-50 flex items-center justify-center shrink-0 group-hover:bg-[var(--color-primary-muted)]">
+            <Wallet className="w-4 h-4 text-[var(--color-primary)]" />
+          </div>
+          <div>
+            <p className="text-sm font-semibold text-[var(--color-text-main)]">Pagamentos</p>
+            <p className="text-xs text-[var(--color-text-muted)]">Folha de salários</p>
+          </div>
+        </Link>
+      </div>
 
       {/* Cabeçalho com botão de refresh */}
       <div className="flex items-center justify-between">

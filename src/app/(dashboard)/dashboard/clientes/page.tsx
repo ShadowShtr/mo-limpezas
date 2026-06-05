@@ -1,9 +1,10 @@
+import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Header } from "@/components/layout/header";
 import { ClientesTable } from "./_components/table";
 import { ClienteSheet } from "./_components/sheet";
-import { Plus } from "lucide-react";
+import { Plus, MapPin } from "lucide-react";
 
 export default async function ClientesPage() {
   const supabase = await createClient();
@@ -28,15 +29,24 @@ export default async function ClientesPage() {
         title="Clientes"
         subtitle={`${clientes?.length ?? 0} clientes`}
         actions={
-          <ClienteSheet
-            companyId={me?.company_id ?? ""}
-            trigger={
-              <button className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[var(--color-primary)] text-white text-sm font-medium hover:bg-[var(--color-primary-hover)] transition-colors">
-                <Plus className="w-4 h-4" />
-                Novo cliente
-              </button>
-            }
-          />
+          <div className="flex items-center gap-2">
+            <Link
+              href="/dashboard/locais"
+              className="flex items-center gap-2 px-3 py-2 rounded-lg border border-[var(--color-border)] text-sm font-medium text-[var(--color-text-sub)] hover:bg-[var(--color-background)] transition-colors"
+            >
+              <MapPin className="w-4 h-4" />
+              Locais
+            </Link>
+            <ClienteSheet
+              companyId={me?.company_id ?? ""}
+              trigger={
+                <button className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[var(--color-primary)] text-white text-sm font-medium hover:bg-[var(--color-primary-hover)] transition-colors">
+                  <Plus className="w-4 h-4" />
+                  Novo cliente
+                </button>
+              }
+            />
+          </div>
         }
       />
       <div className="p-6 max-w-[1400px]">

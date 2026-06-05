@@ -8,7 +8,6 @@ import {
   FileText,
   Users,
   Building2,
-  MapPin,
   Map,
   UsersRound,
   BarChart3,
@@ -16,9 +15,6 @@ import {
   LogOut,
   X,
   AlertTriangle,
-  Car,
-  Wallet,
-  Receipt,
   TrendingUp,
 } from "lucide-react";
 import { logout } from "@/app/actions/auth";
@@ -31,13 +27,9 @@ const NAV = [
   { href: "/dashboard/faltas",        icon: AlertTriangle,   label: "Faltas" },
   { href: "/dashboard/mapa",          icon: Map,             label: "Mapa" },
   { href: "/dashboard/clientes",      icon: Building2,       label: "Clientes" },
-  { href: "/dashboard/locais",        icon: MapPin,          label: "Locais" },
   { href: "/dashboard/equipas",       icon: UsersRound,      label: "Equipas" },
-  { href: "/dashboard/relatorios",         icon: BarChart3,  label: "Relatórios" },
-  { href: "/dashboard/viaturas",           icon: Car,        label: "Viaturas" },
-  { href: "/dashboard/folha-pagamento",    icon: Wallet,     label: "Pagamentos" },
-  { href: "/dashboard/cobrancas",          icon: Receipt,    label: "Cobranças" },
-  { href: "/dashboard/financeiro",         icon: TrendingUp, label: "Financeiro" },
+  { href: "/dashboard/relatorios",    icon: BarChart3,       label: "Relatórios" },
+  { href: "/dashboard/financeiro",    icon: TrendingUp,      label: "Financeiro" },
 ];
 
 interface SidebarProps {
