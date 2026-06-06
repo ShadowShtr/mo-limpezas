@@ -1,6 +1,6 @@
 import { Header } from "@/components/layout/header";
 import { getMapServices } from "@/app/actions/map";
-import { MapView } from "./_components/map-view";
+import { MapClient } from "./_components/map-client";
 import { format } from "date-fns";
 
 export default async function MapaPage() {
@@ -10,12 +10,12 @@ export default async function MapaPage() {
   const servicesWithCoords = services.filter((s) => s.lat && s.lng);
 
   return (
-    <div className="flex flex-col h-screen overflow-hidden">
+    <div className="flex flex-col">
       <Header
         title="Mapa"
         subtitle={`${servicesWithCoords.length} serviço${servicesWithCoords.length !== 1 ? "s" : ""} hoje com localização`}
       />
-      <MapView
+      <MapClient
         initialServices={services}
         initialTeams={teams}
         initialDate={today}
