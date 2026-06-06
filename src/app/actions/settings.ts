@@ -1,8 +1,20 @@
 "use server";
 
+import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
+
+const settingsSchema = z.object({
+  vat_rate: z.number().min(0, "IVA não pode ser negativo.").max(100, "IVA não pode exceder 100%."),
+  invoice_prefix: z.string().min(1).max(10).trim(),
+  hourly_rate: z.number().min(0.01, "Taxa horária deve ser positiva.").max(999),
+  meal_allowance_day: z.number().min(0).max(100),
+  overtime_rate_pct: z.number().min(0).max(200),
+  vacation_days_year: z.number().int().min(0).max(365),
+  gps_radius_meters: z.number().int().min(10, "Raio GPS deve ser pelo menos 10m.").max(50_000),
+  timezone: z.string().min(1).max(50),
+});
 
 export interface CompanySettings {
   vat_rate: number;
@@ -49,6 +61,11 @@ export async function getCompanySettings(companyId: string): Promise<CompanySett
 }
 
 export async function saveCompanySettings(settings: CompanySettings) {
+  const parsed = settingsSchema.safeParse(settings);
+  if (!parsed.success) {
+    return { ok: false as const, error: parsed.error.issues[0].message };
+  }
+
   const supabase = await createClient();
   const admin = createAdminClient();
 
@@ -74,14 +91,14 @@ export async function saveCompanySettings(settings: CompanySettings) {
     .upsert(
       {
         company_id,
-        vat_rate: settings.vat_rate,
-        invoice_prefix: settings.invoice_prefix,
-        hourly_rate: settings.hourly_rate,
-        meal_allowance_day: settings.meal_allowance_day,
-        overtime_rate_pct: settings.overtime_rate_pct,
-        vacation_days_year: settings.vacation_days_year,
-        gps_radius_meters: settings.gps_radius_meters,
-        timezone: settings.timezone,
+        vat_rate: parsed.data.vat_rate,
+        invoice_prefix: parsed.data.invoice_prefix,
+        hourly_rate: parsed.data.hourly_rate,
+        meal_allowance_day: parsed.data.meal_allowance_day,
+        overtime_rate_pct: parsed.data.overtime_rate_pct,
+        vacation_days_year: parsed.data.vacation_days_year,
+        gps_radius_meters: parsed.data.gps_radius_meters,
+        timezone: parsed.data.timezone,
       },
       { onConflict: "company_id" },
     );

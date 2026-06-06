@@ -2,18 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getCompanySettings } from "@/app/actions/settings";
-
-function haversine(lat1: number, lon1: number, lat2: number, lon2: number): number {
-  const R = 6371000;
-  const dLat = ((lat2 - lat1) * Math.PI) / 180;
-  const dLon = ((lon2 - lon1) * Math.PI) / 180;
-  const a =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos((lat1 * Math.PI) / 180) *
-      Math.cos((lat2 * Math.PI) / 180) *
-      Math.sin(dLon / 2) ** 2;
-  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-}
+import { rateLimit, rateLimitKey } from "@/lib/rate-limit";
+import { haversineDistanceM } from "@/lib/calculations";
 
 function parseCoord(value: unknown) {
   const n = Number(value);
@@ -33,6 +23,9 @@ export async function POST(req: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const limited = rateLimit(rateLimitKey("timesheet", user.id), 10, 60_000);
+  if (limited) return limited;
 
   const { service_id, lat: rawLat, lng: rawLng } = await req.json();
   const lat = parseCoord(rawLat);
@@ -90,7 +83,7 @@ export async function POST(req: NextRequest) {
 
   if (service.location_lat != null && service.location_lng != null) {
     distance_m = Math.round(
-      haversine(lat, lng, Number(service.location_lat), Number(service.location_lng))
+      haversineDistanceM(lat, lng, Number(service.location_lat), Number(service.location_lng))
     );
     location_warning = distance_m > settings.gps_radius_meters;
   }
@@ -129,6 +122,9 @@ export async function PATCH(req: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const limited = rateLimit(rateLimitKey("timesheet", user.id), 10, 60_000);
+  if (limited) return limited;
 
   const { service_id, lat: rawLat, lng: rawLng } = await req.json();
   const lat = parseCoord(rawLat);

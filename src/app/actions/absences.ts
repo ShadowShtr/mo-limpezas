@@ -113,14 +113,27 @@ export async function getSubstituteSuggestions(
   // Para cada colaborador, verificar quantos serviços têm no período
   const suggestions: (SubstituteSuggestion | null)[] = await Promise.all(
     (allCollabs ?? []).map(async (c) => {
-      // Contar serviços no período como conflito
-      const { count: conflictCount } = await admin
-        .from("services")
-        .select("id", { count: "exact", head: true })
-        .eq("team_id", "placeholder") // queremos por colaborador, via team_members
-        .gte("scheduled_start", `${startsOn}T00:00:00`)
-        .lte("scheduled_start", `${endsOn}T23:59:59`)
-        .in("status", ["agendado", "em_curso"]);
+      // Obter as equipas a que este colaborador pertence
+      const { data: memberTeams } = await admin
+        .from("team_members")
+        .select("team_id")
+        .eq("collaborator_id", c.id)
+        .is("left_at", null);
+
+      const teamIds = (memberTeams ?? []).map((t) => t.team_id);
+
+      // Contar serviços dessas equipas no período
+      let conflictCount = 0;
+      if (teamIds.length > 0) {
+        const { count } = await admin
+          .from("services")
+          .select("id", { count: "exact", head: true })
+          .in("team_id", teamIds)
+          .gte("scheduled_start", `${startsOn}T00:00:00`)
+          .lte("scheduled_start", `${endsOn}T23:59:59`)
+          .in("status", ["agendado", "em_curso"]);
+        conflictCount = count ?? 0;
+      }
 
       // Verificar se está ausente no mesmo período
       const { data: alsoAbsent } = await admin
@@ -136,13 +149,13 @@ export async function getSubstituteSuggestions(
       // Score: mais skills em comum = maior score
       const cSkills: string[] = c.skills ?? [];
       const commonSkills = cSkills.filter((s) => absentSkills.includes(s)).length;
-      const score = commonSkills * 10 - (conflictCount ?? 0);
+      const score = commonSkills * 10 - conflictCount;
 
       return {
         id: c.id,
         full_name: c.full_name,
         skills: cSkills,
-        conflicting_services: conflictCount ?? 0,
+        conflicting_services: conflictCount,
         score,
       } satisfies SubstituteSuggestion;
     }),

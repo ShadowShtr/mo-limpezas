@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import webpush from "web-push";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { rateLimit, rateLimitKey } from "@/lib/rate-limit";
 
 export async function POST(req: NextRequest) {
   webpush.setVapidDetails(
@@ -30,6 +31,9 @@ export async function POST(req: NextRequest) {
   if (!sender || !["admin", "gestor"].includes(sender.role)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
+
+  const limited = rateLimit(rateLimitKey("push-send", sender.company_id), 20, 60_000);
+  if (limited) return limited;
 
   const { data: subs } = await admin
     .from("push_subscriptions")

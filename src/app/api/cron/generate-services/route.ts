@@ -138,10 +138,14 @@ function addMinutesToTime(time: string, mins: number): string {
 
 export async function GET(req: NextRequest) {
   // Autenticação: header ou query param (para testes manuais)
+  const cronSecret = process.env.CRON_SECRET;
+  if (!cronSecret) {
+    return NextResponse.json({ error: "Cron secret not configured" }, { status: 500 });
+  }
   const secret =
     req.headers.get("x-cron-secret") ??
     req.nextUrl.searchParams.get("secret");
-  if (secret !== process.env.CRON_SECRET) {
+  if (!secret || secret !== cronSecret) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

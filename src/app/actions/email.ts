@@ -1,9 +1,12 @@
 "use server";
 
+import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { getResend, FROM_EMAIL } from "@/lib/email";
 import { clientReminderTemplate } from "@/lib/email/templates";
+
+const emailAddressSchema = z.email();
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 
@@ -51,7 +54,7 @@ export async function sendBulkClientNotifications(
 
   for (const p of payloads) {
     if (p.method === "email") {
-      if (!p.contact || !p.contact.includes("@")) {
+      if (!emailAddressSchema.safeParse(p.contact).success) {
         results.push({ ok: false, serviceId: p.serviceId, method: p.method, error: "Email inválido" });
         continue;
       }

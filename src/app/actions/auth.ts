@@ -2,15 +2,39 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { headers } from "next/headers";
+import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
+import { checkRateLimit, rateLimitKey } from "@/lib/rate-limit";
+
+const emailSchema = z.email("Email inválido.");
+const passwordSchema = z.string().min(6, "Password deve ter pelo menos 6 caracteres.");
+
+async function getClientIp(): Promise<string> {
+  const h = await headers();
+  return h.get("x-forwarded-for")?.split(",")[0].trim() ?? "unknown";
+}
 
 export async function login(formData: FormData) {
+  const ip = await getClientIp();
+  if (!checkRateLimit(rateLimitKey("auth-login", ip), 5, 60_000)) {
+    return { error: "Demasiadas tentativas de login. Aguarda um minuto." };
+  }
+
+  const rawEmail = formData.get("email") as string;
+  const rawPassword = formData.get("password") as string;
+
+  const emailResult = emailSchema.safeParse(rawEmail);
+  if (!emailResult.success) return { error: emailResult.error.issues[0].message };
+
+  const passResult = passwordSchema.safeParse(rawPassword);
+  if (!passResult.success) return { error: passResult.error.issues[0].message };
+
   const supabase = await createClient();
-
-  const email = formData.get("email") as string;
-  const password = formData.get("password") as string;
-
-  const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+  const { data, error } = await supabase.auth.signInWithPassword({
+    email: emailResult.data,
+    password: rawPassword,
+  });
 
   if (error) {
     return { error: "Email ou password incorretos." };
@@ -22,12 +46,18 @@ export async function login(formData: FormData) {
 }
 
 export async function loginMagicLink(formData: FormData) {
+  const ip = await getClientIp();
+  if (!checkRateLimit(rateLimitKey("auth-magic", ip), 3, 60_000)) {
+    return { error: "Demasiadas tentativas. Aguarda um minuto." };
+  }
+
+  const rawEmail = formData.get("email") as string;
+  const emailResult = emailSchema.safeParse(rawEmail);
+  if (!emailResult.success) return { error: "Email inválido." };
+
   const supabase = await createClient();
-
-  const email = formData.get("email") as string;
-
   const { error } = await supabase.auth.signInWithOtp({
-    email,
+    email: emailResult.data,
     options: {
       emailRedirectTo: `${process.env.NEXT_PUBLIC_APP_URL}/auth/callback`,
     },
@@ -41,11 +71,17 @@ export async function loginMagicLink(formData: FormData) {
 }
 
 export async function resetPassword(formData: FormData) {
+  const ip = await getClientIp();
+  if (!checkRateLimit(rateLimitKey("auth-reset", ip), 3, 300_000)) {
+    return { error: "Demasiados pedidos de recuperação. Aguarda 5 minutos." };
+  }
+
+  const rawEmail = formData.get("email") as string;
+  const emailResult = emailSchema.safeParse(rawEmail);
+  if (!emailResult.success) return { error: "Email inválido." };
+
   const supabase = await createClient();
-
-  const email = formData.get("email") as string;
-
-  const { error } = await supabase.auth.resetPasswordForEmail(email, {
+  const { error } = await supabase.auth.resetPasswordForEmail(emailResult.data, {
     redirectTo: `${process.env.NEXT_PUBLIC_APP_URL}/auth/callback?next=/dashboard/perfil/password`,
   });
 

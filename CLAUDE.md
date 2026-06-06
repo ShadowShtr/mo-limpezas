@@ -47,23 +47,53 @@ Lê este ficheiro no início de CADA sessão antes de fazer qualquer coisa.
 
 ## ⚡ PRÓXIMA TASK A EXECUTAR
 
-**Próxima task de código:** PROJETO CONCLUÍDO ✅
+**Próxima task:** AUDITORIA INTERNA CONCLUÍDA ✅ — App pronto para uso em produção.  
+Próximos passos possíveis: testes com utilizadores reais, integração SMS, otimizações de UX.
 
 ---
 
-## 📍 PONTO DE PARAGEM — 2026-06-05
+## 📍 PONTO DE PARAGEM — 2026-06-06
 
-**Última sessão completou:**
-- [6.6] Deploy produção
-  - `src/middleware.ts` — CRIADO (bug crítico: `proxy.ts` não era reconhecido pelo Next.js — rotas estavam desprotegidas)
-  - `next.config.ts` — headers de segurança HTTP (X-Frame-Options, X-Content-Type-Options, etc.)
-  - `README.md` — instruções completas de deploy (Supabase, Resend, Mapbox, VAPID, Vercel)
+**Última sessão completou — Auditoria Interna de Segurança e Qualidade:**
 
-**Último commit:** `[6.6]` — github.com/ShadowShtr/mo-limpezas
+### Segurança
+- `next.config.ts` — adicionado **CSP** completo (Mapbox, Supabase, Resend) + **HSTS** (1 ano)
+- `src/app/api/seed-demo/route.ts` — bloqueado em `NODE_ENV=production` (403)
+- `src/app/api/cron/generate-services/route.ts` — guard contra `CRON_SECRET` vazio
+- `src/app/api/keep-alive/route.ts` — guard contra `CRON_SECRET` vazio
 
-**PROJETO CONCLUÍDO ✅ — pronto para deploy em produção**
+### Rate Limiting Anti-Spam/DDoS
+- `src/lib/rate-limit.ts` — **NOVO** helper em memória com janelas deslizantes
+- `/api/app/timesheet` (POST + PATCH) — máx 10 req/min por utilizador
+- `/api/push/send` — máx 20 req/min por empresa
+- `auth.ts` — login: 5/min por IP; magic link: 3/min; reset password: 3 em 5min
 
-**Migrations pendentes (aplicar no Supabase antes de testar):**
+### Bug Crítico Corrigido
+- `src/app/actions/absences.ts` — query de substituição usava `team_id = "placeholder"` (nunca funcionou). Agora faz lookup real via `team_members` para encontrar as equipas do colaborador.
+
+### Validação de Inputs (Zod)
+- `src/app/actions/auth.ts` — email RFC + password mínima 6 chars
+- `src/app/actions/colaboradores.ts` — nome, email, role, status, horas, skills
+- `src/app/actions/settings.ts` — IVA 0-100%, taxa horária, raio GPS 10-50000m
+- `src/app/actions/email.ts` — validação RFC de email (substituiu `.includes("@")`)
+
+### UX — Componentes Novos
+- `src/components/ui/toast.tsx` — **NOVO** sistema de toast global (`useToast()`)
+- `src/components/ui/confirm-dialog.tsx` — **NOVO** dialog de confirmação reutilizável
+- `src/app/layout.tsx` — integrado `<ToastProvider>`
+
+### Cálculos Partilhados
+- `src/lib/calculations.ts` — **NOVO** módulo com `haversineDistanceM`, `calcServiceValue`, `calcMonthlyGross`, `isValidCoord`
+- `/api/app/timesheet/route.ts` — usa `haversineDistanceM` do módulo partilhado
+
+### Testes Automatizados (39 testes, todos a passar)
+- `vitest.config.ts` — **NOVO** configuração Vitest
+- `src/__tests__/calculations.test.ts` — haversine GPS, valor serviço, salário mensal
+- `src/__tests__/rate-limit.test.ts` — limites, reset de janela, isolamento de chaves
+- `src/__tests__/validation.test.ts` — coordenadas GPS, edge cases de cálculo
+- Executar: `npm test`
+
+**Migrations pendentes (aplicar no Supabase antes de testar em produção):**
 - `supabase/migrations/011_conflict_detection.sql`
 - `supabase/migrations/012_teams_vehicle.sql`
 - `supabase/migrations/013_client_notifications.sql`
@@ -71,10 +101,8 @@ Lê este ficheiro no início de CADA sessão antes de fazer qualquer coisa.
 
 **Config necessária antes de testar emails:**
 - Criar conta em resend.com + obter API key
-- Verificar domínio `molimpezas.pt` no Resend (ou usar `onboarding@resend.dev` em dev)
+- Verificar domínio `molimpezas.pt` no Resend
 - Preencher `.env.local` com `RESEND_API_KEY` e `RESEND_FROM_EMAIL`
-
-**PROJETO CONCLUÍDO — seguir README.md para fazer o deploy em produção**
 
 ---
 
