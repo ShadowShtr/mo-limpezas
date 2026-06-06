@@ -1,6 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  transpilePackages: ["mapbox-gl", "react-map-gl"],
   // Headers de segurança HTTP
   async headers() {
     return [
