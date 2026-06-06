@@ -10,12 +10,27 @@ import MapGL, {
   Layer,
   type MapRef,
 } from "react-map-gl/mapbox";
+import type { StyleSpecification } from "mapbox-gl";
 import { format, parseISO } from "date-fns";
 import { pt } from "date-fns/locale";
-import { MapPin, Navigation, X, Filter, Clock } from "lucide-react";
+import { AlertTriangle, MapPin, Navigation, X, Filter, Clock } from "lucide-react";
 import { getMapServices, type MapService, type MapTeam } from "@/app/actions/map";
 
 const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN ?? "";
+const MAPBOX_STYLE = "mapbox://styles/mapbox/light-v11";
+const DEFAULT_VIEW = { longitude: -8.6291, latitude: 41.1579, zoom: 11 };
+const FALLBACK_STYLE: StyleSpecification = {
+  version: 8,
+  sources: {
+    osm: {
+      type: "raster",
+      tiles: ["https://tile.openstreetmap.org/{z}/{x}/{y}.png"],
+      tileSize: 256,
+      attribution: "OpenStreetMap",
+    },
+  },
+  layers: [{ id: "osm", type: "raster", source: "osm" }],
+};
 
 const STATUS_LABELS: Record<string, string> = {
   agendado: "Agendado",
@@ -59,16 +74,42 @@ export function MapView({ initialServices, initialTeams, initialDate }: Props) {
   const [routes, setRoutes] = useState<RouteResult[]>([]);
   const [loadingRoutes, setLoadingRoutes] = useState(false);
   const [loadingServices, setLoadingServices] = useState(false);
+  const [mapStyle, setMapStyle] = useState<string | typeof FALLBACK_STYLE>(
+    MAPBOX_TOKEN ? MAPBOX_STYLE : FALLBACK_STYLE
+  );
+  const [mapLoaded, setMapLoaded] = useState(false);
+  const [mapError, setMapError] = useState(
+    MAPBOX_TOKEN ? "" : "Token Mapbox em falta. Configure NEXT_PUBLIC_MAPBOX_TOKEN."
+  );
+  const usingFallbackStyle = mapStyle !== MAPBOX_STYLE;
 
   const filteredServices = services.filter((s) => {
+    if (!Number.isFinite(s.lat) || !Number.isFinite(s.lng)) return false;
     if (selectedTeam && s.team_id !== selectedTeam) return false;
     if (selectedStatus && s.status !== selectedStatus) return false;
     return true;
   });
 
+  useEffect(() => {
+    const resize = () => mapRef.current?.resize();
+    const first = window.setTimeout(resize, 0);
+    const second = window.setTimeout(resize, 300);
+    window.addEventListener("resize", resize);
+    return () => {
+      window.clearTimeout(first);
+      window.clearTimeout(second);
+      window.removeEventListener("resize", resize);
+    };
+  }, []);
+
   // Fit map to markers when services change
   useEffect(() => {
     if (!mapRef.current || filteredServices.length === 0) return;
+    if (filteredServices.length === 1) {
+      const [service] = filteredServices;
+      mapRef.current.flyTo({ center: [service.lng, service.lat], zoom: 14, duration: 800 });
+      return;
+    }
     const lngs = filteredServices.map((s) => s.lng);
     const lats = filteredServices.map((s) => s.lat);
     mapRef.current.fitBounds(
@@ -244,9 +285,34 @@ export function MapView({ initialServices, initialTeams, initialDate }: Props) {
         <MapGL
           ref={mapRef}
           mapboxAccessToken={MAPBOX_TOKEN}
-          initialViewState={{ longitude: -8.6291, latitude: 41.1579, zoom: 11 }}
+          initialViewState={DEFAULT_VIEW}
           style={{ width: "100%", height: "100%" }}
-          mapStyle="mapbox://styles/mapbox/light-v11"
+          mapStyle={mapStyle}
+          reuseMaps
+          onLoad={() => {
+            setMapLoaded(true);
+            if (!usingFallbackStyle) setMapError("");
+            mapRef.current?.resize();
+          }}
+          onError={(event) => {
+            const message = event.error?.message ?? "Erro ao carregar o mapa.";
+            const lower = message.toLowerCase();
+            const canFallback =
+              !usingFallbackStyle &&
+              (lower.includes("token") ||
+                lower.includes("authorized") ||
+                lower.includes("forbidden") ||
+                lower.includes("style") ||
+                lower.includes("failed to fetch"));
+
+            if (canFallback) {
+              setMapStyle(FALLBACK_STYLE);
+              setMapError(`Mapbox falhou: ${message}`);
+              return;
+            }
+
+            if (usingFallbackStyle) setMapError(message);
+          }}
         >
           <NavigationControl position="top-right" />
           <ScaleControl unit="metric" position="bottom-left" />
@@ -290,6 +356,35 @@ export function MapView({ initialServices, initialTeams, initialDate }: Props) {
             </Source>
           ))}
         </MapGL>
+
+        {!mapLoaded && !mapError && (
+          <div className="absolute inset-0 z-10 flex items-center justify-center bg-slate-50/80 text-sm text-[var(--color-text-muted)]">
+            A carregar mapa...
+          </div>
+        )}
+
+        {mapError && usingFallbackStyle && mapLoaded && (
+          <div className="absolute left-4 top-4 z-10 max-w-sm rounded-lg border border-amber-200 bg-white/95 p-3 text-xs shadow-sm">
+            <div className="flex items-start gap-2">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
+              <p className="text-[var(--color-text-muted)]">{mapError}. A mostrar mapa alternativo.</p>
+            </div>
+          </div>
+        )}
+
+        {mapError && !mapLoaded && (
+          <div className="absolute inset-0 z-10 flex items-center justify-center bg-slate-50/90 p-6">
+            <div className="max-w-sm rounded-lg border border-amber-200 bg-white p-4 text-sm shadow-sm">
+              <div className="flex items-start gap-3">
+                <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-500" />
+                <div>
+                  <p className="font-semibold text-[var(--color-text-main)]">Mapa indisponivel</p>
+                  <p className="mt-1 text-[var(--color-text-muted)]">{mapError}</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {selectedService && (
           <div className="absolute top-4 right-4 w-72 bg-white rounded-xl shadow-lg border border-[var(--color-border)] p-4 z-10">
