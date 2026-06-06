@@ -19,18 +19,22 @@ import { createClient } from "@/lib/supabase/client";
 
 const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN ?? "";
 const MAPBOX_STYLE = "mapbox://styles/mapbox/light-v11";
-const DEFAULT_VIEW = { longitude: -8.6291, latitude: 41.1579, zoom: 11 };
+const DEFAULT_VIEW = { longitude: -9.1393, latitude: 38.7223, zoom: 12 };
 const FALLBACK_STYLE: StyleSpecification = {
   version: 8,
   sources: {
-    osm: {
+    carto: {
       type: "raster",
-      tiles: ["https://tile.openstreetmap.org/{z}/{x}/{y}.png"],
+      tiles: [
+        "https://a.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png",
+        "https://b.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png",
+        "https://c.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png",
+      ],
       tileSize: 256,
-      attribution: "OpenStreetMap",
+      attribution: "OpenStreetMap, CARTO",
     },
   },
-  layers: [{ id: "osm", type: "raster", source: "osm" }],
+  layers: [{ id: "carto", type: "raster", source: "carto" }],
 };
 
 function sanitizeMapboxError(message: string) {
@@ -84,13 +88,9 @@ export function MapView({ initialServices, initialClockPoints, initialTeams, ini
   const [routes, setRoutes] = useState<RouteResult[]>([]);
   const [loadingRoutes, setLoadingRoutes] = useState(false);
   const [loadingServices, setLoadingServices] = useState(false);
-  const [mapStyle, setMapStyle] = useState<string | typeof FALLBACK_STYLE>(
-    MAPBOX_TOKEN ? MAPBOX_STYLE : FALLBACK_STYLE
-  );
+  const [mapStyle, setMapStyle] = useState<string | typeof FALLBACK_STYLE>(FALLBACK_STYLE);
   const [mapLoaded, setMapLoaded] = useState(false);
-  const [mapError, setMapError] = useState(
-    MAPBOX_TOKEN ? "" : "Token Mapbox em falta. Configure NEXT_PUBLIC_MAPBOX_TOKEN."
-  );
+  const [mapError, setMapError] = useState("");
   const usingFallbackStyle = mapStyle !== MAPBOX_STYLE;
 
   const filteredServices = useMemo(
