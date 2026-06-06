@@ -104,3 +104,9 @@ Abre [http://localhost:3000](http://localhost:3000).
 | `/api/keep-alive` | `0 8 * * *` | Ping diário para evitar hibernação do Supabase |
 
 Os crons requerem o header `x-cron-secret` com o valor de `CRON_SECRET`.
+
+---
+
+## Documentacao Operacional
+
+- [Mapa e GPS operacional](planning/docs/10-mapa-gps.md)
