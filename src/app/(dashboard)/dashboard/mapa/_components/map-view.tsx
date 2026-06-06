@@ -1,7 +1,7 @@
 "use client";
 
 import "mapbox-gl/dist/mapbox-gl.css";
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import MapGL, {
   Marker,
   NavigationControl,
@@ -14,7 +14,8 @@ import type { StyleSpecification } from "mapbox-gl";
 import { format, parseISO } from "date-fns";
 import { pt } from "date-fns/locale";
 import { AlertTriangle, MapPin, Navigation, X, Filter, Clock } from "lucide-react";
-import { getMapServices, type MapService, type MapTeam } from "@/app/actions/map";
+import { getMapServices, type MapClockPoint, type MapService, type MapTeam } from "@/app/actions/map";
+import { createClient } from "@/lib/supabase/client";
 
 const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN ?? "";
 const MAPBOX_STYLE = "mapbox://styles/mapbox/light-v11";
@@ -64,19 +65,22 @@ interface RouteResult {
 
 interface Props {
   initialServices: MapService[];
+  initialClockPoints: MapClockPoint[];
   initialTeams: MapTeam[];
   initialDate: string;
 }
 
-export function MapView({ initialServices, initialTeams, initialDate }: Props) {
+export function MapView({ initialServices, initialClockPoints, initialTeams, initialDate }: Props) {
   const mapRef = useRef<MapRef>(null);
 
   const [date, setDate] = useState(initialDate);
   const [services, setServices] = useState<MapService[]>(initialServices);
+  const [clockPoints, setClockPoints] = useState<MapClockPoint[]>(initialClockPoints);
   const [teams] = useState<MapTeam[]>(initialTeams);
   const [selectedTeam, setSelectedTeam] = useState("");
   const [selectedStatus, setSelectedStatus] = useState("");
   const [selectedService, setSelectedService] = useState<MapService | null>(null);
+  const [selectedClockPoint, setSelectedClockPoint] = useState<MapClockPoint | null>(null);
   const [routes, setRoutes] = useState<RouteResult[]>([]);
   const [loadingRoutes, setLoadingRoutes] = useState(false);
   const [loadingServices, setLoadingServices] = useState(false);
@@ -89,12 +93,35 @@ export function MapView({ initialServices, initialTeams, initialDate }: Props) {
   );
   const usingFallbackStyle = mapStyle !== MAPBOX_STYLE;
 
-  const filteredServices = services.filter((s) => {
-    if (!Number.isFinite(s.lat) || !Number.isFinite(s.lng)) return false;
-    if (selectedTeam && s.team_id !== selectedTeam) return false;
-    if (selectedStatus && s.status !== selectedStatus) return false;
-    return true;
-  });
+  const filteredServices = useMemo(
+    () =>
+      services.filter((s) => {
+        if (!Number.isFinite(s.lat) || !Number.isFinite(s.lng)) return false;
+        if (selectedTeam && s.team_id !== selectedTeam) return false;
+        if (selectedStatus && s.status !== selectedStatus) return false;
+        return true;
+      }),
+    [services, selectedTeam, selectedStatus]
+  );
+
+  const filteredClockPoints = useMemo(
+    () =>
+      clockPoints.filter((p) => {
+        if (!Number.isFinite(p.lat) || !Number.isFinite(p.lng)) return false;
+        if (selectedTeam && p.team_id !== selectedTeam) return false;
+        if (selectedStatus && p.service_status !== selectedStatus) return false;
+        return true;
+      }),
+    [clockPoints, selectedTeam, selectedStatus]
+  );
+
+  const visibleCoords = useMemo(
+    () => [
+      ...filteredServices.map((s) => ({ lng: s.lng, lat: s.lat })),
+      ...filteredClockPoints.map((p) => ({ lng: p.lng, lat: p.lat })),
+    ],
+    [filteredServices, filteredClockPoints]
+  );
 
   useEffect(() => {
     const resize = () => mapRef.current?.resize();
@@ -108,29 +135,51 @@ export function MapView({ initialServices, initialTeams, initialDate }: Props) {
     };
   }, []);
 
-  // Fit map to markers when services change
+  // Fit map to visible service and collaborator markers.
   useEffect(() => {
-    if (!mapRef.current || filteredServices.length === 0) return;
-    if (filteredServices.length === 1) {
-      const [service] = filteredServices;
-      mapRef.current.flyTo({ center: [service.lng, service.lat], zoom: 14, duration: 800 });
+    if (!mapRef.current || visibleCoords.length === 0) return;
+    if (visibleCoords.length === 1) {
+      const [point] = visibleCoords;
+      mapRef.current.flyTo({ center: [point.lng, point.lat], zoom: 14, duration: 800 });
       return;
     }
-    const lngs = filteredServices.map((s) => s.lng);
-    const lats = filteredServices.map((s) => s.lat);
+    const lngs = visibleCoords.map((p) => p.lng);
+    const lats = visibleCoords.map((p) => p.lat);
     mapRef.current.fitBounds(
       [[Math.min(...lngs), Math.min(...lats)], [Math.max(...lngs), Math.max(...lats)]],
       { padding: 80, maxZoom: 14, duration: 800 }
     );
-  }, [filteredServices]);
+  }, [visibleCoords]);
 
-  const fetchServices = useCallback(async (newDate: string) => {
-    setLoadingServices(true);
+  const fetchServices = useCallback(async (newDate: string, silent = false) => {
+    if (!silent) setLoadingServices(true);
     setRoutes([]);
-    const { services: s } = await getMapServices(newDate);
-    setServices(s);
-    setLoadingServices(false);
+    try {
+      const { services: s, clockPoints: points } = await getMapServices(newDate);
+      setServices(s);
+      setClockPoints(points);
+    } finally {
+      if (!silent) setLoadingServices(false);
+    }
   }, []);
+
+  useEffect(() => {
+    const supabase = createClient();
+    const channel = supabase
+      .channel(`dashboard-map-timesheets-${date}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "timesheets" },
+        () => {
+          fetchServices(date, true);
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [date, fetchServices]);
 
   async function calculateRoutes() {
     setLoadingRoutes(true);
@@ -330,7 +379,10 @@ export function MapView({ initialServices, initialTeams, initialDate }: Props) {
               longitude={svc.lng}
               latitude={svc.lat}
               anchor="bottom"
-              onClick={() => setSelectedService(svc)}
+              onClick={() => {
+                setSelectedService(svc);
+                setSelectedClockPoint(null);
+              }}
             >
               <div
                 style={{
@@ -344,6 +396,28 @@ export function MapView({ initialServices, initialTeams, initialDate }: Props) {
                   boxShadow: "0 2px 6px rgba(0,0,0,0.3)",
                 }}
               />
+            </Marker>
+          ))}
+
+          {filteredClockPoints.map((point) => (
+            <Marker
+              key={point.id}
+              longitude={point.lng}
+              latitude={point.lat}
+              anchor="center"
+              onClick={() => {
+                setSelectedClockPoint(point);
+                setSelectedService(null);
+              }}
+            >
+              <div
+                className={`flex h-8 w-8 items-center justify-center rounded-full border-2 text-xs font-bold text-white shadow-md ${
+                  point.type === "in" ? "bg-green-600" : "bg-red-600"
+                } ${point.location_warning ? "border-amber-400" : "border-white"}`}
+                title={`${point.collaborator_name} - ${point.type === "in" ? "Entrada" : "Saida"}`}
+              >
+                {point.type === "in" ? "E" : "S"}
+              </div>
             </Marker>
           ))}
 
@@ -389,6 +463,44 @@ export function MapView({ initialServices, initialTeams, initialDate }: Props) {
                   <p className="mt-1 text-[var(--color-text-muted)]">{mapError}</p>
                 </div>
               </div>
+            </div>
+          </div>
+        )}
+
+        {selectedClockPoint && (
+          <div className="absolute top-4 right-4 w-72 bg-white rounded-xl shadow-lg border border-[var(--color-border)] p-4 z-10">
+            <div className="flex items-start justify-between gap-2 mb-3">
+              <div>
+                <p className="text-sm font-semibold text-[var(--color-text-main)]">{selectedClockPoint.collaborator_name}</p>
+                <p className="text-xs text-[var(--color-text-muted)]">
+                  {selectedClockPoint.type === "in" ? "Entrada" : "Saida"} registada
+                </p>
+              </div>
+              <button onClick={() => setSelectedClockPoint(null)} className="text-[var(--color-text-muted)] hover:text-[var(--color-text-main)] transition-colors">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="space-y-2 text-xs text-[var(--color-text-sub)]">
+              <div className="flex items-center gap-2">
+                <Clock className="w-3.5 h-3.5 shrink-0" />
+                <span>{format(parseISO(selectedClockPoint.at), "HH:mm", { locale: pt })}</span>
+              </div>
+              <div className="flex items-start gap-2">
+                <MapPin className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+                <span>{selectedClockPoint.client_name} - {selectedClockPoint.location_name}</span>
+              </div>
+              {selectedClockPoint.team_name && (
+                <div className="flex items-center gap-2">
+                  <div className="w-3.5 h-3.5 rounded-full shrink-0" style={{ backgroundColor: selectedClockPoint.team_color ?? "#6B7280" }} />
+                  <span>{selectedClockPoint.team_name}</span>
+                </div>
+              )}
+              {selectedClockPoint.location_warning && (
+                <div className="flex items-center gap-2 text-amber-700">
+                  <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                  <span>Fora do raio GPS configurado</span>
+                </div>
+              )}
             </div>
           </div>
         )}

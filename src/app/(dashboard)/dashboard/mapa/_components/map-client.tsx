@@ -1,7 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import type { MapService, MapTeam } from "@/app/actions/map";
+import type { MapClockPoint, MapService, MapTeam } from "@/app/actions/map";
 
 const MapView = dynamic(() => import("./map-view").then((m) => m.MapView), {
   ssr: false,
@@ -10,6 +10,7 @@ const MapView = dynamic(() => import("./map-view").then((m) => m.MapView), {
 
 interface Props {
   initialServices: MapService[];
+  initialClockPoints: MapClockPoint[];
   initialTeams: MapTeam[];
   initialDate: string;
 }
