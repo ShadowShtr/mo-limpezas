@@ -32,6 +32,12 @@ const FALLBACK_STYLE: StyleSpecification = {
   layers: [{ id: "osm", type: "raster", source: "osm" }],
 };
 
+function sanitizeMapboxError(message: string) {
+  return message
+    .replace(/access_token=[^&\s]+/g, "access_token=[oculto]")
+    .replace(/pk\.[A-Za-z0-9._-]+/g, "pk.[oculto]");
+}
+
 const STATUS_LABELS: Record<string, string> = {
   agendado: "Agendado",
   em_curso: "Em curso",
@@ -295,7 +301,8 @@ export function MapView({ initialServices, initialTeams, initialDate }: Props) {
             mapRef.current?.resize();
           }}
           onError={(event) => {
-            const message = event.error?.message ?? "Erro ao carregar o mapa.";
+            const rawMessage = event.error?.message ?? "Erro ao carregar o mapa.";
+            const message = sanitizeMapboxError(rawMessage);
             const lower = message.toLowerCase();
             const canFallback =
               !usingFallbackStyle &&
