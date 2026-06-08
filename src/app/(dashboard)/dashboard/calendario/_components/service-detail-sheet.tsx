@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import {
   X, MapPin, Users, Clock, Euro, FileText, Loader2,
   AlertTriangle, Ban, CalendarX, CheckCircle2, ChevronDown, Bell,
@@ -9,6 +9,7 @@ import { format, parseISO } from "date-fns";
 import { pt } from "date-fns/locale";
 import { createClient } from "@/lib/supabase/client";
 import { notifyTeam } from "@/app/actions/notifications";
+import { cancelService, CANCEL_TYPE_LABELS, type CancelType } from "@/app/actions/cancellations";
 import type { Database } from "@/types/database";
 
 type ServiceFull = Database["public"]["Views"]["services_full"]["Row"];
@@ -60,6 +61,12 @@ export function ServiceDetailSheet({ service, onClose, onChanged }: Props) {
   const [showNotify, setShowNotify] = useState(false);
   const [notifyMsg, setNotifyMsg] = useState("");
 
+  // Cancelamento
+  const [showCancel, setShowCancel] = useState(false);
+  const [cancelType, setCancelType] = useState<CancelType>("client_request");
+  const [cancelReason, setCancelReason] = useState("");
+  const [cancelNotifyTeam, setCancelNotifyTeam] = useState(true);
+
   useEffect(() => {
     if (!service) { setTimesheets([]); return; }
     setTimesheets([]);
@@ -68,6 +75,10 @@ export function ServiceDetailSheet({ service, onClose, onChanged }: Props) {
     setClockOutTime("");
     setClockOutTsId("");
     setShowNotify(false);
+    setShowCancel(false);
+    setCancelType("client_request");
+    setCancelReason("");
+    setCancelNotifyTeam(true);
     setNotifyMsg(
       `Serviço ${service.location_name} — ${format(parseISO(service.scheduled_start), "HH:mm")}–${format(parseISO(service.scheduled_end), "HH:mm")}`
     );
@@ -79,6 +90,14 @@ export function ServiceDetailSheet({ service, onClose, onChanged }: Props) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [service?.id]);
 
+  // Calcular antes do early return (regras de hooks)
+  const isLateCancelWarning = useMemo(() => {
+    if (!service) return false;
+    // eslint-disable-next-line react-hooks/purity
+    const ms = new Date(service.scheduled_start).getTime() - Date.now();
+    return ms > 0 && ms < 86_400_000;
+  }, [service]);
+
   if (!service) return null;
 
   // Capturar em const para que o TypeScript saiba que não é null dentro das closures
@@ -89,17 +108,11 @@ export function ServiceDetailSheet({ service, onClose, onChanged }: Props) {
 
   // ─── Acções ──────────────────────────────────────────────────────────────
 
-  async function doAction(action: "cancelar" | "falta" | "fixClockOut") {
+  async function doAction(action: "falta" | "fixClockOut") {
     setActionLoading(action);
     setActionMsg(null);
 
-    if (action === "cancelar") {
-      const { error } = await supabase
-        .from("services").update({ status: "cancelado" }).eq("id", svc.id);
-      if (error) setActionMsg({ type: "error", text: error.message });
-      else { setActionMsg({ type: "success", text: "Serviço cancelado." }); onChanged(); }
-
-    } else if (action === "falta") {
+    if (action === "falta") {
       const { error } = await supabase
         .from("services").update({ status: "falta" }).eq("id", svc.id);
       if (error) setActionMsg({ type: "error", text: error.message });
@@ -134,6 +147,23 @@ export function ServiceDetailSheet({ service, onClose, onChanged }: Props) {
     }
 
     setActionLoading(null);
+  }
+
+  async function handleCancel() {
+    setActionLoading("cancelar");
+    setActionMsg(null);
+    const res = await cancelService(svc.id, cancelType, cancelReason, cancelNotifyTeam);
+    setActionLoading(null);
+    if (!res.ok) {
+      setActionMsg({ type: "error", text: res.error ?? "Erro ao cancelar." });
+      return;
+    }
+    setShowCancel(false);
+    const parts = ["Serviço cancelado."];
+    if (res.isLate) parts.push("⚠️ Cancelamento tardio (menos de 24h de antecedência).");
+    if (res.sent) parts.push(`Equipa notificada (${res.sent} membro${res.sent !== 1 ? "s" : ""}).`);
+    setActionMsg({ type: "success", text: parts.join(" ") });
+    onChanged();
   }
 
   async function handleNotify() {
@@ -306,6 +336,77 @@ export function ServiceDetailSheet({ service, onClose, onChanged }: Props) {
             </div>
           )}
 
+          {/* Painel de cancelamento */}
+          {showCancel && (
+            <div className="p-4 rounded-lg border border-red-200 bg-red-50 space-y-3">
+              <p className="text-sm font-semibold text-red-800">Cancelar serviço</p>
+
+              {/* Aviso cancelamento tardio */}
+              {isLateCancelWarning && (
+                <div className="flex items-start gap-2 px-3 py-2 rounded-lg bg-amber-50 border border-amber-200 text-xs text-amber-800">
+                  <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+                  <span>Cancelamento tardio — menos de 24h de antecedência. Ficará registado.</span>
+                </div>
+              )}
+
+              <div>
+                <label className="block text-xs font-medium text-red-700 mb-1">Motivo *</label>
+                <div className="relative">
+                  <select
+                    value={cancelType}
+                    onChange={(e) => setCancelType(e.target.value as CancelType)}
+                    className={INPUT_CLS + " pr-8 appearance-none"}
+                  >
+                    {(Object.entries(CANCEL_TYPE_LABELS) as [CancelType, string][]).map(([k, v]) => (
+                      <option key={k} value={k}>{v}</option>
+                    ))}
+                  </select>
+                  <ChevronDown className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--color-text-muted)]" />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-red-700 mb-1">Observações (opcional)</label>
+                <textarea
+                  value={cancelReason}
+                  onChange={(e) => setCancelReason(e.target.value)}
+                  rows={2}
+                  className={INPUT_CLS + " resize-none"}
+                  placeholder="Detalhe adicional sobre o cancelamento..."
+                />
+              </div>
+
+              {svc.team_id && (
+                <label className="flex items-center gap-2 cursor-pointer text-sm text-red-800">
+                  <input
+                    type="checkbox"
+                    checked={cancelNotifyTeam}
+                    onChange={(e) => setCancelNotifyTeam(e.target.checked)}
+                    className="rounded border-red-300 text-red-600"
+                  />
+                  Notificar equipa por push
+                </label>
+              )}
+
+              <div className="flex gap-2">
+                <button
+                  onClick={handleCancel}
+                  disabled={actionLoading === "cancelar"}
+                  className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-red-600 text-white text-sm font-medium hover:bg-red-700 transition-colors disabled:opacity-50"
+                >
+                  {actionLoading === "cancelar" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Ban className="w-3.5 h-3.5" />}
+                  Confirmar cancelamento
+                </button>
+                <button
+                  onClick={() => setShowCancel(false)}
+                  className="px-3 py-2 rounded-lg border border-red-200 text-sm text-red-700 hover:bg-red-100 transition-colors"
+                >
+                  Voltar
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Painel de notificar estabelecimento */}
           {showNotify && (
             <div className="p-4 rounded-lg border border-[var(--color-border)] space-y-3">
@@ -378,13 +479,12 @@ export function ServiceDetailSheet({ service, onClose, onChanged }: Props) {
                 Marcar como falta
               </button>
             )}
-            {svc.status !== "cancelado" && (
+            {svc.status !== "cancelado" && !showCancel && (
               <button
-                onClick={() => doAction("cancelar")}
-                disabled={actionLoading === "cancelar"}
-                className="w-full flex items-center gap-2 px-4 py-2 rounded-lg border border-red-200 text-sm font-medium text-red-700 hover:bg-red-50 transition-colors disabled:opacity-50"
+                onClick={() => setShowCancel(true)}
+                className="w-full flex items-center gap-2 px-4 py-2 rounded-lg border border-red-200 text-sm font-medium text-red-700 hover:bg-red-50 transition-colors"
               >
-                {actionLoading === "cancelar" ? <Loader2 className="w-4 h-4 animate-spin" /> : <Ban className="w-4 h-4" />}
+                <Ban className="w-4 h-4" />
                 Cancelar serviço
               </button>
             )}
