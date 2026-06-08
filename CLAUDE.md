@@ -47,8 +47,31 @@ Lê este ficheiro no início de CADA sessão antes de fazer qualquer coisa.
 
 ## ⚡ PRÓXIMA TASK A EXECUTAR
 
-**Próxima task:** AUDITORIA INTERNA CONCLUÍDA ✅ — App pronto para uso em produção.  
-Próximos passos possíveis: testes com utilizadores reais, integração SMS, otimizações de UX.
+**Próxima task:** Implementar funcionalidade de **Cancelamentos** (razões, notificações, workflow).
+
+---
+
+## 📍 PONTO DE PARAGEM — 2026-06-08
+
+**Última sessão completou — Correções críticas de produção:**
+
+### Mapa (map-view.tsx)
+- **Bug:** `mapStyle` iniciava como `FALLBACK_STYLE` → a lógica de fallback (`!usingFallbackStyle`) nunca disparava → mapa sempre mostrava "Mapa indisponível"
+- **Fix:** Mapa sempre inicia com `MAPBOX_STYLE`; adicionado estado `mapKey` que força remount via `key={mapKey}` quando há erro; `mapTotalFailure` para quando até o fallback falha
+- **CSP:** Adicionado `https://*.cartocdn.com` ao `connect-src` e `img-src` em `next.config.ts` (tiles CartoCDN estavam a ser bloqueados no Vercel)
+
+### Equipas — membros não guardavam
+- **Bug:** `EquipaSheet` usava o cliente Supabase browser para INSERT em `team_members`. RLS bloqueava silenciosamente. Sem tratamento de erro → sempre mostrava sucesso falso
+- **Fix:** Criado `src/app/actions/equipas.ts` — server action com `createAdminClient()` que: verifica auth + role, faz update/insert da equipa, substitui membros, retorna erros tipados
+- **Fix:** Página de equipas (`page.tsx`) alterada para usar `admin` client na query à view `teams_with_members` (RLS filtrava membros para arrays vazios)
+
+### RLS recursão infinita em services
+- **Bug:** Migration 014 criou novas políticas mas não apagou as originais de 006 (nomes diferentes → `DROP IF EXISTS` nunca as encontrou)
+- **Ciclo:** `services` → política "collaborators see own services" → consulta `service_reinforcements` → política "company reinforcements" → consulta `services` → **loop**
+- **Fix:** `supabase/migrations/018_fix_services_rls_recursion.sql` — apaga as 3 políticas antigas; cria função `get_service_company_id()` com `SECURITY DEFINER` para quebrar o ciclo; recria políticas `reinforcements_select` e `reinforcements_manage` sem referenciar `services` directamente
+
+**Migrations a aplicar no Supabase (novas nesta sessão):**
+- `supabase/migrations/018_fix_services_rls_recursion.sql` ← **CRÍTICA: corrige erro "infinite recursion detected in policy for relation 'services'"**
 
 ---
 
