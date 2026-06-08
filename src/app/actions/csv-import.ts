@@ -118,11 +118,10 @@ export async function importClientesCSV(rows: CsvCliente[]) {
       company_id,
       name: r.nome.trim(),
       nif: r.nif?.trim() || null,
-      contact_name: r.contacto_nome?.trim() || null,
-      contact_email: r.contacto_email?.trim() || null,
-      contact_phone: r.contacto_telefone?.trim() || null,
+      email: r.contacto_email?.trim() || null,
+      phone: r.contacto_telefone?.trim() || null,
       notes: r.notas?.trim() || null,
-      active: true,
+      status: "ativo",
     });
 
     if (error) {
