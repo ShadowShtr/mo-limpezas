@@ -19,7 +19,7 @@ export default async function EquipasPage() {
     .single();
 
   const [equipasRes, colaboradoresRes] = await Promise.all([
-    supabase
+    admin
       .from("teams_with_members")
       .select("*")
       .eq("company_id", me?.company_id ?? "")

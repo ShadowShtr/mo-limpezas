@@ -3,7 +3,7 @@
 import { useState, cloneElement, isValidElement } from "react";
 import { useRouter } from "next/navigation";
 import { X, Loader2, Check } from "lucide-react";
-import { createClient } from "@/lib/supabase/client";
+import { saveEquipa } from "@/app/actions/equipas";
 
 type Member = { id: string; full_name: string; avatar_url: string | null };
 
@@ -51,7 +51,6 @@ export function EquipaSheet({ trigger, companyId, colaboradores, equipa }: Props
   );
 
   const isEdit = !!equipa;
-  const supabase = createClient();
 
   function toggleMember(id: string) {
     setSelectedMembers((prev) =>
@@ -64,29 +63,20 @@ export function EquipaSheet({ trigger, companyId, colaboradores, equipa }: Props
     setLoading(true);
     setMessage(null);
 
-    const updateData = { name, color, active, leader_id: leaderId || null };
-    const insertData = { ...updateData, company_id: companyId };
-
-    let teamId = equipa?.id;
-
-    if (isEdit) {
-      const { error } = await supabase.from("teams").update(updateData).eq("id", teamId!);
-      if (error) { setLoading(false); setMessage({ type: "error", text: "Erro ao guardar." }); return; }
-    } else {
-      const { data, error } = await supabase.from("teams").insert(insertData).select("id").single();
-      if (error || !data) { setLoading(false); setMessage({ type: "error", text: "Erro ao criar equipa." }); return; }
-      teamId = data.id;
-    }
-
-    // Apagar membros antigos e inserir os novos (evita conflito UNIQUE)
-    await supabase.from("team_members").delete().eq("team_id", teamId!);
-    if (selectedMembers.length > 0) {
-      await supabase.from("team_members").insert(
-        selectedMembers.map((cid) => ({ team_id: teamId!, collaborator_id: cid }))
-      );
-    }
+    const result = await saveEquipa(
+      equipa?.id ?? null,
+      companyId,
+      { name, color, active, leader_id: leaderId || null },
+      selectedMembers,
+    );
 
     setLoading(false);
+
+    if (!result.ok) {
+      setMessage({ type: "error", text: result.error });
+      return;
+    }
+
     setMessage({ type: "success", text: isEdit ? "Equipa atualizada." : "Equipa criada com sucesso." });
     router.refresh();
   }
