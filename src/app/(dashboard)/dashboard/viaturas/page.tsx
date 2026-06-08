@@ -1,9 +1,17 @@
 import { getVehicles } from "@/app/actions/vehicles";
 import { VehiclesClient } from "./_components/vehicles-client";
+import { Header } from "@/components/layout/header";
 
 export const metadata = { title: "Viaturas — Escala" };
 
 export default async function ViatruasPage() {
   const vehicles = await getVehicles();
-  return <VehiclesClient initialVehicles={vehicles} />;
+  return (
+    <div>
+      <Header title="Viaturas" subtitle="Gestão da frota da empresa" />
+      <div className="p-6 max-w-[1400px]">
+        <VehiclesClient initialVehicles={vehicles} />
+      </div>
+    </div>
+  );
 }

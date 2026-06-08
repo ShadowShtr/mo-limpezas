@@ -125,6 +125,36 @@ export function SettingsForm({ initial }: Props) {
         </Field>
       </Section>
 
+      {/* ── PONTO ELECTRÓNICO ── */}
+      <Section title="Ponto Electrónico" description="Janela de tempo permitida para os colaboradores iniciarem e encerrarem o ponto.">
+        <Field
+          label="Minutos antes para iniciar"
+          hint="Quantos minutos antes do horário previsto do serviço o colaborador pode fazer clock-in. Ex: 40 significa que pode iniciar até 40 min antes."
+        >
+          <NumberInput
+            value={values.checkin_before_minutes}
+            onChange={(v) => set("checkin_before_minutes", v)}
+            step="5"
+            min="0"
+            max="480"
+            suffix="min"
+          />
+        </Field>
+        <Field
+          label="Minutos após para encerrar automaticamente"
+          hint="Quantos minutos após o fim previsto do serviço o sistema força o clock-out automático. Ex: 60 significa que encerrará 1 hora depois do fim."
+        >
+          <NumberInput
+            value={values.checkout_after_minutes}
+            onChange={(v) => set("checkout_after_minutes", v)}
+            step="5"
+            min="0"
+            max="480"
+            suffix="min"
+          />
+        </Field>
+      </Section>
+
       {/* Feedback + Botão */}
       <div className="flex items-center gap-4 pt-2">
         <button

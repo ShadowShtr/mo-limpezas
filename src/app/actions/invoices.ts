@@ -272,7 +272,7 @@ export async function getInvoices(
     .select(`
       id, client_id, invoice_number, invoice_date, due_date,
       period_start, period_end, subtotal, vat_rate, vat_amount, total,
-      status, paid_at, notes,
+      status, paid_at, payment_method, notes,
       clients ( name ),
       invoice_items ( id, service_id, description, quantity, unit_price, total, sort_order )
     `)
@@ -303,7 +303,7 @@ export async function getInvoices(
       total:          row.total,
       status:         row.status as Invoice["status"],
       paid_at:        row.paid_at ?? null,
-      payment_method: (row as { payment_method?: string | null }).payment_method ?? null,
+      payment_method: row.payment_method ?? null,
       notes:          row.notes ?? null,
       items:          [...rawItems].sort((a, b) => a.sort_order - b.sort_order),
     };

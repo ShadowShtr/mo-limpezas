@@ -47,7 +47,7 @@ export async function POST(req: NextRequest) {
 
   const { data: service } = await admin
     .from("services_full")
-    .select("id, company_id, team_id, location_lat, location_lng")
+    .select("id, company_id, team_id, location_lat, location_lng, scheduled_start, scheduled_end")
     .eq("id", service_id)
     .eq("company_id", profile.company_id)
     .single();
@@ -76,6 +76,20 @@ export async function POST(req: NextRequest) {
 
   if (!membership && !reinforcement) {
     return NextResponse.json({ error: "Sem permissão para este serviço" }, { status: 403 });
+  }
+
+  // Validar janela horária do clock-in
+  if (service.scheduled_start) {
+    const now = new Date();
+    const scheduledStart = new Date(service.scheduled_start);
+    const earliestClockIn = new Date(scheduledStart.getTime() - settings.checkin_before_minutes * 60_000);
+    if (now < earliestClockIn) {
+      const diffMin = Math.round((earliestClockIn.getTime() - now.getTime()) / 60_000);
+      return NextResponse.json(
+        { error: `Ainda não pode iniciar o serviço. Pode fazer clock-in em ${diffMin} minuto${diffMin !== 1 ? "s" : ""}.` },
+        { status: 400 },
+      );
+    }
   }
 
   let distance_m: number | null = null;

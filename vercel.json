@@ -7,6 +7,10 @@
     {
       "path": "/api/keep-alive",
       "schedule": "0 8 * * *"
+    },
+    {
+      "path": "/api/cron/auto-checkout",
+      "schedule": "*/15 * * * *"
     }
   ]
 }

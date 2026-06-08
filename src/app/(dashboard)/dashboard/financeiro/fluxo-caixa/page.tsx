@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { getCashFlowEntries } from "@/app/actions/cash-flow";
 import { CashFlowClient } from "./_components/cash-flow-client";
+import { Header } from "@/components/layout/header";
 
 export default async function FluxoCaixaPage({
   searchParams,
@@ -27,22 +28,18 @@ export default async function FluxoCaixaPage({
   const res = await getCashFlowEntries(profile.company_id, { year, month });
 
   return (
-    <div className="flex flex-col gap-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-bold text-[var(--color-text-main)]">Fluxo de Caixa</h1>
-          <p className="text-sm text-[var(--color-text-muted)] mt-0.5">Registo de todas as entradas e saídas</p>
-        </div>
+    <div>
+      <Header title="Fluxo de Caixa" subtitle="Registo de todas as entradas e saídas" />
+      <div className="p-6 max-w-[1400px]">
+        <CashFlowClient
+          initialData={res.ok ? { entries: res.entries, balance: res.balance, entradas: res.entradas, saidas: res.saidas, pendentes: res.pendentes } : null}
+          error={res.ok ? null : res.error}
+          companyId={profile.company_id}
+          mesParam={mesParam}
+          year={year}
+          month={month}
+        />
       </div>
-
-      <CashFlowClient
-        initialData={res.ok ? { entries: res.entries, balance: res.balance, entradas: res.entradas, saidas: res.saidas, pendentes: res.pendentes } : null}
-        error={res.ok ? null : res.error}
-        companyId={profile.company_id}
-        mesParam={mesParam}
-        year={year}
-        month={month}
-      />
     </div>
   );
 }

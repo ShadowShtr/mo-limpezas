@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { getManagementTasks } from "@/app/actions/management-tasks";
 import { TasksClient } from "./_components/tasks-client";
+import { Header } from "@/components/layout/header";
 
 export default async function TarefasPage() {
   const supabase = await createClient();
@@ -24,17 +25,15 @@ export default async function TarefasPage() {
   ]);
 
   return (
-    <div className="flex flex-col gap-6">
-      <div>
-        <h1 className="text-xl font-bold text-[var(--color-text-main)]">Tarefas de Gestão</h1>
-        <p className="text-sm text-[var(--color-text-muted)] mt-0.5">Notas e tarefas entre gestores</p>
+    <div>
+      <Header title="Tarefas de Gestão" subtitle="Notas e tarefas entre gestores" />
+      <div className="p-6 max-w-[1400px]">
+        <TasksClient
+          initialTasks={tasksRes.ok ? tasksRes.tasks : []}
+          companyId={profile.company_id}
+          members={(members ?? []).map((m) => ({ id: m.id, full_name: m.full_name }))}
+        />
       </div>
-
-      <TasksClient
-        initialTasks={tasksRes.ok ? tasksRes.tasks : []}
-        companyId={profile.company_id}
-        members={(members ?? []).map((m) => ({ id: m.id, full_name: m.full_name }))}
-      />
     </div>
   );
 }

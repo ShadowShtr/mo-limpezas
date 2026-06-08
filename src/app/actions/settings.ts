@@ -14,6 +14,8 @@ const settingsSchema = z.object({
   vacation_days_year: z.number().int().min(0).max(365),
   gps_radius_meters: z.number().int().min(10, "Raio GPS deve ser pelo menos 10m.").max(50_000),
   timezone: z.string().min(1).max(50),
+  checkin_before_minutes: z.number().int().min(0, "Não pode ser negativo.").max(480, "Máximo 480 minutos (8h)."),
+  checkout_after_minutes: z.number().int().min(0, "Não pode ser negativo.").max(480, "Máximo 480 minutos (8h)."),
 });
 
 export interface CompanySettings {
@@ -25,6 +27,8 @@ export interface CompanySettings {
   vacation_days_year: number;
   gps_radius_meters: number;
   timezone: string;
+  checkin_before_minutes: number;
+  checkout_after_minutes: number;
 }
 
 const DEFAULTS: CompanySettings = {
@@ -36,13 +40,15 @@ const DEFAULTS: CompanySettings = {
   vacation_days_year: 22,
   gps_radius_meters: 200,
   timezone: "Europe/Lisbon",
+  checkin_before_minutes: 40,
+  checkout_after_minutes: 60,
 };
 
 export async function getCompanySettings(companyId: string): Promise<CompanySettings> {
   const admin = createAdminClient();
   const { data } = await admin
     .from("company_settings")
-    .select("vat_rate, invoice_prefix, hourly_rate, meal_allowance_day, overtime_rate_pct, vacation_days_year, gps_radius_meters, timezone")
+    .select("vat_rate, invoice_prefix, hourly_rate, meal_allowance_day, overtime_rate_pct, vacation_days_year, gps_radius_meters, timezone, checkin_before_minutes, checkout_after_minutes")
     .eq("company_id", companyId)
     .single();
 
@@ -57,6 +63,8 @@ export async function getCompanySettings(companyId: string): Promise<CompanySett
     vacation_days_year: data.vacation_days_year ?? DEFAULTS.vacation_days_year,
     gps_radius_meters: data.gps_radius_meters ?? DEFAULTS.gps_radius_meters,
     timezone: data.timezone ?? DEFAULTS.timezone,
+    checkin_before_minutes: (data as { checkin_before_minutes?: number | null }).checkin_before_minutes ?? DEFAULTS.checkin_before_minutes,
+    checkout_after_minutes: (data as { checkout_after_minutes?: number | null }).checkout_after_minutes ?? DEFAULTS.checkout_after_minutes,
   };
 }
 
@@ -99,6 +107,8 @@ export async function saveCompanySettings(settings: CompanySettings) {
         vacation_days_year: parsed.data.vacation_days_year,
         gps_radius_meters: parsed.data.gps_radius_meters,
         timezone: parsed.data.timezone,
+        checkin_before_minutes: parsed.data.checkin_before_minutes,
+        checkout_after_minutes: parsed.data.checkout_after_minutes,
       },
       { onConflict: "company_id" },
     );

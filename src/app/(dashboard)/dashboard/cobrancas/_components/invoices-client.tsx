@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import {
   Receipt, RefreshCw, Loader2, AlertCircle,
-  Eye, Trash2, Download, FileSpreadsheet, X, Clock,
+  Eye, Trash2, Download, FileSpreadsheet, X, Clock, CheckCircle2,
 } from "lucide-react";
 import {
   generateInvoices,
@@ -36,6 +36,15 @@ const STATUS_COLOR: Record<Invoice["status"], string> = {
   pago:      "bg-green-100 text-green-700",
   vencido:   "bg-red-100 text-red-700",
   cancelado: "bg-gray-100 text-gray-400",
+};
+
+const PAYMENT_METHOD_LABEL: Record<string, string> = {
+  transferencia: "Transferência",
+  mbway:         "MBWay",
+  cheque:        "Cheque",
+  numerario:     "Numerário",
+  debito_direto: "Débito Direto",
+  outro:         "Outro",
 };
 
 // ─── Props ────────────────────────────────────────────────────────────────────
@@ -375,12 +384,30 @@ export function InvoicesClient({ initialInvoices, unbilledServices, companyId, m
                     <td className="px-4 py-3 text-right text-[var(--color-text-muted)]">{fmtEur(inv.vat_amount)}</td>
                     <td className="px-4 py-3 text-right font-semibold text-[var(--color-text-main)]">{fmtEur(inv.total)}</td>
                     <td className="px-4 py-3">
-                      <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_COLOR[inv.status]}`}>
-                        {STATUS_LABEL[inv.status]}
-                      </span>
+                      <div className="flex flex-col gap-0.5">
+                        <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium w-fit ${STATUS_COLOR[inv.status]}`}>
+                          {STATUS_LABEL[inv.status]}
+                        </span>
+                        {inv.status === "pago" && inv.payment_method && (
+                          <span className="text-xs text-[var(--color-text-muted)] pl-0.5">
+                            via {PAYMENT_METHOD_LABEL[inv.payment_method] ?? inv.payment_method}
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-1 justify-end">
+                        {(inv.status === "pendente" || inv.status === "vencido") && (
+                          <button
+                            onClick={() => handleStatusChange(inv.id, "pago")}
+                            disabled={isPending}
+                            className="flex items-center gap-1 text-xs px-2 py-1 rounded-lg border border-green-200 text-green-700 bg-green-50 hover:bg-green-100 transition-colors disabled:opacity-40"
+                            title="Marcar como pago"
+                          >
+                            <CheckCircle2 className="w-3.5 h-3.5" />
+                            Pago
+                          </button>
+                        )}
                         <button
                           onClick={() => setViewing(inv)}
                           className="p-1.5 rounded-lg text-[var(--color-text-muted)] hover:text-[var(--color-primary)] hover:bg-[var(--color-primary-light)] transition-colors"

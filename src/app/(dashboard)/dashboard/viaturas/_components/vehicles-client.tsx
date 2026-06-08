@@ -189,18 +189,9 @@ export function VehiclesClient({ initialVehicles }: Props) {
   }
 
   return (
-    <div className="p-6 space-y-6 max-w-4xl mx-auto">
-      {/* Cabeçalho */}
-      <div className="flex items-center justify-between gap-4 flex-wrap">
-        <div>
-          <h1 className="text-xl font-bold text-[var(--color-text-main)] flex items-center gap-2">
-            <Car className="w-5 h-5 text-[var(--color-primary)]" />
-            Viaturas
-          </h1>
-          <p className="text-sm text-[var(--color-text-muted)] mt-0.5">
-            Gestão da frota da empresa
-          </p>
-        </div>
+    <div className="space-y-6">
+      {/* Acções */}
+      <div className="flex items-center justify-end gap-4 flex-wrap">
         <button
           onClick={() => { setEditing(null); setSheetOpen(true); }}
           className="flex items-center gap-2 px-4 py-2 rounded-lg bg-[var(--color-primary)] text-white text-sm font-semibold hover:bg-[var(--color-primary-hover)] transition-colors"

@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { getAccountsData } from "@/app/actions/cash-flow";
 import { ContasClient } from "./_components/contas-client";
+import { Header } from "@/components/layout/header";
 
 export default async function ContasPage() {
   const supabase = await createClient();
@@ -16,19 +17,17 @@ export default async function ContasPage() {
   const res = await getAccountsData(profile.company_id);
 
   return (
-    <div className="flex flex-col gap-6">
-      <div>
-        <h1 className="text-xl font-bold text-[var(--color-text-main)]">Contas a Pagar e a Receber</h1>
-        <p className="text-sm text-[var(--color-text-muted)] mt-0.5">Extrato de pendências financeiras</p>
+    <div>
+      <Header title="Contas a Pagar e a Receber" subtitle="Extrato de pendências financeiras" />
+      <div className="p-6 max-w-[1400px]">
+        <ContasClient
+          toReceive={res.ok ? res.toReceive : []}
+          toPay={res.ok ? res.toPay : []}
+          expenses={res.ok ? res.expenses : []}
+          companyId={profile.company_id}
+          error={res.ok ? null : res.error}
+        />
       </div>
-
-      <ContasClient
-        toReceive={res.ok ? res.toReceive : []}
-        toPay={res.ok ? res.toPay : []}
-        expenses={res.ok ? res.expenses : []}
-        companyId={profile.company_id}
-        error={res.ok ? null : res.error}
-      />
     </div>
   );
 }
