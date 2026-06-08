@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, cloneElement, isValidElement, useRef, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { X, Loader2, Search, MapPin, CheckCircle2 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
@@ -207,13 +208,10 @@ export function LocalSheet({ trigger, companyId, clientes, local }: Props) {
       })
     : trigger;
 
-  return (
+  const overlay = open ? createPortal(
     <>
-      {triggerWithOpen}
-      {open && (
-        <>
-          <div className="fixed inset-0 bg-black/30 z-40" onClick={() => setOpen(false)} />
-          <div className="fixed right-0 top-0 h-full w-full max-w-md bg-white shadow-xl z-50 flex flex-col">
+      <div className="fixed inset-0 bg-black/30 z-[9998]" onClick={() => setOpen(false)} />
+      <div className="fixed right-0 top-0 h-full w-full max-w-md bg-white shadow-xl z-[9999] flex flex-col">
             <div className="flex items-center justify-between px-6 py-4 border-b border-[var(--color-border)]">
               <h2 className="text-base font-semibold text-[var(--color-text-main)]">
                 {isEdit ? "Editar local" : "Novo local"}
@@ -438,8 +436,14 @@ export function LocalSheet({ trigger, companyId, clientes, local }: Props) {
               </button>
             </div>
           </div>
-        </>
-      )}
+    </>,
+    document.body
+  ) : null;
+
+  return (
+    <>
+      {triggerWithOpen}
+      {overlay}
     </>
   );
 }

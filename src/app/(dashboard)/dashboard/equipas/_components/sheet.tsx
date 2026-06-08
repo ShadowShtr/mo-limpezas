@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, cloneElement, isValidElement } from "react";
+import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { X, Loader2, Check } from "lucide-react";
 import { saveEquipa } from "@/app/actions/equipas";
@@ -85,13 +86,10 @@ export function EquipaSheet({ trigger, companyId, colaboradores, equipa }: Props
     ? cloneElement(trigger as React.ReactElement<{ onClick?: () => void }>, { onClick: () => setOpen(true) })
     : trigger;
 
-  return (
+  const overlay = open ? createPortal(
     <>
-      {triggerWithOpen}
-      {open && (
-        <>
-          <div className="fixed inset-0 bg-black/30 z-40" onClick={() => setOpen(false)} />
-          <div className="fixed right-0 top-0 h-full w-full max-w-md bg-white shadow-xl z-50 flex flex-col">
+      <div className="fixed inset-0 bg-black/30 z-[9998]" onClick={() => setOpen(false)} />
+      <div className="fixed right-0 top-0 h-full w-full max-w-md bg-white shadow-xl z-[9999] flex flex-col">
             <div className="flex items-center justify-between px-6 py-4 border-b border-[var(--color-border)]">
               <h2 className="text-base font-semibold text-[var(--color-text-main)]">{isEdit ? "Editar equipa" : "Nova equipa"}</h2>
               <button onClick={() => setOpen(false)} className="p-1.5 rounded-lg text-[var(--color-text-muted)] hover:bg-[var(--color-background)] transition-colors">
@@ -189,8 +187,14 @@ export function EquipaSheet({ trigger, companyId, colaboradores, equipa }: Props
               </button>
             </div>
           </div>
-        </>
-      )}
+    </>,
+    document.body
+  ) : null;
+
+  return (
+    <>
+      {triggerWithOpen}
+      {overlay}
     </>
   );
 }

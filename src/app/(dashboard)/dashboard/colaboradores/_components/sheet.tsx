@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition, cloneElement, isValidElement } from "react";
+import { createPortal } from "react-dom";
 import { X, Loader2, Plus, Trash2 } from "lucide-react";
 import { createColaborador, updateColaborador } from "@/app/actions/colaboradores";
 import { inviteCollaborator } from "@/app/actions/auth";
@@ -107,14 +108,10 @@ export function ColaboradorSheet({ trigger, companyId, colaborador }: Props) {
     ? cloneElement(trigger as React.ReactElement<{ onClick?: () => void }>, { onClick: () => setOpen(true) })
     : trigger;
 
-  return (
+  const overlay = open ? createPortal(
     <>
-      {triggerWithOpen}
-
-      {open && (
-        <>
-          <div className="fixed inset-0 bg-black/30 z-40 animate-in fade-in duration-150" onClick={() => setOpen(false)} />
-          <div className="fixed right-0 top-0 h-full w-full max-w-md bg-white shadow-xl z-50 flex flex-col animate-in slide-in-from-right duration-200">
+      <div className="fixed inset-0 bg-black/30 z-[9998] animate-in fade-in duration-150" onClick={() => setOpen(false)} />
+      <div className="fixed right-0 top-0 h-full w-full max-w-md bg-white shadow-xl z-[9999] flex flex-col animate-in slide-in-from-right duration-200">
 
             {/* Header */}
             <div className="flex items-center justify-between px-6 py-4 border-b border-[var(--color-border)]">
@@ -241,8 +238,14 @@ export function ColaboradorSheet({ trigger, companyId, colaborador }: Props) {
               </button>
             </div>
           </div>
-        </>
-      )}
+    </>,
+    document.body
+  ) : null;
+
+  return (
+    <>
+      {triggerWithOpen}
+      {overlay}
     </>
   );
 }

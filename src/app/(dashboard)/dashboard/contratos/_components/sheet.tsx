@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition, cloneElement, isValidElement, useMemo } from "react";
+import { createPortal } from "react-dom";
 import { X, Loader2, ChevronDown } from "lucide-react";
 import { createContrato, updateContrato } from "@/app/actions/contratos";
 import type { ScheduleDay } from "@/types/database";
@@ -268,13 +269,10 @@ export function ContratoSheet({ trigger, companyId, userId, clientes, locais, eq
     ? cloneElement(trigger as React.ReactElement<{ onClick?: () => void }>, { onClick: () => setOpen(true) })
     : trigger;
 
-  return (
+  const overlay = open ? createPortal(
     <>
-      {triggerWithOpen}
-      {open && (
-        <>
-          <div className="fixed inset-0 bg-black/30 z-40" onClick={() => setOpen(false)} />
-          <div className="fixed right-0 top-0 h-full w-full max-w-xl bg-white shadow-xl z-50 flex flex-col">
+      <div className="fixed inset-0 bg-black/30 z-[9998]" onClick={() => setOpen(false)} />
+      <div className="fixed right-0 top-0 h-full w-full max-w-xl bg-white shadow-xl z-[9999] flex flex-col">
             {/* Header */}
             <div className="flex items-center justify-between px-6 py-4 border-b border-[var(--color-border)]">
               <h2 className="text-base font-semibold text-[var(--color-text-main)]">
@@ -514,8 +512,14 @@ export function ContratoSheet({ trigger, companyId, userId, clientes, locais, eq
               </button>
             </div>
           </div>
-        </>
-      )}
+    </>,
+    document.body
+  ) : null;
+
+  return (
+    <>
+      {triggerWithOpen}
+      {overlay}
     </>
   );
 }

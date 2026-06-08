@@ -1,47 +1,37 @@
 "use client";
 
-import "mapbox-gl/dist/mapbox-gl.css";
+import "maplibre-gl/dist/maplibre-gl.css";
 import { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import MapGL, {
   Marker,
   NavigationControl,
   ScaleControl,
-  Source,
-  Layer,
   type MapRef,
-} from "react-map-gl/mapbox";
-import type { StyleSpecification } from "mapbox-gl";
+} from "react-map-gl/maplibre";
 import { format, parseISO } from "date-fns";
 import { pt } from "date-fns/locale";
-import { AlertTriangle, MapPin, Navigation, X, Filter, Clock } from "lucide-react";
+import { MapPin, Navigation, X, Filter, Clock } from "lucide-react";
 import { getMapServices, type MapClockPoint, type MapService, type MapTeam } from "@/app/actions/map";
 import { createClient } from "@/lib/supabase/client";
 
-const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN ?? "";
-const MAPBOX_STYLE = "mapbox://styles/mapbox/light-v11";
-const DEFAULT_VIEW = { longitude: -9.1393, latitude: 38.7223, zoom: 12 };
-const FALLBACK_STYLE: StyleSpecification = {
-  version: 8,
+const MAP_STYLE = {
+  version: 8 as const,
   sources: {
     carto: {
-      type: "raster",
+      type: "raster" as const,
       tiles: [
         "https://a.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png",
         "https://b.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png",
         "https://c.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png",
       ],
       tileSize: 256,
-      attribution: "OpenStreetMap, CARTO",
+      attribution: "© OpenStreetMap, © CARTO",
     },
   },
-  layers: [{ id: "carto", type: "raster", source: "carto" }],
+  layers: [{ id: "carto-tiles", type: "raster" as const, source: "carto" }],
 };
 
-function sanitizeMapboxError(message: string) {
-  return message
-    .replace(/access_token=[^&\s]+/g, "access_token=[oculto]")
-    .replace(/pk\.[A-Za-z0-9._-]+/g, "pk.[oculto]");
-}
+const DEFAULT_VIEW = { longitude: -9.1393, latitude: 38.7223, zoom: 12 };
 
 const STATUS_LABELS: Record<string, string> = {
   agendado: "Agendado",
@@ -56,16 +46,6 @@ const STATUS_COLORS: Record<string, string> = {
   concluido: "#16A34A",
   falta: "#EF4444",
 };
-
-interface RouteResult {
-  teamId: string;
-  teamName: string;
-  teamColor: string;
-  durationMin: number;
-  distanceKm: number;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  geojson: any;
-}
 
 interface Props {
   initialServices: MapService[];
@@ -85,15 +65,7 @@ export function MapView({ initialServices, initialClockPoints, initialTeams, ini
   const [selectedStatus, setSelectedStatus] = useState("");
   const [selectedService, setSelectedService] = useState<MapService | null>(null);
   const [selectedClockPoint, setSelectedClockPoint] = useState<MapClockPoint | null>(null);
-  const [routes, setRoutes] = useState<RouteResult[]>([]);
-  const [loadingRoutes, setLoadingRoutes] = useState(false);
   const [loadingServices, setLoadingServices] = useState(false);
-  const [mapStyle, setMapStyle] = useState<string | typeof FALLBACK_STYLE>(MAPBOX_STYLE);
-  const [mapKey, setMapKey] = useState("primary");
-  const [mapLoaded, setMapLoaded] = useState(false);
-  const [mapError, setMapError] = useState("");
-  const [mapTotalFailure, setMapTotalFailure] = useState(false);
-  const usingFallbackStyle = mapStyle !== MAPBOX_STYLE;
 
   const filteredServices = useMemo(
     () =>
@@ -127,22 +99,21 @@ export function MapView({ initialServices, initialClockPoints, initialTeams, ini
 
   useEffect(() => {
     const resize = () => mapRef.current?.resize();
-    const first = window.setTimeout(resize, 0);
-    const second = window.setTimeout(resize, 300);
+    const t1 = window.setTimeout(resize, 0);
+    const t2 = window.setTimeout(resize, 300);
     window.addEventListener("resize", resize);
     return () => {
-      window.clearTimeout(first);
-      window.clearTimeout(second);
+      window.clearTimeout(t1);
+      window.clearTimeout(t2);
       window.removeEventListener("resize", resize);
     };
   }, []);
 
-  // Fit map to visible service and collaborator markers.
   useEffect(() => {
     if (!mapRef.current || visibleCoords.length === 0) return;
     if (visibleCoords.length === 1) {
-      const [point] = visibleCoords;
-      mapRef.current.flyTo({ center: [point.lng, point.lat], zoom: 14, duration: 800 });
+      const [p] = visibleCoords;
+      mapRef.current.flyTo({ center: [p.lng, p.lat], zoom: 14, duration: 800 });
       return;
     }
     const lngs = visibleCoords.map((p) => p.lng);
@@ -155,11 +126,10 @@ export function MapView({ initialServices, initialClockPoints, initialTeams, ini
 
   const fetchServices = useCallback(async (newDate: string, silent = false) => {
     if (!silent) setLoadingServices(true);
-    setRoutes([]);
     try {
-      const { services: s, clockPoints: points } = await getMapServices(newDate);
+      const { services: s, clockPoints: pts } = await getMapServices(newDate);
       setServices(s);
-      setClockPoints(points);
+      setClockPoints(pts);
     } finally {
       if (!silent) setLoadingServices(false);
     }
@@ -169,66 +139,12 @@ export function MapView({ initialServices, initialClockPoints, initialTeams, ini
     const supabase = createClient();
     const channel = supabase
       .channel(`dashboard-map-timesheets-${date}`)
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "timesheets" },
-        () => {
-          fetchServices(date, true);
-        }
-      )
+      .on("postgres_changes", { event: "*", schema: "public", table: "timesheets" }, () => {
+        fetchServices(date, true);
+      })
       .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
+    return () => { supabase.removeChannel(channel); };
   }, [date, fetchServices]);
-
-  async function calculateRoutes() {
-    setLoadingRoutes(true);
-    setRoutes([]);
-
-    const results: RouteResult[] = [];
-    const servicesByTeam = new Map<string, MapService[]>();
-    filteredServices.forEach((s) => {
-      if (!s.team_id) return;
-      const list = servicesByTeam.get(s.team_id) ?? [];
-      list.push(s);
-      servicesByTeam.set(s.team_id, list);
-    });
-
-    for (const [teamId, teamServices] of servicesByTeam.entries()) {
-      if (teamServices.length < 2) continue;
-      const team = teams.find((t) => t.id === teamId);
-      if (!team) continue;
-
-      const sorted = [...teamServices].sort(
-        (a, b) => new Date(a.scheduled_start).getTime() - new Date(b.scheduled_start).getTime()
-      );
-
-      const coords = sorted.map((s) => `${s.lng},${s.lat}`).join(";");
-      const url = `https://api.mapbox.com/directions/v5/mapbox/driving/${coords}?geometries=geojson&overview=full&access_token=${MAPBOX_TOKEN}`;
-
-      try {
-        const res = await fetch(url);
-        const data = await res.json();
-        if (!data.routes?.[0]) continue;
-        const route = data.routes[0];
-        results.push({
-          teamId,
-          teamName: team.name,
-          teamColor: team.color,
-          durationMin: Math.round(route.duration / 60),
-          distanceKm: Math.round(route.distance / 1000),
-          geojson: route.geometry,
-        });
-      } catch {
-        // skip team on error
-      }
-    }
-
-    setRoutes(results);
-    setLoadingRoutes(false);
-  }
 
   return (
     <div className="flex h-[calc(100vh-4rem)]">
@@ -245,7 +161,7 @@ export function MapView({ initialServices, initialClockPoints, initialTeams, ini
               type="date"
               value={date}
               onChange={(e) => { setDate(e.target.value); fetchServices(e.target.value); }}
-              className="w-full px-3 py-1.5 rounded-lg border border-[var(--color-border)] text-sm text-[var(--color-text-main)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
+              className="w-full px-3 py-1.5 rounded-lg border border-[var(--color-border)] text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
             />
           </div>
           <div>
@@ -253,7 +169,7 @@ export function MapView({ initialServices, initialClockPoints, initialTeams, ini
             <select
               value={selectedTeam}
               onChange={(e) => setSelectedTeam(e.target.value)}
-              className="w-full px-3 py-1.5 rounded-lg border border-[var(--color-border)] text-sm text-[var(--color-text-main)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
+              className="w-full px-3 py-1.5 rounded-lg border border-[var(--color-border)] text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
             >
               <option value="">Todas</option>
               {teams.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
@@ -264,20 +180,12 @@ export function MapView({ initialServices, initialClockPoints, initialTeams, ini
             <select
               value={selectedStatus}
               onChange={(e) => setSelectedStatus(e.target.value)}
-              className="w-full px-3 py-1.5 rounded-lg border border-[var(--color-border)] text-sm text-[var(--color-text-main)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
+              className="w-full px-3 py-1.5 rounded-lg border border-[var(--color-border)] text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
             >
               <option value="">Todos</option>
               {Object.entries(STATUS_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
             </select>
           </div>
-          <button
-            onClick={calculateRoutes}
-            disabled={loadingRoutes || filteredServices.length < 2}
-            className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-[var(--color-primary)] text-white text-sm font-medium hover:bg-[var(--color-primary-hover)] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <Navigation className="w-4 h-4" />
-            {loadingRoutes ? "A calcular…" : "Calcular Rotas"}
-          </button>
         </div>
 
         <div className="flex-1 overflow-y-auto">
@@ -320,63 +228,17 @@ export function MapView({ initialServices, initialClockPoints, initialTeams, ini
             </div>
           )}
         </div>
-
-        {routes.length > 0 && (
-          <div className="border-t border-[var(--color-border)] p-4 space-y-2">
-            <p className="text-xs font-semibold text-[var(--color-text-muted)] uppercase tracking-wide">Rotas calculadas</p>
-            {routes.map((r) => (
-              <div key={r.teamId} className="flex items-center gap-2">
-                <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: r.teamColor }} />
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs font-medium text-[var(--color-text-main)] truncate">{r.teamName}</p>
-                  <p className="text-xs text-[var(--color-text-muted)]">{r.durationMin} min · {r.distanceKm} km</p>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
       </div>
 
       {/* Map */}
       <div className="relative flex-1">
         <MapGL
-          key={mapKey}
           ref={mapRef}
-          mapboxAccessToken={MAPBOX_TOKEN}
           initialViewState={DEFAULT_VIEW}
           style={{ width: "100%", height: "100%" }}
-          mapStyle={mapStyle}
-          onLoad={() => {
-            setMapLoaded(true);
-            mapRef.current?.resize();
-          }}
-          onError={(event) => {
-            const rawMessage = event.error?.message ?? "Erro ao carregar o mapa.";
-            const message = sanitizeMapboxError(rawMessage);
-            const lower = message.toLowerCase();
-            const canFallback =
-              !usingFallbackStyle &&
-              (lower.includes("token") ||
-                lower.includes("authorized") ||
-                lower.includes("forbidden") ||
-                lower.includes("style") ||
-                lower.includes("failed to fetch") ||
-                lower.includes("access") ||
-                lower.includes("required"));
-
-            if (canFallback) {
-              setMapStyle(FALLBACK_STYLE);
-              setMapKey("fallback");
-              setMapLoaded(false);
-              setMapError(`Mapbox indisponível: a usar mapa alternativo.`);
-              return;
-            }
-
-            if (usingFallbackStyle) {
-              setMapError(message);
-              setMapTotalFailure(true);
-            }
-          }}
+          mapStyle={MAP_STYLE}
+          reuseMaps
+          onLoad={() => mapRef.current?.resize()}
         >
           <NavigationControl position="top-right" />
           <ScaleControl unit="metric" position="bottom-left" />
@@ -387,10 +249,7 @@ export function MapView({ initialServices, initialClockPoints, initialTeams, ini
               longitude={svc.lng}
               latitude={svc.lat}
               anchor="bottom"
-              onClick={() => {
-                setSelectedService(svc);
-                setSelectedClockPoint(null);
-              }}
+              onClick={() => { setSelectedService(svc); setSelectedClockPoint(null); }}
             >
               <div
                 style={{
@@ -413,67 +272,19 @@ export function MapView({ initialServices, initialClockPoints, initialTeams, ini
               longitude={point.lng}
               latitude={point.lat}
               anchor="center"
-              onClick={() => {
-                setSelectedClockPoint(point);
-                setSelectedService(null);
-              }}
+              onClick={() => { setSelectedClockPoint(point); setSelectedService(null); }}
             >
               <div
                 className={`flex h-8 w-8 items-center justify-center rounded-full border-2 text-xs font-bold text-white shadow-md ${
                   point.type === "in" ? "bg-green-600" : "bg-red-600"
                 } ${point.location_warning ? "border-amber-400" : "border-white"}`}
-                title={`${point.collaborator_name} - ${point.type === "in" ? "Entrada" : "Saida"}`}
+                title={`${point.collaborator_name} - ${point.type === "in" ? "Entrada" : "Saída"}`}
               >
                 {point.type === "in" ? "E" : "S"}
               </div>
             </Marker>
           ))}
-
-          {routes.map((r) => (
-            <Source
-              key={r.teamId}
-              id={`route-${r.teamId}`}
-              type="geojson"
-              data={{ type: "Feature", properties: {}, geometry: r.geojson }}
-            >
-              <Layer
-                id={`route-layer-${r.teamId}`}
-                type="line"
-                layout={{ "line-join": "round", "line-cap": "round" }}
-                paint={{ "line-color": r.teamColor, "line-width": 4, "line-opacity": 0.8 }}
-              />
-            </Source>
-          ))}
         </MapGL>
-
-        {!mapLoaded && !mapTotalFailure && (
-          <div className="absolute inset-0 z-10 flex items-center justify-center bg-slate-50/80 text-sm text-[var(--color-text-muted)]">
-            {mapError ? "A carregar mapa alternativo…" : "A carregar mapa…"}
-          </div>
-        )}
-
-        {mapError && usingFallbackStyle && mapLoaded && !mapTotalFailure && (
-          <div className="absolute left-4 top-4 z-10 max-w-sm rounded-lg border border-amber-200 bg-white/95 p-3 text-xs shadow-sm">
-            <div className="flex items-start gap-2">
-              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
-              <p className="text-[var(--color-text-muted)]">{mapError}</p>
-            </div>
-          </div>
-        )}
-
-        {mapTotalFailure && (
-          <div className="absolute inset-0 z-10 flex items-center justify-center bg-slate-50/90 p-6">
-            <div className="max-w-sm rounded-lg border border-amber-200 bg-white p-4 text-sm shadow-sm">
-              <div className="flex items-start gap-3">
-                <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-500" />
-                <div>
-                  <p className="font-semibold text-[var(--color-text-main)]">Mapa indisponivel</p>
-                  <p className="mt-1 text-[var(--color-text-muted)]">{mapError}</p>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
 
         {selectedClockPoint && (
           <div className="absolute top-4 right-4 w-72 bg-white rounded-xl shadow-lg border border-[var(--color-border)] p-4 z-10">
@@ -481,10 +292,10 @@ export function MapView({ initialServices, initialClockPoints, initialTeams, ini
               <div>
                 <p className="text-sm font-semibold text-[var(--color-text-main)]">{selectedClockPoint.collaborator_name}</p>
                 <p className="text-xs text-[var(--color-text-muted)]">
-                  {selectedClockPoint.type === "in" ? "Entrada" : "Saida"} registada
+                  {selectedClockPoint.type === "in" ? "Entrada" : "Saída"} registada
                 </p>
               </div>
-              <button onClick={() => setSelectedClockPoint(null)} className="text-[var(--color-text-muted)] hover:text-[var(--color-text-main)] transition-colors">
+              <button onClick={() => setSelectedClockPoint(null)} className="text-[var(--color-text-muted)] hover:text-[var(--color-text-main)]">
                 <X className="w-4 h-4" />
               </button>
             </div>
@@ -503,12 +314,6 @@ export function MapView({ initialServices, initialClockPoints, initialTeams, ini
                   <span>{selectedClockPoint.team_name}</span>
                 </div>
               )}
-              {selectedClockPoint.location_warning && (
-                <div className="flex items-center gap-2 text-amber-700">
-                  <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
-                  <span>Fora do raio GPS configurado</span>
-                </div>
-              )}
             </div>
           </div>
         )}
@@ -520,7 +325,7 @@ export function MapView({ initialServices, initialClockPoints, initialTeams, ini
                 <p className="text-sm font-semibold text-[var(--color-text-main)]">{selectedService.client_name}</p>
                 <p className="text-xs text-[var(--color-text-muted)]">{selectedService.location_name}</p>
               </div>
-              <button onClick={() => setSelectedService(null)} className="text-[var(--color-text-muted)] hover:text-[var(--color-text-main)] transition-colors">
+              <button onClick={() => setSelectedService(null)} className="text-[var(--color-text-muted)] hover:text-[var(--color-text-main)]">
                 <X className="w-4 h-4" />
               </button>
             </div>
@@ -543,9 +348,9 @@ export function MapView({ initialServices, initialClockPoints, initialTeams, ini
                   <span>{selectedService.team_name}</span>
                 </div>
               )}
-              <div className="flex items-center gap-2">
+              <div>
                 <span
-                  className="px-2 py-0.5 rounded-full font-medium"
+                  className="px-2 py-0.5 rounded-full text-xs font-medium"
                   style={{
                     backgroundColor: (STATUS_COLORS[selectedService.status] ?? "#6B7280") + "20",
                     color: STATUS_COLORS[selectedService.status] ?? "#6B7280",
