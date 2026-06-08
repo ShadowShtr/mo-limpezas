@@ -88,9 +88,11 @@ export function MapView({ initialServices, initialClockPoints, initialTeams, ini
   const [routes, setRoutes] = useState<RouteResult[]>([]);
   const [loadingRoutes, setLoadingRoutes] = useState(false);
   const [loadingServices, setLoadingServices] = useState(false);
-  const [mapStyle, setMapStyle] = useState<string | typeof FALLBACK_STYLE>(FALLBACK_STYLE);
+  const [mapStyle, setMapStyle] = useState<string | typeof FALLBACK_STYLE>(MAPBOX_STYLE);
+  const [mapKey, setMapKey] = useState("primary");
   const [mapLoaded, setMapLoaded] = useState(false);
   const [mapError, setMapError] = useState("");
+  const [mapTotalFailure, setMapTotalFailure] = useState(false);
   const usingFallbackStyle = mapStyle !== MAPBOX_STYLE;
 
   const filteredServices = useMemo(
@@ -338,15 +340,14 @@ export function MapView({ initialServices, initialClockPoints, initialTeams, ini
       {/* Map */}
       <div className="relative flex-1">
         <MapGL
+          key={mapKey}
           ref={mapRef}
           mapboxAccessToken={MAPBOX_TOKEN}
           initialViewState={DEFAULT_VIEW}
           style={{ width: "100%", height: "100%" }}
           mapStyle={mapStyle}
-          reuseMaps
           onLoad={() => {
             setMapLoaded(true);
-            if (!usingFallbackStyle) setMapError("");
             mapRef.current?.resize();
           }}
           onError={(event) => {
@@ -359,15 +360,22 @@ export function MapView({ initialServices, initialClockPoints, initialTeams, ini
                 lower.includes("authorized") ||
                 lower.includes("forbidden") ||
                 lower.includes("style") ||
-                lower.includes("failed to fetch"));
+                lower.includes("failed to fetch") ||
+                lower.includes("access") ||
+                lower.includes("required"));
 
             if (canFallback) {
               setMapStyle(FALLBACK_STYLE);
-              setMapError(`Mapbox falhou: ${message}`);
+              setMapKey("fallback");
+              setMapLoaded(false);
+              setMapError(`Mapbox indisponível: a usar mapa alternativo.`);
               return;
             }
 
-            if (usingFallbackStyle) setMapError(message);
+            if (usingFallbackStyle) {
+              setMapError(message);
+              setMapTotalFailure(true);
+            }
           }}
         >
           <NavigationControl position="top-right" />
@@ -438,22 +446,22 @@ export function MapView({ initialServices, initialClockPoints, initialTeams, ini
           ))}
         </MapGL>
 
-        {!mapLoaded && !mapError && (
+        {!mapLoaded && !mapTotalFailure && (
           <div className="absolute inset-0 z-10 flex items-center justify-center bg-slate-50/80 text-sm text-[var(--color-text-muted)]">
-            A carregar mapa...
+            {mapError ? "A carregar mapa alternativo…" : "A carregar mapa…"}
           </div>
         )}
 
-        {mapError && usingFallbackStyle && mapLoaded && (
+        {mapError && usingFallbackStyle && mapLoaded && !mapTotalFailure && (
           <div className="absolute left-4 top-4 z-10 max-w-sm rounded-lg border border-amber-200 bg-white/95 p-3 text-xs shadow-sm">
             <div className="flex items-start gap-2">
               <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
-              <p className="text-[var(--color-text-muted)]">{mapError}. A mostrar mapa alternativo.</p>
+              <p className="text-[var(--color-text-muted)]">{mapError}</p>
             </div>
           </div>
         )}
 
-        {mapError && !mapLoaded && (
+        {mapTotalFailure && (
           <div className="absolute inset-0 z-10 flex items-center justify-center bg-slate-50/90 p-6">
             <div className="max-w-sm rounded-lg border border-amber-200 bg-white p-4 text-sm shadow-sm">
               <div className="flex items-start gap-3">
