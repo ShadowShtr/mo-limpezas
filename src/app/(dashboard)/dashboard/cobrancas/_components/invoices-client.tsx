@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import {
   Receipt, RefreshCw, Loader2, AlertCircle,
-  Eye, Trash2, Download, FileSpreadsheet,
+  Eye, Trash2, Download, FileSpreadsheet, X,
 } from "lucide-react";
 import {
   generateInvoices,
@@ -55,6 +55,8 @@ export function InvoicesClient({ initialInvoices, companyId, mesParam, year, mon
   const [viewing,  setViewing]  = useState<Invoice | null>(null);
   const [error,    setError]    = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  const [paymentModal, setPaymentModal] = useState<{ id: string } | null>(null);
+  const [paymentMethod, setPaymentMethod] = useState("transferencia");
 
   // KPIs
   const totalFaturado  = invoices.reduce((s, i) => s + i.total, 0);
@@ -72,14 +74,22 @@ export function InvoicesClient({ initialInvoices, companyId, mesParam, year, mon
   }
 
   function handleStatusChange(id: string, status: Invoice["status"]) {
+    if (status === "pago") {
+      setPaymentModal({ id });
+      return;
+    }
+    applyStatusChange(id, status, undefined);
+  }
+
+  function applyStatusChange(id: string, status: Invoice["status"], method: string | undefined) {
     setError(null);
     startTransition(async () => {
-      const res = await updateInvoiceStatus(id, status);
+      const res = await updateInvoiceStatus(id, status, method);
       if (res.ok) {
         setInvoices((prev) =>
           prev.map((inv) =>
             inv.id === id
-              ? { ...inv, status, paid_at: status === "pago" ? new Date().toISOString() : inv.paid_at }
+              ? { ...inv, status, paid_at: status === "pago" ? new Date().toISOString() : inv.paid_at, payment_method: method ?? inv.payment_method }
               : inv,
           ),
         );
@@ -88,6 +98,12 @@ export function InvoicesClient({ initialInvoices, companyId, mesParam, year, mon
         setError(res.error ?? "Erro.");
       }
     });
+  }
+
+  function confirmPayment() {
+    if (!paymentModal) return;
+    applyStatusChange(paymentModal.id, "pago", paymentMethod);
+    setPaymentModal(null);
   }
 
   function handleDelete(id: string) {
@@ -168,8 +184,13 @@ export function InvoicesClient({ initialInvoices, companyId, mesParam, year, mon
     doc.text("Subtotal:", rMargin - 60, finalY);
     doc.text(fmtEur(inv.subtotal), rMargin, finalY, { align: "right" });
 
-    doc.text(`IVA (${inv.vat_rate}%):`, rMargin - 60, finalY + 7);
-    doc.text(fmtEur(inv.vat_amount), rMargin, finalY + 7, { align: "right" });
+    if (inv.vat_rate === 0) {
+      doc.text("IVA:", rMargin - 60, finalY + 7);
+      doc.text("Isento de IVA", rMargin, finalY + 7, { align: "right" });
+    } else {
+      doc.text(`IVA (${inv.vat_rate}%):`, rMargin - 60, finalY + 7);
+      doc.text(fmtEur(inv.vat_amount), rMargin, finalY + 7, { align: "right" });
+    }
 
     doc.setDrawColor(22, 163, 74);
     doc.line(rMargin - 65, finalY + 10, rMargin, finalY + 10);
@@ -378,6 +399,62 @@ export function InvoicesClient({ initialInvoices, companyId, mesParam, year, mon
           onExportPdf={() => handleExportPdf(viewing)}
           isPending={isPending}
         />
+      )}
+
+      {/* Modal forma de pagamento */}
+      {paymentModal && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center">
+          <div className="fixed inset-0 bg-black/40" onClick={() => setPaymentModal(null)} />
+          <div className="relative z-10 bg-white rounded-xl shadow-xl border border-[var(--color-border)] p-6 w-full max-w-sm mx-4">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-base font-semibold text-[var(--color-text-main)]">Registar pagamento</h3>
+              <button onClick={() => setPaymentModal(null)} className="text-[var(--color-text-muted)] hover:text-[var(--color-text-main)]">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="mb-5">
+              <label className="block text-sm font-medium text-[var(--color-text-main)] mb-2">Forma de pagamento</label>
+              <div className="grid grid-cols-2 gap-2">
+                {[
+                  { value: "transferencia", label: "Transferência" },
+                  { value: "mbway", label: "MBWay" },
+                  { value: "cheque", label: "Cheque" },
+                  { value: "numerario", label: "Numerário" },
+                  { value: "debito_direto", label: "Débito Direto" },
+                  { value: "outro", label: "Outro" },
+                ].map((opt) => (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => setPaymentMethod(opt.value)}
+                    className={`py-2 px-3 rounded-lg border text-sm font-medium transition-colors text-left ${
+                      paymentMethod === opt.value
+                        ? "border-[var(--color-primary)] bg-[var(--color-primary-light)] text-[var(--color-primary)]"
+                        : "border-[var(--color-border)] text-[var(--color-text-sub)] hover:bg-[var(--color-background)]"
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setPaymentModal(null)}
+                className="flex-1 py-2 rounded-lg border border-[var(--color-border)] text-sm text-[var(--color-text-sub)] hover:bg-[var(--color-background)] transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={confirmPayment}
+                disabled={isPending}
+                className="flex-1 py-2 rounded-lg bg-[var(--color-primary)] text-white text-sm font-medium hover:bg-[var(--color-primary-hover)] transition-colors disabled:opacity-50"
+              >
+                {isPending ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : "Confirmar pago"}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </>
   );

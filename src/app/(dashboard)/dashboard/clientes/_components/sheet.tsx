@@ -12,6 +12,7 @@ type Cliente = {
   phone: string | null;
   nif: string | null;
   status: string;
+  vat_exempt: boolean;
 };
 
 interface Props {
@@ -30,6 +31,7 @@ export function ClienteSheet({ trigger, companyId, cliente }: Props) {
   const [phone, setPhone] = useState(cliente?.phone ?? "");
   const [nif, setNif] = useState(cliente?.nif ?? "");
   const [status, setStatus] = useState(cliente?.status ?? "ativo");
+  const [vatExempt, setVatExempt] = useState(cliente?.vat_exempt ?? false);
 
   const isEdit = !!cliente;
 
@@ -43,6 +45,7 @@ export function ClienteSheet({ trigger, companyId, cliente }: Props) {
         phone: phone || undefined,
         nif: nif || undefined,
         status,
+        vat_exempt: vatExempt,
       };
 
       const res = isEdit
@@ -55,7 +58,7 @@ export function ClienteSheet({ trigger, companyId, cliente }: Props) {
           text: isEdit ? "Cliente atualizado." : "Cliente criado com sucesso.",
         });
         if (!isEdit) {
-          setName(""); setEmail(""); setPhone(""); setNif(""); setStatus("ativo");
+          setName(""); setEmail(""); setPhone(""); setNif(""); setStatus("ativo"); setVatExempt(false);
         }
       } else {
         setMessage({ type: "error", text: res.error });
@@ -109,6 +112,19 @@ export function ClienteSheet({ trigger, companyId, cliente }: Props) {
               <option value="ativo">Ativo</option>
               <option value="inativo">Inativo</option>
             </select>
+          </div>
+          <div className="flex items-center justify-between p-3 rounded-lg bg-[var(--color-background)] border border-[var(--color-border)]">
+            <div>
+              <p className="text-sm font-medium text-[var(--color-text-main)]">Isento de IVA</p>
+              <p className="text-xs text-[var(--color-text-muted)] mt-0.5">As faturas deste cliente não incluem IVA</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setVatExempt((v) => !v)}
+              className={`relative w-10 h-5 rounded-full transition-colors shrink-0 ${vatExempt ? "bg-[var(--color-primary)]" : "bg-[var(--color-border)]"}`}
+            >
+              <span className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-all ${vatExempt ? "translate-x-5" : "translate-x-0.5"}`} style={{ left: 0 }} />
+            </button>
           </div>
           {message && (
             <div className={`text-sm px-3 py-2 rounded-lg ${message.type === "error" ? "bg-red-50 text-[var(--color-danger)] border border-red-100" : "bg-[var(--color-primary-light)] text-[var(--color-primary)] border border-[var(--color-primary-muted)]"}`}>

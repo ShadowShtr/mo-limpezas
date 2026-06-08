@@ -5,6 +5,8 @@ import { Header } from "@/components/layout/header";
 import { ColaboradorSheet } from "../_components/sheet";
 import { ColaboradorAbsences } from "./_components/colaborador-absences";
 import { PresencaHistory } from "./_components/presenca-history";
+import { DocumentsSection } from "./_components/documents-section";
+import { getCollaboratorDocuments } from "@/app/actions/collaborator-documents";
 import {
   ArrowLeft, Mail, Phone, Calendar, Award, Edit2,
 } from "lucide-react";
@@ -19,7 +21,13 @@ export default async function ColaboradorDetailPage({ params }: Props) {
   const supabase = await createClient();
   const admin = createAdminClient();
 
-  const [profileRes, timesheetsRes] = await Promise.all([
+  const companyRes = await supabase
+    .from("profiles")
+    .select("company_id")
+    .eq("id", (await supabase.auth.getUser()).data.user!.id)
+    .single();
+
+  const [profileRes, timesheetsRes, docsRes] = await Promise.all([
     supabase
       .from("profiles")
       .select("*")
@@ -32,18 +40,15 @@ export default async function ColaboradorDetailPage({ params }: Props) {
       .not("clock_in_at", "is", null)
       .order("clock_in_at", { ascending: false })
       .limit(30),
+    getCollaboratorDocuments(id),
   ]);
 
   if (!profileRes.data) notFound();
 
   const profile = profileRes.data;
   const timesheets = timesheetsRes.data ?? [];
-
-  const { data: company } = await supabase
-    .from("profiles")
-    .select("company_id")
-    .eq("id", (await supabase.auth.getUser()).data.user!.id)
-    .single();
+  const documents = docsRes.ok ? docsRes.documents : [];
+  const company = companyRes;
 
   // Faltas do colaborador (últimas + futuras)
   const { data: rawAbsences } = await admin
@@ -98,7 +103,7 @@ export default async function ColaboradorDetailPage({ params }: Props) {
         subtitle={`${profile.role} · ${inviteStatus}`}
         actions={
           <ColaboradorSheet
-            companyId={company?.company_id ?? ""}
+            companyId={company.data?.company_id ?? ""}
             colaborador={profile}
             trigger={
               <button className="flex items-center gap-2 px-3 py-2 rounded-lg border border-[var(--color-border)] text-[var(--color-text-sub)] text-sm font-medium hover:bg-[var(--color-background)] transition-colors">
@@ -214,6 +219,13 @@ export default async function ColaboradorDetailPage({ params }: Props) {
 
             {/* Histórico de presenças */}
             <PresencaHistory timesheets={timesheets} />
+
+            {/* Documentos */}
+            <DocumentsSection
+              collaboratorId={id}
+              companyId={company?.data?.company_id ?? ""}
+              initialDocuments={documents}
+            />
           </div>
         </div>
       </div>

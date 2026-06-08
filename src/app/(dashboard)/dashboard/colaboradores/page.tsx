@@ -19,7 +19,7 @@ export default async function ColaboradoresPage() {
 
   const { data: colaboradores } = await admin
     .from("profiles")
-    .select("id, full_name, email, phone, role, status, contracted_hours_month, skills, avatar_url, created_at, invited_at, invite_accepted_at")
+    .select("id, full_name, email, phone, role, status, contracted_hours_month, skills, avatar_url, created_at, invited_at, invite_accepted_at, nif, iban, hourly_rate, contract_start, contract_end")
     .eq("company_id", company?.company_id ?? "")
     .not("role", "eq", "admin")
     .order("full_name");
@@ -42,7 +42,13 @@ export default async function ColaboradoresPage() {
         }
       />
       <div className="p-6 max-w-[1400px]">
-        <ColaboradoresTable colaboradores={colaboradores ?? []} companyId={company?.company_id ?? ""} />
+        <ColaboradoresTable
+          colaboradores={(colaboradores ?? []).map((c) => {
+            const r = c as typeof c & { nif?: string | null; iban?: string | null; hourly_rate?: number | null; contract_start?: string | null; contract_end?: string | null };
+            return { ...r, nif: r.nif ?? null, iban: r.iban ?? null, hourly_rate: r.hourly_rate ?? null, contract_start: r.contract_start ?? null, contract_end: r.contract_end ?? null };
+          })}
+          companyId={company?.company_id ?? ""}
+        />
       </div>
     </div>
   );

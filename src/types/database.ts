@@ -26,13 +26,13 @@ export type Database = {
       profiles: {
         Row: { id: string; company_id: string; full_name: string; phone: string | null; email: string | null; nif: string | null; iban: string | null; avatar_url: string | null; role: string; contracted_hours_month: number | null; hourly_rate: number | null; contract_start: string | null; contract_end: string | null; vacation_balance: number | null; skills: string[]; availability: Record<string, boolean>; status: string; invited_at: string | null; invite_accepted_at: string | null; created_at: string; updated_at: string };
         Insert: { id?: string; company_id: string; full_name: string; email?: string | null; phone?: string | null; role?: string; status?: string; skills?: string[]; contracted_hours_month?: number | null; avatar_url?: string | null };
-        Update: { full_name?: string; phone?: string | null; email?: string | null; nif?: string | null; iban?: string | null; avatar_url?: string | null; role?: string; contracted_hours_month?: number | null; contract_start?: string | null; contract_end?: string | null; vacation_balance?: number | null; skills?: string[]; availability?: Record<string, boolean>; status?: string; invited_at?: string | null; invite_accepted_at?: string | null; company_id?: string };
+        Update: { full_name?: string; phone?: string | null; email?: string | null; nif?: string | null; iban?: string | null; hourly_rate?: number | null; avatar_url?: string | null; role?: string; contracted_hours_month?: number | null; contract_start?: string | null; contract_end?: string | null; vacation_balance?: number | null; skills?: string[]; availability?: Record<string, boolean>; status?: string; invited_at?: string | null; invite_accepted_at?: string | null; company_id?: string };
         Relationships: [];
       };
       clients: {
-        Row: { id: string; company_id: string; name: string; nif: string | null; email: string | null; phone: string | null; address: string | null; type: string | null; notes: string | null; status: string; created_at: string; updated_at: string };
-        Insert: { company_id: string; name: string; nif?: string | null; email?: string | null; phone?: string | null; address?: string | null; type?: string | null; notes?: string | null; status?: string };
-        Update: { name?: string; nif?: string | null; email?: string | null; phone?: string | null; address?: string | null; type?: string | null; notes?: string | null; status?: string };
+        Row: { id: string; company_id: string; name: string; nif: string | null; email: string | null; phone: string | null; address: string | null; type: string | null; notes: string | null; status: string; vat_exempt: boolean; created_at: string; updated_at: string };
+        Insert: { company_id: string; name: string; nif?: string | null; email?: string | null; phone?: string | null; address?: string | null; type?: string | null; notes?: string | null; status?: string; vat_exempt?: boolean };
+        Update: { name?: string; nif?: string | null; email?: string | null; phone?: string | null; address?: string | null; type?: string | null; notes?: string | null; status?: string; vat_exempt?: boolean };
         Relationships: [];
       };
       client_notifications: {
@@ -42,9 +42,9 @@ export type Database = {
         Relationships: [];
       };
       locations: {
-        Row: { id: string; company_id: string; client_id: string; name: string; address: string; lat: number | null; lng: number | null; access_code: string | null; instructions: string | null; hourly_rate: number | null; active: boolean; created_at: string; updated_at: string };
-        Insert: { company_id: string; client_id: string; name: string; address: string; lat?: number | null; lng?: number | null; access_code?: string | null; instructions?: string | null; hourly_rate?: number | null; active?: boolean };
-        Update: { name?: string; address?: string; lat?: number | null; lng?: number | null; access_code?: string | null; instructions?: string | null; hourly_rate?: number | null; active?: boolean };
+        Row: { id: string; company_id: string; client_id: string; name: string; address: string; lat: number | null; lng: number | null; access_code: string | null; instructions: string | null; hourly_rate: number | null; fixed_price: number | null; pricing_type: "hourly" | "fixed"; active: boolean; created_at: string; updated_at: string };
+        Insert: { company_id: string; client_id: string; name: string; address: string; lat?: number | null; lng?: number | null; access_code?: string | null; instructions?: string | null; hourly_rate?: number | null; fixed_price?: number | null; pricing_type?: "hourly" | "fixed"; active?: boolean };
+        Update: { name?: string; address?: string; lat?: number | null; lng?: number | null; access_code?: string | null; instructions?: string | null; hourly_rate?: number | null; fixed_price?: number | null; pricing_type?: "hourly" | "fixed"; active?: boolean };
         Relationships: [];
       };
       teams: {
@@ -80,7 +80,7 @@ export type Database = {
       timesheets: {
         Row: { id: string; service_id: string; collaborator_id: string; company_id: string; clock_in_at: string | null; clock_out_at: string | null; clock_in_lat: number | null; clock_in_lng: number | null; clock_out_lat: number | null; clock_out_lng: number | null; location_warning: boolean; duration_minutes: number | null; notes: string | null; created_at: string; updated_at: string };
         Insert: { service_id: string; collaborator_id: string; company_id: string; clock_in_at?: string | null; clock_in_lat?: number | null; clock_in_lng?: number | null; clock_in_distance_m?: number | null; location_warning?: boolean };
-        Update: { clock_out_at?: string | null; clock_out_lat?: number | null; clock_out_lng?: number | null; location_warning?: boolean; duration_minutes?: number | null; notes?: string | null };
+        Update: { clock_in_at?: string | null; clock_out_at?: string | null; clock_out_lat?: number | null; clock_out_lng?: number | null; location_warning?: boolean; duration_minutes?: number | null; notes?: string | null };
         Relationships: [];
       };
       absences: {
@@ -96,9 +96,9 @@ export type Database = {
         Relationships: [];
       };
       invoices: {
-        Row: { id: string; company_id: string; client_id: string; invoice_number: string; invoice_date: string; due_date: string | null; period_start: string | null; period_end: string | null; subtotal: number; vat_rate: number; vat_amount: number; total: number; status: string; paid_at: string | null; notes: string | null; created_by: string | null; created_at: string; updated_at: string };
+        Row: { id: string; company_id: string; client_id: string; invoice_number: string; invoice_date: string; due_date: string | null; period_start: string | null; period_end: string | null; subtotal: number; vat_rate: number; vat_amount: number; total: number; status: string; paid_at: string | null; payment_method: string | null; notes: string | null; created_by: string | null; created_at: string; updated_at: string };
         Insert: { company_id: string; client_id: string; invoice_number: string; invoice_date: string; subtotal: number; vat_rate?: number; vat_amount: number; total: number; status?: string; due_date?: string | null; period_start?: string | null; period_end?: string | null; notes?: string | null; created_by?: string | null };
-        Update: { status?: string; paid_at?: string | null; due_date?: string | null; notes?: string | null };
+        Update: { status?: string; paid_at?: string | null; payment_method?: string | null; due_date?: string | null; notes?: string | null };
         Relationships: [];
       };
       invoice_items: {
@@ -135,6 +135,24 @@ export type Database = {
         Row: { id: string; company_id: string; vehicle_id: string; team_id: string; driver_id: string | null; date: string; created_at: string };
         Insert: { company_id: string; vehicle_id: string; team_id: string; date: string; driver_id?: string | null; id?: string };
         Update: { vehicle_id?: string; team_id?: string; driver_id?: string | null };
+        Relationships: [];
+      };
+      cash_flow_entries: {
+        Row: { id: string; company_id: string; type: "entrada" | "saida"; amount: number; description: string; category: "faturacao" | "salario" | "despesa" | "fornecedor" | "outro" | null; date: string; reference_id: string | null; reference_type: "invoice" | "payroll" | null; status: "pendente" | "confirmado"; notes: string | null; created_by: string | null; created_at: string };
+        Insert: { company_id: string; type: "entrada" | "saida"; amount: number; description: string; date: string; category?: "faturacao" | "salario" | "despesa" | "fornecedor" | "outro" | null; reference_id?: string | null; reference_type?: "invoice" | "payroll" | null; status?: "pendente" | "confirmado"; notes?: string | null; created_by?: string | null };
+        Update: { description?: string; amount?: number; date?: string; category?: string | null; status?: "pendente" | "confirmado"; notes?: string | null };
+        Relationships: [];
+      };
+      collaborator_documents: {
+        Row: { id: string; company_id: string; collaborator_id: string; file_name: string; file_url: string; file_size: number | null; mime_type: string | null; category: "contrato" | "recibo_salario" | "identificacao" | "outro"; uploaded_by: string | null; created_at: string };
+        Insert: { company_id: string; collaborator_id: string; file_name: string; file_url: string; file_size?: number | null; mime_type?: string | null; category?: "contrato" | "recibo_salario" | "identificacao" | "outro"; uploaded_by?: string | null };
+        Update: { category?: string; file_name?: string };
+        Relationships: [];
+      };
+      management_tasks: {
+        Row: { id: string; company_id: string; title: string; body: string | null; status: "pendente" | "em_curso" | "concluido"; priority: "normal" | "urgente"; assigned_to: string | null; created_by: string | null; due_date: string | null; completed_at: string | null; created_at: string; updated_at: string };
+        Insert: { company_id: string; title: string; body?: string | null; status?: "pendente" | "em_curso" | "concluido"; priority?: "normal" | "urgente"; assigned_to?: string | null; created_by?: string | null; due_date?: string | null };
+        Update: { title?: string; body?: string | null; status?: "pendente" | "em_curso" | "concluido"; priority?: "normal" | "urgente"; assigned_to?: string | null; due_date?: string | null; completed_at?: string | null; updated_at?: string };
         Relationships: [];
       };
     };

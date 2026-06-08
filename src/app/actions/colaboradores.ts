@@ -8,6 +8,11 @@ export interface ColaboradorInput {
   full_name: string;
   email?: string;
   phone?: string;
+  nif?: string;
+  iban?: string;
+  hourly_rate?: number | null;
+  contract_start?: string | null;
+  contract_end?: string | null;
   role: string;
   status: string;
   contracted_hours_month: number;
@@ -84,6 +89,11 @@ export async function updateColaborador(
       full_name: input.full_name,
       email: input.email?.trim() || null,
       phone: input.phone || null,
+      nif: input.nif || null,
+      iban: input.iban || null,
+      hourly_rate: input.hourly_rate ?? null,
+      contract_start: input.contract_start || null,
+      contract_end: input.contract_end || null,
       role: input.role,
       status: input.status,
       contracted_hours_month: input.contracted_hours_month,

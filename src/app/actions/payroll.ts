@@ -321,12 +321,41 @@ export async function markPayrollPaid(
 ): Promise<{ ok: boolean; error?: string }> {
   const admin = createAdminClient();
 
+  // Buscar dados antes de marcar como pago (para o fluxo de caixa)
+  const { data: records } = await admin
+    .from("payroll_records")
+    .select("id, company_id, collaborator_id, net_salary, period_year, period_month, profiles(full_name)")
+    .in("id", ids);
+
   const { error } = await admin
     .from("payroll_records")
     .update({ status: "pago", paid_at: new Date().toISOString() })
     .in("id", ids);
 
   if (error) return { ok: false, error: error.message };
+
+  // Auto-registo no fluxo de caixa
+  if (records && records.length > 0) {
+    const today = new Date().toISOString().split("T")[0];
+    const cashEntries = records.map((r) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const name = (r as any).profiles?.full_name ?? "Colaborador";
+      return {
+        company_id: r.company_id,
+        type: "saida" as const,
+        amount: r.net_salary,
+        description: `Salário ${name} — ${r.period_month}/${r.period_year}`,
+        category: "salario" as const,
+        date: today,
+        reference_id: r.id,
+        reference_type: "payroll" as const,
+        status: "confirmado" as const,
+      };
+    });
+    await admin.from("cash_flow_entries").insert(cashEntries);
+  }
+
   revalidatePath("/dashboard/folha-pagamento");
+  revalidatePath("/dashboard/financeiro");
   return { ok: true };
 }

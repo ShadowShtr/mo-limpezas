@@ -31,6 +31,7 @@ export interface Invoice {
   total: number;
   status: "rascunho" | "pendente" | "pago" | "vencido" | "cancelado";
   paid_at: string | null;
+  payment_method: string | null;
   notes: string | null;
   items: InvoiceItem[];
 }
@@ -87,12 +88,37 @@ export async function generateInvoices(
   if (sErr) return { ok: false, error: sErr.message };
   if (!services?.length) return { ok: true, invoices: [] };
 
-  // Locais e clientes
-  const locationIds = [...new Set(services.map((s) => s.location_id).filter(Boolean))];
+  // Locais e clientes (incluindo locais com preço fixo que têm contratos activos)
+  const serviceLocationIds = [...new Set(services.map((s) => s.location_id).filter(Boolean))];
+
+  // Locais com preço fixo que têm contratos activos no período
+  const { data: fixedLocations } = await admin
+    .from("locations")
+    .select("id, name, client_id, hourly_rate, fixed_price, pricing_type")
+    .eq("company_id", companyId)
+    .eq("pricing_type", "fixed")
+    .eq("active", true);
+
+  // Verificar quais têm contrato activo no período
+  const fixedLocationIds = (fixedLocations ?? []).map((l) => l.id);
+  let activeFixedLocationIds: string[] = [];
+  if (fixedLocationIds.length > 0) {
+    const { data: activeContracts } = await admin
+      .from("contracts")
+      .select("location_id")
+      .eq("company_id", companyId)
+      .eq("status", "ativo")
+      .lte("starts_on", end)
+      .or(`ends_on.is.null,ends_on.gte.${start}`)
+      .in("location_id", fixedLocationIds);
+    activeFixedLocationIds = [...new Set((activeContracts ?? []).map((c) => c.location_id))];
+  }
+
+  const allLocationIds = [...new Set([...serviceLocationIds, ...activeFixedLocationIds])];
   const { data: locations } = await admin
     .from("locations")
-    .select("id, name, client_id, hourly_rate")
-    .in("id", locationIds);
+    .select("id, name, client_id, hourly_rate, fixed_price, pricing_type")
+    .in("id", allLocationIds);
 
   const locationMap = Object.fromEntries(
     (locations ?? []).map((l) => [l.id, l]),
@@ -101,7 +127,7 @@ export async function generateInvoices(
   const clientIds = [...new Set((locations ?? []).map((l) => l.client_id).filter(Boolean))];
   const { data: clients } = await admin
     .from("clients")
-    .select("id, name, nif, email")
+    .select("id, name, nif, email, vat_exempt")
     .in("id", clientIds);
 
   const clientMap = Object.fromEntries(
@@ -118,14 +144,34 @@ export async function generateInvoices(
 
   const existingClientIds = new Set((existing ?? []).map((e) => e.client_id));
 
-  // Agrupar serviços por cliente
+  // Agrupar serviços por cliente (excluindo locais com preço fixo — tratados à parte)
   const byClient = new Map<string, typeof services>();
   for (const s of services) {
     const loc = locationMap[s.location_id];
     if (!loc?.client_id) continue;
+    if (loc.pricing_type === "fixed") continue; // preço fixo: linha separada
     if (existingClientIds.has(loc.client_id)) continue; // já tem fatura
     if (!byClient.has(loc.client_id)) byClient.set(loc.client_id, []);
     byClient.get(loc.client_id)!.push(s);
+  }
+
+  // Locais com preço fixo activos → adicionar ao mapa de clientes
+  for (const locId of activeFixedLocationIds) {
+    const loc = locationMap[locId];
+    if (!loc?.client_id || !loc.fixed_price) continue;
+    if (existingClientIds.has(loc.client_id)) continue;
+    // Registo sintético para o preço fixo
+    if (!byClient.has(loc.client_id)) byClient.set(loc.client_id, []);
+    // Adiciona um serviço sintético (id = locId para ser identificável)
+    byClient.get(loc.client_id)!.push({
+      id: `fixed:${locId}`,
+      location_id: locId,
+      calculated_value: loc.fixed_price,
+      manual_value: null,
+      scheduled_start: `${start}T00:00:00`,
+      actual_start: null,
+      actual_end: null,
+    });
   }
 
   if (!byClient.size) return getInvoices(companyId, year, month);
@@ -137,24 +183,39 @@ export async function generateInvoices(
   for (const [clientId, svcs] of byClient) {
     const invoiceNumber = await nextInvoiceNumber(companyId, prefix, year);
 
+    const clientData = clientMap[clientId];
+    const isVatExempt = (clientData as { vat_exempt?: boolean })?.vat_exempt === true;
+    const effectiveVatFactor = isVatExempt ? 0 : vatFactor;
+    const effectiveVatRate   = isVatExempt ? 0 : vatRate;
+
     const items = svcs
       .sort((a, b) => a.scheduled_start.localeCompare(b.scheduled_start))
       .map((s, idx) => {
         const loc   = locationMap[s.location_id];
+        const isFixed = (s.id as string).startsWith("fixed:");
         const value = s.manual_value ?? s.calculated_value ?? 0;
-        const date  = new Date(s.scheduled_start).toLocaleDateString("pt-PT");
-        let durationMin = 0;
-        if (s.actual_start && s.actual_end) {
-          durationMin = Math.round(
-            (new Date(s.actual_end).getTime() - new Date(s.actual_start).getTime()) / 60000,
-          );
+
+        let description: string;
+        if (isFixed) {
+          const mLabel = new Date(s.scheduled_start).toLocaleDateString("pt-PT", { month: "long", year: "numeric" });
+          description = `${loc?.name ?? "Serviço"} — Avença mensal ${mLabel}`;
+        } else {
+          const date  = new Date(s.scheduled_start).toLocaleDateString("pt-PT");
+          let durationMin = 0;
+          if (s.actual_start && s.actual_end) {
+            durationMin = Math.round(
+              (new Date(s.actual_end).getTime() - new Date(s.actual_start).getTime()) / 60000,
+            );
+          }
+          const durLabel = durationMin > 0
+            ? ` (${Math.floor(durationMin / 60)}h${durationMin % 60 > 0 ? String(durationMin % 60).padStart(2, "0") : ""})`
+            : "";
+          description = `${date} — ${loc?.name ?? "Serviço"}${durLabel}`;
         }
-        const durLabel = durationMin > 0
-          ? ` (${Math.floor(durationMin / 60)}h${durationMin % 60 > 0 ? String(durationMin % 60).padStart(2, "0") : ""})`
-          : "";
+
         return {
-          service_id:  s.id,
-          description: `${date} — ${loc?.name ?? "Serviço"}${durLabel}`,
+          service_id:  isFixed ? null : s.id,
+          description,
           quantity:    1,
           unit_price:  value,
           total:       value,
@@ -163,7 +224,7 @@ export async function generateInvoices(
       });
 
     const subtotal  = Math.round(items.reduce((s, i) => s + i.total, 0) * 100) / 100;
-    const vatAmount = Math.round(subtotal * vatFactor * 100) / 100;
+    const vatAmount = Math.round(subtotal * effectiveVatFactor * 100) / 100;
     const total     = Math.round((subtotal + vatAmount) * 100) / 100;
 
     const { data: inv, error: invErr } = await admin
@@ -177,7 +238,7 @@ export async function generateInvoices(
         period_start:   start,
         period_end:     end,
         subtotal,
-        vat_rate:       vatRate,
+        vat_rate:       effectiveVatRate,
         vat_amount:     vatAmount,
         total,
         status:         "rascunho",
@@ -242,6 +303,7 @@ export async function getInvoices(
       total:          row.total,
       status:         row.status as Invoice["status"],
       paid_at:        row.paid_at ?? null,
+      payment_method: (row as { payment_method?: string | null }).payment_method ?? null,
       notes:          row.notes ?? null,
       items:          [...rawItems].sort((a, b) => a.sort_order - b.sort_order),
     };
@@ -255,10 +317,30 @@ export async function getInvoices(
 export async function updateInvoiceStatus(
   id: string,
   status: Invoice["status"],
+  paymentMethod?: string,
 ): Promise<{ ok: boolean; error?: string }> {
   const admin = createAdminClient();
-  const update: { status: string; paid_at?: string } = { status };
-  if (status === "pago") update.paid_at = new Date().toISOString();
+  const update: { status: string; paid_at?: string; payment_method?: string | null } = { status };
+  if (status === "pago") {
+    update.paid_at = new Date().toISOString();
+    update.payment_method = paymentMethod ?? null;
+    // Auto-registo no fluxo de caixa
+    const { data: inv } = await admin.from("invoices").select("company_id, total, invoice_number, client_id").eq("id", id).single();
+    if (inv) {
+      const { data: clientData } = await admin.from("clients").select("name").eq("id", inv.client_id).single();
+      await admin.from("cash_flow_entries").insert({
+        company_id: inv.company_id,
+        type: "entrada",
+        amount: inv.total,
+        description: `Fatura ${inv.invoice_number} — ${(clientData as { name?: string })?.name ?? "Cliente"}`,
+        category: "faturacao",
+        date: new Date().toISOString().split("T")[0],
+        reference_id: id,
+        reference_type: "invoice",
+        status: "confirmado",
+      });
+    }
+  }
 
   const { error } = await admin
     .from("invoices")
@@ -267,6 +349,7 @@ export async function updateInvoiceStatus(
 
   if (error) return { ok: false, error: error.message };
   revalidatePath("/dashboard/cobrancas");
+  revalidatePath("/dashboard/financeiro");
   return { ok: true };
 }
 

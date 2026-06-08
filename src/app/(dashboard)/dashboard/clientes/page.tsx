@@ -20,7 +20,7 @@ export default async function ClientesPage() {
 
   const { data: clientes } = await supabase
     .from("clients")
-    .select("id, name, email, phone, nif, status, created_at")
+    .select("id, name, email, phone, nif, status, vat_exempt, created_at")
     .order("name");
 
   return (
@@ -50,7 +50,10 @@ export default async function ClientesPage() {
         }
       />
       <div className="p-6 max-w-[1400px]">
-        <ClientesTable clientes={clientes ?? []} companyId={me?.company_id ?? ""} />
+        <ClientesTable
+          clientes={(clientes ?? []).map((c) => ({ ...c, vat_exempt: (c as { vat_exempt?: boolean }).vat_exempt ?? false }))}
+          companyId={me?.company_id ?? ""}
+        />
       </div>
     </div>
   );

@@ -17,6 +17,7 @@ import {
   X,
   AlertTriangle,
   TrendingUp,
+  CheckSquare,
 } from "lucide-react";
 import { logout } from "@/app/actions/auth";
 
@@ -32,6 +33,7 @@ const NAV = [
   { href: "/dashboard/mapa",          icon: Map,             label: "Mapa" },
   { href: "/dashboard/relatorios",    icon: BarChart3,       label: "Relatórios" },
   { href: "/dashboard/financeiro",    icon: TrendingUp,      label: "Financeiro" },
+  { href: "/dashboard/tarefas",       icon: CheckSquare,     label: "Tarefas" },
 ];
 
 interface SidebarProps {

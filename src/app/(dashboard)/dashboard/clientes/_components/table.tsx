@@ -11,6 +11,7 @@ type Cliente = {
   phone: string | null;
   nif: string | null;
   status: string;
+  vat_exempt: boolean;
   created_at: string;
 };
 

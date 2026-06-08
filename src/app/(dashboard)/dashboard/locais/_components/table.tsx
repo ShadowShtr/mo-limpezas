@@ -11,6 +11,8 @@ type Local = {
   lat: number | null;
   lng: number | null;
   hourly_rate: number | null;
+  fixed_price: number | null;
+  pricing_type: "hourly" | "fixed";
   active: boolean;
   client_id: string;
   access_code: string | null;

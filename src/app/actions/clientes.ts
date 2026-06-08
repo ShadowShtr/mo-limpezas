@@ -9,6 +9,7 @@ export interface ClienteInput {
   phone?: string;
   nif?: string;
   status: string;
+  vat_exempt?: boolean;
   company_id: string;
 }
 
@@ -21,6 +22,7 @@ export async function createCliente(input: ClienteInput) {
     phone: input.phone || null,
     nif: input.nif || null,
     status: input.status,
+    vat_exempt: input.vat_exempt ?? false,
     company_id: input.company_id,
   });
 
@@ -39,6 +41,7 @@ export async function updateCliente(id: string, input: Omit<ClienteInput, "compa
     phone: input.phone || null,
     nif: input.nif || null,
     status: input.status,
+    vat_exempt: input.vat_exempt ?? false,
   }).eq("id", id);
 
   if (error) return { ok: false as const, error: error.message };

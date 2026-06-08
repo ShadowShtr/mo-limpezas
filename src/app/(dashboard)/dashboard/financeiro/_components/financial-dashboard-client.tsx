@@ -5,6 +5,7 @@ import Link from "next/link";
 import {
   TrendingUp, TrendingDown, Euro, AlertCircle, Loader2,
   ArrowUpRight, ArrowDownRight, RefreshCw, Receipt, Wallet,
+  BarChart2, FileText,
 } from "lucide-react";
 import { getFinancialDashboard, type FinancialDashboardData } from "@/app/actions/financial-dashboard";
 
@@ -223,7 +224,7 @@ export function FinancialDashboardClient({ data: initialData, error: initialErro
     <div className="space-y-6">
 
       {/* Atalhos para módulos financeiros */}
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <Link
           href="/dashboard/cobrancas"
           className="flex items-center gap-3 p-4 bg-white rounded-xl border border-[var(--color-border)] hover:border-[var(--color-primary)] hover:bg-[var(--color-primary-light)] transition-colors group"
@@ -246,6 +247,30 @@ export function FinancialDashboardClient({ data: initialData, error: initialErro
           <div>
             <p className="text-sm font-semibold text-[var(--color-text-main)]">Pagamentos</p>
             <p className="text-xs text-[var(--color-text-muted)]">Folha de salários</p>
+          </div>
+        </Link>
+        <Link
+          href="/dashboard/financeiro/fluxo-caixa"
+          className="flex items-center gap-3 p-4 bg-white rounded-xl border border-[var(--color-border)] hover:border-[var(--color-primary)] hover:bg-[var(--color-primary-light)] transition-colors group"
+        >
+          <div className="w-9 h-9 rounded-lg bg-green-50 flex items-center justify-center shrink-0 group-hover:bg-[var(--color-primary-muted)]">
+            <BarChart2 className="w-4 h-4 text-[var(--color-primary)]" />
+          </div>
+          <div>
+            <p className="text-sm font-semibold text-[var(--color-text-main)]">Fluxo de Caixa</p>
+            <p className="text-xs text-[var(--color-text-muted)]">Entradas e saídas</p>
+          </div>
+        </Link>
+        <Link
+          href="/dashboard/financeiro/contas"
+          className="flex items-center gap-3 p-4 bg-white rounded-xl border border-[var(--color-border)] hover:border-[var(--color-primary)] hover:bg-[var(--color-primary-light)] transition-colors group"
+        >
+          <div className="w-9 h-9 rounded-lg bg-green-50 flex items-center justify-center shrink-0 group-hover:bg-[var(--color-primary-muted)]">
+            <FileText className="w-4 h-4 text-[var(--color-primary)]" />
+          </div>
+          <div>
+            <p className="text-sm font-semibold text-[var(--color-text-main)]">Contas</p>
+            <p className="text-xs text-[var(--color-text-muted)]">A pagar e a receber</p>
           </div>
         </Link>
       </div>

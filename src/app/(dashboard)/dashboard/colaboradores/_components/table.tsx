@@ -18,6 +18,11 @@ type Colaborador = {
   created_at: string;
   invited_at: string | null;
   invite_accepted_at: string | null;
+  nif: string | null;
+  iban: string | null;
+  hourly_rate: number | null;
+  contract_start: string | null;
+  contract_end: string | null;
 };
 
 const STATUS_STYLE: Record<string, { label: string; dot: string; text: string; bg: string }> = {

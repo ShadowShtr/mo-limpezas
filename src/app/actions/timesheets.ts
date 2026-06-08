@@ -1,6 +1,7 @@
 "use server";
 
 import { createAdminClient } from "@/lib/supabase/admin";
+import { revalidatePath } from "next/cache";
 
 export interface ServiceTimeUpdate {
   id: string;
@@ -36,4 +37,36 @@ export async function saveActualTimes(updates: ServiceTimeUpdate[]) {
     return { ok: false as const, error: "Erro ao guardar algumas entradas." };
   }
   return { ok: true as const };
+}
+
+export async function adminEditTimesheet(
+  timesheetId: string,
+  data: {
+    clock_in_at: string | null;
+    clock_out_at: string | null;
+    notes?: string | null;
+  },
+): Promise<{ ok: boolean; error?: string }> {
+  const admin = createAdminClient();
+
+  let duration_minutes: number | null = null;
+  if (data.clock_in_at && data.clock_out_at) {
+    duration_minutes = Math.round(
+      (new Date(data.clock_out_at).getTime() - new Date(data.clock_in_at).getTime()) / 60000,
+    );
+  }
+
+  const { error } = await admin
+    .from("timesheets")
+    .update({
+      clock_in_at: data.clock_in_at,
+      clock_out_at: data.clock_out_at,
+      duration_minutes,
+      notes: data.notes ?? null,
+    })
+    .eq("id", timesheetId);
+
+  if (error) return { ok: false, error: error.message };
+  revalidatePath("/dashboard/colaboradores");
+  return { ok: true };
 }

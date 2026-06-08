@@ -11,6 +11,11 @@ type Colaborador = {
   full_name: string;
   email: string | null;
   phone: string | null;
+  nif: string | null;
+  iban: string | null;
+  hourly_rate: number | null;
+  contract_start: string | null;
+  contract_end: string | null;
   role: string;
   status: string;
   contracted_hours_month: number | null;
@@ -39,6 +44,11 @@ export function ColaboradorSheet({ trigger, companyId, colaborador }: Props) {
   const [name, setName] = useState(colaborador?.full_name ?? "");
   const [email, setEmail] = useState(colaborador?.email ?? "");
   const [phone, setPhone] = useState(colaborador?.phone ?? "");
+  const [nif, setNif] = useState(colaborador?.nif ?? "");
+  const [iban, setIban] = useState(colaborador?.iban ?? "");
+  const [hourlyRate, setHourlyRate] = useState(colaborador?.hourly_rate != null ? String(colaborador.hourly_rate) : "");
+  const [contractStart, setContractStart] = useState(colaborador?.contract_start ?? "");
+  const [contractEnd, setContractEnd] = useState(colaborador?.contract_end ?? "");
   const [role, setRole] = useState(colaborador?.role ?? "colaborador");
   const [status, setStatus] = useState(colaborador?.status ?? "ativo");
   const [hours, setHours] = useState(String(colaborador?.contracted_hours_month ?? "168"));
@@ -62,6 +72,11 @@ export function ColaboradorSheet({ trigger, companyId, colaborador }: Props) {
         full_name: name,
         email: email || undefined,
         phone: phone || undefined,
+        nif: nif || undefined,
+        iban: iban || undefined,
+        hourly_rate: hourlyRate ? parseFloat(hourlyRate) : null,
+        contract_start: contractStart || null,
+        contract_end: contractEnd || null,
         role,
         status,
         contracted_hours_month: parseFloat(hours) || 168,
@@ -78,8 +93,9 @@ export function ColaboradorSheet({ trigger, companyId, colaborador }: Props) {
           text: isEdit ? "Colaborador atualizado." : "Colaborador criado com sucesso.",
         });
         if (!isEdit) {
-          setName(""); setEmail(""); setPhone(""); setRole("colaborador");
-          setStatus("ativo"); setHours("168"); setSkills([]);
+          setName(""); setEmail(""); setPhone(""); setNif(""); setIban("");
+          setHourlyRate(""); setContractStart(""); setContractEnd("");
+          setRole("colaborador"); setStatus("ativo"); setHours("168"); setSkills([]);
         }
       } else {
         setMessage({ type: "error", text: res.error });
@@ -154,6 +170,44 @@ export function ColaboradorSheet({ trigger, companyId, colaborador }: Props) {
                 <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)}
                   placeholder="+351 900 000 000"
                   className={inputCls} />
+              </div>
+
+              {/* NIF + IBAN */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-medium text-[var(--color-text-main)] mb-1.5">NIF</label>
+                  <input value={nif} onChange={(e) => setNif(e.target.value)}
+                    placeholder="000 000 000"
+                    className={inputCls} />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-[var(--color-text-main)] mb-1.5">€/hora</label>
+                  <input type="number" step="0.01" min="0" value={hourlyRate} onChange={(e) => setHourlyRate(e.target.value)}
+                    placeholder="0.00"
+                    className={inputCls} />
+                </div>
+              </div>
+
+              {/* IBAN */}
+              <div>
+                <label className="block text-sm font-medium text-[var(--color-text-main)] mb-1.5">IBAN</label>
+                <input value={iban} onChange={(e) => setIban(e.target.value)}
+                  placeholder="PT50 0000 0000 0000 0000 0000 0"
+                  className={inputCls} />
+              </div>
+
+              {/* Datas de contrato */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-medium text-[var(--color-text-main)] mb-1.5">Início contrato</label>
+                  <input type="date" value={contractStart} onChange={(e) => setContractStart(e.target.value)}
+                    className={inputCls} />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-[var(--color-text-main)] mb-1.5">Fim contrato</label>
+                  <input type="date" value={contractEnd} onChange={(e) => setContractEnd(e.target.value)}
+                    className={inputCls} />
+                </div>
               </div>
 
               <div className="grid grid-cols-2 gap-4">

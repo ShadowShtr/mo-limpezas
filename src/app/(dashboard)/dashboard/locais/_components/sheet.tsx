@@ -13,6 +13,8 @@ type Local = {
   lat: number | null;
   lng: number | null;
   hourly_rate: number | null;
+  fixed_price: number | null;
+  pricing_type: "hourly" | "fixed";
   active: boolean;
   client_id: string;
   access_code: string | null;
@@ -61,7 +63,9 @@ export function LocalSheet({ trigger, companyId, clientes, local }: Props) {
   // Campos base
   const [name, setName]           = useState(local?.name ?? "");
   const [clientId, setClientId]   = useState(local?.client_id ?? (clientes[0]?.id ?? ""));
+  const [pricingType, setPricingType] = useState<"hourly" | "fixed">(local?.pricing_type ?? "hourly");
   const [hourlyRate, setHourlyRate] = useState(String(local?.hourly_rate ?? ""));
+  const [fixedPrice, setFixedPrice] = useState(String(local?.fixed_price ?? ""));
   const [accessCode, setAccessCode] = useState(local?.access_code ?? "");
   const [instructions, setInstructions] = useState(local?.instructions ?? "");
   const [active, setActive]       = useState(local?.active ?? true);
@@ -174,7 +178,9 @@ export function LocalSheet({ trigger, companyId, clientes, local }: Props) {
     const updateData = {
       name,
       address: composedAddress.trim(),
-      hourly_rate: hourlyRate ? parseFloat(hourlyRate) : null,
+      pricing_type: pricingType,
+      hourly_rate: pricingType === "hourly" ? (hourlyRate ? parseFloat(hourlyRate) : null) : null,
+      fixed_price: pricingType === "fixed" ? (fixedPrice ? parseFloat(fixedPrice) : null) : null,
       access_code: accessCode || null,
       instructions: instructions || null,
       lat: lat ? parseFloat(lat) : null,
@@ -363,18 +369,64 @@ export function LocalSheet({ trigger, companyId, clientes, local }: Props) {
                 </p>
               )}
 
-              {/* €/hora + Código de acesso */}
+              {/* Tipo de cobrança */}
+              <div>
+                <label className="block text-sm font-medium text-[var(--color-text-main)] mb-1.5">Tipo de cobrança</label>
+                <div className="flex rounded-lg border border-[var(--color-border)] overflow-hidden">
+                  <button
+                    type="button"
+                    onClick={() => setPricingType("hourly")}
+                    className={`flex-1 py-2 text-sm font-medium transition-colors ${
+                      pricingType === "hourly"
+                        ? "bg-[var(--color-primary)] text-white"
+                        : "text-[var(--color-text-sub)] hover:bg-[var(--color-background)]"
+                    }`}
+                  >
+                    Por hora
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPricingType("fixed")}
+                    className={`flex-1 py-2 text-sm font-medium transition-colors border-l border-[var(--color-border)] ${
+                      pricingType === "fixed"
+                        ? "bg-[var(--color-primary)] text-white"
+                        : "text-[var(--color-text-sub)] hover:bg-[var(--color-background)]"
+                    }`}
+                  >
+                    Preço fixo/mês
+                  </button>
+                </div>
+              </div>
+
+              {/* Valor + Código de acesso */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-sm font-medium text-[var(--color-text-main)] mb-1.5">€/hora</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    value={hourlyRate}
-                    onChange={(e) => setHourlyRate(e.target.value)}
-                    className={INPUT_CLS}
-                  />
+                  {pricingType === "hourly" ? (
+                    <>
+                      <label className="block text-sm font-medium text-[var(--color-text-main)] mb-1.5">€/hora</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        value={hourlyRate}
+                        onChange={(e) => setHourlyRate(e.target.value)}
+                        className={INPUT_CLS}
+                      />
+                    </>
+                  ) : (
+                    <>
+                      <label className="block text-sm font-medium text-[var(--color-text-main)] mb-1.5">€/mês (fixo)</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        value={fixedPrice}
+                        onChange={(e) => setFixedPrice(e.target.value)}
+                        placeholder="ex: 350.00"
+                        className={INPUT_CLS}
+                      />
+                    </>
+                  )}
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-[var(--color-text-main)] mb-1.5">Cód. acesso</label>
