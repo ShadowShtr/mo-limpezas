@@ -47,11 +47,67 @@ Lê este ficheiro no início de CADA sessão antes de fazer qualquer coisa.
 
 ## ⚡ PRÓXIMA TASK A EXECUTAR
 
-**Próxima task:** Implementar funcionalidade de **Cancelamentos** (razões, notificações, workflow).
+**Próxima task:** Testar emails com clientes reais (emails reais nos registos) + verificar domínio `molimpezas.pt` quando DNS propagar.
 
 ---
 
-## 📍 PONTO DE PARAGEM — 2026-06-08
+## 📍 PONTO DE PARAGEM — 2026-06-08 (sessão 2)
+
+**Última sessão completou — Correções de produção + Cancelamentos + Notificações**
+
+### Migrations aplicadas via Supabase Management API (✅ FEITAS)
+- **018** — RLS recursion fix: `get_service_company_id()` SECURITY DEFINER + políticas corretas
+- **019** — Colunas de cancelamento em `services`: `cancel_type`, `cancel_reason`, `cancelled_at`, `cancelled_by`, `is_late_cancel`
+- **020** — View `services_full` recriada com `client_phone` e `client_email`
+- Migrations 011, 012, 013, 016 — **PENDENTES** (ainda não aplicadas)
+
+### Funcionalidade de Cancelamentos (✅ IMPLEMENTADA)
+- `src/app/actions/cancellations.ts` — server action `cancelService()`: detecta cancelamento tardio (<24h), actualiza status + campos cancel_*, notifica equipa via push
+- `src/lib/cancel-types.ts` — **NOVO** ficheiro separado com `CancelType` e `CANCEL_TYPE_LABELS` (fora de "use server" — Next.js 15 não permite exportar objetos de ficheiros "use server")
+- Painel de cancelamento no `service-detail-sheet.tsx`: pills de motivo, textarea livre, toggle notificar equipa, botão wa.me para avisar cliente
+
+### Bug Crítico Corrigido — "use server" exportando objeto
+- **Erro:** `Error: A "use server" file can only export async functions, found object`
+- **Causa:** `cancellations.ts` exportava `CANCEL_TYPE_LABELS` (objeto) de ficheiro com `"use server"` — bloqueava TODAS as notificações no calendário
+- **Fix:** Movido para `src/lib/cancel-types.ts` sem diretiva "use server"
+
+### Painel de Notificações no Calendário (✅ IMPLEMENTADO)
+- 3 tabs: **WhatsApp** (wa.me link) | **Email** (Resend) | **Equipa** (push)
+- WhatsApp: link `wa.me` com mensagem pré-preenchida — abre app do utilizador
+- Email: `sendBulkClientNotifications` via Resend
+- Equipa: `notifyTeam` via Web Push VAPID
+
+### Server Actions — Padrão Global Try/Catch (✅ IMPLEMENTADO)
+- Todas as server actions agora têm wrapper: função pública chama função privada `_fn` em try/catch
+- Nunca lançam exceção → cliente recebe sempre `{ ok: false, error: "msg real" }` em vez do erro genérico do Next.js
+- Afectou: `notifyTeam`, `sendBulkClientNotifications`, `cancelService`
+
+### Locais — Sheet Reescrita (✅ IMPLEMENTADA)
+- Autocomplete de morada via Nominatim (OSM) com debounce 420ms
+- Campos estruturados: rua, número, complemento, código postal, cidade
+- Lat/lng calculados automaticamente (removidos campos manuais)
+- Fecha automaticamente após guardar + `router.refresh()`
+- Guard `if (loading) return` para evitar duplo submit
+
+### Emails — Diagnóstico e Fix Temporário
+- **Problema:** Domínio `molimpezas.pt` adicionado ao Resend mas DNS records NUNCA foram adicionados ao registar do domínio → STATUS: Failed
+- **Erro API:** `403 The molimpezas.pt domain is not verified`
+- **Fix temporário aplicado:** `RESEND_FROM_EMAIL` no Vercel alterado para `Mo Limpezas <onboarding@resend.dev>` — emails funcionam agora mas remetente aparece como `onboarding@resend.dev`
+- **Para corrigir permanentemente:** Adicionar os registos DNS do Resend no registar do domínio `molimpezas.pt` → clicar Restart no Resend → atualizar `RESEND_FROM_EMAIL` de volta para `Mo Limpezas <noreply@molimpezas.pt>`
+
+### Vercel e Supabase CLI configurados localmente
+- `vercel` CLI instalado globalmente + login com conta `shadowshtr`
+- `npx supabase` CLI + login com token `sbp_b78fd974755706008439101acdcc53b64875000f` (expira 30 dias — ~2026-07-08)
+- Todos os env vars confirmados no Vercel: SUPABASE keys, RESEND, VAPID, MAPBOX, CRON_SECRET, COMPANY_PHONE
+
+### WhatsApp
+- Decisão: manter **wa.me** (gratuito, 1 clique manual) — sem API externa
+- `src/app/actions/whatsapp.ts` existe com implementação Meta Cloud API (gratuita até 1000 msg/mês) — **não activa**, para uso futuro se necessário
+- Botão WhatsApp no cancelamento e no painel de notificações → abre wa.me com mensagem pré-preenchida
+
+---
+
+## 📍 PONTO DE PARAGEM — 2026-06-08 (sessão 1)
 
 **Última sessão completou — Correções críticas de produção:**
 
@@ -68,10 +124,12 @@ Lê este ficheiro no início de CADA sessão antes de fazer qualquer coisa.
 ### RLS recursão infinita em services
 - **Bug:** Migration 014 criou novas políticas mas não apagou as originais de 006 (nomes diferentes → `DROP IF EXISTS` nunca as encontrou)
 - **Ciclo:** `services` → política "collaborators see own services" → consulta `service_reinforcements` → política "company reinforcements" → consulta `services` → **loop**
-- **Fix:** `supabase/migrations/018_fix_services_rls_recursion.sql` — apaga as 3 políticas antigas; cria função `get_service_company_id()` com `SECURITY DEFINER` para quebrar o ciclo; recria políticas `reinforcements_select` e `reinforcements_manage` sem referenciar `services` directamente
+- **Fix:** `supabase/migrations/018_fix_services_rls_recursion.sql`
 
-**Migrations a aplicar no Supabase (novas nesta sessão):**
-- `supabase/migrations/018_fix_services_rls_recursion.sql` ← **CRÍTICA: corrige erro "infinite recursion detected in policy for relation 'services'"**
+**Migrations ✅ APLICADAS (via Management API nesta sessão):**
+- 018 — RLS recursion fix
+- 019 — Campos cancelamento
+- 020 — services_full com client_phone/email
 
 ---
 

@@ -5,17 +5,8 @@ import { createClient } from "@/lib/supabase/server";
 
 export interface WhatsAppResult {
   ok: boolean;
-  sid?: string;
+  messageId?: string;
   error?: string;
-}
-
-function getTwilio() {
-  const sid   = process.env.TWILIO_ACCOUNT_SID;
-  const token = process.env.TWILIO_AUTH_TOKEN;
-  if (!sid || !token) throw new Error("TWILIO_ACCOUNT_SID ou TWILIO_AUTH_TOKEN não configurados no Vercel.");
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const twilio = require("twilio");
-  return twilio(sid, token);
 }
 
 export async function sendWhatsAppToClient(
@@ -39,21 +30,42 @@ export async function sendWhatsAppToClient(
       return { ok: false, error: "Sem permissão." };
     }
 
-    const from = process.env.TWILIO_WHATSAPP_FROM;
-    if (!from) return { ok: false, error: "TWILIO_WHATSAPP_FROM não configurado." };
+    const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID;
+    const accessToken   = process.env.WHATSAPP_ACCESS_TOKEN;
 
-    // Normalizar número: garantir formato +351XXXXXXXXX
+    if (!phoneNumberId || !accessToken) {
+      return { ok: false, error: "WHATSAPP_NOT_CONFIGURED" };
+    }
+
     const normalized = normalizePhone(to);
     if (!normalized) return { ok: false, error: `Número inválido: ${to}` };
 
-    const client = getTwilio();
-    const msg = await client.messages.create({
-      from: `whatsapp:${from}`,
-      to:   `whatsapp:${normalized}`,
-      body: message,
-    });
+    const res = await fetch(
+      `https://graph.facebook.com/v20.0/${phoneNumberId}/messages`,
+      {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${accessToken}`,
+          "Content-Type":  "application/json",
+        },
+        body: JSON.stringify({
+          messaging_product: "whatsapp",
+          to: normalized,
+          type: "text",
+          text: { body: message },
+        }),
+      },
+    );
 
-    return { ok: true, sid: msg.sid };
+    const json = await res.json() as { messages?: { id: string }[]; error?: { message: string } };
+
+    if (!res.ok || json.error) {
+      const msg = json.error?.message ?? `HTTP ${res.status}`;
+      console.error("[sendWhatsAppToClient] Meta API error:", msg);
+      return { ok: false, error: msg };
+    }
+
+    return { ok: true, messageId: json.messages?.[0]?.id };
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Erro desconhecido";
     console.error("[sendWhatsAppToClient]", err);
@@ -63,10 +75,9 @@ export async function sendWhatsAppToClient(
 
 function normalizePhone(raw: string): string | null {
   const digits = raw.replace(/\D/g, "");
-  if (digits.length === 9 && digits.startsWith("9")) return `+351${digits}`;
-  if (digits.length === 12 && digits.startsWith("351")) return `+${digits}`;
-  if (digits.length === 13 && digits.startsWith("351")) return `+${digits.slice(1)}`;
-  if (digits.startsWith("00")) return `+${digits.slice(2)}`;
-  if (digits.startsWith("+")) return digits;
-  return digits.length >= 8 ? `+${digits}` : null;
+  if (digits.length === 9 && digits.startsWith("9")) return `351${digits}`;
+  if (digits.length === 12 && digits.startsWith("351")) return digits;
+  if (digits.startsWith("00")) return digits.slice(2);
+  if (digits.startsWith("+")) return digits.slice(1);
+  return digits.length >= 8 ? digits : null;
 }
