@@ -235,16 +235,16 @@ export function TasksClient({ initialTasks, companyId, members }: Props) {
         {COLUMNS.map(({ status, label, color }) => {
           const col = tasks.filter((t) => t.status === status);
           return (
-            <div key={status} className="space-y-3">
-              <div className={`flex items-center gap-2 px-4 py-2.5 bg-white rounded-xl border-l-4 ${color} border border-[var(--color-border)]`}>
+            <div key={status} className="flex flex-col bg-[var(--color-background)] rounded-xl border border-[var(--color-border)] overflow-hidden min-h-[300px]">
+              <div className={`flex items-center gap-2 px-4 py-3 bg-white border-b border-[var(--color-border)] border-l-4 ${color}`}>
                 <span className="text-sm font-semibold text-[var(--color-text-main)]">{label}</span>
-                <span className="ml-auto text-xs bg-[var(--color-background)] text-[var(--color-text-muted)] px-2 py-0.5 rounded-full">
+                <span className="ml-auto text-xs bg-[var(--color-background)] text-[var(--color-text-muted)] px-2 py-0.5 rounded-full font-medium min-w-[20px] text-center">
                   {col.length}
                 </span>
               </div>
-              <div className="space-y-2">
+              <div className="flex-1 p-3 space-y-2">
                 {col.length === 0 ? (
-                  <div className="flex items-center justify-center py-8 rounded-xl border-2 border-dashed border-[var(--color-border)]">
+                  <div className="flex items-center justify-center py-10 rounded-lg border-2 border-dashed border-[var(--color-border)]">
                     <p className="text-xs text-[var(--color-text-muted)]">Sem tarefas</p>
                   </div>
                 ) : (

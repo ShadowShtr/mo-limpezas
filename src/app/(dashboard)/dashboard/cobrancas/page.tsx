@@ -1,7 +1,7 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { Header } from "@/components/layout/header";
-import { getInvoices } from "@/app/actions/invoices";
+import { getInvoices, getUnbilledServices } from "@/app/actions/invoices";
 import { InvoicesClient } from "./_components/invoices-client";
 
 export const metadata = { title: "Cobranças — Escala" };
@@ -30,8 +30,12 @@ export default async function CobrancastPage({
   const mesParam = params.mes ?? `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
   const [year, month] = mesParam.split("-").map(Number);
 
-  const result  = await getInvoices(companyId, year, month);
-  const invoices = result.ok ? result.invoices : [];
+  const [result, unbilledResult] = await Promise.all([
+    getInvoices(companyId, year, month),
+    getUnbilledServices(companyId),
+  ]);
+  const invoices        = result.ok ? result.invoices : [];
+  const unbilledServices = unbilledResult.ok ? unbilledResult.services : [];
 
   const mesLabel = new Date(year, month - 1).toLocaleDateString("pt-PT", {
     month: "long",
@@ -47,6 +51,7 @@ export default async function CobrancastPage({
       <div className="p-6 max-w-[1400px]">
         <InvoicesClient
           initialInvoices={invoices}
+          unbilledServices={unbilledServices}
           companyId={companyId}
           mesParam={mesParam}
           year={year}

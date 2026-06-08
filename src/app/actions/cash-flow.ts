@@ -114,14 +114,24 @@ export async function deleteCashFlowEntry(id: string): Promise<{ ok: boolean; er
   return { ok: true };
 }
 
+export interface PendingExpense {
+  id: string;
+  description: string;
+  amount: number;
+  category: string;
+  date: string;
+  notes: string | null;
+}
+
 export async function getAccountsData(companyId: string): Promise<{
   ok: true;
   toReceive: { id: string; invoice_number: string; client_name: string; total: number; due_date: string | null; status: string }[];
   toPay: { id: string; collaborator_name: string; net_salary: number; period: string; status: string }[];
+  expenses: PendingExpense[];
 } | { ok: false; error: string }> {
   const admin = createAdminClient();
 
-  const [invoicesRes, payrollRes] = await Promise.all([
+  const [invoicesRes, payrollRes, expensesRes] = await Promise.all([
     admin
       .from("invoices")
       .select("id, invoice_number, client_id, total, due_date, status, clients(name)")
@@ -130,11 +140,19 @@ export async function getAccountsData(companyId: string): Promise<{
       .order("due_date", { ascending: true }),
     admin
       .from("payroll_records")
-      .select("id, collaborator_id, net_salary, period_year, period_month, status, profiles(full_name)")
+      .select("id, collaborator_id, net_salary, period_year, period_month, status, profiles!collaborator_id(full_name)")
       .eq("company_id", companyId)
       .eq("status", "aprovado")
       .order("period_year", { ascending: false })
       .order("period_month", { ascending: false }),
+    admin
+      .from("cash_flow_entries")
+      .select("id, description, amount, category, date, notes")
+      .eq("company_id", companyId)
+      .eq("type", "saida")
+      .eq("status", "pendente")
+      .is("reference_type", null)
+      .order("date", { ascending: true }),
   ]);
 
   if (invoicesRes.error) return { ok: false, error: invoicesRes.error.message };
@@ -159,5 +177,14 @@ export async function getAccountsData(companyId: string): Promise<{
     status: r.status,
   }));
 
-  return { ok: true, toReceive, toPay };
+  const expenses: PendingExpense[] = (expensesRes.data ?? []).map((r) => ({
+    id: r.id,
+    description: r.description,
+    amount: r.amount,
+    category: r.category ?? "outro",
+    date: r.date,
+    notes: r.notes ?? null,
+  }));
+
+  return { ok: true, toReceive, toPay, expenses };
 }

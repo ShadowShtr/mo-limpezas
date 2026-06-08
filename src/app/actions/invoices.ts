@@ -374,3 +374,61 @@ export async function deleteInvoice(
   revalidatePath("/dashboard/cobrancas");
   return { ok: true };
 }
+
+// ─── Serviços concluídos sem fatura ──────────────────────────────────────────
+
+export interface UnbilledService {
+  id: string;
+  reference_number: string;
+  client_name: string;
+  location_name: string;
+  scheduled_start: string;
+  actual_end: string | null;
+  value: number;
+}
+
+export async function getUnbilledServices(
+  companyId: string,
+): Promise<{ ok: true; services: UnbilledService[] } | { ok: false; error: string }> {
+  const admin = createAdminClient();
+
+  // Serviços concluídos dos últimos 60 dias
+  const since = new Date();
+  since.setDate(since.getDate() - 60);
+  const sinceStr = since.toISOString().split("T")[0];
+
+  const { data: services, error: sErr } = await admin
+    .from("services")
+    .select("id, reference_number, scheduled_start, actual_end, calculated_value, manual_value, locations(name, client_id, clients(name))")
+    .eq("company_id", companyId)
+    .eq("status", "concluido")
+    .gte("scheduled_start", `${sinceStr}T00:00:00`)
+    .order("scheduled_start", { ascending: false });
+
+  if (sErr) return { ok: false, error: sErr.message };
+  if (!services?.length) return { ok: true, services: [] };
+
+  // IDs de serviços que já têm invoice_item
+  const serviceIds = services.map((s) => s.id);
+  const { data: billed } = await admin
+    .from("invoice_items")
+    .select("service_id")
+    .in("service_id", serviceIds);
+
+  const billedIds = new Set((billed ?? []).map((b) => b.service_id));
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const unbilled: UnbilledService[] = (services as any[])
+    .filter((s) => !billedIds.has(s.id))
+    .map((s) => ({
+      id:               s.id,
+      reference_number: s.reference_number ?? `#${s.id.slice(0, 6)}`,
+      client_name:      s.locations?.clients?.name ?? "—",
+      location_name:    s.locations?.name ?? "—",
+      scheduled_start:  s.scheduled_start,
+      actual_end:       s.actual_end ?? null,
+      value:            s.manual_value ?? s.calculated_value ?? 0,
+    }));
+
+  return { ok: true, services: unbilled };
+}

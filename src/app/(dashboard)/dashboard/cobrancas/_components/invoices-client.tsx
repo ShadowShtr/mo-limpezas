@@ -3,13 +3,14 @@
 import { useState, useTransition } from "react";
 import {
   Receipt, RefreshCw, Loader2, AlertCircle,
-  Eye, Trash2, Download, FileSpreadsheet, X,
+  Eye, Trash2, Download, FileSpreadsheet, X, Clock,
 } from "lucide-react";
 import {
   generateInvoices,
   updateInvoiceStatus,
   deleteInvoice,
   type Invoice,
+  type UnbilledService,
 } from "@/app/actions/invoices";
 import { InvoiceDetailSheet } from "./invoice-detail-sheet";
 
@@ -41,6 +42,7 @@ const STATUS_COLOR: Record<Invoice["status"], string> = {
 
 interface Props {
   initialInvoices: Invoice[];
+  unbilledServices: UnbilledService[];
   companyId: string;
   mesParam: string;
   year: number;
@@ -50,7 +52,7 @@ interface Props {
 
 // ─── Componente ───────────────────────────────────────────────────────────────
 
-export function InvoicesClient({ initialInvoices, companyId, mesParam, year, month, mesLabel }: Props) {
+export function InvoicesClient({ initialInvoices, unbilledServices, companyId, mesParam, year, month, mesLabel }: Props) {
   const [invoices, setInvoices] = useState<Invoice[]>(initialInvoices);
   const [viewing,  setViewing]  = useState<Invoice | null>(null);
   const [error,    setError]    = useState<string | null>(null);
@@ -256,6 +258,11 @@ export function InvoicesClient({ initialInvoices, companyId, mesParam, year, mon
           >
             {isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
             Gerar cobranças
+            {unbilledServices.length > 0 && (
+              <span className="ml-0.5 px-1.5 py-0.5 rounded-full bg-amber-500 text-white text-xs font-bold leading-none">
+                {unbilledServices.length}
+              </span>
+            )}
           </button>
 
           {invoices.length > 0 && (
@@ -274,6 +281,40 @@ export function InvoicesClient({ initialInvoices, companyId, mesParam, year, mon
           <div className="flex items-center gap-2 p-3 rounded-lg bg-red-50 border border-red-200 text-sm text-red-700">
             <AlertCircle className="w-4 h-4 shrink-0" />
             {error}
+          </div>
+        )}
+
+        {/* Serviços por faturar */}
+        {unbilledServices.length > 0 && (
+          <div className="rounded-xl border border-amber-200 bg-amber-50 overflow-hidden">
+            <div className="flex items-center gap-2 px-5 py-3.5 border-b border-amber-200">
+              <Clock className="w-4 h-4 text-amber-600" />
+              <h3 className="text-sm font-semibold text-amber-800">
+                {unbilledServices.length} serviço{unbilledServices.length !== 1 ? "s" : ""} por faturar
+              </h3>
+              <span className="ml-auto text-xs text-amber-700">Clica em <strong>Gerar cobranças</strong> para criar faturas</span>
+            </div>
+            <div className="divide-y divide-amber-100">
+              {unbilledServices.map((s) => (
+                <div key={s.id} className="flex items-center gap-4 px-5 py-3 hover:bg-amber-100/50 transition-colors">
+                  <div className="w-16 shrink-0">
+                    <span className="text-xs font-mono font-medium text-amber-700">{s.reference_number}</span>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-[var(--color-text-main)] truncate">{s.client_name}</p>
+                    <p className="text-xs text-[var(--color-text-muted)] truncate">{s.location_name}</p>
+                  </div>
+                  <div className="shrink-0 text-right">
+                    <p className="text-xs text-[var(--color-text-muted)]">
+                      {new Date(s.scheduled_start).toLocaleDateString("pt-PT")}
+                    </p>
+                    {s.value > 0 && (
+                      <p className="text-sm font-semibold text-amber-700">{fmtEur(s.value)}</p>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         )}
 

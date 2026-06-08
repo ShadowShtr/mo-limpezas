@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { X, Loader2, AlertCircle } from "lucide-react";
+import { X, Loader2, AlertCircle, Clock, Euro } from "lucide-react";
 import { adjustPayrollRecord, type PayrollRecord } from "@/app/actions/payroll";
 
 interface Props {
@@ -14,37 +14,90 @@ function fmtEur(v: number) {
   return v.toLocaleString("pt-PT", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " €";
 }
 
+function SectionLabel({ icon, label }: { icon: React.ReactNode; label: string }) {
+  return (
+    <div className="flex items-center gap-2 pt-1">
+      <div className="w-5 h-5 text-[var(--color-text-muted)]">{icon}</div>
+      <p className="text-xs font-semibold uppercase tracking-wide text-[var(--color-text-muted)]">{label}</p>
+    </div>
+  );
+}
+
+function SummaryLine({ label, value, danger }: { label: string; value: string; danger?: boolean }) {
+  return (
+    <div>
+      <p className="text-xs text-[var(--color-text-muted)]">{label}</p>
+      <p className={`font-medium text-sm ${danger ? "text-red-600" : "text-[var(--color-text-main)]"}`}>{value}</p>
+    </div>
+  );
+}
+
+const inputCls =
+  "w-full px-3 py-2 rounded-lg border border-[var(--color-border)] text-sm text-[var(--color-text-main)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] focus:border-transparent";
+
 export function PayrollEditSheet({ record, onClose, onSaved }: Props) {
+  // Campos de horas
+  const [workedHours,   setWorkedHours]   = useState(record.worked_hours.toString());
+  const [overtimeHours, setOvertimeHours] = useState(record.overtime_hours.toString());
+  const [absenceHours,  setAbsenceHours]  = useState(record.absence_hours.toString());
+  const [daysWorked,    setDaysWorked]    = useState(record.days_worked.toString());
+  // Desconto por falta (€)
+  const [absenceDed,    setAbsenceDed]    = useState(record.absence_deductions.toString());
+  // Ajustes manuais
   const [otherAdd, setOtherAdd] = useState(record.other_additions.toString());
   const [otherDed, setOtherDed] = useState(record.other_deductions.toString());
   const [notes,    setNotes]    = useState(record.notes ?? "");
-  const [saving,   setSaving]   = useState(false);
-  const [error,    setError]    = useState<string | null>(null);
 
-  const addVal = parseFloat(otherAdd) || 0;
-  const dedVal = parseFloat(otherDed) || 0;
+  const [saving, setSaving] = useState(false);
+  const [error,  setError]  = useState<string | null>(null);
 
-  const previewNet = Math.round(
-    (record.gross_salary + record.meal_allowance + record.overtime_bonus
-      + addVal - record.absence_deductions - dedVal) * 100,
+  // Cálculo do preview em tempo real
+  const workedHoursVal   = parseFloat(workedHours)   || 0;
+  const overtimeHoursVal = parseFloat(overtimeHours) || 0;
+  const daysWorkedVal    = parseInt(daysWorked)       || 0;
+  const absenceDedVal    = parseFloat(absenceDed)    || 0;
+  const addVal           = parseFloat(otherAdd)       || 0;
+  const dedVal           = parseFloat(otherDed)       || 0;
+
+  const grossPreview    = Math.round(workedHoursVal * record.hourly_rate * 100) / 100;
+  const mealPerDay      = record.days_worked > 0 ? record.meal_allowance / record.days_worked : 0;
+  const mealPreview     = Math.round(daysWorkedVal * mealPerDay * 100) / 100;
+  const otBonusPreview  = Math.round(overtimeHoursVal * record.hourly_rate * 0.25 * 100) / 100;
+  const previewNet      = Math.round(
+    (grossPreview + mealPreview + otBonusPreview + addVal - absenceDedVal - dedVal) * 100,
   ) / 100;
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setSaving(true);
     setError(null);
+
     const res = await adjustPayrollRecord(record.id, {
-      other_additions:  addVal,
-      other_deductions: dedVal,
-      notes:            notes || undefined,
+      worked_hours:        workedHoursVal,
+      overtime_hours:      overtimeHoursVal,
+      absence_hours:       parseFloat(absenceHours) || 0,
+      days_worked:         daysWorkedVal,
+      absence_deductions:  absenceDedVal,
+      other_additions:     addVal,
+      other_deductions:    dedVal,
+      notes:               notes || undefined,
     });
+
     if (res.ok) {
       onSaved({
         ...record,
-        other_additions:  addVal,
-        other_deductions: dedVal,
-        net_salary:       previewNet,
-        notes:            notes || null,
+        worked_hours:        workedHoursVal,
+        overtime_hours:      overtimeHoursVal,
+        absence_hours:       parseFloat(absenceHours) || 0,
+        days_worked:         daysWorkedVal,
+        gross_salary:        grossPreview,
+        meal_allowance:      mealPreview,
+        overtime_bonus:      otBonusPreview,
+        absence_deductions:  absenceDedVal,
+        other_additions:     addVal,
+        other_deductions:    dedVal,
+        net_salary:          previewNet,
+        notes:               notes || null,
       });
     } else {
       setError(res.error ?? "Erro ao guardar.");
@@ -70,21 +123,104 @@ export function PayrollEditSheet({ record, onClose, onSaved }: Props) {
           </button>
         </div>
 
-        {/* Resumo atual */}
+        {/* Resumo calculado do registo original */}
         <div className="px-6 py-4 bg-[var(--color-background)] border-b border-[var(--color-border)]">
-          <div className="grid grid-cols-2 gap-3 text-sm">
+          <p className="text-xs font-medium text-[var(--color-text-muted)] mb-2">Valores atuais (antes de guardar)</p>
+          <div className="grid grid-cols-2 gap-3">
             <SummaryLine label="Salário bruto"    value={fmtEur(record.gross_salary)} />
             <SummaryLine label="Sub. alimentação" value={fmtEur(record.meal_allowance)} />
-            <SummaryLine label="Horas extra"      value={fmtEur(record.overtime_bonus)} />
+            <SummaryLine label="Bónus horas extra" value={fmtEur(record.overtime_bonus)} />
             <SummaryLine label="Desc. faltas"     value={fmtEur(record.absence_deductions)} danger />
           </div>
         </div>
 
         {/* Formulário */}
         <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-5">
+
+          {/* Secção: Correções de Horas */}
+          <SectionLabel icon={<Clock className="w-4 h-4" />} label="Correções de Horas" />
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-medium text-[var(--color-text-sub)] mb-1.5">
+                Horas trabalhadas
+              </label>
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={workedHours}
+                onChange={(e) => setWorkedHours(e.target.value)}
+                className={inputCls}
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-[var(--color-text-sub)] mb-1.5">
+                Horas extra
+              </label>
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={overtimeHours}
+                onChange={(e) => setOvertimeHours(e.target.value)}
+                className={inputCls}
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-medium text-[var(--color-text-sub)] mb-1.5">
+                Dias trabalhados
+                <span className="text-[var(--color-text-muted)] font-normal ml-1">— afeta sub. alim.</span>
+              </label>
+              <input
+                type="number"
+                min="0"
+                step="1"
+                value={daysWorked}
+                onChange={(e) => setDaysWorked(e.target.value)}
+                className={inputCls}
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-[var(--color-text-sub)] mb-1.5">
+                Horas de falta
+              </label>
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={absenceHours}
+                onChange={(e) => setAbsenceHours(e.target.value)}
+                className={inputCls}
+              />
+            </div>
+          </div>
+
           <div>
             <label className="block text-xs font-medium text-[var(--color-text-sub)] mb-1.5">
-              Acréscimos manuais (€)
+              Descontos por falta (€)
+            </label>
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              value={absenceDed}
+              onChange={(e) => setAbsenceDed(e.target.value)}
+              className={inputCls}
+            />
+          </div>
+
+          <div className="border-t border-[var(--color-border)]" />
+
+          {/* Secção: Ajustes Manuais */}
+          <SectionLabel icon={<Euro className="w-4 h-4" />} label="Ajustes Manuais" />
+
+          <div>
+            <label className="block text-xs font-medium text-[var(--color-text-sub)] mb-1.5">
+              Acréscimos (€)
               <span className="text-[var(--color-text-muted)] font-normal ml-1">— subsídio, prémio, etc.</span>
             </label>
             <input
@@ -93,13 +229,13 @@ export function PayrollEditSheet({ record, onClose, onSaved }: Props) {
               step="0.01"
               value={otherAdd}
               onChange={(e) => setOtherAdd(e.target.value)}
-              className="w-full px-3 py-2 rounded-lg border border-[var(--color-border)] text-sm text-[var(--color-text-main)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] focus:border-transparent"
+              className={inputCls}
             />
           </div>
 
           <div>
             <label className="block text-xs font-medium text-[var(--color-text-sub)] mb-1.5">
-              Descontos manuais (€)
+              Descontos (€)
               <span className="text-[var(--color-text-muted)] font-normal ml-1">— adiantamento, etc.</span>
             </label>
             <input
@@ -108,7 +244,7 @@ export function PayrollEditSheet({ record, onClose, onSaved }: Props) {
               step="0.01"
               value={otherDed}
               onChange={(e) => setOtherDed(e.target.value)}
-              className="w-full px-3 py-2 rounded-lg border border-[var(--color-border)] text-sm text-[var(--color-text-main)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] focus:border-transparent"
+              className={inputCls}
             />
           </div>
 
@@ -119,16 +255,23 @@ export function PayrollEditSheet({ record, onClose, onSaved }: Props) {
               onChange={(e) => setNotes(e.target.value)}
               rows={3}
               placeholder="Observações para este mês..."
-              className="w-full px-3 py-2 rounded-lg border border-[var(--color-border)] text-sm text-[var(--color-text-main)] resize-none focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] focus:border-transparent"
+              className={inputCls + " resize-none"}
             />
           </div>
 
           {/* Preview líquido */}
-          <div className="p-4 rounded-xl bg-[var(--color-primary-light)] border border-[var(--color-primary)] border-opacity-30">
+          <div className="p-4 rounded-xl bg-[var(--color-primary-light)] border border-[var(--color-primary-muted)]">
             <p className="text-xs text-[var(--color-text-muted)] mb-1">Total líquido (pré-visualização)</p>
-            <p className="text-2xl font-bold text-[var(--color-primary)]">{fmtEur(previewNet)}</p>
-            <p className="text-xs text-[var(--color-text-muted)] mt-0.5">
-              {fmtEur(record.gross_salary)} + {fmtEur(record.meal_allowance)} + {fmtEur(record.overtime_bonus)} + {fmtEur(addVal)} − {fmtEur(record.absence_deductions)} − {fmtEur(dedVal)}
+            <p className={`text-2xl font-bold ${previewNet >= 0 ? "text-[var(--color-primary)]" : "text-red-600"}`}>
+              {fmtEur(previewNet)}
+            </p>
+            <p className="text-xs text-[var(--color-text-muted)] mt-1.5 leading-relaxed">
+              {fmtEur(grossPreview)} bruto
+              {" + "}{fmtEur(mealPreview)} alim.
+              {" + "}{fmtEur(otBonusPreview)} extra
+              {" + "}{fmtEur(addVal)} acrésc.
+              {" − "}{fmtEur(absenceDedVal)} faltas
+              {" − "}{fmtEur(dedVal)} desc.
             </p>
           </div>
 
@@ -159,14 +302,5 @@ export function PayrollEditSheet({ record, onClose, onSaved }: Props) {
         </div>
       </div>
     </>
-  );
-}
-
-function SummaryLine({ label, value, danger }: { label: string; value: string; danger?: boolean }) {
-  return (
-    <div>
-      <p className="text-xs text-[var(--color-text-muted)]">{label}</p>
-      <p className={`font-medium ${danger ? "text-red-600" : "text-[var(--color-text-main)]"}`}>{value}</p>
-    </div>
   );
 }

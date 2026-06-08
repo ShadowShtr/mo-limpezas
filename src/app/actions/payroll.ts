@@ -32,9 +32,14 @@ export interface PayrollRecord {
 }
 
 export interface PayrollAdjust {
-  other_additions?: number;
-  other_deductions?: number;
-  notes?: string;
+  other_additions?:    number;
+  other_deductions?:   number;
+  notes?:              string;
+  worked_hours?:       number;
+  overtime_hours?:     number;
+  absence_hours?:      number;
+  absence_deductions?: number;
+  days_worked?:        number;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -265,27 +270,64 @@ export async function adjustPayrollRecord(
   // Ler registo atual para recalcular net_salary
   const { data: rec, error: rErr } = await admin
     .from("payroll_records")
-    .select("gross_salary, meal_allowance, overtime_bonus, absence_deductions, other_additions, other_deductions")
+    .select("gross_salary, meal_allowance, overtime_bonus, absence_deductions, other_additions, other_deductions, worked_hours, overtime_hours, absence_hours, days_worked, hourly_rate")
     .eq("id", id)
     .single();
 
   if (rErr || !rec) return { ok: false, error: rErr?.message ?? "Registo não encontrado." };
 
-  const otherAdd = adjust.other_additions  ?? rec.other_additions  ?? 0;
-  const otherDed = adjust.other_deductions ?? rec.other_deductions ?? 0;
+  const workedHours    = adjust.worked_hours      ?? rec.worked_hours       ?? 0;
+  const overtimeHours  = adjust.overtime_hours    ?? rec.overtime_hours     ?? 0;
+  const absenceHours   = adjust.absence_hours     ?? rec.absence_hours      ?? 0;
+  const daysWorked     = adjust.days_worked       ?? rec.days_worked        ?? 0;
+  const hourlyRate     = rec.hourly_rate ?? 0;
+
+  // Recalcular valores derivados se algum campo de horas foi alterado
+  const hoursChanged = adjust.worked_hours !== undefined || adjust.overtime_hours !== undefined
+    || adjust.days_worked !== undefined || adjust.absence_hours !== undefined;
+
+  const grossSalary = hoursChanged
+    ? Math.round(workedHours * hourlyRate * 100) / 100
+    : (rec.gross_salary ?? 0);
+
+  // Subsídio de alimentação: proporcional ao número de dias (usando taxa por dia do registo)
+  const mealPerDay = rec.days_worked > 0
+    ? (rec.meal_allowance ?? 0) / rec.days_worked
+    : 0;
+  const mealAllowance = hoursChanged && adjust.days_worked !== undefined
+    ? Math.round(daysWorked * mealPerDay * 100) / 100
+    : (rec.meal_allowance ?? 0);
+
+  // Bónus horas extra: taxa de 25% sobre o valor/hora
+  const overtimeBonus = adjust.overtime_hours !== undefined
+    ? Math.round(overtimeHours * hourlyRate * 0.25 * 100) / 100
+    : (rec.overtime_bonus ?? 0);
+
+  const absenceDed = adjust.absence_deductions ?? rec.absence_deductions ?? 0;
+  const otherAdd   = adjust.other_additions    ?? rec.other_additions    ?? 0;
+  const otherDed   = adjust.other_deductions   ?? rec.other_deductions   ?? 0;
+
   const netSalary = Math.round(
-    ((rec.gross_salary ?? 0) + (rec.meal_allowance ?? 0) + (rec.overtime_bonus ?? 0)
-      + otherAdd - (rec.absence_deductions ?? 0) - otherDed) * 100,
+    (grossSalary + mealAllowance + overtimeBonus + otherAdd - absenceDed - otherDed) * 100,
   ) / 100;
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { error } = await admin
     .from("payroll_records")
     .update({
-      other_additions:  otherAdd,
-      other_deductions: otherDed,
-      notes:            adjust.notes !== undefined ? adjust.notes : undefined,
-      net_salary:       netSalary,
-    })
+      worked_hours:        workedHours,
+      overtime_hours:      overtimeHours,
+      absence_hours:       absenceHours,
+      days_worked:         daysWorked,
+      gross_salary:        grossSalary,
+      meal_allowance:      mealAllowance,
+      overtime_bonus:      overtimeBonus,
+      absence_deductions:  absenceDed,
+      other_additions:     otherAdd,
+      other_deductions:    otherDed,
+      net_salary:          netSalary,
+      notes:               adjust.notes !== undefined ? adjust.notes : undefined,
+    } as any)
     .eq("id", id);
 
   if (error) return { ok: false, error: error.message };

@@ -47,7 +47,63 @@ Lê este ficheiro no início de CADA sessão antes de fazer qualquer coisa.
 
 ## ⚡ PRÓXIMA TASK A EXECUTAR
 
-**Próxima task:** Testar emails com clientes reais (emails reais nos registos) + verificar domínio `molimpezas.pt` quando DNS propagar.
+**Próxima task:** Criar migration SQL para tabela `cash_flow_entries` no Supabase (está em falta — erro "Could not find the table 'public.cash_flow_entries' in the schema cache" no Fluxo de Caixa). Depois testar emails com clientes reais + verificar domínio `molimpezas.pt`.
+
+---
+
+## 📍 PONTO DE PARAGEM — 2026-06-09 (sessão 3)
+
+**Última sessão completou — Módulo Financeiro: Visual + Dados + Folha de Pagamento**
+
+### Kanban de Tarefas — Fix Visual (✅ FEITO)
+- **Problema:** Colunas sem container próprio, cards encostados às paredes, contagem transbordar
+- **Fix:** `src/app/(dashboard)/dashboard/tarefas/_components/tasks-client.tsx`
+  - Cada coluna agora tem `flex flex-col bg-[var(--color-background)] rounded-xl border ... min-h-[300px]`
+  - Header branco separado do body por `border-b`, com border-left colorida (âmbar/azul/verde)
+  - Body com `p-3` — cards respiram dentro da coluna
+  - Empty state com borda tracejada centrada
+
+### Contas a Pagar e a Receber — Fix + Expansão (✅ FEITO)
+- **Bug corrigido:** Query Supabase ambígua em `getAccountsData` (`payroll_records` tem FK `collaborator_id` E `approved_by` ambas para `profiles`). Fix: `.select("profiles!collaborator_id(full_name)")`
+- **Ficheiro:** `src/app/actions/cash-flow.ts`
+
+- **Novo: Secção de Despesas Pendentes**
+  - `getAccountsData` agora retorna também `expenses: PendingExpense[]` — saídas manuais `cash_flow_entries` com `status="pendente"` e `reference_type IS NULL`
+  - `src/app/(dashboard)/dashboard/financeiro/contas/_components/contas-client.tsx` reescrito:
+    - **3 KPI cards:** A Receber (verde) / A Pagar Salários (vermelho) / A Pagar Despesas (âmbar)
+    - **Tabela "Despesas Pendentes":** data, descrição, categoria, valor, botão "Pago" (→ `updateCashFlowEntry status=confirmado`) + eliminar
+    - **Sheet "Registar despesa":** campos descrição, valor, categoria (despesa/fornecedor/avaria), data, notas → `createCashFlowEntry(type="saida", status="pendente")`
+
+### Cobranças — Serviços Por Faturar (✅ FEITO)
+- **Nova função:** `getUnbilledServices(companyId)` em `src/app/actions/invoices.ts`
+  - Busca serviços `status=concluido` dos últimos 60 dias
+  - Cruza com `invoice_items.service_id` para excluir os já faturados
+  - Retorna: id, reference_number, client_name, location_name, scheduled_start, actual_end, value
+- **UI em Cobranças** (`src/app/(dashboard)/dashboard/cobrancas/_components/invoices-client.tsx`):
+  - Banner âmbar "N serviços por faturar" com lista de cliente/local/data/valor
+  - Botão "Gerar cobranças" tem contador âmbar com número de pendentes
+  - Ao clicar "Gerar cobranças" → `generateInvoices()` cria faturas para todos → banner desaparece
+
+### Folha de Pagamento — Totalmente Editável (✅ FEITO)
+- **Expandido `PayrollAdjust`** em `src/app/actions/payroll.ts`:
+  - Novos campos: `worked_hours`, `overtime_hours`, `absence_hours`, `absence_deductions`, `days_worked`
+  - `adjustPayrollRecord` recalcula `gross_salary`, `meal_allowance`, `overtime_bonus` e `net_salary` automaticamente
+- **Sheet reescrita** `src/app/(dashboard)/dashboard/folha-pagamento/_components/payroll-edit-sheet.tsx`:
+  - **Secção "Correções de Horas":** horas trabalhadas, horas extra, dias trabalhados, horas de falta, descontos por falta (€)
+  - **Secção "Ajustes Manuais":** acréscimos € + descontos €
+  - Preview do líquido **atualizado em tempo real** com fórmula visível
+
+### Fluxo de Caixa — Problema pendente (⚠️ NÃO RESOLVIDO)
+- **Erro:** "Could not find the table 'public.cash_flow_entries' in the schema cache"
+- **Causa:** Tabela `cash_flow_entries` está no ficheiro `supabase/migrations/20260608_new_features.sql` mas **nunca foi aplicada no Supabase remoto**
+- **Para resolver:** Aplicar a migration via Supabase Management API ou SQL Editor:
+  ```bash
+  # Ver o conteúdo da migration
+  cat supabase/migrations/20260608_new_features.sql
+  # Aplicar via CLI (se ligado ao projeto)
+  npx supabase db push
+  ```
+- O código `src/app/(dashboard)/dashboard/financeiro/fluxo-caixa/` está **correto** — basta criar a tabela
 
 ---
 

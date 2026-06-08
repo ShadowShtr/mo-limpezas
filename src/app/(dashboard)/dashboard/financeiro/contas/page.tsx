@@ -25,6 +25,8 @@ export default async function ContasPage() {
       <ContasClient
         toReceive={res.ok ? res.toReceive : []}
         toPay={res.ok ? res.toPay : []}
+        expenses={res.ok ? res.expenses : []}
+        companyId={profile.company_id}
         error={res.ok ? null : res.error}
       />
     </div>
