@@ -114,7 +114,7 @@ export interface CollaboratorInviteData {
 }
 
 export function collaboratorInviteTemplate(d: CollaboratorInviteData) {
-  const subject = "Convite — M� Limpezas | Mó Limpezas";
+  const subject = "Convite — Mó Limpezas | Mó Limpezas";
 
   const html = layout(`
     <p style="margin:0 0 8px;font-size:16px;font-weight:600;color:#111827;">
@@ -122,7 +122,7 @@ export function collaboratorInviteTemplate(d: CollaboratorInviteData) {
     </p>
     <p style="margin:0 0 24px;font-size:14px;color:#6b7280;line-height:1.6;">
       Bem-vinda à equipa <strong style="color:#111827;">Mó Limpezas</strong>!<br/>
-      Criámos um acesso à plataforma <strong>Escala</strong> para veres a tua escala,
+      Criámos um acesso à plataforma <strong>Mó Limpezas</strong> para veres a tua escala,
       registar ponto e gerir os teus serviços diretamente no telemóvel.
     </p>
 
