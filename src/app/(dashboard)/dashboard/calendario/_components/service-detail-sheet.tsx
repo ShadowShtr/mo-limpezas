@@ -9,7 +9,8 @@ import { format, parseISO } from "date-fns";
 import { pt } from "date-fns/locale";
 import { createClient } from "@/lib/supabase/client";
 import { notifyTeam } from "@/app/actions/notifications";
-import { cancelService, CANCEL_TYPE_LABELS, type CancelType } from "@/app/actions/cancellations";
+import { cancelService } from "@/app/actions/cancellations";
+import { CANCEL_TYPE_LABELS, type CancelType } from "@/lib/cancel-types";
 import { sendBulkClientNotifications } from "@/app/actions/email";
 import type { Database } from "@/types/database";
 
