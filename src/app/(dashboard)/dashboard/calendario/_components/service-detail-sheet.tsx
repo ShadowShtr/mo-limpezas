@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo } from "react";
 import {
   X, MapPin, Users, Clock, Euro, FileText, Loader2,
-  AlertTriangle, Ban, CalendarX, CheckCircle2, ChevronDown, Bell,
+  AlertTriangle, Ban, CalendarX, CheckCircle2, ChevronDown, Bell, MessageCircle,
 } from "lucide-react";
 import { format, parseISO } from "date-fns";
 import { pt } from "date-fns/locale";
@@ -68,6 +68,7 @@ export function ServiceDetailSheet({ service, onClose, onChanged }: Props) {
   const [cancelNotifyTeam, setCancelNotifyTeam] = useState(true);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (!service) { setTimesheets([]); return; }
     setTimesheets([]);
     setActionMsg(null);
@@ -105,6 +106,8 @@ export function ServiceDetailSheet({ service, onClose, onChanged }: Props) {
   const ss   = STATUS_STYLE[svc.status] ?? STATUS_STYLE.agendado;
   const value = svc.manual_value ?? svc.calculated_value;
   const canAct = svc.status !== "concluido";
+  // client_phone adicionado na migration 020 — cast até tipos serem regenerados
+  const clientPhone = (svc as ServiceFull & { client_phone?: string | null }).client_phone ?? null;
 
   // ─── Acções ──────────────────────────────────────────────────────────────
 
@@ -338,71 +341,102 @@ export function ServiceDetailSheet({ service, onClose, onChanged }: Props) {
 
           {/* Painel de cancelamento */}
           {showCancel && (
-            <div className="p-4 rounded-lg border border-red-200 bg-red-50 space-y-3">
-              <p className="text-sm font-semibold text-red-800">Cancelar serviço</p>
+            <div className="rounded-xl border border-red-200 bg-red-50 overflow-hidden">
+              <div className="px-4 py-3 border-b border-red-100">
+                <p className="text-sm font-semibold text-red-800 flex items-center gap-1.5">
+                  <Ban className="w-4 h-4" /> Cancelar serviço
+                </p>
+              </div>
 
-              {/* Aviso cancelamento tardio */}
-              {isLateCancelWarning && (
-                <div className="flex items-start gap-2 px-3 py-2 rounded-lg bg-amber-50 border border-amber-200 text-xs text-amber-800">
-                  <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
-                  <span>Cancelamento tardio — menos de 24h de antecedência. Ficará registado.</span>
-                </div>
-              )}
+              <div className="px-4 py-3 space-y-4">
+                {/* Aviso cancelamento tardio */}
+                {isLateCancelWarning && (
+                  <div className="flex items-start gap-2 px-3 py-2 rounded-lg bg-amber-50 border border-amber-200 text-xs text-amber-800">
+                    <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+                    <span>Cancelamento tardio — menos de 24h de antecedência. Ficará registado.</span>
+                  </div>
+                )}
 
-              <div>
-                <label className="block text-xs font-medium text-red-700 mb-1">Motivo *</label>
-                <div className="relative">
-                  <select
-                    value={cancelType}
-                    onChange={(e) => setCancelType(e.target.value as CancelType)}
-                    className={INPUT_CLS + " pr-8 appearance-none"}
-                  >
+                {/* Motivo — pills */}
+                <div>
+                  <p className="text-xs font-medium text-red-700 mb-2">Motivo *</p>
+                  <div className="grid grid-cols-2 gap-1.5">
                     {(Object.entries(CANCEL_TYPE_LABELS) as [CancelType, string][]).map(([k, v]) => (
-                      <option key={k} value={k}>{v}</option>
+                      <button
+                        key={k}
+                        type="button"
+                        onClick={() => setCancelType(k)}
+                        className={`px-2.5 py-2 rounded-lg text-xs font-medium text-left transition-colors border ${
+                          cancelType === k
+                            ? "bg-red-600 text-white border-red-600"
+                            : "bg-white text-red-700 border-red-200 hover:bg-red-100"
+                        }`}
+                      >
+                        {v}
+                      </button>
                     ))}
-                  </select>
-                  <ChevronDown className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--color-text-muted)]" />
+                  </div>
                 </div>
-              </div>
 
-              <div>
-                <label className="block text-xs font-medium text-red-700 mb-1">Observações (opcional)</label>
-                <textarea
-                  value={cancelReason}
-                  onChange={(e) => setCancelReason(e.target.value)}
-                  rows={2}
-                  className={INPUT_CLS + " resize-none"}
-                  placeholder="Detalhe adicional sobre o cancelamento..."
-                />
-              </div>
-
-              {svc.team_id && (
-                <label className="flex items-center gap-2 cursor-pointer text-sm text-red-800">
-                  <input
-                    type="checkbox"
-                    checked={cancelNotifyTeam}
-                    onChange={(e) => setCancelNotifyTeam(e.target.checked)}
-                    className="rounded border-red-300 text-red-600"
+                {/* Descrição livre */}
+                <div>
+                  <label className="block text-xs font-medium text-red-700 mb-1">
+                    Descrição <span className="font-normal text-red-400">(opcional)</span>
+                  </label>
+                  <textarea
+                    value={cancelReason}
+                    onChange={(e) => setCancelReason(e.target.value)}
+                    rows={2}
+                    className="w-full px-3 py-2 rounded-lg border border-red-200 bg-white text-sm text-[var(--color-text-main)] focus:outline-none focus:ring-2 focus:ring-red-400 focus:border-transparent resize-none"
+                    placeholder="Ex: cliente pediu reagendamento para semana seguinte..."
                   />
-                  Notificar equipa por push
-                </label>
-              )}
+                </div>
 
-              <div className="flex gap-2">
-                <button
-                  onClick={handleCancel}
-                  disabled={actionLoading === "cancelar"}
-                  className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-red-600 text-white text-sm font-medium hover:bg-red-700 transition-colors disabled:opacity-50"
-                >
-                  {actionLoading === "cancelar" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Ban className="w-3.5 h-3.5" />}
-                  Confirmar cancelamento
-                </button>
-                <button
-                  onClick={() => setShowCancel(false)}
-                  className="px-3 py-2 rounded-lg border border-red-200 text-sm text-red-700 hover:bg-red-100 transition-colors"
-                >
-                  Voltar
-                </button>
+                {/* Notificar equipa */}
+                {svc.team_id && (
+                  <label className="flex items-center gap-2.5 cursor-pointer">
+                    <div
+                      onClick={() => setCancelNotifyTeam((v) => !v)}
+                      className={`w-9 h-5 rounded-full transition-colors shrink-0 flex items-center ${cancelNotifyTeam ? "bg-red-600" : "bg-gray-300"}`}
+                    >
+                      <span className={`w-4 h-4 bg-white rounded-full shadow transition-all mx-0.5 ${cancelNotifyTeam ? "translate-x-4" : "translate-x-0"}`} />
+                    </div>
+                    <span className="text-sm text-red-800">Notificar equipa por push</span>
+                  </label>
+                )}
+
+                {/* WhatsApp ao cliente */}
+                {clientPhone && (
+                  <a
+                    href={`https://wa.me/${clientPhone.replace(/\D/g, "")}?text=${encodeURIComponent(
+                      `Olá ${svc.client_name},\n\nInformamos que o serviço agendado para ${format(parseISO(svc.scheduled_start), "d 'de' MMMM 'às' HH:mm", { locale: pt })} em ${svc.location_name} foi cancelado${cancelType === "client_request" ? " conforme solicitado" : ""}.\n\n${cancelReason ? `Motivo: ${cancelReason}\n\n` : ""}Pedimos desculpa pelo inconveniente. Contacte-nos para reagendar.\n\nMó Limpezas`
+                    )}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-2 w-full px-3 py-2.5 rounded-lg border border-green-200 bg-green-50 text-sm font-medium text-green-800 hover:bg-green-100 transition-colors"
+                  >
+                    <MessageCircle className="w-4 h-4 text-green-600" />
+                    Avisar {svc.client_name} por WhatsApp
+                  </a>
+                )}
+
+                {/* Botões */}
+                <div className="flex gap-2 pt-1">
+                  <button
+                    onClick={handleCancel}
+                    disabled={actionLoading === "cancelar"}
+                    className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-red-600 text-white text-sm font-medium hover:bg-red-700 transition-colors disabled:opacity-50"
+                  >
+                    {actionLoading === "cancelar" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Ban className="w-3.5 h-3.5" />}
+                    Confirmar cancelamento
+                  </button>
+                  <button
+                    onClick={() => setShowCancel(false)}
+                    className="px-3 py-2 rounded-lg border border-red-200 text-sm text-red-700 hover:bg-red-100 transition-colors"
+                  >
+                    Voltar
+                  </button>
+                </div>
               </div>
             </div>
           )}
