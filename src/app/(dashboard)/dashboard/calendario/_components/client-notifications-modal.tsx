@@ -85,12 +85,11 @@ export function ClientNotificationsModal({
 
     if (clientIds.length === 0) { setRows([]); setLoading(false); return; }
 
-    // Clientes com notificação ativa
+    // Clientes no período
     const { data: clients } = await supabase
       .from("clients")
-      .select("id, name, notification_enabled, notification_method, notification_phone, notification_email")
-      .in("id", clientIds)
-      .eq("notification_enabled", true);
+      .select("id, name, email, phone")
+      .in("id", clientIds);
 
     const clientMap = new Map((clients ?? []).map((c) => [c.id, c]));
 
@@ -99,9 +98,11 @@ export function ClientNotificationsModal({
       const cl = clientMap.get(s.client_id);
       if (!cl) continue;
       const dt = parseISO(s.scheduled_start);
-      const methods = cl.notification_method === "both"
-        ? ["sms", "email"]
-        : [cl.notification_method ?? "email"];
+      // Use email by default; add SMS row only if client has a phone number
+      const methods: string[] = [];
+      if (cl.email) methods.push("email");
+      if (cl.phone) methods.push("sms");
+      if (methods.length === 0) methods.push("email");
       for (const method of methods) {
         built.push({
           serviceId:   s.id,
@@ -110,7 +111,7 @@ export function ClientNotificationsModal({
           serviceDate: format(dt, "d MMM", { locale: pt }),
           serviceTime: format(dt, "HH:mm"),
           method,
-          contact:     method === "sms" ? (cl.notification_phone ?? "—") : (cl.notification_email ?? "—"),
+          contact:     method === "sms" ? (cl.phone ?? "—") : (cl.email ?? "—"),
           alreadySent: sentIds.has(s.id),
         });
       }

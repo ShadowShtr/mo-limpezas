@@ -27,7 +27,7 @@ export default async function ClientDetailPage({
   const [{ data: client }, { data: notifications }] = await Promise.all([
     admin
       .from("clients")
-      .select("id, name, contact_name, contact_email, contact_phone, nif, notes, active, notification_enabled, notification_method, notification_phone, notification_email")
+      .select("id, name, email, phone, nif, notes, status")
       .eq("id", id)
       .eq("company_id", me.company_id)
       .single(),
@@ -58,9 +58,8 @@ export default async function ClientDetailPage({
             <h2 className="text-sm font-semibold text-[var(--color-text-main)] mb-4">Informações</h2>
             <dl className="grid grid-cols-2 gap-3 text-sm">
               {[
-                { label: "Contacto", value: client.contact_name },
-                { label: "Email",    value: client.contact_email },
-                { label: "Telefone", value: client.contact_phone },
+                { label: "Email",    value: client.email },
+                { label: "Telefone", value: client.phone },
                 { label: "NIF",      value: client.nif },
               ].map(({ label, value }) => value ? (
                 <div key={label}>
@@ -81,7 +80,6 @@ export default async function ClientDetailPage({
           <CommunicationTab
             client={client}
             notifications={notifications ?? []}
-            userId={user.id}
           />
         </div>
       </div>

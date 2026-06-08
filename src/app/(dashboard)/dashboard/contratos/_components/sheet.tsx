@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, cloneElement, isValidElement, useMemo } from "react";
+import { useState, useTransition, cloneElement, isValidElement, useMemo } from "react";
 import { X, Loader2, ChevronDown } from "lucide-react";
-import { createClient } from "@/lib/supabase/client";
+import { createContrato, updateContrato } from "@/app/actions/contratos";
 import type { ScheduleDay } from "@/types/database";
 import type { ContratosTableRow } from "../page";
 
@@ -145,11 +145,10 @@ interface Props {
 
 export function ContratoSheet({ trigger, companyId, userId, clientes, locais, equipas, contrato }: Props) {
   const isEdit = !!contrato;
-  const supabase = createClient();
 
   // UI state
   const [open, setOpen] = useState(false);
-  const [loading, setLoading] = useState(false);
+  const [pending, startTransition] = useTransition();
   const [message, setMessage] = useState<{ type: "error" | "success"; text: string } | null>(null);
 
   // Formulário
@@ -222,49 +221,47 @@ export function ContratoSheet({ trigger, companyId, userId, clientes, locais, eq
     });
   }
 
-  async function handleSubmit(e: React.SyntheticEvent<HTMLFormElement>) {
+  function handleSubmit(e: React.SyntheticEvent<HTMLFormElement>) {
     e.preventDefault();
-    if (!localId) {
-      setMessage({ type: "error", text: "Seleciona um local." });
-      return;
-    }
-    if ((frequency === "weekly" || frequency === "biweekly") && selectedWeekdays.length === 0) {
-      setMessage({ type: "error", text: "Seleciona pelo menos um dia da semana." });
-      return;
-    }
-
-    setLoading(true);
     setMessage(null);
 
-    const payload = {
-      location_id: localId,
-      name: name || null,
-      frequency,
-      interval_days: frequency === "custom" ? intervalDays : 1,
-      weekdays: (frequency === "weekly" || frequency === "biweekly") ? selectedWeekdays : null,
-      schedule_days: buildScheduleDays(),
-      starts_on: startsOn,
-      ends_on: endsOn || null,
-      status,
-      notes: notes || null,
-    };
-
-    const query = isEdit
-      ? supabase.from("contracts").update(payload).eq("id", contrato.id)
-      : supabase.from("contracts").insert({
-          ...payload,
-          company_id: companyId,
-          created_by: userId,
-        });
-
-    const { error } = await query;
-    setLoading(false);
-
-    if (error) {
-      setMessage({ type: "error", text: "Erro ao guardar: " + error.message });
-    } else {
-      setMessage({ type: "success", text: isEdit ? "Contrato atualizado." : "Contrato criado com sucesso." });
+    // Avisos não bloqueantes
+    if (!localId) {
+      setMessage({ type: "error", text: "Aviso: nenhum local selecionado." });
     }
+    if ((frequency === "weekly" || frequency === "biweekly") && selectedWeekdays.length === 0) {
+      setMessage({ type: "error", text: "Aviso: nenhum dia da semana selecionado." });
+    }
+
+    startTransition(async () => {
+      const input = {
+        location_id: localId,
+        name: name || undefined,
+        frequency,
+        interval_days: frequency === "custom" ? intervalDays : 1,
+        weekdays: (frequency === "weekly" || frequency === "biweekly") ? selectedWeekdays : null,
+        schedule_days: buildScheduleDays(),
+        starts_on: startsOn,
+        ends_on: endsOn || undefined,
+        status,
+        notes: notes || undefined,
+      };
+
+      const res = isEdit
+        ? await updateContrato(contrato.id, input)
+        : await createContrato({ ...input, company_id: companyId, created_by: userId });
+
+      if (res.ok) {
+        setMessage({ type: "success", text: isEdit ? "Contrato atualizado." : "Contrato criado com sucesso." });
+        if (!isEdit) {
+          setName(""); setClienteId(""); setLocalId(""); setFrequency("weekly");
+          setSelectedWeekdays([1, 3, 5]); setStartsOn(new Date().toISOString().split("T")[0]);
+          setEndsOn(""); setNotes(""); setStatus("ativo"); setScheduleConfig({});
+        }
+      } else {
+        setMessage({ type: "error", text: "Erro ao guardar: " + res.error });
+      }
+    });
   }
 
   const triggerWithOpen = isValidElement(trigger)
@@ -509,10 +506,10 @@ export function ContratoSheet({ trigger, companyId, userId, clientes, locais, eq
               <button
                 form="contrato-form"
                 type="submit"
-                disabled={loading}
+                disabled={pending}
                 className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-[var(--color-primary)] text-white text-sm font-medium hover:bg-[var(--color-primary-hover)] transition-colors disabled:opacity-50"
               >
-                {loading && <Loader2 className="w-4 h-4 animate-spin" />}
+                {pending && <Loader2 className="w-4 h-4 animate-spin" />}
                 {isEdit ? "Guardar alterações" : "Criar contrato"}
               </button>
             </div>

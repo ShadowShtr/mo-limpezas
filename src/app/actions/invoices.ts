@@ -101,7 +101,7 @@ export async function generateInvoices(
   const clientIds = [...new Set((locations ?? []).map((l) => l.client_id).filter(Boolean))];
   const { data: clients } = await admin
     .from("clients")
-    .select("id, name, nif, contact_email")
+    .select("id, name, nif, email")
     .in("id", clientIds);
 
   const clientMap = Object.fromEntries(

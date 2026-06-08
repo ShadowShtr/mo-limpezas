@@ -1,17 +1,16 @@
 "use client";
 
-import { useState, cloneElement, isValidElement } from "react";
+import { useState, useTransition, cloneElement, isValidElement } from "react";
 import { X, Loader2 } from "lucide-react";
-import { createClient } from "@/lib/supabase/client";
+import { createCliente, updateCliente } from "@/app/actions/clientes";
 
 type Cliente = {
   id: string;
   name: string;
-  contact_name: string | null;
-  contact_email: string | null;
-  contact_phone: string | null;
+  email: string | null;
+  phone: string | null;
   nif: string | null;
-  active: boolean;
+  status: string;
 };
 
 interface Props {
@@ -22,45 +21,45 @@ interface Props {
 
 export function ClienteSheet({ trigger, companyId, cliente }: Props) {
   const [open, setOpen] = useState(false);
-  const [loading, setLoading] = useState(false);
+  const [pending, startTransition] = useTransition();
   const [message, setMessage] = useState<{ type: "error" | "success"; text: string } | null>(null);
 
   const [name, setName] = useState(cliente?.name ?? "");
-  const [contactName, setContactName] = useState(cliente?.contact_name ?? "");
-  const [contactEmail, setContactEmail] = useState(cliente?.contact_email ?? "");
-  const [contactPhone, setContactPhone] = useState(cliente?.contact_phone ?? "");
+  const [email, setEmail] = useState(cliente?.email ?? "");
+  const [phone, setPhone] = useState(cliente?.phone ?? "");
   const [nif, setNif] = useState(cliente?.nif ?? "");
-  const [active, setActive] = useState(cliente?.active ?? true);
+  const [status, setStatus] = useState(cliente?.status ?? "ativo");
 
   const isEdit = !!cliente;
-  const supabase = createClient();
 
-  async function handleSubmit(e: React.SyntheticEvent<HTMLFormElement>) {
+  function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    setLoading(true);
     setMessage(null);
+    startTransition(async () => {
+      const input = {
+        name,
+        email: email || undefined,
+        phone: phone || undefined,
+        nif: nif || undefined,
+        status,
+      };
 
-    const updateData = {
-      name,
-      contact_name: contactName || null,
-      contact_email: contactEmail || null,
-      contact_phone: contactPhone || null,
-      nif: nif || null,
-      active,
-    };
+      const res = isEdit
+        ? await updateCliente(cliente.id, input)
+        : await createCliente({ ...input, company_id: companyId });
 
-    const query = isEdit
-      ? supabase.from("clients").update(updateData).eq("id", cliente.id)
-      : supabase.from("clients").insert({ ...updateData, company_id: companyId });
-
-    const { error } = await query;
-    setLoading(false);
-
-    if (error) {
-      setMessage({ type: "error", text: "Erro ao guardar. Tenta novamente." });
-    } else {
-      setMessage({ type: "success", text: isEdit ? "Cliente atualizado." : "Cliente criado com sucesso." });
-    }
+      if (res.ok) {
+        setMessage({
+          type: "success",
+          text: isEdit ? "Cliente atualizado." : "Cliente criado com sucesso.",
+        });
+        if (!isEdit) {
+          setName(""); setEmail(""); setPhone(""); setNif(""); setStatus("ativo");
+        }
+      } else {
+        setMessage({ type: "error", text: res.error });
+      }
+    });
   }
 
   const triggerWithOpen = isValidElement(trigger)
@@ -90,18 +89,13 @@ export function ClienteSheet({ trigger, companyId, cliente }: Props) {
                   className="w-full px-3 py-2 rounded-lg border border-[var(--color-border)] text-sm text-[var(--color-text-main)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] focus:border-transparent" />
               </div>
               <div>
-                <label className="block text-sm font-medium text-[var(--color-text-main)] mb-1.5">Nome do contacto</label>
-                <input value={contactName} onChange={(e) => setContactName(e.target.value)}
-                  className="w-full px-3 py-2 rounded-lg border border-[var(--color-border)] text-sm text-[var(--color-text-main)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] focus:border-transparent" />
-              </div>
-              <div>
                 <label className="block text-sm font-medium text-[var(--color-text-main)] mb-1.5">Email</label>
-                <input type="email" value={contactEmail} onChange={(e) => setContactEmail(e.target.value)}
+                <input type="email" value={email} onChange={(e) => setEmail(e.target.value)}
                   className="w-full px-3 py-2 rounded-lg border border-[var(--color-border)] text-sm text-[var(--color-text-main)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] focus:border-transparent" />
               </div>
               <div>
                 <label className="block text-sm font-medium text-[var(--color-text-main)] mb-1.5">Telefone</label>
-                <input type="tel" value={contactPhone} onChange={(e) => setContactPhone(e.target.value)}
+                <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)}
                   placeholder="+351 900 000 000"
                   className="w-full px-3 py-2 rounded-lg border border-[var(--color-border)] text-sm text-[var(--color-text-main)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] focus:border-transparent" />
               </div>
@@ -110,12 +104,13 @@ export function ClienteSheet({ trigger, companyId, cliente }: Props) {
                 <input value={nif} onChange={(e) => setNif(e.target.value)} placeholder="500 000 000"
                   className="w-full px-3 py-2 rounded-lg border border-[var(--color-border)] text-sm text-[var(--color-text-main)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] focus:border-transparent" />
               </div>
-              <div className="flex items-center gap-3">
-                <button type="button" onClick={() => setActive((a) => !a)}
-                  className={`relative w-10 h-5 rounded-full transition-colors ${active ? "bg-[var(--color-primary)]" : "bg-[var(--color-border)]"}`}>
-                  <span className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-all ${active ? "left-5.5" : "left-0.5"}`} />
-                </button>
-                <span className="text-sm text-[var(--color-text-main)]">{active ? "Cliente ativo" : "Cliente inativo"}</span>
+              <div>
+                <label className="block text-sm font-medium text-[var(--color-text-main)] mb-1.5">Estado</label>
+                <select value={status} onChange={(e) => setStatus(e.target.value)}
+                  className="w-full px-3 py-2 rounded-lg border border-[var(--color-border)] text-sm text-[var(--color-text-main)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] focus:border-transparent">
+                  <option value="ativo">Ativo</option>
+                  <option value="inativo">Inativo</option>
+                </select>
               </div>
               {message && (
                 <div className={`text-sm px-3 py-2 rounded-lg ${message.type === "error" ? "bg-red-50 text-[var(--color-danger)] border border-red-100" : "bg-[var(--color-primary-light)] text-[var(--color-primary)] border border-[var(--color-primary-muted)]"}`}>
@@ -125,9 +120,9 @@ export function ClienteSheet({ trigger, companyId, cliente }: Props) {
             </form>
 
             <div className="border-t border-[var(--color-border)] px-6 py-4">
-              <button form="cliente-form" type="submit" disabled={loading}
+              <button form="cliente-form" type="submit" disabled={pending}
                 className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-[var(--color-primary)] text-white text-sm font-medium hover:bg-[var(--color-primary-hover)] transition-colors disabled:opacity-50">
-                {loading && <Loader2 className="w-4 h-4 animate-spin" />}
+                {pending && <Loader2 className="w-4 h-4 animate-spin" />}
                 {isEdit ? "Guardar alterações" : "Criar cliente"}
               </button>
             </div>

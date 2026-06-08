@@ -32,7 +32,7 @@ export default async function ContratosPage() {
       supabase
         .from("clients")
         .select("id, name")
-        .eq("active", true)
+        .eq("status", "ativo")
         .order("name"),
       supabase
         .from("locations")

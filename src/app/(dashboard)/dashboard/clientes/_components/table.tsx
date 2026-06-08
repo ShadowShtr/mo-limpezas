@@ -7,11 +7,10 @@ import { ClienteSheet } from "./sheet";
 type Cliente = {
   id: string;
   name: string;
-  contact_name: string | null;
-  contact_email: string | null;
-  contact_phone: string | null;
+  email: string | null;
+  phone: string | null;
   nif: string | null;
-  active: boolean;
+  status: string;
   created_at: string;
 };
 
@@ -30,11 +29,11 @@ export function ClientesTable({ clientes, companyId }: Props) {
   const filtered = clientes.filter((c) => {
     const matchSearch =
       c.name.toLowerCase().includes(search.toLowerCase()) ||
-      (c.contact_email ?? "").toLowerCase().includes(search.toLowerCase());
+      (c.email ?? "").toLowerCase().includes(search.toLowerCase());
     const matchActive =
       filterActive === "todos" ||
-      (filterActive === "ativo" && c.active) ||
-      (filterActive === "inativo" && !c.active);
+      (filterActive === "ativo" && c.status === "ativo") ||
+      (filterActive === "inativo" && c.status !== "ativo");
     return matchSearch && matchActive;
   });
 
@@ -97,17 +96,17 @@ export function ClientesTable({ clientes, companyId }: Props) {
                     </div>
                   </td>
                   <td className="px-4 py-3">
-                    <p className="text-sm text-[var(--color-text-main)]">{c.contact_name ?? "—"}</p>
-                    <p className="text-xs text-[var(--color-text-muted)]">{c.contact_email ?? c.contact_phone ?? "—"}</p>
+                    <p className="text-sm text-[var(--color-text-main)]">{c.email ?? "—"}</p>
+                    <p className="text-xs text-[var(--color-text-muted)]">{c.phone ?? "—"}</p>
                   </td>
                   <td className="px-4 py-3 text-sm text-[var(--color-text-main)]">{c.nif ?? "—"}</td>
                   <td className="px-4 py-3">
                     <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${
-                      c.active
+                      c.status === "ativo"
                         ? "bg-[var(--color-primary-light)] text-[var(--color-primary)]"
                         : "bg-[var(--color-background)] text-[var(--color-text-muted)]"
                     }`}>
-                      {c.active ? "Ativo" : "Inativo"}
+                      {c.status === "ativo" ? "Ativo" : "Inativo"}
                     </span>
                   </td>
                   <td className="px-4 py-3">

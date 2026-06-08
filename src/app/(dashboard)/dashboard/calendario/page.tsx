@@ -60,7 +60,7 @@ export default async function CalendarioPage({
       .from("clients")
       .select("id, name")
       .eq("company_id", companyId)
-      .eq("active", true)
+      .eq("status", "ativo")
       .order("name"),
     supabase
       .from("locations")

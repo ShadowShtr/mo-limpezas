@@ -30,9 +30,9 @@ export type Database = {
         Relationships: [];
       };
       clients: {
-        Row: { id: string; company_id: string; name: string; contact_name: string | null; contact_email: string | null; contact_phone: string | null; nif: string | null; notes: string | null; active: boolean; notification_enabled: boolean; notification_method: string; notification_phone: string | null; notification_email: string | null; created_at: string; updated_at: string };
-        Insert: { company_id: string; name: string; contact_name?: string | null; contact_email?: string | null; contact_phone?: string | null; nif?: string | null; notes?: string | null; active?: boolean; notification_enabled?: boolean; notification_method?: string; notification_phone?: string | null; notification_email?: string | null };
-        Update: { name?: string; contact_name?: string | null; contact_email?: string | null; contact_phone?: string | null; nif?: string | null; notes?: string | null; active?: boolean; notification_enabled?: boolean; notification_method?: string; notification_phone?: string | null; notification_email?: string | null };
+        Row: { id: string; company_id: string; name: string; nif: string | null; email: string | null; phone: string | null; address: string | null; type: string | null; notes: string | null; status: string; created_at: string; updated_at: string };
+        Insert: { company_id: string; name: string; nif?: string | null; email?: string | null; phone?: string | null; address?: string | null; type?: string | null; notes?: string | null; status?: string };
+        Update: { name?: string; nif?: string | null; email?: string | null; phone?: string | null; address?: string | null; type?: string | null; notes?: string | null; status?: string };
         Relationships: [];
       };
       client_notifications: {

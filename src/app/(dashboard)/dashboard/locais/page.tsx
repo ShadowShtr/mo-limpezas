@@ -25,7 +25,7 @@ export default async function LocaisPage() {
     supabase
       .from("clients")
       .select("id, name")
-      .eq("active", true)
+      .eq("status", "ativo")
       .order("name"),
   ]);
 
