@@ -83,19 +83,27 @@ export async function sendBulkClientNotifications(
         companyPhone,
       });
 
-      const { error } = await resend!.emails.send({
-        from: FROM_EMAIL,
-        to: p.contact,
-        subject,
-        html,
-      });
-
-      results.push({
-        ok: !error,
-        serviceId: p.serviceId,
-        method: p.method,
-        error: error?.message,
-      });
+      try {
+        const { error } = await resend!.emails.send({
+          from: FROM_EMAIL,
+          to: p.contact,
+          subject,
+          html,
+        });
+        results.push({
+          ok: !error,
+          serviceId: p.serviceId,
+          method: p.method,
+          error: error?.message,
+        });
+      } catch (sendErr) {
+        results.push({
+          ok: false,
+          serviceId: p.serviceId,
+          method: p.method,
+          error: sendErr instanceof Error ? sendErr.message : "Erro ao enviar email",
+        });
+      }
     } else {
       // SMS — não implementado ainda, regista como pendente
       results.push({ ok: false, serviceId: p.serviceId, method: "sms", error: "SMS não implementado" });

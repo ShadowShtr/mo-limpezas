@@ -105,12 +105,17 @@ export async function cancelService(
     ? `⚠️ Cancelamento tardio: ${serviceName} foi cancelado. Motivo: ${motivo}.`
     : `${serviceName} foi cancelado. Motivo: ${motivo}.`;
 
-  const { default: webpush } = await import("web-push");
-  webpush.setVapidDetails(
-    "mailto:admin@molimpezas.pt",
-    process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ?? "",
-    process.env.VAPID_PRIVATE_KEY ?? "",
-  );
+  const vapidPublic  = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
+  const vapidPrivate = process.env.VAPID_PRIVATE_KEY;
+  if (!vapidPublic || !vapidPrivate) return { ok: true, isLate, sent: 0 };
+
+  let webpush: typeof import("web-push");
+  try {
+    webpush = (await import("web-push")).default;
+    webpush.setVapidDetails("mailto:admin@molimpezas.pt", vapidPublic, vapidPrivate);
+  } catch {
+    return { ok: true, isLate, sent: 0 };
+  }
 
   const payload = JSON.stringify({
     title: "🚫 Serviço cancelado",

@@ -46,12 +46,29 @@ export async function notifyTeam(serviceId: string, message: string) {
 
   if (!subs?.length) return { ok: true as const, sent: 0 };
 
-  const { default: webpush } = await import("web-push");
-  webpush.setVapidDetails(
-    "mailto:admin@molimpezas.pt",
-    process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ?? "",
-    process.env.VAPID_PRIVATE_KEY ?? "",
-  );
+  // Verificar VAPID keys antes de importar web-push
+  const vapidPublic  = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
+  const vapidPrivate = process.env.VAPID_PRIVATE_KEY;
+
+  if (!vapidPublic || !vapidPrivate) {
+    return { ok: false as const, error: "VAPID keys não configuradas no servidor.", sent: 0 };
+  }
+
+  let webpush: typeof import("web-push");
+  try {
+    webpush = (await import("web-push")).default;
+    webpush.setVapidDetails(
+      "mailto:admin@molimpezas.pt",
+      vapidPublic,
+      vapidPrivate,
+    );
+  } catch (err) {
+    return {
+      ok: false as const,
+      error: `Erro ao configurar notificações push: ${err instanceof Error ? err.message : "erro desconhecido"}`,
+      sent: 0,
+    };
+  }
 
   const payload = JSON.stringify({
     title: "📋 Notificação de serviço",

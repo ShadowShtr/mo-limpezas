@@ -175,7 +175,7 @@ export function ServiceDetailSheet({ service, onClose, onChanged }: Props) {
   }
 
   async function handleNotifyEmail() {
-    if (!clientEmail || !notifyMsg.trim()) return;
+    if (!clientEmail) return;
     setActionLoading("notify");
     setActionMsg(null);
     try {
@@ -206,18 +206,23 @@ export function ServiceDetailSheet({ service, onClose, onChanged }: Props) {
     if (!notifyMsg.trim()) return;
     setActionLoading("notify");
     setActionMsg(null);
-    const res = await notifyTeam(svc.id, notifyMsg.trim());
-    setActionLoading(null);
-    setShowNotify(false);
-    if (res.ok) {
-      setActionMsg({
-        type: "success",
-        text: res.sent > 0
-          ? `Push enviado para ${res.sent} membro${res.sent !== 1 ? "s" : ""} da equipa.`
-          : "Nenhum membro com notificações push ativas.",
-      });
-    } else {
-      setActionMsg({ type: "error", text: res.error });
+    try {
+      const res = await notifyTeam(svc.id, notifyMsg.trim());
+      setShowNotify(false);
+      if (res.ok) {
+        setActionMsg({
+          type: "success",
+          text: res.sent > 0
+            ? `Push enviado para ${res.sent} membro${res.sent !== 1 ? "s" : ""} da equipa.`
+            : "Nenhum membro com notificações push ativas.",
+        });
+      } else {
+        setActionMsg({ type: "error", text: res.error });
+      }
+    } catch (err) {
+      setActionMsg({ type: "error", text: err instanceof Error ? err.message : "Erro ao notificar equipa." });
+    } finally {
+      setActionLoading(null);
     }
   }
 
