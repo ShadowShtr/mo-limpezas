@@ -75,7 +75,7 @@ export default async function EscalaPage({ searchParams }: Props) {
 
       {/* Cabeçalho com navegação de semana */}
       <div className="flex items-center justify-between">
-        <h1 className="text-xl font-bold text-[var(--color-text-main)]">Escala</h1>
+        <h1 className="text-xl font-bold text-[var(--color-text-main)]">Horário</h1>
         <div className="flex items-center gap-1">
           <Link
             href={`/app/escala?semana=${toDateParam(prevWeek)}`}

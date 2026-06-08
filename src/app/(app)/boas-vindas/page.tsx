@@ -8,9 +8,9 @@ import { Button } from "@/components/ui/button";
 const STEPS = [
   {
     icon: CheckCircle2,
-    title: "Bem-vinda à Escala!",
+    title: "Bem-vinda à Mó Limpezas!",
     description:
-      "Esta é a tua plataforma de trabalho. Aqui vês a tua escala, registas entradas e saídas e geris as tuas férias.",
+      "Esta é a tua plataforma de trabalho. Aqui vês o teu horário, registas entradas e saídas e geris as tuas férias.",
     color: "text-[var(--color-primary)]",
     bg: "bg-[var(--color-primary-light)]",
   },

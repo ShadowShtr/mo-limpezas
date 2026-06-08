@@ -11,7 +11,7 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "Mó Limpezas — Escala",
+  title: "Mó Limpezas",
   description: "Plataforma de gestão operacional para equipas de limpeza",
   appleWebApp: {
     capable: true,

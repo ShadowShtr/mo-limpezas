@@ -114,7 +114,7 @@ export interface CollaboratorInviteData {
 }
 
 export function collaboratorInviteTemplate(d: CollaboratorInviteData) {
-  const subject = "Convite — Plataforma Escala | Mó Limpezas";
+  const subject = "Convite — M� Limpezas | Mó Limpezas";
 
   const html = layout(`
     <p style="margin:0 0 8px;font-size:16px;font-weight:600;color:#111827;">

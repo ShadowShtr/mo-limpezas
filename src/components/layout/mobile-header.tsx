@@ -30,9 +30,9 @@ export function MobileHeader({ userName, avatarUrl, onMenuClick }: Props) {
 
       <Link href="/dashboard" className="flex items-center gap-2 flex-1">
         <div className="w-7 h-7 rounded-lg bg-[var(--color-primary)] flex items-center justify-center">
-          <span className="text-white font-bold text-sm">E</span>
+          <span className="text-white font-bold text-sm">ML</span>
         </div>
-        <span className="font-bold text-[var(--color-text-main)] text-[15px]">Escala</span>
+        <span className="font-bold text-[var(--color-text-main)] text-[15px]">Mó Limpezas</span>
       </Link>
 
       <div className="flex items-center gap-2">

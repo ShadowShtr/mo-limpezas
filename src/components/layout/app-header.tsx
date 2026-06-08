@@ -50,9 +50,9 @@ export function AppHeader({ userName, avatarUrl }: AppHeaderProps) {
       {/* Logo / Nome */}
       <Link href="/app" className="flex items-center gap-2">
         <div className="w-7 h-7 rounded-lg bg-[var(--color-primary)] flex items-center justify-center">
-          <span className="text-white font-bold text-sm">E</span>
+          <span className="text-white font-bold text-sm">ML</span>
         </div>
-        <span className="font-semibold text-[var(--color-text-main)] text-sm">Escala</span>
+        <span className="font-semibold text-[var(--color-text-main)] text-sm">Mó Limpezas</span>
       </Link>
 
       {/* Ações direita */}

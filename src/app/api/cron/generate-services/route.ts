@@ -60,9 +60,7 @@ function getOccurrences(
   if (contract.frequency === "daily") {
     const cursor = new Date(monthStart);
     while (cursor <= monthEnd) {
-      const dow = cursor.getDay();
-      // Segunda a Sexta
-      if (dow >= 1 && dow <= 5 && inRange(cursor)) {
+      if (inRange(cursor)) {
         results.push({ date: new Date(cursor), schedule: defaultSchedule });
       }
       cursor.setDate(cursor.getDate() + 1);

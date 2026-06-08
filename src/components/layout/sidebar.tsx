@@ -9,6 +9,7 @@ import {
   Users,
   Building2,
   Map,
+  MapPin,
   UsersRound,
   BarChart3,
   Settings,
@@ -22,12 +23,13 @@ import { logout } from "@/app/actions/auth";
 const NAV = [
   { href: "/dashboard",               icon: LayoutDashboard, label: "Dashboard" },
   { href: "/dashboard/calendario",    icon: Calendar,        label: "Calendário" },
+  { href: "/dashboard/clientes",      icon: Building2,       label: "Clientes" },
+  { href: "/dashboard/locais",        icon: MapPin,          label: "Locais" },
   { href: "/dashboard/contratos",     icon: FileText,        label: "Contratos" },
   { href: "/dashboard/colaboradores", icon: Users,           label: "Colaboradores" },
+  { href: "/dashboard/equipas",       icon: UsersRound,      label: "Equipas" },
   { href: "/dashboard/faltas",        icon: AlertTriangle,   label: "Faltas" },
   { href: "/dashboard/mapa",          icon: Map,             label: "Mapa" },
-  { href: "/dashboard/clientes",      icon: Building2,       label: "Clientes" },
-  { href: "/dashboard/equipas",       icon: UsersRound,      label: "Equipas" },
   { href: "/dashboard/relatorios",    icon: BarChart3,       label: "Relatórios" },
   { href: "/dashboard/financeiro",    icon: TrendingUp,      label: "Financeiro" },
 ];
@@ -60,9 +62,9 @@ export function Sidebar({ userName, userRole, avatarUrl, onClose }: SidebarProps
       {/* Logo */}
       <div className="flex items-center gap-3 px-5 h-16 border-b border-[var(--color-border)]">
         <div className="w-8 h-8 rounded-lg bg-[var(--color-primary)] flex items-center justify-center shrink-0">
-          <span className="text-white font-bold text-sm">E</span>
+          <span className="text-white font-bold text-sm">ML</span>
         </div>
-        <span className="font-bold text-[var(--color-text-main)] text-[15px] flex-1">Escala</span>
+        <span className="font-bold text-[var(--color-text-main)] text-[15px] flex-1">Mó Limpezas</span>
         {onClose && (
           <button
             onClick={onClose}

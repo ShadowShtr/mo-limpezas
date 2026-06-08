@@ -41,9 +41,9 @@ export default function LoginPage() {
         {/* Logo */}
         <div className="text-center mb-8">
           <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-[var(--color-primary)] mb-4">
-            <span className="text-white font-bold text-2xl">E</span>
+            <span className="text-white font-bold text-xl">ML</span>
           </div>
-          <h1 className="text-2xl font-bold text-[var(--color-text-main)]">Escala</h1>
+          <h1 className="text-2xl font-bold text-[var(--color-text-main)]">Mó Limpezas</h1>
           <p className="text-sm text-[var(--color-text-sub)] mt-1">
             {mode === "login" ? "Entra na tua conta" : "Recupera a tua password"}
           </p>
@@ -127,7 +127,7 @@ export default function LoginPage() {
         </div>
 
         <p className="text-center text-xs text-[var(--color-text-muted)] mt-6">
-          Plataforma Escala · Mó Limpezas
+          Mó Limpezas
         </p>
       </div>
     </div>
