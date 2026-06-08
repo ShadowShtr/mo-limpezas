@@ -8,16 +8,14 @@ import { clientReminderTemplate } from "@/lib/email/templates";
 
 const emailAddressSchema = z.email();
 
-// ─── Tipos ────────────────────────────────────────────────────────────────────
-
 export interface NotificationPayload {
   serviceId: string;
   clientId: string;
   clientName: string;
-  serviceDate: string;   // "d MMM" para display, ex: "9 jun"
-  serviceTime: string;   // "HH:mm"
+  serviceDate: string;
+  serviceTime: string;
   method: "sms" | "email";
-  contact: string;       // email ou telefone
+  contact: string;
 }
 
 export interface BulkResult {
@@ -27,9 +25,20 @@ export interface BulkResult {
   errors: string[];
 }
 
-// ─── Enviar notificações em bulk ──────────────────────────────────────────────
-
 export async function sendBulkClientNotifications(
+  payloads: NotificationPayload[],
+): Promise<BulkResult> {
+  // ── Wrapper global: garante que NUNCA lança exceção ──────────────────────────
+  try {
+    return await _sendBulkClientNotifications(payloads);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Erro interno desconhecido";
+    console.error("[sendBulkClientNotifications] uncaught:", err);
+    return { ok: false, sent: 0, failed: payloads.length, errors: [msg] };
+  }
+}
+
+async function _sendBulkClientNotifications(
   payloads: NotificationPayload[],
 ): Promise<BulkResult> {
   const supabase = await createClient();
@@ -50,11 +59,15 @@ export async function sendBulkClientNotifications(
 
   const companyPhone = process.env.COMPANY_PHONE ?? "925 780 509";
 
+  // Verificar Resend
   let resend: ReturnType<typeof getResend> | null = null;
   try {
     resend = getResend();
   } catch {
-    return { ok: false, sent: 0, failed: payloads.length, errors: ["RESEND_API_KEY não configurada no servidor."] };
+    return {
+      ok: false, sent: 0, failed: payloads.length,
+      errors: ["RESEND_API_KEY não configurada no Vercel. Vai a Settings → Environment Variables e adiciona RESEND_API_KEY."],
+    };
   }
 
   const results: { ok: boolean; serviceId: string; method: string; error?: string }[] = [];
@@ -62,11 +75,11 @@ export async function sendBulkClientNotifications(
   for (const p of payloads) {
     if (p.method === "email") {
       if (!emailAddressSchema.safeParse(p.contact).success) {
-        results.push({ ok: false, serviceId: p.serviceId, method: p.method, error: "Email inválido" });
+        results.push({ ok: false, serviceId: p.serviceId, method: p.method, error: `Email inválido: ${p.contact}` });
         continue;
       }
 
-      // Buscar morada do serviço para o template
+      // Buscar morada para o template
       const { data: svc } = await admin
         .from("services_full")
         .select("location_address")
@@ -90,53 +103,60 @@ export async function sendBulkClientNotifications(
           subject,
           html,
         });
-        results.push({
-          ok: !error,
-          serviceId: p.serviceId,
-          method: p.method,
-          error: error?.message,
-        });
+        if (error) {
+          // Erro de domínio não verificado: sugerir solução
+          const hint = (error.message ?? "").toLowerCase().includes("domain")
+            ? " Verifica se o domínio do FROM_EMAIL está verificado no Resend, ou usa 'onboarding@resend.dev'."
+            : "";
+          results.push({ ok: false, serviceId: p.serviceId, method: p.method, error: error.message + hint });
+        } else {
+          results.push({ ok: true, serviceId: p.serviceId, method: p.method });
+        }
       } catch (sendErr) {
         results.push({
-          ok: false,
-          serviceId: p.serviceId,
-          method: p.method,
+          ok: false, serviceId: p.serviceId, method: p.method,
           error: sendErr instanceof Error ? sendErr.message : "Erro ao enviar email",
         });
       }
     } else {
-      // SMS — não implementado ainda, regista como pendente
-      results.push({ ok: false, serviceId: p.serviceId, method: "sms", error: "SMS não implementado" });
+      // SMS — não implementado
+      results.push({ ok: false, serviceId: p.serviceId, method: "sms", error: "SMS não implementado. Usa WhatsApp." });
     }
   }
 
-  // Persistir na tabela client_notifications
-  const records = payloads.map((p, i) => {
-    const r = results[i];
-    return {
-      company_id:   profile.company_id,
-      client_id:    p.clientId,
-      service_id:   p.serviceId,
-      method:       p.method,
-      status:       r.ok ? "enviado" : "falhou",
-      contact_used: p.contact,
-      message_body: p.method === "email"
-        ? `Lembrete de limpeza: ${p.serviceDate} às ${p.serviceTime}`
-        : `SMS pendente para ${p.contact}`,
-      sent_at:      r.ok ? new Date().toISOString() : null,
-      created_by:   user.id,
-    };
-  });
+  // Persistir histórico (se a tabela existir — migration 013)
+  try {
+    const records = payloads.map((p, i) => {
+      const r = results[i];
+      return {
+        company_id:   profile.company_id,
+        client_id:    p.clientId,
+        service_id:   p.serviceId,
+        method:       p.method,
+        status:       r.ok ? "enviado" : "falhou",
+        contact_used: p.contact,
+        message_body: p.method === "email"
+          ? `Lembrete: ${p.serviceDate} às ${p.serviceTime}`
+          : `SMS: ${p.contact}`,
+        sent_at:      r.ok ? new Date().toISOString() : null,
+        created_by:   user.id,
+      };
+    });
 
-  const { error: dbError } = await admin
-    .from("client_notifications")
-    .insert(records);
+    const { error: dbError } = await admin
+      .from("client_notifications")
+      .insert(records);
+
+    if (dbError) {
+      console.warn("[sendBulkClientNotifications] histórico falhou:", dbError.message);
+    }
+  } catch {
+    // Não bloquear o resultado se o histórico falhar
+  }
 
   const sent   = results.filter((r) => r.ok).length;
   const failed = results.filter((r) => !r.ok).length;
   const errors = results.filter((r) => r.error).map((r) => r.error!);
-
-  if (dbError) errors.push("Erro ao guardar histórico: " + dbError.message);
 
   return { ok: failed === 0, sent, failed, errors };
 }
