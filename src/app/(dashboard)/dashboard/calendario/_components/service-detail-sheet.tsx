@@ -12,6 +12,7 @@ import { notifyTeam } from "@/app/actions/notifications";
 import { cancelService } from "@/app/actions/cancellations";
 import { CANCEL_TYPE_LABELS, type CancelType } from "@/lib/cancel-types";
 import { sendBulkClientNotifications } from "@/app/actions/email";
+import { sendWhatsAppToClient } from "@/app/actions/whatsapp";
 import type { Database } from "@/types/database";
 
 type ServiceFull = Database["public"]["Views"]["services_full"]["Row"];
@@ -173,6 +174,30 @@ export function ServiceDetailSheet({ service, onClose, onChanged }: Props) {
     if (res.sent) parts.push(`Equipa notificada (${res.sent} membro${res.sent !== 1 ? "s" : ""}).`);
     setActionMsg({ type: "success", text: parts.join(" ") });
     onChanged();
+  }
+
+  async function handleNotifyWhatsApp() {
+    if (!clientPhone) return;
+    setActionLoading("notify");
+    setActionMsg(null);
+    try {
+      const res = await sendWhatsAppToClient(clientPhone, notifyMsg.trim());
+      setShowNotify(false);
+      if (res.ok) {
+        setActionMsg({ type: "success", text: `WhatsApp enviado para ${svc.client_name}.` });
+      } else if (res.error?.includes("TWILIO")) {
+        // Twilio não configurado — abrir wa.me como fallback
+        const url = `https://wa.me/${clientPhone.replace(/\D/g, "")}?text=${encodeURIComponent(notifyMsg.trim())}`;
+        window.open(url, "_blank");
+        setShowNotify(false);
+      } else {
+        setActionMsg({ type: "error", text: res.error ?? "Erro ao enviar WhatsApp." });
+      }
+    } catch (err) {
+      setActionMsg({ type: "error", text: err instanceof Error ? err.message : "Erro ao enviar." });
+    } finally {
+      setActionLoading(null);
+    }
   }
 
   async function handleNotifyEmail() {
@@ -446,17 +471,24 @@ export function ServiceDetailSheet({ service, onClose, onChanged }: Props) {
 
                 {/* WhatsApp ao cliente */}
                 {clientPhone && (
-                  <a
-                    href={`https://wa.me/${clientPhone.replace(/\D/g, "")}?text=${encodeURIComponent(
-                      `Olá ${svc.client_name},\n\nInformamos que o serviço agendado para ${format(parseISO(svc.scheduled_start), "d 'de' MMMM 'às' HH:mm", { locale: pt })} em ${svc.location_name} foi cancelado${cancelType === "client_request" ? " conforme solicitado" : ""}.\n\n${cancelReason ? `Motivo: ${cancelReason}\n\n` : ""}Pedimos desculpa pelo inconveniente. Contacte-nos para reagendar.\n\nMó Limpezas`
-                    )}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center gap-2 w-full px-3 py-2.5 rounded-lg border border-green-200 bg-green-50 text-sm font-medium text-green-800 hover:bg-green-100 transition-colors"
+                  <button
+                    type="button"
+                    disabled={actionLoading === "cancelar"}
+                    onClick={async () => {
+                      const msg = `Olá ${svc.client_name},\n\nInformamos que o serviço agendado para ${format(parseISO(svc.scheduled_start), "d 'de' MMMM 'às' HH:mm", { locale: pt })} em ${svc.location_name} foi cancelado${cancelType === "client_request" ? " conforme solicitado" : ""}.\n\n${cancelReason ? `Motivo: ${cancelReason}\n\n` : ""}Pedimos desculpa pelo inconveniente. Contacte-nos para reagendar.\n\nMó Limpezas`;
+                      const res = await sendWhatsAppToClient(clientPhone, msg);
+                      if (!res.ok) {
+                        const url = `https://wa.me/${clientPhone.replace(/\D/g, "")}?text=${encodeURIComponent(msg)}`;
+                        window.open(url, "_blank");
+                      } else {
+                        setActionMsg({ type: "success", text: `WhatsApp enviado para ${svc.client_name}.` });
+                      }
+                    }}
+                    className="flex items-center gap-2 w-full px-3 py-2.5 rounded-lg border border-green-200 bg-green-50 text-sm font-medium text-green-800 hover:bg-green-100 transition-colors disabled:opacity-50"
                   >
                     <MessageCircle className="w-4 h-4 text-green-600" />
                     Avisar {svc.client_name} por WhatsApp
-                  </a>
+                  </button>
                 )}
 
                 {/* Botões */}
@@ -522,7 +554,7 @@ export function ServiceDetailSheet({ service, onClose, onChanged }: Props) {
                 {notifyTab === "whatsapp" && clientPhone && (
                   <>
                     <p className="text-xs text-[var(--color-text-muted)]">
-                      Abre o WhatsApp com a mensagem pré-preenchida. Edita antes de enviar.
+                      Envia mensagem WhatsApp para <strong>{svc.client_name}</strong> ({clientPhone}).
                     </p>
                     <textarea
                       value={notifyMsg}
@@ -530,15 +562,14 @@ export function ServiceDetailSheet({ service, onClose, onChanged }: Props) {
                       rows={4}
                       className={INPUT_CLS + " resize-none text-xs"}
                     />
-                    <a
-                      href={`https://wa.me/${clientPhone.replace(/\D/g, "")}?text=${encodeURIComponent(notifyMsg)}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-center justify-center gap-2 w-full px-4 py-2.5 rounded-lg bg-green-600 text-white text-sm font-medium hover:bg-green-700 transition-colors"
+                    <button
+                      onClick={handleNotifyWhatsApp}
+                      disabled={actionLoading === "notify" || !notifyMsg.trim()}
+                      className="flex items-center justify-center gap-2 w-full px-4 py-2.5 rounded-lg bg-green-600 text-white text-sm font-medium hover:bg-green-700 transition-colors disabled:opacity-50"
                     >
-                      <MessageCircle className="w-4 h-4" />
-                      Abrir WhatsApp
-                    </a>
+                      {actionLoading === "notify" ? <Loader2 className="w-4 h-4 animate-spin" /> : <MessageCircle className="w-4 h-4" />}
+                      Enviar WhatsApp
+                    </button>
                   </>
                 )}
 
