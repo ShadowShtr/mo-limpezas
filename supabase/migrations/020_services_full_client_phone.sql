@@ -1,5 +1,5 @@
--- Migration 020: adicionar client_phone à view services_full
--- Necessário para gerar link WhatsApp no painel de cancelamento
+-- Migration 020: adicionar client_phone + client_email à view services_full
+-- Necessário para WhatsApp no painel de cancelamento e email no painel de notificações
 
 CREATE OR REPLACE VIEW services_full AS
 SELECT
@@ -30,6 +30,7 @@ SELECT
   c.id           AS client_id,
   c.name         AS client_name,
   c.phone        AS client_phone,
+  c.email        AS client_email,
 
   -- Team
   t.id           AS team_id,

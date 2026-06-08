@@ -49,7 +49,14 @@ export async function sendBulkClientNotifications(
   }
 
   const companyPhone = process.env.COMPANY_PHONE ?? "925 780 509";
-  const resend = getResend();
+
+  let resend: ReturnType<typeof getResend> | null = null;
+  try {
+    resend = getResend();
+  } catch {
+    return { ok: false, sent: 0, failed: payloads.length, errors: ["RESEND_API_KEY não configurada no servidor."] };
+  }
+
   const results: { ok: boolean; serviceId: string; method: string; error?: string }[] = [];
 
   for (const p of payloads) {
@@ -76,7 +83,7 @@ export async function sendBulkClientNotifications(
         companyPhone,
       });
 
-      const { error } = await resend.emails.send({
+      const { error } = await resend!.emails.send({
         from: FROM_EMAIL,
         to: p.contact,
         subject,

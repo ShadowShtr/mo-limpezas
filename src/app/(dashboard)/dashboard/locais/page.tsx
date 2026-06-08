@@ -20,7 +20,7 @@ export default async function LocaisPage() {
   const [locaisRes, clientesRes] = await Promise.all([
     supabase
       .from("locations")
-      .select("id, name, address, lat, lng, hourly_rate, active, client_id, access_code")
+      .select("id, name, address, lat, lng, hourly_rate, active, client_id, access_code, instructions")
       .order("name"),
     supabase
       .from("clients")

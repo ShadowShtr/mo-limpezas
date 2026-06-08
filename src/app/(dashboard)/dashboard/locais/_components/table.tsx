@@ -14,6 +14,7 @@ type Local = {
   active: boolean;
   client_id: string;
   access_code: string | null;
+  instructions: string | null;
 };
 
 type Cliente = { id: string; name: string };

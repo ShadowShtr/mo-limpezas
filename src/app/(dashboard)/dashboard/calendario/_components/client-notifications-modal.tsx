@@ -154,31 +154,36 @@ export function ClientNotificationsModal({
     setSending(true);
     setMessage(null);
 
-    const result = await sendBulkClientNotifications(
-      toSend.map((r) => ({
-        serviceId:   r.serviceId,
-        clientId:    r.clientId,
-        clientName:  r.clientName,
-        serviceDate: r.serviceDate,
-        serviceTime: r.serviceTime,
-        method:      r.method as "sms" | "email",
-        contact:     r.contact,
-      })),
-    );
+    try {
+      const result = await sendBulkClientNotifications(
+        toSend.map((r) => ({
+          serviceId:   r.serviceId,
+          clientId:    r.clientId,
+          clientName:  r.clientName,
+          serviceDate: r.serviceDate,
+          serviceTime: r.serviceTime,
+          method:      r.method as "sms" | "email",
+          contact:     r.contact,
+        })),
+      );
 
-    setSending(false);
+      if (result.sent > 0 && result.failed === 0) {
+        setMessage({ ok: true, text: `${result.sent} email(s) enviado(s) com sucesso.` });
+      } else if (result.sent > 0) {
+        setMessage({ ok: true, text: `${result.sent} enviado(s), ${result.failed} falharam.` });
+      } else {
+        const detail = result.errors[0] ?? "Erro desconhecido";
+        setMessage({ ok: false, text: `Falha ao enviar: ${detail}` });
+      }
 
-    if (result.sent > 0 && result.failed === 0) {
-      setMessage({ ok: true, text: `${result.sent} email(s) enviado(s) com sucesso.` });
-    } else if (result.sent > 0) {
-      setMessage({ ok: true, text: `${result.sent} enviado(s), ${result.failed} falharam.` });
-    } else {
-      const detail = result.errors[0] ?? "Erro desconhecido";
-      setMessage({ ok: false, text: `Falha ao enviar: ${detail}` });
+      setSelected(new Set());
+      fetchRows();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Erro inesperado ao enviar.";
+      setMessage({ ok: false, text: msg });
+    } finally {
+      setSending(false);
     }
-
-    setSelected(new Set());
-    fetchRows();
   }
 
   if (!open) return null;

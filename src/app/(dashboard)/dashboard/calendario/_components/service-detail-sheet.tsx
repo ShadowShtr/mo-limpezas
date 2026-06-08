@@ -3,13 +3,14 @@
 import { useState, useEffect, useMemo } from "react";
 import {
   X, MapPin, Users, Clock, Euro, FileText, Loader2,
-  AlertTriangle, Ban, CalendarX, CheckCircle2, ChevronDown, Bell, MessageCircle,
+  AlertTriangle, Ban, CalendarX, CheckCircle2, ChevronDown, Bell, MessageCircle, Mail, Users2,
 } from "lucide-react";
 import { format, parseISO } from "date-fns";
 import { pt } from "date-fns/locale";
 import { createClient } from "@/lib/supabase/client";
 import { notifyTeam } from "@/app/actions/notifications";
 import { cancelService, CANCEL_TYPE_LABELS, type CancelType } from "@/app/actions/cancellations";
+import { sendBulkClientNotifications } from "@/app/actions/email";
 import type { Database } from "@/types/database";
 
 type ServiceFull = Database["public"]["Views"]["services_full"]["Row"];
@@ -60,6 +61,7 @@ export function ServiceDetailSheet({ service, onClose, onChanged }: Props) {
   const [actionMsg, setActionMsg] = useState<{ type: "error" | "success"; text: string } | null>(null);
   const [showNotify, setShowNotify] = useState(false);
   const [notifyMsg, setNotifyMsg] = useState("");
+  const [notifyTab, setNotifyTab] = useState<"whatsapp" | "email" | "team">("whatsapp");
 
   // Cancelamento
   const [showCancel, setShowCancel] = useState(false);
@@ -76,6 +78,7 @@ export function ServiceDetailSheet({ service, onClose, onChanged }: Props) {
     setClockOutTime("");
     setClockOutTsId("");
     setShowNotify(false);
+    setNotifyTab("whatsapp");
     setShowCancel(false);
     setCancelType("client_request");
     setCancelReason("");
@@ -106,8 +109,10 @@ export function ServiceDetailSheet({ service, onClose, onChanged }: Props) {
   const ss   = STATUS_STYLE[svc.status] ?? STATUS_STYLE.agendado;
   const value = svc.manual_value ?? svc.calculated_value;
   const canAct = svc.status !== "concluido";
-  // client_phone adicionado na migration 020 — cast até tipos serem regenerados
-  const clientPhone = (svc as ServiceFull & { client_phone?: string | null }).client_phone ?? null;
+  // client_phone / client_email adicionados nas migrations 020/021 — cast até tipos serem regenerados
+  type SvcExtra = ServiceFull & { client_phone?: string | null; client_email?: string | null };
+  const clientPhone = (svc as SvcExtra).client_phone ?? null;
+  const clientEmail = (svc as SvcExtra).client_email ?? null;
 
   // ─── Acções ──────────────────────────────────────────────────────────────
 
@@ -169,7 +174,35 @@ export function ServiceDetailSheet({ service, onClose, onChanged }: Props) {
     onChanged();
   }
 
-  async function handleNotify() {
+  async function handleNotifyEmail() {
+    if (!clientEmail || !notifyMsg.trim()) return;
+    setActionLoading("notify");
+    setActionMsg(null);
+    try {
+      const result = await sendBulkClientNotifications([{
+        serviceId:   svc.id,
+        clientId:    svc.client_id,
+        clientName:  svc.client_name,
+        serviceDate: format(parseISO(svc.scheduled_start), "d MMM", { locale: pt }),
+        serviceTime: format(parseISO(svc.scheduled_start), "HH:mm"),
+        method:      "email",
+        contact:     clientEmail,
+      }]);
+      setShowNotify(false);
+      if (result.sent > 0) {
+        setActionMsg({ type: "success", text: `Email enviado para ${clientEmail}.` });
+      } else {
+        const detail = result.errors[0] ?? "Erro desconhecido";
+        setActionMsg({ type: "error", text: `Falha: ${detail}` });
+      }
+    } catch (err) {
+      setActionMsg({ type: "error", text: err instanceof Error ? err.message : "Erro ao enviar email." });
+    } finally {
+      setActionLoading(null);
+    }
+  }
+
+  async function handleNotifyTeam() {
     if (!notifyMsg.trim()) return;
     setActionLoading("notify");
     setActionMsg(null);
@@ -180,8 +213,8 @@ export function ServiceDetailSheet({ service, onClose, onChanged }: Props) {
       setActionMsg({
         type: "success",
         text: res.sent > 0
-          ? `Notificação enviada para ${res.sent} membro${res.sent !== 1 ? "s" : ""}.`
-          : "Nenhum membro com notificações ativas.",
+          ? `Push enviado para ${res.sent} membro${res.sent !== 1 ? "s" : ""} da equipa.`
+          : "Nenhum membro com notificações push ativas.",
       });
     } else {
       setActionMsg({ type: "error", text: res.error });
@@ -441,30 +474,122 @@ export function ServiceDetailSheet({ service, onClose, onChanged }: Props) {
             </div>
           )}
 
-          {/* Painel de notificar estabelecimento */}
+          {/* Painel de contactar cliente */}
           {showNotify && (
-            <div className="p-4 rounded-lg border border-[var(--color-border)] space-y-3">
-              <p className="text-sm font-semibold text-[var(--color-text-main)]">Notificar {svc.client_name}</p>
-              <textarea
-                value={notifyMsg}
-                onChange={(e) => setNotifyMsg(e.target.value)}
-                rows={3}
-                className={INPUT_CLS + " resize-none"}
-                placeholder={`Mensagem para ${svc.client_name}...`}
-              />
-              <div className="flex gap-2">
+            <div className="rounded-xl border border-[var(--color-border)] overflow-hidden">
+              <div className="px-4 py-3 border-b border-[var(--color-border)] flex items-center justify-between">
+                <p className="text-sm font-semibold text-[var(--color-text-main)]">
+                  Contactar {svc.client_name}
+                </p>
                 <button
-                  onClick={handleNotify}
-                  disabled={actionLoading === "notify" || !notifyMsg.trim()}
-                  className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-[var(--color-primary)] text-white text-sm font-medium hover:bg-[var(--color-primary-hover)] transition-colors disabled:opacity-50"
+                  onClick={() => setShowNotify(false)}
+                  className="p-1 rounded text-[var(--color-text-muted)] hover:bg-[var(--color-background)]"
                 >
-                  {actionLoading === "notify" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Bell className="w-3.5 h-3.5" />}
-                  Enviar
+                  <X className="w-4 h-4" />
                 </button>
-                <button onClick={() => setShowNotify(false)}
-                  className="px-3 py-2 rounded-lg border border-[var(--color-border)] text-sm text-[var(--color-text-sub)] hover:bg-[var(--color-background)] transition-colors">
-                  Cancelar
-                </button>
+              </div>
+
+              {/* Tabs */}
+              <div className="flex border-b border-[var(--color-border)]">
+                {[
+                  { key: "whatsapp" as const, icon: MessageCircle, label: "WhatsApp", show: !!clientPhone },
+                  { key: "email"    as const, icon: Mail,          label: "Email",    show: !!clientEmail },
+                  { key: "team"     as const, icon: Users2,        label: "Equipa",   show: !!svc.team_id },
+                ].filter((t) => t.show).map(({ key, icon: Icon, label }) => (
+                  <button
+                    key={key}
+                    onClick={() => setNotifyTab(key)}
+                    className={`flex items-center gap-1.5 px-4 py-2.5 text-xs font-medium border-b-2 transition-colors -mb-px ${
+                      notifyTab === key
+                        ? "border-[var(--color-primary)] text-[var(--color-primary)]"
+                        : "border-transparent text-[var(--color-text-sub)] hover:text-[var(--color-text-main)]"
+                    }`}
+                  >
+                    <Icon className="w-3.5 h-3.5" />
+                    {label}
+                  </button>
+                ))}
+              </div>
+
+              <div className="p-4 space-y-3">
+                {/* Tab WhatsApp */}
+                {notifyTab === "whatsapp" && clientPhone && (
+                  <>
+                    <p className="text-xs text-[var(--color-text-muted)]">
+                      Abre o WhatsApp com a mensagem pré-preenchida. Edita antes de enviar.
+                    </p>
+                    <textarea
+                      value={notifyMsg}
+                      onChange={(e) => setNotifyMsg(e.target.value)}
+                      rows={4}
+                      className={INPUT_CLS + " resize-none text-xs"}
+                    />
+                    <a
+                      href={`https://wa.me/${clientPhone.replace(/\D/g, "")}?text=${encodeURIComponent(notifyMsg)}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center justify-center gap-2 w-full px-4 py-2.5 rounded-lg bg-green-600 text-white text-sm font-medium hover:bg-green-700 transition-colors"
+                    >
+                      <MessageCircle className="w-4 h-4" />
+                      Abrir WhatsApp
+                    </a>
+                  </>
+                )}
+
+                {/* Tab Email */}
+                {notifyTab === "email" && clientEmail && (
+                  <>
+                    <p className="text-xs text-[var(--color-text-muted)]">
+                      Será enviado um email para <strong>{clientEmail}</strong>.
+                    </p>
+                    <textarea
+                      value={notifyMsg}
+                      onChange={(e) => setNotifyMsg(e.target.value)}
+                      rows={4}
+                      className={INPUT_CLS + " resize-none text-xs"}
+                      placeholder="Mensagem adicional (opcional)..."
+                    />
+                    <button
+                      onClick={handleNotifyEmail}
+                      disabled={actionLoading === "notify"}
+                      className="flex items-center justify-center gap-2 w-full px-4 py-2.5 rounded-lg bg-[var(--color-primary)] text-white text-sm font-medium hover:bg-[var(--color-primary-hover)] transition-colors disabled:opacity-50"
+                    >
+                      {actionLoading === "notify" ? <Loader2 className="w-4 h-4 animate-spin" /> : <Mail className="w-4 h-4" />}
+                      Enviar email
+                    </button>
+                  </>
+                )}
+
+                {/* Tab Equipa (push) */}
+                {notifyTab === "team" && svc.team_id && (
+                  <>
+                    <p className="text-xs text-[var(--color-text-muted)]">
+                      Envia notificação push para todos os membros da equipa <strong>{svc.team_name}</strong>.
+                    </p>
+                    <textarea
+                      value={notifyMsg}
+                      onChange={(e) => setNotifyMsg(e.target.value)}
+                      rows={3}
+                      className={INPUT_CLS + " resize-none text-xs"}
+                      placeholder="Mensagem para a equipa..."
+                    />
+                    <button
+                      onClick={handleNotifyTeam}
+                      disabled={actionLoading === "notify" || !notifyMsg.trim()}
+                      className="flex items-center justify-center gap-2 w-full px-4 py-2.5 rounded-lg bg-[var(--color-primary)] text-white text-sm font-medium hover:bg-[var(--color-primary-hover)] transition-colors disabled:opacity-50"
+                    >
+                      {actionLoading === "notify" ? <Loader2 className="w-4 h-4 animate-spin" /> : <Bell className="w-4 h-4" />}
+                      Notificar equipa
+                    </button>
+                  </>
+                )}
+
+                {/* Nenhum contacto disponível */}
+                {!clientPhone && !clientEmail && !svc.team_id && (
+                  <p className="text-sm text-[var(--color-text-muted)] text-center py-2">
+                    Sem contactos disponíveis. Adiciona email/telefone na ficha do cliente.
+                  </p>
+                )}
               </div>
             </div>
           )}
