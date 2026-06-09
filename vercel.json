@@ -10,7 +10,7 @@
     },
     {
       "path": "/api/cron/auto-checkout",
-      "schedule": "*/15 * * * *"
+      "schedule": "0 23 * * *"
     }
   ]
 }
