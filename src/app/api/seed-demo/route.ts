@@ -1,21 +1,10 @@
-import { NextRequest, NextResponse } from "next/server";
+import { type NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 
-// POST /api/seed-demo?secret=<SEED_SECRET>
-// Popula dados fictícios para testes. Em produção requer o header secret.
-export async function POST(req: NextRequest) {
-  const secret = req.nextUrl.searchParams.get("secret");
-  const envSecret = process.env.SEED_SECRET;
-
-  const isAllowed =
-    process.env.NODE_ENV !== "production" ||
-    (envSecret && secret === envSecret);
-
-  if (!isAllowed) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
-
+// POST /api/seed-demo
+// Popula dados fictícios para testes. Protegido por autenticação (admin/gestor).
+export async function POST(_req: NextRequest) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
   const supabase = await createClient();
@@ -490,16 +479,16 @@ export async function POST(req: NextRequest) {
 
   // ── 8. CASH FLOW (despesas dos últimos 3 meses) ──────────────────────────────
   const despesas = [
-    { desc: "Fornecedor Produtos Limpeza — Fev",  amount: 820,  cat: "material",     date: offsetDate(now, -50) },
-    { desc: "Combustível — Fevereiro",            amount: 340,  cat: "transporte",   date: offsetDate(now, -45) },
-    { desc: "Aluguer de equipamentos",            amount: 600,  cat: "equipamento",  date: offsetDate(now, -40) },
-    { desc: "Seguro de responsabilidade civil",   amount: 250,  cat: "seguro",       date: offsetDate(now, -35) },
-    { desc: "Fornecedor Produtos Limpeza — Mar",  amount: 760,  cat: "material",     date: offsetDate(now, -20) },
-    { desc: "Combustível — Março",                amount: 310,  cat: "transporte",   date: offsetDate(now, -15) },
-    { desc: "Manutenção da carrinha",             amount: 480,  cat: "manutencao",   date: offsetDate(now, -12) },
-    { desc: "Material EPI (luvas, fardas)",       amount: 190,  cat: "material",     date: offsetDate(now, -8)  },
-    { desc: "Fornecedor Produtos Limpeza — Abr",  amount: 790,  cat: "material",     date: offsetDate(now, -5)  },
-    { desc: "Combustível — Abril",                amount: 320,  cat: "transporte",   date: offsetDate(now, -2)  },
+    { desc: "Fornecedor Produtos Limpeza — Fev",  amount: 820,  cat: "fornecedor", date: offsetDate(now, -50) },
+    { desc: "Combustível — Fevereiro",            amount: 340,  cat: "despesa",    date: offsetDate(now, -45) },
+    { desc: "Aluguer de equipamentos",            amount: 600,  cat: "despesa",    date: offsetDate(now, -40) },
+    { desc: "Seguro de responsabilidade civil",   amount: 250,  cat: "despesa",    date: offsetDate(now, -35) },
+    { desc: "Fornecedor Produtos Limpeza — Mar",  amount: 760,  cat: "fornecedor", date: offsetDate(now, -20) },
+    { desc: "Combustível — Março",                amount: 310,  cat: "despesa",    date: offsetDate(now, -15) },
+    { desc: "Manutenção da carrinha",             amount: 480,  cat: "despesa",    date: offsetDate(now, -12) },
+    { desc: "Material EPI (luvas, fardas)",       amount: 190,  cat: "fornecedor", date: offsetDate(now, -8)  },
+    { desc: "Fornecedor Produtos Limpeza — Abr",  amount: 790,  cat: "fornecedor", date: offsetDate(now, -5)  },
+    { desc: "Combustível — Abril",                amount: 320,  cat: "despesa",    date: offsetDate(now, -2)  },
   ];
 
   for (const d of despesas) {
@@ -517,7 +506,39 @@ export async function POST(req: NextRequest) {
       amount: d.amount,
       description: d.desc,
       category: d.cat,
+      status: "confirmado",
       date: d.date,
+      created_by: user.id,
+    });
+  }
+
+  // Receitas (entradas) dos meses anteriores
+  const receitas = [
+    { desc: "Pagamento Edifício Marquês — Fev",  amount: 2100, date: offsetDate(now, -40) },
+    { desc: "Pagamento Clínica Saúde Total — Fev", amount: 3200, date: offsetDate(now, -38) },
+    { desc: "Pagamento Supermercado Freitas — Fev", amount: 1850, date: offsetDate(now, -36) },
+    { desc: "Pagamento Edifício Marquês — Mar",  amount: 2200, date: offsetDate(now, -10) },
+    { desc: "Pagamento Clínica Saúde Total — Mar", amount: 3350, date: offsetDate(now, -8)  },
+    { desc: "Pagamento Hotel Bela Vista — Mar",  amount: 4100, date: offsetDate(now, -6)  },
+  ];
+
+  for (const r of receitas) {
+    const { data: existing } = await admin
+      .from("cash_flow_entries")
+      .select("id")
+      .eq("description", r.desc)
+      .eq("company_id", companyId)
+      .single();
+    if (existing) continue;
+
+    await admin.from("cash_flow_entries").insert({
+      company_id: companyId,
+      type: "entrada",
+      amount: r.amount,
+      description: r.desc,
+      category: "faturacao",
+      status: "confirmado",
+      date: r.date,
       created_by: user.id,
     });
   }
