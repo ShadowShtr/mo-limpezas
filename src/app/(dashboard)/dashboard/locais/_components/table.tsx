@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
-import { Search, MoreHorizontal, MapPin } from "lucide-react";
+import { useState, useTransition } from "react";
+import { Search, MoreHorizontal, MapPin, Trash2 } from "lucide-react";
 import { LocalSheet } from "./sheet";
+import { deleteLocation } from "@/app/actions/locations";
 import { usePagination, Pagination } from "@/components/ui/pagination";
 
 type Local = {
@@ -30,6 +31,17 @@ interface Props {
 
 export function LocaisTable({ locais, clientes, companyId }: Props) {
   const [search, setSearch] = useState("");
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [, startTransition] = useTransition();
+
+  function handleDelete(id: string, name: string) {
+    if (!confirm(`Eliminar o local "${name}"? Esta ação não pode ser desfeita.`)) return;
+    setDeletingId(id);
+    startTransition(async () => {
+      await deleteLocation(id);
+      setDeletingId(null);
+    });
+  }
 
   const clienteMap = Object.fromEntries(clientes.map((c) => [c.id, c.name]));
 
@@ -95,13 +107,23 @@ export function LocaisTable({ locais, clientes, companyId }: Props) {
                     }`}>{l.active ? "Ativo" : "Inativo"}</span>
                   </td>
                   <td className="px-4 py-3">
-                    <LocalSheet companyId={companyId} clientes={clientes} local={l}
-                      trigger={
-                        <button className="p-1.5 rounded-lg text-[var(--color-text-muted)] hover:bg-[var(--color-background)] transition-colors">
-                          <MoreHorizontal className="w-4 h-4" />
-                        </button>
-                      }
-                    />
+                    <div className="flex items-center gap-1">
+                      <LocalSheet companyId={companyId} clientes={clientes} local={l}
+                        trigger={
+                          <button className="p-1.5 rounded-lg text-[var(--color-text-muted)] hover:bg-[var(--color-background)] transition-colors" title="Editar">
+                            <MoreHorizontal className="w-4 h-4" />
+                          </button>
+                        }
+                      />
+                      <button
+                        onClick={() => handleDelete(l.id, l.name)}
+                        disabled={deletingId === l.id}
+                        className="p-1.5 rounded-lg text-[var(--color-text-muted)] hover:text-[var(--color-danger)] hover:bg-red-50 transition-colors disabled:opacity-40"
+                        title="Eliminar"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))
