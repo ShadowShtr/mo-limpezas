@@ -1,4 +1,4 @@
-import { createAdminClient } from "@/lib/supabase/admin";
+﻿import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { Header } from "@/components/layout/header";
 import { getPayrollRecords } from "@/app/actions/payroll";
@@ -44,7 +44,7 @@ export default async function FolhaPagamentoPage({
         title="Folha de Pagamento"
         subtitle={mesLabel}
       />
-      <div className="p-6 max-w-[1400px]">
+      <div className="px-4 py-5 sm:p-6 lg:px-8 max-w-[1400px]">
         <PayrollClient
           initialRecords={records}
           companyId={companyId}

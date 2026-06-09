@@ -1,11 +1,11 @@
-export default function DashboardLoading() {
+﻿export default function DashboardLoading() {
   return (
     <div>
       <div className="h-16 bg-white border-b border-[var(--color-border)] flex items-center px-6">
         <div className="h-5 w-32 bg-[var(--color-border)] rounded animate-pulse" />
       </div>
 
-      <div className="p-6 space-y-6 max-w-[1400px]">
+      <div className="px-4 py-5 sm:p-6 lg:px-8 space-y-6 max-w-[1400px]">
         {/* KPIs skeleton */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           {[...Array(4)].map((_, i) => (

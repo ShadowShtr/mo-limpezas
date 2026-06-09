@@ -1,4 +1,4 @@
-import { createAdminClient } from "@/lib/supabase/admin";
+﻿import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { getAccountsData } from "@/app/actions/cash-flow";
@@ -19,7 +19,7 @@ export default async function ContasPage() {
   return (
     <div>
       <Header title="Contas a Pagar e a Receber" subtitle="Extrato de pendências financeiras" />
-      <div className="p-6 max-w-[1400px]">
+      <div className="px-4 py-5 sm:p-6 lg:px-8 max-w-[1400px]">
         <ContasClient
           toReceive={res.ok ? res.toReceive : []}
           toPay={res.ok ? res.toPay : []}

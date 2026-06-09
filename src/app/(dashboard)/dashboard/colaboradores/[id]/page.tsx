@@ -115,7 +115,7 @@ export default async function ColaboradorDetailPage({ params }: Props) {
         }
       />
 
-      <div className="p-6 space-y-6 max-w-[1200px]">
+      <div className="px-4 py-5 sm:p-6 lg:px-8 space-y-6 max-w-[1200px]">
         {/* Voltar */}
         <Link
           href="/dashboard/colaboradores"

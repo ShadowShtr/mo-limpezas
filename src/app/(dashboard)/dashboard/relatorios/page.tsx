@@ -1,4 +1,4 @@
-import { createAdminClient } from "@/lib/supabase/admin";
+﻿import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { Header } from "@/components/layout/header";
 import { getReportsData } from "@/app/actions/reports";
@@ -49,7 +49,7 @@ export default async function RelatoriosPage({
         subtitle={mesLabel}
       />
 
-      <div className="p-6 max-w-[1400px] space-y-5">
+      <div className="px-4 py-5 sm:p-6 lg:px-8 space-y-5 max-w-[1400px]">
         {/* Filtro de período */}
         <div className="bg-white rounded-xl border border-[var(--color-border)] px-4 py-3">
           <form method="GET" className="flex items-end gap-3">

@@ -1,4 +1,4 @@
-import { createClient } from "@/lib/supabase/server";
+﻿import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Header } from "@/components/layout/header";
 import { ContratosTable } from "./_components/table";
@@ -67,7 +67,7 @@ export default async function ContratosPage() {
           />
         }
       />
-      <div className="p-6 max-w-[1400px]">
+      <div className="px-4 py-5 sm:p-6 lg:px-8 max-w-[1400px]">
         <ContratosTable
           contratos={(contratos ?? []) as unknown as ContratosTableRow[]}
           companyId={companyId}

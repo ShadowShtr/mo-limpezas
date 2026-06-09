@@ -1,4 +1,4 @@
-import { createAdminClient } from "@/lib/supabase/admin";
+﻿import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { Header } from "@/components/layout/header";
 import { AbsenceTable } from "./_components/absence-table";
@@ -97,7 +97,7 @@ export default async function FaltasPage({
         }
       />
 
-      <div className="p-6 max-w-[1400px] space-y-5">
+      <div className="px-4 py-5 sm:p-6 lg:px-8 space-y-5 max-w-[1400px]">
         {/* Alerta de faltas sem substituto */}
         {semSubstituto > 0 && (
           <div className="flex items-center gap-3 px-4 py-3 rounded-lg bg-orange-50 border border-orange-200 text-orange-700 text-sm">

@@ -1,4 +1,4 @@
-import { createAdminClient } from "@/lib/supabase/admin";
+﻿import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { Header } from "@/components/layout/header";
 import { getCompanySettings } from "@/app/actions/settings";
@@ -26,7 +26,7 @@ export default async function ConfiguracoesPage() {
         title="Configurações"
         subtitle="Valores e percentagens que afetam cálculos em toda a plataforma"
       />
-      <div className="p-6 max-w-[900px] space-y-6">
+      <div className="px-4 py-5 sm:p-6 lg:px-8 space-y-6 max-w-[900px]">
         <SettingsForm initial={settings} />
         <CsvImport />
         <SeedButton />
