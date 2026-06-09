@@ -164,11 +164,11 @@ function MonthlyTable({ data }: { data: FinancialDashboardData["monthly"] }) {
         <table className="w-full text-xs">
           <thead>
             <tr className="text-[var(--color-text-muted)] border-b border-[var(--color-border)]">
-              <th className="pb-2 text-left font-medium">Mês</th>
-              <th className="pb-2 text-right font-medium">Receita</th>
-              <th className="pb-2 text-right font-medium">Custos</th>
-              <th className="pb-2 text-right font-medium">Margem</th>
-              <th className="pb-2 text-right font-medium">%</th>
+              <th className="pb-2 px-3 text-left font-medium">Mês</th>
+              <th className="pb-2 px-3 text-right font-medium">Receita</th>
+              <th className="pb-2 px-3 text-right font-medium">Custos</th>
+              <th className="pb-2 px-3 text-right font-medium">Margem</th>
+              <th className="pb-2 px-3 text-right font-medium">%</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-[var(--color-border)]">
@@ -176,13 +176,13 @@ function MonthlyTable({ data }: { data: FinancialDashboardData["monthly"] }) {
               const pct = m.revenue > 0 ? Math.round((m.margin / m.revenue) * 100) : 0;
               return (
                 <tr key={`${m.year}-${m.month}`} className="hover:bg-[var(--color-background)]">
-                  <td className="py-2 font-medium text-[var(--color-text-main)]">{m.label}</td>
-                  <td className="py-2 text-right text-[var(--color-text-main)]">{fmtEur(m.revenue)}</td>
-                  <td className="py-2 text-right text-[var(--color-text-sub)]">{fmtEur(m.costs)}</td>
-                  <td className={`py-2 text-right font-medium ${m.margin >= 0 ? "text-[var(--color-primary)]" : "text-red-500"}`}>
+                  <td className="py-2 px-3 font-medium text-[var(--color-text-main)]">{m.label}</td>
+                  <td className="py-2 px-3 text-right text-[var(--color-text-main)]">{fmtEur(m.revenue)}</td>
+                  <td className="py-2 px-3 text-right text-[var(--color-text-sub)]">{fmtEur(m.costs)}</td>
+                  <td className={`py-2 px-3 text-right font-medium ${m.margin >= 0 ? "text-[var(--color-primary)]" : "text-red-500"}`}>
                     {fmtEur(m.margin)}
                   </td>
-                  <td className={`py-2 text-right ${pct >= 0 ? "text-[var(--color-primary)]" : "text-red-500"}`}>
+                  <td className={`py-2 px-3 text-right ${pct >= 0 ? "text-[var(--color-primary)]" : "text-red-500"}`}>
                     {pct}%
                   </td>
                 </tr>

@@ -187,8 +187,8 @@ export function PayrollClient({ initialRecords, companyId, mesParam, year, month
   return (
     <>
       <div className="space-y-5">
-        {/* Filtro de mês + ações */}
-        <div className="flex flex-wrap items-end gap-3">
+        {/* Toolbar: filtro de mês + ações */}
+        <div className="bg-white rounded-xl border border-[var(--color-border)] px-4 py-3 flex flex-wrap items-end gap-3">
           <form method="GET" className="flex items-end gap-2">
             <div>
               <label className="block text-xs text-[var(--color-text-muted)] mb-1">Mês</label>

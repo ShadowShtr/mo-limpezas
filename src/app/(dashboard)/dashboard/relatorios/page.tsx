@@ -51,23 +51,25 @@ export default async function RelatoriosPage({
 
       <div className="p-6 max-w-[1400px] space-y-5">
         {/* Filtro de período */}
-        <form method="GET" className="flex items-end gap-3">
-          <div>
-            <label className="block text-xs text-[var(--color-text-muted)] mb-1">Mês</label>
-            <input
-              type="month"
-              name="mes"
-              defaultValue={mesParam}
-              className="px-3 py-2 rounded-lg border border-[var(--color-border)] text-sm text-[var(--color-text-main)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
-            />
-          </div>
-          <button
-            type="submit"
-            className="px-4 py-2 rounded-lg border border-[var(--color-border)] text-sm text-[var(--color-text-sub)] hover:bg-[var(--color-background)] transition-colors"
-          >
-            Filtrar
-          </button>
-        </form>
+        <div className="bg-white rounded-xl border border-[var(--color-border)] px-4 py-3">
+          <form method="GET" className="flex items-end gap-3">
+            <div>
+              <label className="block text-xs text-[var(--color-text-muted)] mb-1">Mês</label>
+              <input
+                type="month"
+                name="mes"
+                defaultValue={mesParam}
+                className="px-3 py-2 rounded-lg border border-[var(--color-border)] text-sm text-[var(--color-text-main)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
+              />
+            </div>
+            <button
+              type="submit"
+              className="px-4 py-2 rounded-lg border border-[var(--color-border)] text-sm text-[var(--color-text-sub)] hover:bg-[var(--color-background)] transition-colors"
+            >
+              Filtrar
+            </button>
+          </form>
+        </div>
 
         {/* KPI Cards */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">

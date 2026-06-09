@@ -131,8 +131,8 @@ export function CashFlowClient({ initialData, error: initErr, companyId, mesPara
 
   return (
     <div className="space-y-5">
-      {/* Filtros + botão novo */}
-      <div className="flex flex-wrap items-end gap-3">
+      {/* Toolbar: filtros + botão novo */}
+      <div className="bg-white rounded-xl border border-[var(--color-border)] px-4 py-3 flex flex-wrap items-end gap-3">
         <div>
           <label className="block text-xs text-[var(--color-text-muted)] mb-1">Mês</label>
           <input
