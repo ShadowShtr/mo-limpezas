@@ -10,6 +10,17 @@ function parseCoord(value: unknown) {
   return Number.isFinite(n) ? n : null;
 }
 
+/** Valida um timestamp do cliente (registo offline). Devolve ISO no passado, ou agora. */
+function parsePastTimestamp(value: unknown): string {
+  if (typeof value === "string") {
+    const t = new Date(value).getTime();
+    if (Number.isFinite(t) && t <= Date.now() + 60_000) {
+      return new Date(t).toISOString();
+    }
+  }
+  return new Date().toISOString();
+}
+
 function gpsError() {
   return NextResponse.json(
     { error: "Ative a localização/GPS para registar o ponto." },
@@ -27,12 +38,15 @@ export async function POST(req: NextRequest) {
   const limited = rateLimit(rateLimitKey("timesheet", user.id), 10, 60_000);
   if (limited) return limited;
 
-  const { service_id, lat: rawLat, lng: rawLng } = await req.json();
+  const { service_id, lat: rawLat, lng: rawLng, clock_in_at: rawClockIn } = await req.json();
   const lat = parseCoord(rawLat);
   const lng = parseCoord(rawLng);
   if (!service_id)
     return NextResponse.json({ error: "service_id required" }, { status: 400 });
   if (lat == null || lng == null) return gpsError();
+
+  // Hora do clock-in: aceitar a do cliente (registo offline em fila), nunca no futuro.
+  const clockInAt = parsePastTimestamp(rawClockIn);
 
   const admin = createAdminClient();
 
@@ -78,13 +92,13 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Sem permissão para este serviço" }, { status: 403 });
   }
 
-  // Validar janela horária do clock-in
+  // Validar janela horária do clock-in (usa a hora real do registo — importante p/ fila offline)
   if (service.scheduled_start) {
-    const now = new Date();
+    const ref = new Date(clockInAt);
     const scheduledStart = new Date(service.scheduled_start);
     const earliestClockIn = new Date(scheduledStart.getTime() - settings.checkin_before_minutes * 60_000);
-    if (now < earliestClockIn) {
-      const diffMin = Math.round((earliestClockIn.getTime() - now.getTime()) / 60_000);
+    if (ref < earliestClockIn) {
+      const diffMin = Math.round((earliestClockIn.getTime() - ref.getTime()) / 60_000);
       return NextResponse.json(
         { error: `Ainda não pode iniciar o serviço. Pode fazer clock-in em ${diffMin} minuto${diffMin !== 1 ? "s" : ""}.` },
         { status: 400 },
@@ -106,7 +120,7 @@ export async function POST(req: NextRequest) {
     service_id,
     collaborator_id: user.id,
     company_id: profile.company_id,
-    clock_in_at: new Date().toISOString(),
+    clock_in_at: clockInAt,
     clock_in_lat: lat,
     clock_in_lng: lng,
     clock_in_distance_m: distance_m,
@@ -140,12 +154,14 @@ export async function PATCH(req: NextRequest) {
   const limited = rateLimit(rateLimitKey("timesheet", user.id), 10, 60_000);
   if (limited) return limited;
 
-  const { service_id, lat: rawLat, lng: rawLng } = await req.json();
+  const { service_id, lat: rawLat, lng: rawLng, clock_out_at: rawClockOut } = await req.json();
   const lat = parseCoord(rawLat);
   const lng = parseCoord(rawLng);
   if (!service_id)
     return NextResponse.json({ error: "service_id required" }, { status: 400 });
   if (lat == null || lng == null) return gpsError();
+
+  const clockOutAt = parsePastTimestamp(rawClockOut);
 
   const admin = createAdminClient();
 
@@ -160,15 +176,15 @@ export async function PATCH(req: NextRequest) {
   if (!ts)
     return NextResponse.json({ error: "Clock-in não encontrado" }, { status: 404 });
 
-  const now = new Date();
+  const out = new Date(clockOutAt);
   const duration_minutes = ts.clock_in_at
-    ? Math.round((now.getTime() - new Date(ts.clock_in_at).getTime()) / 60000)
+    ? Math.max(0, Math.round((out.getTime() - new Date(ts.clock_in_at).getTime()) / 60000))
     : 0;
 
   const { data, error } = await admin
     .from("timesheets")
     .update({
-      clock_out_at: now.toISOString(),
+      clock_out_at: clockOutAt,
       clock_out_lat: lat,
       clock_out_lng: lng,
       duration_minutes,
@@ -188,7 +204,7 @@ export async function PATCH(req: NextRequest) {
   if ((count ?? 0) === 0) {
     await admin
       .from("services")
-      .update({ actual_end: now.toISOString(), status: "concluido" })
+      .update({ actual_end: clockOutAt, status: "concluido" })
       .eq("id", service_id);
   }
 

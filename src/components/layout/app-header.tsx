@@ -6,11 +6,12 @@ import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 
 interface AppHeaderProps {
+  userId: string;
   userName: string;
   avatarUrl: string | null;
 }
 
-export function AppHeader({ userName, avatarUrl }: AppHeaderProps) {
+export function AppHeader({ userId, userName, avatarUrl }: AppHeaderProps) {
   const [unread, setUnread] = useState(0);
 
   useEffect(() => {
@@ -20,6 +21,7 @@ export function AppHeader({ userName, avatarUrl }: AppHeaderProps) {
       const { count } = await supabase
         .from("notifications")
         .select("id", { count: "exact", head: true })
+        .eq("user_id", userId)
         .is("read_at", null);
       setUnread(count ?? 0);
     }
@@ -27,16 +29,16 @@ export function AppHeader({ userName, avatarUrl }: AppHeaderProps) {
     loadUnread();
 
     const channel = supabase
-      .channel("app-notifications")
+      .channel(`app-notifications-${userId}`)
       .on(
         "postgres_changes",
-        { event: "*", schema: "public", table: "notifications" },
+        { event: "*", schema: "public", table: "notifications", filter: `user_id=eq.${userId}` },
         () => loadUnread()
       )
       .subscribe();
 
     return () => { supabase.removeChannel(channel); };
-  }, []);
+  }, [userId]);
 
   const initials = userName
     .split(" ")

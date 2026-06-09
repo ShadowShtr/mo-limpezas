@@ -7,6 +7,7 @@ import { formatTime, formatDate } from "@/lib/utils";
 import { StatusBadge } from "../../_components/status-badge";
 import { ClockButton } from "./_components/clock-button";
 import { TeamRealtime } from "./_components/team-realtime";
+import { getCurrentUser } from "@/lib/auth/current-user";
 
 interface Props {
   params: Promise<{ id: string }>;
@@ -16,9 +17,7 @@ export default async function ServicoDetailPage({ params }: Props) {
   const { id } = await params;
   const supabase = await createClient();
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getCurrentUser();
   if (!user) redirect("/login");
 
   const { data: s } = await supabase

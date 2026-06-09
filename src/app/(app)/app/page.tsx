@@ -1,24 +1,17 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { createAdminClient } from "@/lib/supabase/admin";
 import { MapPin, Clock, ChevronRight, Sun, Moon, Coffee } from "lucide-react";
 import { formatTime, formatDate } from "@/lib/utils";
 import { StatusBadge } from "./_components/status-badge";
+import { getCurrentProfile } from "@/lib/auth/current-user";
 
 export default async function AppHomePage() {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
-
-  const admin = createAdminClient();
-  const { data: profile } = await admin
-    .from("profiles")
-    .select("full_name, role")
-    .eq("id", user.id)
-    .single();
-
+  const profile = await getCurrentProfile();
   if (!profile) redirect("/login");
+  const user = { id: profile.id };
+
+  const supabase = await createClient();
 
   // Equipas onde a colaboradora está activa
   const { data: memberships } = await supabase

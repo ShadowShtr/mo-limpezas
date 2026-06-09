@@ -3,6 +3,8 @@ import { createClient } from "@/lib/supabase/server";
 import { Header } from "@/components/layout/header";
 import { AbsenceTable } from "./_components/absence-table";
 import { AbsenceSheet } from "./_components/absence-sheet";
+import { VacationRequests } from "./_components/vacation-requests";
+import { getPendingVacationRequests } from "@/app/actions/vacation";
 import { AlertTriangle } from "lucide-react";
 
 interface SearchParams {
@@ -79,6 +81,9 @@ export default async function FaltasPage({
   // Contar faltas não substituídas
   const semSubstituto = absences.filter((a) => !a.replaced_by).length;
 
+  // Pedidos de férias (colaboradores → gestor)
+  const vacationRequests = await getPendingVacationRequests();
+
   return (
     <div>
       <Header
@@ -98,6 +103,9 @@ export default async function FaltasPage({
       />
 
       <div className="px-4 py-5 sm:p-6 lg:px-8 space-y-5 mx-auto max-w-[1400px]">
+        {/* Pedidos de férias pendentes */}
+        <VacationRequests requests={vacationRequests} />
+
         {/* Alerta de faltas sem substituto */}
         {semSubstituto > 0 && (
           <div className="flex items-center gap-3 px-4 py-3 rounded-lg bg-orange-50 border border-orange-200 text-orange-700 text-sm">

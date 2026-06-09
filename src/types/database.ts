@@ -85,14 +85,14 @@ export type Database = {
       };
       absences: {
         Row: { id: string; company_id: string; collaborator_id: string; absence_type: string; starts_on: string; ends_on: string; notes: string | null; document_url: string | null; replaced_by: string | null; approved_by: string | null; created_by: string | null; created_at: string };
-        Insert: { company_id: string; collaborator_id: string; absence_type: string; starts_on: string; ends_on: string; notes?: string | null; document_url?: string | null; replaced_by?: string | null; created_by?: string | null };
-        Update: { absence_type?: string; ends_on?: string; notes?: string | null; approved_by?: string | null; replaced_by?: string | null };
+        Insert: { company_id: string; collaborator_id: string; absence_type: string; starts_on: string; ends_on: string; notes?: string | null; document_url?: string | null; replaced_by?: string | null; approved_by?: string | null; created_by?: string | null };
+        Update: { absence_type?: string; starts_on?: string; ends_on?: string; notes?: string | null; approved_by?: string | null; replaced_by?: string | null };
         Relationships: [];
       };
       vacation_requests: {
-        Row: { id: string; company_id: string; collaborator_id: string; start_date: string; end_date: string; days_count: number; status: string; notes: string | null; reviewed_by: string | null; reviewed_at: string | null; created_at: string };
-        Insert: { company_id: string; collaborator_id: string; start_date: string; end_date: string; days_count: number; status?: string; notes?: string | null };
-        Update: { status?: string; reviewed_by?: string | null; reviewed_at?: string | null };
+        Row: { id: string; company_id: string; collaborator_id: string; starts_on: string; ends_on: string; days_count: number | null; status: string; notes: string | null; rejection_reason: string | null; reviewed_by: string | null; reviewed_at: string | null; created_at: string };
+        Insert: { company_id: string; collaborator_id: string; starts_on: string; ends_on: string; days_count?: number | null; status?: string; notes?: string | null; rejection_reason?: string | null; reviewed_by?: string | null; reviewed_at?: string | null };
+        Update: { starts_on?: string; ends_on?: string; days_count?: number | null; status?: string; notes?: string | null; rejection_reason?: string | null; reviewed_by?: string | null; reviewed_at?: string | null };
         Relationships: [];
       };
       invoices: {

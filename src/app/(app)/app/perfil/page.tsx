@@ -3,10 +3,11 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Phone, Clock, CalendarDays, User, Download } from "lucide-react";
 import { SignOutButton } from "./_components/sign-out-button";
+import { getCurrentUser } from "@/lib/auth/current-user";
 
 export default async function PerfilPage() {
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await getCurrentUser();
   if (!user) redirect("/login");
 
   const admin = createAdminClient();

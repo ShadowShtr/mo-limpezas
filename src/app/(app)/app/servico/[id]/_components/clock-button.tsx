@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { LogIn, LogOut, MapPin, AlertTriangle, Loader2, CheckCircle } from "lucide-react";
+import { LogIn, LogOut, MapPin, AlertTriangle, Loader2, CheckCircle, CloudOff } from "lucide-react";
+import { queueTimesheet } from "@/lib/offline-sync";
 
 interface Timesheet {
   id: string;
@@ -14,6 +15,10 @@ interface Timesheet {
 interface Props {
   serviceId: string;
   initialTimesheet: Timesheet | null;
+}
+
+function isOffline() {
+  return typeof navigator !== "undefined" && !navigator.onLine;
 }
 
 function getPosition(): Promise<GeolocationPosition> {
@@ -38,6 +43,7 @@ export function ClockButton({ serviceId, initialTimesheet }: Props) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [distanceWarning, setDistanceWarning] = useState<number | null>(null);
+  const [queued, setQueued] = useState<"in" | "out" | null>(null);
 
   async function getCoords(): Promise<{ lat: number | null; lng: number | null }> {
     try {
@@ -54,23 +60,35 @@ export function ClockButton({ serviceId, initialTimesheet }: Props) {
     setDistanceWarning(null);
 
     const { lat, lng } = await getCoords();
+    const at = new Date().toISOString();
 
-    const res = await fetch("/api/app/timesheet", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ service_id: serviceId, lat, lng }),
-    });
-
-    const json = await res.json();
-    setLoading(false);
-
-    if (!res.ok) {
-      setError(json.error ?? "Erro ao fazer clock-in");
+    // Sem rede: guardar em fila e mostrar como registado
+    if (isOffline()) {
+      queueTimesheet({ kind: "in", service_id: serviceId, lat, lng, at });
+      setTimesheet({ id: `local-${Date.now()}`, clock_in_at: at, clock_out_at: null, location_warning: false, clock_in_distance_m: null });
+      setQueued("in");
+      setLoading(false);
       return;
     }
 
-    if (json.location_warning) setDistanceWarning(json.distance_m);
-    setTimesheet(json.data);
+    try {
+      const res = await fetch("/api/app/timesheet", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ service_id: serviceId, lat, lng }),
+      });
+      const json = await res.json();
+      setLoading(false);
+      if (!res.ok) { setError(json.error ?? "Erro ao fazer clock-in"); return; }
+      if (json.location_warning) setDistanceWarning(json.distance_m);
+      setTimesheet(json.data);
+    } catch {
+      // Falhou por rede: cair para a fila
+      queueTimesheet({ kind: "in", service_id: serviceId, lat, lng, at });
+      setTimesheet({ id: `local-${Date.now()}`, clock_in_at: at, clock_out_at: null, location_warning: false, clock_in_distance_m: null });
+      setQueued("in");
+      setLoading(false);
+    }
   }
 
   async function handleClockOut() {
@@ -78,22 +96,32 @@ export function ClockButton({ serviceId, initialTimesheet }: Props) {
     setError(null);
 
     const { lat, lng } = await getCoords();
+    const at = new Date().toISOString();
 
-    const res = await fetch("/api/app/timesheet", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ service_id: serviceId, lat, lng }),
-    });
-
-    const json = await res.json();
-    setLoading(false);
-
-    if (!res.ok) {
-      setError(json.error ?? "Erro ao fazer clock-out");
+    if (isOffline()) {
+      queueTimesheet({ kind: "out", service_id: serviceId, lat, lng, at });
+      setTimesheet((prev) => prev ? { ...prev, clock_out_at: at } : prev);
+      setQueued("out");
+      setLoading(false);
       return;
     }
 
-    setTimesheet(json.data);
+    try {
+      const res = await fetch("/api/app/timesheet", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ service_id: serviceId, lat, lng }),
+      });
+      const json = await res.json();
+      setLoading(false);
+      if (!res.ok) { setError(json.error ?? "Erro ao fazer clock-out"); return; }
+      setTimesheet(json.data);
+    } catch {
+      queueTimesheet({ kind: "out", service_id: serviceId, lat, lng, at });
+      setTimesheet((prev) => prev ? { ...prev, clock_out_at: at } : prev);
+      setQueued("out");
+      setLoading(false);
+    }
   }
 
   /* ── Sem clock-in ─────────────────────────────────────── */
@@ -136,6 +164,12 @@ export function ClockButton({ serviceId, initialTimesheet }: Props) {
               <span>
                 A {distanceWarning ?? timesheet.clock_in_distance_m}m do local (aviso registado)
               </span>
+            </div>
+          )}
+          {queued === "in" && (
+            <div className="flex items-center gap-2 text-xs text-[var(--color-text-muted)] mt-1.5">
+              <CloudOff className="w-3.5 h-3.5 shrink-0" />
+              <span>Registado offline — sincroniza quando houver rede.</span>
             </div>
           )}
         </div>
@@ -182,6 +216,12 @@ export function ClockButton({ serviceId, initialTimesheet }: Props) {
       <p className="text-xs text-green-700 mt-2 border-t border-green-200 pt-2">
         {Math.floor(minutes / 60)}h {minutes % 60}min trabalhadas
       </p>
+      {queued === "out" && (
+        <p className="flex items-center gap-1.5 text-xs text-[var(--color-text-muted)] mt-2">
+          <CloudOff className="w-3.5 h-3.5 shrink-0" />
+          Registado offline — sincroniza quando houver rede.
+        </p>
+      )}
     </div>
   );
 }

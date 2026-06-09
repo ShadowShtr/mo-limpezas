@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { ChevronLeft, ChevronRight, MapPin, Clock } from "lucide-react";
 import { formatTime } from "@/lib/utils";
 import { StatusBadge } from "../_components/status-badge";
+import { getCurrentUser } from "@/lib/auth/current-user";
 
 const WEEKDAYS = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
 const MONTHS = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
@@ -26,7 +27,7 @@ export default async function EscalaPage({ searchParams }: Props) {
   const { semana } = await searchParams;
   const supabase = await createClient();
 
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await getCurrentUser();
   if (!user) redirect("/login");
 
   const baseDate = semana ? new Date(semana) : new Date();

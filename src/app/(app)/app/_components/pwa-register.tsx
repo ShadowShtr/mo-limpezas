@@ -1,8 +1,12 @@
 "use client";
 
 import { useEffect } from "react";
+import { initOfflineSync } from "@/lib/offline-sync";
 
 export function PwaRegister() {
+  // Sincronização da fila offline de registos de ponto
+  useEffect(() => initOfflineSync(), []);
+
   useEffect(() => {
     if (typeof window === "undefined" || !("serviceWorker" in navigator)) return;
 
