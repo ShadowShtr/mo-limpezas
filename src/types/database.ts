@@ -18,9 +18,9 @@ export type Database = {
         Relationships: [];
       };
       company_settings: {
-        Row: { id: string; company_id: string; hourly_rate: number; meal_allowance_day: number; overtime_rate_pct: number; vacation_days_year: number; vat_rate: number; invoice_prefix: string; gps_radius_meters: number; timezone: string; primary_color: string; currency: string; created_at: string; updated_at: string };
-        Insert: { company_id: string; hourly_rate?: number; meal_allowance_day?: number; overtime_rate_pct?: number; vacation_days_year?: number; vat_rate?: number; invoice_prefix?: string; gps_radius_meters?: number; timezone?: string; primary_color?: string; currency?: string };
-        Update: { hourly_rate?: number; meal_allowance_day?: number; overtime_rate_pct?: number; vacation_days_year?: number; vat_rate?: number; invoice_prefix?: string; gps_radius_meters?: number; timezone?: string; primary_color?: string; currency?: string };
+        Row: { id: string; company_id: string; hourly_rate: number; meal_allowance_day: number; overtime_rate_pct: number; vacation_days_year: number; vat_rate: number; invoice_prefix: string; gps_radius_meters: number; timezone: string; primary_color: string; currency: string; checkin_before_minutes: number; checkout_after_minutes: number; created_at: string; updated_at: string };
+        Insert: { company_id: string; hourly_rate?: number; meal_allowance_day?: number; overtime_rate_pct?: number; vacation_days_year?: number; vat_rate?: number; invoice_prefix?: string; gps_radius_meters?: number; timezone?: string; primary_color?: string; currency?: string; checkin_before_minutes?: number; checkout_after_minutes?: number };
+        Update: { hourly_rate?: number; meal_allowance_day?: number; overtime_rate_pct?: number; vacation_days_year?: number; vat_rate?: number; invoice_prefix?: string; gps_radius_meters?: number; timezone?: string; primary_color?: string; currency?: string; checkin_before_minutes?: number; checkout_after_minutes?: number };
         Relationships: [];
       };
       profiles: {

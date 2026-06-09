@@ -63,8 +63,8 @@ export async function getCompanySettings(companyId: string): Promise<CompanySett
     vacation_days_year: data.vacation_days_year ?? DEFAULTS.vacation_days_year,
     gps_radius_meters: data.gps_radius_meters ?? DEFAULTS.gps_radius_meters,
     timezone: data.timezone ?? DEFAULTS.timezone,
-    checkin_before_minutes: (data as { checkin_before_minutes?: number | null }).checkin_before_minutes ?? DEFAULTS.checkin_before_minutes,
-    checkout_after_minutes: (data as { checkout_after_minutes?: number | null }).checkout_after_minutes ?? DEFAULTS.checkout_after_minutes,
+    checkin_before_minutes: data.checkin_before_minutes ?? DEFAULTS.checkin_before_minutes,
+    checkout_after_minutes: data.checkout_after_minutes ?? DEFAULTS.checkout_after_minutes,
   };
 }
 
