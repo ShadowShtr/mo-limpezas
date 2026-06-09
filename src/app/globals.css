@@ -99,6 +99,18 @@ body {
 ::-webkit-scrollbar-thumb { background: var(--color-border); border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--color-text-muted); }
 
+/* Scrollbar do calendário — grossa e visível */
+.calendar-scroll { scrollbar-color: var(--color-text-muted) var(--color-background); }
+.calendar-scroll::-webkit-scrollbar { height: 14px; width: 12px; }
+.calendar-scroll::-webkit-scrollbar-track { background: var(--color-background); }
+.calendar-scroll::-webkit-scrollbar-thumb {
+  background: var(--color-text-muted);
+  border-radius: 8px;
+  border: 3px solid var(--color-background);   /* "almofada" → thumb mais destacado */
+}
+.calendar-scroll::-webkit-scrollbar-thumb:hover { background: var(--color-text-sub); }
+.calendar-scroll::-webkit-scrollbar-corner { background: var(--color-background); }
+
 /* Safe area para iOS (notch / home indicator) */
 .safe-area-pb {
   padding-bottom: env(safe-area-inset-bottom, 0px);

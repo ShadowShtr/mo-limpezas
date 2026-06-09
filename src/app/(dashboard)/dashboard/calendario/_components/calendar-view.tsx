@@ -33,6 +33,9 @@ const TOTAL_HOURS = END_HOUR - START_HOUR;     // 15
 const SLOT_HEIGHT = 40;                         // px por 30 min
 const SLOTS_PER_HOUR = 2;
 const TOTAL_SLOTS = TOTAL_HOURS * SLOTS_PER_HOUR; // 30
+const COL_MIN_W = 180;                          // largura mínima de cada coluna de equipa
+const GUTTER_W = 56;                            // largura da coluna de horas (w-14)
+const HEADER_H = 44;                            // altura do header sticky das equipas
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 
@@ -200,14 +203,15 @@ export function CalendarView({
     return () => clearInterval(id);
   }, [selectedDate]);
 
-  // Scroll automático para a hora actual ou para 08:00 ao montar e ao mudar de dia
+  // Scroll automático para a hora actual ou para 08:00 ao montar e ao mudar de dia.
+  // Soma HEADER_H porque o header das equipas agora vive dentro do contentor de scroll (sticky).
   useEffect(() => {
     if (!scrollRef.current) return;
     const top = computeTimeTop(selectedDate);
     const scrollTo = top !== null
-      ? Math.max(0, top - 100)
+      ? Math.max(0, top - 80)
       : 1 * SLOTS_PER_HOUR * SLOT_HEIGHT; // 08:00
-    scrollRef.current.scrollTop = scrollTo;
+    scrollRef.current.scrollTop = HEADER_H + scrollTo;
   }, [selectedDate]);
 
   // ── Dados derivados ───────────────────────────────────────────────────────
@@ -519,43 +523,49 @@ export function CalendarView({
         {viewMode === "calendar" ?
         <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
 
-          {/* Cabeçalho das equipas */}
-          <div className="flex bg-white border-b border-[var(--color-border)] shrink-0">
-            <div className="w-14 shrink-0 border-r border-[var(--color-border)]" />
-            {columns.length > 0 ? columns.map((col) => (
-              <div
-                key={col.key}
-                className="flex-1 min-w-[160px] px-3 py-2.5 border-l border-[var(--color-border)]"
-              >
-                <div className="flex items-center gap-2">
-                  <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: col.color }} />
-                  <span className="text-sm font-semibold text-[var(--color-text-main)] truncate">{col.name}</span>
-                  <span className="ml-auto text-xs font-medium text-[var(--color-text-muted)] tabular-nums">
-                    {byTeam[col.id]?.length ?? 0}
-                  </span>
-                </div>
-              </div>
-            )) : (
-              <div className="flex-1 px-4 py-2.5 border-l border-[var(--color-border)] flex items-center gap-2">
-                <span className="text-sm text-[var(--color-text-muted)]">Sem equipas —</span>
-                <a href="/dashboard/equipas" className="text-sm text-[var(--color-primary)] hover:underline font-medium">
-                  Criar equipas
-                </a>
-              </div>
-            )}
-          </div>
+          {/* Contentor único de scroll (horizontal + vertical) com header e horas sticky */}
+          <div ref={scrollRef} className="flex-1 overflow-auto calendar-scroll">
+            <div style={{ minWidth: `${GUTTER_W + Math.max(columns.length, 1) * COL_MIN_W}px` }}>
 
-          {/* Área de scroll vertical — sempre renderizada */}
-          <div ref={scrollRef} className="flex-1 overflow-auto">
-            <div
-              className="flex"
-              style={{
-                height: `${TOTAL_SLOTS * SLOT_HEIGHT}px`,
-                minWidth: `${56 + Math.max(columns.length, 1) * 160}px`,
-              }}
-            >
-              {/* Coluna de horas */}
-              <div className="w-14 shrink-0 border-r border-[var(--color-border)] relative bg-white">
+              {/* ── Cabeçalho das equipas — sticky no topo ─────────────────── */}
+              <div
+                className="flex sticky top-0 z-30 bg-white border-b border-[var(--color-border)] shadow-sm"
+                style={{ height: `${HEADER_H}px` }}
+              >
+                {/* Célula de canto — sticky topo+esquerda */}
+                <div className="w-14 shrink-0 sticky left-0 z-40 bg-white border-r border-[var(--color-border)]" />
+                {columns.length > 0 ? columns.map((col) => (
+                  <div
+                    key={col.key}
+                    className="flex-1 min-w-[180px] relative px-3 flex items-center border-l border-[var(--color-border)] bg-white"
+                  >
+                    {/* Faixa de cor da equipa */}
+                    <div className="absolute top-0 left-0 right-0 h-[3px]" style={{ backgroundColor: col.color }} />
+                    <div className="flex items-center gap-2 w-full">
+                      <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: col.color }} />
+                      <span className="text-sm font-semibold text-[var(--color-text-main)] truncate">{col.name}</span>
+                      <span className="ml-auto text-xs font-semibold text-[var(--color-text-sub)] tabular-nums bg-[var(--color-background)] rounded-full px-1.5 py-0.5 min-w-[20px] text-center">
+                        {byTeam[col.id]?.length ?? 0}
+                      </span>
+                    </div>
+                  </div>
+                )) : (
+                  <div className="flex-1 px-4 border-l border-[var(--color-border)] flex items-center gap-2 bg-white">
+                    <span className="text-sm text-[var(--color-text-muted)]">Sem equipas —</span>
+                    <a href="/dashboard/equipas" className="text-sm text-[var(--color-primary)] hover:underline font-medium">
+                      Criar equipas
+                    </a>
+                  </div>
+                )}
+              </div>
+
+              {/* ── Corpo da grelha ────────────────────────────────────────── */}
+              <div
+                className="flex"
+                style={{ height: `${TOTAL_SLOTS * SLOT_HEIGHT}px` }}
+              >
+                {/* Coluna de horas — sticky à esquerda */}
+                <div className="w-14 shrink-0 sticky left-0 z-20 border-r border-[var(--color-border)] relative bg-white">
                 {Array.from({ length: TOTAL_HOURS + 1 }, (_, i) => {
                   const hour = START_HOUR + i;
                   const transform = i === 0
@@ -582,7 +592,7 @@ export function CalendarView({
                 <DroppableColumn
                   key={col.key}
                   id={col.key}
-                  className="flex-1 min-w-[160px] relative border-l border-[var(--color-border)] cursor-crosshair"
+                  className="flex-1 min-w-[180px] relative border-l border-[var(--color-border)] cursor-crosshair"
                   style={{ height: `${TOTAL_SLOTS * SLOT_HEIGHT}px` }}
                   onClick={(e) => handleColumnClick(col.key, e)}
                 >
@@ -642,7 +652,7 @@ export function CalendarView({
               )) : (
                 /* Coluna vazia com grades — para quando não há equipas ainda */
                 <div
-                  className="flex-1 min-w-[160px] relative border-l border-[var(--color-border)]"
+                  className="flex-1 min-w-[180px] relative border-l border-[var(--color-border)]"
                   style={{ height: `${TOTAL_SLOTS * SLOT_HEIGHT}px` }}
                 >
                   <GridLines
@@ -661,6 +671,7 @@ export function CalendarView({
                   )}
                 </div>
               )}
+              </div>
             </div>
           </div>
         </div>
