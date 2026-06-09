@@ -12,6 +12,7 @@ import {
   type PayrollRecord,
 } from "@/app/actions/payroll";
 import { PayrollEditSheet } from "./payroll-edit-sheet";
+import { usePagination, Pagination } from "@/components/ui/pagination";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -60,6 +61,8 @@ export function PayrollClient({ initialRecords, companyId, mesParam, year, month
   const totalExtra = records.reduce((s, r) => s + r.overtime_bonus, 0);
   const totalDesc  = records.reduce((s, r) => s + r.absence_deductions + r.other_deductions, 0);
   const totalLiq   = records.reduce((s, r) => s + r.net_salary, 0);
+
+  const pag = usePagination(records, 10);
 
   function toggleSelect(id: string) {
     setSelected((prev) => {
@@ -311,7 +314,7 @@ export function PayrollClient({ initialRecords, companyId, mesParam, year, month
                 </tr>
               </thead>
               <tbody className="divide-y divide-[var(--color-border)]">
-                {records.map((r) => (
+                {pag.pageItems.map((r) => (
                   <>
                     <tr
                       key={r.id}
@@ -440,6 +443,7 @@ export function PayrollClient({ initialRecords, companyId, mesParam, year, month
                 </tr>
               </tfoot>
             </table>
+            <Pagination {...pag} hideWhenSinglePage />
           </div>
         )}
       </div>

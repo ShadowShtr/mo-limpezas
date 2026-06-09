@@ -1,9 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { Search, Filter, ChevronLeft, ChevronRight, MoreHorizontal, ExternalLink } from "lucide-react";
+import { Search, Filter, MoreHorizontal, ExternalLink } from "lucide-react";
 import Link from "next/link";
 import { ColaboradorSheet } from "./sheet";
+import { usePagination, Pagination } from "@/components/ui/pagination";
 
 type Colaborador = {
   id: string;
@@ -31,8 +32,6 @@ const STATUS_STYLE: Record<string, { label: string; dot: string; text: string; b
   suspenso: { label: "Suspenso", dot: "bg-[var(--color-danger)]",   text: "text-[var(--color-danger)]",   bg: "bg-red-50" },
 };
 
-const PAGE_SIZE = 15;
-
 interface Props {
   colaboradores: Colaborador[];
   companyId: string;
@@ -41,7 +40,6 @@ interface Props {
 export function ColaboradoresTable({ colaboradores, companyId }: Props) {
   const [search, setSearch] = useState("");
   const [filterStatus, setFilterStatus] = useState<string>("todos");
-  const [page, setPage] = useState(1);
 
   const filtered = colaboradores.filter((c) => {
     const matchSearch =
@@ -51,8 +49,8 @@ export function ColaboradoresTable({ colaboradores, companyId }: Props) {
     return matchSearch && matchStatus;
   });
 
-  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
-  const paginated = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  const pag = usePagination(filtered, 10);
+  const paginated = pag.pageItems;
 
   function getInitials(name: string) {
     return name.split(" ").slice(0, 2).map((w) => w[0]).join("").toUpperCase();
@@ -72,7 +70,7 @@ export function ColaboradoresTable({ colaboradores, companyId }: Props) {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--color-text-muted)]" />
           <input
             value={search}
-            onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+            onChange={(e) => { setSearch(e.target.value); pag.setPage(1); }}
             placeholder="Pesquisar por nome ou email..."
             className="w-full pl-9 pr-3 py-2 text-sm rounded-lg border border-[var(--color-border)] bg-white
                        text-[var(--color-text-main)] placeholder:text-[var(--color-text-muted)]
@@ -83,7 +81,7 @@ export function ColaboradoresTable({ colaboradores, companyId }: Props) {
           <Filter className="w-4 h-4 text-[var(--color-text-muted)]" />
           <select
             value={filterStatus}
-            onChange={(e) => { setFilterStatus(e.target.value); setPage(1); }}
+            onChange={(e) => { setFilterStatus(e.target.value); pag.setPage(1); }}
             className="text-sm rounded-lg border border-[var(--color-border)] px-3 py-2 bg-white text-[var(--color-text-main)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
           >
             <option value="todos">Todos os estados</option>
@@ -211,29 +209,7 @@ export function ColaboradoresTable({ colaboradores, companyId }: Props) {
       </div>
 
       {/* Paginação */}
-      {totalPages > 1 && (
-        <div className="flex items-center justify-between px-4 py-3 border-t border-[var(--color-border)]">
-          <p className="text-sm text-[var(--color-text-muted)]">
-            {filtered.length} colaboradores · página {page} de {totalPages}
-          </p>
-          <div className="flex items-center gap-1">
-            <button
-              onClick={() => setPage((p) => Math.max(1, p - 1))}
-              disabled={page === 1}
-              className="p-1.5 rounded-lg border border-[var(--color-border)] text-[var(--color-text-sub)] hover:bg-[var(--color-background)] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-            >
-              <ChevronLeft className="w-4 h-4" />
-            </button>
-            <button
-              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-              disabled={page === totalPages}
-              className="p-1.5 rounded-lg border border-[var(--color-border)] text-[var(--color-text-sub)] hover:bg-[var(--color-background)] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-            >
-              <ChevronRight className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
-      )}
+      <Pagination {...pag} />
     </div>
   );
 }

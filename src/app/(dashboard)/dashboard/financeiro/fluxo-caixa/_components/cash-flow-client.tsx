@@ -14,6 +14,7 @@ import {
   type CashFlowCategory,
   type CashFlowStatus,
 } from "@/app/actions/cash-flow";
+import { usePagination, Pagination } from "@/components/ui/pagination";
 
 function fmtEur(v: number) {
   return v.toLocaleString("pt-PT", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " €";
@@ -126,6 +127,8 @@ export function CashFlowClient({ initialData, error: initErr, companyId, mesPara
     if (filterStatus && e.status !== filterStatus) return false;
     return true;
   });
+
+  const pag = usePagination(filtered, 10);
 
   const inputCls = "w-full px-3 py-2 rounded-lg border border-[var(--color-border)] text-sm text-[var(--color-text-main)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] bg-white";
 
@@ -249,7 +252,7 @@ export function CashFlowClient({ initialData, error: initErr, companyId, mesPara
                 </tr>
               </thead>
               <tbody className="divide-y divide-[var(--color-border)]">
-                {filtered.map((e) => (
+                {pag.pageItems.map((e) => (
                   <tr key={e.id} className={`hover:bg-[var(--color-background)] transition-colors ${e.status === "pendente" ? "opacity-60" : ""}`}>
                     <td className="px-4 py-3 text-sm text-[var(--color-text-sub)]">{fmtDate(e.date)}</td>
                     <td className="px-4 py-3 text-sm text-[var(--color-text-main)] max-w-xs truncate">{e.description}</td>
@@ -293,6 +296,7 @@ export function CashFlowClient({ initialData, error: initErr, companyId, mesPara
                 ))}
               </tbody>
             </table>
+            <Pagination {...pag} hideWhenSinglePage />
           </div>
         )}
       </div>

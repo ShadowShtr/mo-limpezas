@@ -1,8 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { Search, ChevronLeft, ChevronRight, MoreHorizontal, MapPin } from "lucide-react";
+import { Search, MoreHorizontal, MapPin } from "lucide-react";
 import { LocalSheet } from "./sheet";
+import { usePagination, Pagination } from "@/components/ui/pagination";
 
 type Local = {
   id: string;
@@ -21,8 +22,6 @@ type Local = {
 
 type Cliente = { id: string; name: string };
 
-const PAGE_SIZE = 15;
-
 interface Props {
   locais: Local[];
   clientes: Cliente[];
@@ -31,7 +30,6 @@ interface Props {
 
 export function LocaisTable({ locais, clientes, companyId }: Props) {
   const [search, setSearch] = useState("");
-  const [page, setPage] = useState(1);
 
   const clienteMap = Object.fromEntries(clientes.map((c) => [c.id, c.name]));
 
@@ -40,15 +38,15 @@ export function LocaisTable({ locais, clientes, companyId }: Props) {
     l.address.toLowerCase().includes(search.toLowerCase())
   );
 
-  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
-  const paginated = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  const pag = usePagination(filtered, 10);
+  const paginated = pag.pageItems;
 
   return (
     <div className="bg-white rounded-xl border border-[var(--color-border)]">
       <div className="flex flex-wrap items-center gap-3 p-4 border-b border-[var(--color-border)]">
         <div className="relative flex-1 min-w-48">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--color-text-muted)]" />
-          <input value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+          <input value={search} onChange={(e) => { setSearch(e.target.value); pag.setPage(1); }}
             placeholder="Pesquisar local ou morada..."
             className="w-full pl-9 pr-3 py-2 text-sm rounded-lg border border-[var(--color-border)] bg-white text-[var(--color-text-main)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] focus:border-transparent" />
         </div>
@@ -112,21 +110,7 @@ export function LocaisTable({ locais, clientes, companyId }: Props) {
         </table>
       </div>
 
-      {totalPages > 1 && (
-        <div className="flex items-center justify-between px-4 py-3 border-t border-[var(--color-border)]">
-          <p className="text-sm text-[var(--color-text-muted)]">{filtered.length} locais · página {page} de {totalPages}</p>
-          <div className="flex items-center gap-1">
-            <button onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page === 1}
-              className="p-1.5 rounded-lg border border-[var(--color-border)] text-[var(--color-text-sub)] disabled:opacity-40 disabled:cursor-not-allowed hover:bg-[var(--color-background)]">
-              <ChevronLeft className="w-4 h-4" />
-            </button>
-            <button onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={page === totalPages}
-              className="p-1.5 rounded-lg border border-[var(--color-border)] text-[var(--color-text-sub)] disabled:opacity-40 disabled:cursor-not-allowed hover:bg-[var(--color-background)]">
-              <ChevronRight className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
-      )}
+      <Pagination {...pag} />
     </div>
   );
 }

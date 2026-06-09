@@ -10,6 +10,7 @@ import {
   type PendingExpense,
   type CashFlowCategory,
 } from "@/app/actions/cash-flow";
+import { usePagination, Pagination } from "@/components/ui/pagination";
 
 function fmtEur(v: number) {
   return v.toLocaleString("pt-PT", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " €";
@@ -76,6 +77,10 @@ export function ContasClient({ toReceive, toPay, expenses: initialExpenses, comp
   const totalReceive  = toReceive.reduce((s, r) => s + r.total, 0);
   const totalPay      = toPay.reduce((s, r) => s + r.net_salary, 0);
   const totalExpenses = expenses.reduce((s, e) => s + e.amount, 0);
+
+  const receivePag  = usePagination(toReceive, 10);
+  const payPag      = usePagination(toPay, 10);
+  const expensesPag = usePagination(expenses, 10);
 
   function resetForm() {
     setDesc(""); setAmount(""); setCategory("despesa");
@@ -196,7 +201,7 @@ export function ContasClient({ toReceive, toPay, expenses: initialExpenses, comp
                 </tr>
               </thead>
               <tbody className="divide-y divide-[var(--color-border)]">
-                {toReceive.map((r) => (
+                {receivePag.pageItems.map((r) => (
                   <tr key={r.id} className="hover:bg-[var(--color-background)] transition-colors">
                     <td className="px-4 py-3 text-sm font-medium text-[var(--color-text-main)]">{r.invoice_number}</td>
                     <td className="px-4 py-3 text-sm text-[var(--color-text-main)]">{r.client_name}</td>
@@ -218,6 +223,7 @@ export function ContasClient({ toReceive, toPay, expenses: initialExpenses, comp
                 </tr>
               </tfoot>
             </table>
+            <Pagination {...receivePag} hideWhenSinglePage />
           </div>
         )}
       </div>
@@ -247,7 +253,7 @@ export function ContasClient({ toReceive, toPay, expenses: initialExpenses, comp
                 </tr>
               </thead>
               <tbody className="divide-y divide-[var(--color-border)]">
-                {toPay.map((r) => (
+                {payPag.pageItems.map((r) => (
                   <tr key={r.id} className="hover:bg-[var(--color-background)] transition-colors">
                     <td className="px-4 py-3 text-sm text-[var(--color-text-main)]">{r.collaborator_name}</td>
                     <td className="px-4 py-3 text-sm text-[var(--color-text-sub)]">{r.period}</td>
@@ -266,6 +272,7 @@ export function ContasClient({ toReceive, toPay, expenses: initialExpenses, comp
                 </tr>
               </tfoot>
             </table>
+            <Pagination {...payPag} hideWhenSinglePage />
           </div>
         )}
       </div>
@@ -310,7 +317,7 @@ export function ContasClient({ toReceive, toPay, expenses: initialExpenses, comp
                 </tr>
               </thead>
               <tbody className="divide-y divide-[var(--color-border)]">
-                {expenses.map((e) => (
+                {expensesPag.pageItems.map((e) => (
                   <tr key={e.id} className="hover:bg-[var(--color-background)] transition-colors">
                     <td className="px-4 py-3 text-sm text-[var(--color-text-sub)]">{fmtDate(e.date)}</td>
                     <td className="px-4 py-3 text-sm text-[var(--color-text-main)] max-w-xs">
@@ -355,6 +362,7 @@ export function ContasClient({ toReceive, toPay, expenses: initialExpenses, comp
                 </tr>
               </tfoot>
             </table>
+            <Pagination {...expensesPag} hideWhenSinglePage />
           </div>
         )}
       </div>

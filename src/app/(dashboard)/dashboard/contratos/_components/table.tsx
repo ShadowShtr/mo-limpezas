@@ -1,12 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { Search, ChevronLeft, ChevronRight, MoreHorizontal, Calendar, MapPin } from "lucide-react";
+import { Search, MoreHorizontal, Calendar, MapPin } from "lucide-react";
 import { ContratoSheet } from "./sheet";
+import { usePagination, Pagination } from "@/components/ui/pagination";
 import type { ContratosTableRow } from "../page";
 import type { ScheduleDay } from "@/types/database";
-
-const PAGE_SIZE = 15;
 
 const FREQUENCY_LABEL: Record<string, string> = {
   daily: "Diário",
@@ -73,7 +72,6 @@ export function ContratosTable({ contratos, companyId, userId, clientes, locais,
   const [search, setSearch] = useState("");
   const [filterStatus, setFilterStatus] = useState("todos");
   const [filterFreq, setFilterFreq] = useState("todos");
-  const [page, setPage] = useState(1);
 
   const filtered = contratos.filter((c) => {
     const haystack = [
@@ -88,8 +86,8 @@ export function ContratosTable({ contratos, companyId, userId, clientes, locais,
     return matchSearch && matchStatus && matchFreq;
   });
 
-  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
-  const paginated = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  const pag = usePagination(filtered, 10);
+  const paginated = pag.pageItems;
 
   return (
     <div className="bg-white rounded-xl border border-[var(--color-border)]">
@@ -99,7 +97,7 @@ export function ContratosTable({ contratos, companyId, userId, clientes, locais,
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--color-text-muted)]" />
           <input
             value={search}
-            onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+            onChange={(e) => { setSearch(e.target.value); pag.setPage(1); }}
             placeholder="Pesquisar contrato, local, cliente..."
             className="w-full pl-9 pr-3 py-2 text-sm rounded-lg border border-[var(--color-border)] bg-white
                        text-[var(--color-text-main)] placeholder:text-[var(--color-text-muted)]
@@ -108,7 +106,7 @@ export function ContratosTable({ contratos, companyId, userId, clientes, locais,
         </div>
         <select
           value={filterStatus}
-          onChange={(e) => { setFilterStatus(e.target.value); setPage(1); }}
+          onChange={(e) => { setFilterStatus(e.target.value); pag.setPage(1); }}
           className="text-sm rounded-lg border border-[var(--color-border)] px-3 py-2 bg-white text-[var(--color-text-main)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
         >
           <option value="todos">Todos os estados</option>
@@ -118,7 +116,7 @@ export function ContratosTable({ contratos, companyId, userId, clientes, locais,
         </select>
         <select
           value={filterFreq}
-          onChange={(e) => { setFilterFreq(e.target.value); setPage(1); }}
+          onChange={(e) => { setFilterFreq(e.target.value); pag.setPage(1); }}
           className="text-sm rounded-lg border border-[var(--color-border)] px-3 py-2 bg-white text-[var(--color-text-main)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
         >
           <option value="todos">Todas as frequências</option>
@@ -241,21 +239,7 @@ export function ContratosTable({ contratos, companyId, userId, clientes, locais,
         </table>
       </div>
 
-      {totalPages > 1 && (
-        <div className="flex items-center justify-between px-4 py-3 border-t border-[var(--color-border)]">
-          <p className="text-sm text-[var(--color-text-muted)]">{filtered.length} contratos · página {page} de {totalPages}</p>
-          <div className="flex items-center gap-1">
-            <button onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page === 1}
-              className="p-1.5 rounded-lg border border-[var(--color-border)] text-[var(--color-text-sub)] hover:bg-[var(--color-background)] disabled:opacity-40 disabled:cursor-not-allowed">
-              <ChevronLeft className="w-4 h-4" />
-            </button>
-            <button onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={page === totalPages}
-              className="p-1.5 rounded-lg border border-[var(--color-border)] text-[var(--color-text-sub)] hover:bg-[var(--color-background)] disabled:opacity-40 disabled:cursor-not-allowed">
-              <ChevronRight className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
-      )}
+      <Pagination {...pag} />
     </div>
   );
 }

@@ -13,6 +13,7 @@ import {
   type UnbilledService,
 } from "@/app/actions/invoices";
 import { InvoiceDetailSheet } from "./invoice-detail-sheet";
+import { usePagination, Pagination } from "@/components/ui/pagination";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -74,6 +75,9 @@ export function InvoicesClient({ initialInvoices, unbilledServices, companyId, m
   const totalRecebido  = invoices.filter((i) => i.status === "pago").reduce((s, i) => s + i.total, 0);
   const totalPendente  = invoices.filter((i) => i.status === "pendente").reduce((s, i) => s + i.total, 0);
   const totalVencido   = invoices.filter((i) => i.status === "vencido").reduce((s, i) => s + i.total, 0);
+
+  const invoicesPag = usePagination(invoices, 10);
+  const unbilledPag = usePagination(unbilledServices, 10);
 
   function handleGenerate() {
     setError(null);
@@ -336,7 +340,7 @@ export function InvoicesClient({ initialInvoices, unbilledServices, companyId, m
                 </tr>
               </thead>
               <tbody className="divide-y divide-[var(--color-border)]">
-                {invoices.map((inv) => (
+                {invoicesPag.pageItems.map((inv) => (
                   <tr key={inv.id} className="bg-white hover:bg-[var(--color-background)] transition-colors">
                     <td className="px-4 py-3 font-mono text-xs text-[var(--color-text-sub)]">{inv.invoice_number}</td>
                     <td className="px-4 py-3 font-medium text-[var(--color-text-main)]">{inv.client_name}</td>
@@ -421,6 +425,7 @@ export function InvoicesClient({ initialInvoices, unbilledServices, companyId, m
                 </tr>
               </tfoot>
             </table>
+            <Pagination {...invoicesPag} hideWhenSinglePage />
           </div>
         )}
         {/* Serviços por faturar — em baixo */}
@@ -434,7 +439,7 @@ export function InvoicesClient({ initialInvoices, unbilledServices, companyId, m
               <span className="ml-auto text-xs text-amber-700">Clica em <strong>Gerar cobranças</strong> para criar faturas</span>
             </div>
             <div className="divide-y divide-amber-100">
-              {unbilledServices.map((s) => (
+              {unbilledPag.pageItems.map((s) => (
                 <div key={s.id} className="flex items-center gap-4 px-5 py-3 hover:bg-amber-100/50 transition-colors">
                   <div className="w-16 shrink-0">
                     <span className="text-xs font-mono font-medium text-amber-700">{s.reference_number}</span>
@@ -454,6 +459,7 @@ export function InvoicesClient({ initialInvoices, unbilledServices, companyId, m
                 </div>
               ))}
             </div>
+            <Pagination {...unbilledPag} hideWhenSinglePage />
           </div>
         )}
       </div>
