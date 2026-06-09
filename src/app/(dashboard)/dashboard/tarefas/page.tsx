@@ -27,7 +27,7 @@ export default async function TarefasPage() {
   return (
     <div>
       <Header title="Tarefas de Gestão" subtitle="Notas e tarefas entre gestores" />
-      <div className="px-4 py-5 sm:p-6 lg:px-8 max-w-[1400px]">
+      <div className="px-4 py-5 sm:p-6 lg:px-8 mx-auto max-w-[1400px]">
         <TasksClient
           initialTasks={tasksRes.ok ? tasksRes.tasks : []}
           companyId={profile.company_id}

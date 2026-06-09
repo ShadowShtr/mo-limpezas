@@ -50,7 +50,7 @@ export default async function LocaisPage() {
           />
         }
       />
-      <div className="px-4 py-5 sm:p-6 lg:px-8 max-w-[1400px]">
+      <div className="px-4 py-5 sm:p-6 lg:px-8 mx-auto max-w-[1400px]">
         <LocaisTable
           locais={(locais ?? []).map((l) => {
             const r = l as typeof l & { fixed_price?: number | null; pricing_type?: string };

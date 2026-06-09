@@ -49,7 +49,7 @@ export default async function ClientesPage() {
           </div>
         }
       />
-      <div className="px-4 py-5 sm:p-6 lg:px-8 max-w-[1400px]">
+      <div className="px-4 py-5 sm:p-6 lg:px-8 mx-auto max-w-[1400px]">
         <ClientesTable
           clientes={(clientes ?? []).map((c) => ({ ...c, vat_exempt: (c as { vat_exempt?: boolean }).vat_exempt ?? false }))}
           companyId={me?.company_id ?? ""}

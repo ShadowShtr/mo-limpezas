@@ -1,4 +1,4 @@
-import { notFound } from "next/navigation";
+﻿import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Header } from "@/components/layout/header";
@@ -115,7 +115,7 @@ export default async function ColaboradorDetailPage({ params }: Props) {
         }
       />
 
-      <div className="px-4 py-5 sm:p-6 lg:px-8 space-y-6 max-w-[1200px]">
+      <div className="px-4 py-5 sm:p-6 lg:px-8 space-y-6 mx-auto max-w-[1200px]">
         {/* Voltar */}
         <Link
           href="/dashboard/colaboradores"

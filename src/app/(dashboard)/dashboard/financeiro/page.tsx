@@ -29,7 +29,7 @@ export default async function FinanceiroPage() {
         title="Dashboard Financeiro"
         subtitle={`Visão geral ${yearLabel}`}
       />
-      <div className="px-4 py-5 sm:p-6 lg:px-8 max-w-[1400px]">
+      <div className="px-4 py-5 sm:p-6 lg:px-8 mx-auto max-w-[1400px]">
         <FinancialDashboardClient
           data={result.ok ? result.data : null}
           error={result.ok ? null : result.error}

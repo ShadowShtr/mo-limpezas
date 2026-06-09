@@ -26,7 +26,7 @@ export default async function ConfiguracoesPage() {
         title="Configurações"
         subtitle="Valores e percentagens que afetam cálculos em toda a plataforma"
       />
-      <div className="px-4 py-5 sm:p-6 lg:px-8 space-y-6 max-w-[900px]">
+      <div className="px-4 py-5 sm:p-6 lg:px-8 space-y-6 mx-auto max-w-[900px]">
         <SettingsForm initial={settings} />
         <CsvImport />
         <SeedButton />

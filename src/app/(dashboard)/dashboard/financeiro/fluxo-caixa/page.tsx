@@ -30,7 +30,7 @@ export default async function FluxoCaixaPage({
   return (
     <div>
       <Header title="Fluxo de Caixa" subtitle="Registo de todas as entradas e saídas" />
-      <div className="px-4 py-5 sm:p-6 lg:px-8 max-w-[1400px]">
+      <div className="px-4 py-5 sm:p-6 lg:px-8 mx-auto max-w-[1400px]">
         <CashFlowClient
           initialData={res.ok ? { entries: res.entries, balance: res.balance, entradas: res.entradas, saidas: res.saidas, pendentes: res.pendentes } : null}
           error={res.ok ? null : res.error}

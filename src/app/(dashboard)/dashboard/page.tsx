@@ -44,7 +44,7 @@ export default async function DashboardPage() {
     <div>
       <Header title="Dashboard" subtitle={subtitle} />
 
-      <div className="px-4 py-5 sm:p-6 lg:px-8 space-y-6 max-w-[1400px]">
+      <div className="px-4 py-5 sm:p-6 lg:px-8 space-y-6 mx-auto max-w-[1400px]">
         <DashboardKPIs kpis={kpis} />
 
         <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">

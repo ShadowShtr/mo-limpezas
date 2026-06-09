@@ -9,7 +9,7 @@ export default async function ViatruasPage() {
   return (
     <div>
       <Header title="Viaturas" subtitle="Gestão da frota da empresa" />
-      <div className="px-4 py-5 sm:p-6 lg:px-8 max-w-[1400px]">
+      <div className="px-4 py-5 sm:p-6 lg:px-8 mx-auto max-w-[1400px]">
         <VehiclesClient initialVehicles={vehicles} />
       </div>
     </div>
