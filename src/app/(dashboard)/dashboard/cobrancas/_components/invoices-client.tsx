@@ -293,40 +293,6 @@ export function InvoicesClient({ initialInvoices, unbilledServices, companyId, m
           </div>
         )}
 
-        {/* Serviços por faturar */}
-        {unbilledServices.length > 0 && (
-          <div className="rounded-xl border border-amber-200 bg-amber-50 overflow-hidden">
-            <div className="flex items-center gap-2 px-5 py-3.5 border-b border-amber-200">
-              <Clock className="w-4 h-4 text-amber-600" />
-              <h3 className="text-sm font-semibold text-amber-800">
-                {unbilledServices.length} serviço{unbilledServices.length !== 1 ? "s" : ""} por faturar
-              </h3>
-              <span className="ml-auto text-xs text-amber-700">Clica em <strong>Gerar cobranças</strong> para criar faturas</span>
-            </div>
-            <div className="divide-y divide-amber-100">
-              {unbilledServices.map((s) => (
-                <div key={s.id} className="flex items-center gap-4 px-5 py-3 hover:bg-amber-100/50 transition-colors">
-                  <div className="w-16 shrink-0">
-                    <span className="text-xs font-mono font-medium text-amber-700">{s.reference_number}</span>
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-[var(--color-text-main)] truncate">{s.client_name}</p>
-                    <p className="text-xs text-[var(--color-text-muted)] truncate">{s.location_name}</p>
-                  </div>
-                  <div className="shrink-0 text-right">
-                    <p className="text-xs text-[var(--color-text-muted)]">
-                      {new Date(s.scheduled_start).toLocaleDateString("pt-PT")}
-                    </p>
-                    {s.value > 0 && (
-                      <p className="text-sm font-semibold text-amber-700">{fmtEur(s.value)}</p>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
         {/* KPIs */}
         {invoices.length > 0 && (
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -455,6 +421,39 @@ export function InvoicesClient({ initialInvoices, unbilledServices, companyId, m
                 </tr>
               </tfoot>
             </table>
+          </div>
+        )}
+        {/* Serviços por faturar — em baixo */}
+        {unbilledServices.length > 0 && (
+          <div className="rounded-xl border border-amber-200 bg-amber-50 overflow-hidden">
+            <div className="flex items-center gap-2 px-5 py-3.5 border-b border-amber-200">
+              <Clock className="w-4 h-4 text-amber-600" />
+              <h3 className="text-sm font-semibold text-amber-800">
+                {unbilledServices.length} serviço{unbilledServices.length !== 1 ? "s" : ""} por faturar
+              </h3>
+              <span className="ml-auto text-xs text-amber-700">Clica em <strong>Gerar cobranças</strong> para criar faturas</span>
+            </div>
+            <div className="divide-y divide-amber-100">
+              {unbilledServices.map((s) => (
+                <div key={s.id} className="flex items-center gap-4 px-5 py-3 hover:bg-amber-100/50 transition-colors">
+                  <div className="w-16 shrink-0">
+                    <span className="text-xs font-mono font-medium text-amber-700">{s.reference_number}</span>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-[var(--color-text-main)] truncate">{s.client_name}</p>
+                    <p className="text-xs text-[var(--color-text-muted)] truncate">{s.location_name}</p>
+                  </div>
+                  <div className="shrink-0 text-right">
+                    <p className="text-xs text-[var(--color-text-muted)]">
+                      {new Date(s.scheduled_start).toLocaleDateString("pt-PT")}
+                    </p>
+                    {s.value > 0 && (
+                      <p className="text-sm font-semibold text-amber-700">{fmtEur(s.value)}</p>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         )}
       </div>

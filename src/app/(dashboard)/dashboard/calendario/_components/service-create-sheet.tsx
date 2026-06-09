@@ -5,6 +5,7 @@ import { X, Loader2, ChevronDown } from "lucide-react";
 import { format } from "date-fns";
 import { pt } from "date-fns/locale";
 import { createClient } from "@/lib/supabase/client";
+import { createService } from "../_actions/create-service";
 
 type Client = { id: string; name: string };
 type Location = { id: string; client_id: string; name: string; address: string; hourly_rate: number | null };
@@ -100,23 +101,21 @@ export function ServiceCreateSheet({
     const scheduledStart = `${dateStr}T${startTime}:00`;
     const scheduledEnd = `${dateStr}T${endTime}:00`;
 
-    const { error } = await supabase.from("services").insert({
-      company_id: companyId,
-      location_id: locationId,
-      reference_number: ref,
-      scheduled_start: scheduledStart,
-      scheduled_end: scheduledEnd,
-      team_id: teamId || null,
-      status: "agendado",
-      hourly_rate: selectedLocation?.hourly_rate ?? null,
-      calculated_value: calculatedValue,
+    const res = await createService({
+      companyId,
+      locationId,
+      teamId: teamId || null,
+      referenceNumber: ref,
+      scheduledStart,
+      scheduledEnd,
+      hourlyRate: selectedLocation?.hourly_rate ?? null,
+      calculatedValue: calculatedValue ?? null,
       notes: notes || null,
-      created_by: userId,
     });
 
     setLoading(false);
-    if (error) {
-      setMessage("Erro ao criar: " + error.message);
+    if (!res.ok) {
+      setMessage("Erro ao criar: " + res.error);
     } else {
       onCreated();
       onClose();
