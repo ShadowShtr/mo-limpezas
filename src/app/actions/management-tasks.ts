@@ -41,12 +41,16 @@ export interface TaskInput {
   priority?: TaskPriority;
   assigned_to?: string | null;
   due_date?: string | null;
+  /** Pass true when moving to a "completed" column so completed_at is set */
+  markCompleted?: boolean;
 }
 
 export async function getManagementTasks(
   companyId: string,
 ): Promise<{ ok: true; tasks: ManagementTask[] } | { ok: false; error: string }> {
   const admin = createAdminClient();
+
+  // Collect unique people IDs from a first query then fetch profiles in parallel
   const { data, error } = await admin
     .from("management_tasks")
     .select("*")
@@ -56,16 +60,19 @@ export async function getManagementTasks(
   if (error) return { ok: false, error: error.message };
 
   const peopleIds = [
-    ...new Set([
-      ...(data ?? []).map((t) => t.assigned_to),
-      ...(data ?? []).map((t) => t.created_by),
-    ].filter(Boolean) as string[]),
+    ...new Set(
+      [...(data ?? []).map((t) => t.assigned_to), ...(data ?? []).map((t) => t.created_by)]
+        .filter(Boolean) as string[],
+    ),
   ];
 
-  let names: Record<string, string> = {};
+  const names: Record<string, string> = {};
   if (peopleIds.length > 0) {
-    const { data: profiles } = await admin.from("profiles").select("id, full_name").in("id", peopleIds);
-    names = Object.fromEntries((profiles ?? []).map((p) => [p.id, p.full_name]));
+    const { data: profiles } = await admin
+      .from("profiles")
+      .select("id, full_name")
+      .in("id", peopleIds);
+    for (const p of profiles ?? []) names[p.id] = p.full_name;
   }
 
   const tasks: ManagementTask[] = (data ?? []).map((t) => ({
@@ -89,27 +96,57 @@ export async function getManagementTasks(
 export async function createManagementTask(
   companyId: string,
   input: TaskInput,
-): Promise<{ ok: boolean; error?: string }> {
+): Promise<{ ok: true; task: ManagementTask } | { ok: false; error: string }> {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { ok: false, error: "Não autenticado" };
 
   const admin = createAdminClient();
-  const { error } = await admin.from("management_tasks").insert({
-    company_id: companyId,
-    title: input.title,
-    body: input.body ?? null,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    status: (input.status ?? "pendente") as any,
-    priority: input.priority ?? "normal",
-    assigned_to: input.assigned_to ?? null,
-    due_date: input.due_date ?? null,
-    created_by: user.id,
-  });
+  const { data: row, error } = await admin
+    .from("management_tasks")
+    .insert({
+      company_id: companyId,
+      title: input.title,
+      body: input.body ?? null,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      status: (input.status ?? "pendente") as any,
+      priority: input.priority ?? "normal",
+      assigned_to: input.assigned_to ?? null,
+      due_date: input.due_date ?? null,
+      created_by: user.id,
+    })
+    .select("*")
+    .single();
 
-  if (error) return { ok: false, error: error.message };
+  if (error || !row) return { ok: false, error: error?.message ?? "Erro ao criar" };
+
+  let assignedName: string | null = null;
+  let createdByName: string | null = null;
+  const idsToFetch = [row.assigned_to, row.created_by].filter(Boolean) as string[];
+  if (idsToFetch.length > 0) {
+    const { data: profiles } = await admin.from("profiles").select("id, full_name").in("id", idsToFetch);
+    const map = Object.fromEntries((profiles ?? []).map((p) => [p.id, p.full_name]));
+    assignedName = row.assigned_to ? (map[row.assigned_to] ?? null) : null;
+    createdByName = row.created_by ? (map[row.created_by] ?? null) : null;
+  }
+
+  const task: ManagementTask = {
+    id: row.id,
+    title: row.title,
+    body: row.body,
+    status: row.status as TaskStatus,
+    priority: row.priority as TaskPriority,
+    assigned_to: row.assigned_to,
+    assigned_to_name: assignedName,
+    created_by: row.created_by,
+    created_by_name: createdByName,
+    due_date: row.due_date,
+    completed_at: row.completed_at,
+    created_at: row.created_at,
+  };
+
   revalidatePath("/dashboard/tarefas");
-  return { ok: true };
+  return { ok: true, task };
 }
 
 export async function updateManagementTask(
@@ -118,7 +155,8 @@ export async function updateManagementTask(
 ): Promise<{ ok: boolean; error?: string }> {
   const admin = createAdminClient();
 
-  const completedAt = data.status === "concluido"
+  // completedAt: set when caller explicitly marks as complete, clear when status changes, leave untouched otherwise
+  const completedAt = data.markCompleted
     ? new Date().toISOString()
     : data.status !== undefined
     ? null

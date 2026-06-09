@@ -21,6 +21,7 @@ export default async function ClientesPage() {
   const { data: clientes } = await supabase
     .from("clients")
     .select("id, name, email, phone, nif, status, vat_exempt, created_at")
+    .eq("company_id", me?.company_id ?? "")
     .order("name");
 
   return (

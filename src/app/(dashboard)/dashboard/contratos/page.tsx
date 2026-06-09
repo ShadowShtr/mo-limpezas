@@ -28,20 +28,24 @@ export default async function ContratosPage() {
           starts_on, ends_on, status, notes, created_at,
           locations ( id, name, address, clients ( id, name ) )
         `)
+        .eq("company_id", companyId)
         .order("created_at", { ascending: false }),
       supabase
         .from("clients")
         .select("id, name")
+        .eq("company_id", companyId)
         .eq("status", "ativo")
         .order("name"),
       supabase
         .from("locations")
         .select("id, client_id, name, address, hourly_rate")
+        .eq("company_id", companyId)
         .eq("active", true)
         .order("name"),
       supabase
         .from("teams")
         .select("id, name, color")
+        .eq("company_id", companyId)
         .eq("active", true)
         .order("name"),
     ]);

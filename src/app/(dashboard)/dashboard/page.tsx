@@ -1,4 +1,6 @@
 ﻿import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { redirect } from "next/navigation";
 import { Header } from "@/components/layout/header";
 import { DashboardKPIs } from "./_components/kpis";
 import { TodayServices } from "./_components/today-services";
@@ -7,6 +9,12 @@ import { formatDate } from "@/lib/utils";
 
 export default async function DashboardPage() {
   const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+
+  const admin = createAdminClient();
+  const { data: profile } = await admin.from("profiles").select("company_id").eq("id", user.id).single();
+  if (!profile?.company_id) redirect("/login");
 
   const today = new Date();
   const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate()).toISOString();
@@ -16,12 +24,14 @@ export default async function DashboardPage() {
     supabase
       .from("services_full")
       .select("*")
+      .eq("company_id", profile.company_id)
       .gte("scheduled_start", todayStart)
       .lte("scheduled_start", todayEnd)
       .order("scheduled_start"),
     supabase
       .from("teams_with_members")
-      .select("id, name, color"),
+      .select("id, name, color")
+      .eq("company_id", profile.company_id),
   ]);
 
   const services = servicesRes.data ?? [];

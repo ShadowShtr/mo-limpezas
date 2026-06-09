@@ -112,7 +112,8 @@ export function TasksClient({ initialTasks, initialColumns, companyId, members }
   const [columns, setColumns] = useState(initialColumns);
 
   const [savingColumns, startSaveColumns] = useTransition();
-  const [creating, startCreate] = useTransition();
+  const [creatingModal, startCreateModal] = useTransition();
+  const [creatingInline, startCreateInline] = useTransition();
   const [moving, setMoving] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<string | null>(null);
 
@@ -129,6 +130,7 @@ export function TasksClient({ initialTasks, initialColumns, companyId, members }
   // ── Inline "Adicionar tarefa" por coluna ──
   const [addingTaskCol, setAddingTaskCol] = useState<string | null>(null);
   const [inlineTitle, setInlineTitle] = useState("");
+  const [inlineError, setInlineError] = useState<string | null>(null);
 
   // ── Detail popup ──
   const [openTask, setOpenTask] = useState<ManagementTask | null>(null);
@@ -149,6 +151,9 @@ export function TasksClient({ initialTasks, initialColumns, companyId, members }
   const [editingColId, setEditingColId] = useState<string | null>(null);
   const [editingColName, setEditingColName] = useState("");
 
+  // ── Delete coluna — erro inline ──
+  const [colDeleteError, setColDeleteError] = useState<string | null>(null);
+
   // ── Drag ──
   const [drag, setDrag] = useState<DragState | null>(null);
   const [dropTarget, setDropTarget] = useState<string | null>(null);
@@ -156,6 +161,14 @@ export function TasksClient({ initialTasks, initialColumns, companyId, members }
   const dragRef = useRef<DragState | null>(null);
   const dropTargetRef = useRef<string | null>(null);
   const wasDraggingRef = useRef(false);
+
+  // ── Escape closes detail popup ──
+  useEffect(() => {
+    if (!openTask) return;
+    const handler = (e: KeyboardEvent) => { if (e.key === "Escape") setOpenTask(null); };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [openTask]);
 
   useEffect(() => {
     function handleMove(e: PointerEvent) {
@@ -176,24 +189,21 @@ export function TasksClient({ initialTasks, initialColumns, companyId, members }
     }
     function handleUp() {
       const d = dragRef.current; if (!d) return;
-      // Capturar antes de limpar
       const wasActive = d.active;
       const taskId = d.taskId;
       const fromCol = d.fromColumnId;
       const toCol = dropTargetRef.current;
 
-      // Limpar IMEDIATAMENTE — o card cai na hora
       wasDraggingRef.current = wasActive;
       dragRef.current = null;
       dropTargetRef.current = null;
       setDrag(null);
       setDropTarget(null);
 
-      // Mover optimisticamente e sincronizar em background
       if (wasActive && toCol && toCol !== fromCol) {
         setTasks((prev) => prev.map((t) => t.id === taskId ? { ...t, status: toCol } : t));
-        updateManagementTask(taskId, { status: toCol }).catch(() => {
-          // Reverter em caso de erro
+        const isCompletion = toCol === "concluido";
+        updateManagementTask(taskId, { status: toCol, markCompleted: isCompletion }).catch(() => {
           setTasks((prev) => prev.map((t) => t.id === taskId ? { ...t, status: fromCol } : t));
         });
       }
@@ -229,10 +239,12 @@ export function TasksClient({ initialTasks, initialColumns, companyId, members }
         title: editTitle.trim() || openTask.title, body: editBody.trim() || null,
         priority: editPriority, assigned_to: editAssigned || null,
         due_date: editDue || null, status: editStatus,
+        markCompleted: editStatus === "concluido" && openTask.status !== "concluido",
       };
       await updateManagementTask(openTask.id, update);
+      const { markCompleted: _mc, ...taskFields } = update;
       setTasks((prev) => prev.map((t) => t.id === openTask.id ? {
-        ...t, ...update,
+        ...t, ...taskFields,
         assigned_to_name: members.find((m) => m.id === editAssigned)?.full_name ?? null,
       } : t));
       setOpenTask(null);
@@ -256,33 +268,23 @@ export function TasksClient({ initialTasks, initialColumns, companyId, members }
       priority: createPriority, assigned_to: createAssigned || null,
       due_date: createDue || null, status: createColId,
     };
-    startCreate(async () => {
+    startCreateModal(async () => {
       const res = await createManagementTask(companyId, input);
       if (!res.ok) { setCreateError(res.error ?? "Erro ao criar tarefa"); return; }
-      const fake: ManagementTask = {
-        id: `temp-${Date.now()}`, title: input.title, body: input.body ?? null,
-        status: createColId, priority: input.priority ?? "normal",
-        assigned_to: input.assigned_to ?? null,
-        assigned_to_name: members.find((m) => m.id === createAssigned)?.full_name ?? null,
-        created_by: null, created_by_name: null,
-        due_date: input.due_date ?? null, completed_at: null, created_at: new Date().toISOString(),
-      };
-      setTasks((prev) => [fake, ...prev]);
+      setTasks((prev) => [res.task, ...prev]);
       setShowCreateModal(false);
       setCreateTitle(""); setCreateBody(""); setCreatePriority("normal"); setCreateAssigned(""); setCreateDue(""); setCreateColId("");
     });
   }
 
   function submitInlineTask(colId: string) {
-    const title = inlineTitle.trim(); if (!title) { setAddingTaskCol(null); return; }
-    startCreate(async () => {
-      await createManagementTask(companyId, { title, status: colId });
-      const fake: ManagementTask = {
-        id: `temp-${Date.now()}`, title, body: null, status: colId, priority: "normal",
-        assigned_to: null, assigned_to_name: null, created_by: null, created_by_name: null,
-        due_date: null, completed_at: null, created_at: new Date().toISOString(),
-      };
-      setTasks((prev) => [...prev, fake]);
+    const title = inlineTitle.trim();
+    if (!title) { setAddingTaskCol(null); return; }
+    setInlineError(null);
+    startCreateInline(async () => {
+      const res = await createManagementTask(companyId, { title, status: colId });
+      if (!res.ok) { setInlineError(res.error ?? "Erro ao criar"); return; }
+      setTasks((prev) => [...prev, res.task]);
       setAddingTaskCol(null); setInlineTitle("");
     });
   }
@@ -305,8 +307,11 @@ export function TasksClient({ initialTasks, initialColumns, companyId, members }
   }
 
   function handleDeleteColumn(col: KanbanColumn) {
-    if (tasks.some((t) => t.status === col.id)) { alert(`Mova ou elimine todas as tarefas de "${col.name}" antes de apagar.`); return; }
-    if (!confirm(`Eliminar coluna "${col.name}"?`)) return;
+    setColDeleteError(null);
+    if (tasks.some((t) => t.status === col.id)) {
+      setColDeleteError(`Mova ou elimine todas as tarefas de "${col.name}" antes de apagar.`);
+      return;
+    }
     persistColumns(columns.filter((c) => c.id !== col.id));
   }
 
@@ -318,6 +323,12 @@ export function TasksClient({ initialTasks, initialColumns, companyId, members }
       {/* ── Top bar ── */}
       <div className="flex items-center justify-end gap-2 mb-4 flex-shrink-0">
         {savingColumns && <span className="text-xs text-[var(--color-text-muted)] italic mr-auto">A guardar...</span>}
+        {colDeleteError && (
+          <span className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-1.5 mr-auto flex items-center gap-1.5">
+            <AlertTriangle className="w-3.5 h-3.5 shrink-0" />{colDeleteError}
+            <button onClick={() => setColDeleteError(null)} className="ml-1 text-red-400 hover:text-red-600"><X className="w-3 h-3" /></button>
+          </span>
+        )}
         <button
           onClick={() => { setAddingColumn(true); setNewColName(""); setNewColColor("blue"); }}
           className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-[var(--color-border)] text-sm text-[var(--color-text-sub)] hover:border-[var(--color-primary)] hover:text-[var(--color-primary)] transition-colors"
@@ -384,9 +395,15 @@ export function TasksClient({ initialTasks, initialColumns, companyId, members }
 
                 {/* Cards (scrollable) */}
                 <div className="flex-1 overflow-y-auto p-2 space-y-2">
-                  {colTasks.length === 0 && !isDropTarget && (
-                    <div className="flex items-center justify-center py-8 rounded-lg border-2 border-dashed border-[var(--color-border)]">
-                      <p className="text-xs text-[var(--color-text-muted)]">Sem tarefas</p>
+                  {colTasks.length === 0 && (
+                    <div className={`flex items-center justify-center py-8 rounded-lg border-2 border-dashed transition-colors ${
+                      isDropTarget
+                        ? "border-[var(--color-primary)] bg-[var(--color-primary-light)]/20"
+                        : "border-[var(--color-border)]"
+                    }`}>
+                      <p className="text-xs text-[var(--color-text-muted)]">
+                        {isDropTarget ? "Soltar aqui" : "Sem tarefas"}
+                      </p>
                     </div>
                   )}
                   {colTasks.map((task) => (
@@ -414,20 +431,21 @@ export function TasksClient({ initialTasks, initialColumns, companyId, members }
                         onChange={(e) => setInlineTitle(e.target.value)}
                         onKeyDown={(e) => {
                           if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); submitInlineTask(col.id); }
-                          if (e.key === "Escape") { setAddingTaskCol(null); setInlineTitle(""); }
+                          if (e.key === "Escape") { setAddingTaskCol(null); setInlineTitle(""); setInlineError(null); }
                         }}
                       />
+                      {inlineError && <p className="text-xs text-red-600">{inlineError}</p>}
                       <div className="flex gap-1.5">
                         <button
                           onClick={() => submitInlineTask(col.id)}
-                          disabled={creating}
+                          disabled={creatingInline}
                           className="flex-1 flex items-center justify-center gap-1 px-3 py-1.5 rounded-lg bg-[var(--color-primary)] text-white text-xs font-medium disabled:opacity-50"
                         >
-                          {creating ? <Loader2 className="w-3 h-3 animate-spin" /> : null}
+                          {creatingInline ? <Loader2 className="w-3 h-3 animate-spin" /> : null}
                           Adicionar
                         </button>
                         <button
-                          onClick={() => { setAddingTaskCol(null); setInlineTitle(""); }}
+                          onClick={() => { setAddingTaskCol(null); setInlineTitle(""); setInlineError(null); }}
                           className="px-2 py-1.5 rounded-lg hover:bg-[var(--color-background)] text-[var(--color-text-muted)]"
                         >
                           <X className="w-3.5 h-3.5" />
@@ -436,7 +454,7 @@ export function TasksClient({ initialTasks, initialColumns, companyId, members }
                     </div>
                   ) : (
                     <button
-                      onClick={() => { setAddingTaskCol(col.id); setInlineTitle(""); }}
+                      onClick={() => { setAddingTaskCol(col.id); setInlineTitle(""); setInlineError(null); }}
                       className="w-full flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-xs text-[var(--color-text-muted)] hover:bg-white hover:text-[var(--color-text-sub)] transition-colors"
                     >
                       <Plus className="w-3.5 h-3.5" />Adicionar tarefa
@@ -555,9 +573,9 @@ export function TasksClient({ initialTasks, initialColumns, companyId, members }
                 className="flex-1 px-4 py-2 rounded-xl border border-[var(--color-border)] text-sm font-medium text-[var(--color-text-sub)] hover:bg-[var(--color-background)]">
                 Cancelar
               </button>
-              <button onClick={submitCreateModal} disabled={creating}
+              <button onClick={submitCreateModal} disabled={creatingModal}
                 className="flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-[var(--color-primary)] text-white text-sm font-medium hover:opacity-90 disabled:opacity-50">
-                {creating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+                {creatingModal ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
                 Criar tarefa
               </button>
             </div>
@@ -569,7 +587,8 @@ export function TasksClient({ initialTasks, initialColumns, companyId, members }
       {/* ── Detail popup ── */}
       {openTask && typeof window !== "undefined" && createPortal(
         <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={saveDetail} />
+          {/* Backdrop closes without saving */}
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setOpenTask(null)} />
           <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6 space-y-4 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between">
               <h2 className="text-base font-semibold text-[var(--color-text-main)]">Detalhes da tarefa</h2>
@@ -578,11 +597,19 @@ export function TasksClient({ initialTasks, initialColumns, companyId, members }
                   className="p-1.5 rounded-lg text-red-400 hover:bg-red-50">
                   <Trash2 className="w-4 h-4" />
                 </button>
-                <button onClick={saveDetail} className="p-1.5 rounded-lg text-[var(--color-text-muted)] hover:bg-[var(--color-background)]">
+                <button onClick={() => setOpenTask(null)} className="p-1.5 rounded-lg text-[var(--color-text-muted)] hover:bg-[var(--color-background)]">
                   <X className="w-4 h-4" />
                 </button>
               </div>
             </div>
+
+            {/* Read-only meta */}
+            {openTask.created_by_name && (
+              <p className="text-xs text-[var(--color-text-muted)]">
+                Criado por <span className="font-medium text-[var(--color-text-sub)]">{openTask.created_by_name}</span>
+              </p>
+            )}
+
             <div className="space-y-3">
               <div>
                 <label className="block text-xs font-medium text-[var(--color-text-sub)] mb-1">Título</label>

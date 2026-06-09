@@ -110,60 +110,65 @@ export async function getSubstituteSuggestions(
 
   if (error) return { ok: false, error: error.message };
 
-  // Para cada colaborador, verificar quantos serviços têm no período
-  const suggestions: (SubstituteSuggestion | null)[] = await Promise.all(
-    (allCollabs ?? []).map(async (c) => {
-      // Obter as equipas a que este colaborador pertence
-      const { data: memberTeams } = await admin
-        .from("team_members")
-        .select("team_id")
-        .eq("collaborator_id", c.id)
-        .is("left_at", null);
+  const collabIds = (allCollabs ?? []).map((c) => c.id);
+  if (collabIds.length === 0) return { ok: true, data: [] };
 
-      const teamIds = (memberTeams ?? []).map((t) => t.team_id);
+  // 3 queries totais em paralelo (era N×3 individual)
+  const [membershipsRes, absencesRes] = await Promise.all([
+    admin
+      .from("team_members")
+      .select("collaborator_id, team_id")
+      .in("collaborator_id", collabIds)
+      .is("left_at", null),
+    admin
+      .from("absences")
+      .select("collaborator_id")
+      .in("collaborator_id", collabIds)
+      .lte("starts_on", endsOn)
+      .gte("ends_on", startsOn),
+  ]);
 
-      // Contar serviços dessas equipas no período
-      let conflictCount = 0;
-      if (teamIds.length > 0) {
-        const { count } = await admin
-          .from("services")
-          .select("id", { count: "exact", head: true })
-          .in("team_id", teamIds)
-          .gte("scheduled_start", `${startsOn}T00:00:00`)
-          .lte("scheduled_start", `${endsOn}T23:59:59`)
-          .in("status", ["agendado", "em_curso"]);
-        conflictCount = count ?? 0;
-      }
+  // Conjunto de ausentes no período (para exclusão rápida)
+  const absentSet = new Set((absencesRes.data ?? []).map((a) => a.collaborator_id));
 
-      // Verificar se está ausente no mesmo período
-      const { data: alsoAbsent } = await admin
-        .from("absences")
-        .select("id")
-        .eq("collaborator_id", c.id)
-        .lte("starts_on", endsOn)
-        .gte("ends_on", startsOn)
-        .limit(1);
+  // Agrupar equipas por colaborador
+  const teamsByCollab = new Map<string, string[]>();
+  for (const m of membershipsRes.data ?? []) {
+    const list = teamsByCollab.get(m.collaborator_id) ?? [];
+    list.push(m.team_id);
+    teamsByCollab.set(m.collaborator_id, list);
+  }
 
-      if (alsoAbsent && alsoAbsent.length > 0) return null;
+  // Uma query para contar serviços de todas as equipas em jogo
+  const allTeamIds = [...new Set((membershipsRes.data ?? []).map((m) => m.team_id))];
+  let servicesByTeam = new Map<string, number>();
+  if (allTeamIds.length > 0) {
+    const { data: services } = await admin
+      .from("services")
+      .select("team_id")
+      .in("team_id", allTeamIds)
+      .gte("scheduled_start", `${startsOn}T00:00:00`)
+      .lte("scheduled_start", `${endsOn}T23:59:59`)
+      .in("status", ["agendado", "em_curso"]);
+    for (const s of services ?? []) {
+      if (!s.team_id) continue;
+      servicesByTeam.set(s.team_id, (servicesByTeam.get(s.team_id) ?? 0) + 1);
+    }
+  }
 
-      // Score: mais skills em comum = maior score
-      const cSkills: string[] = c.skills ?? [];
-      const commonSkills = cSkills.filter((s) => absentSkills.includes(s)).length;
-      const score = commonSkills * 10 - conflictCount;
+  const suggestions: SubstituteSuggestion[] = [];
+  for (const c of allCollabs ?? []) {
+    if (absentSet.has(c.id)) continue;
 
-      return {
-        id: c.id,
-        full_name: c.full_name,
-        skills: cSkills,
-        conflicting_services: conflictCount,
-        score,
-      } satisfies SubstituteSuggestion;
-    }),
-  );
+    const teams = teamsByCollab.get(c.id) ?? [];
+    const conflictCount = teams.reduce((sum, tid) => sum + (servicesByTeam.get(tid) ?? 0), 0);
 
-  const filtered = suggestions
-    .filter((s): s is SubstituteSuggestion => s !== null)
-    .sort((a, b) => b.score - a.score);
+    const cSkills: string[] = c.skills ?? [];
+    const commonSkills = cSkills.filter((s) => absentSkills.includes(s)).length;
+    const score = commonSkills * 10 - conflictCount;
 
-  return { ok: true, data: filtered };
+    suggestions.push({ id: c.id, full_name: c.full_name, skills: cSkills, conflicting_services: conflictCount, score });
+  }
+
+  return { ok: true, data: suggestions.sort((a, b) => b.score - a.score) };
 }
