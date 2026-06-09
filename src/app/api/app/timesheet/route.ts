@@ -165,16 +165,48 @@ export async function PATCH(req: NextRequest) {
 
   const admin = createAdminClient();
 
-  const { data: ts } = await admin
-    .from("timesheets")
-    .select("id, clock_in_at")
-    .eq("service_id", service_id)
-    .eq("collaborator_id", user.id)
-    .is("clock_out_at", null)
+  const { data: profile } = await admin
+    .from("profiles")
+    .select("company_id")
+    .eq("id", user.id)
     .single();
 
+  if (!profile)
+    return NextResponse.json({ error: "Perfil não encontrado" }, { status: 404 });
+
+  const [{ data: ts }, { data: service }, settings] = await Promise.all([
+    admin
+      .from("timesheets")
+      .select("id, clock_in_at")
+      .eq("service_id", service_id)
+      .eq("collaborator_id", user.id)
+      .is("clock_out_at", null)
+      .single(),
+    admin
+      .from("services_full")
+      .select("scheduled_end")
+      .eq("id", service_id)
+      .eq("company_id", profile.company_id)
+      .single(),
+    getCompanySettings(profile.company_id),
+  ]);
+
   if (!ts)
-    return NextResponse.json({ error: "Clock-in não encontrado" }, { status: 404 });
+    return NextResponse.json({ error: "Registo de entrada não encontrado" }, { status: 404 });
+
+  // Validar janela de saída: não pode terminar mais de checkout_after_minutes após o fim previsto
+  if (service?.scheduled_end) {
+    const ref = new Date(clockOutAt);
+    const scheduledEnd = new Date(service.scheduled_end);
+    const latestClockOut = new Date(scheduledEnd.getTime() + settings.checkout_after_minutes * 60_000);
+    if (ref > latestClockOut) {
+      const diffMin = Math.round((ref.getTime() - latestClockOut.getTime()) / 60_000);
+      return NextResponse.json(
+        { error: `O prazo para terminar o ponto já passou há ${diffMin} minuto${diffMin !== 1 ? "s" : ""}. Contacte o gestor para corrigir o registo.` },
+        { status: 400 },
+      );
+    }
+  }
 
   const out = new Date(clockOutAt);
   const duration_minutes = ts.clock_in_at

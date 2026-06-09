@@ -79,7 +79,7 @@ export function ClockButton({ serviceId, initialTimesheet }: Props) {
       });
       const json = await res.json();
       setLoading(false);
-      if (!res.ok) { setError(json.error ?? "Erro ao fazer clock-in"); return; }
+      if (!res.ok) { setError(json.error ?? "Erro ao registar entrada"); return; }
       if (json.location_warning) setDistanceWarning(json.distance_m);
       setTimesheet(json.data);
     } catch {
@@ -114,7 +114,7 @@ export function ClockButton({ serviceId, initialTimesheet }: Props) {
       });
       const json = await res.json();
       setLoading(false);
-      if (!res.ok) { setError(json.error ?? "Erro ao fazer clock-out"); return; }
+      if (!res.ok) { setError(json.error ?? "Erro ao registar saída"); return; }
       setTimesheet(json.data);
     } catch {
       queueTimesheet({ kind: "out", service_id: serviceId, lat, lng, at });
@@ -138,7 +138,7 @@ export function ClockButton({ serviceId, initialTimesheet }: Props) {
           ) : (
             <LogIn className="w-5 h-5" />
           )}
-          {loading ? "A obter localização…" : "Fazer Clock-in"}
+          {loading ? "A obter localização…" : "Bater Ponto"}
         </button>
         {error && <p className="text-xs text-red-600 text-center">{error}</p>}
       </div>
@@ -184,7 +184,7 @@ export function ClockButton({ serviceId, initialTimesheet }: Props) {
           ) : (
             <LogOut className="w-5 h-5" />
           )}
-          {loading ? "A registar saída…" : "Fazer Clock-out"}
+          {loading ? "A registar saída…" : "Terminar Ponto"}
         </button>
 
         {error && <p className="text-xs text-red-600 text-center">{error}</p>}

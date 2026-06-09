@@ -37,6 +37,7 @@ export interface AbsenceRow {
   notes: string | null;
   replaced_by: string | null;
   replaced_by_name: string | null;
+  is_new?: boolean;
 }
 
 interface Props {
@@ -96,7 +97,14 @@ export function AbsenceTable({ absences }: Props) {
             {absences.map((row) => (
               <tr key={row.id} className="hover:bg-[var(--color-background)] transition-colors">
                 <td className="px-4 py-3 font-medium text-[var(--color-text-main)]">
-                  {row.collaborator_name}
+                  <span className="flex items-center gap-2">
+                    {row.collaborator_name}
+                    {row.is_new && (
+                      <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-amber-100 text-amber-700 border border-amber-200">
+                        Novo
+                      </span>
+                    )}
+                  </span>
                 </td>
                 <td className="px-4 py-3">
                   <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${ABSENCE_COLORS[row.absence_type] ?? "bg-gray-100 text-gray-700"}`}>

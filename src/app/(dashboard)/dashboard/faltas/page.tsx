@@ -49,7 +49,7 @@ export default async function FaltasPage({
   // Faltas do período (com join manual)
   let absencesQuery = admin
     .from("absences")
-    .select("id, collaborator_id, absence_type, starts_on, ends_on, notes, replaced_by")
+    .select("id, collaborator_id, absence_type, starts_on, ends_on, notes, replaced_by, created_by, created_at")
     .eq("company_id", companyId)
     .lte("starts_on", endOfMonth)
     .gte("ends_on", startOfMonth)
@@ -66,6 +66,7 @@ export default async function FaltasPage({
     (colaboradores ?? []).map((c) => [c.id, c.full_name]),
   );
 
+  const nowMs = Date.now();
   const absences = (rawAbsences ?? []).map((a) => ({
     id: a.id,
     collaborator_id: a.collaborator_id,
@@ -76,6 +77,7 @@ export default async function FaltasPage({
     notes: a.notes,
     replaced_by: a.replaced_by,
     replaced_by_name: a.replaced_by ? (profilesMap[a.replaced_by] ?? null) : null,
+    is_new: a.created_by === a.collaborator_id && (nowMs - new Date(a.created_at).getTime()) < 48 * 60 * 60 * 1000,
   }));
 
   // Contar faltas não substituídas
