@@ -47,7 +47,7 @@ Lê este ficheiro no início de CADA sessão antes de fazer qualquer coisa.
 
 ## ⚡ PRÓXIMA TASK A EXECUTAR
 
-**Próxima task:** Criar migration SQL para tabela `cash_flow_entries` no Supabase (está em falta — erro "Could not find the table 'public.cash_flow_entries' in the schema cache" no Fluxo de Caixa). Depois testar emails com clientes reais + verificar domínio `molimpezas.pt`.
+**Próxima task:** Verificar domínio `molimpezas.pt` no Resend (adicionar registos DNS) e testar emails com clientes reais. Ver secção "Emails" na sessão 2 para instruções detalhadas.
 
 ---
 
@@ -93,17 +93,11 @@ Lê este ficheiro no início de CADA sessão antes de fazer qualquer coisa.
   - **Secção "Ajustes Manuais":** acréscimos € + descontos €
   - Preview do líquido **atualizado em tempo real** com fórmula visível
 
-### Fluxo de Caixa — Problema pendente (⚠️ NÃO RESOLVIDO)
-- **Erro:** "Could not find the table 'public.cash_flow_entries' in the schema cache"
-- **Causa:** Tabela `cash_flow_entries` está no ficheiro `supabase/migrations/20260608_new_features.sql` mas **nunca foi aplicada no Supabase remoto**
-- **Para resolver:** Aplicar a migration via Supabase Management API ou SQL Editor:
-  ```bash
-  # Ver o conteúdo da migration
-  cat supabase/migrations/20260608_new_features.sql
-  # Aplicar via CLI (se ligado ao projeto)
-  npx supabase db push
-  ```
-- O código `src/app/(dashboard)/dashboard/financeiro/fluxo-caixa/` está **correto** — basta criar a tabela
+### Fluxo de Caixa — Problema pendente (✅ RESOLVIDO — 2026-06-09)
+- Migrations `20260608_new_features.sql` e `20260609_timesheet_limits.sql` aplicadas via `npx supabase db query --linked`
+- Tabelas criadas: `cash_flow_entries`, `collaborator_documents`, `management_tasks`
+- Colunas adicionadas em `company_settings`: `checkin_before_minutes`, `checkout_after_minutes`
+- Migrations 011, 012, 013 também aplicadas nesta sessão
 
 ---
 
@@ -115,7 +109,7 @@ Lê este ficheiro no início de CADA sessão antes de fazer qualquer coisa.
 - **018** — RLS recursion fix: `get_service_company_id()` SECURITY DEFINER + políticas corretas
 - **019** — Colunas de cancelamento em `services`: `cancel_type`, `cancel_reason`, `cancelled_at`, `cancelled_by`, `is_late_cancel`
 - **020** — View `services_full` recriada com `client_phone` e `client_email`
-- Migrations 011, 012, 013, 016 — **PENDENTES** (ainda não aplicadas)
+- Migrations 011, 012, 013, 016 — **APLICADAS** (011/012/013 em 2026-06-09, 016 já estava)
 
 ### Funcionalidade de Cancelamentos (✅ IMPLEMENTADA)
 - `src/app/actions/cancellations.ts` — server action `cancelService()`: detecta cancelamento tardio (<24h), actualiza status + campos cancel_*, notifica equipa via push
@@ -230,11 +224,13 @@ Lê este ficheiro no início de CADA sessão antes de fazer qualquer coisa.
 - `src/__tests__/validation.test.ts` — coordenadas GPS, edge cases de cálculo
 - Executar: `npm test`
 
-**Migrations pendentes (aplicar no Supabase antes de testar em produção):**
-- `supabase/migrations/011_conflict_detection.sql`
-- `supabase/migrations/012_teams_vehicle.sql`
-- `supabase/migrations/013_client_notifications.sql`
-- `supabase/migrations/016_vehicles.sql`
+**Migrations aplicadas (✅ todas resolvidas em 2026-06-09):**
+- `supabase/migrations/011_conflict_detection.sql` ✅
+- `supabase/migrations/012_teams_vehicle.sql` ✅
+- `supabase/migrations/013_client_notifications.sql` ✅
+- `supabase/migrations/016_vehicles.sql` ✅ (já estava)
+- `supabase/migrations/20260608_new_features.sql` ✅
+- `supabase/migrations/20260609_timesheet_limits.sql` ✅
 
 **Config necessária antes de testar emails:**
 - Criar conta em resend.com + obter API key
