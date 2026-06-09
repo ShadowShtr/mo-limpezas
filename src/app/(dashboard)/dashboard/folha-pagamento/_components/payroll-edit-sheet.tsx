@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { X, Loader2, AlertCircle, Clock, Euro } from "lucide-react";
+import { X, Loader2, AlertCircle, Clock, Euro, Percent } from "lucide-react";
 import { adjustPayrollRecord, type PayrollRecord } from "@/app/actions/payroll";
 
 interface Props {
@@ -36,6 +36,10 @@ const inputCls =
   "w-full px-3 py-2 rounded-lg border border-[var(--color-border)] text-sm text-[var(--color-text-main)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] focus:border-transparent";
 
 export function PayrollEditSheet({ record, onClose, onSaved }: Props) {
+  // Campos de taxas
+  const [hourlyRate,    setHourlyRate]    = useState(record.hourly_rate.toString());
+  const mealPerDayInit = record.days_worked > 0 ? record.meal_allowance / record.days_worked : 9.6;
+  const [mealDay,       setMealDay]       = useState(mealPerDayInit.toFixed(2));
   // Campos de horas
   const [workedHours,   setWorkedHours]   = useState(record.worked_hours.toString());
   const [overtimeHours, setOvertimeHours] = useState(record.overtime_hours.toString());
@@ -52,6 +56,8 @@ export function PayrollEditSheet({ record, onClose, onSaved }: Props) {
   const [error,  setError]  = useState<string | null>(null);
 
   // Cálculo do preview em tempo real
+  const hourlyRateVal    = parseFloat(hourlyRate)    || 0;
+  const mealDayVal       = parseFloat(mealDay)       || 0;
   const workedHoursVal   = parseFloat(workedHours)   || 0;
   const overtimeHoursVal = parseFloat(overtimeHours) || 0;
   const daysWorkedVal    = parseInt(daysWorked)       || 0;
@@ -59,10 +65,9 @@ export function PayrollEditSheet({ record, onClose, onSaved }: Props) {
   const addVal           = parseFloat(otherAdd)       || 0;
   const dedVal           = parseFloat(otherDed)       || 0;
 
-  const grossPreview    = Math.round(workedHoursVal * record.hourly_rate * 100) / 100;
-  const mealPerDay      = record.days_worked > 0 ? record.meal_allowance / record.days_worked : 0;
-  const mealPreview     = Math.round(daysWorkedVal * mealPerDay * 100) / 100;
-  const otBonusPreview  = Math.round(overtimeHoursVal * record.hourly_rate * 0.25 * 100) / 100;
+  const grossPreview    = Math.round(workedHoursVal * hourlyRateVal * 100) / 100;
+  const mealPreview     = Math.round(daysWorkedVal * mealDayVal * 100) / 100;
+  const otBonusPreview  = Math.round(overtimeHoursVal * hourlyRateVal * 0.25 * 100) / 100;
   const previewNet      = Math.round(
     (grossPreview + mealPreview + otBonusPreview + addVal - absenceDedVal - dedVal) * 100,
   ) / 100;
@@ -73,6 +78,8 @@ export function PayrollEditSheet({ record, onClose, onSaved }: Props) {
     setError(null);
 
     const res = await adjustPayrollRecord(record.id, {
+      hourly_rate:         hourlyRateVal,
+      meal_allowance_day:  mealDayVal,
       worked_hours:        workedHoursVal,
       overtime_hours:      overtimeHoursVal,
       absence_hours:       parseFloat(absenceHours) || 0,
@@ -86,6 +93,7 @@ export function PayrollEditSheet({ record, onClose, onSaved }: Props) {
     if (res.ok) {
       onSaved({
         ...record,
+        hourly_rate:         hourlyRateVal,
         worked_hours:        workedHoursVal,
         overtime_hours:      overtimeHoursVal,
         absence_hours:       parseFloat(absenceHours) || 0,
@@ -136,6 +144,40 @@ export function PayrollEditSheet({ record, onClose, onSaved }: Props) {
 
         {/* Formulário */}
         <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-5">
+
+          {/* Secção: Taxas */}
+          <SectionLabel icon={<Percent className="w-4 h-4" />} label="Taxas" />
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-medium text-[var(--color-text-sub)] mb-1.5">
+                €/hora
+              </label>
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={hourlyRate}
+                onChange={(e) => setHourlyRate(e.target.value)}
+                className={inputCls}
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-[var(--color-text-sub)] mb-1.5">
+                Sub. alimentação/dia (€)
+              </label>
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={mealDay}
+                onChange={(e) => setMealDay(e.target.value)}
+                className={inputCls}
+              />
+            </div>
+          </div>
+
+          <div className="border-t border-[var(--color-border)]" />
 
           {/* Secção: Correções de Horas */}
           <SectionLabel icon={<Clock className="w-4 h-4" />} label="Correções de Horas" />

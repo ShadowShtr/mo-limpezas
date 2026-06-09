@@ -40,6 +40,8 @@ export interface PayrollAdjust {
   absence_hours?:      number;
   absence_deductions?: number;
   days_worked?:        number;
+  hourly_rate?:        number;
+  meal_allowance_day?: number;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -280,26 +282,26 @@ export async function adjustPayrollRecord(
   const overtimeHours  = adjust.overtime_hours    ?? rec.overtime_hours     ?? 0;
   const absenceHours   = adjust.absence_hours     ?? rec.absence_hours      ?? 0;
   const daysWorked     = adjust.days_worked       ?? rec.days_worked        ?? 0;
-  const hourlyRate     = rec.hourly_rate ?? 0;
+  const hourlyRate     = adjust.hourly_rate       ?? rec.hourly_rate        ?? 0;
 
-  // Recalcular valores derivados se algum campo de horas foi alterado
-  const hoursChanged = adjust.worked_hours !== undefined || adjust.overtime_hours !== undefined
+  const rateChanged  = adjust.hourly_rate     !== undefined;
+  const hoursChanged = adjust.worked_hours    !== undefined || adjust.overtime_hours !== undefined
     || adjust.days_worked !== undefined || adjust.absence_hours !== undefined;
 
-  const grossSalary = hoursChanged
+  const grossSalary = (hoursChanged || rateChanged)
     ? Math.round(workedHours * hourlyRate * 100) / 100
     : (rec.gross_salary ?? 0);
 
-  // Subsídio de alimentação: proporcional ao número de dias (usando taxa por dia do registo)
-  const mealPerDay = rec.days_worked > 0
-    ? (rec.meal_allowance ?? 0) / rec.days_worked
-    : 0;
-  const mealAllowance = hoursChanged && adjust.days_worked !== undefined
+  // Subsídio de alimentação: usa meal_allowance_day se fornecido, senão proporcional ao registo
+  const mealPerDay = adjust.meal_allowance_day !== undefined
+    ? adjust.meal_allowance_day
+    : rec.days_worked > 0 ? (rec.meal_allowance ?? 0) / rec.days_worked : 0;
+  const mealAllowance = (hoursChanged && adjust.days_worked !== undefined) || adjust.meal_allowance_day !== undefined
     ? Math.round(daysWorked * mealPerDay * 100) / 100
     : (rec.meal_allowance ?? 0);
 
   // Bónus horas extra: taxa de 25% sobre o valor/hora
-  const overtimeBonus = adjust.overtime_hours !== undefined
+  const overtimeBonus = (adjust.overtime_hours !== undefined || rateChanged)
     ? Math.round(overtimeHours * hourlyRate * 0.25 * 100) / 100
     : (rec.overtime_bonus ?? 0);
 
@@ -319,6 +321,7 @@ export async function adjustPayrollRecord(
       overtime_hours:      overtimeHours,
       absence_hours:       absenceHours,
       days_worked:         daysWorked,
+      hourly_rate:         hourlyRate,
       gross_salary:        grossSalary,
       meal_allowance:      mealAllowance,
       overtime_bonus:      overtimeBonus,
