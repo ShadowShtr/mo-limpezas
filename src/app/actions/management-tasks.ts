@@ -4,8 +4,20 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 
-export type TaskStatus = "pendente" | "em_curso" | "concluido";
+export type TaskStatus = string; // free-form to support custom columns
 export type TaskPriority = "normal" | "urgente";
+
+export interface KanbanColumn {
+  id: string;
+  name: string;
+  color: string;
+}
+
+export const DEFAULT_KANBAN_COLUMNS: KanbanColumn[] = [
+  { id: "pendente",  name: "Pendente",  color: "amber" },
+  { id: "em_curso",  name: "Em Curso",  color: "blue" },
+  { id: "concluido", name: "Concluído", color: "green" },
+];
 
 export interface ManagementTask {
   id: string;
@@ -87,7 +99,8 @@ export async function createManagementTask(
     company_id: companyId,
     title: input.title,
     body: input.body ?? null,
-    status: input.status ?? "pendente",
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    status: (input.status ?? "pendente") as any,
     priority: input.priority ?? "normal",
     assigned_to: input.assigned_to ?? null,
     due_date: input.due_date ?? null,
@@ -111,14 +124,15 @@ export async function updateManagementTask(
     ? null
     : undefined;
 
-  const { error } = await admin.from("management_tasks").update({
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { error } = await (admin.from("management_tasks") as any).update({
     updated_at: new Date().toISOString(),
-    ...(data.title     !== undefined && { title:        data.title }),
-    ...(data.body      !== undefined && { body:         data.body }),
-    ...(data.status    !== undefined && { status:       data.status, completed_at: completedAt }),
-    ...(data.priority  !== undefined && { priority:     data.priority }),
-    ...(data.assigned_to !== undefined && { assigned_to: data.assigned_to }),
-    ...(data.due_date  !== undefined && { due_date:     data.due_date }),
+    ...(data.title       !== undefined && { title:        data.title }),
+    ...(data.body        !== undefined && { body:         data.body }),
+    ...(data.status      !== undefined && { status:       data.status, completed_at: completedAt }),
+    ...(data.priority    !== undefined && { priority:     data.priority }),
+    ...(data.assigned_to !== undefined && { assigned_to:  data.assigned_to }),
+    ...(data.due_date    !== undefined && { due_date:     data.due_date }),
   }).eq("id", taskId);
   if (error) return { ok: false, error: error.message };
 
@@ -132,6 +146,31 @@ export async function deleteManagementTask(
   const admin = createAdminClient();
   const { error } = await admin.from("management_tasks").delete().eq("id", taskId);
   if (error) return { ok: false, error: error.message };
+  revalidatePath("/dashboard/tarefas");
+  return { ok: true };
+}
+
+export async function getKanbanColumns(companyId: string): Promise<KanbanColumn[]> {
+  const admin = createAdminClient();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data } = await (admin.from("company_settings") as any)
+    .select("kanban_columns")
+    .eq("company_id", companyId)
+    .single();
+  if (!data?.kanban_columns) return DEFAULT_KANBAN_COLUMNS;
+  return data.kanban_columns as KanbanColumn[];
+}
+
+export async function saveKanbanColumns(
+  companyId: string,
+  columns: KanbanColumn[],
+): Promise<{ ok: boolean; error?: string }> {
+  const admin = createAdminClient();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { error } = await (admin.from("company_settings") as any)
+    .update({ kanban_columns: columns })
+    .eq("company_id", companyId);
+  if (error) return { ok: false, error: (error as { message: string }).message };
   revalidatePath("/dashboard/tarefas");
   return { ok: true };
 }
