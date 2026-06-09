@@ -13,7 +13,7 @@ export interface KanbanColumn {
   color: string;
 }
 
-export const DEFAULT_KANBAN_COLUMNS: KanbanColumn[] = [
+const DEFAULT_KANBAN_COLUMNS: KanbanColumn[] = [
   { id: "pendente",  name: "Pendente",  color: "amber" },
   { id: "em_curso",  name: "Em Curso",  color: "blue" },
   { id: "concluido", name: "Concluído", color: "green" },
