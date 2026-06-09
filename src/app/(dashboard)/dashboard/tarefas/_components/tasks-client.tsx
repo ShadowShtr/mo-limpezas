@@ -174,21 +174,38 @@ export function TasksClient({ initialTasks, initialColumns, companyId, members }
       const next: DragState = { ...d, x: e.clientX, y: e.clientY, active };
       dragRef.current = next; setDrag(next);
     }
-    async function handleUp() {
+    function handleUp() {
       const d = dragRef.current; if (!d) return;
-      wasDraggingRef.current = d.active;
-      if (d.active && dropTargetRef.current && dropTargetRef.current !== d.fromColumnId) {
-        const toCol = dropTargetRef.current;
-        setMoving(d.taskId);
-        setTasks((prev) => prev.map((t) => t.id === d.taskId ? { ...t, status: toCol } : t));
-        await updateManagementTask(d.taskId, { status: toCol });
-        setMoving(null);
+      // Capturar antes de limpar
+      const wasActive = d.active;
+      const taskId = d.taskId;
+      const fromCol = d.fromColumnId;
+      const toCol = dropTargetRef.current;
+
+      // Limpar IMEDIATAMENTE — o card cai na hora
+      wasDraggingRef.current = wasActive;
+      dragRef.current = null;
+      dropTargetRef.current = null;
+      setDrag(null);
+      setDropTarget(null);
+
+      // Mover optimisticamente e sincronizar em background
+      if (wasActive && toCol && toCol !== fromCol) {
+        setTasks((prev) => prev.map((t) => t.id === taskId ? { ...t, status: toCol } : t));
+        updateManagementTask(taskId, { status: toCol }).catch(() => {
+          // Reverter em caso de erro
+          setTasks((prev) => prev.map((t) => t.id === taskId ? { ...t, status: fromCol } : t));
+        });
       }
-      dragRef.current = null; dropTargetRef.current = null; setDrag(null); setDropTarget(null);
     }
     window.addEventListener("pointermove", handleMove);
     window.addEventListener("pointerup", handleUp);
-    return () => { window.removeEventListener("pointermove", handleMove); window.removeEventListener("pointerup", handleUp); };
+    window.addEventListener("pointercancel", handleUp);
+    return () => {
+      window.removeEventListener("pointermove", handleMove);
+      window.removeEventListener("pointerup", handleUp);
+      window.removeEventListener("pointercancel", handleUp);
+    };
   }, []);
 
   function handleCardPointerDown(e: React.PointerEvent, taskId: string, columnId: string) {
