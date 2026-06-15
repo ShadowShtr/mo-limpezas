@@ -294,6 +294,96 @@ export async function uploadDamageReport(formData: FormData): Promise<{
   return { ok: true, id: data.id };
 }
 
+// ─── Backup ZIP (gestor) ─────────────────────────────────────────────────────
+
+export interface BackupDocument {
+  collaborator_name: string;
+  category: DocumentCategory;
+  file_name: string;
+  notes: string | null;
+  signed_url: string;
+  file_size: number | null;
+}
+
+export async function getDocumentsForBackup(): Promise<{
+  ok: boolean;
+  company_name?: string;
+  documents?: BackupDocument[];
+  expiring_count?: number;
+  error?: string;
+}> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { ok: false, error: "Não autenticado" };
+
+  const admin = createAdminClient();
+  const { data: profile } = await admin
+    .from("profiles")
+    .select("company_id, role")
+    .eq("id", user.id)
+    .single();
+
+  if (!profile) return { ok: false, error: "Perfil não encontrado" };
+  if (!["gestor", "admin"].includes(profile.role)) return { ok: false, error: "Sem permissão" };
+
+  const { data: company } = await admin
+    .from("companies")
+    .select("name")
+    .eq("id", profile.company_id)
+    .single();
+
+  const { data: docs, error } = await admin
+    .from("collaborator_documents")
+    .select("id, file_name, file_url, file_size, category, notes, collaborator_id, expires_at")
+    .eq("company_id", profile.company_id)
+    .is("archived_at", null)
+    .order("collaborator_id")
+    .order("created_at");
+
+  if (error) return { ok: false, error: error.message };
+  if (!docs || docs.length === 0) {
+    return { ok: true, company_name: company?.name, documents: [], expiring_count: 0 };
+  }
+
+  const collabIds = [...new Set(docs.map((d) => d.collaborator_id))];
+  const { data: profiles } = await admin
+    .from("profiles")
+    .select("id, full_name")
+    .in("id", collabIds);
+  const nameMap = Object.fromEntries((profiles ?? []).map((p) => [p.id, p.full_name]));
+
+  const thirtyDays = Date.now() + 30 * 24 * 60 * 60 * 1000;
+  const expiring_count = docs.filter(
+    (d) => d.expires_at && new Date(d.expires_at).getTime() < thirtyDays,
+  ).length;
+
+  const bucketPrefix = `/${BUCKET}/`;
+  const documents = await Promise.all(
+    docs.map(async (doc) => {
+      const storagePath = doc.file_url.includes(bucketPrefix)
+        ? decodeURIComponent(doc.file_url.split(bucketPrefix)[1])
+        : null;
+
+      let signed_url = doc.file_url;
+      if (storagePath) {
+        const { data: urlData } = await admin.storage.from(BUCKET).createSignedUrl(storagePath, 7200);
+        if (urlData) signed_url = urlData.signedUrl;
+      }
+
+      return {
+        collaborator_name: nameMap[doc.collaborator_id] ?? "Desconhecida",
+        category: doc.category,
+        file_name: doc.file_name,
+        notes: doc.notes,
+        signed_url,
+        file_size: doc.file_size,
+      } satisfies BackupDocument;
+    }),
+  );
+
+  return { ok: true, company_name: company?.name, documents, expiring_count };
+}
+
 // ─── Arquivo de documentos expirados (cron) ───────────────────────────────────
 
 export async function listDocumentsToArchive(companyId: string): Promise<{
