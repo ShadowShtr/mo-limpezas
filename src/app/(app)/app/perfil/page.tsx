@@ -35,8 +35,13 @@ export default async function PerfilPage() {
   const workedHours = (workedMins / 60).toFixed(1);
   const contractedHours = profile.contracted_hours_month ?? 168;
 
-  const docsRes = await getMyDocuments();
-  const myDocs = docsRes.ok ? (docsRes.documents ?? []) : [];
+  let myDocs: Awaited<ReturnType<typeof getMyDocuments>>["documents"] = [];
+  try {
+    const docsRes = await getMyDocuments();
+    myDocs = docsRes.ok ? (docsRes.documents ?? []) : [];
+  } catch {
+    // Continua sem documentos — não crasha a página
+  }
 
   const initials = profile.full_name
     .split(" ")

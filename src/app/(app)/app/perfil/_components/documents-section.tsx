@@ -2,7 +2,7 @@
 
 import { useState, useTransition, useRef } from "react";
 import {
-  FileText, FileImage, File, Download, Loader2, Camera, Receipt,
+  FileText, File, Download, Loader2, Camera, Receipt,
   ChevronDown, ChevronUp, AlertTriangle,
 } from "lucide-react";
 import {
@@ -56,24 +56,37 @@ interface Props {
 }
 
 export function AppDocumentsSection({ initialDocuments }: Props) {
-  const [docs, setDocs] = useState<CollaboratorDocument[]>(initialDocuments);
+  const [docs, setDocs]             = useState<CollaboratorDocument[]>(initialDocuments);
   const [showDamageForm, setShowDamageForm] = useState(false);
-  const [notes, setNotes] = useState("");
-  const [uploading, startUpload] = useTransition();
-  const [message, setMessage] = useState<{ type: "error" | "success"; text: string } | null>(null);
-  const [expanded, setExpanded] = useState(true);
+  const [notes, setNotes]           = useState("");
+  const [uploading, startUpload]    = useTransition();
+  const [message, setMessage]       = useState<{ type: "error" | "success"; text: string } | null>(null);
+  const [expanded, setExpanded]     = useState(true);
   const [downloading, setDownloading] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+
+  // Cache de signed URLs para evitar chamada ao servidor em cada toque
+  const urlCache = useRef<Map<string, { url: string; expiresAt: number }>>(new Map());
 
   const salaryDocs = docs.filter((d) => d.category === "recibo_salario");
   const otherDocs  = docs.filter((d) => d.category !== "recibo_salario");
 
   async function handleDownload(doc: CollaboratorDocument) {
     if (!doc.file_url) return;
+
+    // Usar URL em cache se ainda válida (50 min — signed URL dura 1h)
+    const cached = urlCache.current.get(doc.id);
+    if (cached && cached.expiresAt > Date.now()) {
+      window.open(cached.url, "_blank", "noopener,noreferrer");
+      return;
+    }
+
     setDownloading(doc.id);
     const res = await getSignedDocumentUrl(doc.file_url);
     setDownloading(null);
+
     if (res.ok) {
+      urlCache.current.set(doc.id, { url: res.url, expiresAt: Date.now() + 50 * 60 * 1000 });
       window.open(res.url, "_blank", "noopener,noreferrer");
     } else {
       setMessage({ type: "error", text: "Não foi possível abrir o ficheiro. Tente novamente." });
@@ -97,37 +110,37 @@ export function AppDocumentsSection({ initialDocuments }: Props) {
         setShowDamageForm(false);
         if (fileRef.current) fileRef.current.value = "";
         setDocs((prev) => [{
-          id: res.id ?? crypto.randomUUID(),
-          file_name: file.name,
-          file_url: "",
-          file_size: file.size,
-          mime_type: file.type,
-          category: "avaria",
-          notes: notes || null,
+          id:                     res.id ?? crypto.randomUUID(),
+          file_name:              file.name,
+          file_url:               "",
+          file_size:              file.size,
+          mime_type:              file.type,
+          category:               "avaria",
+          notes:                  notes || null,
           visible_to_collaborator: true,
-          uploaded_by_role: "colaboradora",
-          expires_at: null,
-          archived_at: null,
-          created_at: new Date().toISOString(),
-          uploaded_by_name: null,
+          uploaded_by_role:       "colaboradora",
+          expires_at:             null,
+          archived_at:            null,
+          created_at:             new Date().toISOString(),
+          uploaded_by_name:       null,
         }, ...prev]);
       } else {
-        setMessage({ type: "error", text: res.error ?? "Erro ao enviar." });
+        setMessage({ type: "error", text: res.error ?? "Erro ao enviar. Tente novamente." });
       }
     });
+  }
+
+  function openFilePicker() {
+    // Reset para permitir seleccionar o mesmo ficheiro de novo
+    if (fileRef.current) fileRef.current.value = "";
+    fileRef.current?.click();
   }
 
   if (docs.length === 0 && !showDamageForm) {
     return (
       <div
         className="rounded-2xl p-4"
-        style={{
-          background: "var(--glass-bg)",
-          backdropFilter: "var(--glass-blur)",
-          WebkitBackdropFilter: "var(--glass-blur)",
-          border: "1px solid var(--glass-border)",
-          boxShadow: "var(--glass-shadow)",
-        }}
+        style={{ background: "var(--glass-bg)", backdropFilter: "var(--glass-blur)", WebkitBackdropFilter: "var(--glass-blur)", border: "1px solid var(--glass-border)", boxShadow: "var(--glass-shadow)" }}
       >
         <div className="flex items-center gap-2 mb-3">
           <FileText className="w-4 h-4 text-[var(--color-primary)]" />
@@ -144,9 +157,6 @@ export function AppDocumentsSection({ initialDocuments }: Props) {
           <Camera className="w-4 h-4" />
           Reportar avaria / dano
         </button>
-        {showDamageForm && message?.type === "success" && (
-          <p className="text-xs text-center text-green-600 mt-2">{message.text}</p>
-        )}
       </div>
     );
   }
@@ -154,13 +164,7 @@ export function AppDocumentsSection({ initialDocuments }: Props) {
   return (
     <div
       className="rounded-2xl overflow-hidden"
-      style={{
-        background: "var(--glass-bg)",
-        backdropFilter: "var(--glass-blur)",
-        WebkitBackdropFilter: "var(--glass-blur)",
-        border: "1px solid var(--glass-border)",
-        boxShadow: "var(--glass-shadow)",
-      }}
+      style={{ background: "var(--glass-bg)", backdropFilter: "var(--glass-blur)", WebkitBackdropFilter: "var(--glass-blur)", border: "1px solid var(--glass-border)", boxShadow: "var(--glass-shadow)" }}
     >
       {/* Header colapsável */}
       <button
@@ -169,21 +173,18 @@ export function AppDocumentsSection({ initialDocuments }: Props) {
         className="w-full flex items-center gap-2 p-4 hover:bg-white/30 transition-colors"
       >
         <FileText className="w-4 h-4 text-[var(--color-primary)] shrink-0" />
-        <p className="text-sm font-semibold text-[var(--color-text-main)] flex-1 text-left">
-          Os meus documentos
-        </p>
+        <p className="text-sm font-semibold text-[var(--color-text-main)] flex-1 text-left">Os meus documentos</p>
         <span className="text-xs bg-[var(--color-primary-light)] text-[var(--color-primary)] px-1.5 py-0.5 rounded-full font-medium mr-1">
           {docs.length}
         </span>
-        {expanded ? (
-          <ChevronUp className="w-4 h-4 text-[var(--color-text-muted)]" />
-        ) : (
-          <ChevronDown className="w-4 h-4 text-[var(--color-text-muted)]" />
-        )}
+        {expanded
+          ? <ChevronUp className="w-4 h-4 text-[var(--color-text-muted)]" />
+          : <ChevronDown className="w-4 h-4 text-[var(--color-text-muted)]" />}
       </button>
 
       {expanded && (
         <div className="border-t border-[var(--glass-border)]">
+
           {/* Folhas de salário */}
           {salaryDocs.length > 0 && (
             <div className="p-4 space-y-2">
@@ -191,8 +192,9 @@ export function AppDocumentsSection({ initialDocuments }: Props) {
                 Folhas de Salário
               </p>
               {salaryDocs.map((doc) => {
-                const days = daysUntil(doc.expires_at);
+                const days          = daysUntil(doc.expires_at);
                 const isDownloading = downloading === doc.id;
+                const isCached      = urlCache.current.has(doc.id);
                 return (
                   <button
                     key={doc.id}
@@ -209,8 +211,7 @@ export function AppDocumentsSection({ initialDocuments }: Props) {
                         {doc.notes || doc.file_name}
                       </p>
                       <p className="text-xs text-[var(--color-text-muted)]">
-                        {fmtDate(doc.created_at)}
-                        {doc.file_size ? ` · ${fmtSize(doc.file_size)}` : ""}
+                        {fmtDate(doc.created_at)}{doc.file_size ? ` · ${fmtSize(doc.file_size)}` : ""}
                       </p>
                       {days !== null && days < 14 && days > 0 && (
                         <p className="text-[10px] text-amber-600 font-medium">Expira em {days} dias</p>
@@ -219,11 +220,10 @@ export function AppDocumentsSection({ initialDocuments }: Props) {
                         <p className="text-[10px] text-[var(--color-text-muted)]">A processar…</p>
                       )}
                     </div>
-                    {isDownloading ? (
-                      <Loader2 className="w-4 h-4 text-[var(--color-primary)] animate-spin shrink-0" />
-                    ) : (
-                      <Download className="w-4 h-4 text-[var(--color-text-muted)] group-hover:text-[var(--color-primary)] transition-colors shrink-0" />
-                    )}
+                    {isDownloading
+                      ? <Loader2 className="w-4 h-4 text-[var(--color-primary)] animate-spin shrink-0" />
+                      : <Download className={`w-4 h-4 shrink-0 transition-colors ${isCached ? "text-[var(--color-primary)]" : "text-[var(--color-text-muted)] group-hover:text-[var(--color-primary)]"}`} />
+                    }
                   </button>
                 );
               })}
@@ -237,9 +237,10 @@ export function AppDocumentsSection({ initialDocuments }: Props) {
                 Outros documentos
               </p>
               {otherDocs.map((doc) => {
-                const CatIcon = CATEGORY_ICONS[doc.category];
-                const colorClass = CATEGORY_COLORS[doc.category];
+                const CatIcon       = CATEGORY_ICONS[doc.category];
+                const colorClass    = CATEGORY_COLORS[doc.category];
                 const isDownloading = downloading === doc.id;
+                const isCached      = urlCache.current.has(doc.id);
                 return (
                   <button
                     key={doc.id}
@@ -263,11 +264,9 @@ export function AppDocumentsSection({ initialDocuments }: Props) {
                       )}
                     </div>
                     {doc.file_url && (
-                      isDownloading ? (
-                        <Loader2 className="w-4 h-4 text-[var(--color-primary)] animate-spin shrink-0" />
-                      ) : (
-                        <Download className="w-4 h-4 text-[var(--color-text-muted)] group-hover:text-[var(--color-primary)] transition-colors shrink-0" />
-                      )
+                      isDownloading
+                        ? <Loader2 className="w-4 h-4 text-[var(--color-primary)] animate-spin shrink-0" />
+                        : <Download className={`w-4 h-4 shrink-0 transition-colors ${isCached ? "text-[var(--color-primary)]" : "text-[var(--color-text-muted)] group-hover:text-[var(--color-primary)]"}`} />
                     )}
                   </button>
                 );
@@ -280,7 +279,7 @@ export function AppDocumentsSection({ initialDocuments }: Props) {
             <div className="p-4 border-t border-[var(--glass-border)] space-y-3">
               <p className="text-sm font-semibold text-[var(--color-text-main)]">Reportar avaria / dano</p>
               <p className="text-xs text-[var(--color-text-muted)]">
-                Tire uma foto ou anexe um PDF descrevendo o que aconteceu. O gestor será notificado.
+                Tire uma foto ou escolha um ficheiro da galeria. O gestor será notificado.
               </p>
 
               <input
@@ -291,14 +290,17 @@ export function AppDocumentsSection({ initialDocuments }: Props) {
                 className="w-full text-sm border border-[var(--color-border)] rounded-xl px-3 py-2 bg-white/70 focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]/30"
               />
 
+              {/* accept="image/*" permite câmara + galeria no iOS e Android */}
               <input
                 ref={fileRef}
                 type="file"
-                accept="image/jpeg,image/png,image/webp,.pdf"
+                accept="image/*,.pdf"
+                capture="environment"
                 className="hidden"
                 onChange={handleFileChange}
                 disabled={uploading}
               />
+
               <div className="grid grid-cols-2 gap-2">
                 <button
                   type="button"
@@ -309,15 +311,14 @@ export function AppDocumentsSection({ initialDocuments }: Props) {
                 </button>
                 <button
                   type="button"
-                  onClick={() => fileRef.current?.click()}
+                  onClick={openFilePicker}
                   disabled={uploading}
                   className="flex items-center justify-center gap-2 py-2.5 rounded-xl bg-red-500 text-white text-sm font-medium hover:opacity-90 active:opacity-90 disabled:opacity-50"
                 >
-                  {uploading ? (
-                    <><Loader2 className="w-4 h-4 animate-spin" /> A enviar...</>
-                  ) : (
-                    <><Camera className="w-4 h-4" /> Anexar ficheiro</>
-                  )}
+                  {uploading
+                    ? <><Loader2 className="w-4 h-4 animate-spin" /> A enviar...</>
+                    : <><Camera className="w-4 h-4" /> Fotografar / Escolher</>
+                  }
                 </button>
               </div>
 
@@ -345,6 +346,7 @@ export function AppDocumentsSection({ initialDocuments }: Props) {
               )}
             </div>
           )}
+
         </div>
       )}
     </div>

@@ -8,7 +8,7 @@ import { PresencaHistory } from "./_components/presenca-history";
 import { DocumentsSection } from "./_components/documents-section";
 import { getCollaboratorDocuments } from "@/app/actions/collaborator-documents";
 import {
-  ArrowLeft, Mail, Phone, Calendar, Award, Edit2,
+  ArrowLeft, Mail, Phone, Calendar, Award, Edit2, Palmtree,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -188,6 +188,25 @@ export default async function ColaboradorDetailPage({ params }: Props) {
                 </div>
               </div>
             )}
+
+            {/* Saldo de Férias */}
+            <div className="bg-white rounded-xl border border-[var(--color-border)] p-5">
+              <div className="flex items-center gap-2 mb-3">
+                <Palmtree className="w-4 h-4 text-emerald-600" />
+                <h3 className="text-sm font-semibold text-[var(--color-text-main)]">Férias</h3>
+              </div>
+              <div className="flex items-end gap-1">
+                <span className="text-3xl font-bold text-[var(--color-text-main)]">
+                  {profile.vacation_balance ?? 22}
+                </span>
+                <span className="text-sm text-[var(--color-text-muted)] mb-1">dias disponíveis</span>
+              </div>
+              {profile.contract_start && (
+                <p className="text-xs text-[var(--color-text-muted)] mt-1">
+                  Contrato desde {new Date(profile.contract_start).toLocaleDateString("pt-PT")}
+                </p>
+              )}
+            </div>
 
             {/* Faltas */}
             <ColaboradorAbsences
