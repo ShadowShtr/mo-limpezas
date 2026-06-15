@@ -93,7 +93,7 @@ html {
 }
 
 body {
-  background: linear-gradient(135deg, #f0fdf4 0%, #f8fafc 60%, #eff6ff 100%);
+  background: linear-gradient(135deg, #d1fae5 0%, #f8fafc 55%, #dbeafe 100%);
   background-attachment: fixed;
   color: var(--color-text-main);
   font-family: var(--font-sans), system-ui, sans-serif;
@@ -120,13 +120,13 @@ body {
 
 /* Glass para elementos de navegação (sidebar, headers, bottom nav) */
 .glass-nav {
-  background: rgba(255, 255, 255, 0.92);
-  backdrop-filter: saturate(150%) blur(10px);
-  -webkit-backdrop-filter: saturate(150%) blur(10px);
+  background: rgba(255, 255, 255, 0.75);
+  backdrop-filter: saturate(180%) blur(12px);
+  -webkit-backdrop-filter: saturate(180%) blur(12px);
 }
-.glass-nav-top    { border-bottom: 1px solid rgba(203, 213, 225, 0.80); }
-.glass-nav-side   { border-right:  1px solid rgba(203, 213, 225, 0.80); }
-.glass-nav-bottom { border-top:    1px solid rgba(203, 213, 225, 0.80); }
+.glass-nav-top    { border-bottom: 1px solid rgba(203, 213, 225, 0.70); }
+.glass-nav-side   { border-right:  1px solid rgba(203, 213, 225, 0.70); }
+.glass-nav-bottom { border-top:    1px solid rgba(203, 213, 225, 0.70); }
 
 /* Scrollbar suave */
 ::-webkit-scrollbar { width: 6px; height: 6px; }

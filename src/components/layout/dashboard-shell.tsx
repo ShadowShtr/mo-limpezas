@@ -15,7 +15,7 @@ export function DashboardShell({ children, userName, userRole, avatarUrl }: Prop
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   return (
-    <div className="flex h-screen overflow-hidden">
+    <div className="flex h-screen overflow-hidden" style={{ background: "linear-gradient(135deg, #d1fae5 0%, #f8fafc 55%, #dbeafe 100%)" }}>
       {/* Sidebar desktop (sempre visível ≥ lg) */}
       <div className="hidden lg:flex">
         <Sidebar userName={userName} userRole={userRole} avatarUrl={avatarUrl} />

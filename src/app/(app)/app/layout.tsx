@@ -11,7 +11,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   if (profile.role !== "colaborador") redirect("/dashboard");
 
   return (
-    <div className="flex flex-col min-h-screen">
+    <div className="flex flex-col min-h-screen" style={{ background: "linear-gradient(135deg, #d1fae5 0%, #f8fafc 55%, #dbeafe 100%)" }}>
       <PwaRegister />
       <AppHeader userId={profile.id} userName={profile.full_name} avatarUrl={profile.avatar_url} />
       <main className="flex-1 overflow-y-auto pb-20 px-4 pt-4">
