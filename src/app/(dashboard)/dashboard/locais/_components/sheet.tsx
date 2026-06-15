@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, useTransition } from "react";
+import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { X, Loader2, Search, MapPin, CheckCircle2 } from "lucide-react";
 import { createLocation, updateLocation } from "@/app/actions/locations";
@@ -190,28 +191,19 @@ export function LocalSheet({ trigger, companyId, clientes, local }: Props) {
     });
   }
 
-  return (
+  const overlay = open && typeof window !== "undefined" ? createPortal(
     <>
-      <span
-        onClick={() => { setMessage(null); setOpen(true); }}
-        style={{ display: "contents", cursor: "pointer" }}
-      >
-        {trigger}
-      </span>
-
-      {open && (
-        <>
-          <div
-            className="fixed inset-0 z-[9998]"
-            style={{
-              background: "rgba(9,14,26,0.45)",
-              backdropFilter: "blur(6px)",
-              WebkitBackdropFilter: "blur(6px)",
-            }}
-            onClick={() => setOpen(false)}
-          />
-          <div
-            className="fixed right-0 top-0 h-full w-full max-w-md z-[9999] flex flex-col"
+      <div
+        className="fixed inset-0 z-[9998]"
+        style={{
+          background: "rgba(9,14,26,0.45)",
+          backdropFilter: "blur(6px)",
+          WebkitBackdropFilter: "blur(6px)",
+        }}
+        onClick={() => setOpen(false)}
+      />
+      <div
+        className="fixed right-0 top-0 h-screen w-full max-w-md z-[9999] flex flex-col"
             style={{
               background: "rgba(255,255,255,0.97)",
               backdropFilter: "blur(24px)",
@@ -496,7 +488,17 @@ export function LocalSheet({ trigger, companyId, clientes, local }: Props) {
             </div>
           </div>
         </>
-      )}
+    , document.body) : null;
+
+  return (
+    <>
+      <span
+        onClick={() => { setMessage(null); setOpen(true); }}
+        style={{ display: "contents", cursor: "pointer" }}
+      >
+        {trigger}
+      </span>
+      {overlay}
     </>
   );
 }

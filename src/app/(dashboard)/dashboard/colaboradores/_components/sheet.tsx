@@ -306,7 +306,7 @@ export function ColaboradorSheet({ trigger, companyId, colaborador }: Props) {
 
   return (
     <>
-      <span onClick={() => setOpen(true)} style={{ display: "contents", cursor: "pointer" }}>
+      <span onClick={() => { setMessage(null); setOpen(true); }} style={{ display: "contents", cursor: "pointer" }}>
         {trigger}
       </span>
       {overlay}

@@ -218,20 +218,20 @@ export function TeamAllocationModal({
     const dateStr = format(selectedDate, "yyyy-MM-dd");
 
     try {
-      for (const team of allocated) {
-        const alloc = allocationMap[team.id];
-        if (!alloc?.vehicleId) {
-          // sem viatura → remover alocação existente (se houver)
-          await removeAllocation(team.id, dateStr).catch(() => null);
-        } else {
-          await upsertAllocation({
+      await Promise.all(
+        allocated.map((team) => {
+          const alloc = allocationMap[team.id];
+          if (!alloc?.vehicleId) {
+            return removeAllocation(team.id, dateStr).catch(() => null);
+          }
+          return upsertAllocation({
             vehicle_id: alloc.vehicleId,
             team_id:    team.id,
             driver_id:  alloc.driverId || null,
             date:       dateStr,
           });
-        }
-      }
+        }),
+      );
       setMessage({ type: "success", text: "Alocações guardadas." });
       setTimeout(onClose, 1200);
     } catch {
