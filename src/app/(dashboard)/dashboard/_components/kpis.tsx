@@ -14,33 +14,33 @@ interface Props {
 export function DashboardKPIs({ kpis }: Props) {
   const cards = [
     {
-      label: "SERVIÇOS HOJE",
+      label: "Serviços hoje",
       value: kpis.total,
       icon: CalendarCheck,
-      iconColor: "text-[var(--color-primary)]",
-      iconBg: "bg-[var(--color-primary-light)]",
+      accent: "#22C55E",
+      accentBg: "rgba(34,197,94,0.10)",
     },
     {
-      label: "CONCLUÍDOS",
+      label: "Concluídos",
       value: kpis.done,
       icon: CheckCircle,
-      iconColor: "text-[var(--color-success)]",
-      iconBg: "bg-[var(--color-primary-light)]",
+      accent: "#22C55E",
+      accentBg: "rgba(34,197,94,0.10)",
       suffix: kpis.total > 0 ? `${Math.round((kpis.done / kpis.total) * 100)}%` : null,
     },
     {
-      label: "EM CURSO",
+      label: "Em curso",
       value: kpis.ongoing,
       icon: Loader2,
-      iconColor: "text-[var(--color-warning)]",
-      iconBg: "bg-amber-50",
+      accent: "#F59E0B",
+      accentBg: "rgba(245,158,11,0.10)",
     },
     {
-      label: "SEM COBERTURA",
+      label: "Sem cobertura",
       value: kpis.noCoverage,
       icon: AlertTriangle,
-      iconColor: kpis.noCoverage > 0 ? "text-[var(--color-danger)]" : "text-[var(--color-text-muted)]",
-      iconBg: kpis.noCoverage > 0 ? "bg-red-50" : "bg-[var(--color-background)]",
+      accent: kpis.noCoverage > 0 ? "#EF4444" : "#94A3B8",
+      accentBg: kpis.noCoverage > 0 ? "rgba(239,68,68,0.10)" : "rgba(148,163,184,0.08)",
       highlight: kpis.noCoverage > 0,
     },
   ];
@@ -52,23 +52,35 @@ export function DashboardKPIs({ kpis }: Props) {
         return (
           <div
             key={c.label}
-            className={`rounded-xl p-5 bg-white border transition-shadow hover:shadow-md ${
-              c.highlight ? "border-red-200" : "border-slate-200/80"
-            }`}
-            style={{ boxShadow: "0 1px 3px rgba(15,23,42,0.06), 0 2px 8px rgba(15,23,42,0.04)" }}
+            className="glass-card rounded-2xl p-5"
+            style={c.highlight ? { outline: "1px solid rgba(239,68,68,0.2)" } : undefined}
           >
-            <div className="flex items-start justify-between mb-3">
-              <div className={`w-9 h-9 rounded-lg flex items-center justify-center ${c.iconBg}`}>
-                <Icon className={`w-5 h-5 ${c.iconColor}`} />
+            <div className="flex items-start justify-between mb-4">
+              <div
+                className="w-10 h-10 rounded-xl flex items-center justify-center"
+                style={{ background: c.accentBg }}
+              >
+                <Icon className="w-5 h-5" style={{ color: c.accent }} />
               </div>
               {c.suffix && (
-                <span className="text-xs font-medium text-[var(--color-primary)] bg-[var(--color-primary-light)] px-2 py-0.5 rounded-full">
+                <span
+                  className="text-[11px] font-semibold px-2 py-0.5 rounded-full"
+                  style={{ background: "rgba(34,197,94,0.10)", color: "#16A34A" }}
+                >
                   {c.suffix}
                 </span>
               )}
             </div>
-            <p className="text-3xl font-bold text-[var(--color-text-main)]">{c.value}</p>
-            <p className="text-xs font-medium text-[var(--color-text-muted)] uppercase tracking-wide mt-1">
+            <p
+              className="text-3xl font-bold leading-none"
+              style={{ color: "var(--color-text-main)", letterSpacing: "-0.02em" }}
+            >
+              {c.value}
+            </p>
+            <p
+              className="text-xs font-medium mt-1.5"
+              style={{ color: "var(--color-text-muted)" }}
+            >
               {c.label}
             </p>
           </div>

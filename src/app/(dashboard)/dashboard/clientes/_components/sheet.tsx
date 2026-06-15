@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition, cloneElement, isValidElement } from "react";
+import { useState, useTransition } from "react";
 import { createPortal } from "react-dom";
 import { X, Loader2 } from "lucide-react";
 import { createCliente, updateCliente } from "@/app/actions/clientes";
@@ -66,14 +66,22 @@ export function ClienteSheet({ trigger, companyId, cliente }: Props) {
     });
   }
 
-  const triggerWithOpen = isValidElement(trigger)
-    ? cloneElement(trigger as React.ReactElement<{ onClick?: () => void }>, { onClick: () => setOpen(true) })
-    : trigger;
-
   const overlay = open ? createPortal(
     <>
-      <div className="fixed inset-0 bg-black/30 z-[9998]" onClick={() => setOpen(false)} />
-      <div className="fixed right-0 top-0 h-full w-full max-w-md bg-white shadow-xl z-[9999] flex flex-col">
+      <div
+        className="fixed inset-0 z-[9998]"
+        style={{ background: "rgba(9,14,26,0.45)", backdropFilter: "blur(6px)", WebkitBackdropFilter: "blur(6px)" }}
+        onClick={() => setOpen(false)}
+      />
+      <div
+        className="fixed right-0 top-0 h-full w-full max-w-md z-[9999] flex flex-col"
+        style={{
+          background: "rgba(255,255,255,0.97)",
+          backdropFilter: "blur(24px)",
+          WebkitBackdropFilter: "blur(24px)",
+          boxShadow: "-8px 0 40px rgba(9,14,26,0.14), -1px 0 0 rgba(15,23,42,0.07)",
+        }}
+      >
         <div className="flex items-center justify-between px-6 py-4 border-b border-[var(--color-border)]">
           <h2 className="text-base font-semibold text-[var(--color-text-main)]">
             {isEdit ? "Editar cliente" : "Novo cliente"}
@@ -147,7 +155,9 @@ export function ClienteSheet({ trigger, companyId, cliente }: Props) {
 
   return (
     <>
-      {triggerWithOpen}
+      <span onClick={() => setOpen(true)} style={{ display: "contents", cursor: "pointer" }}>
+        {trigger}
+      </span>
       {overlay}
     </>
   );

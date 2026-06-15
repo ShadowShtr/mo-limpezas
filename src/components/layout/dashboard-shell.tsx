@@ -15,17 +15,18 @@ export function DashboardShell({ children, userName, userRole, avatarUrl }: Prop
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   return (
-    <div className="flex h-screen overflow-hidden" style={{ background: "linear-gradient(135deg, #d1fae5 0%, #f8fafc 55%, #dbeafe 100%)" }}>
-      {/* Sidebar desktop (sempre visível ≥ lg) */}
+    <div className="flex h-screen overflow-hidden" style={{ background: "var(--color-background)" }}>
+      {/* Sidebar desktop */}
       <div className="hidden lg:flex">
         <Sidebar userName={userName} userRole={userRole} avatarUrl={avatarUrl} />
       </div>
 
-      {/* Drawer mobile (< lg) */}
+      {/* Drawer mobile */}
       {sidebarOpen && (
         <>
           <div
-            className="fixed inset-0 bg-black/40 z-40 lg:hidden"
+            className="fixed inset-0 z-40 lg:hidden"
+            style={{ background: "rgba(0,0,0,0.5)", backdropFilter: "blur(4px)" }}
             onClick={() => setSidebarOpen(false)}
           />
           <div className="fixed inset-y-0 left-0 z-50 lg:hidden">
@@ -41,7 +42,6 @@ export function DashboardShell({ children, userName, userRole, avatarUrl }: Prop
 
       {/* Conteúdo principal */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        {/* Header mobile (só visível < lg) */}
         <MobileHeader
           userName={userName}
           avatarUrl={avatarUrl}

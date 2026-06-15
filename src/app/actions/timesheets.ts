@@ -65,7 +65,6 @@ export async function adminEditTimesheet(
       clock_in_at: data.clock_in_at,
       clock_out_at: data.clock_out_at,
       duration_minutes,
-      notes: data.notes ?? null,
     })
     .eq("id", timesheetId);
 

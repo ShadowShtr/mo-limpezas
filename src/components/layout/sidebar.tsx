@@ -18,6 +18,7 @@ import {
   AlertTriangle,
   TrendingUp,
   CheckSquare,
+  Truck,
 } from "lucide-react";
 import { logout } from "@/app/actions/auth";
 
@@ -34,6 +35,7 @@ const NAV = [
   { href: "/dashboard/relatorios",    icon: BarChart3,       label: "Relatórios" },
   { href: "/dashboard/financeiro",    icon: TrendingUp,      label: "Financeiro" },
   { href: "/dashboard/tarefas",       icon: CheckSquare,     label: "Tarefas" },
+  { href: "/dashboard/viaturas",      icon: Truck,           label: "Viaturas" },
 ];
 
 interface SidebarProps {
@@ -59,18 +61,49 @@ export function Sidebar({ userName, userRole, avatarUrl, onClose }: SidebarProps
     .toUpperCase();
 
   return (
-    <aside className="w-60 shrink-0 flex flex-col h-screen sticky top-0 glass-nav glass-nav-side">
+    <aside
+      className="w-[220px] shrink-0 flex flex-col h-screen sticky top-0 glass-dark overflow-hidden"
+      style={{ background: "rgba(9,14,26,0.94)" }}
+    >
+      {/* Background decorative glow */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0 overflow-hidden"
+      >
+        <div
+          className="absolute -top-24 -left-16 w-64 h-64 rounded-full opacity-20"
+          style={{
+            background: "radial-gradient(circle, rgba(34,197,94,0.35) 0%, transparent 70%)",
+            filter: "blur(32px)",
+          }}
+        />
+      </div>
 
-      {/* Logo */}
-      <div className="flex items-center gap-3 px-5 h-16 border-b border-[var(--glass-border)]">
-        <div className="w-8 h-8 rounded-lg bg-[var(--color-primary)] flex items-center justify-center shrink-0">
-          <span className="text-white font-bold text-sm">ML</span>
+      {/* ── Logo ────────────────────────────────────────── */}
+      <div
+        className="relative flex items-center gap-3 px-5 h-[60px] shrink-0"
+        style={{ borderBottom: "1px solid rgba(255,255,255,0.06)" }}
+      >
+        <div
+          className="w-8 h-8 rounded-xl flex items-center justify-center shrink-0 shadow-lg"
+          style={{
+            background: "linear-gradient(135deg, #22C55E 0%, #16A34A 100%)",
+            boxShadow: "0 4px 12px rgba(34,197,94,0.35)",
+          }}
+        >
+          <span className="text-white font-bold text-xs tracking-wide">ML</span>
         </div>
-        <span className="font-bold text-[var(--color-text-main)] text-[15px] flex-1">Mó Limpezas</span>
+        <div className="flex-1 min-w-0">
+          <p className="text-white font-semibold text-sm leading-none truncate">Mó Limpezas</p>
+          <p className="text-[10px] mt-0.5" style={{ color: "rgba(148,163,184,0.55)" }}>
+            Gestão de limpeza
+          </p>
+        </div>
         {onClose && (
           <button
             onClick={onClose}
-            className="p-1.5 rounded-lg text-[var(--color-text-muted)] hover:bg-[var(--color-background)] transition-colors"
+            className="p-1.5 rounded-lg transition-colors"
+            style={{ color: "rgba(148,163,184,0.6)" }}
             aria-label="Fechar menu"
           >
             <X className="w-4 h-4" />
@@ -78,8 +111,8 @@ export function Sidebar({ userName, userRole, avatarUrl, onClose }: SidebarProps
         )}
       </div>
 
-      {/* Navegação */}
-      <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
+      {/* ── Navegação ────────────────────────────────────── */}
+      <nav className="relative flex-1 px-3 py-3 space-y-0.5 overflow-y-auto">
         {NAV.map(({ href, icon: Icon, label }) => {
           const active = isActive(href);
           return (
@@ -87,56 +120,123 @@ export function Sidebar({ userName, userRole, avatarUrl, onClose }: SidebarProps
               key={href}
               href={href}
               onClick={onClose}
-              className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+              className="relative flex items-center gap-3 px-3 py-[9px] rounded-xl text-[13px] font-medium transition-all duration-150 group"
+              style={
                 active
-                  ? "bg-[var(--color-primary-light)] text-[var(--color-primary)] border-l-[3px] border-[var(--color-primary)] pl-[9px]"
-                  : "text-[var(--color-text-sub)] hover:bg-[var(--color-background)] hover:text-[var(--color-text-main)]"
-              }`}
+                  ? {
+                      background: "rgba(34,197,94,0.13)",
+                      color: "#22C55E",
+                    }
+                  : {
+                      color: "rgba(226,232,240,0.65)",
+                    }
+              }
+              onMouseEnter={(e) => {
+                if (!active) {
+                  (e.currentTarget as HTMLElement).style.background = "rgba(255,255,255,0.055)";
+                  (e.currentTarget as HTMLElement).style.color = "rgba(248,250,252,0.95)";
+                }
+              }}
+              onMouseLeave={(e) => {
+                if (!active) {
+                  (e.currentTarget as HTMLElement).style.background = "";
+                  (e.currentTarget as HTMLElement).style.color = "rgba(226,232,240,0.65)";
+                }
+              }}
             >
-              <Icon className="w-4 h-4 shrink-0" />
-              {label}
+              {/* Active indicator */}
+              {active && (
+                <span
+                  className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-5 rounded-full"
+                  style={{ background: "#22C55E", boxShadow: "0 0 8px rgba(34,197,94,0.6)" }}
+                />
+              )}
+
+              <Icon
+                className="w-[17px] h-[17px] shrink-0"
+                style={{ color: active ? "#22C55E" : undefined }}
+              />
+              <span className="flex-1 truncate">{label}</span>
             </Link>
           );
         })}
       </nav>
 
-      {/* Divisor */}
-      <div className="px-3 pb-1">
+      {/* ── Divisor ──────────────────────────────────────── */}
+      <div className="relative px-3 pb-2" style={{ borderTop: "1px solid rgba(255,255,255,0.05)" }}>
+        <div className="h-2" />
         <Link
           href="/dashboard/configuracoes"
-          className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+          onClick={onClose}
+          className="flex items-center gap-3 px-3 py-[9px] rounded-xl text-[13px] font-medium transition-all duration-150"
+          style={
             pathname.startsWith("/dashboard/configuracoes")
-              ? "bg-[var(--color-primary-light)] text-[var(--color-primary)]"
-              : "text-[var(--color-text-sub)] hover:bg-[var(--color-background)] hover:text-[var(--color-text-main)]"
-          }`}
+              ? { background: "rgba(34,197,94,0.13)", color: "#22C55E" }
+              : { color: "rgba(226,232,240,0.55)" }
+          }
+          onMouseEnter={(e) => {
+            if (!pathname.startsWith("/dashboard/configuracoes")) {
+              (e.currentTarget as HTMLElement).style.background = "rgba(255,255,255,0.055)";
+              (e.currentTarget as HTMLElement).style.color = "rgba(248,250,252,0.90)";
+            }
+          }}
+          onMouseLeave={(e) => {
+            if (!pathname.startsWith("/dashboard/configuracoes")) {
+              (e.currentTarget as HTMLElement).style.background = "";
+              (e.currentTarget as HTMLElement).style.color = "rgba(226,232,240,0.55)";
+            }
+          }}
         >
-          <Settings className="w-4 h-4 shrink-0" />
+          <Settings className="w-[17px] h-[17px] shrink-0" />
           Configurações
         </Link>
       </div>
 
-      {/* Utilizador */}
-      <div className="border-t border-[var(--glass-border)] p-4">
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-full bg-[var(--color-primary-muted)] flex items-center justify-center shrink-0 overflow-hidden">
+      {/* ── Utilizador ──────────────────────────────────── */}
+      <div
+        className="relative shrink-0 p-3 mx-3 mb-3 rounded-2xl"
+        style={{
+          background: "rgba(255,255,255,0.04)",
+          border: "1px solid rgba(255,255,255,0.07)",
+        }}
+      >
+        <div className="flex items-center gap-2.5">
+          <div
+            className="w-8 h-8 rounded-full shrink-0 overflow-hidden flex items-center justify-center font-semibold text-xs"
+            style={{
+              background: avatarUrl ? "transparent" : "rgba(34,197,94,0.2)",
+              border: "1.5px solid rgba(34,197,94,0.3)",
+              color: "#22C55E",
+            }}
+          >
             {avatarUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img src={avatarUrl} alt={userName} className="w-full h-full object-cover" />
             ) : (
-              <span className="text-[var(--color-primary)] font-semibold text-xs">{initials}</span>
+              <span>{initials}</span>
             )}
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-[var(--color-text-main)] truncate">{userName}</p>
-            <p className="text-xs text-[var(--color-text-muted)] capitalize">{userRole}</p>
+            <p
+              className="text-[12px] font-semibold truncate leading-none mb-0.5"
+              style={{ color: "rgba(248,250,252,0.90)" }}
+            >
+              {userName}
+            </p>
+            <p className="text-[10px] capitalize" style={{ color: "rgba(148,163,184,0.55)" }}>
+              {userRole}
+            </p>
           </div>
           <form action={logout}>
             <button
               type="submit"
               title="Sair"
-              className="text-[var(--color-text-muted)] hover:text-[var(--color-danger)] transition-colors"
+              className="p-1.5 rounded-lg transition-colors"
+              style={{ color: "rgba(148,163,184,0.45)" }}
+              onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.color = "#EF4444")}
+              onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.color = "rgba(148,163,184,0.45)")}
             >
-              <LogOut className="w-4 h-4" />
+              <LogOut className="w-3.5 h-3.5" />
             </button>
           </form>
         </div>

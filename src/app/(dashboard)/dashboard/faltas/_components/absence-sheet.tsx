@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, cloneElement, isValidElement } from "react";
+import { useState } from "react";
 import { X, Loader2 } from "lucide-react";
 import { createAbsence, type AbsenceType } from "@/app/actions/absences";
 
@@ -82,24 +82,32 @@ export function AbsenceSheet({ trigger, colaboradores, defaultCollaboratorId }: 
     }
   }
 
-  const triggerWithOpen = isValidElement(trigger)
-    ? cloneElement(trigger as React.ReactElement<{ onClick?: () => void }>, {
-        onClick: () => { resetForm(); setOpen(true); },
-      })
-    : trigger;
-
   return (
     <>
-      {triggerWithOpen}
+      <span
+        onClick={() => { resetForm(); setOpen(true); }}
+        style={{ display: "contents", cursor: "pointer" }}
+      >
+        {trigger}
+      </span>
 
       {open && (
         <>
           <div
-            className="fixed inset-0 bg-black/30 z-40 animate-in fade-in duration-150"
+            className="fixed inset-0 z-40 animate-in fade-in duration-150"
+            style={{ background: "rgba(9,14,26,0.45)", backdropFilter: "blur(6px)", WebkitBackdropFilter: "blur(6px)" }}
             onClick={() => setOpen(false)}
           />
 
-          <div className="fixed right-0 top-0 h-full w-full max-w-md bg-white shadow-xl z-50 flex flex-col animate-in slide-in-from-right duration-200">
+          <div
+            className="fixed right-0 top-0 h-full w-full max-w-md z-50 flex flex-col animate-in slide-in-from-right duration-200"
+            style={{
+              background: "rgba(255,255,255,0.97)",
+              backdropFilter: "blur(24px)",
+              WebkitBackdropFilter: "blur(24px)",
+              boxShadow: "-8px 0 40px rgba(9,14,26,0.14), -1px 0 0 rgba(15,23,42,0.07)",
+            }}
+          >
             {/* Header */}
             <div className="flex items-center justify-between px-6 py-4 border-b border-[var(--color-border)]">
               <div>
