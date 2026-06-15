@@ -1,6 +1,7 @@
 "use server";
 
 import { createAdminClient } from "@/lib/supabase/admin";
+import { calcTimesheetDuration } from "@/lib/payroll-calc";
 import { revalidatePath } from "next/cache";
 
 export interface ServiceTimeUpdate {
@@ -51,9 +52,11 @@ export async function adminEditTimesheet(
 
   let duration_minutes: number | null = null;
   if (data.clock_in_at && data.clock_out_at) {
-    duration_minutes = Math.round(
-      (new Date(data.clock_out_at).getTime() - new Date(data.clock_in_at).getTime()) / 60000,
-    );
+    const dur = calcTimesheetDuration(data.clock_in_at, data.clock_out_at);
+    if (dur === null) {
+      return { ok: false, error: "A hora de saída não pode ser anterior à de entrada." };
+    }
+    duration_minutes = dur;
   }
 
   const { error } = await admin

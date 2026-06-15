@@ -2,6 +2,7 @@
 
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
+import { monthRange, calcCollaboratorPayroll } from "@/lib/payroll-calc";
 import { revalidatePath } from "next/cache";
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
@@ -44,13 +45,7 @@ export interface PayrollAdjust {
   meal_allowance_day?: number;
 }
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-function monthRange(year: number, month: number) {
-  const start = `${year}-${String(month).padStart(2, "0")}-01`;
-  const end = new Date(year, month, 0).toISOString().split("T")[0];
-  return { start, end };
-}
+// monthRange re-exported from payroll-calc (timezone-safe, uses Date.UTC)
 
 // ─── Calcular e guardar folha de pagamento ────────────────────────────────────
 
@@ -120,57 +115,35 @@ export async function calculateAndSavePayroll(
   // 6. Calcular por colaborador
   const upserts = profiles.map((p) => {
     const myTimesheets = (timesheets ?? []).filter((t) => t.collaborator_id === p.id);
-    const workedMinutes = myTimesheets.reduce((s, t) => s + (t.duration_minutes ?? 0), 0);
-    const workedHours = Math.round((workedMinutes / 60) * 100) / 100;
-
-    // Dias trabalhados = datas distintas
-    const datesSet = new Set(
-      myTimesheets
-        .filter((t) => t.clock_in_at)
-        .map((t) => (t.clock_in_at as string).slice(0, 10)),
-    );
-    const daysWorked = datesSet.size;
+    const myAbsences   = (absences   ?? []).filter((a) => a.collaborator_id === p.id);
 
     const contractedHours = p.contracted_hours_month ?? 168;
-    const hourlyRate = p.hourly_rate ?? defaultHourlyRate;
-
-    // Horas extra = acima do contratado
-    const overtimeHours = Math.max(0, Math.round((workedHours - contractedHours) * 100) / 100);
-
-    // Faltas: total de dias no mês com sobreposição
-    const myAbsences = (absences ?? []).filter((a) => a.collaborator_id === p.id);
-    let absenceDays = 0;
-    let injustifiedDays = 0;
-    for (const a of myAbsences) {
-      const aStart = new Date(Math.max(new Date(a.starts_on).getTime(), new Date(start).getTime()));
-      const aEnd   = new Date(Math.min(new Date(a.ends_on).getTime(),   new Date(end).getTime()));
-      const days = Math.round((aEnd.getTime() - aStart.getTime()) / (1000 * 60 * 60 * 24)) + 1;
-      if (days > 0) {
-        absenceDays += days;
-        if (a.absence_type === "pessoal_injustificado") injustifiedDays += days;
-      }
-    }
-    // Horas de falta = dias × (horas contratadas / 22 dias úteis estimados)
-    const dailyHours = contractedHours / 22;
-    const absenceHours  = Math.round(absenceDays * dailyHours * 100) / 100;
-    const absenceDeductions = Math.round(injustifiedDays * dailyHours * hourlyRate * 100) / 100;
-
-    const grossSalary   = Math.round(workedHours * hourlyRate * 100) / 100;
-    const mealAllowance = Math.round(daysWorked * mealAllowanceDay * 100) / 100;
-    const overtimeBonus = Math.round(overtimeHours * hourlyRate * (overtimeRatePct / 100) * 100) / 100;
+    const hourlyRate      = p.hourly_rate ?? defaultHourlyRate;
 
     const ex = existingMap[p.id];
     const otherAdditions  = ex?.other_additions  ?? 0;
     const otherDeductions = ex?.other_deductions ?? 0;
     const notes           = ex?.notes ?? null;
-    // Não sobrescrever status/paid_at se já aprovado ou pago
     const status  = ex?.status === "aprovado" || ex?.status === "pago" ? ex.status : "rascunho";
     const paidAt  = ex?.paid_at ?? null;
 
-    const netSalary = Math.round(
-      (grossSalary + mealAllowance + overtimeBonus + otherAdditions
-        - absenceDeductions - otherDeductions) * 100,
-    ) / 100;
+    const calc = calcCollaboratorPayroll(
+      myTimesheets as { duration_minutes: number; clock_in_at: string }[],
+      myAbsences,
+      contractedHours,
+      hourlyRate,
+      { defaultHourlyRate, mealAllowanceDay, overtimeRatePct },
+      start,
+      end,
+      otherAdditions,
+      otherDeductions,
+    );
+
+    const {
+      workedHours, daysWorked, overtimeHours,
+      grossSalary, mealAllowance, overtimeBonus,
+      absenceHours, absenceDeductions, netSalary,
+    } = calc;
 
     return {
       company_id:          companyId,
