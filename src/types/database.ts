@@ -144,9 +144,47 @@ export type Database = {
         Relationships: [];
       };
       collaborator_documents: {
-        Row: { id: string; company_id: string; collaborator_id: string; file_name: string; file_url: string; file_size: number | null; mime_type: string | null; category: "contrato" | "recibo_salario" | "identificacao" | "outro"; uploaded_by: string | null; created_at: string };
-        Insert: { company_id: string; collaborator_id: string; file_name: string; file_url: string; file_size?: number | null; mime_type?: string | null; category?: "contrato" | "recibo_salario" | "identificacao" | "outro"; uploaded_by?: string | null };
-        Update: { category?: string; file_name?: string };
+        Row: {
+          id: string;
+          company_id: string;
+          collaborator_id: string;
+          file_name: string;
+          file_url: string;
+          file_size: number | null;
+          mime_type: string | null;
+          category: "contrato" | "recibo_salario" | "identificacao" | "avaria" | "outro";
+          uploaded_by: string | null;
+          uploaded_by_role: "gestor" | "colaboradora";
+          visible_to_collaborator: boolean;
+          notes: string | null;
+          expires_at: string | null;
+          archived_at: string | null;
+          created_at: string;
+        };
+        Insert: {
+          company_id: string;
+          collaborator_id: string;
+          file_name: string;
+          file_url: string;
+          file_size?: number | null;
+          mime_type?: string | null;
+          category?: "contrato" | "recibo_salario" | "identificacao" | "avaria" | "outro";
+          uploaded_by?: string | null;
+          uploaded_by_role?: "gestor" | "colaboradora";
+          visible_to_collaborator?: boolean;
+          notes?: string | null;
+          expires_at?: string | null;
+          archived_at?: string | null;
+        };
+        Update: {
+          category?: "contrato" | "recibo_salario" | "identificacao" | "avaria" | "outro";
+          file_name?: string;
+          uploaded_by_role?: "gestor" | "colaboradora";
+          visible_to_collaborator?: boolean;
+          notes?: string | null;
+          expires_at?: string | null;
+          archived_at?: string | null;
+        };
         Relationships: [];
       };
       management_tasks: {

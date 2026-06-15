@@ -2,11 +2,12 @@
 
 import { useState, useTransition, useRef } from "react";
 import {
-  FileText, FileImage, File, Download, Upload,
-  AlertTriangle, Loader2, Camera, Receipt, ChevronDown, ChevronUp,
+  FileText, FileImage, File, Download, Loader2, Camera, Receipt,
+  ChevronDown, ChevronUp, AlertTriangle,
 } from "lucide-react";
 import {
   uploadDamageReport,
+  getSignedDocumentUrl,
   type CollaboratorDocument,
   type DocumentCategory,
 } from "@/app/actions/collaborator-documents";
@@ -45,10 +46,6 @@ function fmtSize(bytes: number | null) {
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 }
 
-function isImage(mime: string | null) {
-  return !!mime?.startsWith("image/");
-}
-
 function daysUntil(iso: string | null): number | null {
   if (!iso) return null;
   return Math.ceil((new Date(iso).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
@@ -65,10 +62,23 @@ export function AppDocumentsSection({ initialDocuments }: Props) {
   const [uploading, startUpload] = useTransition();
   const [message, setMessage] = useState<{ type: "error" | "success"; text: string } | null>(null);
   const [expanded, setExpanded] = useState(true);
+  const [downloading, setDownloading] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const salaryDocs = docs.filter((d) => d.category === "recibo_salario");
   const otherDocs  = docs.filter((d) => d.category !== "recibo_salario");
+
+  async function handleDownload(doc: CollaboratorDocument) {
+    if (!doc.file_url) return;
+    setDownloading(doc.id);
+    const res = await getSignedDocumentUrl(doc.file_url);
+    setDownloading(null);
+    if (res.ok) {
+      window.open(res.url, "_blank", "noopener,noreferrer");
+    } else {
+      setMessage({ type: "error", text: "Não foi possível abrir o ficheiro. Tente novamente." });
+    }
+  }
 
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -86,7 +96,6 @@ export function AppDocumentsSection({ initialDocuments }: Props) {
         setNotes("");
         setShowDamageForm(false);
         if (fileRef.current) fileRef.current.value = "";
-        // Optimistic add
         setDocs((prev) => [{
           id: res.id ?? crypto.randomUUID(),
           file_name: file.name,
@@ -135,6 +144,9 @@ export function AppDocumentsSection({ initialDocuments }: Props) {
           <Camera className="w-4 h-4" />
           Reportar avaria / dano
         </button>
+        {showDamageForm && message?.type === "success" && (
+          <p className="text-xs text-center text-green-600 mt-2">{message.text}</p>
+        )}
       </div>
     );
   }
@@ -150,7 +162,7 @@ export function AppDocumentsSection({ initialDocuments }: Props) {
         boxShadow: "var(--glass-shadow)",
       }}
     >
-      {/* Header */}
+      {/* Header colapsável */}
       <button
         type="button"
         onClick={() => setExpanded((v) => !v)}
@@ -172,7 +184,7 @@ export function AppDocumentsSection({ initialDocuments }: Props) {
 
       {expanded && (
         <div className="border-t border-[var(--glass-border)]">
-          {/* Folhas de Salário */}
+          {/* Folhas de salário */}
           {salaryDocs.length > 0 && (
             <div className="p-4 space-y-2">
               <p className="text-[10px] font-semibold text-[var(--color-text-muted)] uppercase tracking-wide mb-2">
@@ -180,13 +192,14 @@ export function AppDocumentsSection({ initialDocuments }: Props) {
               </p>
               {salaryDocs.map((doc) => {
                 const days = daysUntil(doc.expires_at);
+                const isDownloading = downloading === doc.id;
                 return (
-                  <a
+                  <button
                     key={doc.id}
-                    href={doc.file_url || "#"}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center gap-3 p-3 rounded-xl bg-white/50 hover:bg-white/80 active:bg-white/80 transition-colors group"
+                    type="button"
+                    onClick={() => handleDownload(doc)}
+                    disabled={isDownloading || !doc.file_url}
+                    className="w-full flex items-center gap-3 p-3 rounded-xl bg-white/50 hover:bg-white/80 active:bg-white/80 transition-colors group disabled:opacity-60 disabled:cursor-not-allowed text-left"
                   >
                     <div className="w-9 h-9 rounded-lg bg-green-50 flex items-center justify-center shrink-0">
                       <Receipt className="w-4 h-4 text-green-600" />
@@ -202,9 +215,16 @@ export function AppDocumentsSection({ initialDocuments }: Props) {
                       {days !== null && days < 14 && days > 0 && (
                         <p className="text-[10px] text-amber-600 font-medium">Expira em {days} dias</p>
                       )}
+                      {!doc.file_url && (
+                        <p className="text-[10px] text-[var(--color-text-muted)]">A processar…</p>
+                      )}
                     </div>
-                    <Download className="w-4 h-4 text-[var(--color-text-muted)] group-hover:text-[var(--color-primary)] transition-colors shrink-0" />
-                  </a>
+                    {isDownloading ? (
+                      <Loader2 className="w-4 h-4 text-[var(--color-primary)] animate-spin shrink-0" />
+                    ) : (
+                      <Download className="w-4 h-4 text-[var(--color-text-muted)] group-hover:text-[var(--color-primary)] transition-colors shrink-0" />
+                    )}
+                  </button>
                 );
               })}
             </div>
@@ -219,13 +239,14 @@ export function AppDocumentsSection({ initialDocuments }: Props) {
               {otherDocs.map((doc) => {
                 const CatIcon = CATEGORY_ICONS[doc.category];
                 const colorClass = CATEGORY_COLORS[doc.category];
+                const isDownloading = downloading === doc.id;
                 return (
-                  <a
+                  <button
                     key={doc.id}
-                    href={doc.file_url || "#"}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center gap-3 p-3 rounded-xl bg-white/50 hover:bg-white/80 active:bg-white/80 transition-colors group"
+                    type="button"
+                    onClick={() => handleDownload(doc)}
+                    disabled={isDownloading || !doc.file_url}
+                    className="w-full flex items-center gap-3 p-3 rounded-xl bg-white/50 hover:bg-white/80 active:bg-white/80 transition-colors group disabled:opacity-60 disabled:cursor-not-allowed text-left"
                   >
                     <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${colorClass}`}>
                       <CatIcon className="w-4 h-4" />
@@ -237,11 +258,18 @@ export function AppDocumentsSection({ initialDocuments }: Props) {
                       <p className="text-xs text-[var(--color-text-muted)]">
                         {CATEGORY_LABELS[doc.category]} · {fmtDate(doc.created_at)}
                       </p>
+                      {!doc.file_url && (
+                        <p className="text-[10px] text-[var(--color-text-muted)]">A processar…</p>
+                      )}
                     </div>
                     {doc.file_url && (
-                      <Download className="w-4 h-4 text-[var(--color-text-muted)] group-hover:text-[var(--color-primary)] transition-colors shrink-0" />
+                      isDownloading ? (
+                        <Loader2 className="w-4 h-4 text-[var(--color-primary)] animate-spin shrink-0" />
+                      ) : (
+                        <Download className="w-4 h-4 text-[var(--color-text-muted)] group-hover:text-[var(--color-primary)] transition-colors shrink-0" />
+                      )
                     )}
-                  </a>
+                  </button>
                 );
               })}
             </div>
@@ -303,14 +331,17 @@ export function AppDocumentsSection({ initialDocuments }: Props) {
             <div className="p-4 border-t border-[var(--glass-border)]">
               <button
                 type="button"
-                onClick={() => setShowDamageForm(true)}
+                onClick={() => { setShowDamageForm(true); setMessage(null); }}
                 className="flex items-center gap-2 w-full justify-center py-2.5 rounded-xl bg-red-50 text-red-600 text-sm font-medium hover:bg-red-100 active:bg-red-100 transition-colors"
               >
                 <Camera className="w-4 h-4" />
                 Reportar avaria / dano
               </button>
-              {message && message.type === "success" && (
+              {message?.type === "success" && (
                 <p className="text-xs text-center text-green-600 mt-2">{message.text}</p>
+              )}
+              {message?.type === "error" && (
+                <p className="text-xs text-center text-red-600 mt-2">{message.text}</p>
               )}
             </div>
           )}

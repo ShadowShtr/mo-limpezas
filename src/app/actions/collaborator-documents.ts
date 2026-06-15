@@ -30,37 +30,33 @@ export interface CollaboratorDocument {
 const BUCKET = "collaborator-documents";
 const RETENTION_MONTHS = 3;
 
-type RawDoc = {
-  id: string;
-  file_name: string;
-  file_url: string;
-  file_size: number | null;
-  mime_type: string | null;
-  category: string;
-  notes: string | null;
-  visible_to_collaborator: boolean;
-  uploaded_by_role: string;
-  expires_at: string | null;
-  archived_at: string | null;
-  created_at: string;
-  uploaded_by: string | null;
-};
+async function ensureBucket(admin: ReturnType<typeof createAdminClient>) {
+  const { error } = await admin.storage.getBucket(BUCKET);
+  if (error) {
+    await admin.storage.createBucket(BUCKET, {
+      public: false,
+      fileSizeLimit: 52428800,
+      allowedMimeTypes: ["application/pdf", "image/jpeg", "image/png", "image/webp"],
+    });
+  }
+}
+
+// ─── Dashboard (gestor) ───────────────────────────────────────────────────────
 
 export async function getCollaboratorDocuments(
   collaboratorId: string,
 ): Promise<{ ok: true; documents: CollaboratorDocument[] } | { ok: false; error: string }> {
   const admin = createAdminClient();
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data, error } = await (admin as any)
+  const { data, error } = await admin
     .from("collaborator_documents")
     .select("id, file_name, file_url, file_size, mime_type, category, notes, visible_to_collaborator, uploaded_by_role, expires_at, archived_at, created_at, uploaded_by")
     .eq("collaborator_id", collaboratorId)
     .is("archived_at", null)
     .order("created_at", { ascending: false });
 
-  if (error) return { ok: false, error: (error as { message: string }).message };
+  if (error) return { ok: false, error: error.message };
 
-  const rows = (data ?? []) as RawDoc[];
+  const rows = data ?? [];
   const uploaderIds = [...new Set(rows.map((d) => d.uploaded_by).filter(Boolean) as string[])];
   let names: Record<string, string> = {};
   if (uploaderIds.length > 0) {
@@ -74,12 +70,12 @@ export async function getCollaboratorDocuments(
     file_url: d.file_url,
     file_size: d.file_size,
     mime_type: d.mime_type,
-    category: (d.category ?? "outro") as DocumentCategory,
-    notes: d.notes ?? null,
-    visible_to_collaborator: d.visible_to_collaborator ?? false,
-    uploaded_by_role: (d.uploaded_by_role ?? "gestor") as "gestor" | "colaboradora",
-    expires_at: d.expires_at ?? null,
-    archived_at: d.archived_at ?? null,
+    category: d.category,
+    notes: d.notes,
+    visible_to_collaborator: d.visible_to_collaborator,
+    uploaded_by_role: d.uploaded_by_role,
+    expires_at: d.expires_at,
+    archived_at: d.archived_at,
     created_at: d.created_at,
     uploaded_by_name: d.uploaded_by ? (names[d.uploaded_by] ?? null) : null,
   }));
@@ -105,8 +101,11 @@ export async function uploadCollaboratorDocument(
   if (!fileObj) return { ok: false, error: "Ficheiro em falta" };
   if (fileObj.size > 50 * 1024 * 1024) return { ok: false, error: "Ficheiro demasiado grande (máx 50 MB)" };
 
-  const path = `${companyId}/${collaboratorId}/${Date.now()}-${fileObj.name.replace(/[^a-zA-Z0-9._-]/g, "_")}`;
+  const safeName = fileObj.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+  const path = `${companyId}/${collaboratorId}/${Date.now()}-${safeName}`;
   const admin = createAdminClient();
+
+  await ensureBucket(admin);
 
   const { error: uploadError } = await admin.storage
     .from(BUCKET)
@@ -119,8 +118,7 @@ export async function uploadCollaboratorDocument(
   const expiresAt = new Date();
   expiresAt.setMonth(expiresAt.getMonth() + RETENTION_MONTHS);
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data, error: dbError } = await (admin as any)
+  const { data, error: dbError } = await admin
     .from("collaborator_documents")
     .insert({
       company_id:              companyId,
@@ -133,13 +131,13 @@ export async function uploadCollaboratorDocument(
       notes,
       visible_to_collaborator: visible,
       uploaded_by:             user.id,
-      uploaded_by_role:        "gestor",
+      uploaded_by_role:        "gestor" as const,
       expires_at:              expiresAt.toISOString(),
     })
     .select("id")
     .single();
 
-  if (dbError) return { ok: false, error: (dbError as { message: string }).message };
+  if (dbError) return { ok: false, error: dbError.message };
 
   revalidatePath(`/dashboard/colaboradores/${collaboratorId}`);
   return { ok: true, id: data.id };
@@ -175,6 +173,8 @@ export async function deleteCollaboratorDocument(
 export async function getSignedDocumentUrl(
   fileUrl: string,
 ): Promise<{ ok: true; url: string } | { ok: false; error: string }> {
+  if (!fileUrl) return { ok: false, error: "URL do ficheiro em falta" };
+
   const admin = createAdminClient();
   const bucketPrefix = `/${BUCKET}/`;
   const storagePath = fileUrl.includes(bucketPrefix) ? fileUrl.split(bucketPrefix)[1] : null;
@@ -183,13 +183,13 @@ export async function getSignedDocumentUrl(
 
   const { data, error } = await admin.storage
     .from(BUCKET)
-    .createSignedUrl(storagePath, 3600);
+    .createSignedUrl(decodeURIComponent(storagePath), 3600);
 
   if (error || !data) return { ok: false, error: error?.message ?? "Erro ao gerar link" };
   return { ok: true, url: data.signedUrl };
 }
 
-// ─── Documentos da colaboradora (app mobile) ──────────────────────────────────
+// ─── App da colaboradora ──────────────────────────────────────────────────────
 
 export async function getMyDocuments(): Promise<{
   ok: boolean;
@@ -201,8 +201,7 @@ export async function getMyDocuments(): Promise<{
   if (!user) return { ok: false, error: "Não autenticado" };
 
   const admin = createAdminClient();
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data, error } = await (admin as any)
+  const { data, error } = await admin
     .from("collaborator_documents")
     .select("id, file_name, file_url, file_size, mime_type, category, notes, visible_to_collaborator, uploaded_by_role, expires_at, archived_at, created_at")
     .eq("collaborator_id", user.id)
@@ -210,27 +209,25 @@ export async function getMyDocuments(): Promise<{
     .is("archived_at", null)
     .order("created_at", { ascending: false });
 
-  if (error) return { ok: false, error: (error as { message: string }).message };
+  if (error) return { ok: false, error: error.message };
 
-  const rows = (data ?? []) as RawDoc[];
-  return {
-    ok: true,
-    documents: rows.map((d) => ({
-      id: d.id,
-      file_name: d.file_name,
-      file_url: d.file_url,
-      file_size: d.file_size,
-      mime_type: d.mime_type,
-      category: (d.category ?? "outro") as DocumentCategory,
-      notes: d.notes ?? null,
-      visible_to_collaborator: d.visible_to_collaborator ?? true,
-      uploaded_by_role: (d.uploaded_by_role ?? "gestor") as "gestor" | "colaboradora",
-      expires_at: d.expires_at ?? null,
-      archived_at: d.archived_at ?? null,
-      created_at: d.created_at,
-      uploaded_by_name: null,
-    })),
-  };
+  const documents: CollaboratorDocument[] = (data ?? []).map((d) => ({
+    id: d.id,
+    file_name: d.file_name,
+    file_url: d.file_url,
+    file_size: d.file_size,
+    mime_type: d.mime_type,
+    category: d.category,
+    notes: d.notes,
+    visible_to_collaborator: d.visible_to_collaborator,
+    uploaded_by_role: d.uploaded_by_role,
+    expires_at: d.expires_at,
+    archived_at: d.archived_at,
+    created_at: d.created_at,
+    uploaded_by_name: null,
+  }));
+
+  return { ok: true, documents };
 }
 
 export async function uploadDamageReport(formData: FormData): Promise<{
@@ -256,7 +253,10 @@ export async function uploadDamageReport(formData: FormData): Promise<{
   if (!file) return { ok: false, error: "Ficheiro obrigatório" };
   if (file.size > 50 * 1024 * 1024) return { ok: false, error: "Ficheiro demasiado grande (máx 50 MB)" };
 
-  const path = `${profile.company_id}/${user.id}/${Date.now()}-${file.name.replace(/[^a-zA-Z0-9._-]/g, "_")}`;
+  const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+  const path = `${profile.company_id}/${user.id}/${Date.now()}-${safeName}`;
+
+  await ensureBucket(admin);
 
   const { error: uploadError } = await admin.storage
     .from(BUCKET)
@@ -269,8 +269,7 @@ export async function uploadDamageReport(formData: FormData): Promise<{
   const expiresAt = new Date();
   expiresAt.setMonth(expiresAt.getMonth() + RETENTION_MONTHS);
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data, error: dbError } = await (admin as any)
+  const { data, error: dbError } = await admin
     .from("collaborator_documents")
     .insert({
       company_id:              profile.company_id,
@@ -279,17 +278,17 @@ export async function uploadDamageReport(formData: FormData): Promise<{
       file_url:                urlData.publicUrl,
       file_size:               file.size,
       mime_type:               file.type,
-      category:                "avaria",
+      category:                "avaria" as const,
       notes,
       visible_to_collaborator: true,
       uploaded_by:             user.id,
-      uploaded_by_role:        "colaboradora",
+      uploaded_by_role:        "colaboradora" as const,
       expires_at:              expiresAt.toISOString(),
     })
     .select("id")
     .single();
 
-  if (dbError) return { ok: false, error: (dbError as { message: string }).message };
+  if (dbError) return { ok: false, error: dbError.message };
 
   revalidatePath("/app/perfil");
   return { ok: true, id: data.id };
@@ -318,7 +317,6 @@ export async function archiveExpiredDocuments(companyId: string): Promise<{
 }> {
   const admin = createAdminClient();
 
-  // Buscar documentos expirados para apagar do storage
   const { data: expired } = await admin
     .from("collaborator_documents")
     .select("id, file_url")
@@ -328,9 +326,8 @@ export async function archiveExpiredDocuments(companyId: string): Promise<{
 
   const docs = expired ?? [];
 
-  // Apagar do storage
   const paths = docs
-    .map((d: { id: string; file_url: string }) => {
+    .map((d) => {
       const prefix = `/${BUCKET}/`;
       return d.file_url.includes(prefix) ? decodeURIComponent(d.file_url.split(prefix)[1]) : null;
     })
@@ -340,15 +337,13 @@ export async function archiveExpiredDocuments(companyId: string): Promise<{
     await admin.storage.from(BUCKET).remove(paths);
   }
 
-  // Marcar como arquivados
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { error } = await (admin as any)
+  const { error } = await admin
     .from("collaborator_documents")
     .update({ archived_at: new Date().toISOString() })
     .eq("company_id", companyId)
     .lt("expires_at", new Date().toISOString())
     .is("archived_at", null);
 
-  if (error) return { ok: false, error: (error as { message: string }).message };
+  if (error) return { ok: false, error: error.message };
   return { ok: true, count: docs.length };
 }
