@@ -38,6 +38,14 @@
   --color-status-cancelled: #DC2626;
   --color-status-missing:   #DC2626;
   --color-status-none:      #94A3B8;
+
+  /* Glassmorphism */
+  --glass-bg:          rgba(255, 255, 255, 0.82);
+  --glass-bg-strong:   rgba(255, 255, 255, 0.92);
+  --glass-border:      rgba(226, 232, 240, 0.65);
+  --glass-border-light:rgba(255, 255, 255, 0.55);
+  --glass-shadow:      0 8px 32px rgba(15, 23, 42, 0.08), 0 2px 8px rgba(15, 23, 42, 0.04);
+  --glass-blur:        saturate(180%) blur(14px);
   --font-heading:          var(--font-sans);
   --color-sidebar-ring:          var(--sidebar-ring);
   --color-sidebar-border:          var(--sidebar-border);
@@ -85,12 +93,29 @@ html {
 }
 
 body {
-  background-color: var(--color-background);
+  background: linear-gradient(135deg, #edfff3 0%, #f8fafc 45%, #eff6ff 100%);
+  background-attachment: fixed;
   color: var(--color-text-main);
   font-family: var(--font-sans), system-ui, sans-serif;
   min-height: 100%;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+/* Glassmorphism utilitário */
+.glass {
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--glass-shadow);
+}
+.glass-strong {
+  background: var(--glass-bg-strong);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--glass-shadow);
 }
 
 /* Scrollbar suave */

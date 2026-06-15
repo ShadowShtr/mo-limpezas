@@ -19,7 +19,7 @@ export function MobileHeader({ userName, avatarUrl, onMenuClick }: Props) {
     .toUpperCase();
 
   return (
-    <header className="lg:hidden h-14 bg-white border-b border-[var(--color-border)] flex items-center px-4 gap-3 sticky top-0 z-30">
+    <header className="lg:hidden h-14 flex items-center px-4 gap-3 sticky top-0 z-30" style={{ background: "var(--glass-bg-strong)", backdropFilter: "var(--glass-blur)", WebkitBackdropFilter: "var(--glass-blur)", borderBottom: "1px solid var(--glass-border)" }}>
       <button
         onClick={onMenuClick}
         className="p-2 rounded-lg text-[var(--color-text-sub)] hover:bg-[var(--color-background)] transition-colors"

@@ -3,7 +3,9 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Phone, Clock, CalendarDays, User, Download } from "lucide-react";
 import { SignOutButton } from "./_components/sign-out-button";
+import { AppDocumentsSection } from "./_components/documents-section";
 import { getCurrentUser } from "@/lib/auth/current-user";
+import { getMyDocuments } from "@/app/actions/collaborator-documents";
 
 export default async function PerfilPage() {
   const supabase = await createClient();
@@ -33,6 +35,9 @@ export default async function PerfilPage() {
   const workedHours = (workedMins / 60).toFixed(1);
   const contractedHours = profile.contracted_hours_month ?? 168;
 
+  const docsRes = await getMyDocuments();
+  const myDocs = docsRes.ok ? (docsRes.documents ?? []) : [];
+
   const initials = profile.full_name
     .split(" ")
     .slice(0, 2)
@@ -45,7 +50,7 @@ export default async function PerfilPage() {
       <h1 className="text-xl font-bold text-[var(--color-text-main)]">Perfil</h1>
 
       {/* Card de identidade */}
-      <div className="bg-white rounded-2xl border border-[var(--color-border)] p-5 flex items-center gap-4">
+      <div className="rounded-2xl p-5 flex items-center gap-4" style={{ background: "var(--glass-bg)", backdropFilter: "var(--glass-blur)", WebkitBackdropFilter: "var(--glass-blur)", border: "1px solid var(--glass-border)", boxShadow: "var(--glass-shadow)" }}>
         {profile.avatar_url ? (
           <img
             src={profile.avatar_url}
@@ -72,7 +77,7 @@ export default async function PerfilPage() {
       </div>
 
       {/* Estatísticas do mês */}
-      <div className="bg-white rounded-2xl border border-[var(--color-border)] p-4">
+      <div className="rounded-2xl p-4" style={{ background: "var(--glass-bg)", backdropFilter: "var(--glass-blur)", WebkitBackdropFilter: "var(--glass-blur)", border: "1px solid var(--glass-border)", boxShadow: "var(--glass-shadow)" }}>
         <p className="text-xs font-semibold text-[var(--color-text-muted)] uppercase tracking-wide mb-3">
           Este mês
         </p>
@@ -98,7 +103,7 @@ export default async function PerfilPage() {
 
       {/* Competências */}
       {profile.skills && profile.skills.length > 0 && (
-        <div className="bg-white rounded-2xl border border-[var(--color-border)] p-4">
+        <div className="rounded-2xl p-4" style={{ background: "var(--glass-bg)", backdropFilter: "var(--glass-blur)", WebkitBackdropFilter: "var(--glass-blur)", border: "1px solid var(--glass-border)", boxShadow: "var(--glass-shadow)" }}>
           <div className="flex items-center gap-2 mb-3">
             <User className="w-4 h-4 text-[var(--color-primary)]" />
             <p className="text-sm font-semibold text-[var(--color-text-main)]">Competências</p>
@@ -116,11 +121,15 @@ export default async function PerfilPage() {
         </div>
       )}
 
+      {/* Documentos */}
+      <AppDocumentsSection initialDocuments={myDocs} />
+
       {/* Calendário */}
       <a
         href="/api/app/calendar.ics"
         download="escala.ics"
-        className="flex items-center justify-center gap-2 w-full py-3.5 rounded-2xl border border-[var(--color-border)] bg-white text-sm font-medium text-[var(--color-text-main)] active:bg-[var(--color-background)] transition-colors"
+        className="flex items-center justify-center gap-2 w-full py-3.5 rounded-2xl text-sm font-medium text-[var(--color-text-main)] active:opacity-80 transition-all"
+        style={{ background: "var(--glass-bg)", backdropFilter: "var(--glass-blur)", WebkitBackdropFilter: "var(--glass-blur)", border: "1px solid var(--glass-border)", boxShadow: "var(--glass-shadow)" }}
       >
         <Download className="w-4 h-4 text-[var(--color-primary)]" />
         Exportar escala para calendário

@@ -16,7 +16,7 @@ export function BottomNav() {
   const pathname = usePathname();
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-[var(--color-border)] safe-area-pb">
+    <nav className="fixed bottom-0 left-0 right-0 z-40 safe-area-pb" style={{ background: "var(--glass-bg-strong)", backdropFilter: "var(--glass-blur)", WebkitBackdropFilter: "var(--glass-blur)", borderTop: "1px solid var(--glass-border)" }}>
       <div className="flex">
         {ITEMS.map(({ href, label, icon: Icon }) => {
           const isActive = href === "/app" ? pathname === "/app" : pathname.startsWith(href);

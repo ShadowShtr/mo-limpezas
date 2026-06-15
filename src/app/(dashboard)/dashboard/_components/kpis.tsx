@@ -52,9 +52,16 @@ export function DashboardKPIs({ kpis }: Props) {
         return (
           <div
             key={c.label}
-            className={`bg-white rounded-xl border p-5 ${
-              c.highlight ? "border-red-200" : "border-[var(--color-border)]"
+            className={`rounded-xl p-5 transition-shadow hover:shadow-lg ${
+              c.highlight ? "border-red-200" : ""
             }`}
+            style={{
+              background: "var(--glass-bg)",
+              backdropFilter: "var(--glass-blur)",
+              WebkitBackdropFilter: "var(--glass-blur)",
+              border: c.highlight ? "1px solid #fecaca" : "1px solid var(--glass-border)",
+              boxShadow: "var(--glass-shadow)",
+            }}
           >
             <div className="flex items-start justify-between mb-3">
               <div className={`w-9 h-9 rounded-lg flex items-center justify-center ${c.iconBg}`}>

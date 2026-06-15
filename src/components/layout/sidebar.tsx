@@ -59,10 +59,10 @@ export function Sidebar({ userName, userRole, avatarUrl, onClose }: SidebarProps
     .toUpperCase();
 
   return (
-    <aside className="w-60 shrink-0 flex flex-col h-screen bg-white border-r border-[var(--color-border)] sticky top-0">
+    <aside className="w-60 shrink-0 flex flex-col h-screen sticky top-0" style={{ background: "var(--glass-bg-strong)", backdropFilter: "var(--glass-blur)", WebkitBackdropFilter: "var(--glass-blur)", borderRight: "1px solid var(--glass-border)" }}>
 
       {/* Logo */}
-      <div className="flex items-center gap-3 px-5 h-16 border-b border-[var(--color-border)]">
+      <div className="flex items-center gap-3 px-5 h-16 border-b border-[var(--glass-border)]">
         <div className="w-8 h-8 rounded-lg bg-[var(--color-primary)] flex items-center justify-center shrink-0">
           <span className="text-white font-bold text-sm">ML</span>
         </div>
@@ -116,7 +116,7 @@ export function Sidebar({ userName, userRole, avatarUrl, onClose }: SidebarProps
       </div>
 
       {/* Utilizador */}
-      <div className="border-t border-[var(--color-border)] p-4">
+      <div className="border-t border-[var(--glass-border)] p-4">
         <div className="flex items-center gap-3">
           <div className="w-8 h-8 rounded-full bg-[var(--color-primary-muted)] flex items-center justify-center shrink-0 overflow-hidden">
             {avatarUrl ? (
