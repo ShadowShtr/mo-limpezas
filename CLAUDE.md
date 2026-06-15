@@ -47,7 +47,38 @@ Lê este ficheiro no início de CADA sessão antes de fazer qualquer coisa.
 
 ## ⚡ PRÓXIMA TASK A EXECUTAR
 
-**Próxima task:** Verificar domínio `molimpezas.pt` no Resend (adicionar registos DNS) e testar emails com clientes reais. Ver secção "Emails" na sessão 2 para instruções detalhadas.
+**Próxima task:** Aplicar migration 021 no Supabase (via Management API ou `npx supabase db query --linked`). Criar bucket `collaborator-documents` no Supabase Storage (50MB limite, PDF+imagem). Depois: verificar domínio `molimpezas.pt` no Resend.
+
+---
+
+## 📍 PONTO DE PARAGEM — 2026-06-15 (sessão 4)
+
+**Última sessão completou — 3 funcionalidades grandes**
+
+### Testes Concorrentes (✅ FEITO)
+- `src/__tests__/clockin-concurrent.test.ts` — 30 testes novos, total: 250 passando
+- 8 blocos: isolamento de dados, guard `actual_start`, transição `concluido`, cálculos de duração, `parsePastTimestamp`, janela horária 8h00, isolamento entre serviços, double clock-in
+- Cobre o cenário real: 35 funcionárias a dar clock-in/out às 8h em simultâneo
+
+### Glassmorphism (✅ FEITO)
+- `globals.css`: gradient de fundo verde→branco→azul subtil + variáveis `--glass-*`
+- Sidebar, header, mobile-header, app-header, bottom-nav: `backdrop-filter blur(14px)` + `bg rgba(255,255,255,0.82/0.92)`
+- KPI cards dashboard + cards perfil app com glass effect
+
+### Sistema de Documentos (✅ FEITO — MIGRATION PENDENTE)
+- **Migration 021** — `supabase/migrations/021_documents_enhanced.sql` — AINDA NÃO APLICADA
+  - Adiciona: `visible_to_collaborator`, `notes`, `expires_at`, `archived_at`, `uploaded_by_role`
+  - Categoria `avaria` adicionada
+  - Funções SQL: `get_documents_to_archive()`, `archive_expired_documents()`
+- **Bucket Storage**: `collaborator-documents` — CRIAR NO SUPABASE (50MB, PDF+imagem)
+- **Admin**: `documento-section.tsx` atualizado — upload com visibilidade, notas, categoria avaria, aviso de expiração
+- **App mobile**: `/app/perfil` — secção de documentos colapsável: folhas de salário + reportar avaria com câmara
+- **Cron** `/api/cron/archive-documents` — dia 1 de cada mês às 02:00 — arquiva manifesto JSON organizado por funcionária → apaga do storage
+
+### ⚠️ PENDENTE PARA FUNCIONAR
+1. Aplicar migration 021 no Supabase
+2. Criar bucket `collaborator-documents` no Storage (Supabase Dashboard → Storage → New Bucket)
+3. Limites por empresa: ~150 MB/3meses (35 func × 5 docs × 1MB) — Free tier OK
 
 ---
 
