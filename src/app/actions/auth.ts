@@ -17,7 +17,7 @@ async function getClientIp(): Promise<string> {
 
 export async function login(formData: FormData) {
   const ip = await getClientIp();
-  if (!checkRateLimit(rateLimitKey("auth-login", ip), 5, 60_000)) {
+  if (!await checkRateLimit(rateLimitKey("auth-login", ip), 5, 60_000)) {
     return { error: "Demasiadas tentativas de login. Aguarda um minuto." };
   }
 
@@ -47,7 +47,7 @@ export async function login(formData: FormData) {
 
 export async function loginMagicLink(formData: FormData) {
   const ip = await getClientIp();
-  if (!checkRateLimit(rateLimitKey("auth-magic", ip), 3, 60_000)) {
+  if (!await checkRateLimit(rateLimitKey("auth-magic", ip), 3, 60_000)) {
     return { error: "Demasiadas tentativas. Aguarda um minuto." };
   }
 
@@ -72,7 +72,7 @@ export async function loginMagicLink(formData: FormData) {
 
 export async function resetPassword(formData: FormData) {
   const ip = await getClientIp();
-  if (!checkRateLimit(rateLimitKey("auth-reset", ip), 3, 300_000)) {
+  if (!await checkRateLimit(rateLimitKey("auth-reset", ip), 3, 300_000)) {
     return { error: "Demasiados pedidos de recuperação. Aguarda 5 minutos." };
   }
 

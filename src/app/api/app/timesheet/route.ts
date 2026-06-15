@@ -35,7 +35,7 @@ export async function POST(req: NextRequest) {
   } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const limited = rateLimit(rateLimitKey("timesheet", user.id), 10, 60_000);
+  const limited = await rateLimit(rateLimitKey("timesheet", user.id), 10, 60_000);
   if (limited) return limited;
 
   const { service_id, lat: rawLat, lng: rawLng, clock_in_at: rawClockIn } = await req.json();
@@ -151,7 +151,7 @@ export async function PATCH(req: NextRequest) {
   } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const limited = rateLimit(rateLimitKey("timesheet", user.id), 10, 60_000);
+  const limited = await rateLimit(rateLimitKey("timesheet", user.id), 10, 60_000);
   if (limited) return limited;
 
   const { service_id, lat: rawLat, lng: rawLng, clock_out_at: rawClockOut } = await req.json();

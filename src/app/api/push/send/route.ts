@@ -32,7 +32,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const limited = rateLimit(rateLimitKey("push-send", sender.company_id), 20, 60_000);
+  const limited = await rateLimit(rateLimitKey("push-send", sender.company_id), 20, 60_000);
   if (limited) return limited;
 
   const { data: subs } = await admin

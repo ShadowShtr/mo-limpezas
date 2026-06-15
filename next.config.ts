@@ -1,7 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  transpilePackages: ["mapbox-gl", "react-map-gl"],
+  transpilePackages: ["react-map-gl"],
   // Headers de segurança HTTP
   async headers() {
     return [
@@ -18,10 +18,11 @@ const nextConfig: NextConfig = {
             key: "Content-Security-Policy",
             value: [
               "default-src 'self'",
-              "script-src 'self' 'unsafe-eval' 'unsafe-inline' blob: https://api.mapbox.com https://events.mapbox.com",
-              "style-src 'self' 'unsafe-inline' https://api.mapbox.com",
-              "img-src 'self' data: blob: https://api.mapbox.com https://*.mapbox.com https://*.cartocdn.com",
-              "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.mapbox.com https://events.mapbox.com https://api.resend.com https://*.cartocdn.com https://nominatim.openstreetmap.org",
+              // 'unsafe-inline' necessário para Next.js hydration; sem Mapbox não precisamos de 'unsafe-eval'
+              "script-src 'self' 'unsafe-inline' blob:",
+              "style-src 'self' 'unsafe-inline'",
+              "img-src 'self' data: blob: https://*.cartocdn.com https://*.openstreetmap.org",
+              "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.resend.com https://*.cartocdn.com https://nominatim.openstreetmap.org",
               "worker-src 'self' blob:",
               "font-src 'self' data:",
               "frame-ancestors 'none'",
