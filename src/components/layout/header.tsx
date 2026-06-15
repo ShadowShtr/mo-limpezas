@@ -11,7 +11,7 @@ interface HeaderProps {
 
 export function Header({ title, subtitle, actions, backHref }: HeaderProps) {
   return (
-    <header className="h-16 flex items-center px-4 sm:px-6 lg:px-8 gap-4 sticky top-0 z-30" style={{ background: "var(--glass-bg-strong)", backdropFilter: "var(--glass-blur)", WebkitBackdropFilter: "var(--glass-blur)", borderBottom: "1px solid var(--glass-border)" }}>
+    <header className="h-16 flex items-center px-4 sm:px-6 lg:px-8 gap-4 sticky top-0 z-30 glass-nav glass-nav-top">
       {backHref && (
         <Link href={backHref} className="p-1.5 rounded-lg text-[var(--color-text-muted)] hover:bg-[var(--color-background)] transition-colors shrink-0">
           <ChevronLeft className="w-5 h-5" />

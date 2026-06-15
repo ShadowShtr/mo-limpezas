@@ -59,7 +59,7 @@ export function Sidebar({ userName, userRole, avatarUrl, onClose }: SidebarProps
     .toUpperCase();
 
   return (
-    <aside className="w-60 shrink-0 flex flex-col h-screen sticky top-0" style={{ background: "var(--glass-bg-strong)", backdropFilter: "var(--glass-blur)", WebkitBackdropFilter: "var(--glass-blur)", borderRight: "1px solid var(--glass-border)" }}>
+    <aside className="w-60 shrink-0 flex flex-col h-screen sticky top-0 glass-nav glass-nav-side">
 
       {/* Logo */}
       <div className="flex items-center gap-3 px-5 h-16 border-b border-[var(--glass-border)]">

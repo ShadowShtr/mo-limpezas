@@ -52,16 +52,10 @@ export function DashboardKPIs({ kpis }: Props) {
         return (
           <div
             key={c.label}
-            className={`rounded-xl p-5 transition-shadow hover:shadow-lg ${
-              c.highlight ? "border-red-200" : ""
+            className={`rounded-xl p-5 bg-white border transition-shadow hover:shadow-md ${
+              c.highlight ? "border-red-200" : "border-slate-200/80"
             }`}
-            style={{
-              background: "var(--glass-bg)",
-              backdropFilter: "var(--glass-blur)",
-              WebkitBackdropFilter: "var(--glass-blur)",
-              border: c.highlight ? "1px solid #fecaca" : "1px solid var(--glass-border)",
-              boxShadow: "var(--glass-shadow)",
-            }}
+            style={{ boxShadow: "0 1px 3px rgba(15,23,42,0.06), 0 2px 8px rgba(15,23,42,0.04)" }}
           >
             <div className="flex items-start justify-between mb-3">
               <div className={`w-9 h-9 rounded-lg flex items-center justify-center ${c.iconBg}`}>

@@ -48,7 +48,7 @@ export function AppHeader({ userId, userName, avatarUrl }: AppHeaderProps) {
     .toUpperCase();
 
   return (
-    <header className="sticky top-0 z-40 px-4 h-14 flex items-center justify-between" style={{ background: "var(--glass-bg-strong)", backdropFilter: "var(--glass-blur)", WebkitBackdropFilter: "var(--glass-blur)", borderBottom: "1px solid var(--glass-border)" }}>
+    <header className="sticky top-0 z-40 px-4 h-14 flex items-center justify-between glass-nav glass-nav-top">
       {/* Logo / Nome */}
       <Link href="/app" className="flex items-center gap-2">
         <div className="w-7 h-7 rounded-lg bg-[var(--color-primary)] flex items-center justify-center">

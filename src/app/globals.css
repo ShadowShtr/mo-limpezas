@@ -93,7 +93,7 @@ html {
 }
 
 body {
-  background: linear-gradient(135deg, #edfff3 0%, #f8fafc 45%, #eff6ff 100%);
+  background: linear-gradient(135deg, #f0fdf4 0%, #f8fafc 60%, #eff6ff 100%);
   background-attachment: fixed;
   color: var(--color-text-main);
   font-family: var(--font-sans), system-ui, sans-serif;
@@ -104,19 +104,29 @@ body {
 
 /* Glassmorphism utilitário */
 .glass {
-  background: var(--glass-bg);
-  backdrop-filter: var(--glass-blur);
-  -webkit-backdrop-filter: var(--glass-blur);
-  border: 1px solid var(--glass-border);
-  box-shadow: var(--glass-shadow);
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: saturate(150%) blur(10px);
+  -webkit-backdrop-filter: saturate(150%) blur(10px);
+  border: 1px solid rgba(203, 213, 225, 0.80);
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06), 0 4px 16px rgba(15, 23, 42, 0.04);
 }
 .glass-strong {
-  background: var(--glass-bg-strong);
-  backdrop-filter: var(--glass-blur);
-  -webkit-backdrop-filter: var(--glass-blur);
-  border: 1px solid var(--glass-border);
-  box-shadow: var(--glass-shadow);
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: saturate(150%) blur(10px);
+  -webkit-backdrop-filter: saturate(150%) blur(10px);
+  border: 1px solid rgba(203, 213, 225, 0.80);
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06), 0 4px 16px rgba(15, 23, 42, 0.04);
 }
+
+/* Glass para elementos de navegação (sidebar, headers, bottom nav) */
+.glass-nav {
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: saturate(150%) blur(10px);
+  -webkit-backdrop-filter: saturate(150%) blur(10px);
+}
+.glass-nav-top    { border-bottom: 1px solid rgba(203, 213, 225, 0.80); }
+.glass-nav-side   { border-right:  1px solid rgba(203, 213, 225, 0.80); }
+.glass-nav-bottom { border-top:    1px solid rgba(203, 213, 225, 0.80); }
 
 /* Scrollbar suave */
 ::-webkit-scrollbar { width: 6px; height: 6px; }
@@ -215,7 +225,7 @@ body {
     @apply border-border outline-ring/50;
   }
   body {
-    @apply bg-background text-foreground;
+    @apply text-foreground;
   }
   html {
     @apply font-sans;

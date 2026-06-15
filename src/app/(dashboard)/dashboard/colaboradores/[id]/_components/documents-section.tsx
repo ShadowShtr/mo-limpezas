@@ -55,7 +55,13 @@ function fmtDate(iso: string) {
 function isExpiringSoon(expiresAt: string | null): boolean {
   if (!expiresAt) return false;
   const diff = new Date(expiresAt).getTime() - Date.now();
-  return diff > 0 && diff < 14 * 24 * 60 * 60 * 1000; // menos de 14 dias
+  return diff > 0 && diff < 14 * 24 * 60 * 60 * 1000;
+}
+
+function isBackupWarning(expiresAt: string | null): boolean {
+  if (!expiresAt) return false;
+  const diff = new Date(expiresAt).getTime() - Date.now();
+  return diff > 0 && diff < 30 * 24 * 60 * 60 * 1000;
 }
 
 interface Props {
@@ -77,6 +83,7 @@ export function DocumentsSection({ collaboratorId, companyId, initialDocuments }
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const expiringSoon = documents.filter((d) => isExpiringSoon(d.expires_at));
+  const backupWarningDocs = documents.filter((d) => isBackupWarning(d.expires_at));
 
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const f = e.target.files?.[0] ?? null;
@@ -145,14 +152,8 @@ export function DocumentsSection({ collaboratorId, companyId, initialDocuments }
 
   return (
     <div
-      className="rounded-xl overflow-hidden"
-      style={{
-        background: "var(--glass-bg)",
-        backdropFilter: "var(--glass-blur)",
-        WebkitBackdropFilter: "var(--glass-blur)",
-        border: "1px solid var(--glass-border)",
-        boxShadow: "var(--glass-shadow)",
-      }}
+      className="rounded-xl overflow-hidden bg-white border border-slate-200/80"
+      style={{ boxShadow: "0 1px 3px rgba(15,23,42,0.06), 0 4px 16px rgba(15,23,42,0.04)" }}
     >
       {/* Header */}
       <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--glass-border)]">
@@ -174,12 +175,21 @@ export function DocumentsSection({ collaboratorId, companyId, initialDocuments }
         </button>
       </div>
 
-      {/* Aviso de expiração */}
-      {expiringSoon.length > 0 && (
-        <div className="px-5 py-2 bg-amber-50/80 border-b border-amber-100 flex items-center gap-2">
-          <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
-          <p className="text-xs text-amber-700">
-            {expiringSoon.length} documento{expiringSoon.length > 1 ? "s" : ""} expira{expiringSoon.length > 1 ? "m" : ""} em breve — faça download antes do arquivo automático
+      {/* Aviso de backup — perda irreversível de dados */}
+      {backupWarningDocs.length > 0 && (
+        <div className="px-5 py-3 bg-amber-50 border-b border-amber-200 space-y-1.5">
+          <div className="flex items-center gap-2">
+            <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+            <p className="text-sm font-semibold text-amber-800">
+              Faça backup — dados serão eliminados permanentemente
+            </p>
+          </div>
+          <p className="text-xs text-amber-700 leading-relaxed">
+            {backupWarningDocs.length === 1
+              ? "1 documento expira"
+              : `${backupWarningDocs.length} documentos expiram`}{" "}
+            nos próximos 30 dias e {backupWarningDocs.length === 1 ? "será apagado" : "serão apagados"} automaticamente pelo sistema de forma{" "}
+            <strong>irreversível</strong>. Faça download dos ficheiros antes da data de expiração — esta ação não pode ser desfeita e os dados não poderão ser recuperados.
           </p>
         </div>
       )}
@@ -266,15 +276,7 @@ export function DocumentsSection({ collaboratorId, companyId, initialDocuments }
       {showModal && typeof window !== "undefined" && createPortal(
         <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setShowModal(false)} />
-          <div
-            className="relative rounded-2xl shadow-2xl w-full max-w-md p-6 space-y-4"
-            style={{
-              background: "var(--glass-bg-strong)",
-              backdropFilter: "var(--glass-blur)",
-              WebkitBackdropFilter: "var(--glass-blur)",
-              border: "1px solid var(--glass-border)",
-            }}
-          >
+          <div className="relative rounded-2xl w-full max-w-md p-6 space-y-4 glass-strong">
             <div className="flex items-center justify-between">
               <h2 className="text-base font-semibold text-[var(--color-text-main)]">Carregar documento</h2>
               <button onClick={() => setShowModal(false)} className="p-1 rounded-lg hover:bg-white/50">
