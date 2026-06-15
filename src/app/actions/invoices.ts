@@ -319,13 +319,27 @@ export async function updateInvoiceStatus(
   status: Invoice["status"],
   paymentMethod?: string,
 ): Promise<{ ok: boolean; error?: string }> {
-  const admin = createAdminClient();
+  const supabase = await createClient();
+  const admin    = createAdminClient();
+
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { ok: false, error: "Não autenticado." };
+
+  const { data: profile } = await admin
+    .from("profiles")
+    .select("company_id, role")
+    .eq("id", user.id)
+    .single();
+  if (!profile || !["admin", "gestor"].includes(profile.role)) {
+    return { ok: false, error: "Sem permissão." };
+  }
+
   const update: { status: string; paid_at?: string; payment_method?: string | null } = { status };
   if (status === "pago") {
     update.paid_at = new Date().toISOString();
     update.payment_method = paymentMethod ?? null;
     // Auto-registo no fluxo de caixa
-    const { data: inv } = await admin.from("invoices").select("company_id, total, invoice_number, client_id").eq("id", id).single();
+    const { data: inv } = await admin.from("invoices").select("company_id, total, invoice_number, client_id").eq("id", id).eq("company_id", profile.company_id).single();
     if (inv) {
       const { data: clientData } = await admin.from("clients").select("name").eq("id", inv.client_id).single();
       await admin.from("cash_flow_entries").insert({
@@ -345,7 +359,8 @@ export async function updateInvoiceStatus(
   const { error } = await admin
     .from("invoices")
     .update(update)
-    .eq("id", id);
+    .eq("id", id)
+    .eq("company_id", profile.company_id);
 
   if (error) return { ok: false, error: error.message };
   revalidatePath("/dashboard/cobrancas");
@@ -364,10 +379,20 @@ export async function deleteInvoice(
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { ok: false, error: "Não autenticado." };
 
+  const { data: profile } = await admin
+    .from("profiles")
+    .select("company_id, role")
+    .eq("id", user.id)
+    .single();
+  if (!profile || !["admin", "gestor"].includes(profile.role)) {
+    return { ok: false, error: "Sem permissão." };
+  }
+
   const { error } = await admin
     .from("invoices")
     .delete()
     .eq("id", id)
+    .eq("company_id", profile.company_id)
     .eq("status", "rascunho"); // só eliminar rascunhos
 
   if (error) return { ok: false, error: error.message };

@@ -2,6 +2,7 @@
 
 import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 
 export interface ColaboradorInput {
@@ -37,7 +38,23 @@ export async function createColaborador(input: ColaboradorInput) {
     return { ok: false as const, error: parsed.error.issues[0].message };
   }
 
-  const admin = createAdminClient();
+  const supabase = await createClient();
+  const admin    = createAdminClient();
+
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { ok: false as const, error: "Não autenticado." };
+
+  const { data: callerProfile } = await admin
+    .from("profiles")
+    .select("company_id, role")
+    .eq("id", user.id)
+    .single();
+  if (!callerProfile || !["admin", "gestor"].includes(callerProfile.role)) {
+    return { ok: false as const, error: "Sem permissão." };
+  }
+  if (callerProfile.company_id !== parsed.data.company_id) {
+    return { ok: false as const, error: "Acesso negado." };
+  }
 
   // Gera email placeholder se não fornecido (formato válido obrigatório pelo GoTrue)
   const email =
@@ -81,7 +98,20 @@ export async function updateColaborador(
   id: string,
   input: Omit<ColaboradorInput, "company_id">,
 ) {
-  const admin = createAdminClient();
+  const supabase = await createClient();
+  const admin    = createAdminClient();
+
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { ok: false as const, error: "Não autenticado." };
+
+  const { data: callerProfile } = await admin
+    .from("profiles")
+    .select("company_id, role")
+    .eq("id", user.id)
+    .single();
+  if (!callerProfile || !["admin", "gestor"].includes(callerProfile.role)) {
+    return { ok: false as const, error: "Sem permissão." };
+  }
 
   const { error } = await admin
     .from("profiles")
@@ -99,7 +129,8 @@ export async function updateColaborador(
       contracted_hours_month: input.contracted_hours_month,
       skills: input.skills,
     })
-    .eq("id", id);
+    .eq("id", id)
+    .eq("company_id", callerProfile.company_id);
 
   if (error) return { ok: false as const, error: error.message };
 

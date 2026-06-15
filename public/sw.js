@@ -1,4 +1,5 @@
-const CACHE = "mo-limpezas-v1";
+// Versão atualiza automaticamente a cada deploy via next.config.ts headers
+const CACHE = "mo-limpezas-v2";
 const STATIC = ["/app", "/offline"];
 
 self.addEventListener("install", (e) => {
@@ -20,34 +21,44 @@ self.addEventListener("fetch", (e) => {
 
   const url = new URL(e.request.url);
 
-  // Rede sempre para API e autenticação
+  // Rede sempre para API e autenticação — nunca cachear
   if (url.pathname.startsWith("/api/") || url.pathname.startsWith("/auth/")) {
     e.respondWith(
       fetch(e.request).catch(
-        () => new Response(JSON.stringify({ error: "offline" }), { status: 503 })
+        () => new Response(JSON.stringify({ error: "offline" }), {
+          status: 503,
+          headers: { "Content-Type": "application/json" },
+        })
       )
     );
     return;
   }
 
-  // Cache-first para assets estáticos
+  // Cache-first para assets estáticos — só cachear respostas 2xx
   if (/\.(js|css|png|jpg|jpeg|svg|ico|woff2?)$/.test(url.pathname)) {
     e.respondWith(
-      caches.match(e.request).then((hit) => hit || fetch(e.request).then((res) => {
-        const clone = res.clone();
-        caches.open(CACHE).then((c) => c.put(e.request, clone));
-        return res;
-      }))
+      caches.match(e.request).then((hit) => {
+        if (hit) return hit;
+        return fetch(e.request).then((res) => {
+          if (res.ok) {
+            const clone = res.clone();
+            caches.open(CACHE).then((c) => c.put(e.request, clone));
+          }
+          return res;
+        });
+      })
     );
     return;
   }
 
-  // Network-first para páginas
+  // Network-first para páginas — só cachear respostas 2xx
   e.respondWith(
     fetch(e.request)
       .then((res) => {
-        const clone = res.clone();
-        caches.open(CACHE).then((c) => c.put(e.request, clone));
+        if (res.ok) {
+          const clone = res.clone();
+          caches.open(CACHE).then((c) => c.put(e.request, clone));
+        }
         return res;
       })
       .catch(() => caches.match(e.request).then((hit) => hit || caches.match("/app")))

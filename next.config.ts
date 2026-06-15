@@ -21,7 +21,7 @@ const nextConfig: NextConfig = {
               "script-src 'self' 'unsafe-eval' 'unsafe-inline' blob: https://api.mapbox.com https://events.mapbox.com",
               "style-src 'self' 'unsafe-inline' https://api.mapbox.com",
               "img-src 'self' data: blob: https://api.mapbox.com https://*.mapbox.com https://*.cartocdn.com",
-              "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.mapbox.com https://events.mapbox.com https://api.resend.com https://*.cartocdn.com",
+              "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.mapbox.com https://events.mapbox.com https://api.resend.com https://*.cartocdn.com https://nominatim.openstreetmap.org",
               "worker-src 'self' blob:",
               "font-src 'self' data:",
               "frame-ancestors 'none'",

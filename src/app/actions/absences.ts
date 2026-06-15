@@ -62,8 +62,13 @@ export async function createAbsence(input: CreateAbsenceInput) {
 }
 
 export async function deleteAbsence(id: string) {
-  const admin = createAdminClient();
-  const { error } = await admin.from("absences").delete().eq("id", id);
+  const supabase = await createClient();
+  const admin    = createAdminClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { ok: false as const, error: "Não autenticado." };
+  const companyId = await getCompanyId();
+  if (!companyId) return { ok: false as const, error: "Sem permissão." };
+  const { error } = await admin.from("absences").delete().eq("id", id).eq("company_id", companyId);
   if (error) return { ok: false as const, error: error.message };
   revalidatePath("/dashboard/faltas");
   revalidatePath("/dashboard/calendario");
@@ -71,11 +76,17 @@ export async function deleteAbsence(id: string) {
 }
 
 export async function updateAbsenceSubstitute(absenceId: string, replacedById: string | null) {
-  const admin = createAdminClient();
+  const supabase = await createClient();
+  const admin    = createAdminClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { ok: false as const, error: "Não autenticado." };
+  const companyId = await getCompanyId();
+  if (!companyId) return { ok: false as const, error: "Sem permissão." };
   const { error } = await admin
     .from("absences")
     .update({ replaced_by: replacedById })
-    .eq("id", absenceId);
+    .eq("id", absenceId)
+    .eq("company_id", companyId);
   if (error) return { ok: false as const, error: error.message };
   revalidatePath("/dashboard/faltas");
   return { ok: true as const };

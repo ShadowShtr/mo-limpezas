@@ -100,12 +100,27 @@ export async function logout() {
 }
 
 export async function inviteCollaborator(formData: FormData) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: "Não autenticado." };
+
   const { createAdminClient } = await import("@/lib/supabase/admin");
   const admin = createAdminClient();
+
+  const { data: callerProfile } = await admin
+    .from("profiles")
+    .select("company_id, role")
+    .eq("id", user.id)
+    .single();
+  if (!callerProfile || !["admin", "gestor"].includes(callerProfile.role)) {
+    return { error: "Sem permissão." };
+  }
 
   const email = formData.get("email") as string;
   const name = formData.get("name") as string;
   const companyId = formData.get("company_id") as string;
+
+  if (companyId !== callerProfile.company_id) return { error: "Acesso negado." };
 
   // Gerar link de convite sem enviar o email padrão do Supabase
   const { data: linkData, error: linkError } = await admin.auth.admin.generateLink({

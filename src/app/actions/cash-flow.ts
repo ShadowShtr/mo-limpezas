@@ -93,20 +93,53 @@ export async function updateCashFlowEntry(
   id: string,
   data: { status?: CashFlowStatus; description?: string; amount?: number; notes?: string | null },
 ): Promise<{ ok: boolean; error?: string }> {
-  const admin = createAdminClient();
-  const { error } = await admin.from("cash_flow_entries").update(data).eq("id", id);
+  const supabase = await createClient();
+  const admin    = createAdminClient();
+
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { ok: false, error: "Não autenticado." };
+
+  const { data: profile } = await admin
+    .from("profiles")
+    .select("company_id, role")
+    .eq("id", user.id)
+    .single();
+  if (!profile || !["admin", "gestor"].includes(profile.role)) {
+    return { ok: false, error: "Sem permissão." };
+  }
+
+  const { error } = await admin
+    .from("cash_flow_entries")
+    .update(data)
+    .eq("id", id)
+    .eq("company_id", profile.company_id);
   if (error) return { ok: false, error: error.message };
   revalidatePath("/dashboard/financeiro/fluxo-caixa");
   return { ok: true };
 }
 
 export async function deleteCashFlowEntry(id: string): Promise<{ ok: boolean; error?: string }> {
-  const admin = createAdminClient();
+  const supabase = await createClient();
+  const admin    = createAdminClient();
+
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { ok: false, error: "Não autenticado." };
+
+  const { data: profile } = await admin
+    .from("profiles")
+    .select("company_id, role")
+    .eq("id", user.id)
+    .single();
+  if (!profile || !["admin", "gestor"].includes(profile.role)) {
+    return { ok: false, error: "Sem permissão." };
+  }
+
   // Só apagar entradas manuais (sem reference_type)
   const { error } = await admin
     .from("cash_flow_entries")
     .delete()
     .eq("id", id)
+    .eq("company_id", profile.company_id)
     .is("reference_type", null);
 
   if (error) return { ok: false, error: error.message };

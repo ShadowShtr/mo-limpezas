@@ -269,14 +269,24 @@ export async function adjustPayrollRecord(
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { ok: false, error: "Não autenticado." };
 
+  const { data: profile } = await admin
+    .from("profiles")
+    .select("company_id, role")
+    .eq("id", user.id)
+    .single();
+  if (!profile || !["admin", "gestor"].includes(profile.role)) {
+    return { ok: false, error: "Sem permissão." };
+  }
+
   // Ler registo atual para recalcular net_salary
   const { data: rec, error: rErr } = await admin
     .from("payroll_records")
-    .select("gross_salary, meal_allowance, overtime_bonus, absence_deductions, other_additions, other_deductions, worked_hours, overtime_hours, absence_hours, days_worked, hourly_rate")
+    .select("company_id, gross_salary, meal_allowance, overtime_bonus, absence_deductions, other_additions, other_deductions, worked_hours, overtime_hours, absence_hours, days_worked, hourly_rate")
     .eq("id", id)
     .single();
 
   if (rErr || !rec) return { ok: false, error: rErr?.message ?? "Registo não encontrado." };
+  if (rec.company_id !== profile.company_id) return { ok: false, error: "Acesso negado." };
 
   const workedHours    = adjust.worked_hours      ?? rec.worked_hours       ?? 0;
   const overtimeHours  = adjust.overtime_hours    ?? rec.overtime_hours     ?? 0;
@@ -349,10 +359,20 @@ export async function approvePayrollRecords(
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { ok: false, error: "Não autenticado." };
 
+  const { data: profile } = await admin
+    .from("profiles")
+    .select("company_id, role")
+    .eq("id", user.id)
+    .single();
+  if (!profile || !["admin", "gestor"].includes(profile.role)) {
+    return { ok: false, error: "Sem permissão." };
+  }
+
   const { error } = await admin
     .from("payroll_records")
     .update({ status: "aprovado", approved_by: user.id })
-    .in("id", ids);
+    .in("id", ids)
+    .eq("company_id", profile.company_id);
 
   if (error) return { ok: false, error: error.message };
   revalidatePath("/dashboard/folha-pagamento");
@@ -364,18 +384,33 @@ export async function approvePayrollRecords(
 export async function markPayrollPaid(
   ids: string[],
 ): Promise<{ ok: boolean; error?: string }> {
-  const admin = createAdminClient();
+  const supabase = await createClient();
+  const admin    = createAdminClient();
+
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { ok: false, error: "Não autenticado." };
+
+  const { data: profile } = await admin
+    .from("profiles")
+    .select("company_id, role")
+    .eq("id", user.id)
+    .single();
+  if (!profile || !["admin", "gestor"].includes(profile.role)) {
+    return { ok: false, error: "Sem permissão." };
+  }
 
   // Buscar dados antes de marcar como pago (para o fluxo de caixa)
   const { data: records } = await admin
     .from("payroll_records")
     .select("id, company_id, collaborator_id, net_salary, period_year, period_month, profiles(full_name)")
-    .in("id", ids);
+    .in("id", ids)
+    .eq("company_id", profile.company_id);
 
   const { error } = await admin
     .from("payroll_records")
     .update({ status: "pago", paid_at: new Date().toISOString() })
-    .in("id", ids);
+    .in("id", ids)
+    .eq("company_id", profile.company_id);
 
   if (error) return { ok: false, error: error.message };
 
