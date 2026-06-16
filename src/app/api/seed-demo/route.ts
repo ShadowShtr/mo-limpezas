@@ -3,8 +3,12 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 // POST /api/seed-demo
-// Popula dados fictícios para testes. Protegido por autenticação (admin/gestor).
+// Popula dados fictícios para testes. Apenas em desenvolvimento.
 export async function POST(_req: NextRequest) {
+  if (process.env.NODE_ENV === "production") {
+    return NextResponse.json({ error: "Não disponível em produção." }, { status: 403 });
+  }
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const admin = createAdminClient() as any;
   const supabase = await createClient();
