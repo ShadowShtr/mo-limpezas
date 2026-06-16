@@ -329,10 +329,9 @@ export async function getDamageReportUploadUrl(
     const safeName = fileName.replace(/[^a-zA-Z0-9._-]/g, "_");
     const path = `${profile.company_id}/${user.id}/${Date.now()}-${safeName}`;
 
-    await ensureBucket(admin);
-
+    // ensureBucket removido do caminho de upload — adiciona latência desnecessária em prod
     const { data, error } = await admin.storage.from(BUCKET).createSignedUploadUrl(path);
-    if (error || !data) return { ok: false, error: error?.message ?? "Erro ao gerar URL de upload" };
+    if (error || !data) return { ok: false, error: error?.message ?? "Bucket não configurado. Contacta o gestor." };
 
     const { data: urlData } = admin.storage.from(BUCKET).getPublicUrl(path);
     return { ok: true, signedUrl: data.signedUrl, token: data.token, path, publicUrl: urlData.publicUrl };

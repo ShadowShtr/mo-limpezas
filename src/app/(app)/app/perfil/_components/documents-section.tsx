@@ -100,6 +100,9 @@ export function AppDocumentsSection({ initialDocuments }: Props) {
   async function compressImage(file: File): Promise<File> {
     if (!file.type.startsWith("image/")) return file;
     return new Promise((resolve) => {
+      // Timeout de segurança — canvas.toBlob() nunca chama o callback em alguns WebViews
+      const bail = setTimeout(() => resolve(file), 8000);
+
       const img = new Image();
       const url = URL.createObjectURL(file);
       img.onload = () => {
@@ -111,9 +114,12 @@ export function AppDocumentsSection({ initialDocuments }: Props) {
         const canvas = document.createElement("canvas");
         canvas.width = w;
         canvas.height = h;
-        canvas.getContext("2d")!.drawImage(img, 0, 0, w, h);
+        const ctx = canvas.getContext("2d");
+        if (!ctx) { clearTimeout(bail); resolve(file); return; }
+        ctx.drawImage(img, 0, 0, w, h);
         canvas.toBlob(
           (blob) => {
+            clearTimeout(bail);
             if (!blob) { resolve(file); return; }
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             resolve(new (File as any)([blob], file.name.replace(/\.[^.]+$/, ".jpg"), { type: "image/jpeg" }) as File);
@@ -122,7 +128,7 @@ export function AppDocumentsSection({ initialDocuments }: Props) {
           0.82,
         );
       };
-      img.onerror = () => { URL.revokeObjectURL(url); resolve(file); };
+      img.onerror = () => { clearTimeout(bail); URL.revokeObjectURL(url); resolve(file); };
       img.src = url;
     });
   }
@@ -133,28 +139,38 @@ export function AppDocumentsSection({ initialDocuments }: Props) {
 
     setMessage(null);
     startUpload(async () => {
-      try {
-        // 1. Comprimir a imagem no dispositivo
-        const compressed = await compressImage(file);
+      // Timeout global de 60s — garante que uploading nunca fica preso para sempre
+      let timedOut = false;
+      const globalTimeout = setTimeout(() => {
+        timedOut = true;
+        setMessage({ type: "error", text: "O envio demorou demasiado. Verifica a ligação e tenta novamente." });
+      }, 60_000);
 
-        // 2. Pedir URL assinada ao servidor (rápido — sem ficheiro)
+      try {
+        // 1. Comprimir imagem no dispositivo (máx 8s, senão usa original)
+        const compressed = await compressImage(file);
+        if (timedOut) return;
+
+        // 2. Pedir URL assinada ao servidor
         const urlRes = await getDamageReportUploadUrl(compressed.name);
+        if (timedOut) return;
         if (!urlRes.ok) {
           setMessage({ type: "error", text: urlRes.error });
           return;
         }
 
-        // 3. Upload direto celular → Supabase (o token na URL é a autorização)
+        // 3. Upload directo celular → Supabase via URL assinada
         const supabase = createClient();
         const { error: uploadError } = await supabase.storage
           .from(BUCKET)
           .uploadToSignedUrl(urlRes.path, urlRes.token, compressed, { contentType: compressed.type });
+        if (timedOut) return;
         if (uploadError) {
-          setMessage({ type: "error", text: `Erro ao enviar: ${uploadError.message}` });
+          setMessage({ type: "error", text: `Erro ao enviar ficheiro: ${uploadError.message}` });
           return;
         }
 
-        // 4. Guardar registo na BD e notificar gestores (rápido — sem ficheiro)
+        // 4. Guardar registo na BD e notificar gestores
         const saveRes = await saveDamageReportRecord({
           path:      urlRes.path,
           publicUrl: urlRes.publicUrl,
@@ -163,32 +179,38 @@ export function AppDocumentsSection({ initialDocuments }: Props) {
           mimeType:  compressed.type,
           notes:     notes || null,
         });
+        if (timedOut) return;
 
         if (saveRes.ok) {
-          setMessage({ type: "success", text: "Relatório enviado com sucesso. O gestor foi notificado." });
+          clearTimeout(globalTimeout);
+          setMessage({ type: "success", text: "Relatório enviado. O gestor foi notificado." });
           setNotes("");
           setShowDamageForm(false);
           if (fileRef.current) fileRef.current.value = "";
           setDocs((prev) => [{
-            id:                     saveRes.id ?? crypto.randomUUID(),
-            file_name:              compressed.name,
-            file_url:               urlRes.publicUrl,
-            file_size:              compressed.size,
-            mime_type:              compressed.type,
-            category:               "avaria",
-            notes:                  notes || null,
+            id:                      saveRes.id ?? crypto.randomUUID(),
+            file_name:               compressed.name,
+            file_url:                urlRes.publicUrl,
+            file_size:               compressed.size,
+            mime_type:               compressed.type,
+            category:                "avaria",
+            notes:                   notes || null,
             visible_to_collaborator: true,
-            uploaded_by_role:       "colaboradora",
-            expires_at:             null,
-            archived_at:            null,
-            created_at:             new Date().toISOString(),
-            uploaded_by_name:       null,
+            uploaded_by_role:        "colaboradora",
+            expires_at:              null,
+            archived_at:             null,
+            created_at:              new Date().toISOString(),
+            uploaded_by_name:        null,
           }, ...prev]);
         } else {
-          setMessage({ type: "error", text: saveRes.error ?? "Erro ao guardar. Tente novamente." });
+          setMessage({ type: "error", text: saveRes.error ?? "Erro ao guardar. Tenta novamente." });
         }
-      } catch {
-        setMessage({ type: "error", text: "Erro inesperado. Tente novamente." });
+      } catch (err) {
+        if (!timedOut) {
+          setMessage({ type: "error", text: err instanceof Error ? err.message : "Erro inesperado. Tenta novamente." });
+        }
+      } finally {
+        clearTimeout(globalTimeout);
       }
     });
   }
