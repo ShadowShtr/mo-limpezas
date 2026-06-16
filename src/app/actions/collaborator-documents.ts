@@ -318,6 +318,106 @@ export async function uploadDamageReport(formData: FormData): Promise<{
   }
 }
 
+// ─── Upload direto (celular → Supabase sem passar pelo servidor) ──────────────
+
+/** Passo 1: gera URL assinada para o celular fazer upload direto ao Supabase. */
+export async function getDamageReportUploadUrl(
+  fileName: string,
+): Promise<{ ok: true; signedUrl: string; token: string; path: string; publicUrl: string } | { ok: false; error: string }> {
+  try {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return { ok: false, error: "Não autenticado" };
+
+    const admin = createAdminClient();
+    const { data: profile } = await admin
+      .from("profiles").select("company_id").eq("id", user.id).single();
+    if (!profile) return { ok: false, error: "Perfil não encontrado" };
+
+    const safeName = fileName.replace(/[^a-zA-Z0-9._-]/g, "_");
+    const path = `${profile.company_id}/${user.id}/${Date.now()}-${safeName}`;
+
+    await ensureBucket(admin);
+
+    const { data, error } = await admin.storage.from(BUCKET).createSignedUploadUrl(path);
+    if (error || !data) return { ok: false, error: error?.message ?? "Erro ao gerar URL de upload" };
+
+    const { data: urlData } = admin.storage.from(BUCKET).getPublicUrl(path);
+    return { ok: true, signedUrl: data.signedUrl, token: data.token, path, publicUrl: urlData.publicUrl };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Erro interno" };
+  }
+}
+
+/** Passo 2: após o celular fazer upload direto, guarda o registo na BD e notifica gestores. */
+export async function saveDamageReportRecord(params: {
+  path: string;
+  publicUrl: string;
+  fileName: string;
+  fileSize: number;
+  mimeType: string;
+  notes: string | null;
+}): Promise<{ ok: boolean; id?: string; error?: string }> {
+  try {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return { ok: false, error: "Não autenticado" };
+
+    const admin = createAdminClient();
+    const { data: profile } = await admin
+      .from("profiles").select("company_id").eq("id", user.id).single();
+    if (!profile) return { ok: false, error: "Perfil não encontrado" };
+
+    const expiresAt = new Date();
+    expiresAt.setMonth(expiresAt.getMonth() + RETENTION_MONTHS);
+
+    const { data, error: dbError } = await admin
+      .from("collaborator_documents")
+      .insert({
+        company_id:              profile.company_id,
+        collaborator_id:         user.id,
+        file_name:               params.fileName,
+        file_url:                params.publicUrl,
+        file_size:               params.fileSize,
+        mime_type:               params.mimeType,
+        category:                "avaria" as const,
+        notes:                   params.notes,
+        visible_to_collaborator: true,
+        uploaded_by:             user.id,
+        uploaded_by_role:        "colaboradora" as const,
+        expires_at:              expiresAt.toISOString(),
+      })
+      .select("id")
+      .single();
+
+    if (dbError) return { ok: false, error: dbError.message };
+
+    const [{ data: collaboratorProfile }, { data: managers }] = await Promise.all([
+      admin.from("profiles").select("full_name").eq("id", user.id).single(),
+      admin.from("profiles").select("id").eq("company_id", profile.company_id).in("role", ["gestor", "admin"]),
+    ]);
+
+    if (managers && managers.length > 0) {
+      const name = collaboratorProfile?.full_name ?? "Uma colaboradora";
+      await admin.from("notifications").insert(
+        managers.map((m: { id: string }) => ({
+          company_id: profile.company_id,
+          user_id:    m.id,
+          type:       "damage_report_submitted",
+          title:      `${name} enviou um relatório de avaria`,
+          body:       params.notes ? `"${params.notes}"` : "Consulte os documentos para ver a imagem.",
+          data:       { document_id: data.id, collaborator_id: user.id },
+        })),
+      );
+    }
+
+    revalidatePath("/app/perfil");
+    return { ok: true, id: data.id };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Erro ao guardar registo." };
+  }
+}
+
 // ─── Backup ZIP (gestor) ─────────────────────────────────────────────────────
 
 export interface BackupDocument {

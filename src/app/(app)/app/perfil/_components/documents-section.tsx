@@ -5,12 +5,16 @@ import {
   FileText, File, Download, Loader2, Camera, Receipt,
   ChevronDown, ChevronUp, AlertTriangle,
 } from "lucide-react";
+import { createClient } from "@/lib/supabase/client";
 import {
-  uploadDamageReport,
+  getDamageReportUploadUrl,
+  saveDamageReportRecord,
   getSignedDocumentUrl,
   type CollaboratorDocument,
   type DocumentCategory,
 } from "@/app/actions/collaborator-documents";
+
+const BUCKET = "collaborator-documents";
 
 const CATEGORY_LABELS: Record<DocumentCategory, string> = {
   recibo_salario: "Folha de Salário",
@@ -130,21 +134,45 @@ export function AppDocumentsSection({ initialDocuments }: Props) {
     setMessage(null);
     startUpload(async () => {
       try {
+        // 1. Comprimir a imagem no dispositivo
         const compressed = await compressImage(file);
-        const fd = new FormData();
-        fd.append("file", compressed);
-        fd.append("notes", notes);
 
-        const res = await uploadDamageReport(fd);
-        if (res.ok) {
+        // 2. Pedir URL assinada ao servidor (rápido — sem ficheiro)
+        const urlRes = await getDamageReportUploadUrl(compressed.name);
+        if (!urlRes.ok) {
+          setMessage({ type: "error", text: urlRes.error });
+          return;
+        }
+
+        // 3. Upload direto celular → Supabase (sem passar pelo servidor Next.js)
+        const supabase = createClient();
+        const { error: uploadError } = await supabase.storage
+          .from(BUCKET)
+          .uploadToSignedUrl(urlRes.path, urlRes.token, compressed, { contentType: compressed.type });
+        if (uploadError) {
+          setMessage({ type: "error", text: "Erro ao enviar ficheiro. Tente novamente." });
+          return;
+        }
+
+        // 4. Guardar registo na BD e notificar gestores (rápido — sem ficheiro)
+        const saveRes = await saveDamageReportRecord({
+          path:      urlRes.path,
+          publicUrl: urlRes.publicUrl,
+          fileName:  compressed.name,
+          fileSize:  compressed.size,
+          mimeType:  compressed.type,
+          notes:     notes || null,
+        });
+
+        if (saveRes.ok) {
           setMessage({ type: "success", text: "Relatório enviado com sucesso. O gestor foi notificado." });
           setNotes("");
           setShowDamageForm(false);
           if (fileRef.current) fileRef.current.value = "";
           setDocs((prev) => [{
-            id:                     res.id ?? crypto.randomUUID(),
+            id:                     saveRes.id ?? crypto.randomUUID(),
             file_name:              compressed.name,
-            file_url:               "",
+            file_url:               urlRes.publicUrl,
             file_size:              compressed.size,
             mime_type:              compressed.type,
             category:               "avaria",
@@ -157,10 +185,10 @@ export function AppDocumentsSection({ initialDocuments }: Props) {
             uploaded_by_name:       null,
           }, ...prev]);
         } else {
-          setMessage({ type: "error", text: res.error ?? "Erro ao enviar. Tente novamente." });
+          setMessage({ type: "error", text: saveRes.error ?? "Erro ao guardar. Tente novamente." });
         }
       } catch {
-        setMessage({ type: "error", text: "Erro inesperado ao enviar. Tente novamente." });
+        setMessage({ type: "error", text: "Erro inesperado. Tente novamente." });
       }
     });
   }
