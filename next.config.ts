@@ -12,6 +12,15 @@ const nextConfig: NextConfig = {
   async headers() {
     return [
       {
+        // sw.js nunca pode ser cacheado — o browser precisa sempre da versão mais recente
+        // para detectar actualizações do service worker
+        source: "/sw.js",
+        headers: [
+          { key: "Cache-Control", value: "no-cache, no-store, must-revalidate" },
+          { key: "Service-Worker-Allowed", value: "/" },
+        ],
+      },
+      {
         source: "/(.*)",
         headers: [
           { key: "X-Content-Type-Options", value: "nosniff" },
