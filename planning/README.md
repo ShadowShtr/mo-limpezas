@@ -32,6 +32,7 @@ A plataforma resolve os problemas diários de uma empresa com múltiplas equipas
 | [docs/06-difficulty.md](docs/06-difficulty.md) | O que Claude faz vs o que o user faz |
 | [docs/07-financial-module.md](docs/07-financial-module.md) | Especificação do módulo financeiro |
 | [wireframes/screens.md](wireframes/screens.md) | Descrição dos ecrãs principais |
+| [docs/11-incidentes-producao.md](docs/11-incidentes-producao.md) | Incidentes e correcoes de producao |
 
 ---
 

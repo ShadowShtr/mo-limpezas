@@ -11,9 +11,9 @@ INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_typ
 VALUES (
   'collaborator-documents',
   'collaborator-documents',
-  true,
+  false,
   52428800,
-  ARRAY['image/jpeg', 'image/png', 'image/webp', 'application/pdf']
+  NULL
 )
 ON CONFLICT (id) DO NOTHING;
 
@@ -65,7 +65,7 @@ CREATE POLICY "colaboradoras upload avarias storage"
     AND (storage.foldername(name))[2] = auth.uid()::text
     AND EXISTS (
       SELECT 1 FROM profiles
-      WHERE id = auth.uid() AND role = 'colaboradora'
+      WHERE id = auth.uid() AND role = 'colaborador'
     )
   );
 

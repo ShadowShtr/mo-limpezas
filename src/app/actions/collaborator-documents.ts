@@ -2,6 +2,10 @@
 
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
+import {
+  buildDamageReportNotificationRows,
+  buildDocumentStoragePath,
+} from "@/lib/collaborator-documents";
 import { revalidatePath } from "next/cache";
 
 export type DocumentCategory =
@@ -93,8 +97,7 @@ export async function uploadCollaboratorDocument(
   if (!fileObj) return { ok: false, error: "Ficheiro em falta" };
   if (fileObj.size > 50 * 1024 * 1024) return { ok: false, error: "Ficheiro demasiado grande (máx 50 MB)" };
 
-  const safeName = fileObj.name.replace(/[^a-zA-Z0-9._-]/g, "_");
-  const path = `${companyId}/${collaboratorId}/${Date.now()}-${safeName}`;
+  const path = buildDocumentStoragePath({ companyId, collaboratorId, fileName: fileObj.name });
   const admin = createAdminClient();
 
   await ensureBucket(admin);
@@ -246,8 +249,11 @@ export async function uploadDamageReport(formData: FormData): Promise<{
     if (!file) return { ok: false, error: "Ficheiro obrigatório" };
     if (file.size > 50 * 1024 * 1024) return { ok: false, error: "Ficheiro demasiado grande (máx 50 MB)" };
 
-    const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
-    const path = `${profile.company_id}/${user.id}/${Date.now()}-${safeName}`;
+    const path = buildDocumentStoragePath({
+      companyId: profile.company_id,
+      collaboratorId: user.id,
+      fileName: file.name,
+    });
 
     await ensureBucket(admin);
 
@@ -290,17 +296,14 @@ export async function uploadDamageReport(formData: FormData): Promise<{
     ]);
 
     if (managers && managers.length > 0) {
-      const name = collaboratorProfile?.full_name ?? "Uma colaboradora";
-      await admin.from("notifications").insert(
-        managers.map((m: { id: string }) => ({
-          company_id: profile.company_id,
-          user_id:    m.id,
-          type:       "damage_report_submitted",
-          title:      `${name} enviou um relatório de avaria`,
-          body:       notes ? `"${notes}"` : "Consulte os documentos para ver a imagem.",
-          data:       { document_id: data.id, collaborator_id: user.id },
-        })),
-      );
+      await admin.from("notifications").insert(buildDamageReportNotificationRows({
+        companyId: profile.company_id,
+        collaboratorId: user.id,
+        collaboratorName: collaboratorProfile?.full_name,
+        documentId: data.id,
+        notes,
+        managers,
+      }));
     }
 
     revalidatePath("/app/perfil");
@@ -326,8 +329,11 @@ export async function getDamageReportUploadUrl(
       .from("profiles").select("company_id").eq("id", user.id).single();
     if (!profile) return { ok: false, error: "Perfil não encontrado" };
 
-    const safeName = fileName.replace(/[^a-zA-Z0-9._-]/g, "_");
-    const path = `${profile.company_id}/${user.id}/${Date.now()}-${safeName}`;
+    const path = buildDocumentStoragePath({
+      companyId: profile.company_id,
+      collaboratorId: user.id,
+      fileName,
+    });
 
     // ensureBucket removido do caminho de upload — adiciona latência desnecessária em prod
     const { data, error } = await admin.storage.from(BUCKET).createSignedUploadUrl(path);
@@ -389,17 +395,14 @@ export async function saveDamageReportRecord(params: {
     ]);
 
     if (managers && managers.length > 0) {
-      const name = collaboratorProfile?.full_name ?? "Uma colaboradora";
-      await admin.from("notifications").insert(
-        managers.map((m: { id: string }) => ({
-          company_id: profile.company_id,
-          user_id:    m.id,
-          type:       "damage_report_submitted",
-          title:      `${name} enviou um relatório de avaria`,
-          body:       params.notes ? `"${params.notes}"` : "Consulte os documentos para ver a imagem.",
-          data:       { document_id: data.id, collaborator_id: user.id },
-        })),
-      );
+      await admin.from("notifications").insert(buildDamageReportNotificationRows({
+        companyId: profile.company_id,
+        collaboratorId: user.id,
+        collaboratorName: collaboratorProfile?.full_name,
+        documentId: data.id,
+        notes: params.notes,
+        managers,
+      }));
     }
 
     revalidatePath("/app/perfil");
