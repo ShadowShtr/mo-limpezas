@@ -30,30 +30,14 @@ export interface CollaboratorDocument {
 const BUCKET = "collaborator-documents";
 const RETENTION_MONTHS = 3;
 
-// Tipos MIME aceites — inclui HEIC/HEIF (câmara iOS) e formatos comuns
-const ALLOWED_MIME_TYPES = [
-  "application/pdf",
-  "image/jpeg", "image/jpg",
-  "image/png",
-  "image/webp",
-  "image/heic", "image/heif",
-  "image/gif",
-  "image/bmp",
-];
-
 async function ensureBucket(admin: ReturnType<typeof createAdminClient>) {
-  const bucketOptions = {
-    public: false,
-    fileSizeLimit: 52428800,
-    allowedMimeTypes: ALLOWED_MIME_TYPES,
-  };
-
   const { error } = await admin.storage.getBucket(BUCKET);
   if (error) {
-    await admin.storage.createBucket(BUCKET, bucketOptions);
-  } else {
-    // Atualizar bucket existente para incluir HEIC/HEIF do iOS
-    await admin.storage.updateBucket(BUCKET, bucketOptions);
+    // Criar sem restrição de MIME types — permite qualquer formato (HEIC, PDF, etc.)
+    await admin.storage.createBucket(BUCKET, {
+      public: false,
+      fileSizeLimit: 52428800,
+    });
   }
 }
 
