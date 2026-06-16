@@ -65,6 +65,7 @@ export function AppDocumentsSection({ initialDocuments }: Props) {
   const [notes, setNotes]           = useState("");
   const [uploading, startUpload]    = useTransition();
   const [message, setMessage]       = useState<{ type: "error" | "success"; text: string } | null>(null);
+  const [uploadStep, setUploadStep] = useState<"compressing" | "uploading" | "saving" | null>(null);
   const [expanded, setExpanded]     = useState(true);
   const [downloading, setDownloading] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -99,9 +100,11 @@ export function AppDocumentsSection({ initialDocuments }: Props) {
 
   async function compressImage(file: File): Promise<File> {
     if (!file.type.startsWith("image/")) return file;
+    // Não comprimir se já for pequeno (< 800 KB)
+    if (file.size < 800 * 1024) return file;
     return new Promise((resolve) => {
-      // Timeout de segurança — canvas.toBlob() nunca chama o callback em alguns WebViews
-      const bail = setTimeout(() => resolve(file), 8000);
+      // 15s de timeout — canvas.toBlob() pode nunca chamar callback em alguns WebViews Android
+      const bail = setTimeout(() => resolve(file), 15000);
 
       const img = new Image();
       const url = URL.createObjectURL(file);
@@ -120,7 +123,7 @@ export function AppDocumentsSection({ initialDocuments }: Props) {
         canvas.toBlob(
           (blob) => {
             clearTimeout(bail);
-            if (!blob) { resolve(file); return; }
+            if (!blob || blob.size >= file.size) { resolve(file); return; }
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             resolve(new (File as any)([blob], file.name.replace(/\.[^.]+$/, ".jpg"), { type: "image/jpeg" }) as File);
           },
@@ -139,22 +142,26 @@ export function AppDocumentsSection({ initialDocuments }: Props) {
 
     setMessage(null);
     startUpload(async () => {
-      // Timeout global de 60s — garante que uploading nunca fica preso para sempre
+      // Timeout global de 90s — garante que uploading nunca fica preso para sempre
       let timedOut = false;
       const globalTimeout = setTimeout(() => {
         timedOut = true;
+        setUploadStep(null);
         setMessage({ type: "error", text: "O envio demorou demasiado. Verifica a ligação e tenta novamente." });
-      }, 60_000);
+      }, 90_000);
 
       try {
-        // 1. Comprimir imagem no dispositivo (máx 8s, senão usa original)
+        // 1. Comprimir imagem no dispositivo (máx 15s, senão usa original)
+        setUploadStep("compressing");
         const compressed = await compressImage(file);
         if (timedOut) return;
 
         // 2. Pedir URL assinada ao servidor
+        setUploadStep("uploading");
         const urlRes = await getDamageReportUploadUrl(compressed.name);
         if (timedOut) return;
         if (!urlRes.ok) {
+          setUploadStep(null);
           setMessage({ type: "error", text: urlRes.error });
           return;
         }
@@ -166,11 +173,13 @@ export function AppDocumentsSection({ initialDocuments }: Props) {
           .uploadToSignedUrl(urlRes.path, urlRes.token, compressed, { contentType: compressed.type });
         if (timedOut) return;
         if (uploadError) {
+          setUploadStep(null);
           setMessage({ type: "error", text: `Erro ao enviar ficheiro: ${uploadError.message}` });
           return;
         }
 
         // 4. Guardar registo na BD e notificar gestores
+        setUploadStep("saving");
         const saveRes = await saveDamageReportRecord({
           path:      urlRes.path,
           publicUrl: urlRes.publicUrl,
@@ -183,6 +192,7 @@ export function AppDocumentsSection({ initialDocuments }: Props) {
 
         if (saveRes.ok) {
           clearTimeout(globalTimeout);
+          setUploadStep(null);
           setMessage({ type: "success", text: "Relatório enviado. O gestor foi notificado." });
           setNotes("");
           setShowDamageForm(false);
@@ -207,10 +217,12 @@ export function AppDocumentsSection({ initialDocuments }: Props) {
         }
       } catch (err) {
         if (!timedOut) {
+          setUploadStep(null);
           setMessage({ type: "error", text: err instanceof Error ? err.message : "Erro inesperado. Tenta novamente." });
         }
       } finally {
         clearTimeout(globalTimeout);
+        setUploadStep(null);
       }
     });
   }
@@ -392,7 +404,13 @@ export function AppDocumentsSection({ initialDocuments }: Props) {
                 className="flex items-center justify-center gap-2 w-full py-3 rounded-xl bg-red-500 text-white text-sm font-semibold active:opacity-80 disabled:opacity-50 transition-opacity"
               >
                 {uploading
-                  ? <><Loader2 className="w-4 h-4 animate-spin" /> A enviar...</>
+                  ? <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      {uploadStep === "compressing" && "A comprimir imagem..."}
+                      {uploadStep === "uploading"   && "A enviar ficheiro..."}
+                      {uploadStep === "saving"      && "A guardar..."}
+                      {!uploadStep                  && "A enviar..."}
+                    </>
                   : <><Camera className="w-4 h-4" /> Tirar foto ou escolher ficheiro</>
                 }
               </button>

@@ -65,7 +65,7 @@ CREATE POLICY "colaboradoras upload avarias storage"
     AND (storage.foldername(name))[2] = auth.uid()::text
     AND EXISTS (
       SELECT 1 FROM profiles
-      WHERE id = auth.uid() AND role = 'colaborador'
+      WHERE id = auth.uid() AND role = 'colaboradora'
     )
   );
 

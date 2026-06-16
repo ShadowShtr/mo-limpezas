@@ -47,7 +47,7 @@ Lê este ficheiro no início de CADA sessão antes de fazer qualquer coisa.
 
 ## ⚡ PRÓXIMA TASK A EXECUTAR
 
-**Próxima task:** Aplicar migration 021 no Supabase (via Management API ou `npx supabase db query --linked`). Criar bucket `collaborator-documents` no Supabase Storage (50MB limite, PDF+imagem). Depois: verificar domínio `molimpezas.pt` no Resend.
+**Próxima task:** Verificar domínio `molimpezas.pt` no Resend (adicionar registos DNS no registar do domínio → clicar Restart no Resend → atualizar `RESEND_FROM_EMAIL` para `Mo Limpezas <noreply@molimpezas.pt>`).
 
 ---
 
@@ -65,20 +65,17 @@ Lê este ficheiro no início de CADA sessão antes de fazer qualquer coisa.
 - Sidebar, header, mobile-header, app-header, bottom-nav: `backdrop-filter blur(14px)` + `bg rgba(255,255,255,0.82/0.92)`
 - KPI cards dashboard + cards perfil app com glass effect
 
-### Sistema de Documentos (✅ FEITO — MIGRATION PENDENTE)
-- **Migration 021** — `supabase/migrations/021_documents_enhanced.sql` — AINDA NÃO APLICADA
-  - Adiciona: `visible_to_collaborator`, `notes`, `expires_at`, `archived_at`, `uploaded_by_role`
+### Sistema de Documentos (✅ FEITO E ATIVO)
+- **Migration 021** — ✅ APLICADA (2026-06-16) via `npx supabase db query --linked`
+  - Colunas: `visible_to_collaborator`, `notes`, `expires_at`, `archived_at`, `uploaded_by_role`
   - Categoria `avaria` adicionada
   - Funções SQL: `get_documents_to_archive()`, `archive_expired_documents()`
-- **Bucket Storage**: `collaborator-documents` — CRIAR NO SUPABASE (50MB, PDF+imagem)
-- **Admin**: `documento-section.tsx` atualizado — upload com visibilidade, notas, categoria avaria, aviso de expiração
-- **App mobile**: `/app/perfil` — secção de documentos colapsável: folhas de salário + reportar avaria com câmara
-- **Cron** `/api/cron/archive-documents` — dia 1 de cada mês às 02:00 — arquiva manifesto JSON organizado por funcionária → apaga do storage
-
-### ⚠️ PENDENTE PARA FUNCIONAR
-1. Aplicar migration 021 no Supabase
-2. Criar bucket `collaborator-documents` no Storage (Supabase Dashboard → Storage → New Bucket)
-3. Limites por empresa: ~150 MB/3meses (35 func × 5 docs × 1MB) — Free tier OK
+- **Migration 022** — ✅ APLICADA (2026-06-16) — bucket `collaborator-documents` criado + políticas storage
+  - Bug corrigido: RLS policy usava `role = 'colaborador'` → corrigido para `role = 'colaboradora'`
+- **Admin**: `documento-section.tsx` — upload com visibilidade, notas, categoria avaria, aviso de expiração
+- **App mobile**: `/app/perfil` — upload direto celular→Supabase via signed URL; compressão 1600px JPEG 82%
+- **Cron** `/api/cron/archive-documents` — dia 1 de cada mês às 02:00 — arquiva manifesto JSON → apaga do storage
+- **Melhorias de UX (2026-06-16):** timeout compressão 15s (era 8s), timeout global 90s (era 60s), estados progressivos no botão ("A comprimir...", "A enviar...", "A guardar...")
 
 ---
 
