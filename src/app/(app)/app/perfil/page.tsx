@@ -101,7 +101,7 @@ export default async function PerfilPage() {
               <span className="text-[10px] font-semibold text-[var(--color-info)] uppercase tracking-wide">Férias</span>
             </div>
             <p className="text-2xl font-bold text-[var(--color-text-main)]">{profile.vacation_balance ?? 22}</p>
-            <p className="text-[10px] text-[var(--color-text-muted)]">dias por ano</p>
+            <p className="text-[10px] text-[var(--color-text-muted)]">dias disponíveis</p>
           </div>
         </div>
       </div>

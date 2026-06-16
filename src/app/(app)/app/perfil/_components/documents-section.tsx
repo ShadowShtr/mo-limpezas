@@ -103,29 +103,33 @@ export function AppDocumentsSection({ initialDocuments }: Props) {
 
     setMessage(null);
     startUpload(async () => {
-      const res = await uploadDamageReport(fd);
-      if (res.ok) {
-        setMessage({ type: "success", text: "Relatório enviado com sucesso. O gestor foi notificado." });
-        setNotes("");
-        setShowDamageForm(false);
-        if (fileRef.current) fileRef.current.value = "";
-        setDocs((prev) => [{
-          id:                     res.id ?? crypto.randomUUID(),
-          file_name:              file.name,
-          file_url:               "",
-          file_size:              file.size,
-          mime_type:              file.type,
-          category:               "avaria",
-          notes:                  notes || null,
-          visible_to_collaborator: true,
-          uploaded_by_role:       "colaboradora",
-          expires_at:             null,
-          archived_at:            null,
-          created_at:             new Date().toISOString(),
-          uploaded_by_name:       null,
-        }, ...prev]);
-      } else {
-        setMessage({ type: "error", text: res.error ?? "Erro ao enviar. Tente novamente." });
+      try {
+        const res = await uploadDamageReport(fd);
+        if (res.ok) {
+          setMessage({ type: "success", text: "Relatório enviado com sucesso. O gestor foi notificado." });
+          setNotes("");
+          setShowDamageForm(false);
+          if (fileRef.current) fileRef.current.value = "";
+          setDocs((prev) => [{
+            id:                     res.id ?? crypto.randomUUID(),
+            file_name:              file.name,
+            file_url:               "",
+            file_size:              file.size,
+            mime_type:              file.type,
+            category:               "avaria",
+            notes:                  notes || null,
+            visible_to_collaborator: true,
+            uploaded_by_role:       "colaboradora",
+            expires_at:             null,
+            archived_at:            null,
+            created_at:             new Date().toISOString(),
+            uploaded_by_name:       null,
+          }, ...prev]);
+        } else {
+          setMessage({ type: "error", text: res.error ?? "Erro ao enviar. Tente novamente." });
+        }
+      } catch {
+        setMessage({ type: "error", text: "Erro inesperado ao enviar. Tente novamente." });
       }
     });
   }

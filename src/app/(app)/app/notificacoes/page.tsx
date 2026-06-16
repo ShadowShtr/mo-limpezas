@@ -1,8 +1,14 @@
-import { getMyNotifications } from "@/app/actions/notifications";
+import { getMyNotifications, type AppNotification } from "@/app/actions/notifications";
 import { NotificationsList } from "./_components/notifications-list";
 
 export default async function NotificacoesPage() {
-  const notifications = await getMyNotifications();
+  let notifications: AppNotification[] = [];
+
+  try {
+    notifications = await getMyNotifications();
+  } catch {
+    // Continua sem notificações — não crasha a página
+  }
 
   return (
     <div className="flex flex-col gap-4 pb-2">

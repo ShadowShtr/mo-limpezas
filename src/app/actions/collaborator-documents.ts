@@ -30,14 +30,30 @@ export interface CollaboratorDocument {
 const BUCKET = "collaborator-documents";
 const RETENTION_MONTHS = 3;
 
+// Tipos MIME aceites — inclui HEIC/HEIF (câmara iOS) e formatos comuns
+const ALLOWED_MIME_TYPES = [
+  "application/pdf",
+  "image/jpeg", "image/jpg",
+  "image/png",
+  "image/webp",
+  "image/heic", "image/heif",
+  "image/gif",
+  "image/bmp",
+];
+
 async function ensureBucket(admin: ReturnType<typeof createAdminClient>) {
+  const bucketOptions = {
+    public: false,
+    fileSizeLimit: 52428800,
+    allowedMimeTypes: ALLOWED_MIME_TYPES,
+  };
+
   const { error } = await admin.storage.getBucket(BUCKET);
   if (error) {
-    await admin.storage.createBucket(BUCKET, {
-      public: false,
-      fileSizeLimit: 52428800,
-      allowedMimeTypes: ["application/pdf", "image/jpeg", "image/png", "image/webp"],
-    });
+    await admin.storage.createBucket(BUCKET, bucketOptions);
+  } else {
+    // Atualizar bucket existente para incluir HEIC/HEIF do iOS
+    await admin.storage.updateBucket(BUCKET, bucketOptions);
   }
 }
 
@@ -235,63 +251,67 @@ export async function uploadDamageReport(formData: FormData): Promise<{
   id?: string;
   error?: string;
 }> {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { ok: false, error: "Não autenticado" };
+  try {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return { ok: false, error: "Não autenticado" };
 
-  const admin = createAdminClient();
-  const { data: profile } = await admin
-    .from("profiles")
-    .select("company_id")
-    .eq("id", user.id)
-    .single();
-  if (!profile) return { ok: false, error: "Perfil não encontrado" };
+    const admin = createAdminClient();
+    const { data: profile } = await admin
+      .from("profiles")
+      .select("company_id")
+      .eq("id", user.id)
+      .single();
+    if (!profile) return { ok: false, error: "Perfil não encontrado" };
 
-  const file  = formData.get("file") as File | null;
-  const notes = (formData.get("notes") as string) || null;
+    const file  = formData.get("file") as File | null;
+    const notes = (formData.get("notes") as string) || null;
 
-  if (!file) return { ok: false, error: "Ficheiro obrigatório" };
-  if (file.size > 50 * 1024 * 1024) return { ok: false, error: "Ficheiro demasiado grande (máx 50 MB)" };
+    if (!file) return { ok: false, error: "Ficheiro obrigatório" };
+    if (file.size > 50 * 1024 * 1024) return { ok: false, error: "Ficheiro demasiado grande (máx 50 MB)" };
 
-  const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
-  const path = `${profile.company_id}/${user.id}/${Date.now()}-${safeName}`;
+    const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+    const path = `${profile.company_id}/${user.id}/${Date.now()}-${safeName}`;
 
-  await ensureBucket(admin);
+    await ensureBucket(admin);
 
-  const { error: uploadError } = await admin.storage
-    .from(BUCKET)
-    .upload(path, file, { contentType: file.type, upsert: false });
+    const { error: uploadError } = await admin.storage
+      .from(BUCKET)
+      .upload(path, file, { contentType: file.type, upsert: false });
 
-  if (uploadError) return { ok: false, error: uploadError.message };
+    if (uploadError) return { ok: false, error: uploadError.message };
 
-  const { data: urlData } = admin.storage.from(BUCKET).getPublicUrl(path);
+    const { data: urlData } = admin.storage.from(BUCKET).getPublicUrl(path);
 
-  const expiresAt = new Date();
-  expiresAt.setMonth(expiresAt.getMonth() + RETENTION_MONTHS);
+    const expiresAt = new Date();
+    expiresAt.setMonth(expiresAt.getMonth() + RETENTION_MONTHS);
 
-  const { data, error: dbError } = await admin
-    .from("collaborator_documents")
-    .insert({
-      company_id:              profile.company_id,
-      collaborator_id:         user.id,
-      file_name:               file.name,
-      file_url:                urlData.publicUrl,
-      file_size:               file.size,
-      mime_type:               file.type,
-      category:                "avaria" as const,
-      notes,
-      visible_to_collaborator: true,
-      uploaded_by:             user.id,
-      uploaded_by_role:        "colaboradora" as const,
-      expires_at:              expiresAt.toISOString(),
-    })
-    .select("id")
-    .single();
+    const { data, error: dbError } = await admin
+      .from("collaborator_documents")
+      .insert({
+        company_id:              profile.company_id,
+        collaborator_id:         user.id,
+        file_name:               file.name,
+        file_url:                urlData.publicUrl,
+        file_size:               file.size,
+        mime_type:               file.type,
+        category:                "avaria" as const,
+        notes,
+        visible_to_collaborator: true,
+        uploaded_by:             user.id,
+        uploaded_by_role:        "colaboradora" as const,
+        expires_at:              expiresAt.toISOString(),
+      })
+      .select("id")
+      .single();
 
-  if (dbError) return { ok: false, error: dbError.message };
+    if (dbError) return { ok: false, error: dbError.message };
 
-  revalidatePath("/app/perfil");
-  return { ok: true, id: data.id };
+    revalidatePath("/app/perfil");
+    return { ok: true, id: data.id };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Erro ao enviar. Tente novamente." };
+  }
 }
 
 // ─── Backup ZIP (gestor) ─────────────────────────────────────────────────────
