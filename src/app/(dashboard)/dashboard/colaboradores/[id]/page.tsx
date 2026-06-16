@@ -1,4 +1,4 @@
-﻿import { notFound } from "next/navigation";
+import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Header } from "@/components/layout/header";
@@ -21,19 +21,13 @@ export default async function ColaboradorDetailPage({ params }: Props) {
   const supabase = await createClient();
   const admin = createAdminClient();
 
-  const companyRes = await supabase
-    .from("profiles")
-    .select("company_id")
-    .eq("id", (await supabase.auth.getUser()).data.user!.id)
-    .single();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) notFound();
 
-  const [profileRes, timesheetsRes, docsRes] = await Promise.all([
-    supabase
-      .from("profiles")
-      .select("*")
-      .eq("id", id)
-      .single(),
-    supabase
+  const [companyRes, profileRes, timesheetsRes, docsRes, rawAbsencesRes] = await Promise.all([
+    admin.from("profiles").select("company_id").eq("id", user.id).single(),
+    admin.from("profiles").select("*").eq("id", id).single(),
+    admin
       .from("timesheets")
       .select("id, clock_in_at, clock_out_at, duration_minutes, location_warning, service_id")
       .eq("collaborator_id", id)
@@ -41,6 +35,12 @@ export default async function ColaboradorDetailPage({ params }: Props) {
       .order("clock_in_at", { ascending: false })
       .limit(30),
     getCollaboratorDocuments(id),
+    admin
+      .from("absences")
+      .select("id, absence_type, starts_on, ends_on, notes, replaced_by")
+      .eq("collaborator_id", id)
+      .order("starts_on", { ascending: false })
+      .limit(20),
   ]);
 
   if (!profileRes.data) notFound();
@@ -48,18 +48,9 @@ export default async function ColaboradorDetailPage({ params }: Props) {
   const profile = profileRes.data;
   const timesheets = timesheetsRes.data ?? [];
   const documents = docsRes.ok ? docsRes.documents : [];
-  const company = companyRes;
+  const rawAbsences = rawAbsencesRes.data ?? [];
 
-  // Faltas do colaborador (últimas + futuras)
-  const { data: rawAbsences } = await admin
-    .from("absences")
-    .select("id, absence_type, starts_on, ends_on, notes, replaced_by")
-    .eq("collaborator_id", id)
-    .order("starts_on", { ascending: false })
-    .limit(20);
-
-  // Resolver nomes de substitutos
-  const replacedByIds = [...new Set((rawAbsences ?? []).map((a) => a.replaced_by).filter((id): id is string => !!id))];
+  const replacedByIds = [...new Set(rawAbsences.map((a) => a.replaced_by).filter((rid): rid is string => !!rid))];
   let substituteNames: Record<string, string> = {};
   if (replacedByIds.length > 0) {
     const { data: subs } = await admin
@@ -69,7 +60,7 @@ export default async function ColaboradorDetailPage({ params }: Props) {
     substituteNames = Object.fromEntries((subs ?? []).map((s) => [s.id, s.full_name]));
   }
 
-  const absences = (rawAbsences ?? []).map((a) => ({
+  const absences = rawAbsences.map((a) => ({
     id: a.id,
     absence_type: a.absence_type,
     starts_on: a.starts_on,
@@ -103,7 +94,7 @@ export default async function ColaboradorDetailPage({ params }: Props) {
         subtitle={`${profile.role} · ${inviteStatus}`}
         actions={
           <ColaboradorSheet
-            companyId={company.data?.company_id ?? ""}
+            companyId={companyRes.data?.company_id ?? ""}
             colaborador={profile}
             trigger={
               <button className="flex items-center gap-2 px-3 py-2 rounded-lg border border-[var(--color-border)] text-[var(--color-text-sub)] text-sm font-medium hover:bg-[var(--color-background)] transition-colors">
@@ -242,7 +233,7 @@ export default async function ColaboradorDetailPage({ params }: Props) {
             {/* Documentos */}
             <DocumentsSection
               collaboratorId={id}
-              companyId={company?.data?.company_id ?? ""}
+              companyId={companyRes.data?.company_id ?? ""}
               initialDocuments={documents}
             />
           </div>

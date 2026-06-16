@@ -49,35 +49,27 @@ export async function getCollaboratorDocuments(
   const admin = createAdminClient();
   const { data, error } = await admin
     .from("collaborator_documents")
-    .select("id, file_name, file_url, file_size, mime_type, category, notes, visible_to_collaborator, uploaded_by_role, expires_at, archived_at, created_at, uploaded_by")
+    .select("id, file_name, file_url, file_size, mime_type, category, notes, visible_to_collaborator, uploaded_by_role, expires_at, archived_at, created_at, profiles!uploaded_by(full_name)")
     .eq("collaborator_id", collaboratorId)
     .is("archived_at", null)
     .order("created_at", { ascending: false });
 
   if (error) return { ok: false, error: error.message };
 
-  const rows = data ?? [];
-  const uploaderIds = [...new Set(rows.map((d) => d.uploaded_by).filter(Boolean) as string[])];
-  let names: Record<string, string> = {};
-  if (uploaderIds.length > 0) {
-    const { data: profiles } = await admin.from("profiles").select("id, full_name").in("id", uploaderIds);
-    names = Object.fromEntries((profiles ?? []).map((p) => [p.id, p.full_name]));
-  }
-
-  const documents: CollaboratorDocument[] = rows.map((d) => ({
+  const documents: CollaboratorDocument[] = (data ?? []).map((d) => ({
     id: d.id,
     file_name: d.file_name,
     file_url: d.file_url,
     file_size: d.file_size,
     mime_type: d.mime_type,
-    category: d.category,
+    category: d.category as DocumentCategory,
     notes: d.notes,
     visible_to_collaborator: d.visible_to_collaborator,
-    uploaded_by_role: d.uploaded_by_role,
+    uploaded_by_role: d.uploaded_by_role as "gestor" | "colaboradora",
     expires_at: d.expires_at,
     archived_at: d.archived_at,
     created_at: d.created_at,
-    uploaded_by_name: d.uploaded_by ? (names[d.uploaded_by] ?? null) : null,
+    uploaded_by_name: (d.profiles as { full_name?: string } | null)?.full_name ?? null,
   }));
 
   return { ok: true, documents };
