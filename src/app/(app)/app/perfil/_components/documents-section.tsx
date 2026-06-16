@@ -111,7 +111,8 @@ export function AppDocumentsSection({ initialDocuments }: Props) {
         canvas.toBlob(
           (blob) => {
             if (!blob) { resolve(file); return; }
-            resolve(new File([blob], file.name.replace(/\.[^.]+$/, ".jpg"), { type: "image/jpeg" }));
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            resolve(new (File as any)([blob], file.name.replace(/\.[^.]+$/, ".jpg"), { type: "image/jpeg" }) as File);
           },
           "image/jpeg",
           0.82,

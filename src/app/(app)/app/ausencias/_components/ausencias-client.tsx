@@ -71,7 +71,7 @@ export function AusenciasClient({ absences }: Props) {
       {/* Faltas */}
       <div>
         <h2 className="text-xs font-semibold text-[var(--color-text-muted)] uppercase tracking-wide mb-2 flex items-center gap-1.5">
-          <Stethoscope className="w-3.5 h-3.5" /> Faltas registadas
+          <Stethoscope className="w-3.5 h-3.5" /> Minhas faltas
         </h2>
         {absences.length === 0 ? (
           <p className="text-sm text-[var(--color-text-muted)] bg-white rounded-2xl border border-[var(--color-border)] p-4 text-center">
