@@ -144,13 +144,13 @@ export function AppDocumentsSection({ initialDocuments }: Props) {
           return;
         }
 
-        // 3. Upload direto celular → Supabase (sem passar pelo servidor Next.js)
+        // 3. Upload direto celular → Supabase (o token na URL é a autorização)
         const supabase = createClient();
         const { error: uploadError } = await supabase.storage
           .from(BUCKET)
           .uploadToSignedUrl(urlRes.path, urlRes.token, compressed, { contentType: compressed.type });
         if (uploadError) {
-          setMessage({ type: "error", text: "Erro ao enviar ficheiro. Tente novamente." });
+          setMessage({ type: "error", text: `Erro ao enviar: ${uploadError.message}` });
           return;
         }
 
