@@ -152,7 +152,7 @@ export async function getSubstituteSuggestions(
 
   // Uma query para contar serviços de todas as equipas em jogo
   const allTeamIds = [...new Set((membershipsRes.data ?? []).map((m) => m.team_id))];
-  let servicesByTeam = new Map<string, number>();
+  const servicesByTeam = new Map<string, number>();
   if (allTeamIds.length > 0) {
     const { data: services } = await admin
       .from("services")

@@ -10,7 +10,7 @@ import MapGL, {
 } from "react-map-gl/maplibre";
 import { format, parseISO } from "date-fns";
 import { pt } from "date-fns/locale";
-import { MapPin, Navigation, X, Filter, Clock } from "lucide-react";
+import { MapPin, X, Filter, Clock } from "lucide-react";
 import { getMapServices, type MapClockPoint, type MapService, type MapTeam } from "@/app/actions/map";
 import { createClient } from "@/lib/supabase/client";
 

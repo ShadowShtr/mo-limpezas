@@ -22,7 +22,8 @@ export default async function ClientDetailPage({
     .eq("id", user.id)
     .single();
 
-  if (!me || me.role === "colaborador") redirect("/dashboard");
+  if (!me) redirect("/login");
+  if (me.role === "colaborador") redirect("/app");
 
   const [{ data: client }, { data: notifications }] = await Promise.all([
     admin

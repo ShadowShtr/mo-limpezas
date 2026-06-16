@@ -16,7 +16,6 @@ interface Props {
   onClose: () => void;
   onCreated: () => void;
   companyId: string;
-  userId: string;
   date: Date;
   initialStartTime: string; // "HH:MM"
   initialTeamId: string;
@@ -49,7 +48,7 @@ function calcDuration(start: string, end: string): number {
 
 export function ServiceCreateSheet({
   open, onClose, onCreated,
-  companyId, userId,
+  companyId,
   date, initialStartTime, initialTeamId,
   clients, locations, teams,
 }: Props) {

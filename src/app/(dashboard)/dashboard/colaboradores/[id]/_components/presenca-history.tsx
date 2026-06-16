@@ -84,6 +84,13 @@ function EditRow({ t, onDone, onCancel }: EditRowProps) {
           : "—"}
       </td>
       <td className="px-4 py-2">
+        <input
+          type="text"
+          value={notes}
+          onChange={(e) => setNotes(e.target.value)}
+          placeholder="Nota da correção"
+          className={`${inputCls} mb-1 w-full`}
+        />
         <div className="flex items-center gap-1">
           <button
             onClick={handleSave}

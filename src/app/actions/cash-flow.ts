@@ -2,6 +2,7 @@
 
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
+import { isValidCashFlowAmount } from "@/lib/cash-flow-integrity";
 import { revalidatePath } from "next/cache";
 
 export type CashFlowType = "entrada" | "saida";
@@ -76,12 +77,25 @@ export async function createCashFlowEntry(
 ): Promise<{ ok: boolean; error?: string }> {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { ok: false, error: "NÃ£o autenticado." };
 
   const admin = createAdminClient();
+  const { data: profile } = await admin
+    .from("profiles")
+    .select("company_id, role")
+    .eq("id", user.id)
+    .single();
+  if (!profile || !["admin", "gestor"].includes(profile.role) || profile.company_id !== companyId) {
+    return { ok: false, error: "Sem permissÃ£o." };
+  }
+  if (!isValidCashFlowAmount(data.amount) || !data.description.trim()) {
+    return { ok: false, error: "Dados invÃ¡lidos." };
+  }
+
   const { error } = await admin.from("cash_flow_entries").insert({
-    company_id: companyId,
+    company_id: profile.company_id,
     ...data,
-    created_by: user?.id ?? null,
+    created_by: user.id,
   });
 
   if (error) return { ok: false, error: error.message };
@@ -106,6 +120,13 @@ export async function updateCashFlowEntry(
     .single();
   if (!profile || !["admin", "gestor"].includes(profile.role)) {
     return { ok: false, error: "Sem permissão." };
+  }
+
+  if (data.amount !== undefined && !isValidCashFlowAmount(data.amount)) {
+    return { ok: false, error: "Valor invalido." };
+  }
+  if (data.description !== undefined && !data.description.trim()) {
+    return { ok: false, error: "Descricao invalida." };
   }
 
   const { error } = await admin

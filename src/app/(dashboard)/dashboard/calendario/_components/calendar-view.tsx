@@ -50,7 +50,6 @@ interface CalendarViewProps {
   weekStartISO: string;
   selectedDateISO: string;
   companyId: string;
-  userId: string;
   clients: Client[];
   locations: Loc[];
   isDemo?: boolean;
@@ -148,7 +147,7 @@ function GridLines({
 
 export function CalendarView({
   services, teams, weekStartISO, selectedDateISO,
-  companyId, userId, clients, locations,
+  companyId, clients, locations,
   isDemo = false,
 }: CalendarViewProps) {
   const router    = useRouter();
@@ -181,6 +180,7 @@ export function CalendarView({
   const [conflictMsg,   setConflictMsg]   = useState<string | null>(null);
   const [pdfLoading,    setPdfLoading]    = useState(false);
 
+  /* eslint-disable react-hooks/set-state-in-effect */
   // Inicializar today e currentTop no cliente (evita hydration mismatch)
   useEffect(() => {
     setToday(new Date());
@@ -195,6 +195,7 @@ export function CalendarView({
     setCurrentTop(computeTimeTop(d));
     setToday(new Date());
   }, [selectedDateISO]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   // Actualizar linha de hora actual a cada minuto
   useEffect(() => {
@@ -698,7 +699,6 @@ export function CalendarView({
         onClose={() => setCreateSheet(null)}
         onCreated={handleChanged}
         companyId={companyId}
-        userId={userId}
         date={createSheet?.date ?? today ?? new Date()}
         initialStartTime={createSheet?.startTime ?? "09:00"}
         initialTeamId={createSheet?.teamId ?? ""}

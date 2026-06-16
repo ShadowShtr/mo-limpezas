@@ -21,9 +21,9 @@ export default async function DashboardPage() {
   const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate()).toISOString();
   const todayEnd   = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 23, 59, 59).toISOString();
 
-  const thirtyDaysFromNow = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+  const thirtyDaysFromNow = new Date(today.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString();
 
-  const [servicesRes, teamsRes, expiringDocsRes] = await Promise.all([
+  const [servicesRes, expiringDocsRes] = await Promise.all([
     supabase
       .from("services_full")
       .select("*")
@@ -31,10 +31,6 @@ export default async function DashboardPage() {
       .gte("scheduled_start", todayStart)
       .lte("scheduled_start", todayEnd)
       .order("scheduled_start"),
-    supabase
-      .from("teams_with_members")
-      .select("id, name, color")
-      .eq("company_id", profile.company_id),
     admin
       .from("collaborator_documents")
       .select("id", { count: "exact", head: true })
@@ -45,7 +41,6 @@ export default async function DashboardPage() {
   ]);
 
   const services     = servicesRes.data ?? [];
-  const teams        = teamsRes.data ?? [];
   const expiringDocs = expiringDocsRes.count ?? 0;
 
   const kpis = {

@@ -14,7 +14,7 @@ function redirectWithCookies(url: URL, supabaseResponse: NextResponse) {
 }
 
 export async function proxy(request: NextRequest) {
-  const { supabaseResponse, user } = await updateSession(request);
+  const { supabaseResponse, user, profileRole } = await updateSession(request);
   const pathname = request.nextUrl.pathname;
 
   const isPublic = PUBLIC_ROUTES.some((r) => pathname.startsWith(r));
@@ -28,14 +28,14 @@ export async function proxy(request: NextRequest) {
   }
 
   if (user && isPublic) {
-    const role = user.user_metadata?.role as string | undefined;
+    const role = profileRole ?? (user.user_metadata?.role as string | undefined);
     const url = request.nextUrl.clone();
     url.pathname = role === "colaborador" ? "/app" : "/dashboard";
     return redirectWithCookies(url, supabaseResponse);
   }
 
   if (user && isManagerRoute) {
-    const role = user.user_metadata?.role as string | undefined;
+    const role = profileRole ?? (user.user_metadata?.role as string | undefined);
     if (role === "colaborador") {
       const url = request.nextUrl.clone();
       url.pathname = "/app";

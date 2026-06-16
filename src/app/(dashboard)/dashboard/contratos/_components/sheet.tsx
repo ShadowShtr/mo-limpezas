@@ -45,7 +45,7 @@ function calcOccurrences(
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   const start = new Date(startsOn + "T00:00:00");
-  let cursor = start >= today ? new Date(start) : new Date(today);
+  const cursor = start >= today ? new Date(start) : new Date(today);
 
   let iter = 0;
   if (frequency === "daily") {

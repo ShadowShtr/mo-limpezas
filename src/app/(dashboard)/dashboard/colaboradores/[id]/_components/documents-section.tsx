@@ -82,7 +82,6 @@ export function DocumentsSection({ collaboratorId, companyId, initialDocuments }
   const [uploadError, setUploadError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const expiringSoon = documents.filter((d) => isExpiringSoon(d.expires_at));
   const backupWarningDocs = documents.filter((d) => isBackupWarning(d.expires_at));
 
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {

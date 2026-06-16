@@ -48,7 +48,7 @@ function buildTimestamp(dateStr: string, time: string): string | null {
   return `${dateStr}T${time}:00`;
 }
 
-function toCSV(rows: ServiceFull[], edits: EditMap, dateStr: string): string {
+function toCSV(rows: ServiceFull[], edits: EditMap): string {
   const headers = [
     "Referência",
     "Cliente",
@@ -148,7 +148,7 @@ export function CalendarListView({ services, teams, selectedDate, onChanged }: P
   }
 
   function handleExport() {
-    const csv = toCSV(dayServices, edits, dateStr);
+    const csv = toCSV(dayServices, edits);
     const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");

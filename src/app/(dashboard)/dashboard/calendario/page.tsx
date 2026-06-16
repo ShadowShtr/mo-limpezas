@@ -92,7 +92,6 @@ export default async function CalendarioPage({
         weekStartISO={weekStart.toISOString()}
         selectedDateISO={baseDate.toISOString()}
         companyId={companyId}
-        userId={user.id}
         clients={clients ?? []}
         locations={locations ?? []}
         isDemo={isDemo}

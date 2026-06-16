@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import Link from "next/link";
 import {
-  TrendingUp, TrendingDown, Euro, AlertCircle, Loader2,
+  Euro, AlertCircle, Loader2,
   ArrowUpRight, ArrowDownRight, RefreshCw, Receipt, Wallet,
   BarChart2, FileText,
 } from "lucide-react";

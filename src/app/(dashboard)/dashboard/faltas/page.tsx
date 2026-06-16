@@ -66,7 +66,7 @@ export default async function FaltasPage({
     (colaboradores ?? []).map((c) => [c.id, c.full_name]),
   );
 
-  const nowMs = Date.now();
+  const nowMs = now.getTime();
   const absences = (rawAbsences ?? []).map((a) => ({
     id: a.id,
     collaborator_id: a.collaborator_id,
@@ -114,7 +114,7 @@ export default async function FaltasPage({
             <AlertTriangle className="w-4 h-4 shrink-0" />
             <span>
               <strong>{semSubstituto}</strong> falta{semSubstituto !== 1 ? "s" : ""} sem substituto atribuído.
-              Clica em "Sugerir substituto" na tabela para resolver.
+              Clica em &quot;Sugerir substituto&quot; na tabela para resolver.
             </span>
           </div>
         )}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { parseISO, format, differenceInMinutes } from "date-fns";
 import { MapPin, Clock, Euro, FileText, Lock, Users } from "lucide-react";
 import { useDraggable } from "@dnd-kit/core";
@@ -55,24 +55,15 @@ function ServiceTooltip({ service, pos }: { service: ServiceForBlock; pos: Toolt
   const dur   = `${Math.floor(mins / 60)}h${mins % 60 > 0 ? `${mins % 60}min` : ""}`;
   const value = service.manual_value ?? service.calculated_value;
 
-  // Ajustar para não sair do viewport
-  const [style, setStyle] = useState<React.CSSProperties>({
-    left: pos.x + 12,
-    top:  pos.y,
-    opacity: 0,
-  });
-
-  useEffect(() => {
-    const W = window.innerWidth;
-    const H = window.innerHeight;
-    const TW = 280; // largura estimada do tooltip
-    const TH = 220; // altura estimada
-
-    const left = pos.x + TW + 24 > W ? pos.x - TW - 12 : pos.x + 12;
-    const top  = pos.y + TH > H ? Math.max(8, H - TH - 8) : pos.y;
-
-    setStyle({ left, top, opacity: 1 });
-  }, [pos.x, pos.y]);
+  const viewportW = typeof window === "undefined" ? 1024 : window.innerWidth;
+  const viewportH = typeof window === "undefined" ? 768 : window.innerHeight;
+  const tooltipW = 280;
+  const tooltipH = 220;
+  const style: React.CSSProperties = {
+    left: pos.x + tooltipW + 24 > viewportW ? pos.x - tooltipW - 12 : pos.x + 12,
+    top:  pos.y + tooltipH > viewportH ? Math.max(8, viewportH - tooltipH - 8) : pos.y,
+    opacity: 1,
+  };
 
   return (
     <div

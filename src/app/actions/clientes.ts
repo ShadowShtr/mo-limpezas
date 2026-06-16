@@ -1,6 +1,7 @@
 "use server";
 
 import { createAdminClient } from "@/lib/supabase/admin";
+import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 
 export interface ClienteInput {
@@ -14,7 +15,19 @@ export interface ClienteInput {
 }
 
 export async function createCliente(input: ClienteInput) {
+  const supabase = await createClient();
   const admin = createAdminClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { ok: false as const, error: "Nao autenticado." };
+
+  const { data: profile } = await admin
+    .from("profiles")
+    .select("company_id, role")
+    .eq("id", user.id)
+    .single();
+  if (!profile || !["admin", "gestor"].includes(profile.role) || profile.company_id !== input.company_id) {
+    return { ok: false as const, error: "Sem permissao." };
+  }
 
   const { error } = await admin.from("clients").insert({
     name: input.name,
@@ -23,7 +36,7 @@ export async function createCliente(input: ClienteInput) {
     nif: input.nif || null,
     status: input.status,
     vat_exempt: input.vat_exempt ?? false,
-    company_id: input.company_id,
+    company_id: profile.company_id,
   });
 
   if (error) return { ok: false as const, error: error.message };
@@ -33,7 +46,19 @@ export async function createCliente(input: ClienteInput) {
 }
 
 export async function updateCliente(id: string, input: Omit<ClienteInput, "company_id">) {
+  const supabase = await createClient();
   const admin = createAdminClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { ok: false as const, error: "Nao autenticado." };
+
+  const { data: profile } = await admin
+    .from("profiles")
+    .select("company_id, role")
+    .eq("id", user.id)
+    .single();
+  if (!profile || !["admin", "gestor"].includes(profile.role)) {
+    return { ok: false as const, error: "Sem permissao." };
+  }
 
   const { error } = await admin.from("clients").update({
     name: input.name,
@@ -42,7 +67,7 @@ export async function updateCliente(id: string, input: Omit<ClienteInput, "compa
     nif: input.nif || null,
     status: input.status,
     vat_exempt: input.vat_exempt ?? false,
-  }).eq("id", id);
+  }).eq("id", id).eq("company_id", profile.company_id);
 
   if (error) return { ok: false as const, error: error.message };
 

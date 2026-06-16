@@ -189,6 +189,7 @@ export function TeamAllocationModal({
   }
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (open) fetchData();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, selectedDate]);

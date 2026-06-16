@@ -121,7 +121,7 @@ export function ClientNotificationsModal({
     setLoading(false);
   }
 
-  useEffect(() => { if (open) fetchRows(); }, [open, tab, selectedDate]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (open) fetchRows(); }, [open, tab, selectedDate]); // eslint-disable-line react-hooks/exhaustive-deps, react-hooks/set-state-in-effect
 
   // ── Selecção ───────────────────────────────────────────────────────────────
 
@@ -130,7 +130,8 @@ export function ClientNotificationsModal({
   function toggleRow(key: string) {
     setSelected((prev) => {
       const next = new Set(prev);
-      next.has(key) ? next.delete(key) : next.add(key);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
       return next;
     });
   }

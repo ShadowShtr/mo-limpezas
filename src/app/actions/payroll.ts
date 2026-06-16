@@ -3,6 +3,7 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { monthRange, calcCollaboratorPayroll } from "@/lib/payroll-calc";
+import { getMissingCashFlowReferenceIds, isValidCashFlowAmount } from "@/lib/cash-flow-integrity";
 import { revalidatePath } from "next/cache";
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
@@ -44,6 +45,14 @@ export interface PayrollAdjust {
   hourly_rate?:        number;
   meal_allowance_day?: number;
 }
+
+type PayrollProfileJoin = {
+  profiles?: { full_name: string; avatar_url: string | null } | null;
+};
+
+type PayrollPaidProfileJoin = {
+  profiles?: { full_name: string } | null;
+};
 
 // monthRange re-exported from payroll-calc (timezone-safe, uses Date.UTC)
 
@@ -199,8 +208,7 @@ export async function getPayrollRecords(
   if (error) return { ok: false, error: error.message };
 
   const records: PayrollRecord[] = (data ?? []).map((r) => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const profile = (r as any).profiles as { full_name: string; avatar_url: string | null } | null;
+    const profile = (r as unknown as PayrollProfileJoin).profiles ?? null;
     return {
       id: r.id,
       collaborator_id:    r.collaborator_id,
@@ -296,7 +304,6 @@ export async function adjustPayrollRecord(
     (grossSalary + mealAllowance + overtimeBonus + otherAdd - absenceDed - otherDed) * 100,
   ) / 100;
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { error } = await admin
     .from("payroll_records")
     .update({
@@ -313,7 +320,7 @@ export async function adjustPayrollRecord(
       other_deductions:    otherDed,
       net_salary:          netSalary,
       notes:               adjust.notes !== undefined ? adjust.notes : undefined,
-    } as any)
+    })
     .eq("id", id);
 
   if (error) return { ok: false, error: error.message };
@@ -360,8 +367,11 @@ export async function markPayrollPaid(
   const supabase = await createClient();
   const admin    = createAdminClient();
 
+  const uniqueIds = [...new Set(ids)];
+  if (uniqueIds.length === 0) return { ok: true };
+
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { ok: false, error: "Não autenticado." };
+  if (!user) return { ok: false, error: "Nao autenticado." };
 
   const { data: profile } = await admin
     .from("profiles")
@@ -369,43 +379,62 @@ export async function markPayrollPaid(
     .eq("id", user.id)
     .single();
   if (!profile || !["admin", "gestor"].includes(profile.role)) {
-    return { ok: false, error: "Sem permissão." };
+    return { ok: false, error: "Sem permissao." };
   }
 
-  // Buscar dados antes de marcar como pago (para o fluxo de caixa)
   const { data: records } = await admin
     .from("payroll_records")
-    .select("id, company_id, collaborator_id, net_salary, period_year, period_month, profiles(full_name)")
-    .in("id", ids)
+    .select("id, company_id, collaborator_id, net_salary, period_year, period_month, status, profiles(full_name)")
+    .in("id", uniqueIds)
     .eq("company_id", profile.company_id);
 
-  const { error } = await admin
-    .from("payroll_records")
-    .update({ status: "pago", paid_at: new Date().toISOString() })
-    .in("id", ids)
-    .eq("company_id", profile.company_id);
+  const payableRecords = (records ?? []).filter((r) => r.status !== "pago");
+  const payableIds = payableRecords.map((r) => r.id);
 
-  if (error) return { ok: false, error: error.message };
+  if (payableIds.length > 0) {
+    const { error } = await admin
+      .from("payroll_records")
+      .update({ status: "pago", paid_at: new Date().toISOString() })
+      .in("id", payableIds)
+      .eq("company_id", profile.company_id);
 
-  // Auto-registo no fluxo de caixa
-  if (records && records.length > 0) {
+    if (error) return { ok: false, error: error.message };
+  }
+
+  if (payableRecords.length > 0) {
+    const { data: existingRefs } = await admin
+      .from("cash_flow_entries")
+      .select("reference_id")
+      .eq("company_id", profile.company_id)
+      .eq("reference_type", "payroll")
+      .in("reference_id", payableIds);
+
+    const missingIds = new Set(getMissingCashFlowReferenceIds(
+      payableIds,
+      (existingRefs ?? []).map((r) => r.reference_id),
+    ));
     const today = new Date().toISOString().split("T")[0];
-    const cashEntries = records.map((r) => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const name = (r as any).profiles?.full_name ?? "Colaborador";
-      return {
-        company_id: r.company_id,
-        type: "saida" as const,
-        amount: r.net_salary,
-        description: `Salário ${name} — ${r.period_month}/${r.period_year}`,
-        category: "salario" as const,
-        date: today,
-        reference_id: r.id,
-        reference_type: "payroll" as const,
-        status: "confirmado" as const,
-      };
-    });
-    await admin.from("cash_flow_entries").insert(cashEntries);
+    const cashEntries = payableRecords
+      .filter((r) => missingIds.has(r.id) && isValidCashFlowAmount(r.net_salary))
+      .map((r) => {
+        const name = (r as unknown as PayrollPaidProfileJoin).profiles?.full_name ?? "Colaborador";
+        return {
+          company_id: r.company_id,
+          type: "saida" as const,
+          amount: r.net_salary,
+          description: `Salario ${name} - ${r.period_month}/${r.period_year}`,
+          category: "salario" as const,
+          date: today,
+          reference_id: r.id,
+          reference_type: "payroll" as const,
+          status: "confirmado" as const,
+        };
+      });
+
+    if (cashEntries.length > 0) {
+      const { error: cashErr } = await admin.from("cash_flow_entries").insert(cashEntries);
+      if (cashErr) return { ok: false, error: cashErr.message };
+    }
   }
 
   revalidatePath("/dashboard/folha-pagamento");

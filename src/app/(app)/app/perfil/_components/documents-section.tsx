@@ -68,6 +68,7 @@ export function AppDocumentsSection({ initialDocuments }: Props) {
   const [uploadStep, setUploadStep] = useState<"compressing" | "uploading" | "saving" | null>(null);
   const [expanded, setExpanded]     = useState(true);
   const [downloading, setDownloading] = useState<string | null>(null);
+  const [cachedDocIds, setCachedDocIds] = useState<Set<string>>(() => new Set());
   const fileRef = useRef<HTMLInputElement>(null);
 
   // Cache de signed URLs para evitar chamada ao servidor em cada toque
@@ -81,7 +82,7 @@ export function AppDocumentsSection({ initialDocuments }: Props) {
 
     // Usar URL em cache se ainda válida (50 min — signed URL dura 1h)
     const cached = urlCache.current.get(doc.id);
-    if (cached && cached.expiresAt > Date.now()) {
+    if (cached && cached.expiresAt > new Date().getTime()) {
       window.open(cached.url, "_blank", "noopener,noreferrer");
       return;
     }
@@ -91,7 +92,8 @@ export function AppDocumentsSection({ initialDocuments }: Props) {
     setDownloading(null);
 
     if (res.ok) {
-      urlCache.current.set(doc.id, { url: res.url, expiresAt: Date.now() + 50 * 60 * 1000 });
+      urlCache.current.set(doc.id, { url: res.url, expiresAt: new Date().getTime() + 50 * 60 * 1000 });
+      setCachedDocIds((prev) => new Set(prev).add(doc.id));
       window.open(res.url, "_blank", "noopener,noreferrer");
     } else {
       setMessage({ type: "error", text: "Não foi possível abrir o ficheiro. Tente novamente." });
@@ -291,7 +293,7 @@ export function AppDocumentsSection({ initialDocuments }: Props) {
               {salaryDocs.map((doc) => {
                 const days          = daysUntil(doc.expires_at);
                 const isDownloading = downloading === doc.id;
-                const isCached      = urlCache.current.has(doc.id);
+                const isCached      = cachedDocIds.has(doc.id);
                 return (
                   <button
                     key={doc.id}
@@ -337,7 +339,7 @@ export function AppDocumentsSection({ initialDocuments }: Props) {
                 const CatIcon       = CATEGORY_ICONS[doc.category];
                 const colorClass    = CATEGORY_COLORS[doc.category];
                 const isDownloading = downloading === doc.id;
-                const isCached      = urlCache.current.has(doc.id);
+                const isCached      = cachedDocIds.has(doc.id);
                 return (
                   <button
                     key={doc.id}

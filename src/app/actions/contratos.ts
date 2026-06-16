@@ -1,6 +1,7 @@
 "use server";
 
 import { createAdminClient } from "@/lib/supabase/admin";
+import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import type { ScheduleDay } from "@/types/database";
 
@@ -145,7 +146,27 @@ async function generateServicesForContract(
 // ─── Actions ─────────────────────────────────────────────────────────────────
 
 export async function createContrato(input: ContratoInput) {
+  const supabase = await createClient();
   const admin = createAdminClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { ok: false as const, error: "Nao autenticado." };
+
+  const { data: profile } = await admin
+    .from("profiles")
+    .select("company_id, role")
+    .eq("id", user.id)
+    .single();
+  if (!profile || !["admin", "gestor"].includes(profile.role) || profile.company_id !== input.company_id) {
+    return { ok: false as const, error: "Sem permissao." };
+  }
+
+  const { data: location } = await admin
+    .from("locations")
+    .select("id")
+    .eq("id", input.location_id)
+    .eq("company_id", profile.company_id)
+    .single();
+  if (!location) return { ok: false as const, error: "Local invalido." };
 
   const { data: contract, error } = await admin
     .from("contracts")
@@ -160,8 +181,8 @@ export async function createContrato(input: ContratoInput) {
       ends_on: input.ends_on || null,
       status: input.status,
       notes: input.notes || null,
-      company_id: input.company_id,
-      created_by: input.created_by,
+      company_id: profile.company_id,
+      created_by: user.id,
     })
     .select("id, location_id, locations(hourly_rate)")
     .single();
@@ -176,7 +197,7 @@ export async function createContrato(input: ContratoInput) {
     await generateServicesForContract(
       admin,
       contract.id,
-      input.company_id,
+      profile.company_id,
       input.location_id,
       hourlyRate,
       {
@@ -196,7 +217,27 @@ export async function createContrato(input: ContratoInput) {
 }
 
 export async function updateContrato(id: string, input: Omit<ContratoInput, "company_id" | "created_by">) {
+  const supabase = await createClient();
   const admin = createAdminClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { ok: false as const, error: "Nao autenticado." };
+
+  const { data: profile } = await admin
+    .from("profiles")
+    .select("company_id, role")
+    .eq("id", user.id)
+    .single();
+  if (!profile || !["admin", "gestor"].includes(profile.role)) {
+    return { ok: false as const, error: "Sem permissao." };
+  }
+
+  const { data: location } = await admin
+    .from("locations")
+    .select("id")
+    .eq("id", input.location_id)
+    .eq("company_id", profile.company_id)
+    .single();
+  if (!location) return { ok: false as const, error: "Local invalido." };
 
   const { error } = await admin.from("contracts").update({
     location_id: input.location_id,
@@ -209,7 +250,7 @@ export async function updateContrato(id: string, input: Omit<ContratoInput, "com
     ends_on: input.ends_on || null,
     status: input.status,
     notes: input.notes || null,
-  }).eq("id", id);
+  }).eq("id", id).eq("company_id", profile.company_id);
 
   if (error) return { ok: false as const, error: error.message };
 

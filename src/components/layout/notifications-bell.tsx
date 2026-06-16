@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useId } from "react";
 import { Bell, CheckCheck } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { formatDistanceToNow } from "@/lib/utils";
@@ -33,9 +33,9 @@ export function NotificationsBell() {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [unread, setUnread] = useState(0);
   const ref = useRef<HTMLDivElement>(null);
-  const supabase = useRef(createClient()).current;
+  const [supabase] = useState(() => createClient());
   // Nome único por instância para evitar conflito quando dois NotificationsBell montam em simultâneo
-  const channelName = useRef(`notifications-${Math.random().toString(36).slice(2)}`).current;
+  const channelName = `notifications-${useId()}`;
 
   const loadNotifications = useCallback(async () => {
     const { data } = await supabase
@@ -48,7 +48,7 @@ export function NotificationsBell() {
       setNotifications(data);
       setUnread(data.filter((n) => !n.read_at).length);
     }
-  }, []);
+  }, [supabase]);
 
   useEffect(() => {
     const channel = supabase
@@ -63,7 +63,7 @@ export function NotificationsBell() {
     loadNotifications();
 
     return () => { supabase.removeChannel(channel); };
-  }, [loadNotifications]);
+  }, [channelName, loadNotifications, supabase]);
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
