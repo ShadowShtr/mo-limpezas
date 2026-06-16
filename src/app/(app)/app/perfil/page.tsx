@@ -98,7 +98,7 @@ export default async function PerfilPage() {
           <div className="bg-blue-50 rounded-xl p-3">
             <div className="flex items-center gap-1.5 mb-1">
               <CalendarDays className="w-3.5 h-3.5 text-[var(--color-info)]" />
-              <span className="text-[10px] font-semibold text-[var(--color-info)] uppercase tracking-wide">Férias</span>
+              <span className="text-[10px] font-semibold text-[var(--color-info)] uppercase tracking-wide">Faltas</span>
             </div>
             <p className="text-2xl font-bold text-[var(--color-text-main)]">{profile.vacation_balance ?? 22}</p>
             <p className="text-[10px] text-[var(--color-text-muted)]">dias disponíveis</p>

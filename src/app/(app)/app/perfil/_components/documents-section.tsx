@@ -325,37 +325,35 @@ export function AppDocumentsSection({ initialDocuments }: Props) {
                 className="w-full text-sm border border-[var(--color-border)] rounded-xl px-3 py-2 bg-white/70 focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]/30"
               />
 
-              {/* accept="image/*" permite câmara + galeria no iOS e Android */}
+              {/* Sem capture= para mostrar o picker nativo (câmara + galeria) instantaneamente */}
               <input
                 ref={fileRef}
                 type="file"
                 accept="image/*,.pdf"
-                capture="environment"
                 className="hidden"
                 onChange={handleFileChange}
                 disabled={uploading}
               />
 
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  type="button"
-                  onClick={() => { setShowDamageForm(false); setMessage(null); }}
-                  className="py-2.5 rounded-xl border border-[var(--color-border)] text-sm font-medium text-[var(--color-text-sub)] bg-white/50"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="button"
-                  onClick={openFilePicker}
-                  disabled={uploading}
-                  className="flex items-center justify-center gap-2 py-2.5 rounded-xl bg-red-500 text-white text-sm font-medium hover:opacity-90 active:opacity-90 disabled:opacity-50"
-                >
-                  {uploading
-                    ? <><Loader2 className="w-4 h-4 animate-spin" /> A enviar...</>
-                    : <><Camera className="w-4 h-4" /> Fotografar / Escolher</>
-                  }
-                </button>
-              </div>
+              <button
+                type="button"
+                onClick={openFilePicker}
+                disabled={uploading}
+                className="flex items-center justify-center gap-2 w-full py-3 rounded-xl bg-red-500 text-white text-sm font-semibold active:opacity-80 disabled:opacity-50 transition-opacity"
+              >
+                {uploading
+                  ? <><Loader2 className="w-4 h-4 animate-spin" /> A enviar...</>
+                  : <><Camera className="w-4 h-4" /> Tirar foto ou escolher ficheiro</>
+                }
+              </button>
+
+              <button
+                type="button"
+                onClick={() => { setShowDamageForm(false); setMessage(null); }}
+                className="w-full py-2.5 rounded-xl border border-[var(--color-border)] text-sm font-medium text-[var(--color-text-sub)] bg-white/50 active:bg-white/80"
+              >
+                Cancelar
+              </button>
 
               {message && (
                 <p className={`text-xs px-3 py-2 rounded-lg ${message.type === "error" ? "bg-red-50 text-red-600" : "bg-green-50 text-green-600"}`}>
