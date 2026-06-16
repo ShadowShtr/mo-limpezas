@@ -1,9 +1,15 @@
-// Versão atualiza automaticamente a cada deploy via next.config.ts headers
-const CACHE = "mo-limpezas-v2";
-const STATIC = ["/app", "/offline"];
+// Incrementar CACHE força purga do cache antigo em todos os clientes
+const CACHE = "mo-limpezas-v3";
+
+// Apenas assets estáticos são guardados — HTML é sempre da rede
+const PRECACHE = ["/offline"];
 
 self.addEventListener("install", (e) => {
-  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(STATIC)).catch(() => {}));
+  e.waitUntil(
+    caches.open(CACHE)
+      .then((c) => c.addAll(PRECACHE))
+      .catch(() => {})
+  );
   self.skipWaiting();
 });
 
@@ -16,12 +22,17 @@ self.addEventListener("activate", (e) => {
   self.clients.claim();
 });
 
+// Quando o SW actualiza, força reload em todos os clientes abertos
+self.addEventListener("message", (e) => {
+  if (e.data === "SKIP_WAITING") self.skipWaiting();
+});
+
 self.addEventListener("fetch", (e) => {
   if (e.request.method !== "GET") return;
 
   const url = new URL(e.request.url);
 
-  // Rede sempre para API e autenticação — nunca cachear
+  // API e autenticação — sempre rede, nunca cachear
   if (url.pathname.startsWith("/api/") || url.pathname.startsWith("/auth/")) {
     e.respondWith(
       fetch(e.request).catch(
@@ -34,7 +45,7 @@ self.addEventListener("fetch", (e) => {
     return;
   }
 
-  // Cache-first para assets estáticos — só cachear respostas 2xx
+  // Assets estáticos — cache-first (JS, CSS, imagens, fonts)
   if (/\.(js|css|png|jpg|jpeg|svg|ico|woff2?)$/.test(url.pathname)) {
     e.respondWith(
       caches.match(e.request).then((hit) => {
@@ -51,17 +62,12 @@ self.addEventListener("fetch", (e) => {
     return;
   }
 
-  // Network-first para páginas — só cachear respostas 2xx
+  // Páginas HTML — sempre da rede, NUNCA guardar em cache
+  // Fallback para /offline se sem ligação
   e.respondWith(
-    fetch(e.request)
-      .then((res) => {
-        if (res.ok) {
-          const clone = res.clone();
-          caches.open(CACHE).then((c) => c.put(e.request, clone));
-        }
-        return res;
-      })
-      .catch(() => caches.match(e.request).then((hit) => hit || caches.match("/app")))
+    fetch(e.request).catch(() =>
+      caches.match("/offline").then((hit) => hit || new Response("Sem ligação", { status: 503 }))
+    )
   );
 });
 

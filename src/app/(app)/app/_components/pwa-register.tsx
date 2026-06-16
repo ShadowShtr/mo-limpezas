@@ -13,6 +13,11 @@ export function PwaRegister() {
     navigator.serviceWorker
       .register("/sw.js", { scope: "/" })
       .then(async (reg) => {
+        // Quando o SW actualiza, recarrega a página para mostrar conteúdo novo
+        navigator.serviceWorker.addEventListener("controllerchange", () => {
+          window.location.reload();
+        });
+
         const publicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
         if (!publicKey || !("PushManager" in window)) return;
 
