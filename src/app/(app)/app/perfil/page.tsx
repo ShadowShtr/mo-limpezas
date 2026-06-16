@@ -1,47 +1,49 @@
 import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { Phone, Clock, CalendarDays, User, Download } from "lucide-react";
+import { Phone, Clock, AlertTriangle, User, Download } from "lucide-react";
 import { SignOutButton } from "./_components/sign-out-button";
 import { AppDocumentsSection } from "./_components/documents-section";
 import { getCurrentUser } from "@/lib/auth/current-user";
 import { getMyDocuments } from "@/app/actions/collaborator-documents";
 
 export default async function PerfilPage() {
-  const supabase = await createClient();
   const user = await getCurrentUser();
   if (!user) redirect("/login");
 
   const admin = createAdminClient();
-  const { data: profile } = await admin
-    .from("profiles")
-    .select("full_name, phone, email, avatar_url, contracted_hours_month, contract_start, vacation_balance, skills")
-    .eq("id", user.id)
-    .single();
-
-  if (!profile) redirect("/login");
-
-  // Horas trabalhadas este mês
   const now = new Date();
-  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
-  const { data: timesheets } = await supabase
-    .from("timesheets")
-    .select("duration_minutes")
-    .eq("collaborator_id", user.id)
-    .gte("clock_in_at", monthStart)
-    .not("clock_out_at", "is", null);
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split("T")[0];
+  const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split("T")[0];
 
-  const workedMins = (timesheets ?? []).reduce((sum, t) => sum + (t.duration_minutes ?? 0), 0);
+  const [profileRes, timesheetsRes, absencesRes, docsRes] = await Promise.all([
+    admin
+      .from("profiles")
+      .select("full_name, phone, email, avatar_url, contracted_hours_month, skills")
+      .eq("id", user.id)
+      .single(),
+    admin
+      .from("timesheets")
+      .select("duration_minutes")
+      .eq("collaborator_id", user.id)
+      .gte("clock_in_at", new Date(now.getFullYear(), now.getMonth(), 1).toISOString())
+      .not("clock_out_at", "is", null),
+    admin
+      .from("absences")
+      .select("id", { count: "exact", head: true })
+      .eq("collaborator_id", user.id)
+      .gte("starts_on", monthStart)
+      .lte("starts_on", monthEnd),
+    getMyDocuments(),
+  ]);
+
+  if (!profileRes.data) redirect("/login");
+
+  const profile = profileRes.data;
+  const workedMins = (timesheetsRes.data ?? []).reduce((sum, t) => sum + (t.duration_minutes ?? 0), 0);
   const workedHours = (workedMins / 60).toFixed(1);
   const contractedHours = profile.contracted_hours_month ?? 168;
-
-  let myDocs: Awaited<ReturnType<typeof getMyDocuments>>["documents"] = [];
-  try {
-    const docsRes = await getMyDocuments();
-    myDocs = docsRes.ok ? (docsRes.documents ?? []) : [];
-  } catch {
-    // Continua sem documentos — não crasha a página
-  }
+  const absencesThisMonth = absencesRes.count ?? 0;
+  const myDocs = docsRes.ok ? (docsRes.documents ?? []) : [];
 
   const initials = profile.full_name
     .split(" ")
@@ -95,13 +97,15 @@ export default async function PerfilPage() {
             <p className="text-2xl font-bold text-[var(--color-text-main)]">{workedHours}h</p>
             <p className="text-[10px] text-[var(--color-text-muted)]">de {contractedHours}h contratadas</p>
           </div>
-          <div className="bg-blue-50 rounded-xl p-3">
+          <div className="bg-orange-50 rounded-xl p-3">
             <div className="flex items-center gap-1.5 mb-1">
-              <CalendarDays className="w-3.5 h-3.5 text-[var(--color-info)]" />
-              <span className="text-[10px] font-semibold text-[var(--color-info)] uppercase tracking-wide">Faltas</span>
+              <AlertTriangle className="w-3.5 h-3.5 text-orange-500" />
+              <span className="text-[10px] font-semibold text-orange-600 uppercase tracking-wide">Faltas</span>
             </div>
-            <p className="text-2xl font-bold text-[var(--color-text-main)]">{profile.vacation_balance ?? 22}</p>
-            <p className="text-[10px] text-[var(--color-text-muted)]">dias disponíveis</p>
+            <p className="text-2xl font-bold text-[var(--color-text-main)]">{absencesThisMonth}</p>
+            <p className="text-[10px] text-[var(--color-text-muted)]">
+              {absencesThisMonth === 1 ? "falta registada" : "faltas registadas"}
+            </p>
           </div>
         </div>
       </div>
