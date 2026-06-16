@@ -60,6 +60,11 @@ export function ColaboradorAbsences({ colaboradorId, colaboradorName, absences }
         <div className="flex items-center gap-2">
           <AlertTriangle className="w-4 h-4 text-orange-500" />
           <h3 className="text-sm font-semibold text-[var(--color-text-main)]">Faltas</h3>
+          {absences.length > 0 && (
+            <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-orange-100 text-orange-700">
+              {absences.length}
+            </span>
+          )}
         </div>
         <AbsenceSheet
           colaboradores={colaboradores}
