@@ -60,6 +60,26 @@ export async function createVacationRequest(input: {
 
   if (error) return { ok: false, error: error.message };
 
+  // Notificar gestores do pedido de férias
+  const [{ data: collab }, { data: managers }] = await Promise.all([
+    admin.from("profiles").select("full_name").eq("id", user.id).single(),
+    admin.from("profiles").select("id").eq("company_id", profile.company_id).in("role", ["gestor", "admin"]),
+  ]);
+  if (managers && managers.length > 0) {
+    const name = collab?.full_name ?? "Uma colaboradora";
+    const dias = countWeekdays(input.starts_on, input.ends_on);
+    await admin.from("notifications").insert(
+      managers.map((m: { id: string }) => ({
+        company_id: profile.company_id,
+        user_id:    m.id,
+        type:       "vacation_requested",
+        title:      `${name} pediu ${dias} dia(s) de férias`,
+        body:       `De ${input.starts_on} a ${input.ends_on}.${input.notes ? ` "${input.notes}"` : ""}`,
+        data:       { collaborator_id: user.id },
+      })),
+    );
+  }
+
   revalidatePath("/app/ausencias");
   revalidatePath("/dashboard/faltas");
   return { ok: true };
@@ -96,6 +116,33 @@ export async function createOwnAbsence(input: {
   });
 
   if (error) return { ok: false, error: error.message };
+
+  // Notificar gestores da falta registada
+  const ABSENCE_LABELS: Record<string, string> = {
+    doenca_com_baixa:      "doença (com baixa)",
+    doenca_sem_baixa:      "doença (sem baixa)",
+    pessoal_justificado:   "motivo pessoal justificado",
+    outro:                 "outro motivo",
+  };
+
+  const [{ data: collab }, { data: managers }] = await Promise.all([
+    admin.from("profiles").select("full_name").eq("id", user.id).single(),
+    admin.from("profiles").select("id").eq("company_id", profile.company_id).in("role", ["gestor", "admin"]),
+  ]);
+  if (managers && managers.length > 0) {
+    const name = collab?.full_name ?? "Uma colaboradora";
+    const label = ABSENCE_LABELS[input.absence_type] ?? input.absence_type;
+    await admin.from("notifications").insert(
+      managers.map((m: { id: string }) => ({
+        company_id: profile.company_id,
+        user_id:    m.id,
+        type:       "absence_requested",
+        title:      `${name} registou uma falta`,
+        body:       `Motivo: ${label}. De ${input.starts_on} a ${input.ends_on}.${input.notes ? ` "${input.notes}"` : ""}`,
+        data:       { collaborator_id: user.id },
+      })),
+    );
+  }
 
   revalidatePath("/app/ausencias");
   revalidatePath("/dashboard/faltas");

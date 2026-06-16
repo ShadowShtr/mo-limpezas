@@ -291,6 +291,26 @@ export async function uploadDamageReport(formData: FormData): Promise<{
 
     if (dbError) return { ok: false, error: dbError.message };
 
+    // Notificar todos os gestores/admins da empresa
+    const [{ data: collaboratorProfile }, { data: managers }] = await Promise.all([
+      admin.from("profiles").select("full_name").eq("id", user.id).single(),
+      admin.from("profiles").select("id").eq("company_id", profile.company_id).in("role", ["gestor", "admin"]),
+    ]);
+
+    if (managers && managers.length > 0) {
+      const name = collaboratorProfile?.full_name ?? "Uma colaboradora";
+      await admin.from("notifications").insert(
+        managers.map((m: { id: string }) => ({
+          company_id: profile.company_id,
+          user_id:    m.id,
+          type:       "damage_report_submitted",
+          title:      `${name} enviou um relatório de avaria`,
+          body:       notes ? `"${notes}"` : "Consulte os documentos para ver a imagem.",
+          data:       { document_id: data.id, collaborator_id: user.id },
+        })),
+      );
+    }
+
     revalidatePath("/app/perfil");
     return { ok: true, id: data.id };
   } catch (err) {

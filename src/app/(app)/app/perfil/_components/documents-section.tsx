@@ -93,17 +93,47 @@ export function AppDocumentsSection({ initialDocuments }: Props) {
     }
   }
 
+  async function compressImage(file: File): Promise<File> {
+    if (!file.type.startsWith("image/")) return file;
+    return new Promise((resolve) => {
+      const img = new Image();
+      const url = URL.createObjectURL(file);
+      img.onload = () => {
+        URL.revokeObjectURL(url);
+        const MAX = 1600;
+        const scale = Math.min(1, MAX / Math.max(img.width, img.height));
+        const w = Math.round(img.width * scale);
+        const h = Math.round(img.height * scale);
+        const canvas = document.createElement("canvas");
+        canvas.width = w;
+        canvas.height = h;
+        canvas.getContext("2d")!.drawImage(img, 0, 0, w, h);
+        canvas.toBlob(
+          (blob) => {
+            if (!blob) { resolve(file); return; }
+            resolve(new File([blob], file.name.replace(/\.[^.]+$/, ".jpg"), { type: "image/jpeg" }));
+          },
+          "image/jpeg",
+          0.82,
+        );
+      };
+      img.onerror = () => { URL.revokeObjectURL(url); resolve(file); };
+      img.src = url;
+    });
+  }
+
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    const fd = new FormData();
-    fd.append("file", file);
-    fd.append("notes", notes);
-
     setMessage(null);
     startUpload(async () => {
       try {
+        const compressed = await compressImage(file);
+        const fd = new FormData();
+        fd.append("file", compressed);
+        fd.append("notes", notes);
+
         const res = await uploadDamageReport(fd);
         if (res.ok) {
           setMessage({ type: "success", text: "Relatório enviado com sucesso. O gestor foi notificado." });
@@ -112,10 +142,10 @@ export function AppDocumentsSection({ initialDocuments }: Props) {
           if (fileRef.current) fileRef.current.value = "";
           setDocs((prev) => [{
             id:                     res.id ?? crypto.randomUUID(),
-            file_name:              file.name,
+            file_name:              compressed.name,
             file_url:               "",
-            file_size:              file.size,
-            mime_type:              file.type,
+            file_size:              compressed.size,
+            mime_type:              compressed.type,
             category:               "avaria",
             notes:                  notes || null,
             visible_to_collaborator: true,

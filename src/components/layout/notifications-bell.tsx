@@ -15,14 +15,17 @@ interface Notification {
 }
 
 const TYPE_LABELS: Record<string, string> = {
-  new_service: "Novo serviço",
-  service_changed: "Serviço alterado",
-  service_cancelled: "Serviço cancelado",
-  substitute_needed: "Substituição necessária",
-  clock_out_missing: "Saída em falta",
-  vacation_approved: "Férias aprovadas",
-  vacation_rejected: "Férias recusadas",
-  generation_conflict: "Conflito de geração",
+  new_service:               "Novo serviço",
+  service_changed:           "Serviço alterado",
+  service_cancelled:         "Serviço cancelado",
+  substitute_needed:         "Substituição necessária",
+  clock_out_missing:         "Saída em falta",
+  vacation_approved:         "Férias aprovadas",
+  vacation_rejected:         "Férias recusadas",
+  generation_conflict:       "Conflito de geração",
+  damage_report_submitted:   "Relatório de avaria",
+  absence_requested:         "Pedido de falta",
+  vacation_requested:        "Pedido de férias",
 };
 
 export function NotificationsBell() {
@@ -96,7 +99,9 @@ export function NotificationsBell() {
       >
         <Bell className="w-5 h-5" />
         {unread > 0 && (
-          <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-[var(--color-danger)] rounded-full" />
+          <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 bg-[var(--color-danger)] rounded-full text-white text-[10px] font-bold flex items-center justify-center leading-none">
+            {unread > 99 ? "99+" : unread}
+          </span>
         )}
       </button>
 
