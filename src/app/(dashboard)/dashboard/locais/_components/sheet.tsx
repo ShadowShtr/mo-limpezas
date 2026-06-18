@@ -19,6 +19,8 @@ type Local = {
   client_id: string;
   access_code: string | null;
   instructions: string | null;
+  has_key: boolean;
+  key_label: string | null;
 };
 
 type Cliente = { id: string; name: string };
@@ -28,6 +30,8 @@ interface Props {
   companyId: string;
   clientes: Cliente[];
   local?: Local;
+  /** Quando definido, o local fica pré-associado a este cliente e o seletor é escondido. */
+  fixedClientId?: string;
 }
 
 interface NominatimResult {
@@ -52,7 +56,7 @@ const INPUT_CLS =
   "w-full px-3 py-2 rounded-lg border border-[var(--color-border)] text-sm text-[var(--color-text-main)] " +
   "focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] focus:border-transparent bg-white";
 
-export function LocalSheet({ trigger, companyId, clientes, local }: Props) {
+export function LocalSheet({ trigger, companyId, clientes, local, fixedClientId }: Props) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
 
@@ -60,11 +64,13 @@ export function LocalSheet({ trigger, companyId, clientes, local }: Props) {
   const [message, setMessage] = useState<{ type: "error" | "success"; text: string } | null>(null);
 
   const [name, setName]           = useState(local?.name ?? "");
-  const [clientId, setClientId]   = useState(local?.client_id ?? (clientes[0]?.id ?? ""));
+  const [clientId, setClientId]   = useState(local?.client_id ?? fixedClientId ?? (clientes[0]?.id ?? ""));
   const [pricingType, setPricingType] = useState<"hourly" | "fixed">(local?.pricing_type ?? "hourly");
   const [hourlyRate, setHourlyRate] = useState(String(local?.hourly_rate ?? ""));
   const [fixedPrice, setFixedPrice] = useState(String(local?.fixed_price ?? ""));
   const [accessCode, setAccessCode] = useState(local?.access_code ?? "");
+  const [hasKey, setHasKey]       = useState(local?.has_key ?? false);
+  const [keyLabel, setKeyLabel]   = useState(local?.key_label ?? "");
   const [instructions, setInstructions] = useState(local?.instructions ?? "");
   const [active, setActive]       = useState(local?.active ?? true);
 
@@ -170,6 +176,8 @@ export function LocalSheet({ trigger, companyId, clientes, local }: Props) {
       hourly_rate: pricingType === "hourly" ? (hourlyRate ? parseFloat(hourlyRate) : null) : null,
       fixed_price: pricingType === "fixed" ? (fixedPrice ? parseFloat(fixedPrice) : null) : null,
       access_code: accessCode || null,
+      has_key: hasKey,
+      key_label: hasKey ? (keyLabel || null) : null,
       instructions: instructions || null,
       lat: lat ? parseFloat(lat) : null,
       lng: lng ? parseFloat(lng) : null,
@@ -238,7 +246,7 @@ export function LocalSheet({ trigger, companyId, clientes, local }: Props) {
               </div>
 
               {/* Cliente */}
-              {!isEdit && (
+              {!isEdit && !fixedClientId && (
                 <div>
                   <label className="block text-sm font-medium text-[var(--color-text-main)] mb-1.5">Cliente *</label>
                   <select
@@ -424,7 +432,7 @@ export function LocalSheet({ trigger, companyId, clientes, local }: Props) {
                   )}
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-[var(--color-text-main)] mb-1.5">Cód. acesso</label>
+                  <label className="block text-sm font-medium text-[var(--color-text-main)] mb-1.5">Código do prédio</label>
                   <input
                     value={accessCode}
                     onChange={(e) => setAccessCode(e.target.value)}
@@ -432,6 +440,33 @@ export function LocalSheet({ trigger, companyId, clientes, local }: Props) {
                     className={INPUT_CLS}
                   />
                 </div>
+              </div>
+
+              {/* Chave física */}
+              <div className="space-y-3 p-3 rounded-lg bg-[var(--color-background)] border border-[var(--color-border)]">
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setHasKey((k) => !k)}
+                    className={`relative w-10 h-5 rounded-full transition-colors ${hasKey ? "bg-[var(--color-primary)]" : "bg-[var(--color-border)]"}`}
+                  >
+                    <span
+                      className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-all ${hasKey ? "left-[22px]" : "left-0.5"}`}
+                    />
+                  </button>
+                  <span className="text-sm text-[var(--color-text-main)]">Tem chave física</span>
+                </div>
+                {hasKey && (
+                  <div>
+                    <label className="block text-sm font-medium text-[var(--color-text-main)] mb-1.5">Identificação da chave</label>
+                    <input
+                      value={keyLabel}
+                      onChange={(e) => setKeyLabel(e.target.value)}
+                      placeholder="ex: Chave nº 1974"
+                      className={INPUT_CLS}
+                    />
+                  </div>
+                )}
               </div>
 
               {/* Instruções */}

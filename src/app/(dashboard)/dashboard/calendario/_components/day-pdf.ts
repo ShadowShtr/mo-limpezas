@@ -1,4 +1,4 @@
-import { format, parseISO, differenceInMinutes } from "date-fns";
+import { format, parseISO } from "date-fns";
 import { pt } from "date-fns/locale";
 import type { ServiceForBlock } from "./service-block";
 
@@ -32,171 +32,187 @@ export interface TeamRoute {
   services: ServiceForBlock[];
 }
 
-// ─── Geração do PDF ───────────────────────────────────────────────────────────
+// ─── Helpers de cor ─────────────────────────────────────────────────────────
+
+function hexToRgb(hex: string): [number, number, number] {
+  const h = hex.replace("#", "");
+  return [
+    parseInt(h.slice(0, 2), 16) || 0,
+    parseInt(h.slice(2, 4), 16) || 0,
+    parseInt(h.slice(4, 6), 16) || 0,
+  ];
+}
+
+/** Versão clara da cor da equipa (mistura com branco) para o fundo dos blocos. */
+function tint([r, g, b]: [number, number, number], amount = 0.85): [number, number, number] {
+  return [
+    Math.round(r + (255 - r) * amount),
+    Math.round(g + (255 - g) * amount),
+    Math.round(b + (255 - b) * amount),
+  ];
+}
+
+// ─── Geração do PDF (grelha: colunas = equipas, linhas = horas) ───────────────
 
 export async function generateDayPdf(
   date: Date,
   routes: TeamRoute[],
 ) {
   const { jsPDF } = await import("jspdf");
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const autoTable = (await import("jspdf-autotable")).default as (doc: any, options: any) => void;
 
-  const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+  const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
+  const pageW = doc.internal.pageSize.getWidth();   // ~297
+  const pageH = doc.internal.pageSize.getHeight();  // ~210
   const dateLabel = format(date, "EEEE, d 'de' MMMM 'de' yyyy", { locale: pt });
   const dateShort = format(date, "yyyy-MM-dd");
 
   // ── Cabeçalho ──────────────────────────────────────────────────────────────
-  doc.setFontSize(18);
+  const margin = 10;
+  doc.setFontSize(15);
   doc.setFont("helvetica", "bold");
-  doc.setTextColor(22, 163, 74); // verde primário
-  doc.text("Plano Operacional", 14, 18);
+  doc.setTextColor(22, 163, 74);
+  doc.text("Plano Operacional", margin, 12);
 
-  doc.setFontSize(11);
+  doc.setFontSize(10);
   doc.setFont("helvetica", "normal");
   doc.setTextColor(71, 85, 105);
-  doc.text(dateLabel.charAt(0).toUpperCase() + dateLabel.slice(1), 14, 26);
+  doc.text(dateLabel.charAt(0).toUpperCase() + dateLabel.slice(1), margin, 18);
 
-  // Linha separadora
-  doc.setDrawColor(229, 231, 235);
-  doc.setLineWidth(0.5);
-  doc.line(14, 30, 196, 30);
+  // ── Intervalo horário (dinâmico, com fallback 7h–18h) ───────────────────────
+  let minHour = 7;
+  let maxHour = 18;
+  const allServices = routes.flatMap((r) => r.services);
+  if (allServices.length) {
+    const starts = allServices.map((s) => parseISO(s.scheduled_start).getHours());
+    const ends   = allServices.map((s) => {
+      const e = parseISO(s.scheduled_end);
+      return e.getHours() + (e.getMinutes() > 0 ? 1 : 0);
+    });
+    minHour = Math.min(minHour, ...starts);
+    maxHour = Math.max(maxHour, ...ends);
+  }
+  const totalMinutes = (maxHour - minHour) * 60;
 
-  let y = 38;
+  // ── Geometria da grelha ─────────────────────────────────────────────────────
+  const gridTop    = 24;          // abaixo do cabeçalho
+  const headerH    = 9;           // faixa com nome das equipas
+  const bodyTop    = gridTop + headerH;
+  const gridBottom = pageH - 8;   // deixa espaço para o rodapé
+  const gutterW    = 13;          // coluna das horas
+  const gridLeft   = margin + gutterW;
+  const gridRight  = pageW - margin;
+  const cols       = routes.length || 1;
+  const colW       = (gridRight - gridLeft) / cols;
+  const pxPerMin   = (gridBottom - bodyTop) / totalMinutes;
 
-  const totalServices = routes.reduce((s, r) => s + r.services.length, 0);
-  const totalValue = routes.reduce((s, r) =>
-    s + r.services.reduce((sv, svc) => sv + (svc.manual_value ?? svc.calculated_value ?? 0), 0), 0,
-  );
+  const yForTime = (iso: string) => {
+    const d = parseISO(iso);
+    const mins = (d.getHours() * 60 + d.getMinutes()) - minHour * 60;
+    return bodyTop + Math.max(0, Math.min(mins, totalMinutes)) * pxPerMin;
+  };
 
-  doc.setFontSize(9);
-  doc.setTextColor(107, 114, 128);
-  doc.text(`${totalServices} serviço${totalServices !== 1 ? "s" : ""}  ·  ${routes.length} equipa${routes.length !== 1 ? "s" : ""}  ·  Total: €${totalValue.toFixed(2)}`, 14, y);
-  y += 10;
+  // ── Linhas horárias + etiquetas ─────────────────────────────────────────────
+  doc.setDrawColor(226, 232, 235);
+  doc.setLineWidth(0.2);
+  for (let h = minHour; h <= maxHour; h++) {
+    const y = bodyTop + (h - minHour) * 60 * pxPerMin;
+    doc.setDrawColor(219, 224, 230);
+    doc.line(gridLeft, y, gridRight, y);
+    doc.setFontSize(7.5);
+    doc.setTextColor(120, 128, 140);
+    doc.text(`${String(h).padStart(2, "0")}:00`, margin, y + 2.5);
+    // meia-hora (tracejada leve)
+    if (h < maxHour) {
+      const yHalf = y + 30 * pxPerMin;
+      doc.setDrawColor(238, 241, 244);
+      doc.line(gridLeft, yHalf, gridRight, yHalf);
+    }
+  }
 
-  // ── Secção por equipa ──────────────────────────────────────────────────────
-  for (const route of routes) {
-    if (!route.services.length) continue;
+  // ── Cabeçalho + separadores das colunas (equipas) ───────────────────────────
+  doc.setDrawColor(210, 216, 222);
+  doc.setLineWidth(0.2);
+  routes.forEach((route, i) => {
+    const x = gridLeft + i * colW;
+    const rgb = hexToRgb(route.teamColor);
 
-    const sorted = [...route.services].sort((a, b) =>
-      a.scheduled_start.localeCompare(b.scheduled_start),
+    // Faixa de cor + nome
+    doc.setFillColor(rgb[0], rgb[1], rgb[2]);
+    doc.rect(x, gridTop, colW, headerH, "F");
+    doc.setFontSize(7.5);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(255, 255, 255);
+    doc.text(
+      doc.splitTextToSize(route.teamName, colW - 3)[0] ?? route.teamName,
+      x + 1.5, gridTop + 6,
     );
 
-    // Cabeçalho da equipa
-    if (y > 260) { doc.addPage(); y = 18; }
+    // Separador vertical da coluna
+    doc.line(x, gridTop, x, gridBottom);
+  });
+  // Bordas externas da grelha
+  doc.line(gridRight, gridTop, gridRight, gridBottom);
+  doc.setDrawColor(210, 216, 222);
+  doc.line(gridLeft, gridTop, gridRight, gridTop);
+  doc.line(gridLeft, bodyTop, gridRight, bodyTop);
+  doc.line(gridLeft, gridBottom, gridRight, gridBottom);
 
-    // Quadrado de cor + nome da equipa
-    const hexColor = route.teamColor.replace("#", "");
-    const r = parseInt(hexColor.slice(0, 2), 16);
-    const g = parseInt(hexColor.slice(2, 4), 16);
-    const b = parseInt(hexColor.slice(4, 6), 16);
-    doc.setFillColor(r, g, b);
-    doc.roundedRect(14, y - 3.5, 4, 4, 1, 1, "F");
+  // ── Blocos de serviço ───────────────────────────────────────────────────────
+  routes.forEach((route, i) => {
+    const x = gridLeft + i * colW;
+    const rgb = hexToRgb(route.teamColor);
+    const bg  = tint(rgb);
 
-    doc.setFontSize(11);
-    doc.setFont("helvetica", "bold");
-    doc.setTextColor(30, 41, 59);
-    doc.text(route.teamName, 21, y);
-    y += 6;
+    for (const svc of route.services) {
+      const yTop = yForTime(svc.scheduled_start);
+      const yEnd = yForTime(svc.scheduled_end);
+      const h = Math.max(yEnd - yTop, 5);
+      const bx = x + 0.6;
+      const bw = colW - 1.2;
 
-    // Construir linhas da tabela com intercalação de viagem
-    const tableBody: (string | { content: string; styles: object })[][] = [];
+      // Fundo + borda esquerda colorida
+      doc.setFillColor(bg[0], bg[1], bg[2]);
+      doc.setDrawColor(rgb[0], rgb[1], rgb[2]);
+      doc.setLineWidth(0.2);
+      doc.rect(bx, yTop + 0.4, bw, h - 0.8, "FD");
+      doc.setFillColor(rgb[0], rgb[1], rgb[2]);
+      doc.rect(bx, yTop + 0.4, 1, h - 0.8, "F");
 
-    for (let i = 0; i < sorted.length; i++) {
-      const svc = sorted[i];
-      const start = parseISO(svc.scheduled_start);
-      const end   = parseISO(svc.scheduled_end);
-      const durMin = differenceInMinutes(end, start);
-      const dur = `${Math.floor(durMin / 60)}h${durMin % 60 > 0 ? `${durMin % 60}m` : ""}`;
-      const value = svc.manual_value ?? svc.calculated_value;
+      // Texto
+      const tx = bx + 2.2;
+      let ty = yTop + 3.2;
+      doc.setTextColor(30, 41, 59);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(6.8);
+      const nameLines = doc.splitTextToSize(svc.location_name, bw - 3).slice(0, 2);
+      doc.text(nameLines, tx, ty);
+      ty += nameLines.length * 2.6;
 
-      tableBody.push([
-        `${i + 1}`,
-        `${format(start, "HH:mm")}–${format(end, "HH:mm")}`,
-        svc.location_name,
-        svc.client_name,
-        svc.location_address,
-        dur,
-        value != null ? `€${value.toFixed(2)}` : "—",
-        svc.location_access_code ?? "—",
-      ]);
-
-      // Linha de viagem entre este e o próximo
-      const next = sorted[i + 1];
-      if (
-        next &&
-        svc.location_lat != null && svc.location_lng != null &&
-        next.location_lat != null && next.location_lng != null
-      ) {
-        const mins = travelMinutes(
-          svc.location_lat, svc.location_lng,
-          next.location_lat, next.location_lng,
-        );
-        const dist = haversineKm(svc.location_lat, svc.location_lng, next.location_lat, next.location_lng);
-        tableBody.push([
-          {
-            content: `↓  ~${mins} min de viagem  (${dist.toFixed(1)} km em linha reta)`,
-            styles: {
-              colSpan: 8,
-              fontStyle: "italic",
-              textColor: [107, 114, 128],
-              fillColor: [249, 250, 251],
-              fontSize: 7.5,
-            },
-          },
-          "", "", "", "", "", "", "",
-        ]);
+      if (h > 9) {
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(6);
+        doc.setTextColor(90, 98, 110);
+        const start = parseISO(svc.scheduled_start);
+        const end   = parseISO(svc.scheduled_end);
+        doc.text(`${format(start, "HH:mm")}–${format(end, "HH:mm")}`, tx, ty);
+        ty += 2.4;
+        if (h > 14 && svc.location_address) {
+          const addr = doc.splitTextToSize(svc.location_address, bw - 3).slice(0, 1);
+          doc.text(addr, tx, ty);
+        }
       }
     }
-
-    autoTable(doc, {
-      startY: y,
-      head: [["#", "Horário", "Local", "Cliente", "Morada", "Dur.", "Valor", "Acesso"]],
-      body: tableBody,
-      theme: "grid",
-      styles: { fontSize: 8, cellPadding: 2.5, overflow: "linebreak" },
-      headStyles: {
-        fillColor: [22, 163, 74],
-        textColor: 255,
-        fontStyle: "bold",
-        fontSize: 8,
-      },
-      columnStyles: {
-        0: { cellWidth: 7, halign: "center" },
-        1: { cellWidth: 22 },
-        2: { cellWidth: 32 },
-        3: { cellWidth: 28 },
-        4: { cellWidth: 45 },
-        5: { cellWidth: 12, halign: "center" },
-        6: { cellWidth: 16, halign: "right" },
-        7: { cellWidth: 18, halign: "center" },
-      },
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      didParseCell: (data: any) => {
-        if (data.row.raw?.[0]?.styles?.colSpan === 8) {
-          Object.assign(data.cell.styles, data.row.raw[0].styles);
-        }
-      },
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      didDrawPage: (data: any) => { y = data.cursor.y + 8; },
-    });
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    y = (doc as any).lastAutoTable?.finalY ?? y;
-    y += 10;
-  }
+  });
 
   // ── Rodapé ─────────────────────────────────────────────────────────────────
-  const pageCount = doc.getNumberOfPages();
-  for (let p = 1; p <= pageCount; p++) {
-    doc.setPage(p);
-    doc.setFontSize(7.5);
-    doc.setTextColor(156, 163, 175);
-    doc.text(
-      `Escala · Gerado em ${format(new Date(), "d/MM/yyyy HH:mm")} · Pág. ${p}/${pageCount}`,
-      14, 290,
-    );
-  }
+  const totalServices = allServices.length;
+  doc.setFontSize(7);
+  doc.setTextColor(156, 163, 175);
+  doc.setFont("helvetica", "normal");
+  doc.text(
+    `${totalServices} serviço${totalServices !== 1 ? "s" : ""} · ${routes.length} equipa${routes.length !== 1 ? "s" : ""} · Gerado em ${format(new Date(), "d/MM/yyyy HH:mm")}`,
+    margin, pageH - 3,
+  );
 
   doc.save(`plano-${dateShort}.pdf`);
 }

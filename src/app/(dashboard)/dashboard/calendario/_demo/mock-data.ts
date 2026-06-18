@@ -59,6 +59,8 @@ function svc(
     location_lng: null,
     location_access_code: accessCode,
     location_instructions: null,
+    location_has_key: false,
+    location_key_label: null,
     client_id: `cli-${id}`,
     client_name: clientName,
     client_email: null,

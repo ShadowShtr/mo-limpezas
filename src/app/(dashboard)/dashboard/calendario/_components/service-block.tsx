@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { parseISO, format, differenceInMinutes } from "date-fns";
-import { MapPin, Clock, Euro, FileText, Lock, Users } from "lucide-react";
+import { MapPin, Clock, Euro, FileText, Lock, Key, Users } from "lucide-react";
 import { useDraggable } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
 
@@ -16,6 +16,8 @@ export type ServiceForBlock = {
   location_address: string;
   location_access_code: string | null;
   location_instructions: string | null;
+  location_has_key: boolean;
+  location_key_label: string | null;
   location_lat: number | null;
   location_lng: number | null;
   client_name: string;
@@ -113,6 +115,12 @@ function ServiceTooltip({ service, pos }: { service: ServiceForBlock; pos: Toolt
               )}
               {service.team_name}
             </span>
+          </Row>
+        )}
+
+        {service.location_has_key && (
+          <Row icon={Key} label="Chave">
+            <span>{service.location_key_label || "Equipa tem chave"}</span>
           </Row>
         )}
 

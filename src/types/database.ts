@@ -42,9 +42,9 @@ export type Database = {
         Relationships: [];
       };
       locations: {
-        Row: { id: string; company_id: string; client_id: string; name: string; address: string; lat: number | null; lng: number | null; access_code: string | null; instructions: string | null; hourly_rate: number | null; fixed_price: number | null; pricing_type: "hourly" | "fixed"; active: boolean; created_at: string; updated_at: string };
-        Insert: { company_id: string; client_id: string; name: string; address: string; lat?: number | null; lng?: number | null; access_code?: string | null; instructions?: string | null; hourly_rate?: number | null; fixed_price?: number | null; pricing_type?: "hourly" | "fixed"; active?: boolean };
-        Update: { name?: string; address?: string; lat?: number | null; lng?: number | null; access_code?: string | null; instructions?: string | null; hourly_rate?: number | null; fixed_price?: number | null; pricing_type?: "hourly" | "fixed"; active?: boolean };
+        Row: { id: string; company_id: string; client_id: string; name: string; address: string; lat: number | null; lng: number | null; access_code: string | null; instructions: string | null; has_key: boolean; key_label: string | null; hourly_rate: number | null; fixed_price: number | null; pricing_type: "hourly" | "fixed"; active: boolean; created_at: string; updated_at: string };
+        Insert: { company_id: string; client_id: string; name: string; address: string; lat?: number | null; lng?: number | null; access_code?: string | null; instructions?: string | null; has_key?: boolean; key_label?: string | null; hourly_rate?: number | null; fixed_price?: number | null; pricing_type?: "hourly" | "fixed"; active?: boolean };
+        Update: { name?: string; address?: string; lat?: number | null; lng?: number | null; access_code?: string | null; instructions?: string | null; has_key?: boolean; key_label?: string | null; hourly_rate?: number | null; fixed_price?: number | null; pricing_type?: "hourly" | "fixed"; active?: boolean };
         Relationships: [];
       };
       teams: {
@@ -79,7 +79,7 @@ export type Database = {
       };
       timesheets: {
         Row: { id: string; service_id: string; collaborator_id: string; company_id: string; clock_in_at: string | null; clock_out_at: string | null; clock_in_lat: number | null; clock_in_lng: number | null; clock_out_lat: number | null; clock_out_lng: number | null; clock_in_distance_m: number | null; location_warning: boolean; duration_minutes: number | null; notes: string | null; client_event_id: string | null; manual_checkin: boolean; gps_accuracy_m: number | null; created_at: string; updated_at: string };
-        Insert: { service_id: string; collaborator_id: string; company_id: string; clock_in_at?: string | null; clock_in_lat?: number | null; clock_in_lng?: number | null; clock_in_distance_m?: number | null; location_warning?: boolean; client_event_id?: string | null; manual_checkin?: boolean; gps_accuracy_m?: number | null };
+        Insert: { service_id: string; collaborator_id: string; company_id: string; clock_in_at?: string | null; clock_out_at?: string | null; clock_in_lat?: number | null; clock_in_lng?: number | null; clock_in_distance_m?: number | null; location_warning?: boolean; duration_minutes?: number | null; notes?: string | null; client_event_id?: string | null; manual_checkin?: boolean; gps_accuracy_m?: number | null };
         Update: { clock_in_at?: string | null; clock_out_at?: string | null; clock_out_lat?: number | null; clock_out_lng?: number | null; location_warning?: boolean; duration_minutes?: number | null; notes?: string | null; client_event_id?: string | null; manual_checkin?: boolean; gps_accuracy_m?: number | null };
         Relationships: [];
       };
@@ -208,7 +208,7 @@ export type Database = {
     };
     Views: {
       services_full: {
-        Row: { id: string; company_id: string; reference_number: string; scheduled_start: string; scheduled_end: string; actual_start: string | null; actual_end: string | null; status: string; notes: string | null; calculated_value: number | null; manual_value: number | null; contract_id: string | null; is_exception: boolean; location_id: string; location_name: string; location_address: string; location_lat: number | null; location_lng: number | null; location_access_code: string | null; location_instructions: string | null; client_id: string; client_name: string; client_email: string | null; client_phone: string | null; team_id: string | null; team_name: string | null; team_color: string | null };
+        Row: { id: string; company_id: string; reference_number: string; scheduled_start: string; scheduled_end: string; actual_start: string | null; actual_end: string | null; status: string; notes: string | null; calculated_value: number | null; manual_value: number | null; contract_id: string | null; is_exception: boolean; location_id: string; location_name: string; location_address: string; location_lat: number | null; location_lng: number | null; location_access_code: string | null; location_instructions: string | null; location_has_key: boolean; location_key_label: string | null; client_id: string; client_name: string; client_email: string | null; client_phone: string | null; team_id: string | null; team_name: string | null; team_color: string | null };
         Relationships: [];
       };
       monthly_hours_summary: {

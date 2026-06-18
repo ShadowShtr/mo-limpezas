@@ -68,6 +68,8 @@ function toBlock(s: ServiceFull): ServiceForBlock {
     location_address: s.location_address,
     location_access_code: s.location_access_code ?? null,
     location_instructions: s.location_instructions ?? null,
+    location_has_key: s.location_has_key ?? false,
+    location_key_label: s.location_key_label ?? null,
     location_lat: s.location_lat ?? null,
     location_lng: s.location_lng ?? null,
     client_name: s.client_name,

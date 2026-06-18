@@ -19,6 +19,8 @@ type Local = {
   client_id: string;
   access_code: string | null;
   instructions: string | null;
+  has_key: boolean;
+  key_label: string | null;
 };
 
 type Cliente = { id: string; name: string };

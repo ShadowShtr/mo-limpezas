@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo } from "react";
 import {
-  X, MapPin, Users, Clock, Euro, FileText, Loader2,
+  X, MapPin, Users, Clock, Euro, FileText, Loader2, Key, Lock,
   AlertTriangle, Ban, CalendarX, CheckCircle2, ChevronDown, Bell, MessageCircle, Mail, Users2,
 } from "lucide-react";
 import { format, parseISO } from "date-fns";
@@ -292,6 +292,26 @@ export function ServiceDetailSheet({ service, onClose, onChanged }: Props) {
                     (manual · calculado: €{svc.calculated_value.toFixed(2)})
                   </span>
                 )}
+              </InfoRow>
+            )}
+
+            {svc.location_has_key && (
+              <InfoRow icon={Key} label="Chave">
+                <span className="text-[var(--color-text-main)]">
+                  {svc.location_key_label || "A equipa tem chave deste local."}
+                </span>
+              </InfoRow>
+            )}
+
+            {svc.location_access_code && (
+              <InfoRow icon={Lock} label="Código de acesso">
+                <span className="font-mono font-semibold">{svc.location_access_code}</span>
+              </InfoRow>
+            )}
+
+            {svc.location_instructions && (
+              <InfoRow icon={FileText} label="Instruções">
+                <p className="text-sm text-[var(--color-text-sub)] whitespace-pre-line">{svc.location_instructions}</p>
               </InfoRow>
             )}
 
