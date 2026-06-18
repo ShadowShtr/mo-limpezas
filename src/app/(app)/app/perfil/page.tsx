@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Phone, Clock, AlertTriangle, User, Download } from "lucide-react";
 import { SignOutButton } from "./_components/sign-out-button";
+import { ChangePasswordSection } from "./_components/change-password-section";
 import { AppDocumentsSection } from "./_components/documents-section";
 import { getCurrentUser } from "@/lib/auth/current-user";
 import { getMyDocuments } from "@/app/actions/collaborator-documents";
@@ -143,6 +144,9 @@ export default async function PerfilPage() {
         <Download className="w-4 h-4 text-[var(--color-primary)]" />
         Exportar escala para calendário
       </a>
+
+      {/* Alterar password */}
+      <ChangePasswordSection />
 
       {/* Terminar sessão */}
       <SignOutButton />

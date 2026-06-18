@@ -6,6 +6,7 @@ import { ColaboradorSheet } from "../_components/sheet";
 import { ColaboradorAbsences } from "./_components/colaborador-absences";
 import { PresencaHistory } from "./_components/presenca-history";
 import { DocumentsSection } from "./_components/documents-section";
+import { ResetPasswordButton } from "./_components/reset-password-button";
 import { getCollaboratorDocuments } from "@/app/actions/collaborator-documents";
 import {
   ArrowLeft, Mail, Phone, Calendar, Award, Edit2, Palmtree,
@@ -205,6 +206,9 @@ export default async function ColaboradorDetailPage({ params }: Props) {
               colaboradorName={profile.full_name}
               absences={absences}
             />
+
+            {/* Acesso / redefinir password */}
+            <ResetPasswordButton colaboradorId={id} />
           </div>
 
           {/* Coluna direita — estatísticas + histórico */}

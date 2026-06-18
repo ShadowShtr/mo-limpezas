@@ -137,3 +137,42 @@ export async function updateColaborador(
   revalidatePath("/dashboard/colaboradores");
   return { ok: true as const };
 }
+
+// Redefine a password de uma colaboradora gerando uma nova provisória.
+// Sem email/domínio: o admin/gestor recebe a senha no ecrã para a entregar.
+export async function resetColaboradorPassword(id: string) {
+  const supabase = await createClient();
+  const admin = createAdminClient();
+
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { ok: false as const, error: "Não autenticado." };
+
+  const { data: callerProfile } = await admin
+    .from("profiles")
+    .select("company_id, role")
+    .eq("id", user.id)
+    .single();
+  if (!callerProfile || !["admin", "gestor"].includes(callerProfile.role)) {
+    return { ok: false as const, error: "Sem permissão." };
+  }
+
+  const { data: target } = await admin
+    .from("profiles")
+    .select("company_id, full_name")
+    .eq("id", id)
+    .single();
+  if (!target) return { ok: false as const, error: "Colaboradora não encontrada." };
+  if (target.company_id !== callerProfile.company_id) {
+    return { ok: false as const, error: "Acesso negado." };
+  }
+
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789";
+  let rnd = "";
+  for (const b of crypto.getRandomValues(new Uint8Array(10))) rnd += chars[b % chars.length];
+  const password = "Mo" + rnd + "!9";
+
+  const { error } = await admin.auth.admin.updateUserById(id, { password });
+  if (error) return { ok: false as const, error: "Não foi possível redefinir a password." };
+
+  return { ok: true as const, password, name: target.full_name as string };
+}
