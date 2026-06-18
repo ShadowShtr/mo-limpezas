@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import { useState } from "react";
 import {
   LayoutDashboard,
   Calendar,
@@ -45,10 +46,22 @@ interface SidebarProps {
 
 export function Sidebar({ userName, userRole, avatarUrl, onClose }: SidebarProps) {
   const pathname = usePathname();
+  const router = useRouter();
+  const [pendingHref, setPendingHref] = useState<string | null>(null);
 
   function isActive(href: string) {
     if (href === "/dashboard") return pathname === "/dashboard";
     return pathname.startsWith(href);
+  }
+
+  function warmRoute(href: string) {
+    if (!isActive(href)) router.prefetch(href);
+  }
+
+  function handleNavigate(href: string) {
+    if (!isActive(href)) setPendingHref(href);
+    warmRoute(href);
+    onClose?.();
   }
 
   const initials = userName
@@ -113,14 +126,18 @@ export function Sidebar({ userName, userRole, avatarUrl, onClose }: SidebarProps
       <nav className="relative flex-1 px-3 py-3 space-y-0.5 overflow-y-auto">
         {NAV.map(({ href, icon: Icon, label }) => {
           const active = isActive(href);
+          const pending = pendingHref === href && !active;
           return (
             <Link
               key={href}
               href={href}
-              onClick={onClose}
+              prefetch={true}
+              onClick={() => handleNavigate(href)}
+              onFocus={() => warmRoute(href)}
+              onTouchStart={() => warmRoute(href)}
               className="relative flex items-center gap-3 px-3 py-[9px] rounded-xl text-[13px] font-medium transition-all duration-150 group"
               style={
-                active
+                active || pending
                   ? {
                       background: "rgba(34,197,94,0.13)",
                       color: "#22C55E",
@@ -130,6 +147,7 @@ export function Sidebar({ userName, userRole, avatarUrl, onClose }: SidebarProps
                     }
               }
               onMouseEnter={(e) => {
+                warmRoute(href);
                 if (!active) {
                   (e.currentTarget as HTMLElement).style.background = "rgba(255,255,255,0.055)";
                   (e.currentTarget as HTMLElement).style.color = "rgba(248,250,252,0.95)";
@@ -143,7 +161,7 @@ export function Sidebar({ userName, userRole, avatarUrl, onClose }: SidebarProps
               }}
             >
               {/* Active indicator */}
-              {active && (
+              {(active || pending) && (
                 <span
                   className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-5 rounded-full"
                   style={{ background: "#22C55E", boxShadow: "0 0 8px rgba(34,197,94,0.6)" }}
@@ -152,9 +170,12 @@ export function Sidebar({ userName, userRole, avatarUrl, onClose }: SidebarProps
 
               <Icon
                 className="w-[17px] h-[17px] shrink-0"
-                style={{ color: active ? "#22C55E" : undefined }}
+                style={{ color: active || pending ? "#22C55E" : undefined }}
               />
               <span className="flex-1 truncate">{label}</span>
+              {pending && (
+                <span className="w-1.5 h-1.5 rounded-full bg-[#22C55E] animate-pulse" aria-hidden />
+              )}
             </Link>
           );
         })}
@@ -165,14 +186,19 @@ export function Sidebar({ userName, userRole, avatarUrl, onClose }: SidebarProps
         <div className="h-2" />
         <Link
           href="/dashboard/configuracoes"
-          onClick={onClose}
+          prefetch={true}
+          onClick={() => handleNavigate("/dashboard/configuracoes")}
+          onFocus={() => warmRoute("/dashboard/configuracoes")}
+          onTouchStart={() => warmRoute("/dashboard/configuracoes")}
           className="flex items-center gap-3 px-3 py-[9px] rounded-xl text-[13px] font-medium transition-all duration-150"
           style={
-            pathname.startsWith("/dashboard/configuracoes")
+            pathname.startsWith("/dashboard/configuracoes") ||
+            (pendingHref === "/dashboard/configuracoes" && !pathname.startsWith("/dashboard/configuracoes"))
               ? { background: "rgba(34,197,94,0.13)", color: "#22C55E" }
               : { color: "rgba(226,232,240,0.55)" }
           }
           onMouseEnter={(e) => {
+            warmRoute("/dashboard/configuracoes");
             if (!pathname.startsWith("/dashboard/configuracoes")) {
               (e.currentTarget as HTMLElement).style.background = "rgba(255,255,255,0.055)";
               (e.currentTarget as HTMLElement).style.color = "rgba(248,250,252,0.90)";
@@ -187,6 +213,9 @@ export function Sidebar({ userName, userRole, avatarUrl, onClose }: SidebarProps
         >
           <Settings className="w-[17px] h-[17px] shrink-0" />
           Configurações
+          {pendingHref === "/dashboard/configuracoes" && !pathname.startsWith("/dashboard/configuracoes") && (
+            <span className="ml-auto w-1.5 h-1.5 rounded-full bg-[#22C55E] animate-pulse" aria-hidden />
+          )}
         </Link>
       </div>
 
