@@ -41,3 +41,13 @@ yarn-error.log*
 next-env.d.ts
 
 .vercel
+
+# Credenciais provisorias (segredos) - nunca commitar
+CREDENCIAIS_COLABORADORES.local.md
+*.local.md
+
+# Ficheiros de dados de import (dados pessoais) - nunca commitar
+scripts/*.local.json
+scripts/_*.json
+scripts/_*.mjs
+*_data*.json
