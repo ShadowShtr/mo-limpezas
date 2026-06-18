@@ -20,9 +20,11 @@ export async function sendWhatsAppToClient(
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return { ok: false, error: "Não autenticado." };
 
+    // Lê o próprio perfil do utilizador autenticado (scoped por id = user.id).
+    // Inclui company_id por consistência com o padrão das restantes actions.
     const { data: profile } = await admin
       .from("profiles")
-      .select("role")
+      .select("role, company_id")
       .eq("id", user.id)
       .single();
 
