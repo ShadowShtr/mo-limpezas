@@ -149,6 +149,49 @@ export function collaboratorInviteTemplate(d: CollaboratorInviteData) {
   return { subject, html };
 }
 
+// ─── Recuperação de password ─────────────────────────────────────────────────
+
+export interface PasswordRecoveryData {
+  collaboratorName: string;
+  recoveryUrl: string;
+}
+
+export function passwordRecoveryTemplate(d: PasswordRecoveryData) {
+  const subject = "Definir password — Mó Limpezas | Mó Limpezas";
+
+  const html = layout(`
+    <p style="margin:0 0 8px;font-size:16px;font-weight:600;color:#111827;">
+      Olá, ${escHtml(d.collaboratorName)}!
+    </p>
+    <p style="margin:0 0 24px;font-size:14px;color:#6b7280;line-height:1.6;">
+      Recebemos um pedido para definires/recuperares a tua password na plataforma
+      <strong style="color:#111827;">Mó Limpezas</strong>.<br/>
+      Clica no botão abaixo para escolheres uma password nova.
+    </p>
+
+    <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:24px;">
+      <tr>
+        <td align="center">
+          <a href="${escHtml(d.recoveryUrl)}"
+             style="display:inline-block;padding:14px 32px;background:#16A34A;color:#ffffff;
+                    text-decoration:none;border-radius:8px;font-size:15px;font-weight:700;">
+            Definir nova password
+          </a>
+        </td>
+      </tr>
+    </table>
+
+    <p style="margin:0 0 8px;font-size:13px;color:#9ca3af;text-align:center;">
+      Este link expira em 1 hora.
+    </p>
+    <p style="margin:0;font-size:12px;color:#d1d5db;text-align:center;">
+      Se não pediste isto, podes ignorar este email — a tua password atual continua válida.
+    </p>
+  `);
+
+  return { subject, html };
+}
+
 // ─── Utilitário ───────────────────────────────────────────────────────────────
 
 function escHtml(str: string): string {

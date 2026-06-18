@@ -80,16 +80,63 @@ export async function resetPassword(formData: FormData) {
   const emailResult = emailSchema.safeParse(rawEmail);
   if (!emailResult.success) return { error: "Email inválido." };
 
-  const supabase = await createClient();
-  const { error } = await supabase.auth.resetPasswordForEmail(emailResult.data, {
-    redirectTo: `${process.env.NEXT_PUBLIC_APP_URL}/auth/callback?next=/dashboard/perfil/password`,
+  const email = emailResult.data;
+  const { createAdminClient } = await import("@/lib/supabase/admin");
+  const admin = createAdminClient();
+  const redirectTo = `${process.env.NEXT_PUBLIC_APP_URL}/auth/callback?next=/recuperar/nova-senha`;
+
+  // Gerar link de recuperação sem usar o email padrão do Supabase
+  const { data: linkData, error: linkError } = await admin.auth.admin.generateLink({
+    type: "recovery",
+    email,
+    options: { redirectTo },
   });
 
-  if (error) {
-    return { error: "Não foi possível enviar o email. Verifica o endereço." };
+  // Não revelar se o email existe — devolver sempre sucesso genérico
+  if (linkError || !linkData?.properties?.action_link) {
+    return { success: "Se o email existir, enviámos as instruções de recuperação." };
   }
 
-  return { success: "Email de recuperação enviado." };
+  // Enviar email personalizado via Resend
+  try {
+    const { getResend, FROM_EMAIL } = await import("@/lib/email");
+    const { passwordRecoveryTemplate } = await import("@/lib/email/templates");
+    const name = (linkData.user?.user_metadata?.full_name as string) || "colaboradora";
+    const { subject, html } = passwordRecoveryTemplate({
+      collaboratorName: name,
+      recoveryUrl: linkData.properties.action_link,
+    });
+    const resend = getResend();
+    await resend.emails.send({ from: FROM_EMAIL, to: email, subject, html });
+  } catch {
+    // Fallback: email base do Supabase
+    const supabase = await createClient();
+    await supabase.auth.resetPasswordForEmail(email, { redirectTo });
+  }
+
+  return { success: "Se o email existir, enviámos as instruções de recuperação." };
+}
+
+const newPasswordSchema = z.string().min(8, "A password deve ter pelo menos 8 caracteres.");
+
+// Define a nova password do utilizador autenticado (sessão de recuperação ativa).
+export async function updatePassword(formData: FormData) {
+  const password = formData.get("password") as string;
+  const confirm = formData.get("confirm") as string;
+
+  const parsed = newPasswordSchema.safeParse(password);
+  if (!parsed.success) return { error: parsed.error.issues[0].message };
+  if (password !== confirm) return { error: "As passwords não coincidem." };
+
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: "Sessão inválida ou expirada. Pede um novo link de recuperação." };
+
+  const { error } = await supabase.auth.updateUser({ password });
+  if (error) return { error: "Não foi possível alterar a password. Tenta novamente." };
+
+  const role = user.user_metadata?.role as string | undefined;
+  return { success: "Password alterada com sucesso.", redirect: role === "colaborador" ? "/app" : "/dashboard" };
 }
 
 export async function logout() {
