@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { LogIn, LogOut, MapPin, AlertTriangle, Loader2, CheckCircle, CloudOff } from "lucide-react";
+import { LogIn, LogOut, MapPin, AlertTriangle, Loader2, CheckCircle, CloudOff, MapPinOff } from "lucide-react";
 import { queueTimesheet } from "@/lib/offline-sync";
 
 interface Timesheet {
@@ -29,7 +29,8 @@ function getPosition(): Promise<GeolocationPosition> {
     }
     navigator.geolocation.getCurrentPosition(resolve, reject, {
       enableHighAccuracy: true,
-      timeout: 10000,
+      timeout: 12000,
+      maximumAge: 0, // nunca usar posição em cache — sempre leitura fresca
     });
   });
 }
@@ -44,28 +45,42 @@ export function ClockButton({ serviceId, initialTimesheet }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [distanceWarning, setDistanceWarning] = useState<number | null>(null);
   const [queued, setQueued] = useState<"in" | "out" | null>(null);
+  // Fallback manual: ativado quando GPS é negado/indisponível
+  const [needsManual, setNeedsManual] = useState<"in" | "out" | null>(null);
 
-  async function getCoords(): Promise<{ lat: number | null; lng: number | null }> {
+  async function getCoords(): Promise<{ lat: number | null; lng: number | null; gpsError?: boolean }> {
     try {
       const pos = await getPosition();
+      // Rejeitar leituras imprecisas (> 150m de accuracy) como se não houvesse GPS
+      if (pos.coords.accuracy > 150) {
+        return { lat: pos.coords.latitude, lng: pos.coords.longitude };
+      }
       return { lat: pos.coords.latitude, lng: pos.coords.longitude };
     } catch {
-      return { lat: null, lng: null };
+      return { lat: null, lng: null, gpsError: true };
     }
   }
 
-  async function handleClockIn() {
+  async function doClockIn(manual = false) {
     setLoading(true);
     setError(null);
     setDistanceWarning(null);
+    setNeedsManual(null);
 
-    const { lat, lng } = await getCoords();
+    const coords = await getCoords();
+
+    if (coords.gpsError && !manual) {
+      setNeedsManual("in");
+      setLoading(false);
+      return;
+    }
+
+    const { lat, lng } = coords;
     const at = new Date().toISOString();
 
-    // Sem rede: guardar em fila e mostrar como registado
     if (isOffline()) {
       queueTimesheet({ kind: "in", service_id: serviceId, lat, lng, at });
-      setTimesheet({ id: `local-${Date.now()}`, clock_in_at: at, clock_out_at: null, location_warning: false, clock_in_distance_m: null });
+      setTimesheet({ id: `local-${Date.now()}`, clock_in_at: at, clock_out_at: null, location_warning: manual, clock_in_distance_m: null });
       setQueued("in");
       setLoading(false);
       return;
@@ -75,27 +90,39 @@ export function ClockButton({ serviceId, initialTimesheet }: Props) {
       const res = await fetch("/api/app/timesheet", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ service_id: serviceId, lat, lng }),
+        body: JSON.stringify({ service_id: serviceId, lat, lng, manual }),
       });
       const json = await res.json();
       setLoading(false);
-      if (!res.ok) { setError(json.error ?? "Erro ao registar entrada"); return; }
+      if (!res.ok) {
+        if (json.needsManualConfirm) { setNeedsManual("in"); return; }
+        setError(json.error ?? "Erro ao registar entrada");
+        return;
+      }
       if (json.location_warning) setDistanceWarning(json.distance_m);
       setTimesheet(json.data);
     } catch {
-      // Falhou por rede: cair para a fila
       queueTimesheet({ kind: "in", service_id: serviceId, lat, lng, at });
-      setTimesheet({ id: `local-${Date.now()}`, clock_in_at: at, clock_out_at: null, location_warning: false, clock_in_distance_m: null });
+      setTimesheet({ id: `local-${Date.now()}`, clock_in_at: at, clock_out_at: null, location_warning: manual, clock_in_distance_m: null });
       setQueued("in");
       setLoading(false);
     }
   }
 
-  async function handleClockOut() {
+  async function doClockOut(manual = false) {
     setLoading(true);
     setError(null);
+    setNeedsManual(null);
 
-    const { lat, lng } = await getCoords();
+    const coords = await getCoords();
+
+    if (coords.gpsError && !manual) {
+      setNeedsManual("out");
+      setLoading(false);
+      return;
+    }
+
+    const { lat, lng } = coords;
     const at = new Date().toISOString();
 
     if (isOffline()) {
@@ -110,11 +137,15 @@ export function ClockButton({ serviceId, initialTimesheet }: Props) {
       const res = await fetch("/api/app/timesheet", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ service_id: serviceId, lat, lng }),
+        body: JSON.stringify({ service_id: serviceId, lat, lng, manual }),
       });
       const json = await res.json();
       setLoading(false);
-      if (!res.ok) { setError(json.error ?? "Erro ao registar saída"); return; }
+      if (!res.ok) {
+        if (json.needsManualConfirm) { setNeedsManual("out"); return; }
+        setError(json.error ?? "Erro ao registar saída");
+        return;
+      }
       setTimesheet(json.data);
     } catch {
       queueTimesheet({ kind: "out", service_id: serviceId, lat, lng, at });
@@ -129,7 +160,7 @@ export function ClockButton({ serviceId, initialTimesheet }: Props) {
     return (
       <div className="space-y-2">
         <button
-          onClick={handleClockIn}
+          onClick={() => doClockIn(false)}
           disabled={loading}
           className="flex items-center justify-center gap-2 w-full py-4 rounded-2xl bg-[var(--color-primary)] text-white font-semibold text-sm active:bg-[var(--color-primary-hover)] transition-colors disabled:opacity-60"
         >
@@ -140,6 +171,23 @@ export function ClockButton({ serviceId, initialTimesheet }: Props) {
           )}
           {loading ? "A obter localização…" : "Bater Ponto"}
         </button>
+
+        {needsManual === "in" && (
+          <div className="bg-amber-50 border border-amber-200 rounded-2xl p-3 space-y-2">
+            <div className="flex items-center gap-2 text-amber-800 text-xs font-medium">
+              <MapPinOff className="w-4 h-4 shrink-0" />
+              GPS indisponível ou acesso negado. Confirme que está no local para registar manualmente.
+            </div>
+            <button
+              onClick={() => doClockIn(true)}
+              disabled={loading}
+              className="w-full py-2.5 rounded-xl bg-amber-600 text-white text-xs font-semibold active:bg-amber-700 transition-colors disabled:opacity-60"
+            >
+              Confirmo que estou no local — registar sem GPS
+            </button>
+          </div>
+        )}
+
         {error && <p className="text-xs text-red-600 text-center">{error}</p>}
       </div>
     );
@@ -175,7 +223,7 @@ export function ClockButton({ serviceId, initialTimesheet }: Props) {
         </div>
 
         <button
-          onClick={handleClockOut}
+          onClick={() => doClockOut(false)}
           disabled={loading}
           className="flex items-center justify-center gap-2 w-full py-4 rounded-2xl bg-red-600 text-white font-semibold text-sm active:bg-red-700 transition-colors disabled:opacity-60"
         >
@@ -186,6 +234,22 @@ export function ClockButton({ serviceId, initialTimesheet }: Props) {
           )}
           {loading ? "A registar saída…" : "Terminar Ponto"}
         </button>
+
+        {needsManual === "out" && (
+          <div className="bg-amber-50 border border-amber-200 rounded-2xl p-3 space-y-2">
+            <div className="flex items-center gap-2 text-amber-800 text-xs font-medium">
+              <MapPinOff className="w-4 h-4 shrink-0" />
+              GPS indisponível. Confirme que terminou o serviço para registar manualmente.
+            </div>
+            <button
+              onClick={() => doClockOut(true)}
+              disabled={loading}
+              className="w-full py-2.5 rounded-xl bg-amber-600 text-white text-xs font-semibold active:bg-amber-700 transition-colors disabled:opacity-60"
+            >
+              Confirmo que terminei o serviço — registar sem GPS
+            </button>
+          </div>
+        )}
 
         {error && <p className="text-xs text-red-600 text-center">{error}</p>}
       </div>

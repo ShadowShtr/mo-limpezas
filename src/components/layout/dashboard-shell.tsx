@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Sidebar } from "./sidebar";
 import { MobileHeader } from "./mobile-header";
+import { ConnectionBanner } from "@/components/ui/connection-banner";
 
 interface Props {
   children: React.ReactNode;
@@ -42,6 +43,7 @@ export function DashboardShell({ children, userName, userRole, avatarUrl }: Prop
 
       {/* Conteúdo principal */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+        <ConnectionBanner />
         <MobileHeader
           userName={userName}
           avatarUrl={avatarUrl}

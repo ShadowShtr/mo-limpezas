@@ -21,13 +21,6 @@ function parsePastTimestamp(value: unknown): string {
   return new Date().toISOString();
 }
 
-function gpsError() {
-  return NextResponse.json(
-    { error: "Ative a localização/GPS para registar o ponto." },
-    { status: 400 }
-  );
-}
-
 export async function POST(req: NextRequest) {
   const supabase = await createClient();
   const {
@@ -38,12 +31,18 @@ export async function POST(req: NextRequest) {
   const limited = await rateLimit(rateLimitKey("timesheet", user.id), 10, 60_000);
   if (limited) return limited;
 
-  const { service_id, lat: rawLat, lng: rawLng, clock_in_at: rawClockIn } = await req.json();
+  const { service_id, lat: rawLat, lng: rawLng, clock_in_at: rawClockIn, manual } = await req.json();
   const lat = parseCoord(rawLat);
   const lng = parseCoord(rawLng);
   if (!service_id)
     return NextResponse.json({ error: "service_id required" }, { status: 400 });
-  if (lat == null || lng == null) return gpsError();
+  // GPS obrigatório apenas se não for check-in manual confirmado
+  if ((lat == null || lng == null) && !manual) {
+    return NextResponse.json(
+      { error: "Ative a localização/GPS para registar o ponto.", needsManualConfirm: true },
+      { status: 400 }
+    );
+  }
 
   // Hora do clock-in: aceitar a do cliente (registo offline em fila), nunca no futuro.
   const clockInAt = parsePastTimestamp(rawClockIn);
@@ -109,11 +108,43 @@ export async function POST(req: NextRequest) {
   let distance_m: number | null = null;
   let location_warning = false;
 
-  if (service.location_lat != null && service.location_lng != null) {
+  if (lat != null && lng != null && service.location_lat != null && service.location_lng != null) {
     distance_m = Math.round(
       haversineDistanceM(lat, lng, Number(service.location_lat), Number(service.location_lng))
     );
     location_warning = distance_m > settings.gps_radius_meters;
+  }
+
+  // Guard: ponto aberto para este serviço (double clock-in)
+  const { data: dupOpen } = await admin
+    .from("timesheets")
+    .select("id")
+    .eq("service_id", service_id)
+    .eq("collaborator_id", user.id)
+    .is("clock_out_at", null)
+    .maybeSingle();
+
+  if (dupOpen) {
+    return NextResponse.json(
+      { error: "Já tem um ponto aberto para este serviço. Registe a saída primeiro." },
+      { status: 409 }
+    );
+  }
+
+  // Guard: ponto aberto noutro serviço (entrada sem saída anterior)
+  const { data: openElsewhere } = await admin
+    .from("timesheets")
+    .select("id")
+    .eq("collaborator_id", user.id)
+    .is("clock_out_at", null)
+    .neq("service_id", service_id)
+    .maybeSingle();
+
+  if (openElsewhere) {
+    return NextResponse.json(
+      { error: "Tem um ponto aberto noutro serviço. Registe a saída nesse serviço antes de iniciar um novo." },
+      { status: 409 }
+    );
   }
 
   const insertPayload = {
@@ -124,7 +155,7 @@ export async function POST(req: NextRequest) {
     clock_in_lat: lat,
     clock_in_lng: lng,
     clock_in_distance_m: distance_m,
-    location_warning,
+    location_warning: manual ? true : location_warning,
   };
 
   const { data, error } = await admin
@@ -154,12 +185,17 @@ export async function PATCH(req: NextRequest) {
   const limited = await rateLimit(rateLimitKey("timesheet", user.id), 10, 60_000);
   if (limited) return limited;
 
-  const { service_id, lat: rawLat, lng: rawLng, clock_out_at: rawClockOut } = await req.json();
+  const { service_id, lat: rawLat, lng: rawLng, clock_out_at: rawClockOut, manual } = await req.json();
   const lat = parseCoord(rawLat);
   const lng = parseCoord(rawLng);
   if (!service_id)
     return NextResponse.json({ error: "service_id required" }, { status: 400 });
-  if (lat == null || lng == null) return gpsError();
+  if ((lat == null || lng == null) && !manual) {
+    return NextResponse.json(
+      { error: "Ative a localização/GPS para registar o ponto.", needsManualConfirm: true },
+      { status: 400 }
+    );
+  }
 
   const clockOutAt = parsePastTimestamp(rawClockOut);
 

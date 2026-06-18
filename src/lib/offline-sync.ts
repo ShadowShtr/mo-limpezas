@@ -23,7 +23,13 @@ function read(): PendingTimesheet[] {
 
 function write(list: PendingTimesheet[]) {
   if (typeof window === "undefined") return;
-  localStorage.setItem(KEY, JSON.stringify(list));
+  try {
+    localStorage.setItem(KEY, JSON.stringify(list));
+  } catch (e) {
+    // Storage cheio (QuotaExceededError) ou bloqueado — continuar sem crash;
+    // os dados ficam apenas em memória até a próxima reload.
+    console.warn("[offline-sync] localStorage write failed:", e);
+  }
   window.dispatchEvent(new CustomEvent("pending-timesheets-changed", { detail: list.length }));
 }
 

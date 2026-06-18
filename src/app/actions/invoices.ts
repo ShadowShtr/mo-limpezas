@@ -41,7 +41,7 @@ export interface Invoice {
 
 function monthRange(year: number, month: number) {
   const start = `${year}-${String(month).padStart(2, "0")}-01`;
-  const end   = new Date(year, month, 0).toISOString().split("T")[0];
+  const end   = new Date(Date.UTC(year, month, 0)).toISOString().split("T")[0];
   return { start, end };
 }
 
