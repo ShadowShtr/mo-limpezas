@@ -1,0 +1,420 @@
+================================================================================
+  AUDITORIA COMPLETA — PLATAFORMA "ESCALA" (Mó Limpezas)
+  Repositório: github.com/ShadowShtr/mo-limpezas
+  Stack: Next.js 15 + TypeScript + Tailwind + Supabase + Mapbox + PWA
+  Data da auditoria: 2026-06-18
+  Autor: sessão de auditoria assistida (Claude) + ShadowShtr
+================================================================================
+
+COMO LER ESTE DOCUMENTO
+-----------------------
+  [x]  = verificado / implementado / a funcionar
+  [~]  = parcial — funciona mas tem recomendação de melhoria
+  [ ]  = recomendação ainda NÃO feita (trabalho futuro)
+  ⚠   = risco / atenção
+  →    = onde está no código (caminho:linha)
+
+REGRA DE OURO DESTA AUDITORIA:
+  NÃO PULAR ETAPAS. Cada secção tem de ser revista de cima a baixo antes de
+  marcar como concluída. Se algo for marcado [ ] ou [~], fica registado aqui
+  para não se perder. Nada passa despercebido.
+
+
+================================================================================
+PARTE 0 — RESUMO DO QUE FOI FEITO NESTA RONDA (2026-06-18)
+================================================================================
+
+1) FUNCIONALIDADE — Ficha completa de cliente
+   [x] Página /dashboard/clientes/[id] reescrita como perfil completo (antes era
+       só leitura mínima). Layout em 2 colunas no estilo da ficha de colaboradores.
+       → src/app/(dashboard)/dashboard/clientes/[id]/page.tsx
+   [x] Coluna esquerda: cartão de perfil (empresa/particular), contactos clicáveis
+       (mailto:/tel:), NIF, notas, badges de estado + "Isento de IVA".
+   [x] Coluna direita: 4 KPIs (Locais, Agendados, Concluídos, Faturado €),
+       painel "Próximas intervenções" (via view services_full), histórico recente,
+       tabela de Locais e histórico de Comunicação.
+   [x] Botão "Editar" no cabeçalho abre o ClienteSheet (edição inline).
+   [x] ClienteSheet passou a editar também Tipo (empresa/particular) e Notas.
+       → src/app/(dashboard)/dashboard/clientes/_components/sheet.tsx
+   [x] Action de cliente grava type/notes e revalida a ficha individual.
+       → src/app/actions/clientes.ts
+   Commits: 2b96521 (deploy Vercel: ready)
+
+2) SEGURANÇA — Correção de fugas multi-tenant (IDOR) — CRÍTICO
+   Descoberta: várias server actions usavam o SERVICE-ROLE client (que ignora as
+   políticas RLS do Supabase) recebendo o companyId/ids VINDOS DO CLIENTE, sem
+   autenticar o chamador. Como qualquer função "use server" é invocável
+   diretamente (POST), permitiam LER e ALTERAR dados de OUTRAS empresas.
+   ⚠ O script automático scripts/audit-security.ts NÃO apanhava isto, porque ele
+     só confirma que "company_id" aparece na action — não distingue se vem da
+     sessão ou de um parâmetro controlado pelo cliente.
+
+   Correção aplicada:
+   [x] Novo helper requireProfile() → src/lib/auth-guard.ts
+       - Valida a sessão (auth.getUser)
+       - Confirma o papel (admin/gestor quando aplicável)
+       - DEVOLVE SEMPRE o company_id da SESSÃO (nunca o parâmetro do cliente)
+   [x] Aplicado a 20+ funções em 9 ficheiros:
+       - financial-dashboard.ts : getFinancialDashboard
+       - reports.ts             : getReportsData
+       - cash-flow.ts           : getCashFlowEntries, getAccountsData
+       - invoices.ts            : generateInvoices (WRITE), getInvoices, getUnbilledServices
+       - payroll.ts             : calculateAndSavePayroll (WRITE), getPayrollRecords
+       - settings.ts            : getCompanySettings
+       - management-tasks.ts    : get/create/update/delete + get/saveKanbanColumns
+       - timesheets.ts          : saveActualTimes, adminEditTimesheet, adminCreateTimesheet
+       - collaborator-documents : getCollaboratorDocuments, deleteCollaboratorDocument,
+                                  getSignedDocumentUrl, list/archive
+   [x] Mutações passaram a ter .eq("company_id", profile.company_id) (scoping).
+   [x] getSignedDocumentUrl agora só assina ficheiros cujo path começa por
+       `${company_id}/` — um signed URL ignora as políticas de storage, por isso
+       sem este check qualquer utilizador podia gerar link para ficheiros de
+       outra empresa (recibos de salário, documentos pessoais).
+   [x] Função pura isStoragePathInCompany() extraída + 5 testes novos.
+   Commits: ebc00b9 (deploy Vercel: ready)
+
+3) VERIFICAÇÕES AUTOMÁTICAS — estado no fecho desta ronda
+   [x] Testes (vitest): 271 a passar (266 + 5 novos de segurança)
+   [x] Type-check (tsc --noEmit): 0 erros
+   [x] ESLint: 0 erros (apenas warnings cosméticos — ver Parte 8)
+   [x] Build de produção no Vercel: ready (prebuild check-env + audit-security passam)
+   [x] audit-security.ts: só assinala /api/health (público intencional)
+
+
+================================================================================
+PARTE 1 — ARMAZENAMENTO (STORAGE) E RESOLUÇÃO
+================================================================================
+
+CONTEXTO: Os ficheiros (documentos de colaboradoras, recibos, fotos de avarias)
+ficam no Supabase Storage, bucket "collaborator-documents". A base de dados
+guarda metadados em collaborator_documents.
+
+  [x] Path de storage normalizado: `${companyId}/${collaboratorId}/${ts}-${nome}`
+      → src/lib/collaborator-documents.ts:buildDocumentStoragePath
+  [x] Nome do ficheiro é sanitizado (só a-z, 0-9, . _ -) — evita path traversal e
+      caracteres inválidos. → sanitizeDocumentFileName
+  [x] Acesso a ficheiros via SIGNED URL temporário (1h), nunca URL pública direta
+      para conteúdo sensível. → getSignedDocumentUrl
+  [x] Signed URL restrito à empresa da sessão (corrigido nesta ronda — ver Parte 0.2)
+  [x] Limite de tamanho no upload: 50 MB (admin) / compressão no telemóvel
+      (1600px JPEG 82%) antes de enviar.
+  [x] Retenção automática: documentos expiram e são arquivados (manifesto JSON +
+      remoção do storage) por cron mensal protegido por CRON_SECRET.
+      → src/app/api/cron/archive-documents/route.ts
+  [x] Quota de localStorage tratada: se o localStorage estiver cheio/bloqueado,
+      a fila offline cai para memória (memQueue) sem rebentar.
+      → src/lib/offline-sync.ts (try/catch nos read/write + fallback)
+
+  CHECKS DE RESOLUÇÃO DE ARMAZENAMENTO (passar um a um, não pular):
+  [x] Upload com ficheiro grande (>50MB) → rejeitado com mensagem clara.
+  [x] Upload sem ficheiro → "Ficheiro em falta".
+  [x] Download de doc de OUTRA empresa → "Sem permissão para aceder a este ficheiro".
+  [x] localStorage cheio → não crasha, usa memória; aviso em console.warn.
+  [ ] RECOMENDAÇÃO: validar mime-type no servidor (hoje aceita qualquer tipo após
+      a migração 023 ter removido a restrição de MIME). Reintroduzir allowlist
+      (pdf, jpg, png, heic, docx) no servidor para evitar uploads abusivos.
+  [ ] RECOMENDAÇÃO: alerta quando o bucket se aproximar do limite do plano Supabase.
+
+
+================================================================================
+PARTE 2 — CACHE E SERVICE WORKER (PWA)
+================================================================================
+
+  [x] Service worker versionado: const CACHE = "mo-limpezas-v3".
+      → public/sw.js
+  [x] Estratégia correta por tipo de pedido:
+        - API e autenticação  → SEMPRE rede, NUNCA cache (dados sempre frescos)
+        - Assets estáticos    → cache-first (JS/CSS/imagens/fonts)
+        - Páginas HTML        → SEMPRE rede; offline cai para página /offline
+  [x] skipWaiting() + clients.claim() → atualização do SW propaga a todos os
+      clientes sem precisar fechar a app.
+  [x] Purga de cache antigo no "activate" (apaga todas as chaves != CACHE atual).
+  [x] Mensagem "SKIP_WAITING" suportada (força ativação imediata da nova versão).
+  [x] PRECACHE mínimo: ["/offline"] — não cacheia páginas com dados de negócio.
+
+  ⚠ REGRA OPERACIONAL: ao publicar mudanças que afetem assets, INCREMENTAR o
+    número de versão do CACHE (v3 → v4) garante purga em todos os telemóveis.
+    NÃO PULAR este passo em releases de PWA.
+
+  CHECKS DE CACHE (não pular):
+  [x] Após deploy, a app móvel recebe a nova versão sem reinstalar.
+  [x] Sem ligação → mostra /offline em vez de erro do browser.
+  [x] Dados financeiros/serviços nunca vêm de cache obsoleta (API = network-only).
+  [ ] RECOMENDAÇÃO: registar a versão do SW num header/console no arranque para
+      diagnóstico ("que versão tem este telemóvel?").
+
+
+================================================================================
+PARTE 3 — CARREGAMENTO (LOADING) E ESTADOS DE ESPERA
+================================================================================
+
+  [x] Skeletons de carregamento por rota (Next.js loading.tsx):
+        - /dashboard/loading.tsx
+        - /dashboard/calendario/loading.tsx
+        - /dashboard/colaboradores/[id]/loading.tsx
+        - /app/loading.tsx, /app/perfil/loading.tsx
+  [x] Botões com estado "pending" durante operações assíncronas (useTransition +
+      disabled + spinner Loader2). Ex.: ClienteSheet, sheets em geral.
+  [x] Estados de texto progressivos em uploads no telemóvel:
+      "A comprimir..." → "A enviar..." → "A guardar...".
+  [x] Empty states explícitos (ex.: "Nenhuma intervenção agendada.",
+      "Ainda não há clientes.") em vez de ecrãs em branco.
+
+  [~] FICHA DE CLIENTE: a página /clientes/[id] faz várias queries em paralelo
+      (Promise.all) — bom — mas NÃO tem loading.tsx próprio. Herda o loading do
+      segmento. RECOMENDAÇÃO: adicionar clientes/[id]/loading.tsx para skeleton
+      dedicado (igual ao de colaboradores/[id]).
+  [ ] RECOMENDAÇÃO: o KPI "Faturado" lê até 2000 serviços concluídos
+      (.limit(2000)). Para clientes com muito histórico, trocar por uma soma
+      agregada em SQL (view/RPC) para não transferir milhares de linhas.
+
+  CHECKS DE CARREGAMENTO (não pular):
+  [x] Navegar entre páginas mostra skeleton, não ecrã branco.
+  [x] Submeter formulário desativa o botão (evita duplo submit).
+  [x] Listas vazias mostram mensagem amigável.
+
+
+================================================================================
+PARTE 4 — VELOCIDADE DA PÁGINA (PERFORMANCE)
+================================================================================
+
+  [x] Queries paralelizadas com Promise.all nas páginas server (clientes/[id],
+      colaboradores/[id], calendário, etc.) — reduz waterfalls.
+  [x] Selects pedem só as colunas necessárias (não SELECT *) na maioria dos casos.
+  [x] Paginação client-side nas tabelas (usePagination, 10 linhas/página).
+  [x] Glassmorphism com backdrop-filter — efeito visual sem imagens pesadas.
+  [x] Assets estáticos servidos com cache-first pelo service worker.
+
+  [~] IMAGENS: alguns componentes usam <img> em vez de next/image
+      (app-header, mobile-header, perfil). Funciona, mas perde otimização
+      automática (LCP/bandwidth). → ver warnings ESLint na Parte 8.
+  [ ] RECOMENDAÇÃO: medir Web Vitals reais em produção (LCP/CLS/INP) com o
+      Vercel Analytics ou Lighthouse no telemóvel-alvo das colaboradoras.
+  [ ] RECOMENDAÇÃO: a query de "Faturado" da ficha de cliente (limit 2000) e a de
+      "Concluídos" deviam ser COUNT/SUM no servidor (ver Parte 3).
+
+  CHECKS DE VELOCIDADE (não pular):
+  [x] Páginas-chave não têm N+1 óbvio (queries em paralelo).
+  [x] Tabelas grandes paginadas.
+  [ ] Lighthouse mobile >= 90 em Performance (POR MEDIR — fazer e registar aqui).
+
+
+================================================================================
+PARTE 5 — BOTÕES E AÇÕES (todos respondem corretamente?)
+================================================================================
+
+  MÉTODO: o build de produção (next build) compila TODOS os componentes e JSX —
+  220+ elementos <button> no projeto. Se um onClick referenciasse um símbolo
+  inexistente ou um handler partido, o build FALHAVA. O build passou (Vercel: ready),
+  por isso todos os botões estão LIGADOS a handlers válidos.
+
+  [x] Botões de formulário usam type="submit" + form="id" ou onClick com handler.
+  [x] Botões de ação assíncrona ficam disabled enquanto pending (anti-duplo-clique).
+  [x] Botões destrutivos (apagar/arquivar) passam por confirm-dialog reutilizável.
+      → src/components/ui/confirm-dialog.tsx
+  [x] Feedback ao utilizador via toast global após ações.
+      → src/components/ui/toast.tsx
+  [x] Ficha de cliente: "Editar", "Novo local", contactos (mailto/tel) — todos
+      ligados e testados na compilação.
+
+  ⚠ LIMITAÇÃO: NÃO existe suite end-to-end (Playwright/Cypress) instalada. A
+    compilação garante que os botões existem e estão ligados, mas NÃO prova que
+    cada um produz o efeito de negócio correto em runtime.
+
+  CHECKS DE BOTÕES (não pular):
+  [x] Compilação confirma que todos os handlers existem.
+  [x] Botões assíncronos mostram estado de carregamento e bloqueiam re-clique.
+  [x] Ações destrutivas pedem confirmação.
+  [ ] RECOMENDAÇÃO FORTE: instalar Playwright e escrever testes E2E dos fluxos
+      críticos: login → criar cliente → criar local → agendar serviço →
+      clock-in/out → gerar fatura → folha de pagamento. Só assim se valida
+      "cada botão faz a coisa certa" de forma automática e repetível.
+
+
+================================================================================
+PARTE 6 — VULNERABILIDADES (SEGURANÇA)
+================================================================================
+
+JÁ FEITO EM RONDAS ANTERIORES (mantém-se válido):
+  [x] CSP completa + HSTS (1 ano, includeSubDomains, preload).
+      → next.config.ts (Content-Security-Policy, Strict-Transport-Security)
+  [x] CSP cobre Supabase, Mapbox, Resend, Nominatim, CartoCDN (img-src/connect-src).
+  [x] /api/seed-demo bloqueado em produção (403).
+  [x] Rotas /api/cron/* protegidas por CRON_SECRET (com guard contra secret vazio).
+  [x] Rate limiting em memória (janelas deslizantes):
+        - /api/app/timesheet: 10 req/min por utilizador
+        - /api/push/send: 20 req/min por empresa
+        - login 5/min, magic link 3/min, reset 3/5min
+      → src/lib/rate-limit.ts
+  [x] Validação de inputs com Zod nas actions sensíveis (auth, colaboradores,
+      settings, email).
+  [x] Multi-tenancy: company_id em todas as tabelas + RLS.
+
+FEITO NESTA RONDA:
+  [x] CORREÇÃO IDOR multi-tenant em 20+ server actions (ver Parte 0.2). Esta era
+      a falha mais grave: leitura/escrita cross-tenant via service-role.
+  [x] Signed URLs de storage restritos à empresa.
+
+CHECKS DE VULNERABILIDADES (não pular):
+  [x] Nenhuma server action com service-role confia em companyId do cliente.
+  [x] Signed URLs não atravessam empresas.
+  [x] Cron protegido; seed bloqueado em prod; rate limiting ativo.
+  [x] /api/health é público mas não expõe dados (só {ok:true}) — aceite.
+  [ ] RECOMENDAÇÃO: reforçar scripts/audit-security.ts para DETETAR o padrão IDOR
+      (server action exportada que recebe `companyId`/`...Id` por parâmetro e usa
+      createAdminClient). Hoje tem ponto cego. Evita regressões futuras.
+  [ ] RECOMENDAÇÃO: revisão periódica das políticas RLS no Supabase (as RLS são a
+      2ª linha de defesa; o service-role salta-as, daí o guard na aplicação ser
+      obrigatório).
+  [ ] RECOMENDAÇÃO: rotação do token do Supabase CLI (expira ~2026-07-08) e do
+      CRON_SECRET; confirmar que nenhuma chave está no repositório.
+
+
+================================================================================
+PARTE 7 — TRAVAMENTOS, ERROS E ALTERNATIVAS TEMPORÁRIAS (RESILIÊNCIA)
+================================================================================
+
+Esta é a parte mais importante para o terreno: o que acontece QUANDO ALGO FALHA
+e que alternativa temporária existe para o trabalho não parar.
+
+7.1 — GPS NÃO PEGA NO CLOCK-IN/OUT (o caso que pediste)
+  COMO FUNCIONA HOJE:
+  [x] Se há coordenadas mas a colaboradora está LONGE do local, o ponto é
+      REGISTADO na mesma com location_warning = true (NUNCA bloqueia).
+      → src/app/api/app/timesheet/route.ts:118,141
+  [x] Se NÃO há GPS de todo, o servidor responde needsManualConfirm = true. A
+      colaboradora confirma manualmente e o ponto entra com manual_checkin = true
+      e location_warning = true, ficando MARCADO PARA VALIDAÇÃO posterior pelo gestor.
+      → route.ts:66-70, 141-145, 163-168 (logAudit "timesheet.manual_checkin")
+  [x] O gestor revê e corrige depois no "Registo de Ponto"
+      (adminEditTimesheet/adminCreateTimesheet).
+  RESULTADO: o trabalho nunca para por causa do GPS; fica um rasto auditável
+  ("GPS indisponível/impreciso confirmado pela colaboradora") para validar a frio.
+
+7.2 — SEM LIGAÇÃO À INTERNET (offline)
+  [x] Fila offline de pontos em localStorage com fallback em memória.
+      → src/lib/offline-sync.ts
+  [x] Cada ponto leva um client_event_id (UUID) — IDEMPOTÊNCIA: ao voltar a rede,
+      sincroniza e o servidor faz upsert onConflict=client_event_id,
+      ignoreDuplicates → nunca duplica o ponto mesmo que reenvie.
+      → route.ts:150
+  [x] Sincronização automática quando navigator.onLine volta a true
+      (initOfflineSync / syncPendingTimesheets).
+  [x] Pontos que falham repetidamente vão para uma fila "failed" separada (não se
+      perdem; ficam para reenvio/visibilidade).
+  [x] Banner de ligação informa o estado. → src/components/ui/connection-banner.tsx
+  [x] Página /offline servida pelo service worker quando não há rede.
+
+7.3 — PONTO REGISTADO TARDE (sincronizado horas depois)
+  [x] parsePastTimestamp aceita o carimbo de tempo real do evento; se for "muito
+      antigo" (tooOld) regista logAudit "timesheet.late_sync" com o atraso em horas,
+      para o gestor saber que foi sincronizado a frio.
+      → route.ts:73,170-174
+
+7.4 — DUPLO CLOCK-IN / PONTO ABERTO NOUTRO SERVIÇO
+  [x] Bloqueia 2º ponto aberto no mesmo serviço (409, mensagem clara).
+  [x] Bloqueia abrir ponto novo com outro ainda aberto (obriga a fechar primeiro).
+      → route.ts:121-131
+  [x] 30 testes de concorrência cobrem 35 colaboradoras a bater ponto às 8h em
+      simultâneo. → src/__tests__/clockin-concurrent.test.ts
+
+7.5 — ERRO NUMA SERVER ACTION (não rebentar a UI)
+  [x] Padrão global: as actions nunca lançam exceção crua ao cliente; devolvem
+      sempre { ok:false, error:"mensagem real" } (try/catch / wrapper).
+      → auth.ts, cancellations.ts, cash-flow.ts, notifications.ts, email.ts,
+        whatsapp.ts, collaborator-documents.ts, etc.
+  [x] requireProfile devolve {ok:false,error} em vez de explodir quando não
+      autenticado/sem permissão. → src/lib/auth-guard.ts
+
+7.6 — ERRO DE RENDER / PÁGINA REBENTA
+  [x] error.tsx (boundary por segmento) + global-error.tsx (boundary raiz) +
+      not-found.tsx (404 amigável). → src/app/
+  [x] Mapa: se o estilo Mapbox falha, faz fallback de estilo e força remount via
+      key; se até o fallback falha, mostra "Mapa indisponível" controlado.
+
+7.7 — EMAIL / NOTIFICAÇÕES FALHAM
+  [x] Email (Resend) e Push (VAPID) tratados como best-effort com fallback:
+      WhatsApp via wa.me (1 clique manual, sem API/custos) sempre disponível como
+      alternativa para avisar o cliente.
+  ⚠ Remetente atual usa onboarding@resend.dev (domínio molimpezas.pt ainda não
+    verificado no Resend — DNS por adicionar). Emails funcionam, mas o remetente
+    não é o do domínio próprio. (Já registado no CLAUDE.md como próxima task.)
+
+CHECKS DE RESILIÊNCIA (não pular):
+  [x] Sem GPS → ponto manual marcado para validação (não bloqueia).
+  [x] Sem rede → fila offline idempotente, sincroniza sozinha.
+  [x] Sync tardio → auditado.
+  [x] Duplo ponto → bloqueado.
+  [x] Action falha → {ok:false,error}, UI não rebenta.
+  [x] Render falha → boundaries error/global-error/not-found.
+  [ ] RECOMENDAÇÃO: integrar monitorização de erros (Sentry) para apanhar
+      exceções de runtime em produção que não aparecem nos testes.
+  [ ] RECOMENDAÇÃO: UI no Registo de Ponto que destaque pontos com
+      location_warning/manual_checkin pendentes de validação (lista filtrável).
+
+
+================================================================================
+PARTE 8 — QUALIDADE / ESCRITA DO CÓDIGO (limpeza e erros)
+================================================================================
+
+  [x] Type-check (tsc --noEmit): 0 erros — tipos consistentes.
+  [x] Build de produção: passa.
+  [x] Padrões consistentes: actions com guard + scoping; sheets com useTransition;
+      design system (verde #16A34A, Inter, ícones Lucide) respeitado.
+
+  WARNINGS ESLint ATUAIS (não bloqueiam, mas limpar quando houver tempo):
+  [~] @next/next/no-img-element em:
+        - src/app/(app)/app/perfil/page.tsx:63
+        - src/components/layout/app-header.tsx:75
+        - src/components/layout/mobile-header.tsx:42
+      → trocar <img> por next/image (otimização + menos bandwidth).
+  [~] no-unused-vars (variáveis/parametros não usados):
+        - tarefas/_components/tasks-client.tsx: moving/setMoving/_mc
+        - api/app/timesheet/route.ts: client_event_id (l.193), affected (l.236)
+        - api/seed-demo/route.ts: _req
+        - recuperar/nova-senha/page.tsx:32 (no-unused-expressions)
+  [~] Parâmetros _companyId mantidos por compatibilidade de assinatura nas actions
+      corrigidas — geram warning de "unused" mas são intencionais (os callers ainda
+      passam o valor posicionalmente). Limpeza opcional: remover o parâmetro e
+      atualizar os callers para não o passar.
+
+  CHECKS DE CÓDIGO (não pular):
+  [x] Sem erros de tipo.
+  [x] Sem imports órfãos nos ficheiros alterados (createAdminClient removido onde
+      deixou de ser usado).
+  [x] Convenções de nomes e estilo coerentes com o resto do projeto.
+  [ ] RECOMENDAÇÃO: tratar os warnings ESLint acima num PR de "limpeza" dedicado.
+
+
+================================================================================
+PARTE 9 — RASTREIO DE ESTADO (não saltar nada / pendentes)
+================================================================================
+
+PENDENTES REGISTADOS (para não se perder nada):
+  [ ] Verificar domínio molimpezas.pt no Resend (DNS) → repor RESEND_FROM_EMAIL.
+  [ ] Reforçar audit-security.ts para detetar IDOR por parâmetro (Parte 6).
+  [ ] Instalar Playwright + E2E dos fluxos críticos (Parte 5).
+  [ ] Integrar Sentry (Parte 7).
+  [ ] loading.tsx dedicado para clientes/[id] (Parte 3).
+  [ ] Trocar KPIs com .limit(2000) por agregação SQL (Parte 3/4).
+  [ ] Reintroduzir allowlist de mime-type no upload (Parte 1).
+  [ ] Limpar warnings ESLint (Parte 8).
+  [ ] Medir Lighthouse mobile e registar resultado (Parte 4).
+  [ ] Rotação de tokens/segredos (Parte 6).
+
+PROCESSO PARA PRÓXIMAS AUDITORIAS (não pular etapas):
+  1. npm test                        → tem de ficar a 100% (atualmente 271/271)
+  2. npx tsc --noEmit                → 0 erros
+  3. npx eslint "src/**/*.{ts,tsx}"  → 0 erros (warnings registados na Parte 8)
+  4. npx tsx scripts/audit-security.ts
+  5. Build/deploy no Vercel          → ready (corre prebuild check-env + audit)
+  6. Revisão manual de IDOR: qualquer action nova com createAdminClient TEM de
+     usar requireProfile e derivar company_id da sessão.
+  7. Atualizar este ficheiro: marcar [x]/[~]/[ ] e mover pendentes resolvidos.
+
+
+================================================================================
+FIM DO RELATÓRIO — última atualização: 2026-06-18
+Commits desta ronda: 2b96521 (ficha de cliente), ebc00b9 (correções de segurança)
+Estado: 271 testes a passar · tsc limpo · build/deploy Vercel: ready
+================================================================================
