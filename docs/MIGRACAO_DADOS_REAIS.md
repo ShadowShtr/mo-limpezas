@@ -128,7 +128,18 @@ node scripts/migrate-real-data.mjs --data <caminho>.json [--wipe]
 
 # 2. Geocodificar locais sem coordenadas
 node scripts/geocode-locations.mjs
+
+# 3. (FUTURO) Envio em massa de recuperação de password.
+#    Requer domínio verificado no Resend. Sem --send é dry-run (só lista).
+node scripts/send-password-recovery.mjs            # dry-run
+node scripts/send-password-recovery.mjs --send     # envia
 ```
+
+> **Recuperação de password sem email** (enquanto não há domínio verificado no
+> Resend): as colaboradoras trocam em Perfil → "Alterar password"; admins/gestores
+> usam "Redefinir password" na ficha do colaborador (gera nova senha provisória).
+> O envio por email fica pronto em `scripts/send-password-recovery.mjs` para quando
+> o domínio existir.
 
 Requer `.env.local` com `NEXT_PUBLIC_SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` e
 `NEXT_PUBLIC_MAPBOX_TOKEN`. Ver cada script para o formato do JSON esperado.
