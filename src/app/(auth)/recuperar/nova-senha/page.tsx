@@ -8,7 +8,6 @@ import { Loader2, CheckCircle2 } from "lucide-react";
 
 export default function NovaSenhaPage() {
   const router = useRouter();
-  const [supabase] = useState(() => createClient());
   const [ready, setReady] = useState(false);
   const [invalid, setInvalid] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -19,6 +18,7 @@ export default function NovaSenhaPage() {
   // estabelecer a sessão de recuperação (não depende do Site URL do Supabase).
   useEffect(() => {
     let active = true;
+    const supabase = createClient();
     const params = new URLSearchParams(window.location.search);
     const token_hash = params.get("token_hash");
     const type = params.get("type") as "recovery" | null;
@@ -39,7 +39,7 @@ export default function NovaSenhaPage() {
     }
     run();
     return () => { active = false; };
-  }, [supabase]);
+  }, []);
 
   async function handleSubmit(e: React.SyntheticEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -51,6 +51,7 @@ export default function NovaSenhaPage() {
     if (password !== confirm) return setMessage({ type: "error", text: "As passwords não coincidem." });
 
     setLoading(true);
+    const supabase = createClient();
     const { data, error } = await supabase.auth.updateUser({ password });
     setLoading(false);
     if (error) return setMessage({ type: "error", text: "Não foi possível alterar a password. Pede um novo link." });
