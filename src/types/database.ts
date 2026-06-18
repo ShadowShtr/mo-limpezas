@@ -1,5 +1,5 @@
-// Tipos manuais — serão substituídos pelos gerados automaticamente após as migrations:
-// npx supabase gen types typescript --project-id <project-id> > src/types/database.ts
+// Tipos manuais — actualizar após cada migration.
+// Para regenerar completamente: npx supabase gen types typescript --project-id <ref> --schema public > src/types/supabase.ts
 
 export type ScheduleDay = {
   day: "mon" | "tue" | "wed" | "thu" | "fri" | "sat" | "sun" | "all";
@@ -78,9 +78,15 @@ export type Database = {
         Relationships: [];
       };
       timesheets: {
-        Row: { id: string; service_id: string; collaborator_id: string; company_id: string; clock_in_at: string | null; clock_out_at: string | null; clock_in_lat: number | null; clock_in_lng: number | null; clock_out_lat: number | null; clock_out_lng: number | null; location_warning: boolean; duration_minutes: number | null; notes: string | null; created_at: string; updated_at: string };
-        Insert: { service_id: string; collaborator_id: string; company_id: string; clock_in_at?: string | null; clock_in_lat?: number | null; clock_in_lng?: number | null; clock_in_distance_m?: number | null; location_warning?: boolean };
-        Update: { clock_in_at?: string | null; clock_out_at?: string | null; clock_out_lat?: number | null; clock_out_lng?: number | null; location_warning?: boolean; duration_minutes?: number | null; notes?: string | null };
+        Row: { id: string; service_id: string; collaborator_id: string; company_id: string; clock_in_at: string | null; clock_out_at: string | null; clock_in_lat: number | null; clock_in_lng: number | null; clock_out_lat: number | null; clock_out_lng: number | null; clock_in_distance_m: number | null; location_warning: boolean; duration_minutes: number | null; notes: string | null; client_event_id: string | null; manual_checkin: boolean; gps_accuracy_m: number | null; created_at: string; updated_at: string };
+        Insert: { service_id: string; collaborator_id: string; company_id: string; clock_in_at?: string | null; clock_in_lat?: number | null; clock_in_lng?: number | null; clock_in_distance_m?: number | null; location_warning?: boolean; client_event_id?: string | null; manual_checkin?: boolean; gps_accuracy_m?: number | null };
+        Update: { clock_in_at?: string | null; clock_out_at?: string | null; clock_out_lat?: number | null; clock_out_lng?: number | null; location_warning?: boolean; duration_minutes?: number | null; notes?: string | null; client_event_id?: string | null; manual_checkin?: boolean; gps_accuracy_m?: number | null };
+        Relationships: [];
+      };
+      audit_logs: {
+        Row: { id: string; company_id: string; actor_id: string; action: string; entity_type: string; entity_id: string | null; meta: Record<string, unknown>; created_at: string };
+        Insert: { company_id: string; actor_id: string; action: string; entity_type?: string; entity_id?: string | null; meta?: Record<string, unknown>; id?: string; created_at?: string };
+        Update: Record<string, never>;
         Relationships: [];
       };
       absences: {
@@ -193,10 +199,16 @@ export type Database = {
         Update: { title?: string; body?: string | null; status?: "pendente" | "em_curso" | "concluido"; priority?: "normal" | "urgente"; assigned_to?: string | null; due_date?: string | null; completed_at?: string | null; updated_at?: string };
         Relationships: [];
       };
+      service_price_audit: {
+        Row: { id: string; service_id: string; old_value: number | null; new_value: number | null; changed_by: string | null; reason: string | null; created_at: string };
+        Insert: { service_id: string; old_value?: number | null; new_value?: number | null; changed_by?: string | null; reason?: string | null };
+        Update: Record<string, never>;
+        Relationships: [];
+      };
     };
     Views: {
       services_full: {
-        Row: { id: string; company_id: string; reference_number: string; scheduled_start: string; scheduled_end: string; actual_start: string | null; actual_end: string | null; status: string; notes: string | null; calculated_value: number | null; manual_value: number | null; contract_id: string | null; is_exception: boolean; location_id: string; location_name: string; location_address: string; location_lat: number | null; location_lng: number | null; location_access_code: string | null; location_instructions: string | null; client_id: string; client_name: string; team_id: string | null; team_name: string | null; team_color: string | null };
+        Row: { id: string; company_id: string; reference_number: string; scheduled_start: string; scheduled_end: string; actual_start: string | null; actual_end: string | null; status: string; notes: string | null; calculated_value: number | null; manual_value: number | null; contract_id: string | null; is_exception: boolean; location_id: string; location_name: string; location_address: string; location_lat: number | null; location_lng: number | null; location_access_code: string | null; location_instructions: string | null; client_id: string; client_name: string; client_email: string | null; client_phone: string | null; team_id: string | null; team_name: string | null; team_color: string | null };
         Relationships: [];
       };
       monthly_hours_summary: {

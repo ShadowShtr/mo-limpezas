@@ -36,9 +36,7 @@ async function logAudit(
   meta: Record<string, unknown>
 ) {
   try {
-    // audit_logs é uma tabela nova (migration 025) — usar cast até os tipos serem regenerados
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await (admin as any).from("audit_logs").insert({ company_id: companyId, actor_id: actorId, action, entity_type: "timesheet", entity_id: entityId, meta });
+    await admin.from("audit_logs").insert({ company_id: companyId, actor_id: actorId, action, entity_type: "timesheet", entity_id: entityId, meta });
   } catch { /* não bloquear operação se audit falhar */ }
 }
 
@@ -157,9 +155,8 @@ export async function POST(req: NextRequest) {
   };
 
   // Upsert com idempotência: se client_event_id já existe, ignorar silenciosamente.
-  // Cast necessário até migration 025 ser aplicada e tipos regenerados.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data, error } = await (admin.from("timesheets") as any)
+  const { data, error } = await admin
+    .from("timesheets")
     .upsert(insertPayload, { onConflict: "client_event_id", ignoreDuplicates: true })
     .select()
     .maybeSingle();

@@ -61,6 +61,8 @@ function svc(
     location_instructions: null,
     client_id: `cli-${id}`,
     client_name: clientName,
+    client_email: null,
+    client_phone: null,
     team_id: team.id,
     team_name: team.name,
     team_color: team.color,
