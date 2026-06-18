@@ -83,19 +83,20 @@ export async function resetPassword(formData: FormData) {
   const email = emailResult.data;
   const { createAdminClient } = await import("@/lib/supabase/admin");
   const admin = createAdminClient();
-  const redirectTo = `${process.env.NEXT_PUBLIC_APP_URL}/auth/callback?next=/recuperar/nova-senha`;
 
-  // Gerar link de recuperação sem usar o email padrão do Supabase
+  // Gera o token de recuperação. Usamos o token_hash num link próprio para a
+  // página chamar verifyOtp — assim não dependemos do Site URL/allowlist do Supabase.
   const { data: linkData, error: linkError } = await admin.auth.admin.generateLink({
     type: "recovery",
     email,
-    options: { redirectTo },
   });
 
   // Não revelar se o email existe — devolver sempre sucesso genérico
-  if (linkError || !linkData?.properties?.action_link) {
+  if (linkError || !linkData?.properties?.hashed_token) {
     return { success: "Se o email existir, enviámos as instruções de recuperação." };
   }
+
+  const recoveryUrl = `${process.env.NEXT_PUBLIC_APP_URL}/recuperar/nova-senha?token_hash=${linkData.properties.hashed_token}&type=recovery`;
 
   // Enviar email personalizado via Resend
   try {
@@ -104,14 +105,12 @@ export async function resetPassword(formData: FormData) {
     const name = (linkData.user?.user_metadata?.full_name as string) || "colaboradora";
     const { subject, html } = passwordRecoveryTemplate({
       collaboratorName: name,
-      recoveryUrl: linkData.properties.action_link,
+      recoveryUrl,
     });
     const resend = getResend();
     await resend.emails.send({ from: FROM_EMAIL, to: email, subject, html });
   } catch {
-    // Fallback: email base do Supabase
-    const supabase = await createClient();
-    await supabase.auth.resetPasswordForEmail(email, { redirectTo });
+    // Se o Resend falhar, não conseguimos entregar — resposta genérica na mesma.
   }
 
   return { success: "Se o email existir, enviámos as instruções de recuperação." };
