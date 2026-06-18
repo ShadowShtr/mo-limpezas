@@ -10,6 +10,7 @@ import {
   FileText,
 } from "lucide-react";
 import type { HorasRow, AbsentismoRow, ReceitaRow, ServicosRow } from "@/app/actions/reports";
+import { downloadCsv } from "@/lib/csv";
 
 type Tab = "horas" | "absentismo" | "receita" | "servicos";
 
@@ -34,14 +35,7 @@ function fmtEuros(value: number) {
 }
 
 function exportCsv(filename: string, headers: string[], rows: string[][]) {
-  const lines = [headers, ...rows].map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(","));
-  const blob = new Blob(["﻿" + lines.join("\r\n")], { type: "text/csv;charset=utf-8;" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  a.click();
-  URL.revokeObjectURL(url);
+  downloadCsv(filename, headers, rows);
 }
 
 async function exportClientePdf(row: ReceitaRow, mesLabel: string, vatRate: number) {

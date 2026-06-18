@@ -1,47 +1,58 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { WifiOff, CloudOff } from "lucide-react";
 
 type Status = "online" | "offline" | "slow";
 
 const CHECK_URL = "/api/health";
+const PROBE_TIMEOUT_MS = 5000;
 const SLOW_THRESHOLD_MS = 4000;
+const INTERVAL_MS = 30_000;
 
 export function ConnectionBanner() {
   const [status, setStatus] = useState<Status>("online");
+  const inFlightRef = useRef(false);
+  const abortRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
-    let timer: ReturnType<typeof setTimeout>;
-
-    function handleOffline() { setStatus("offline"); }
-    function handleOnline() { checkLatency(); }
-
     async function checkLatency() {
+      if (inFlightRef.current) return; // nunca acumular pedidos
       if (!navigator.onLine) { setStatus("offline"); return; }
+
+      inFlightRef.current = true;
+      const controller = new AbortController();
+      abortRef.current = controller;
+      const timeoutId = setTimeout(() => controller.abort(), PROBE_TIMEOUT_MS);
+
       const start = Date.now();
       try {
-        const res = await fetch(CHECK_URL, { method: "HEAD", cache: "no-store" });
+        const res = await fetch(CHECK_URL, { method: "HEAD", cache: "no-store", signal: controller.signal });
         const ms = Date.now() - start;
-        if (!res.ok) { setStatus("slow"); }
-        else if (ms > SLOW_THRESHOLD_MS) { setStatus("slow"); }
-        else { setStatus("online"); }
+        setStatus(!res.ok || ms > SLOW_THRESHOLD_MS ? "slow" : "online");
       } catch {
-        setStatus("slow");
+        // Timeout (AbortError) ou falha de rede
+        setStatus(navigator.onLine ? "slow" : "offline");
+      } finally {
+        clearTimeout(timeoutId);
+        inFlightRef.current = false;
+        abortRef.current = null;
       }
     }
 
+    function handleOffline() { abortRef.current?.abort(); setStatus("offline"); }
+    function handleOnline()  { void checkLatency(); }
+
     window.addEventListener("offline", handleOffline);
     window.addEventListener("online", handleOnline);
-
-    // Verificar a cada 30s
-    timer = setInterval(checkLatency, 30_000);
-    checkLatency();
+    const timer = setInterval(checkLatency, INTERVAL_MS);
+    void checkLatency();
 
     return () => {
       window.removeEventListener("offline", handleOffline);
       window.removeEventListener("online", handleOnline);
       clearInterval(timer);
+      abortRef.current?.abort();
     };
   }, []);
 
@@ -50,23 +61,14 @@ export function ConnectionBanner() {
   return (
     <div
       role="alert"
-      className={`
-        flex items-center justify-center gap-2 px-4 py-2 text-xs font-medium z-50
-        ${status === "offline"
-          ? "bg-red-600 text-white"
-          : "bg-amber-500 text-white"}
-      `}
+      className={`flex items-center justify-center gap-2 px-4 py-2 text-xs font-medium z-50 ${
+        status === "offline" ? "bg-red-600 text-white" : "bg-amber-500 text-white"
+      }`}
     >
       {status === "offline" ? (
-        <>
-          <WifiOff className="w-3.5 h-3.5 shrink-0" />
-          Sem ligação — os pontos serão guardados e enviados quando a rede voltar.
-        </>
+        <><WifiOff className="w-3.5 h-3.5 shrink-0" />Sem ligação — os pontos serão guardados e enviados quando a rede voltar.</>
       ) : (
-        <>
-          <CloudOff className="w-3.5 h-3.5 shrink-0" />
-          Ligação lenta — algumas operações podem demorar mais do habitual.
-        </>
+        <><CloudOff className="w-3.5 h-3.5 shrink-0" />Ligação lenta — algumas operações podem demorar mais do habitual.</>
       )}
     </div>
   );

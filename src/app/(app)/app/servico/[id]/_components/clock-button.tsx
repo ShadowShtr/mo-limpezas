@@ -4,6 +4,11 @@ import { useState } from "react";
 import { LogIn, LogOut, MapPin, AlertTriangle, Loader2, CheckCircle, CloudOff, MapPinOff } from "lucide-react";
 import { queueTimesheet } from "@/lib/offline-sync";
 
+function uuid() {
+  if (typeof crypto !== "undefined" && crypto.randomUUID) return crypto.randomUUID();
+  return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
 interface Timesheet {
   id: string;
   clock_in_at: string;
@@ -21,18 +26,30 @@ function isOffline() {
   return typeof navigator !== "undefined" && !navigator.onLine;
 }
 
-function getPosition(): Promise<GeolocationPosition> {
-  return new Promise((resolve, reject) => {
-    if (!navigator.geolocation) {
-      reject(new Error("GPS não disponível"));
-      return;
-    }
-    navigator.geolocation.getCurrentPosition(resolve, reject, {
-      enableHighAccuracy: true,
-      timeout: 12000,
-      maximumAge: 0, // nunca usar posição em cache — sempre leitura fresca
-    });
-  });
+/** Tenta posição rápida (baixa precisão) e depois alta precisão se necessário. */
+async function getPosition(): Promise<GeolocationPosition> {
+  if (!navigator.geolocation) throw new Error("GPS não disponível");
+
+  function tryGet(highAccuracy: boolean, timeout: number): Promise<GeolocationPosition> {
+    return new Promise((resolve, reject) =>
+      navigator.geolocation.getCurrentPosition(resolve, reject, {
+        enableHighAccuracy: highAccuracy,
+        timeout,
+        maximumAge: 0,
+      })
+    );
+  }
+
+  // Passo 1: leitura rápida (económica em bateria, ≤ 3 s)
+  try {
+    const quick = await tryGet(false, 3000);
+    if (quick.coords.accuracy <= 100) return quick; // boa o suficiente
+    // Passo 2: alta precisão se leitura rápida foi imprecisa
+    return await tryGet(true, 12000);
+  } catch {
+    // Leitura rápida falhou (negada ou timeout) — tentar alta precisão
+    return tryGet(true, 12000);
+  }
 }
 
 function fmt(iso: string) {
@@ -48,16 +65,20 @@ export function ClockButton({ serviceId, initialTimesheet }: Props) {
   // Fallback manual: ativado quando GPS é negado/indisponível
   const [needsManual, setNeedsManual] = useState<"in" | "out" | null>(null);
 
-  async function getCoords(): Promise<{ lat: number | null; lng: number | null; gpsError?: boolean }> {
+  async function getCoords(): Promise<{
+    lat: number | null; lng: number | null;
+    accuracy: number | null; gpsError?: boolean
+  }> {
     try {
       const pos = await getPosition();
-      // Rejeitar leituras imprecisas (> 150m de accuracy) como se não houvesse GPS
-      if (pos.coords.accuracy > 150) {
-        return { lat: pos.coords.latitude, lng: pos.coords.longitude };
+      const accuracy = Math.round(pos.coords.accuracy);
+      // Leituras com accuracy > 150m são inúteis para validar presença
+      if (accuracy > 150) {
+        return { lat: null, lng: null, accuracy, gpsError: true };
       }
-      return { lat: pos.coords.latitude, lng: pos.coords.longitude };
+      return { lat: pos.coords.latitude, lng: pos.coords.longitude, accuracy };
     } catch {
-      return { lat: null, lng: null, gpsError: true };
+      return { lat: null, lng: null, accuracy: null, gpsError: true };
     }
   }
 
@@ -75,11 +96,12 @@ export function ClockButton({ serviceId, initialTimesheet }: Props) {
       return;
     }
 
-    const { lat, lng } = coords;
+    const { lat, lng, accuracy } = coords;
     const at = new Date().toISOString();
+    const client_event_id = uuid();
 
     if (isOffline()) {
-      queueTimesheet({ kind: "in", service_id: serviceId, lat, lng, at });
+      queueTimesheet({ kind: "in", service_id: serviceId, lat, lng, at, manual, gps_accuracy: accuracy, client_event_id });
       setTimesheet({ id: `local-${Date.now()}`, clock_in_at: at, clock_out_at: null, location_warning: manual, clock_in_distance_m: null });
       setQueued("in");
       setLoading(false);
@@ -90,7 +112,7 @@ export function ClockButton({ serviceId, initialTimesheet }: Props) {
       const res = await fetch("/api/app/timesheet", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ service_id: serviceId, lat, lng, manual }),
+        body: JSON.stringify({ service_id: serviceId, lat, lng, manual, gps_accuracy: accuracy, client_event_id }),
       });
       const json = await res.json();
       setLoading(false);
@@ -102,7 +124,7 @@ export function ClockButton({ serviceId, initialTimesheet }: Props) {
       if (json.location_warning) setDistanceWarning(json.distance_m);
       setTimesheet(json.data);
     } catch {
-      queueTimesheet({ kind: "in", service_id: serviceId, lat, lng, at });
+      queueTimesheet({ kind: "in", service_id: serviceId, lat, lng, at, manual, gps_accuracy: accuracy, client_event_id });
       setTimesheet({ id: `local-${Date.now()}`, clock_in_at: at, clock_out_at: null, location_warning: manual, clock_in_distance_m: null });
       setQueued("in");
       setLoading(false);
@@ -122,11 +144,12 @@ export function ClockButton({ serviceId, initialTimesheet }: Props) {
       return;
     }
 
-    const { lat, lng } = coords;
+    const { lat, lng, accuracy } = coords;
     const at = new Date().toISOString();
+    const client_event_id = uuid();
 
     if (isOffline()) {
-      queueTimesheet({ kind: "out", service_id: serviceId, lat, lng, at });
+      queueTimesheet({ kind: "out", service_id: serviceId, lat, lng, at, manual, gps_accuracy: accuracy, client_event_id });
       setTimesheet((prev) => prev ? { ...prev, clock_out_at: at } : prev);
       setQueued("out");
       setLoading(false);
@@ -137,7 +160,7 @@ export function ClockButton({ serviceId, initialTimesheet }: Props) {
       const res = await fetch("/api/app/timesheet", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ service_id: serviceId, lat, lng, manual }),
+        body: JSON.stringify({ service_id: serviceId, lat, lng, manual, gps_accuracy: accuracy, client_event_id }),
       });
       const json = await res.json();
       setLoading(false);
@@ -148,7 +171,7 @@ export function ClockButton({ serviceId, initialTimesheet }: Props) {
       }
       setTimesheet(json.data);
     } catch {
-      queueTimesheet({ kind: "out", service_id: serviceId, lat, lng, at });
+      queueTimesheet({ kind: "out", service_id: serviceId, lat, lng, at, manual, gps_accuracy: accuracy, client_event_id });
       setTimesheet((prev) => prev ? { ...prev, clock_out_at: at } : prev);
       setQueued("out");
       setLoading(false);

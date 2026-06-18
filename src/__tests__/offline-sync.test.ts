@@ -4,18 +4,20 @@ import { describe, it, expect, beforeEach, vi, afterEach } from "vitest";
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 /** Build a minimal PendingTimesheet-like object without the id field. */
+let _evtSeq = 0;
 function entry(
   service_id: string,
   kind: "in" | "out",
   lat = 38.7169,
   lng = -9.1399,
-): Omit<import("@/lib/offline-sync").PendingTimesheet, "id"> {
+): Omit<import("@/lib/offline-sync").PendingTimesheet, "id" | "created_offline_at"> {
   return {
     kind,
     service_id,
     lat,
     lng,
     at: new Date(Date.now() - 5000).toISOString(),
+    client_event_id: `test-evt-${++_evtSeq}`,
   };
 }
 

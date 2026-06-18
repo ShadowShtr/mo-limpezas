@@ -13,6 +13,7 @@ import {
   type UnbilledService,
 } from "@/app/actions/invoices";
 import { InvoiceDetailSheet } from "./invoice-detail-sheet";
+import { downloadCsv } from "@/lib/csv";
 import { usePagination, Pagination } from "@/components/ui/pagination";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -230,16 +231,7 @@ export function InvoicesClient({ initialInvoices, unbilledServices, companyId, m
       inv.total.toFixed(2),
       STATUS_LABEL[inv.status],
     ]);
-    const lines = [headers, ...rows].map((r) =>
-      r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(","),
-    );
-    const blob = new Blob(["﻿" + lines.join("\r\n")], { type: "text/csv;charset=utf-8;" });
-    const url  = URL.createObjectURL(blob);
-    const a    = document.createElement("a");
-    a.href     = url;
-    a.download = `cobrancas-${mesParam}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+    downloadCsv(`cobrancas-${mesParam}`, headers, rows);
   }
 
   return (

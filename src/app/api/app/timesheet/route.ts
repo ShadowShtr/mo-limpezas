@@ -5,38 +5,66 @@ import { getCompanySettings } from "@/app/actions/settings";
 import { rateLimit, rateLimitKey } from "@/lib/rate-limit";
 import { haversineDistanceM } from "@/lib/calculations";
 
+// Pontos offline aceites até 48h no passado; mais antigos vão para revisão automática
+const MAX_OFFLINE_AGE_MS = 48 * 60 * 60 * 1000;
+
 function parseCoord(value: unknown) {
   const n = Number(value);
   return Number.isFinite(n) ? n : null;
 }
 
-/** Valida um timestamp do cliente (registo offline). Devolve ISO no passado, ou agora. */
-function parsePastTimestamp(value: unknown): string {
+/**
+ * Valida timestamp do cliente (registo offline).
+ * Devolve { ts: ISO, tooOld: boolean }.
+ */
+function parsePastTimestamp(value: unknown): { ts: string; tooOld: boolean } {
   if (typeof value === "string") {
     const t = new Date(value).getTime();
     if (Number.isFinite(t) && t <= Date.now() + 60_000) {
-      return new Date(t).toISOString();
+      return { ts: new Date(t).toISOString(), tooOld: Date.now() - t > MAX_OFFLINE_AGE_MS };
     }
   }
-  return new Date().toISOString();
+  return { ts: new Date().toISOString(), tooOld: false };
+}
+
+async function logAudit(
+  admin: ReturnType<typeof createAdminClient>,
+  companyId: string,
+  actorId: string,
+  action: string,
+  entityId: string,
+  meta: Record<string, unknown>
+) {
+  try {
+    // audit_logs é uma tabela nova (migration 025) — usar cast até os tipos serem regenerados
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await (admin as any).from("audit_logs").insert({ company_id: companyId, actor_id: actorId, action, entity_type: "timesheet", entity_id: entityId, meta });
+  } catch { /* não bloquear operação se audit falhar */ }
 }
 
 export async function POST(req: NextRequest) {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const limited = await rateLimit(rateLimitKey("timesheet", user.id), 10, 60_000);
+  // Rate limit separado para clock-in (menos tolerante a repetição rápida)
+  const limited = await rateLimit(rateLimitKey("timesheet-in", user.id), 6, 60_000);
   if (limited) return limited;
 
-  const { service_id, lat: rawLat, lng: rawLng, clock_in_at: rawClockIn, manual } = await req.json();
+  const {
+    service_id,
+    lat: rawLat, lng: rawLng,
+    clock_in_at: rawClockIn,
+    manual,
+    gps_accuracy,
+    client_event_id,
+  } = await req.json();
+
   const lat = parseCoord(rawLat);
   const lng = parseCoord(rawLng);
+
   if (!service_id)
     return NextResponse.json({ error: "service_id required" }, { status: 400 });
-  // GPS obrigatório apenas se não for check-in manual confirmado
   if ((lat == null || lng == null) && !manual) {
     return NextResponse.json(
       { error: "Ative a localização/GPS para registar o ponto.", needsManualConfirm: true },
@@ -44,23 +72,18 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // Hora do clock-in: aceitar a do cliente (registo offline em fila), nunca no futuro.
-  const clockInAt = parsePastTimestamp(rawClockIn);
+  const { ts: clockInAt, tooOld } = parsePastTimestamp(rawClockIn);
 
   const admin = createAdminClient();
 
   const { data: profile } = await admin
-    .from("profiles")
-    .select("company_id")
-    .eq("id", user.id)
-    .single();
-
+    .from("profiles").select("company_id").eq("id", user.id).single();
   if (!profile)
     return NextResponse.json({ error: "Perfil não encontrado" }, { status: 404 });
 
   const { data: service } = await admin
     .from("services_full")
-    .select("id, company_id, team_id, location_lat, location_lng, scheduled_start, scheduled_end")
+    .select("id, company_id, team_id, location_lat, location_lng, scheduled_start, scheduled_end, status")
     .eq("id", service_id)
     .eq("company_id", profile.company_id)
     .single();
@@ -68,30 +91,25 @@ export async function POST(req: NextRequest) {
   if (!service)
     return NextResponse.json({ error: "Serviço não encontrado" }, { status: 404 });
 
+  // Bloquear clock-in em serviços terminados ou cancelados
+  if (["cancelado", "concluido", "arquivado"].includes(service.status ?? "")) {
+    return NextResponse.json(
+      { error: `Este serviço está ${service.status} e não aceita mais pontos.` },
+      { status: 409 }
+    );
+  }
+
   const [{ data: membership }, { data: reinforcement }, settings] = await Promise.all([
     service.team_id
-      ? admin
-          .from("team_members")
-          .select("id")
-          .eq("team_id", service.team_id)
-          .eq("collaborator_id", user.id)
-          .is("left_at", null)
-          .maybeSingle()
+      ? admin.from("team_members").select("id").eq("team_id", service.team_id).eq("collaborator_id", user.id).is("left_at", null).maybeSingle()
       : Promise.resolve({ data: null }),
-    admin
-      .from("service_reinforcements")
-      .select("id")
-      .eq("service_id", service_id)
-      .eq("collaborator_id", user.id)
-      .maybeSingle(),
+    admin.from("service_reinforcements").select("id").eq("service_id", service_id).eq("collaborator_id", user.id).maybeSingle(),
     getCompanySettings(profile.company_id),
   ]);
 
-  if (!membership && !reinforcement) {
+  if (!membership && !reinforcement)
     return NextResponse.json({ error: "Sem permissão para este serviço" }, { status: 403 });
-  }
 
-  // Validar janela horária do clock-in (usa a hora real do registo — importante p/ fila offline)
   if (service.scheduled_start) {
     const ref = new Date(clockInAt);
     const scheduledStart = new Date(service.scheduled_start);
@@ -100,52 +118,29 @@ export async function POST(req: NextRequest) {
       const diffMin = Math.round((earliestClockIn.getTime() - ref.getTime()) / 60_000);
       return NextResponse.json(
         { error: `Ainda não pode iniciar o serviço. Pode fazer clock-in em ${diffMin} minuto${diffMin !== 1 ? "s" : ""}.` },
-        { status: 400 },
+        { status: 400 }
       );
     }
   }
 
   let distance_m: number | null = null;
   let location_warning = false;
-
   if (lat != null && lng != null && service.location_lat != null && service.location_lng != null) {
-    distance_m = Math.round(
-      haversineDistanceM(lat, lng, Number(service.location_lat), Number(service.location_lng))
-    );
+    distance_m = Math.round(haversineDistanceM(lat, lng, Number(service.location_lat), Number(service.location_lng)));
     location_warning = distance_m > settings.gps_radius_meters;
   }
 
   // Guard: ponto aberto para este serviço (double clock-in)
   const { data: dupOpen } = await admin
-    .from("timesheets")
-    .select("id")
-    .eq("service_id", service_id)
-    .eq("collaborator_id", user.id)
-    .is("clock_out_at", null)
-    .maybeSingle();
+    .from("timesheets").select("id").eq("service_id", service_id).eq("collaborator_id", user.id).is("clock_out_at", null).maybeSingle();
+  if (dupOpen)
+    return NextResponse.json({ error: "Já tem um ponto aberto para este serviço. Registe a saída primeiro." }, { status: 409 });
 
-  if (dupOpen) {
-    return NextResponse.json(
-      { error: "Já tem um ponto aberto para este serviço. Registe a saída primeiro." },
-      { status: 409 }
-    );
-  }
-
-  // Guard: ponto aberto noutro serviço (entrada sem saída anterior)
+  // Guard: ponto aberto noutro serviço
   const { data: openElsewhere } = await admin
-    .from("timesheets")
-    .select("id")
-    .eq("collaborator_id", user.id)
-    .is("clock_out_at", null)
-    .neq("service_id", service_id)
-    .maybeSingle();
-
-  if (openElsewhere) {
-    return NextResponse.json(
-      { error: "Tem um ponto aberto noutro serviço. Registe a saída nesse serviço antes de iniciar um novo." },
-      { status: 409 }
-    );
-  }
+    .from("timesheets").select("id").eq("collaborator_id", user.id).is("clock_out_at", null).neq("service_id", service_id).maybeSingle();
+  if (openElsewhere)
+    return NextResponse.json({ error: "Tem um ponto aberto noutro serviço. Registe a saída nesse serviço antes de iniciar um novo." }, { status: 409 });
 
   const insertPayload = {
     service_id,
@@ -156,38 +151,64 @@ export async function POST(req: NextRequest) {
     clock_in_lng: lng,
     clock_in_distance_m: distance_m,
     location_warning: manual ? true : location_warning,
+    manual_checkin: manual ?? false,
+    gps_accuracy_m: gps_accuracy ?? null,
+    ...(client_event_id ? { client_event_id } : {}),
   };
 
-  const { data, error } = await admin
-    .from("timesheets")
-    .insert(insertPayload)
+  // Upsert com idempotência: se client_event_id já existe, ignorar silenciosamente.
+  // Cast necessário até migration 025 ser aplicada e tipos regenerados.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await (admin.from("timesheets") as any)
+    .upsert(insertPayload, { onConflict: "client_event_id", ignoreDuplicates: true })
     .select()
-    .single();
+    .maybeSingle();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 400 });
 
-  await admin
-    .from("services")
-    .update({ actual_start: insertPayload.clock_in_at, status: "em_curso" })
-    .eq("id", service_id)
-    .is("actual_start", null);
+  // data é null quando o upsert ignorou duplicado — considerar sucesso
+  if (!data) {
+    return NextResponse.json({ data: null, duplicate: true, distance_m, location_warning });
+  }
 
-  return NextResponse.json({ data, distance_m, location_warning });
+  await admin.from("services").update({ actual_start: clockInAt, status: "em_curso" }).eq("id", service_id).is("actual_start", null);
+
+  if (manual) {
+    await logAudit(admin, profile.company_id, user.id, "timesheet.manual_checkin", data.id, {
+      service_id, gps_accuracy, reason: "GPS indisponível/impreciso confirmado pela colaboradora",
+      tooOld, ip: req.headers.get("x-forwarded-for") ?? "unknown",
+    });
+  }
+
+  if (tooOld) {
+    await logAudit(admin, profile.company_id, user.id, "timesheet.late_sync", data.id, {
+      service_id, clock_in_at: clockInAt, delay_hours: Math.round((Date.now() - new Date(clockInAt).getTime()) / 3_600_000),
+    });
+  }
+
+  return NextResponse.json({ data, distance_m, location_warning, tooOld });
 }
 
 export async function PATCH(req: NextRequest) {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const limited = await rateLimit(rateLimitKey("timesheet", user.id), 10, 60_000);
+  const limited = await rateLimit(rateLimitKey("timesheet-out", user.id), 6, 60_000);
   if (limited) return limited;
 
-  const { service_id, lat: rawLat, lng: rawLng, clock_out_at: rawClockOut, manual } = await req.json();
+  const {
+    service_id,
+    lat: rawLat, lng: rawLng,
+    clock_out_at: rawClockOut,
+    manual,
+    gps_accuracy,
+    client_event_id,
+  } = await req.json();
+
   const lat = parseCoord(rawLat);
   const lng = parseCoord(rawLng);
+
   if (!service_id)
     return NextResponse.json({ error: "service_id required" }, { status: 400 });
   if ((lat == null || lng == null) && !manual) {
@@ -197,40 +218,24 @@ export async function PATCH(req: NextRequest) {
     );
   }
 
-  const clockOutAt = parsePastTimestamp(rawClockOut);
+  const { ts: clockOutAt, tooOld } = parsePastTimestamp(rawClockOut);
 
   const admin = createAdminClient();
 
   const { data: profile } = await admin
-    .from("profiles")
-    .select("company_id")
-    .eq("id", user.id)
-    .single();
-
+    .from("profiles").select("company_id").eq("id", user.id).single();
   if (!profile)
     return NextResponse.json({ error: "Perfil não encontrado" }, { status: 404 });
 
   const [{ data: ts }, { data: service }, settings] = await Promise.all([
-    admin
-      .from("timesheets")
-      .select("id, clock_in_at")
-      .eq("service_id", service_id)
-      .eq("collaborator_id", user.id)
-      .is("clock_out_at", null)
-      .single(),
-    admin
-      .from("services_full")
-      .select("scheduled_end")
-      .eq("id", service_id)
-      .eq("company_id", profile.company_id)
-      .single(),
+    admin.from("timesheets").select("id, clock_in_at").eq("service_id", service_id).eq("collaborator_id", user.id).is("clock_out_at", null).single(),
+    admin.from("services_full").select("scheduled_end, status").eq("id", service_id).eq("company_id", profile.company_id).single(),
     getCompanySettings(profile.company_id),
   ]);
 
   if (!ts)
     return NextResponse.json({ error: "Registo de entrada não encontrado" }, { status: 404 });
 
-  // Validar janela de saída: não pode terminar mais de checkout_after_minutes após o fim previsto
   if (service?.scheduled_end) {
     const ref = new Date(clockOutAt);
     const scheduledEnd = new Date(service.scheduled_end);
@@ -239,7 +244,7 @@ export async function PATCH(req: NextRequest) {
       const diffMin = Math.round((ref.getTime() - latestClockOut.getTime()) / 60_000);
       return NextResponse.json(
         { error: `O prazo para terminar o ponto já passou há ${diffMin} minuto${diffMin !== 1 ? "s" : ""}. Contacte o gestor para corrigir o registo.` },
-        { status: 400 },
+        { status: 400 }
       );
     }
   }
@@ -249,32 +254,35 @@ export async function PATCH(req: NextRequest) {
     ? Math.max(0, Math.round((out.getTime() - new Date(ts.clock_in_at).getTime()) / 60000))
     : 0;
 
-  const { data, error } = await admin
+  // Incluir .is("clock_out_at", null) no update para evitar checkout duplicado em corrida paralela
+  const { data, error, count: affected } = await admin
     .from("timesheets")
-    .update({
-      clock_out_at: clockOutAt,
-      clock_out_lat: lat,
-      clock_out_lng: lng,
-      duration_minutes,
-    })
+    .update({ clock_out_at: clockOutAt, clock_out_lat: lat, clock_out_lng: lng, duration_minutes })
     .eq("id", ts.id)
-    .select()
-    .single();
+    .is("clock_out_at", null) // guard de corrida: só actualiza se ainda estiver aberto
+    .select();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 400 });
-
-  const { count } = await admin
-    .from("timesheets")
-    .select("id", { count: "exact", head: true })
-    .eq("service_id", service_id)
-    .is("clock_out_at", null);
-
-  if ((count ?? 0) === 0) {
-    await admin
-      .from("services")
-      .update({ actual_end: clockOutAt, status: "concluido" })
-      .eq("id", service_id);
+  if (!data || data.length === 0) {
+    // Outro pedido chegou primeiro e fechou o ponto — tratar como duplicado
+    return NextResponse.json({ duplicate: true, duration_minutes }, { status: 409 });
   }
 
-  return NextResponse.json({ data, duration_minutes });
+  const updatedTs = data[0];
+
+  if (manual) {
+    await logAudit(admin, profile.company_id, user.id, "timesheet.manual_checkout", ts.id, {
+      service_id, gps_accuracy, reason: "GPS indisponível/impreciso confirmado pela colaboradora",
+      ip: req.headers.get("x-forwarded-for") ?? "unknown",
+    });
+  }
+
+  const { count: openCount } = await admin
+    .from("timesheets").select("id", { count: "exact", head: true }).eq("service_id", service_id).is("clock_out_at", null);
+
+  if ((openCount ?? 0) === 0) {
+    await admin.from("services").update({ actual_end: clockOutAt, status: "concluido" }).eq("id", service_id);
+  }
+
+  return NextResponse.json({ data: updatedTs, duration_minutes, tooOld });
 }

@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "prebuild": "npx tsx scripts/check-env.ts",
+    "prebuild": "npx tsx scripts/check-env.ts && npx tsx scripts/audit-security.ts",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
