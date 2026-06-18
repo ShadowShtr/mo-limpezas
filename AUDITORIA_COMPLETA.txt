@@ -76,9 +76,18 @@ PARTE 0 — RESUMO DO QUE FOI FEITO NESTA RONDA (2026-06-18)
 3) VERIFICAÇÕES AUTOMÁTICAS — estado no fecho desta ronda
    [x] Testes (vitest): 271 a passar (266 + 5 novos de segurança)
    [x] Type-check (tsc --noEmit): 0 erros
-   [x] ESLint: 0 erros (apenas warnings cosméticos — ver Parte 8)
-   [x] Build de produção no Vercel: ready (prebuild check-env + audit-security passam)
-   [x] audit-security.ts: só assinala /api/health (público intencional)
+   [x] ESLint: 0 erros e 0 warnings
+   [x] Build local de produção: passa (prebuild check-env + audit-security passam)
+   [x] audit-security.ts: /api/health está em allowlist pública explícita
+
+4) LIMPEZA DE AUDITORIA — correções desta ronda
+   [x] scripts/audit-security.ts normaliza caminhos Windows/Unix e deixa
+       /api/health passar como rota pública intencional.
+   [x] scripts/check-env.ts carrega .env.local com @next/env antes de validar vars.
+   [x] Removida exigência fantasma de VAPID_SUBJECT (não é usada pela aplicação).
+   [x] Warnings ESLint eliminados: <img> trocado por next/image nos avatares,
+       expressão ternária sem efeito removida, variáveis mortas removidas.
+   [x] next.config.ts permite otimização de imagens Supabase via remotePatterns.
 
 
 ================================================================================
@@ -185,9 +194,8 @@ PARTE 4 — VELOCIDADE DA PÁGINA (PERFORMANCE)
   [x] Glassmorphism com backdrop-filter — efeito visual sem imagens pesadas.
   [x] Assets estáticos servidos com cache-first pelo service worker.
 
-  [~] IMAGENS: alguns componentes usam <img> em vez de next/image
-      (app-header, mobile-header, perfil). Funciona, mas perde otimização
-      automática (LCP/bandwidth). → ver warnings ESLint na Parte 8.
+  [x] IMAGENS: avatares principais usam next/image e remotePatterns para Supabase
+      (perfil, app-header, mobile-header).
   [ ] RECOMENDAÇÃO: medir Web Vitals reais em produção (LCP/CLS/INP) com o
       Vercel Analytics ou Lighthouse no telemóvel-alvo das colaboradoras.
   [ ] RECOMENDAÇÃO: a query de "Faturado" da ficha de cliente (limit 2000) e a de
@@ -362,28 +370,17 @@ PARTE 8 — QUALIDADE / ESCRITA DO CÓDIGO (limpeza e erros)
   [x] Padrões consistentes: actions com guard + scoping; sheets com useTransition;
       design system (verde #16A34A, Inter, ícones Lucide) respeitado.
 
-  WARNINGS ESLint ATUAIS (não bloqueiam, mas limpar quando houver tempo):
-  [~] @next/next/no-img-element em:
-        - src/app/(app)/app/perfil/page.tsx:63
-        - src/components/layout/app-header.tsx:75
-        - src/components/layout/mobile-header.tsx:42
-      → trocar <img> por next/image (otimização + menos bandwidth).
-  [~] no-unused-vars (variáveis/parametros não usados):
-        - tarefas/_components/tasks-client.tsx: moving/setMoving/_mc
-        - api/app/timesheet/route.ts: client_event_id (l.193), affected (l.236)
-        - api/seed-demo/route.ts: _req
-        - recuperar/nova-senha/page.tsx:32 (no-unused-expressions)
-  [~] Parâmetros _companyId mantidos por compatibilidade de assinatura nas actions
-      corrigidas — geram warning de "unused" mas são intencionais (os callers ainda
-      passam o valor posicionalmente). Limpeza opcional: remover o parâmetro e
-      atualizar os callers para não o passar.
+  WARNINGS ESLint ATUAIS:
+  [x] Nenhum warning atual em `npx eslint "src/**/*.{ts,tsx}"`.
+  [x] Parâmetros prefixados com `_` são ignorados pelo ESLint por convenção
+      explícita; continuam permitidos para compatibilidade de assinaturas.
 
   CHECKS DE CÓDIGO (não pular):
   [x] Sem erros de tipo.
+  [x] Sem warnings ESLint.
   [x] Sem imports órfãos nos ficheiros alterados (createAdminClient removido onde
       deixou de ser usado).
   [x] Convenções de nomes e estilo coerentes com o resto do projeto.
-  [ ] RECOMENDAÇÃO: tratar os warnings ESLint acima num PR de "limpeza" dedicado.
 
 
 ================================================================================
@@ -398,7 +395,6 @@ PENDENTES REGISTADOS (para não se perder nada):
   [ ] loading.tsx dedicado para clientes/[id] (Parte 3).
   [ ] Trocar KPIs com .limit(2000) por agregação SQL (Parte 3/4).
   [ ] Reintroduzir allowlist de mime-type no upload (Parte 1).
-  [ ] Limpar warnings ESLint (Parte 8).
   [ ] Medir Lighthouse mobile e registar resultado (Parte 4).
   [ ] Rotação de tokens/segredos (Parte 6).
 
@@ -415,6 +411,7 @@ PROCESSO PARA PRÓXIMAS AUDITORIAS (não pular etapas):
 
 ================================================================================
 FIM DO RELATÓRIO — última atualização: 2026-06-18
-Commits desta ronda: 2b96521 (ficha de cliente), ebc00b9 (correções de segurança)
-Estado: 271 testes a passar · tsc limpo · build/deploy Vercel: ready
+Commits desta ronda: 2b96521 (ficha de cliente), ebc00b9 (correções de segurança),
+este commit (limpeza final da auditoria)
+Estado: 271 testes a passar · tsc limpo · ESLint 0 warnings · build local pronto
 ================================================================================

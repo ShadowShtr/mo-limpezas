@@ -190,7 +190,6 @@ export async function PATCH(req: NextRequest) {
     clock_out_at: rawClockOut,
     manual,
     gps_accuracy,
-    client_event_id,
   } = await req.json();
 
   const lat = parseCoord(rawLat);
@@ -233,7 +232,7 @@ export async function PATCH(req: NextRequest) {
     : 0;
 
   // Incluir .is("clock_out_at", null) no update para evitar checkout duplicado em corrida paralela
-  const { data, error, count: affected } = await admin
+  const { data, error } = await admin
     .from("timesheets")
     .update({ clock_out_at: clockOutAt, clock_out_lat: lat, clock_out_lng: lng, duration_minutes })
     .eq("id", ts.id)

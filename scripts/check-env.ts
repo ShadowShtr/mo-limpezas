@@ -4,6 +4,10 @@
  * Integrado no package.json: "prebuild": "npx tsx scripts/check-env.ts"
  */
 
+import { loadEnvConfig } from "@next/env";
+
+loadEnvConfig(process.cwd());
+
 const REQUIRED: Record<string, { desc: string; example: string }> = {
   NEXT_PUBLIC_SUPABASE_URL: {
     desc: "URL do projeto Supabase",
@@ -36,10 +40,6 @@ const REQUIRED: Record<string, { desc: string; example: string }> = {
   VAPID_PRIVATE_KEY: {
     desc: "Chave privada VAPID (server-side only)",
     example: "...",
-  },
-  VAPID_SUBJECT: {
-    desc: "Email de contacto VAPID (mailto:...)",
-    example: "mailto:admin@molimpezas.pt",
   },
   CRON_SECRET: {
     desc: "Secret para proteger rotas /api/cron/*",

@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { Bell } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -72,9 +73,11 @@ export function AppHeader({ userId, userName, avatarUrl }: AppHeaderProps) {
         {/* Avatar */}
         <Link href="/app/perfil">
           {avatarUrl ? (
-            <img
+            <Image
               src={avatarUrl}
               alt={userName}
+              width={32}
+              height={32}
               className="w-8 h-8 rounded-full object-cover ring-2 ring-[var(--color-border)]"
             />
           ) : (

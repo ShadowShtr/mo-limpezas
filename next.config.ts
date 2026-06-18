@@ -2,6 +2,15 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   transpilePackages: ["react-map-gl"],
+  images: {
+    remotePatterns: [
+      {
+        protocol: "https",
+        hostname: "**.supabase.co",
+        pathname: "/storage/v1/object/**",
+      },
+    ],
+  },
   experimental: {
     serverActions: {
       // Fotos de celular chegam a 10-15 MB; o padrão do Next.js é 1 MB

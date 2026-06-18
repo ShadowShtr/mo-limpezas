@@ -5,7 +5,7 @@
  */
 
 import { readFileSync, readdirSync, statSync } from "fs";
-import { join, relative } from "path";
+import { join, relative, sep } from "path";
 
 const ROOT = join(import.meta.dirname, "..");
 const SRC = join(ROOT, "src");
@@ -29,6 +29,10 @@ function walkFiles(dir: string, exts = [".ts", ".tsx"]): string[] {
 }
 
 function rel(path: string) { return relative(ROOT, path); }
+
+function routePath(file: string) {
+  return rel(file).split(sep).join("/");
+}
 
 function check(condition: boolean, file: string, message: string) {
   if (!condition) {
@@ -96,10 +100,13 @@ console.log('\n🔍  Verificando autenticação nas API routes...');
 const apiFiles = walkFiles(join(SRC, "app", "api")).filter((f) => f.endsWith("route.ts"));
 
 const CRON_ROUTES = ["cron", "keep-alive"];
+const PUBLIC_ROUTES = ["src/app/api/health/route.ts"];
 
 for (const file of apiFiles) {
   const content = readFileSync(file, "utf-8");
-  const isCron = CRON_ROUTES.some((p) => file.includes(p));
+  const normalized = routePath(file);
+  const isCron = CRON_ROUTES.some((p) => normalized.includes(`/api/${p}/`));
+  const isPublic = PUBLIC_ROUTES.includes(normalized);
 
   if (isCron) {
     check(
@@ -109,7 +116,7 @@ for (const file of apiFiles) {
     );
   } else {
     // Rotas normais devem verificar auth
-    const hasAuth = content.includes("getUser()") || content.includes("auth.uid()") || file.includes("/health/");
+    const hasAuth = content.includes("getUser()") || content.includes("auth.uid()") || isPublic;
     check(
       hasAuth,
       file,

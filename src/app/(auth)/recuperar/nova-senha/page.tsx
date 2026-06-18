@@ -29,7 +29,10 @@ export default function NovaSenhaPage() {
       if (cur.session) { if (active) setReady(true); return; }
       if (token_hash && type) {
         const { error } = await supabase.auth.verifyOtp({ token_hash, type });
-        if (active) error ? setInvalid(true) : setReady(true);
+        if (active) {
+          if (error) setInvalid(true);
+          else setReady(true);
+        }
       } else if (active) {
         setInvalid(true);
       }

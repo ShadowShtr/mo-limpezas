@@ -114,7 +114,6 @@ export function TasksClient({ initialTasks, initialColumns, companyId, members }
   const [savingColumns, startSaveColumns] = useTransition();
   const [creatingModal, startCreateModal] = useTransition();
   const [creatingInline, startCreateInline] = useTransition();
-  const [moving, setMoving] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<string | null>(null);
 
   // ── "Nova tarefa" modal (top-level, com seletor de coluna) ──
@@ -242,7 +241,8 @@ export function TasksClient({ initialTasks, initialColumns, companyId, members }
         markCompleted: editStatus === "concluido" && openTask.status !== "concluido",
       };
       await updateManagementTask(openTask.id, update);
-      const { markCompleted: _mc, ...taskFields } = update;
+      const taskFields = { ...update };
+      delete taskFields.markCompleted;
       setTasks((prev) => prev.map((t) => t.id === openTask.id ? {
         ...t, ...taskFields,
         assigned_to_name: members.find((m) => m.id === editAssigned)?.full_name ?? null,

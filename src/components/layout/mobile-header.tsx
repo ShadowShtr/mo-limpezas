@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { Menu } from "lucide-react";
 import { NotificationsBell } from "./notifications-bell";
@@ -37,9 +38,9 @@ export function MobileHeader({ userName, avatarUrl, onMenuClick }: Props) {
 
       <div className="flex items-center gap-2">
         <NotificationsBell />
-        <div className="w-8 h-8 rounded-full bg-[var(--color-primary-muted)] flex items-center justify-center shrink-0 overflow-hidden">
+        <div className="relative w-8 h-8 rounded-full bg-[var(--color-primary-muted)] flex items-center justify-center shrink-0 overflow-hidden">
           {avatarUrl ? (
-            <img src={avatarUrl} alt={userName} className="w-full h-full object-cover" />
+            <Image src={avatarUrl} alt={userName} fill sizes="32px" className="object-cover" />
           ) : (
             <span className="text-[var(--color-primary)] font-semibold text-xs">{initials}</span>
           )}

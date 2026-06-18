@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import Image from "next/image";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Phone, Clock, AlertTriangle, User, Download } from "lucide-react";
 import { SignOutButton } from "./_components/sign-out-button";
@@ -60,9 +61,11 @@ export default async function PerfilPage() {
       {/* Card de identidade */}
       <div className="rounded-2xl p-5 flex items-center gap-4" style={{ background: "var(--glass-bg)", backdropFilter: "var(--glass-blur)", WebkitBackdropFilter: "var(--glass-blur)", border: "1px solid var(--glass-border)", boxShadow: "var(--glass-shadow)" }}>
         {profile.avatar_url ? (
-          <img
+          <Image
             src={profile.avatar_url}
             alt={profile.full_name}
+            width={64}
+            height={64}
             className="w-16 h-16 rounded-full object-cover"
           />
         ) : (
