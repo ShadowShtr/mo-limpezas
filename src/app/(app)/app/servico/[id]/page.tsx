@@ -27,7 +27,7 @@ export default async function ServicoDetailPage({ params }: Props) {
       status, notes, team_id,
       client_name, client_id,
       location_name, location_address, location_lat, location_lng,
-      location_access_code, location_instructions,
+      location_access_code, location_instructions, location_has_key, location_key_label,
       team_name, team_color
     `)
     .eq("id", id)
@@ -189,7 +189,20 @@ export default async function ServicoDetailPage({ params }: Props) {
         <TeamRealtime serviceId={id} initialMembers={teamMembers} />
       )}
 
-      {/* Acesso */}
+      {/* Chave física */}
+      {s.location_has_key && (
+        <div className="bg-white rounded-2xl border border-[var(--color-border)] p-4">
+          <div className="flex items-center gap-2 mb-2">
+            <Key className="w-4 h-4 text-[var(--color-primary)]" />
+            <h3 className="text-sm font-semibold text-[var(--color-text-main)]">Chave</h3>
+          </div>
+          <p className="text-sm text-[var(--color-text-sub)] bg-[var(--color-primary-light)] rounded-lg px-3 py-2">
+            {s.location_key_label || "A equipa tem chave deste local."}
+          </p>
+        </div>
+      )}
+
+      {/* Código do prédio */}
       {s.location_access_code && (
         <div className="bg-white rounded-2xl border border-[var(--color-border)] p-4">
           <div className="flex items-center gap-2 mb-2">

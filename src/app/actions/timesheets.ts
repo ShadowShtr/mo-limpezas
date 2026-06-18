@@ -70,5 +70,50 @@ export async function adminEditTimesheet(
 
   if (error) return { ok: false, error: error.message };
   revalidatePath("/dashboard/colaboradores");
+  revalidatePath("/dashboard/registo-ponto");
+  return { ok: true };
+}
+
+/**
+ * Cria manualmente um registo de ponto para um colaborador num serviço.
+ * Usado no Registo de Ponto quando não existe ainda um timesheet (ex: registo em falta).
+ * timesheets.service_id é obrigatório (FK), por isso é preciso um serviço associado.
+ */
+export async function adminCreateTimesheet(
+  serviceId: string,
+  collaboratorId: string,
+  data: { clock_in_at: string; clock_out_at: string | null },
+): Promise<{ ok: boolean; error?: string }> {
+  const admin = createAdminClient();
+
+  // company_id deduzido do serviço para manter o multi-tenant consistente
+  const { data: svc, error: svcErr } = await admin
+    .from("services")
+    .select("company_id")
+    .eq("id", serviceId)
+    .single();
+  if (svcErr || !svc) return { ok: false, error: "Serviço não encontrado." };
+
+  let duration_minutes: number | null = null;
+  if (data.clock_in_at && data.clock_out_at) {
+    const dur = calcTimesheetDuration(data.clock_in_at, data.clock_out_at);
+    if (dur === null) return { ok: false, error: "A hora de saída não pode ser anterior à de entrada." };
+    duration_minutes = dur;
+  }
+
+  const { error } = await admin.from("timesheets").insert({
+    service_id: serviceId,
+    collaborator_id: collaboratorId,
+    company_id: svc.company_id,
+    clock_in_at: data.clock_in_at,
+    clock_out_at: data.clock_out_at,
+    duration_minutes,
+    manual_checkin: true,
+    notes: "Registo criado manualmente pelo gestor",
+  });
+
+  if (error) return { ok: false, error: error.message };
+  revalidatePath("/dashboard/colaboradores");
+  revalidatePath("/dashboard/registo-ponto");
   return { ok: true };
 }

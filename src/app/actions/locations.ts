@@ -13,6 +13,8 @@ interface LocationInput {
   hourly_rate: number | null;
   fixed_price: number | null;
   access_code: string | null;
+  has_key: boolean;
+  key_label: string | null;
   instructions: string | null;
   active: boolean;
   client_id: string;
@@ -44,6 +46,8 @@ export async function createLocation(input: LocationInput) {
     hourly_rate: input.hourly_rate,
     fixed_price: input.fixed_price,
     access_code: input.access_code,
+    has_key: input.has_key,
+    key_label: input.key_label,
     instructions: input.instructions,
     active: input.active,
     client_id: input.client_id,
@@ -84,6 +88,8 @@ export async function updateLocation(id: string, input: Omit<LocationInput, "cli
       hourly_rate: input.hourly_rate,
       fixed_price: input.fixed_price,
       access_code: input.access_code,
+      has_key: input.has_key,
+      key_label: input.key_label,
       instructions: input.instructions,
       active: input.active,
     })

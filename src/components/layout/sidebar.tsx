@@ -9,7 +9,6 @@ import {
   Users,
   Building2,
   Map,
-  MapPin,
   UsersRound,
   BarChart3,
   Settings,
@@ -18,7 +17,7 @@ import {
   AlertTriangle,
   TrendingUp,
   CheckSquare,
-  Truck,
+  Clock,
 } from "lucide-react";
 import { logout } from "@/app/actions/auth";
 
@@ -26,16 +25,15 @@ const NAV = [
   { href: "/dashboard",               icon: LayoutDashboard, label: "Dashboard" },
   { href: "/dashboard/calendario",    icon: Calendar,        label: "Calendário" },
   { href: "/dashboard/clientes",      icon: Building2,       label: "Clientes" },
-  { href: "/dashboard/locais",        icon: MapPin,          label: "Locais" },
   { href: "/dashboard/contratos",     icon: FileText,        label: "Contratos" },
   { href: "/dashboard/colaboradores", icon: Users,           label: "Colaboradores" },
+  { href: "/dashboard/registo-ponto", icon: Clock,           label: "Registo de Ponto" },
   { href: "/dashboard/equipas",       icon: UsersRound,      label: "Equipas" },
   { href: "/dashboard/faltas",        icon: AlertTriangle,   label: "Faltas" },
   { href: "/dashboard/mapa",          icon: Map,             label: "Mapa" },
   { href: "/dashboard/relatorios",    icon: BarChart3,       label: "Relatórios" },
   { href: "/dashboard/financeiro",    icon: TrendingUp,      label: "Financeiro" },
   { href: "/dashboard/tarefas",       icon: CheckSquare,     label: "Tarefas" },
-  { href: "/dashboard/viaturas",      icon: Truck,           label: "Viaturas" },
 ];
 
 interface SidebarProps {
