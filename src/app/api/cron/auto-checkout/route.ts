@@ -67,16 +67,25 @@ export async function GET(req: NextRequest) {
 
     if (now < deadline) continue;
 
-    // Passou o prazo — forçar clock-out
+    // Passou o prazo — forçar clock-out.
+    // Gravar a saída na hora PREVISTA de fim do serviço (não na hora a que o cron
+    // corre), para não inflacionar as horas trabalhadas se o cron correr muito
+    // depois. O gestor pode afinar manualmente no Registo de Ponto.
     const clockInAt = ts.clock_in_at ? new Date(ts.clock_in_at) : now;
-    const duration_minutes = Math.round((now.getTime() - clockInAt.getTime()) / 60_000);
+    const plannedEnd = new Date(scheduledEnd);
+    // Nunca antes da entrada (evita duração negativa em casos estranhos)
+    const clockOutAt = plannedEnd > clockInAt ? plannedEnd : now;
+    const duration_minutes = Math.max(
+      0,
+      Math.round((clockOutAt.getTime() - clockInAt.getTime()) / 60_000),
+    );
 
     const { error: updateErr } = await admin
       .from("timesheets")
       .update({
-        clock_out_at: now.toISOString(),
+        clock_out_at: clockOutAt.toISOString(),
         duration_minutes,
-        notes: "Auto-encerrado pelo sistema (limite de tempo atingido)",
+        notes: "Auto-encerrado pelo sistema (saída registada no fim previsto do serviço)",
       })
       .eq("id", ts.id);
 
@@ -95,7 +104,7 @@ export async function GET(req: NextRequest) {
     if ((count ?? 0) === 0) {
       await admin
         .from("services")
-        .update({ actual_end: now.toISOString(), status: "concluido" })
+        .update({ actual_end: clockOutAt.toISOString(), status: "concluido" })
         .eq("id", ts.service_id);
     }
 
