@@ -48,6 +48,8 @@ const REQUIRED: Record<string, { desc: string; example: string }> = {
 };
 
 const missing: string[] = [];
+const isVercelPreview =
+  process.env.VERCEL === "1" && process.env.VERCEL_ENV !== "production";
 
 for (const [key, meta] of Object.entries(REQUIRED)) {
   const val = process.env[key];
@@ -59,6 +61,13 @@ for (const [key, meta] of Object.entries(REQUIRED)) {
 }
 
 if (missing.length > 0) {
+  if (isVercelPreview) {
+    console.warn(`\n⚠️  Preview sem ${missing.length} variável(s) de ambiente.`);
+    console.warn("    O build vai continuar para validar UI/rotas públicas.");
+    console.warn("    Configura estas vars também no ambiente Preview para testar a app completa.\n");
+    process.exit(0);
+  }
+
   console.error(`\n🚫  Build cancelado: ${missing.length} variável(s) de ambiente em falta.\n`);
   console.error("    Adiciona as vars em falta no Vercel (Settings → Environment Variables)");
   console.error("    ou no ficheiro .env.local para desenvolvimento local.\n");
