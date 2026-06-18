@@ -11,6 +11,8 @@ type Cliente = {
   email: string | null;
   phone: string | null;
   nif: string | null;
+  type?: string | null;
+  notes?: string | null;
   status: string;
   vat_exempt: boolean;
 };
@@ -30,6 +32,8 @@ export function ClienteSheet({ trigger, companyId, cliente }: Props) {
   const [email, setEmail] = useState(cliente?.email ?? "");
   const [phone, setPhone] = useState(cliente?.phone ?? "");
   const [nif, setNif] = useState(cliente?.nif ?? "");
+  const [type, setType] = useState(cliente?.type ?? "empresa");
+  const [notes, setNotes] = useState(cliente?.notes ?? "");
   const [status, setStatus] = useState(cliente?.status ?? "ativo");
   const [vatExempt, setVatExempt] = useState(cliente?.vat_exempt ?? false);
 
@@ -44,6 +48,8 @@ export function ClienteSheet({ trigger, companyId, cliente }: Props) {
         email: email || undefined,
         phone: phone || undefined,
         nif: nif || undefined,
+        type,
+        notes: notes || undefined,
         status,
         vat_exempt: vatExempt,
       };
@@ -58,7 +64,7 @@ export function ClienteSheet({ trigger, companyId, cliente }: Props) {
           text: isEdit ? "Cliente atualizado." : "Cliente criado com sucesso.",
         });
         if (!isEdit) {
-          setName(""); setEmail(""); setPhone(""); setNif(""); setStatus("ativo"); setVatExempt(false);
+          setName(""); setEmail(""); setPhone(""); setNif(""); setType("empresa"); setNotes(""); setStatus("ativo"); setVatExempt(false);
         }
       } else {
         setMessage({ type: "error", text: res.error });
@@ -112,6 +118,20 @@ export function ClienteSheet({ trigger, companyId, cliente }: Props) {
             <label className="block text-sm font-medium text-[var(--color-text-main)] mb-1.5">NIF</label>
             <input value={nif} onChange={(e) => setNif(e.target.value)} placeholder="500 000 000"
               className="w-full px-3 py-2 rounded-lg border border-[var(--color-border)] text-sm text-[var(--color-text-main)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] focus:border-transparent" />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-[var(--color-text-main)] mb-1.5">Tipo</label>
+            <select value={type} onChange={(e) => setType(e.target.value)}
+              className="w-full px-3 py-2 rounded-lg border border-[var(--color-border)] text-sm text-[var(--color-text-main)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] focus:border-transparent">
+              <option value="empresa">Empresa</option>
+              <option value="individual">Particular</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-[var(--color-text-main)] mb-1.5">Notas</label>
+            <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={3}
+              placeholder="Observações internas sobre o cliente..."
+              className="w-full px-3 py-2 rounded-lg border border-[var(--color-border)] text-sm text-[var(--color-text-main)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] focus:border-transparent resize-y" />
           </div>
           <div>
             <label className="block text-sm font-medium text-[var(--color-text-main)] mb-1.5">Estado</label>

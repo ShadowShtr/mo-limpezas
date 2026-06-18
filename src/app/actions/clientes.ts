@@ -9,6 +9,8 @@ export interface ClienteInput {
   email?: string;
   phone?: string;
   nif?: string;
+  type?: string;
+  notes?: string;
   status: string;
   vat_exempt?: boolean;
   company_id: string;
@@ -34,6 +36,8 @@ export async function createCliente(input: ClienteInput) {
     email: input.email || null,
     phone: input.phone || null,
     nif: input.nif || null,
+    type: input.type || "empresa",
+    notes: input.notes || null,
     status: input.status,
     vat_exempt: input.vat_exempt ?? false,
     company_id: profile.company_id,
@@ -124,6 +128,8 @@ export async function updateCliente(id: string, input: Omit<ClienteInput, "compa
     email: input.email || null,
     phone: input.phone || null,
     nif: input.nif || null,
+    type: input.type || "empresa",
+    notes: input.notes || null,
     status: input.status,
     vat_exempt: input.vat_exempt ?? false,
   }).eq("id", id).eq("company_id", profile.company_id);
@@ -131,5 +137,6 @@ export async function updateCliente(id: string, input: Omit<ClienteInput, "compa
   if (error) return { ok: false as const, error: error.message };
 
   revalidatePath("/dashboard/clientes");
+  revalidatePath(`/dashboard/clientes/${id}`);
   return { ok: true as const };
 }

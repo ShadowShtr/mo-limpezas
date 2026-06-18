@@ -1,11 +1,38 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { redirect, notFound } from "next/navigation";
-import { Plus } from "lucide-react";
+import Link from "next/link";
+import { format, parseISO, isToday, isTomorrow } from "date-fns";
+import { pt } from "date-fns/locale";
+import {
+  ArrowLeft, Plus, Edit2, Mail, Phone, Hash, Building2, User,
+  StickyNote, CalendarClock, MapPin, BadgeEuro,
+} from "lucide-react";
 import { Header } from "@/components/layout/header";
+import { ClienteSheet } from "../_components/sheet";
 import { CommunicationTab } from "./_components/communication-tab";
 import { LocaisTable } from "../../locais/_components/table";
 import { LocalSheet } from "../../locais/_components/sheet";
+
+const STATUS_STYLE: Record<string, { bg: string; text: string; label: string }> = {
+  agendado:  { bg: "#F0FDF4", text: "#15803D", label: "Agendado" },
+  em_curso:  { bg: "#FFFBEB", text: "#92400E", label: "Em curso" },
+  concluido: { bg: "#F1F5F9", text: "#475569", label: "Concluído" },
+  cancelado: { bg: "#FEF2F2", text: "#B91C1C", label: "Cancelado" },
+  falta:     { bg: "#FEF2F2", text: "#B91C1C", label: "Falta" },
+  sem_cobertura: { bg: "#FEF2F2", text: "#B91C1C", label: "Sem cobertura" },
+};
+
+function serviceValue(s: { calculated_value: number | null; manual_value: number | null }) {
+  return s.manual_value ?? s.calculated_value ?? 0;
+}
+
+function dayLabel(iso: string) {
+  const d = parseISO(iso);
+  if (isToday(d)) return "Hoje";
+  if (isTomorrow(d)) return "Amanhã";
+  return format(d, "EEE, d MMM", { locale: pt });
+}
 
 export default async function ClientDetailPage({
   params,
@@ -28,10 +55,19 @@ export default async function ClientDetailPage({
   if (!me) redirect("/login");
   if (me.role === "colaborador") redirect("/app");
 
-  const [{ data: client }, { data: notifications }, { data: locaisRaw }] = await Promise.all([
+  const nowIso = new Date().toISOString();
+
+  const [
+    { data: client },
+    { data: notifications },
+    { data: locaisRaw },
+    { data: upcomingRaw },
+    { data: recentRaw },
+    { data: doneRaw },
+  ] = await Promise.all([
     admin
       .from("clients")
-      .select("id, name, email, phone, nif, notes, status")
+      .select("id, name, email, phone, nif, type, notes, status, vat_exempt, created_at")
       .eq("id", id)
       .eq("company_id", me.company_id)
       .single(),
@@ -50,6 +86,36 @@ export default async function ClientDetailPage({
       .eq("client_id", id)
       .eq("company_id", me.company_id)
       .order("name"),
+
+    // Próximas intervenções
+    admin
+      .from("services_full")
+      .select("id, reference_number, scheduled_start, scheduled_end, status, location_name, team_name, team_color, calculated_value, manual_value")
+      .eq("client_id", id)
+      .eq("company_id", me.company_id)
+      .gte("scheduled_start", nowIso)
+      .neq("status", "cancelado")
+      .order("scheduled_start", { ascending: true })
+      .limit(15),
+
+    // Histórico recente
+    admin
+      .from("services_full")
+      .select("id, reference_number, scheduled_start, status, location_name, team_name, team_color, calculated_value, manual_value")
+      .eq("client_id", id)
+      .eq("company_id", me.company_id)
+      .lt("scheduled_start", nowIso)
+      .order("scheduled_start", { ascending: false })
+      .limit(10),
+
+    // Concluídos (para KPI de faturação)
+    admin
+      .from("services_full")
+      .select("calculated_value, manual_value")
+      .eq("client_id", id)
+      .eq("company_id", me.company_id)
+      .eq("status", "concluido")
+      .limit(2000),
   ]);
 
   if (!client) notFound();
@@ -60,69 +126,247 @@ export default async function ClientDetailPage({
   });
   const clienteRef = [{ id: client.id, name: client.name }];
 
+  const upcoming = upcomingRaw ?? [];
+  const recent = recentRaw ?? [];
+  const done = doneRaw ?? [];
+  const totalBilled = done.reduce((acc, s) => acc + serviceValue(s), 0);
+  const nextService = upcoming[0] ?? null;
+
+  const initials = client.name.split(" ").slice(0, 2).map((w) => w[0]).join("").toUpperCase();
+  const isCompany = (client.type ?? "empresa") === "empresa";
+
   return (
-    <div className="flex flex-col h-full">
+    <div>
       <Header
         title={client.name}
         subtitle="Ficha do cliente"
-        backHref="/dashboard/clientes"
+        actions={
+          <ClienteSheet
+            companyId={me.company_id}
+            cliente={client}
+            trigger={
+              <button className="flex items-center gap-2 px-3 py-2 rounded-lg border border-[var(--color-border)] text-[var(--color-text-sub)] text-sm font-medium hover:bg-[var(--color-background)] transition-colors">
+                <Edit2 className="w-4 h-4" />
+                Editar
+              </button>
+            }
+          />
+        }
       />
-      <div className="flex-1 overflow-auto px-6 py-6">
-        <div className="max-w-3xl mx-auto space-y-6">
 
-          {/* Informações gerais */}
-          <section className="bg-white rounded-xl border border-[var(--color-border)] p-5">
-            <h2 className="text-sm font-semibold text-[var(--color-text-main)] mb-4">Informações</h2>
-            <dl className="grid grid-cols-2 gap-3 text-sm">
-              {[
-                { label: "Email",    value: client.email },
-                { label: "Telefone", value: client.phone },
-                { label: "NIF",      value: client.nif },
-              ].map(({ label, value }) => value ? (
-                <div key={label}>
-                  <dt className="text-xs text-[var(--color-text-muted)] mb-0.5">{label}</dt>
-                  <dd className="text-[var(--color-text-main)] font-medium">{value}</dd>
+      <div className="px-4 py-5 sm:p-6 lg:px-8 space-y-6 mx-auto max-w-[1200px]">
+        <Link
+          href="/dashboard/clientes"
+          className="inline-flex items-center gap-1.5 text-sm text-[var(--color-text-sub)] hover:text-[var(--color-text-main)] transition-colors"
+        >
+          <ArrowLeft className="w-4 h-4" />
+          Clientes
+        </Link>
+
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* ─── Coluna esquerda — perfil ─────────────────────────── */}
+          <div className="space-y-4">
+            {/* Card principal */}
+            <div className="bg-white rounded-xl border border-[var(--color-border)] p-6 text-center">
+              <div className="w-20 h-20 rounded-2xl bg-[var(--color-primary-light)] flex items-center justify-center mx-auto mb-4">
+                {isCompany
+                  ? <Building2 className="w-9 h-9 text-[var(--color-primary)]" />
+                  : <span className="text-[var(--color-primary)] font-bold text-2xl">{initials}</span>}
+              </div>
+              <h2 className="text-lg font-bold text-[var(--color-text-main)]">{client.name}</h2>
+              <p className="text-sm text-[var(--color-text-sub)] mt-0.5 flex items-center justify-center gap-1.5">
+                {isCompany ? <Building2 className="w-3.5 h-3.5" /> : <User className="w-3.5 h-3.5" />}
+                {isCompany ? "Empresa" : "Particular"}
+              </p>
+              <div className="flex items-center justify-center gap-2 mt-3">
+                <span className={`inline-block text-xs font-medium px-3 py-1 rounded-full ${
+                  client.status === "ativo"
+                    ? "bg-[var(--color-primary-light)] text-[var(--color-primary)]"
+                    : "bg-[var(--color-background)] text-[var(--color-text-muted)]"
+                }`}>
+                  {client.status === "ativo" ? "Ativo" : "Inativo"}
+                </span>
+                {client.vat_exempt && (
+                  <span className="inline-block text-xs font-medium px-3 py-1 rounded-full bg-amber-50 text-amber-700">
+                    Isento de IVA
+                  </span>
+                )}
+              </div>
+            </div>
+
+            {/* Contacto */}
+            <div className="bg-white rounded-xl border border-[var(--color-border)] p-5 space-y-3">
+              <h3 className="text-sm font-semibold text-[var(--color-text-main)]">Contacto</h3>
+              {client.email ? (
+                <a href={`mailto:${client.email}`} className="flex items-center gap-3 group">
+                  <Mail className="w-4 h-4 text-[var(--color-text-muted)] shrink-0" />
+                  <span className="text-sm text-[var(--color-text-main)] group-hover:text-[var(--color-primary)] truncate">{client.email}</span>
+                </a>
+              ) : null}
+              {client.phone ? (
+                <a href={`tel:${client.phone}`} className="flex items-center gap-3 group">
+                  <Phone className="w-4 h-4 text-[var(--color-text-muted)] shrink-0" />
+                  <span className="text-sm text-[var(--color-text-main)] group-hover:text-[var(--color-primary)]">{client.phone}</span>
+                </a>
+              ) : null}
+              {client.nif ? (
+                <div className="flex items-center gap-3">
+                  <Hash className="w-4 h-4 text-[var(--color-text-muted)] shrink-0" />
+                  <span className="text-sm text-[var(--color-text-main)]">NIF {client.nif}</span>
                 </div>
-              ) : null)}
-              {client.notes && (
-                <div className="col-span-2">
-                  <dt className="text-xs text-[var(--color-text-muted)] mb-0.5">Notas</dt>
-                  <dd className="text-[var(--color-text-sub)]">{client.notes}</dd>
+              ) : null}
+              {!client.email && !client.phone && !client.nif && (
+                <p className="text-sm text-[var(--color-text-muted)]">Sem contactos registados.</p>
+              )}
+            </div>
+
+            {/* Notas */}
+            {client.notes ? (
+              <div className="bg-white rounded-xl border border-[var(--color-border)] p-5">
+                <div className="flex items-center gap-2 mb-2">
+                  <StickyNote className="w-4 h-4 text-[var(--color-text-muted)]" />
+                  <h3 className="text-sm font-semibold text-[var(--color-text-main)]">Notas</h3>
+                </div>
+                <p className="text-sm text-[var(--color-text-sub)] whitespace-pre-wrap">{client.notes}</p>
+              </div>
+            ) : null}
+          </div>
+
+          {/* ─── Coluna direita — atividade ───────────────────────── */}
+          <div className="lg:col-span-2 space-y-4">
+            {/* KPIs */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+              <div className="bg-white rounded-xl border border-[var(--color-border)] p-4 text-center">
+                <p className="text-2xl font-bold text-[var(--color-text-main)]">{locais.length}</p>
+                <p className="text-xs text-[var(--color-text-muted)] uppercase tracking-wide mt-1">Locais</p>
+              </div>
+              <div className="bg-white rounded-xl border border-[var(--color-border)] p-4 text-center">
+                <p className="text-2xl font-bold text-[var(--color-text-main)]">{upcoming.length}</p>
+                <p className="text-xs text-[var(--color-text-muted)] uppercase tracking-wide mt-1">Agendados</p>
+              </div>
+              <div className="bg-white rounded-xl border border-[var(--color-border)] p-4 text-center">
+                <p className="text-2xl font-bold text-[var(--color-text-main)]">{done.length}</p>
+                <p className="text-xs text-[var(--color-text-muted)] uppercase tracking-wide mt-1">Concluídos</p>
+              </div>
+              <div className="bg-white rounded-xl border border-[var(--color-border)] p-4 text-center">
+                <p className="text-2xl font-bold text-[var(--color-text-main)]">€{totalBilled.toFixed(0)}</p>
+                <p className="text-xs text-[var(--color-text-muted)] uppercase tracking-wide mt-1">Faturado</p>
+              </div>
+            </div>
+
+            {/* Próximas intervenções */}
+            <section className="bg-white rounded-xl border border-[var(--color-border)] p-5">
+              <div className="flex items-center gap-2 mb-4">
+                <CalendarClock className="w-4 h-4 text-[var(--color-primary)]" />
+                <h2 className="text-sm font-semibold text-[var(--color-text-main)]">
+                  Próximas intervenções <span className="text-[var(--color-text-muted)] font-normal">({upcoming.length})</span>
+                </h2>
+                {nextService && (
+                  <span className="ml-auto text-xs text-[var(--color-text-muted)]">
+                    Próxima: {dayLabel(nextService.scheduled_start)}
+                  </span>
+                )}
+              </div>
+              {upcoming.length === 0 ? (
+                <p className="text-sm text-[var(--color-text-muted)] py-4 text-center">Nenhuma intervenção agendada.</p>
+              ) : (
+                <div className="space-y-1.5 max-h-[420px] overflow-y-auto">
+                  {upcoming.map((s) => {
+                    const st = STATUS_STYLE[s.status ?? "agendado"] ?? STATUS_STYLE.agendado;
+                    return (
+                      <div key={s.id} className="flex items-center gap-3 px-3 py-2.5 rounded-lg border border-[var(--color-border)] hover:bg-[var(--color-background)] transition-colors">
+                        <div className="flex flex-col items-center justify-center w-14 shrink-0 text-center">
+                          <span className="text-xs font-semibold text-[var(--color-text-main)] capitalize leading-tight">
+                            {format(parseISO(s.scheduled_start), "d MMM", { locale: pt })}
+                          </span>
+                          <span className="text-[11px] text-[var(--color-text-muted)]">
+                            {format(parseISO(s.scheduled_start), "HH:mm")}
+                          </span>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-[var(--color-text-main)] truncate">
+                            {s.location_name ?? "—"}
+                          </p>
+                          <p className="text-xs text-[var(--color-text-muted)] flex items-center gap-1.5">
+                            {s.reference_number ? `#${s.reference_number}` : ""}
+                            {s.team_name && (
+                              <span className="inline-flex items-center gap-1">
+                                <span className="w-2 h-2 rounded-full" style={{ background: s.team_color ?? "#94A3B8" }} />
+                                {s.team_name}
+                              </span>
+                            )}
+                          </p>
+                        </div>
+                        <span className="text-xs font-semibold px-2 py-0.5 rounded-full shrink-0" style={{ background: st.bg, color: st.text }}>
+                          {st.label}
+                        </span>
+                      </div>
+                    );
+                  })}
                 </div>
               )}
-            </dl>
-          </section>
+            </section>
 
-          {/* Locais */}
-          <section className="bg-white rounded-xl border border-[var(--color-border)] p-5">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-sm font-semibold text-[var(--color-text-main)]">
-                Locais <span className="text-[var(--color-text-muted)] font-normal">({locais.length})</span>
-              </h2>
-              <LocalSheet
-                companyId={me.company_id}
+            {/* Histórico recente */}
+            {recent.length > 0 && (
+              <section className="bg-white rounded-xl border border-[var(--color-border)] p-5">
+                <h2 className="text-sm font-semibold text-[var(--color-text-main)] mb-4">
+                  Histórico recente <span className="text-[var(--color-text-muted)] font-normal">({recent.length})</span>
+                </h2>
+                <div className="space-y-1.5 max-h-72 overflow-y-auto">
+                  {recent.map((s) => {
+                    const st = STATUS_STYLE[s.status ?? "concluido"] ?? STATUS_STYLE.concluido;
+                    return (
+                      <div key={s.id} className="flex items-center gap-3 px-3 py-2 rounded-lg bg-[var(--color-background)] border border-[var(--color-border)] text-sm">
+                        <span className="text-xs text-[var(--color-text-muted)] w-20 shrink-0">
+                          {format(parseISO(s.scheduled_start), "d MMM yyyy", { locale: pt })}
+                        </span>
+                        <span className="flex-1 min-w-0 truncate text-[var(--color-text-main)]">{s.location_name ?? "—"}</span>
+                        <span className="text-xs text-[var(--color-text-sub)] flex items-center gap-1 shrink-0">
+                          <BadgeEuro className="w-3.5 h-3.5" />{serviceValue(s).toFixed(0)}
+                        </span>
+                        <span className="text-xs font-semibold px-2 py-0.5 rounded-full shrink-0" style={{ background: st.bg, color: st.text }}>
+                          {st.label}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </section>
+            )}
+
+            {/* Locais */}
+            <section className="bg-white rounded-xl border border-[var(--color-border)] p-5">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-sm font-semibold text-[var(--color-text-main)] flex items-center gap-2">
+                  <MapPin className="w-4 h-4 text-[var(--color-primary)]" />
+                  Locais <span className="text-[var(--color-text-muted)] font-normal">({locais.length})</span>
+                </h2>
+                <LocalSheet
+                  companyId={me.company_id}
+                  clientes={clienteRef}
+                  fixedClientId={client.id}
+                  trigger={
+                    <button className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[var(--color-primary)] text-white text-sm font-medium hover:bg-[var(--color-primary-hover)] transition-colors">
+                      <Plus className="w-4 h-4" />
+                      Novo local
+                    </button>
+                  }
+                />
+              </div>
+              <LocaisTable
+                locais={locais}
                 clientes={clienteRef}
-                fixedClientId={client.id}
-                trigger={
-                  <button className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[var(--color-primary)] text-white text-sm font-medium hover:bg-[var(--color-primary-hover)] transition-colors">
-                    <Plus className="w-4 h-4" />
-                    Novo local
-                  </button>
-                }
+                companyId={me.company_id}
               />
-            </div>
-            <LocaisTable
-              locais={locais}
-              clientes={clienteRef}
-              companyId={me.company_id}
-            />
-          </section>
+            </section>
 
-          {/* Comunicação */}
-          <CommunicationTab
-            client={client}
-            notifications={notifications ?? []}
-          />
+            {/* Comunicação */}
+            <CommunicationTab
+              client={client}
+              notifications={notifications ?? []}
+            />
+          </div>
         </div>
       </div>
     </div>
