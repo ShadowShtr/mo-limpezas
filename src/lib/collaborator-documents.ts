@@ -27,6 +27,21 @@ export function isCollaboratorProfileRole(role: string | null | undefined): bool
   return role === "colaborador";
 }
 
+/**
+ * Verifica se um caminho de storage (`${companyId}/${collaboratorId}/...`)
+ * pertence à empresa indicada. Usado para impedir que um signed URL seja gerado
+ * para ficheiros de outra empresa (um signed URL ignora as políticas de storage).
+ */
+export function isStoragePathInCompany(
+  storagePath: string,
+  companyId: string,
+): boolean {
+  if (!storagePath || !companyId) return false;
+  // Bloquear travessia de diretórios e prefixos parciais (ex: "company1" vs "company12").
+  if (storagePath.includes("..")) return false;
+  return storagePath.startsWith(`${companyId}/`);
+}
+
 export function buildDamageReportNotificationRows(input: DamageReportNotificationInput) {
   const name = input.collaboratorName || "Uma colaboradora";
   return (input.managers ?? []).map((manager) => ({

@@ -3,6 +3,7 @@
 import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
+import { requireProfile } from "@/lib/auth-guard";
 import { revalidatePath } from "next/cache";
 
 const settingsSchema = z.object({
@@ -44,12 +45,14 @@ const DEFAULTS: CompanySettings = {
   checkout_after_minutes: 60,
 };
 
-export async function getCompanySettings(companyId: string): Promise<CompanySettings> {
-  const admin = createAdminClient();
+export async function getCompanySettings(_companyId?: string): Promise<CompanySettings> {
+  const guard = await requireProfile();
+  if (!guard.ok) return DEFAULTS;
+  const { admin } = guard;
   const { data } = await admin
     .from("company_settings")
     .select("vat_rate, invoice_prefix, hourly_rate, meal_allowance_day, overtime_rate_pct, vacation_days_year, gps_radius_meters, timezone, checkin_before_minutes, checkout_after_minutes")
-    .eq("company_id", companyId)
+    .eq("company_id", guard.profile.company_id)
     .single();
 
   if (!data) return DEFAULTS;

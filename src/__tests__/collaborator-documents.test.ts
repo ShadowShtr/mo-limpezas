@@ -5,6 +5,7 @@ import {
   buildDamageReportNotificationRows,
   buildDocumentStoragePath,
   isCollaboratorProfileRole,
+  isStoragePathInCompany,
   sanitizeDocumentFileName,
 } from "@/lib/collaborator-documents";
 
@@ -54,6 +55,29 @@ describe("collaborator documents", () => {
         data: { document_id: "doc-1", collaborator_id: "colab-1" },
       },
     ]);
+  });
+
+  describe("isolamento multi-tenant no signed URL (isStoragePathInCompany)", () => {
+    it("aceita ficheiros da própria empresa", () => {
+      expect(isStoragePathInCompany("empresa-1/colab-1/123-doc.pdf", "empresa-1")).toBe(true);
+    });
+
+    it("rejeita ficheiros de outra empresa", () => {
+      expect(isStoragePathInCompany("empresa-2/colab-9/recibo.pdf", "empresa-1")).toBe(false);
+    });
+
+    it("rejeita prefixos parciais (empresa-1 vs empresa-12)", () => {
+      expect(isStoragePathInCompany("empresa-12/colab-1/doc.pdf", "empresa-1")).toBe(false);
+    });
+
+    it("rejeita travessia de diretórios", () => {
+      expect(isStoragePathInCompany("empresa-1/../empresa-2/doc.pdf", "empresa-1")).toBe(false);
+    });
+
+    it("rejeita path ou companyId vazios", () => {
+      expect(isStoragePathInCompany("", "empresa-1")).toBe(false);
+      expect(isStoragePathInCompany("empresa-1/doc.pdf", "")).toBe(false);
+    });
   });
 
   it("migration de correção permite role colaborador e remove restrição de MIME", () => {

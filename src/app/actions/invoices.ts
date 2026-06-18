@@ -2,6 +2,7 @@
 
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
+import { requireProfile } from "@/lib/auth-guard";
 import { getMissingCashFlowReferenceIds, isValidCashFlowAmount } from "@/lib/cash-flow-integrity";
 import { revalidatePath } from "next/cache";
 
@@ -59,11 +60,14 @@ async function nextInvoiceNumber(companyId: string, prefix: string, year: number
 // ─── Gerar documentos de cobrança ─────────────────────────────────────────────
 
 export async function generateInvoices(
-  companyId: string,
+  _companyId: string,
   year: number,
   month: number,
 ): Promise<{ ok: true; invoices: Invoice[] } | { ok: false; error: string }> {
-  const admin = createAdminClient();
+  const guard = await requireProfile({ roles: ["admin", "gestor"] });
+  if (!guard.ok) return { ok: false, error: guard.error };
+  const { admin } = guard;
+  const companyId = guard.profile.company_id;
   const { start, end } = monthRange(year, month);
 
   // Configurações
@@ -261,11 +265,14 @@ export async function generateInvoices(
 // ─── Ler faturas ──────────────────────────────────────────────────────────────
 
 export async function getInvoices(
-  companyId: string,
+  _companyId: string,
   year: number,
   month: number,
 ): Promise<{ ok: true; invoices: Invoice[] } | { ok: false; error: string }> {
-  const admin = createAdminClient();
+  const guard = await requireProfile();
+  if (!guard.ok) return { ok: false, error: guard.error };
+  const { admin } = guard;
+  const companyId = guard.profile.company_id;
   const { start, end } = monthRange(year, month);
 
   const { data, error } = await admin
@@ -446,9 +453,12 @@ export interface UnbilledService {
 }
 
 export async function getUnbilledServices(
-  companyId: string,
+  _companyId?: string,
 ): Promise<{ ok: true; services: UnbilledService[] } | { ok: false; error: string }> {
-  const admin = createAdminClient();
+  const guard = await requireProfile();
+  if (!guard.ok) return { ok: false, error: guard.error };
+  const { admin } = guard;
+  const companyId = guard.profile.company_id;
 
   // Serviços concluídos dos últimos 60 dias
   const since = new Date();

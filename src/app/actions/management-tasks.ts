@@ -1,7 +1,6 @@
 "use server";
 
-import { createAdminClient } from "@/lib/supabase/admin";
-import { createClient } from "@/lib/supabase/server";
+import { requireProfile } from "@/lib/auth-guard";
 import { revalidatePath } from "next/cache";
 
 export type TaskStatus = string; // free-form to support custom columns
@@ -46,9 +45,12 @@ export interface TaskInput {
 }
 
 export async function getManagementTasks(
-  companyId: string,
+  _companyId?: string,
 ): Promise<{ ok: true; tasks: ManagementTask[] } | { ok: false; error: string }> {
-  const admin = createAdminClient();
+  const guard = await requireProfile();
+  if (!guard.ok) return { ok: false, error: guard.error };
+  const { admin } = guard;
+  const companyId = guard.profile.company_id;
 
   // Collect unique people IDs from a first query then fetch profiles in parallel
   const { data, error } = await admin
@@ -94,18 +96,18 @@ export async function getManagementTasks(
 }
 
 export async function createManagementTask(
-  companyId: string,
+  _companyId: string,
   input: TaskInput,
 ): Promise<{ ok: true; task: ManagementTask } | { ok: false; error: string }> {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { ok: false, error: "Não autenticado" };
+  const guard = await requireProfile();
+  if (!guard.ok) return { ok: false, error: guard.error };
+  const { admin } = guard;
+  const user = { id: guard.profile.id };
 
-  const admin = createAdminClient();
   const { data: row, error } = await admin
     .from("management_tasks")
     .insert({
-      company_id: companyId,
+      company_id: guard.profile.company_id,
       title: input.title,
       body: input.body ?? null,
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -153,7 +155,9 @@ export async function updateManagementTask(
   taskId: string,
   data: Partial<TaskInput & { completed_at: string | null }>,
 ): Promise<{ ok: boolean; error?: string }> {
-  const admin = createAdminClient();
+  const guard = await requireProfile();
+  if (!guard.ok) return { ok: false, error: guard.error };
+  const { admin, profile } = guard;
 
   // completedAt: set when caller explicitly marks as complete, clear when status changes, leave untouched otherwise
   const completedAt = data.markCompleted
@@ -171,7 +175,7 @@ export async function updateManagementTask(
     ...(data.priority    !== undefined && { priority:     data.priority }),
     ...(data.assigned_to !== undefined && { assigned_to:  data.assigned_to }),
     ...(data.due_date    !== undefined && { due_date:     data.due_date }),
-  }).eq("id", taskId);
+  }).eq("id", taskId).eq("company_id", profile.company_id);
   if (error) return { ok: false, error: error.message };
 
   revalidatePath("/dashboard/tarefas");
@@ -181,33 +185,43 @@ export async function updateManagementTask(
 export async function deleteManagementTask(
   taskId: string,
 ): Promise<{ ok: boolean; error?: string }> {
-  const admin = createAdminClient();
-  const { error } = await admin.from("management_tasks").delete().eq("id", taskId);
+  const guard = await requireProfile();
+  if (!guard.ok) return { ok: false, error: guard.error };
+  const { admin, profile } = guard;
+  const { error } = await admin
+    .from("management_tasks")
+    .delete()
+    .eq("id", taskId)
+    .eq("company_id", profile.company_id);
   if (error) return { ok: false, error: error.message };
   revalidatePath("/dashboard/tarefas");
   return { ok: true };
 }
 
-export async function getKanbanColumns(companyId: string): Promise<KanbanColumn[]> {
-  const admin = createAdminClient();
+export async function getKanbanColumns(_companyId?: string): Promise<KanbanColumn[]> {
+  const guard = await requireProfile();
+  if (!guard.ok) return DEFAULT_KANBAN_COLUMNS;
+  const { admin, profile } = guard;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data } = await (admin.from("company_settings") as any)
     .select("kanban_columns")
-    .eq("company_id", companyId)
+    .eq("company_id", profile.company_id)
     .single();
   if (!data?.kanban_columns) return DEFAULT_KANBAN_COLUMNS;
   return data.kanban_columns as KanbanColumn[];
 }
 
 export async function saveKanbanColumns(
-  companyId: string,
+  _companyId: string,
   columns: KanbanColumn[],
 ): Promise<{ ok: boolean; error?: string }> {
-  const admin = createAdminClient();
+  const guard = await requireProfile({ roles: ["admin", "gestor"] });
+  if (!guard.ok) return { ok: false, error: guard.error };
+  const { admin, profile } = guard;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { error } = await (admin.from("company_settings") as any)
     .update({ kanban_columns: columns })
-    .eq("company_id", companyId);
+    .eq("company_id", profile.company_id);
   if (error) return { ok: false, error: (error as { message: string }).message };
   revalidatePath("/dashboard/tarefas");
   return { ok: true };

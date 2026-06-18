@@ -1,6 +1,6 @@
 "use server";
 
-import { createAdminClient } from "@/lib/supabase/admin";
+import { requireProfile } from "@/lib/auth-guard";
 
 export interface HorasRow {
   id: string;
@@ -56,11 +56,15 @@ export interface ReportsData {
 }
 
 export async function getReportsData(
-  companyId: string,
+  _companyId: string,
   startDate: string,
   endDate: string,
 ): Promise<ReportsData> {
-  const admin = createAdminClient();
+  const guard = await requireProfile({ roles: ["admin", "gestor"] });
+  if (!guard.ok) throw new Error(guard.error);
+  const { admin, profile } = guard;
+  // company_id vem SEMPRE da sessão — nunca confiar no parâmetro do cliente.
+  const companyId = profile.company_id;
 
   // ─── 1. HORAS ─────────────────────────────────────────────
   const { data: profiles } = await admin

@@ -1,7 +1,7 @@
 "use server";
 
-import { createAdminClient } from "@/lib/supabase/admin";
 import { calcTimesheetDuration } from "@/lib/payroll-calc";
+import { requireProfile } from "@/lib/auth-guard";
 import { revalidatePath } from "next/cache";
 
 export interface ServiceTimeUpdate {
@@ -13,7 +13,9 @@ export interface ServiceTimeUpdate {
 export async function saveActualTimes(updates: ServiceTimeUpdate[]) {
   if (updates.length === 0) return { ok: true };
 
-  const supabase = createAdminClient();
+  const guard = await requireProfile({ roles: ["admin", "gestor"] });
+  if (!guard.ok) return { ok: false as const, error: guard.error };
+  const { admin: supabase, profile } = guard;
 
   const results = await Promise.all(
     updates.map((u) =>
@@ -29,7 +31,8 @@ export async function saveActualTimes(updates: ServiceTimeUpdate[]) {
               ? "em_curso"
               : undefined,
         })
-        .eq("id", u.id),
+        .eq("id", u.id)
+        .eq("company_id", profile.company_id),
     ),
   );
 
@@ -48,7 +51,9 @@ export async function adminEditTimesheet(
     notes?: string | null;
   },
 ): Promise<{ ok: boolean; error?: string }> {
-  const admin = createAdminClient();
+  const guard = await requireProfile({ roles: ["admin", "gestor"] });
+  if (!guard.ok) return { ok: false, error: guard.error };
+  const { admin, profile } = guard;
 
   let duration_minutes: number | null = null;
   if (data.clock_in_at && data.clock_out_at) {
@@ -66,7 +71,8 @@ export async function adminEditTimesheet(
       clock_out_at: data.clock_out_at,
       duration_minutes,
     })
-    .eq("id", timesheetId);
+    .eq("id", timesheetId)
+    .eq("company_id", profile.company_id);
 
   if (error) return { ok: false, error: error.message };
   revalidatePath("/dashboard/colaboradores");
@@ -84,13 +90,16 @@ export async function adminCreateTimesheet(
   collaboratorId: string,
   data: { clock_in_at: string; clock_out_at: string | null },
 ): Promise<{ ok: boolean; error?: string }> {
-  const admin = createAdminClient();
+  const guard = await requireProfile({ roles: ["admin", "gestor"] });
+  if (!guard.ok) return { ok: false, error: guard.error };
+  const { admin, profile } = guard;
 
-  // company_id deduzido do serviço para manter o multi-tenant consistente
+  // O serviço tem de pertencer à empresa da sessão (isolamento multi-tenant)
   const { data: svc, error: svcErr } = await admin
     .from("services")
     .select("company_id")
     .eq("id", serviceId)
+    .eq("company_id", profile.company_id)
     .single();
   if (svcErr || !svc) return { ok: false, error: "Serviço não encontrado." };
 

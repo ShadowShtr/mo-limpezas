@@ -2,6 +2,7 @@
 
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
+import { requireProfile } from "@/lib/auth-guard";
 import { monthRange, calcCollaboratorPayroll } from "@/lib/payroll-calc";
 import { getMissingCashFlowReferenceIds, isValidCashFlowAmount } from "@/lib/cash-flow-integrity";
 import { revalidatePath } from "next/cache";
@@ -59,11 +60,14 @@ type PayrollPaidProfileJoin = {
 // ─── Calcular e guardar folha de pagamento ────────────────────────────────────
 
 export async function calculateAndSavePayroll(
-  companyId: string,
+  _companyId: string,
   year: number,
   month: number,
 ): Promise<{ ok: true; records: PayrollRecord[] } | { ok: false; error: string }> {
-  const admin = createAdminClient();
+  const guard = await requireProfile({ roles: ["admin", "gestor"] });
+  if (!guard.ok) return { ok: false, error: guard.error };
+  const { admin } = guard;
+  const companyId = guard.profile.company_id;
   const { start, end } = monthRange(year, month);
 
   // 1. Colaboradores ativos
@@ -191,11 +195,14 @@ export async function calculateAndSavePayroll(
 // ─── Ler registos guardados ───────────────────────────────────────────────────
 
 export async function getPayrollRecords(
-  companyId: string,
+  _companyId: string,
   year: number,
   month: number,
 ): Promise<{ ok: true; records: PayrollRecord[] } | { ok: false; error: string }> {
-  const admin = createAdminClient();
+  const guard = await requireProfile();
+  if (!guard.ok) return { ok: false, error: guard.error };
+  const { admin } = guard;
+  const companyId = guard.profile.company_id;
 
   const { data, error } = await admin
     .from("payroll_records")

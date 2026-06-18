@@ -2,6 +2,7 @@
 
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
+import { requireProfile } from "@/lib/auth-guard";
 import { isValidCashFlowAmount } from "@/lib/cash-flow-integrity";
 import { revalidatePath } from "next/cache";
 
@@ -31,10 +32,13 @@ export interface CashFlowFilters {
 }
 
 export async function getCashFlowEntries(
-  companyId: string,
+  _companyId: string,
   filters: CashFlowFilters,
 ): Promise<{ ok: true; entries: CashFlowEntry[]; balance: number; entradas: number; saidas: number; pendentes: number } | { ok: false; error: string }> {
-  const admin = createAdminClient();
+  const guard = await requireProfile();
+  if (!guard.ok) return { ok: false, error: guard.error };
+  const { admin } = guard;
+  const companyId = guard.profile.company_id;
   const start = `${filters.year}-${String(filters.month).padStart(2, "0")}-01`;
   const end   = new Date(filters.year, filters.month, 0).toISOString().split("T")[0];
 
@@ -177,13 +181,16 @@ export interface PendingExpense {
   notes: string | null;
 }
 
-export async function getAccountsData(companyId: string): Promise<{
+export async function getAccountsData(_companyId?: string): Promise<{
   ok: true;
   toReceive: { id: string; invoice_number: string; client_name: string; total: number; due_date: string | null; status: string }[];
   toPay: { id: string; collaborator_name: string; net_salary: number; period: string; status: string }[];
   expenses: PendingExpense[];
 } | { ok: false; error: string }> {
-  const admin = createAdminClient();
+  const guard = await requireProfile();
+  if (!guard.ok) return { ok: false, error: guard.error };
+  const { admin } = guard;
+  const companyId = guard.profile.company_id;
 
   const [invoicesRes, payrollRes, expensesRes] = await Promise.all([
     admin

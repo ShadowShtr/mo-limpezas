@@ -1,6 +1,6 @@
 "use server";
 
-import { createAdminClient } from "@/lib/supabase/admin";
+import { requireProfile } from "@/lib/auth-guard";
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 
@@ -50,9 +50,13 @@ function last12Months(): { year: number; month: number }[] {
 // ─── Action principal ─────────────────────────────────────────────────────────
 
 export async function getFinancialDashboard(
-  companyId: string,
+  _companyId?: string,
 ): Promise<{ ok: true; data: FinancialDashboardData } | { ok: false; error: string }> {
-  const admin = createAdminClient();
+  const guard = await requireProfile({ roles: ["admin", "gestor"] });
+  if (!guard.ok) return { ok: false, error: guard.error };
+  const { admin, profile } = guard;
+  // company_id vem SEMPRE da sessão — nunca confiar no parâmetro do cliente.
+  const companyId = profile.company_id;
   const months = last12Months();
   const now = new Date();
   const currentYear = now.getFullYear();

@@ -2,9 +2,11 @@
 
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
+import { requireProfile } from "@/lib/auth-guard";
 import {
   buildDamageReportNotificationRows,
   buildDocumentStoragePath,
+  isStoragePathInCompany,
 } from "@/lib/collaborator-documents";
 import { revalidatePath } from "next/cache";
 
@@ -50,11 +52,14 @@ async function ensureBucket(admin: ReturnType<typeof createAdminClient>) {
 export async function getCollaboratorDocuments(
   collaboratorId: string,
 ): Promise<{ ok: true; documents: CollaboratorDocument[] } | { ok: false; error: string }> {
-  const admin = createAdminClient();
+  const guard = await requireProfile({ roles: ["admin", "gestor"] });
+  if (!guard.ok) return { ok: false, error: guard.error };
+  const { admin } = guard;
   const { data, error } = await admin
     .from("collaborator_documents")
     .select("id, file_name, file_url, file_size, mime_type, category, notes, visible_to_collaborator, uploaded_by_role, expires_at, archived_at, created_at, profiles!uploaded_by(full_name)")
     .eq("collaborator_id", collaboratorId)
+    .eq("company_id", guard.profile.company_id)
     .is("archived_at", null)
     .order("created_at", { ascending: false });
 
@@ -142,12 +147,15 @@ export async function deleteCollaboratorDocument(
   documentId: string,
   collaboratorId: string,
 ): Promise<{ ok: boolean; error?: string }> {
-  const admin = createAdminClient();
+  const guard = await requireProfile({ roles: ["admin", "gestor"] });
+  if (!guard.ok) return { ok: false, error: guard.error };
+  const { admin, profile } = guard;
 
   const { data, error: fetchErr } = await admin
     .from("collaborator_documents")
     .select("file_url")
     .eq("id", documentId)
+    .eq("company_id", profile.company_id)
     .single();
 
   if (fetchErr || !data) return { ok: false, error: "Documento não encontrado" };
@@ -158,7 +166,11 @@ export async function deleteCollaboratorDocument(
     await admin.storage.from(BUCKET).remove([decodeURIComponent(storagePath)]);
   }
 
-  const { error } = await admin.from("collaborator_documents").delete().eq("id", documentId);
+  const { error } = await admin
+    .from("collaborator_documents")
+    .delete()
+    .eq("id", documentId)
+    .eq("company_id", profile.company_id);
   if (error) return { ok: false, error: error.message };
 
   revalidatePath(`/dashboard/colaboradores/${collaboratorId}`);
@@ -170,15 +182,25 @@ export async function getSignedDocumentUrl(
 ): Promise<{ ok: true; url: string } | { ok: false; error: string }> {
   if (!fileUrl) return { ok: false, error: "URL do ficheiro em falta" };
 
-  const admin = createAdminClient();
+  const guard = await requireProfile();
+  if (!guard.ok) return { ok: false, error: guard.error };
+  const { admin, profile } = guard;
+
   const bucketPrefix = `/${BUCKET}/`;
   const storagePath = fileUrl.includes(bucketPrefix) ? fileUrl.split(bucketPrefix)[1] : null;
 
   if (!storagePath) return { ok: true, url: fileUrl };
 
+  const decodedPath = decodeURIComponent(storagePath);
+  // O path tem o formato `${companyId}/${collaboratorId}/...` — só permitir
+  // assinar ficheiros da própria empresa (um signed URL ignora as políticas de storage).
+  if (!isStoragePathInCompany(decodedPath, profile.company_id)) {
+    return { ok: false, error: "Sem permissão para aceder a este ficheiro." };
+  }
+
   const { data, error } = await admin.storage
     .from(BUCKET)
-    .createSignedUrl(decodeURIComponent(storagePath), 3600);
+    .createSignedUrl(decodedPath, 3600);
 
   if (error || !data) return { ok: false, error: error?.message ?? "Erro ao gerar link" };
   return { ok: true, url: data.signedUrl };
@@ -504,26 +526,31 @@ export async function getDocumentsForBackup(): Promise<{
 
 // ─── Arquivo de documentos expirados (cron) ───────────────────────────────────
 
-export async function listDocumentsToArchive(companyId: string): Promise<{
+export async function listDocumentsToArchive(_companyId?: string): Promise<{
   ok: boolean;
   documents?: (CollaboratorDocument & { collaborator_name: string })[];
   error?: string;
 }> {
-  const admin = createAdminClient();
+  const guard = await requireProfile({ roles: ["admin", "gestor"] });
+  if (!guard.ok) return { ok: false, error: guard.error };
+  const { admin } = guard;
   const { data, error } = await admin.rpc("get_documents_to_archive", {
-    p_company_id: companyId,
+    p_company_id: guard.profile.company_id,
   });
 
   if (error) return { ok: false, error: error.message };
   return { ok: true, documents: (data ?? []) as (CollaboratorDocument & { collaborator_name: string })[] };
 }
 
-export async function archiveExpiredDocuments(companyId: string): Promise<{
+export async function archiveExpiredDocuments(_companyId?: string): Promise<{
   ok: boolean;
   count?: number;
   error?: string;
 }> {
-  const admin = createAdminClient();
+  const guard = await requireProfile({ roles: ["admin", "gestor"] });
+  if (!guard.ok) return { ok: false, error: guard.error };
+  const { admin } = guard;
+  const companyId = guard.profile.company_id;
 
   const { data: expired } = await admin
     .from("collaborator_documents")
