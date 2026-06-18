@@ -108,18 +108,8 @@ export async function POST(req: NextRequest) {
   if (!membership && !reinforcement)
     return NextResponse.json({ error: "Sem permissão para este serviço" }, { status: 403 });
 
-  if (service.scheduled_start) {
-    const ref = new Date(clockInAt);
-    const scheduledStart = new Date(service.scheduled_start);
-    const earliestClockIn = new Date(scheduledStart.getTime() - settings.checkin_before_minutes * 60_000);
-    if (ref < earliestClockIn) {
-      const diffMin = Math.round((earliestClockIn.getTime() - ref.getTime()) / 60_000);
-      return NextResponse.json(
-        { error: `Ainda não pode iniciar o serviço. Pode fazer clock-in em ${diffMin} minuto${diffMin !== 1 ? "s" : ""}.` },
-        { status: 400 }
-      );
-    }
-  }
+  // Sem limite de tempo para clock-in: as colaboradoras podem bater ponto a
+  // qualquer hora, inclusive atrasadas. O gestor pode afinar no Registo de Ponto.
 
   let distance_m: number | null = null;
   let location_warning = false;
@@ -224,27 +214,18 @@ export async function PATCH(req: NextRequest) {
   if (!profile)
     return NextResponse.json({ error: "Perfil não encontrado" }, { status: 404 });
 
-  const [{ data: ts }, { data: service }, settings] = await Promise.all([
-    admin.from("timesheets").select("id, clock_in_at").eq("service_id", service_id).eq("collaborator_id", user.id).is("clock_out_at", null).single(),
-    admin.from("services_full").select("scheduled_end, status").eq("id", service_id).eq("company_id", profile.company_id).single(),
-    getCompanySettings(profile.company_id),
-  ]);
+  const { data: ts } = await admin
+    .from("timesheets")
+    .select("id, clock_in_at")
+    .eq("service_id", service_id)
+    .eq("collaborator_id", user.id)
+    .is("clock_out_at", null)
+    .single();
 
   if (!ts)
     return NextResponse.json({ error: "Registo de entrada não encontrado" }, { status: 404 });
 
-  if (service?.scheduled_end) {
-    const ref = new Date(clockOutAt);
-    const scheduledEnd = new Date(service.scheduled_end);
-    const latestClockOut = new Date(scheduledEnd.getTime() + settings.checkout_after_minutes * 60_000);
-    if (ref > latestClockOut) {
-      const diffMin = Math.round((ref.getTime() - latestClockOut.getTime()) / 60_000);
-      return NextResponse.json(
-        { error: `O prazo para terminar o ponto já passou há ${diffMin} minuto${diffMin !== 1 ? "s" : ""}. Contacte o gestor para corrigir o registo.` },
-        { status: 400 }
-      );
-    }
-  }
+  // Sem limite de tempo para clock-out: o ponto pode ser fechado a qualquer hora.
 
   const out = new Date(clockOutAt);
   const duration_minutes = ts.clock_in_at
