@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { Search, MoreHorizontal } from "lucide-react";
+import Link from "next/link";
+import { Search, MoreHorizontal, MapPin } from "lucide-react";
 import { ClienteSheet } from "./sheet";
 import { usePagination, Pagination } from "@/components/ui/pagination";
 
@@ -87,12 +88,12 @@ export function ClientesTable({ clientes, companyId }: Props) {
               paginated.map((c) => (
                 <tr key={c.id} className="hover:bg-[var(--color-background)] transition-colors">
                   <td className="px-4 py-3">
-                    <div className="flex items-center gap-3">
+                    <Link href={`/dashboard/clientes/${c.id}`} className="flex items-center gap-3 group">
                       <div className="w-9 h-9 rounded-lg bg-[var(--color-primary-light)] flex items-center justify-center shrink-0">
                         <span className="text-[var(--color-primary)] font-bold text-sm">{c.name[0].toUpperCase()}</span>
                       </div>
-                      <p className="text-sm font-medium text-[var(--color-text-main)]">{c.name}</p>
-                    </div>
+                      <p className="text-sm font-medium text-[var(--color-text-main)] group-hover:text-[var(--color-primary)] group-hover:underline">{c.name}</p>
+                    </Link>
                   </td>
                   <td className="px-4 py-3">
                     <p className="text-sm text-[var(--color-text-main)]">{c.email ?? "—"}</p>
@@ -110,11 +111,18 @@ export function ClientesTable({ clientes, companyId }: Props) {
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-1">
+                      <Link
+                        href={`/dashboard/clientes/${c.id}`}
+                        title="Abrir ficha (locais, chave/código)"
+                        className="p-1.5 rounded-lg text-[var(--color-text-muted)] hover:text-[var(--color-primary)] hover:bg-[var(--color-background)] transition-colors"
+                      >
+                        <MapPin className="w-4 h-4" />
+                      </Link>
                       <ClienteSheet
                         companyId={companyId}
                         cliente={c}
                         trigger={
-                          <button className="p-1.5 rounded-lg text-[var(--color-text-muted)] hover:bg-[var(--color-background)] transition-colors">
+                          <button title="Editar cliente" className="p-1.5 rounded-lg text-[var(--color-text-muted)] hover:bg-[var(--color-background)] transition-colors">
                             <MoreHorizontal className="w-4 h-4" />
                           </button>
                         }
