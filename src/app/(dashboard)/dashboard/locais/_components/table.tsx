@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Search, MoreHorizontal, MapPin, Trash2 } from "lucide-react";
+import { Search, MoreHorizontal, MapPin, Trash2, Key, Lock } from "lucide-react";
 import { LocalSheet } from "./sheet";
 import { deleteLocation } from "@/app/actions/locations";
 import { usePagination, Pagination } from "@/components/ui/pagination";
@@ -74,13 +74,14 @@ export function LocaisTable({ locais, clientes, companyId }: Props) {
               <th className="text-left px-4 py-3 text-xs font-medium text-[var(--color-text-muted)] uppercase tracking-wide">Cliente</th>
               <th className="text-left px-4 py-3 text-xs font-medium text-[var(--color-text-muted)] uppercase tracking-wide">€/hora</th>
               <th className="text-left px-4 py-3 text-xs font-medium text-[var(--color-text-muted)] uppercase tracking-wide">GPS</th>
+              <th className="text-left px-4 py-3 text-xs font-medium text-[var(--color-text-muted)] uppercase tracking-wide">Acesso</th>
               <th className="text-left px-4 py-3 text-xs font-medium text-[var(--color-text-muted)] uppercase tracking-wide">Estado</th>
               <th className="px-4 py-3" />
             </tr>
           </thead>
           <tbody className="divide-y divide-[var(--color-border)]">
             {paginated.length === 0 ? (
-              <tr><td colSpan={6} className="text-center py-12 text-sm text-[var(--color-text-muted)]">
+              <tr><td colSpan={7} className="text-center py-12 text-sm text-[var(--color-text-muted)]">
                 {search ? "Nenhum local encontrado." : "Ainda não há locais."}
               </td></tr>
             ) : (
@@ -102,6 +103,26 @@ export function LocaisTable({ locais, clientes, companyId }: Props) {
                     <span className={`text-xs ${l.lat && l.lng ? "text-[var(--color-primary)]" : "text-[var(--color-text-muted)]"}`}>
                       {l.lat && l.lng ? "✓ Definido" : "Sem GPS"}
                     </span>
+                  </td>
+                  <td className="px-4 py-3">
+                    {l.has_key || l.access_code ? (
+                      <div className="flex flex-col gap-0.5">
+                        {l.has_key && (
+                          <span className="text-xs text-[var(--color-text-main)] flex items-center gap-1">
+                            <Key className="w-3 h-3 text-[var(--color-primary)]" />
+                            {l.key_label || "Tem chave"}
+                          </span>
+                        )}
+                        {l.access_code && (
+                          <span className="text-xs text-[var(--color-text-sub)] flex items-center gap-1 font-mono">
+                            <Lock className="w-3 h-3" />
+                            {l.access_code}
+                          </span>
+                        )}
+                      </div>
+                    ) : (
+                      <span className="text-xs text-[var(--color-text-muted)]">—</span>
+                    )}
                   </td>
                   <td className="px-4 py-3">
                     <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${
