@@ -47,8 +47,8 @@ Lê este ficheiro no início de CADA sessão antes de fazer qualquer coisa.
 
 ## ⚡ PRÓXIMA TASK A EXECUTAR
 
-**Próxima task:** TASK 22 (auditoria central).
-TASK 01–04 + 06 + 08 + 13 + 15 + 19 feitas (checkpoint 2026-06-19).
+**Próxima task:** TASK 18 (service worker/cache) ou TASK 14 (crons em lotes).
+TASK 01–04 + 06 + 08 + 13 + 15 + 19 + 22 feitas (checkpoint 2026-06-19).
 
 > ❌ **TASK 12 (foto obrigatória) DESCARTADA** — o dono confirmou (2026-06-19) que
 > as fotos são ocasionais, nunca obrigatórias. O foco é o ponto, offline,
@@ -109,6 +109,11 @@ TASK 01–04 + 06 + 08 + 13 + 15 + 19 feitas (checkpoint 2026-06-19).
   services(company_id,team_id,scheduled_start), timesheets(company_id,service_id),
   clients(company_id,status), locations(company_id,client_id)
 - 6 já existiam (025/027); clock_out_at descartado de propósito (ver SQL)
+
+**TASK 22 — Auditoria central (✅ FEITO)**
+- `src/lib/audit.ts` — `auditLog(...)` central (sanitiza segredos, trunca, não lança)
+- Auditado: cancelamento serviço, arquivar/editar cliente, ajuste+pagamento folha,
+  ponto (timesheet) e foto (confirm). actor_id é NOT NULL → ações sem ator não auditam.
 
 ---
 
