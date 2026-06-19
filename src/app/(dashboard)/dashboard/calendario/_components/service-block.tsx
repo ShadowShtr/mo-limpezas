@@ -14,8 +14,7 @@ export type ServiceForBlock = {
   status: string;
   location_name: string;
   location_address: string;
-  location_access_code: string | null;
-  location_instructions: string | null;
+  location_has_access_code: boolean;
   location_has_key: boolean;
   location_key_label: string | null;
   location_lat: number | null;
@@ -138,15 +137,9 @@ function ServiceTooltip({ service, pos }: { service: ServiceForBlock; pos: Toolt
           </Row>
         )}
 
-        {service.location_access_code && (
+        {service.location_has_access_code && (
           <Row icon={Lock} label="Acesso">
-            <span>Código registado</span>
-          </Row>
-        )}
-
-        {service.location_instructions && (
-          <Row icon={FileText} label="Instruções">
-            <span className="text-[var(--color-text-sub)] break-words">{service.location_instructions}</span>
+            <span>Código registado (ver ficha)</span>
           </Row>
         )}
 
@@ -233,8 +226,8 @@ export function ServiceBlock({ service, slotHeight, startHour, teamId, onClick, 
   const isShort = height <= slotHeight;
   const isMedium = height > slotHeight && height < slotHeight * 3;
   const isLarge = height >= slotHeight * 3;
-  const hasAccess = service.location_has_key || !!service.location_access_code;
-  const noteText = service.notes?.trim() || service.location_instructions?.trim() || "";
+  const hasAccess = service.location_has_key || service.location_has_access_code;
+  const noteText = service.notes?.trim() || "";
 
   // Overlay não usa transform nem posição absoluta — é controlado pelo DragOverlay
   const overlayStyle: React.CSSProperties = isOverlay ? {
@@ -316,7 +309,7 @@ export function ServiceBlock({ service, slotHeight, startHour, teamId, onClick, 
               {hasAccess && (
                 <span className="inline-flex items-center gap-0.5 ml-1 align-middle">
                   {service.location_has_key && <Key className="inline w-2.5 h-2.5" />}
-                  {service.location_access_code && <Lock className="inline w-2.5 h-2.5" />}
+                  {service.location_has_access_code && <Lock className="inline w-2.5 h-2.5" />}
                 </span>
               )}
               {isLarge && (
