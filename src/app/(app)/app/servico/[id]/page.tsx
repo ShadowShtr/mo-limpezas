@@ -106,6 +106,25 @@ export default async function ServicoDetailPage({ params }: Props) {
   const photosRes = await getServicePhotos(id);
   const initialPhotos = photosRes.ok ? photosRes.photos : [];
 
+  // Próximo serviço da colaboradora hoje (TASK 19) — depois deste, na mesma equipa
+  type NextService = { id: string; client_name: string; location_name: string; scheduled_start: string; scheduled_end: string };
+  let nextService: NextService | null = null;
+  if (s.team_id && s.scheduled_start) {
+    const todayEnd = new Date(s.scheduled_start);
+    todayEnd.setHours(23, 59, 59, 999);
+    const { data: nextRaw } = await admin
+      .from("services_full")
+      .select("id, client_name, location_name, scheduled_start, scheduled_end")
+      .eq("team_id", s.team_id)
+      .gt("scheduled_start", s.scheduled_start)
+      .lte("scheduled_start", todayEnd.toISOString())
+      .not("status", "in", "(cancelado,falta)")
+      .order("scheduled_start")
+      .limit(1)
+      .maybeSingle();
+    nextService = (nextRaw as unknown as NextService | null) ?? null;
+  }
+
   const mapsUrl =
     s.location_lat && s.location_lng
       ? `https://www.google.com/maps/dir/?api=1&destination=${s.location_lat},${s.location_lng}`
@@ -179,9 +198,6 @@ export default async function ServicoDetailPage({ params }: Props) {
         }
       />
 
-      {/* Fotos do serviço — fluxo separado do ponto (TASK 04) */}
-      <ServicePhotos serviceId={id} initialPhotos={initialPhotos} />
-
       {/* Botão Navegar */}
       <a
         href={mapsUrl}
@@ -245,6 +261,37 @@ export default async function ServicoDetailPage({ params }: Props) {
             <h3 className="text-sm font-semibold text-[var(--color-text-main)]">Notas</h3>
           </div>
           <p className="text-sm text-[var(--color-text-sub)] leading-relaxed">{s.notes}</p>
+        </div>
+      )}
+
+      {/* Fotos — opcional/ocasional, fica no fim para não competir com o ponto */}
+      <ServicePhotos serviceId={id} initialPhotos={initialPhotos} />
+
+      {/* Próximo serviço de hoje (TASK 19) */}
+      {nextService && (
+        <div className="pt-1">
+          <h3 className="text-xs font-semibold text-[var(--color-text-muted)] uppercase tracking-wide mb-2">
+            A seguir hoje
+          </h3>
+          <Link
+            href={`/app/servico/${nextService.id}`}
+            className="bg-white rounded-2xl border border-[var(--color-border)] p-4 flex items-center gap-3 active:scale-[0.98] transition-transform"
+          >
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold text-[var(--color-text-main)] truncate">
+                {nextService.client_name}
+              </p>
+              <p className="text-xs text-[var(--color-text-sub)] mt-0.5 flex items-center gap-1">
+                <MapPin className="w-3 h-3 shrink-0" />
+                <span className="truncate">{nextService.location_name}</span>
+              </p>
+              <p className="text-xs text-[var(--color-text-muted)] mt-1 flex items-center gap-1">
+                <Clock className="w-3 h-3 shrink-0" />
+                {formatTime(nextService.scheduled_start)} – {formatTime(nextService.scheduled_end)}
+              </p>
+            </div>
+            <ArrowLeft className="w-4 h-4 text-[var(--color-text-muted)] shrink-0 rotate-180" />
+          </Link>
         </div>
       )}
     </div>
