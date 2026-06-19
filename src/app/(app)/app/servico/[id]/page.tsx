@@ -7,6 +7,8 @@ import { formatTime, formatDate } from "@/lib/utils";
 import { StatusBadge } from "../../_components/status-badge";
 import { ClockButton } from "./_components/clock-button";
 import { TeamRealtime } from "./_components/team-realtime";
+import { ServicePhotos } from "./_components/service-photos";
+import { getServicePhotos } from "@/app/actions/service-photos";
 import { getCurrentUser } from "@/lib/auth/current-user";
 
 interface Props {
@@ -100,6 +102,10 @@ export default async function ServicoDetailPage({ params }: Props) {
     })
     .filter(Boolean) as { id: string; full_name: string; clockIn: string | null; clockOut: string | null }[];
 
+  // Fotos do serviço (TASK 04) — independente do ponto
+  const photosRes = await getServicePhotos(id);
+  const initialPhotos = photosRes.ok ? photosRes.photos : [];
+
   const mapsUrl =
     s.location_lat && s.location_lng
       ? `https://www.google.com/maps/dir/?api=1&destination=${s.location_lat},${s.location_lng}`
@@ -172,6 +178,9 @@ export default async function ServicoDetailPage({ params }: Props) {
             : null
         }
       />
+
+      {/* Fotos do serviço — fluxo separado do ponto (TASK 04) */}
+      <ServicePhotos serviceId={id} initialPhotos={initialPhotos} />
 
       {/* Botão Navegar */}
       <a

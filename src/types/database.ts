@@ -89,6 +89,12 @@ export type Database = {
         Update: Record<string, never>;
         Relationships: [];
       };
+      service_photos: {
+        Row: { id: string; company_id: string; service_id: string; collaborator_id: string; storage_path: string; kind: string; status: string; original_size_bytes: number | null; compressed_size_bytes: number | null; mime_type: string | null; width: number | null; height: number | null; client_event_id: string; created_at: string; uploaded_at: string | null; failed_at: string | null; failure_reason: string | null };
+        Insert: { company_id: string; service_id: string; collaborator_id: string; storage_path: string; client_event_id: string; kind?: string; status?: string; original_size_bytes?: number | null; compressed_size_bytes?: number | null; mime_type?: string | null; width?: number | null; height?: number | null; id?: string; created_at?: string; uploaded_at?: string | null; failed_at?: string | null; failure_reason?: string | null };
+        Update: { status?: string; uploaded_at?: string | null; compressed_size_bytes?: number | null; failed_at?: string | null; failure_reason?: string | null; kind?: string };
+        Relationships: [];
+      };
       absences: {
         Row: { id: string; company_id: string; collaborator_id: string; absence_type: string; starts_on: string; ends_on: string; notes: string | null; document_url: string | null; replaced_by: string | null; approved_by: string | null; created_by: string | null; created_at: string };
         Insert: { company_id: string; collaborator_id: string; absence_type: string; starts_on: string; ends_on: string; notes?: string | null; document_url?: string | null; replaced_by?: string | null; approved_by?: string | null; created_by?: string | null };
