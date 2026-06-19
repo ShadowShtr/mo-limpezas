@@ -3,6 +3,7 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
+import { auditLog } from "@/lib/audit";
 
 export interface ClienteInput {
   name: string;
@@ -104,6 +105,16 @@ export async function archiveCliente(id: string) {
 
   if (error) return { ok: false as const, error: error.message };
 
+  await auditLog({
+    companyId: profile.company_id,
+    actorId: user.id,
+    action: "client_archived",
+    entityType: "client",
+    entityId: id,
+    after: { status: "inativo" },
+    source: "dashboard",
+  }, admin);
+
   revalidatePath("/dashboard/clientes");
   return { ok: true as const };
 }
@@ -135,6 +146,16 @@ export async function updateCliente(id: string, input: Omit<ClienteInput, "compa
   }).eq("id", id).eq("company_id", profile.company_id);
 
   if (error) return { ok: false as const, error: error.message };
+
+  await auditLog({
+    companyId: profile.company_id,
+    actorId: user.id,
+    action: "client_updated",
+    entityType: "client",
+    entityId: id,
+    after: { name: input.name, status: input.status, nif: input.nif || null },
+    source: "dashboard",
+  }, admin);
 
   revalidatePath("/dashboard/clientes");
   revalidatePath(`/dashboard/clientes/${id}`);

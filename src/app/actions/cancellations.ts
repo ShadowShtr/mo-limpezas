@@ -4,6 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { CANCEL_TYPE_LABELS } from "@/lib/cancel-types";
 import type { CancelType } from "@/lib/cancel-types";
+import { auditLog } from "@/lib/audit";
 
 export async function cancelService(
   serviceId: string,
@@ -56,6 +57,18 @@ export async function cancelService(
     .eq("id", serviceId);
 
   if (updateErr) return { ok: false, error: updateErr.message };
+
+  await auditLog({
+    companyId: profile.company_id,
+    actorId: user.id,
+    action: "service_cancelled",
+    entityType: "service",
+    entityId: serviceId,
+    before: { status: svc.status },
+    after: { status: "cancelado", cancel_type: cancelType, is_late_cancel: isLate },
+    meta: { reason: cancelReason.trim() || null },
+    source: "dashboard",
+  }, admin);
 
   if (!notifyTeamMembers || !svc.team_id) {
     return { ok: true, isLate, sent: 0 };

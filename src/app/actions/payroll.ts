@@ -4,6 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { requireProfile } from "@/lib/auth-guard";
 import { monthRange, calcCollaboratorPayroll } from "@/lib/payroll-calc";
+import { auditLog } from "@/lib/audit";
 import { getMissingCashFlowReferenceIds, isValidCashFlowAmount } from "@/lib/cash-flow-integrity";
 import { revalidatePath } from "next/cache";
 
@@ -331,6 +332,18 @@ export async function adjustPayrollRecord(
     .eq("id", id);
 
   if (error) return { ok: false, error: error.message };
+
+  await auditLog({
+    companyId: profile.company_id,
+    actorId: user.id,
+    action: "payroll_adjusted",
+    entityType: "payroll",
+    entityId: id,
+    before: { net_salary: rec.gross_salary, gross_salary: rec.gross_salary },
+    after: { gross_salary: grossSalary, net_salary: netSalary },
+    source: "dashboard",
+  }, admin);
+
   revalidatePath("/dashboard/folha-pagamento");
   return { ok: true };
 }
@@ -442,6 +455,18 @@ export async function markPayrollPaid(
       const { error: cashErr } = await admin.from("cash_flow_entries").insert(cashEntries);
       if (cashErr) return { ok: false, error: cashErr.message };
     }
+  }
+
+  if (payableIds.length > 0) {
+    await auditLog({
+      companyId: profile.company_id,
+      actorId: user.id,
+      action: "payroll_paid",
+      entityType: "payroll",
+      after: { status: "pago", count: payableIds.length },
+      meta: { ids: payableIds },
+      source: "dashboard",
+    }, admin);
   }
 
   revalidatePath("/dashboard/folha-pagamento");

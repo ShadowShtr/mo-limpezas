@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { rateLimit, rateLimitKey } from "@/lib/rate-limit";
 import { withRouteMetrics } from "@/lib/observability/route-metrics";
+import { auditLog } from "@/lib/audit";
 
 /**
  * TASK 01/04 — Confirma que a foto chegou ao Storage e atualiza a metadata.
@@ -79,17 +80,16 @@ async function handle(req: NextRequest) {
 
   if (error) return NextResponse.json({ error: error.message }, { status: 400 });
 
-  // Auditoria leve (TASK 22).
-  try {
-    await admin.from("audit_logs").insert({
-      company_id: profile.company_id,
-      actor_id: user.id,
-      action: status === "uploaded" ? "service_photo_uploaded" : "service_photo_failed",
-      entity_type: "service_photo",
-      entity_id: photo.id,
-      meta: { client_event_id, status },
-    });
-  } catch { /* não bloquear */ }
+  // Auditoria central (TASK 22).
+  await auditLog({
+    companyId: profile.company_id,
+    actorId: user.id,
+    action: status === "uploaded" ? "service_photo_uploaded" : "service_photo_failed",
+    entityType: "service_photo",
+    entityId: photo.id,
+    meta: { client_event_id, status },
+    source: "mobile",
+  }, admin);
 
   return NextResponse.json({ ok: true, upload_id: photo.id });
 }

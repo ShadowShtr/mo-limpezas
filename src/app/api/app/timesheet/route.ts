@@ -5,6 +5,7 @@ import { getCompanySettings } from "@/app/actions/settings";
 import { rateLimit, rateLimitKey } from "@/lib/rate-limit";
 import { haversineDistanceM } from "@/lib/calculations";
 import { withRouteMetrics } from "@/lib/observability/route-metrics";
+import { auditLog } from "@/lib/audit";
 
 // Pontos offline aceites até 48h no passado; mais antigos vão para revisão automática
 const MAX_OFFLINE_AGE_MS = 48 * 60 * 60 * 1000;
@@ -36,9 +37,10 @@ async function logAudit(
   entityId: string,
   meta: Record<string, unknown>
 ) {
-  try {
-    await admin.from("audit_logs").insert({ company_id: companyId, actor_id: actorId, action, entity_type: "timesheet", entity_id: entityId, meta });
-  } catch { /* não bloquear operação se audit falhar */ }
+  await auditLog(
+    { companyId, actorId, action, entityType: "timesheet", entityId, meta, source: "mobile" },
+    admin,
+  );
 }
 
 async function postHandler(req: NextRequest) {
