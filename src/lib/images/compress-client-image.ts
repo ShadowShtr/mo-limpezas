@@ -76,7 +76,22 @@ async function decode(file: File): Promise<{ width: number; height: number; draw
 }
 
 function toBlob(canvas: HTMLCanvasElement, mime: string, quality: number): Promise<Blob | null> {
-  return new Promise((resolve) => canvas.toBlob((b) => resolve(b), mime, quality));
+  return new Promise((resolve) => {
+    // Safety net: canvas.toBlob can hang indefinitely on some mobile browsers
+    // (especially WebP on older iOS/Android). Fall back after 6 s so the
+    // overall 15 s timeout doesn't dominate every failure.
+    const timer = setTimeout(() => resolve(null), 6000);
+    try {
+      canvas.toBlob((b) => {
+        clearTimeout(timer);
+        // treat an empty blob the same as null (broken encoding)
+        resolve(b && b.size > 0 ? b : null);
+      }, mime, quality);
+    } catch {
+      clearTimeout(timer);
+      resolve(null);
+    }
+  });
 }
 
 async function compressOnce(file: File, opts: Required<CompressOptions>): Promise<CompressedImage> {

@@ -5,10 +5,12 @@
 import { createClient } from "@/lib/supabase/client";
 import {
   getPendingUploads,
+  getAllUploads,
   markUploading,
   markUploaded,
   markFailed,
   markNeedsUserAction,
+  updateUpload,
   type QueuedUpload,
 } from "@/lib/offline/upload-queue";
 
@@ -134,6 +136,22 @@ export async function processUploadQueue(): Promise<void> {
   }
 }
 
+/**
+ * Itens presos em "uploading" de uma sessão anterior (app fechou durante upload)
+ * nunca seriam retomados porque getPendingUploads só devolve queued/failed.
+ * Reseta-os para "queued" sem incrementar tentativas.
+ */
+async function resetStaleUploading(): Promise<void> {
+  try {
+    const all = await getAllUploads();
+    for (const item of all) {
+      if (item.status === "uploading") {
+        await updateUpload(item.client_event_id, { status: "queued" });
+      }
+    }
+  } catch { /* ignore */ }
+}
+
 let listenersBound = false;
 
 /** Liga o processamento automático: ao voltar a internet e periodicamente. */
@@ -150,7 +168,8 @@ export function startUploadQueueWatcher(intervalMs = 30_000): () => void {
     listenersBound = true;
   }
 
-  tick();
+  // Resetar itens órfãos de sessões anteriores antes de começar a processar.
+  void resetStaleUploading().then(tick);
   const id = window.setInterval(tick, intervalMs);
   return () => window.clearInterval(id);
 }

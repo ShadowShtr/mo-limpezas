@@ -31,7 +31,7 @@ interface Props {
 export function ServicePhotos({ serviceId, initialPhotos }: Props) {
   const [photos, setPhotos] = useState<ServicePhoto[]>(initialPhotos);
   const [queued, setQueued] = useState<QueuedUpload[]>([]);
-  const [busy, setBusy] = useState<"compressing" | null>(null);
+  const [busy, setBusy] = useState<"compressing" | "sending" | null>(null);
   const [message, setMessage] = useState<{ type: "error" | "success"; text: string } | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -121,12 +121,15 @@ export function ServicePhotos({ serviceId, initialPhotos }: Props) {
 
       await refreshQueue();
       if (typeof navigator !== "undefined" && navigator.onLine) {
-        setMessage({ type: "success", text: "A enviar foto…" });
-        void processUploadQueue().then(() => {
-          void refreshQueue();
-          void refreshPhotos();
+        setBusy("sending");
+        void processUploadQueue().then(async () => {
+          await refreshQueue();
+          await refreshPhotos();
+          setBusy(null);
+          setMessage({ type: "success", text: "Foto enviada com sucesso." });
         });
       } else {
+        setBusy(null);
         setMessage({ type: "success", text: "Foto guardada no telemóvel. Será enviada quando houver internet." });
       }
     } catch {
@@ -206,11 +209,13 @@ export function ServicePhotos({ serviceId, initialPhotos }: Props) {
       <button
         type="button"
         onClick={openPicker}
-        disabled={busy === "compressing"}
+        disabled={busy !== null}
         className="flex items-center justify-center gap-2 w-full py-3 rounded-xl bg-[var(--color-primary-light)] text-[var(--color-primary)] text-sm font-semibold active:opacity-80 disabled:opacity-50 transition-opacity"
       >
         {busy === "compressing"
           ? <><Loader2 className="w-4 h-4 animate-spin" /> A preparar foto…</>
+          : busy === "sending"
+          ? <><Loader2 className="w-4 h-4 animate-spin" /> A enviar foto…</>
           : <><Camera className="w-4 h-4" /> Adicionar Foto</>}
       </button>
 
