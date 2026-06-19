@@ -14,7 +14,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   return (
     <div className="flex flex-col min-h-screen" style={{ background: "linear-gradient(135deg, #d1fae5 0%, #f8fafc 55%, #dbeafe 100%)" }}>
       <PwaRegister />
-      <ConnectionBanner />
+      {/* Colaboradora em campo: health check espaçado (5 min) — poupa bateria/4G */}
+      <ConnectionBanner intervalMs={300_000} />
       <AppHeader userId={profile.id} userName={profile.full_name} avatarUrl={profile.avatar_url} />
       <main className="flex-1 overflow-y-auto pb-20 px-4 pt-4">
         {children}

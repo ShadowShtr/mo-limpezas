@@ -43,7 +43,8 @@ export function DashboardShell({ children, userName, userRole, avatarUrl }: Prop
 
       {/* Conteúdo principal */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        <ConnectionBanner />
+        {/* Gestora: health check mais frequente (2 min) */}
+        <ConnectionBanner intervalMs={120_000} />
         <MobileHeader
           userName={userName}
           avatarUrl={avatarUrl}
