@@ -47,8 +47,9 @@ Lê este ficheiro no início de CADA sessão antes de fazer qualquer coisa.
 
 ## ⚡ PRÓXIMA TASK A EXECUTAR
 
-**Próxima task:** TASK 19 (UX final tela funcionária). TASK 01–04 + TASK 13 feitas
-(checkpoint 2026-06-19).
+**Próxima task:** TASK 06 (health check pausar quando aba escondida) ou TASK 08
+(logs leves por rota). TASK 01–04 + 13 + 19 feitas (checkpoint 2026-06-19).
+Nota: ConnectionBanner já usa AbortController/sem acumular (parte da TASK 06 feita).
 
 > ❌ **TASK 12 (foto obrigatória) DESCARTADA** — o dono confirmou (2026-06-19) que
 > as fotos são ocasionais, nunca obrigatórias. O foco é o ponto, offline,
@@ -87,6 +88,11 @@ Lê este ficheiro no início de CADA sessão antes de fazer qualquer coisa.
 - Mostra: serviços sem checkout, iniciados sem ponto, pontos fora do raio GPS,
   pontos manuais, fotos pendentes e falhadas. Cada item liga ao dia no calendário.
 - Não carrega no dashboard principal (mantém-no rápido — TASK 07)
+
+**TASK 19 — UX final tela do serviço (✅ FEITO)**
+- Card "A seguir hoje" (próximo serviço da equipa) no fim da tela
+- Bloco de fotos movido para o fim (foto é ocasional, não compete com o ponto)
+- Ponto + Navegar = ações primárias no topo; aviso offline via ConnectionBanner global
 
 ---
 
