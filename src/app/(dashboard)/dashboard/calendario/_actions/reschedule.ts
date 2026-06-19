@@ -83,12 +83,6 @@ export async function rescheduleService(
 
   if (error) return { ok: false, error: error.message };
 
-  // Notificar colaboradoras da nova equipa quando a equipa foi alterada
-  const teamChanged = newTeamId !== null && newTeamId !== service.team_id;
-  if (teamChanged) {
-    await notifyNewTeam(admin, profile.company_id, newTeamId!, serviceId).catch(() => void 0);
-  }
-
   await auditLog({
     companyId: profile.company_id,
     actorId: user.id,
@@ -116,68 +110,6 @@ export async function rescheduleService(
   return { ok: true, conflicts };
 }
 
-async function notifyNewTeam(
-  admin: ReturnType<typeof createAdminClient>,
-  companyId: string,
-  teamId: string,
-  serviceId: string,
-) {
-  const { data: svc } = await admin
-    .from("services")
-    .select("scheduled_start, location_id")
-    .eq("id", serviceId)
-    .single();
-
-  const { data: loc } = svc?.location_id
-    ? await admin.from("locations").select("name").eq("id", svc.location_id).single()
-    : { data: null };
-
-  const date = svc?.scheduled_start
-    ? new Date(svc.scheduled_start).toLocaleDateString("pt-PT", { weekday: "short", day: "numeric", month: "short" })
-    : "";
-
-  const { data: members } = await admin
-    .from("team_members")
-    .select("collaborator_id")
-    .eq("team_id", teamId)
-    .is("left_at", null);
-
-  if (!members?.length) return;
-
-  const memberIds = members.map((m) => m.collaborator_id);
-
-  const { data: subs } = await admin
-    .from("push_subscriptions")
-    .select("endpoint, p256dh, auth_key")
-    .in("user_id", memberIds)
-    .eq("company_id", companyId);
-
-  if (!subs?.length) return;
-
-  const vapidPublic  = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
-  const vapidPrivate = process.env.VAPID_PRIVATE_KEY;
-  if (!vapidPublic || !vapidPrivate) return;
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const webpush = ((await import("web-push")) as any).default ?? (await import("web-push"));
-  webpush.setVapidDetails("mailto:admin@molimpezas.pt", vapidPublic, vapidPrivate);
-
-  const payload = JSON.stringify({
-    title: "📋 Novo trabalho atribuído",
-    body: `${loc?.name ?? "Serviço"} — ${date}`,
-    url: `/app/servico/${serviceId}`,
-  });
-
-  await Promise.allSettled(
-    subs.map((s: { endpoint: string; p256dh: string; auth_key: string }) =>
-      webpush.sendNotification(
-        { endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth_key } },
-        payload,
-      ),
-    ),
-  );
-}
-
 async function getConflicts(
   admin: ReturnType<typeof createAdminClient>,
   companyId: string,
@@ -187,7 +119,6 @@ async function getConflicts(
   newTeamId: string | null,
 ): Promise<ConflictInfo[]> {
   if (!newTeamId) return [];
-  // Detetar conflitos na mesma equipa no mesmo dia
   const dayStr = newStart.slice(0, 10);
   const { data: others } = await admin
     .from("services_full")

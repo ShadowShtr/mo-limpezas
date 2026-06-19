@@ -388,7 +388,7 @@ export function CalendarView({
     if (result.conflicts.length > 0) {
       setConflictMsg(`Conflito registado (#${result.conflicts.map((c) => c.reference_number).join(", #")}).`);
     } else {
-      setConflictMsg(`Serviço atribuído a ${targetTeam?.name ?? "outra equipa"}. Equipa notificada.`);
+      setConflictMsg(`Serviço atribuído a ${targetTeam?.name ?? "outra equipa"}.`);
     }
   }
 
