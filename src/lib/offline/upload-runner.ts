@@ -1,8 +1,9 @@
 // TASK 03/09 — Orquestra o envio das fotos em fila (compress já feito no enqueue):
-//   sign → uploadToSignedUrl (direto ao Supabase) → confirm → remove da fila.
+//   sign → fetch PUT (direto ao Supabase Storage) → confirm → remove da fila.
 // Inclui backoff entre tentativas e estados finais (não faz retry infinito).
+// Nota: uploadToSignedUrl do SDK não tem timeout/cancel — substituído por fetch PUT
+// com AbortController (60s) para não bloquear indefinidamente em mobile.
 
-import { createClient } from "@/lib/supabase/client";
 import {
   getPendingUploads,
   getAllUploads,
@@ -93,13 +94,26 @@ async function processItem(item: QueuedUpload): Promise<boolean> {
       throw new Error(data.error ?? "Resposta inválida ao preparar o envio.");
     }
 
-    // Upload direto ao Supabase Storage (não passa pela Vercel).
-    const supabase = createClient();
-    const { error: upErr } = await supabase.storage
-      .from(data.bucket)
-      .uploadToSignedUrl(data.storage_path, data.token, item.blob, { contentType: item.mimeType });
-
-    if (upErr) throw new Error(upErr.message);
+    // Upload direto ao Supabase Storage via fetch PUT + AbortController (60s).
+    // O SDK uploadToSignedUrl não tem timeout nem cancel e trava em mobile.
+    const controller = new AbortController();
+    const abortTimer = setTimeout(() => controller.abort(), 60_000);
+    try {
+      const resp = await fetch(data.signed_url, {
+        method: "PUT",
+        body: item.blob,
+        headers: { "Content-Type": item.mimeType || "application/octet-stream" },
+        signal: controller.signal,
+      });
+      clearTimeout(abortTimer);
+      if (!resp.ok) throw new Error(`Storage ${resp.status}: ${resp.statusText}`);
+    } catch (fetchErr) {
+      clearTimeout(abortTimer);
+      if (fetchErr instanceof Error && fetchErr.name === "AbortError") {
+        throw new Error("Timeout ao enviar foto. Verifica a ligação.");
+      }
+      throw fetchErr;
+    }
 
     await confirmUpload(item, "uploaded");
     await markUploaded(item.client_event_id);
