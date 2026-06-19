@@ -50,12 +50,26 @@ export async function createCliente(input: ClienteInput) {
   return { ok: true as const };
 }
 
-/** Criação rápida de cliente (nome + telefone) a partir do formulário de serviço. Devolve o id criado. */
-export async function createClienteQuick(companyId: string, name: string, phone?: string) {
+export interface ClienteComLocalInput {
+  // Cliente
+  name: string;
+  type: "individual" | "empresa";
+  phone?: string;
+  email?: string;
+  nif?: string;
+  // Local
+  locationName: string;
+  address: string;
+  hourlyRate: number | null;
+  serviceType: string;
+}
+
+/** Cria cliente + local de uma vez. Devolve os dois ids. */
+export async function createClienteComLocal(companyId: string, input: ClienteComLocalInput) {
   const supabase = await createClient();
   const admin = createAdminClient();
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { ok: false as const, error: "Nao autenticado.", id: null };
+  if (!user) return { ok: false as const, error: "Não autenticado.", clientId: null, locationId: null };
 
   const { data: profile } = await admin
     .from("profiles")
@@ -63,19 +77,47 @@ export async function createClienteQuick(companyId: string, name: string, phone?
     .eq("id", user.id)
     .single();
   if (!profile || !["admin", "gestor"].includes(profile.role) || profile.company_id !== companyId) {
-    return { ok: false as const, error: "Sem permissao.", id: null };
+    return { ok: false as const, error: "Sem permissão.", clientId: null, locationId: null };
   }
 
-  const { data, error } = await admin
+  const { data: client, error: ce } = await admin
     .from("clients")
-    .insert({ name: name.trim(), phone: phone?.trim() || null, status: "ativo", company_id: companyId, type: "particular" })
+    .insert({
+      name: input.name.trim(),
+      type: input.type,
+      phone: input.phone?.trim() || null,
+      email: input.email?.trim() || null,
+      nif: input.nif?.trim() || null,
+      status: "ativo",
+      company_id: companyId,
+    })
     .select("id")
     .single();
+  if (ce || !client) return { ok: false as const, error: ce?.message ?? "Erro ao criar cliente.", clientId: null, locationId: null };
 
-  if (error || !data) return { ok: false as const, error: error?.message ?? "Erro ao criar.", id: null };
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: location, error: le } = await admin
+    .from("locations")
+    .insert({
+      name: input.locationName.trim(),
+      address: input.address.trim(),
+      hourly_rate: input.hourlyRate,
+      service_type: input.serviceType || "limpeza_regular",
+      active: true,
+      client_id: client.id,
+      company_id: companyId,
+    } as any)
+    .select("id")
+    .single();
+  if (le || !location) {
+    // rollback manual do cliente criado
+    await admin.from("clients").delete().eq("id", client.id);
+    return { ok: false as const, error: le?.message ?? "Erro ao criar local.", clientId: null, locationId: null };
+  }
 
   revalidatePath("/dashboard/clientes");
-  return { ok: true as const, id: data.id as string };
+  revalidatePath("/dashboard/locais");
+  return { ok: true as const, clientId: client.id as string, locationId: location.id as string };
 }
 
 /**

@@ -1,12 +1,12 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { X, Loader2, ChevronDown, Plus, UserPlus } from "lucide-react";
+import { X, Loader2, ChevronDown, Plus, UserPlus, Building2, User, MapPin } from "lucide-react";
 import { format } from "date-fns";
 import { pt } from "date-fns/locale";
 import { createClient } from "@/lib/supabase/client";
 import { createService } from "../_actions/create-service";
-import { createClienteQuick } from "@/app/actions/clientes";
+import { createClienteComLocal } from "@/app/actions/clientes";
 
 type Client = { id: string; name: string };
 type Location = { id: string; client_id: string; name: string; address: string; hourly_rate: number | null };
@@ -18,7 +18,7 @@ interface Props {
   onCreated: () => void;
   companyId: string;
   date: Date;
-  initialStartTime: string; // "HH:MM"
+  initialStartTime: string;
   initialTeamId: string;
   clients: Client[];
   locations: Location[];
@@ -35,12 +35,20 @@ const SELECT_CLS =
   "w-full appearance-none px-3 py-2 pr-8 rounded-lg border border-[var(--color-border)] text-sm " +
   "text-[var(--color-text-main)] bg-white focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] focus:border-transparent";
 
+const SERVICE_TYPE_LABELS: Record<string, string> = {
+  limpeza_regular: "Limpeza regular",
+  manutencao: "Manutenção",
+  pos_obra: "Pós-obra",
+  vidros: "Vidros",
+  carpetes: "Carpetes",
+  industrial: "Industrial",
+  outro: "Outro",
+};
+
 function addMinutes(time: string, mins: number): string {
   const [h, m] = time.split(":").map(Number);
   const total = h * 60 + m + mins;
-  const nh = Math.min(Math.floor(total / 60), 23);
-  const nm = total % 60;
-  return `${String(nh).padStart(2, "0")}:${String(nm).padStart(2, "0")}`;
+  return `${String(Math.min(Math.floor(total / 60), 23)).padStart(2, "0")}:${String(total % 60).padStart(2, "0")}`;
 }
 
 function calcDuration(start: string, end: string): number {
@@ -51,8 +59,7 @@ function calcDuration(start: string, end: string): number {
 
 export function ServiceCreateSheet({
   open, onClose, onCreated,
-  companyId,
-  date, initialStartTime, initialTeamId,
+  companyId, date, initialStartTime, initialTeamId,
   clients: initialClients, locations, teams,
   fixedClientId, fixedLocationId,
 }: Props) {
@@ -60,10 +67,10 @@ export function ServiceCreateSheet({
 
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
-
-  // Lista local de clientes (pode crescer com cadastro rápido)
   const [clientList, setClientList] = useState<Client[]>(initialClients);
+  const [locationList, setLocationList] = useState<Location[]>(locations);
 
+  // Serviço
   const [clientId, setClientId] = useState(fixedClientId ?? "");
   const [locationId, setLocationId] = useState(fixedLocationId ?? "");
   const [teamId, setTeamId] = useState(initialTeamId);
@@ -71,21 +78,30 @@ export function ServiceCreateSheet({
   const [endTime, setEndTime] = useState(addMinutes(initialStartTime, 120));
   const [notes, setNotes] = useState("");
 
-  // Cadastro rápido de cliente
+  // Registo de novo cliente
   const [showNewClient, setShowNewClient] = useState(false);
+  const [newClientType, setNewClientType] = useState<"individual" | "empresa">("individual");
   const [newClientName, setNewClientName] = useState("");
   const [newClientPhone, setNewClientPhone] = useState("");
+  const [newClientEmail, setNewClientEmail] = useState("");
+  const [newClientNif, setNewClientNif] = useState("");
+  // Local do novo cliente
+  const [newLocName, setNewLocName] = useState("");
+  const [newLocAddress, setNewLocAddress] = useState("");
+  const [newLocRate, setNewLocRate] = useState("");
+  const [newLocServiceType, setNewLocServiceType] = useState("limpeza_regular");
+
   const [creatingClient, setCreatingClient] = useState(false);
   const [newClientError, setNewClientError] = useState<string | null>(null);
 
   const filteredLocations = useMemo(
-    () => (clientId ? locations.filter((l) => l.client_id === clientId) : locations),
-    [clientId, locations],
+    () => (clientId ? locationList.filter((l) => l.client_id === clientId) : locationList),
+    [clientId, locationList],
   );
 
   const selectedLocation = useMemo(
-    () => locations.find((l) => l.id === locationId) ?? null,
-    [locationId, locations],
+    () => locationList.find((l) => l.id === locationId) ?? null,
+    [locationId, locationList],
   );
 
   const durationMin = calcDuration(startTime, endTime);
@@ -94,20 +110,51 @@ export function ServiceCreateSheet({
       ? (durationMin / 60) * selectedLocation.hourly_rate
       : null;
 
+  function resetNewClientForm() {
+    setNewClientName(""); setNewClientPhone(""); setNewClientEmail(""); setNewClientNif("");
+    setNewLocName(""); setNewLocAddress(""); setNewLocRate(""); setNewLocServiceType("limpeza_regular");
+    setNewClientType("individual"); setNewClientError(null);
+  }
+
   async function handleCreateClient() {
     if (!newClientName.trim()) { setNewClientError("O nome é obrigatório."); return; }
+    if (!newLocName.trim()) { setNewClientError("O nome do local é obrigatório."); return; }
+    if (!newLocAddress.trim()) { setNewClientError("A morada do local é obrigatória."); return; }
     setCreatingClient(true);
     setNewClientError(null);
-    const res = await createClienteQuick(companyId, newClientName, newClientPhone || undefined);
+
+    const res = await createClienteComLocal(companyId, {
+      name: newClientName,
+      type: newClientType,
+      phone: newClientPhone || undefined,
+      email: newClientEmail || undefined,
+      nif: newClientNif || undefined,
+      locationName: newLocName,
+      address: newLocAddress,
+      hourlyRate: newLocRate ? parseFloat(newLocRate) : null,
+      serviceType: newLocServiceType,
+    });
+
     setCreatingClient(false);
-    if (!res.ok || !res.id) { setNewClientError(res.error ?? "Erro ao criar cliente."); return; }
-    const newC: Client = { id: res.id, name: newClientName.trim() };
+    if (!res.ok || !res.clientId || !res.locationId) {
+      setNewClientError(res.error ?? "Erro ao criar.");
+      return;
+    }
+
+    const newC: Client = { id: res.clientId, name: newClientName.trim() };
+    const newL: Location = {
+      id: res.locationId,
+      client_id: res.clientId,
+      name: newLocName.trim(),
+      address: newLocAddress.trim(),
+      hourly_rate: newLocRate ? parseFloat(newLocRate) : null,
+    };
     setClientList((prev) => [...prev, newC].sort((a, b) => a.name.localeCompare(b.name, "pt")));
-    setClientId(res.id);
-    setLocationId("");
-    setNewClientName("");
-    setNewClientPhone("");
+    setLocationList((prev) => [...prev, newL]);
+    setClientId(res.clientId);
+    setLocationId(res.locationId);
     setShowNewClient(false);
+    resetNewClientForm();
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -124,30 +171,23 @@ export function ServiceCreateSheet({
       .eq("company_id", companyId);
 
     const ref = String((count ?? 0) + 1).padStart(4, "0");
-
     const dateStr = format(date, "yyyy-MM-dd");
-    const scheduledStart = `${dateStr}T${startTime}:00`;
-    const scheduledEnd = `${dateStr}T${endTime}:00`;
 
     const res = await createService({
       companyId,
       locationId,
       teamId: teamId || null,
       referenceNumber: ref,
-      scheduledStart,
-      scheduledEnd,
+      scheduledStart: `${dateStr}T${startTime}:00`,
+      scheduledEnd: `${dateStr}T${endTime}:00`,
       hourlyRate: selectedLocation?.hourly_rate ?? null,
       calculatedValue: calculatedValue ?? null,
       notes: notes || null,
     });
 
     setLoading(false);
-    if (!res.ok) {
-      setMessage("Erro ao criar: " + res.error);
-    } else {
-      onCreated();
-      onClose();
-    }
+    if (!res.ok) setMessage("Erro ao criar: " + res.error);
+    else { onCreated(); onClose(); }
   }
 
   if (!open) return null;
@@ -156,6 +196,7 @@ export function ServiceCreateSheet({
     <>
       <div className="fixed inset-0 bg-black/30 z-40" onClick={onClose} />
       <div className="fixed right-0 top-0 h-full w-full max-w-lg bg-white shadow-xl z-50 flex flex-col">
+
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-[var(--color-border)]">
           <div>
@@ -164,196 +205,228 @@ export function ServiceCreateSheet({
               {format(date, "EEEE, d 'de' MMMM yyyy", { locale: pt })} · {startTime}–{endTime}
             </p>
           </div>
-          <button
-            onClick={onClose}
-            className="p-1.5 rounded-lg text-[var(--color-text-muted)] hover:bg-[var(--color-background)] transition-colors"
-          >
+          <button onClick={onClose} className="p-1.5 rounded-lg text-[var(--color-text-muted)] hover:bg-[var(--color-background)] transition-colors">
             <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* Body */}
-        <form id="create-service-form" onSubmit={handleSubmit} className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
+        <div className="flex-1 overflow-y-auto">
+          <form id="create-service-form" onSubmit={handleSubmit} className="px-6 py-5 space-y-5">
 
-          {/* Cliente → Local */}
-          <div className="space-y-3">
-            <div className="grid grid-cols-2 gap-3">
-              <Field label="Cliente *">
-                <div className="relative">
-                  <select
-                    value={clientId}
-                    onChange={(e) => { setClientId(e.target.value); setLocationId(""); }}
-                    disabled={!!fixedClientId}
-                    className={SELECT_CLS + (fixedClientId ? " opacity-70 cursor-not-allowed" : "")}
-                  >
-                    <option value="">Selecionar...</option>
-                    {clientList.map((c) => (
-                      <option key={c.id} value={c.id}>{c.name}</option>
-                    ))}
-                  </select>
-                  <ChevronDown className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--color-text-muted)]" />
-                </div>
-              </Field>
-              <Field label="Local *">
-                <div className="relative">
-                  <select
-                    value={locationId}
-                    onChange={(e) => setLocationId(e.target.value)}
-                    disabled={!clientId}
-                    className={SELECT_CLS + (clientId ? "" : " opacity-50 cursor-not-allowed")}
-                  >
-                    <option value="">Selecionar...</option>
-                    {filteredLocations.map((l) => (
-                      <option key={l.id} value={l.id}>{l.name}</option>
-                    ))}
-                  </select>
-                  <ChevronDown className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--color-text-muted)]" />
-                </div>
-              </Field>
+            {/* Cliente + Local */}
+            <div className="space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="Cliente *">
+                  <div className="relative">
+                    <select
+                      value={clientId}
+                      onChange={(e) => { setClientId(e.target.value); setLocationId(""); }}
+                      disabled={!!fixedClientId}
+                      className={SELECT_CLS + (fixedClientId ? " opacity-70 cursor-not-allowed" : "")}
+                    >
+                      <option value="">Selecionar...</option>
+                      {clientList.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                    </select>
+                    <ChevronDown className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--color-text-muted)]" />
+                  </div>
+                </Field>
+                <Field label="Local *">
+                  <div className="relative">
+                    <select
+                      value={locationId}
+                      onChange={(e) => setLocationId(e.target.value)}
+                      disabled={!clientId}
+                      className={SELECT_CLS + (clientId ? "" : " opacity-50 cursor-not-allowed")}
+                    >
+                      <option value="">Selecionar...</option>
+                      {filteredLocations.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
+                    </select>
+                    <ChevronDown className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--color-text-muted)]" />
+                  </div>
+                </Field>
+              </div>
+
+              {!fixedClientId && !showNewClient && (
+                <button
+                  type="button"
+                  onClick={() => setShowNewClient(true)}
+                  className="flex items-center gap-1.5 text-xs font-medium text-[var(--color-primary)] hover:underline"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  Registar novo cliente
+                </button>
+              )}
             </div>
 
-            {/* Botão cadastro rápido de cliente */}
-            {!fixedClientId && !showNewClient && (
-              <button
-                type="button"
-                onClick={() => setShowNewClient(true)}
-                className="flex items-center gap-1.5 text-xs font-medium text-[var(--color-primary)] hover:underline"
-              >
-                <Plus className="w-3.5 h-3.5" />
-                Cadastrar novo cliente
-              </button>
-            )}
-
-            {/* Formulário rápido de novo cliente */}
+            {/* ── Formulário de novo cliente ── */}
             {showNewClient && (
-              <div className="rounded-xl border border-[var(--color-primary-muted)] bg-[var(--color-primary-light)] p-4 space-y-3">
-                <div className="flex items-center justify-between">
+              <div className="rounded-xl border border-[var(--color-primary-muted)] bg-[var(--color-primary-light)] overflow-hidden">
+                <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--color-primary-muted)]">
                   <p className="text-sm font-semibold text-[var(--color-primary)] flex items-center gap-1.5">
                     <UserPlus className="w-4 h-4" />
                     Novo cliente
                   </p>
                   <button
                     type="button"
-                    onClick={() => { setShowNewClient(false); setNewClientError(null); setNewClientName(""); setNewClientPhone(""); }}
+                    onClick={() => { setShowNewClient(false); resetNewClientForm(); }}
                     className="p-1 rounded text-[var(--color-primary)] hover:bg-[var(--color-primary-muted)]"
                   >
                     <X className="w-3.5 h-3.5" />
                   </button>
                 </div>
 
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs font-medium text-[var(--color-text-main)] mb-1">Nome *</label>
-                    <input
-                      type="text"
-                      value={newClientName}
-                      onChange={(e) => setNewClientName(e.target.value)}
-                      placeholder="Nome do cliente"
-                      className={INPUT_CLS}
-                      autoFocus
-                    />
+                <div className="px-4 py-4 space-y-4">
+                  {/* Tipo */}
+                  <div className="grid grid-cols-2 gap-2">
+                    {(["individual", "empresa"] as const).map((t) => (
+                      <button
+                        key={t}
+                        type="button"
+                        onClick={() => setNewClientType(t)}
+                        className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-sm font-medium transition-colors ${
+                          newClientType === t
+                            ? "bg-[var(--color-primary)] text-white border-[var(--color-primary)]"
+                            : "bg-white text-[var(--color-text-main)] border-[var(--color-border)] hover:bg-[var(--color-background)]"
+                        }`}
+                      >
+                        {t === "individual" ? <User className="w-3.5 h-3.5" /> : <Building2 className="w-3.5 h-3.5" />}
+                        {t === "individual" ? "Particular" : "Empresa"}
+                      </button>
+                    ))}
                   </div>
-                  <div>
-                    <label className="block text-xs font-medium text-[var(--color-text-main)] mb-1">Telefone</label>
-                    <input
-                      type="tel"
-                      value={newClientPhone}
-                      onChange={(e) => setNewClientPhone(e.target.value)}
-                      placeholder="9XXXXXXXX"
-                      className={INPUT_CLS}
-                    />
+
+                  {/* Dados do cliente */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="col-span-2">
+                      <label className="block text-xs font-medium text-[var(--color-text-main)] mb-1">Nome *</label>
+                      <input type="text" value={newClientName} onChange={(e) => setNewClientName(e.target.value)}
+                        placeholder={newClientType === "empresa" ? "Nome da empresa" : "Nome completo"}
+                        className={INPUT_CLS} autoFocus />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-[var(--color-text-main)] mb-1">Telefone</label>
+                      <input type="tel" value={newClientPhone} onChange={(e) => setNewClientPhone(e.target.value)}
+                        placeholder="9XXXXXXXX" className={INPUT_CLS} />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-[var(--color-text-main)] mb-1">Email</label>
+                      <input type="email" value={newClientEmail} onChange={(e) => setNewClientEmail(e.target.value)}
+                        placeholder="email@exemplo.com" className={INPUT_CLS} />
+                    </div>
+                    <div className="col-span-2">
+                      <label className="block text-xs font-medium text-[var(--color-text-main)] mb-1">
+                        {newClientType === "empresa" ? "NIF da empresa" : "NIF (opcional)"}
+                      </label>
+                      <input type="text" value={newClientNif} onChange={(e) => setNewClientNif(e.target.value)}
+                        placeholder="5XXXXXXXX" className={INPUT_CLS} />
+                    </div>
                   </div>
+
+                  {/* Separador - Local */}
+                  <div className="flex items-center gap-2 pt-1">
+                    <div className="flex-1 h-px bg-[var(--color-primary-muted)]" />
+                    <span className="text-xs font-semibold text-[var(--color-primary)] flex items-center gap-1">
+                      <MapPin className="w-3 h-3" /> Local de serviço
+                    </span>
+                    <div className="flex-1 h-px bg-[var(--color-primary-muted)]" />
+                  </div>
+
+                  <div className="space-y-3">
+                    <div>
+                      <label className="block text-xs font-medium text-[var(--color-text-main)] mb-1">Nome do local *</label>
+                      <input type="text" value={newLocName} onChange={(e) => setNewLocName(e.target.value)}
+                        placeholder='Ex: "Casa", "Escritório Lisboa"' className={INPUT_CLS} />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-[var(--color-text-main)] mb-1">Morada *</label>
+                      <input type="text" value={newLocAddress} onChange={(e) => setNewLocAddress(e.target.value)}
+                        placeholder="Rua, número, código postal, cidade" className={INPUT_CLS} />
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-xs font-medium text-[var(--color-text-main)] mb-1">Valor/hora (€)</label>
+                        <input type="number" min="0" step="0.5" value={newLocRate} onChange={(e) => setNewLocRate(e.target.value)}
+                          placeholder="Ex: 15.00" className={INPUT_CLS} />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-[var(--color-text-main)] mb-1">Tipo de serviço</label>
+                        <div className="relative">
+                          <select value={newLocServiceType} onChange={(e) => setNewLocServiceType(e.target.value)} className={SELECT_CLS}>
+                            {Object.entries(SERVICE_TYPE_LABELS).map(([k, v]) => (
+                              <option key={k} value={k}>{v}</option>
+                            ))}
+                          </select>
+                          <ChevronDown className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--color-text-muted)]" />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {newClientError && (
+                    <p className="text-xs text-red-600 font-medium">{newClientError}</p>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={handleCreateClient}
+                    disabled={creatingClient || !newClientName.trim() || !newLocName.trim() || !newLocAddress.trim()}
+                    className="w-full flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-lg bg-[var(--color-primary)] text-white text-sm font-semibold hover:bg-[var(--color-primary-hover)] transition-colors disabled:opacity-50"
+                  >
+                    {creatingClient ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+                    Criar cliente e local
+                  </button>
                 </div>
-
-                {newClientError && (
-                  <p className="text-xs text-red-600">{newClientError}</p>
-                )}
-
-                <button
-                  type="button"
-                  onClick={handleCreateClient}
-                  disabled={creatingClient || !newClientName.trim()}
-                  className="w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-[var(--color-primary)] text-white text-sm font-medium hover:bg-[var(--color-primary-hover)] transition-colors disabled:opacity-50"
-                >
-                  {creatingClient ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
-                  Criar e selecionar
-                </button>
               </div>
             )}
-          </div>
 
-          {/* Equipa */}
-          <Field label="Equipa">
-            <div className="relative">
-              <select
-                value={teamId}
-                onChange={(e) => setTeamId(e.target.value)}
-                className={SELECT_CLS}
-              >
-                <option value="">Sem equipa</option>
-                {teams.map((t) => (
-                  <option key={t.id} value={t.id}>{t.name}</option>
-                ))}
-              </select>
-              <ChevronDown className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--color-text-muted)]" />
-            </div>
-          </Field>
-
-          {/* Horário */}
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="Hora de início *">
-              <input
-                type="time"
-                value={startTime}
-                onChange={(e) => {
-                  setStartTime(e.target.value);
-                  setEndTime(addMinutes(e.target.value, 120));
-                }}
-                className={INPUT_CLS}
-                required
-              />
+            {/* Equipa */}
+            <Field label="Equipa">
+              <div className="relative">
+                <select value={teamId} onChange={(e) => setTeamId(e.target.value)} className={SELECT_CLS}>
+                  <option value="">Sem equipa</option>
+                  {teams.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+                </select>
+                <ChevronDown className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--color-text-muted)]" />
+              </div>
             </Field>
-            <Field label="Hora de fim *">
-              <input
-                type="time"
-                value={endTime}
-                onChange={(e) => setEndTime(e.target.value)}
-                className={INPUT_CLS}
-                required
-              />
-            </Field>
-          </div>
 
-          {/* Previsão de valor */}
-          {calculatedValue != null && (
-            <div className="p-3 rounded-lg bg-[var(--color-primary-light)] border border-[var(--color-primary-muted)]">
-              <p className="text-xs text-[var(--color-primary)] font-medium">
-                Duração: {Math.floor(durationMin / 60)}h{durationMin % 60 > 0 ? `${durationMin % 60}min` : ""} ·{" "}
-                Valor estimado: <strong>€{calculatedValue.toFixed(2)}</strong>
-                {selectedLocation?.hourly_rate && (
-                  <span className="font-normal opacity-80"> ({selectedLocation.hourly_rate}€/h)</span>
-                )}
-              </p>
+            {/* Horário */}
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Hora de início *">
+                <input type="time" value={startTime} onChange={(e) => { setStartTime(e.target.value); setEndTime(addMinutes(e.target.value, 120)); }}
+                  className={INPUT_CLS} required />
+              </Field>
+              <Field label="Hora de fim *">
+                <input type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} className={INPUT_CLS} required />
+              </Field>
             </div>
-          )}
 
-          {/* Notas */}
-          <Field label="Notas (opcional)">
-            <textarea
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              rows={3}
-              placeholder="Instruções especiais, materiais necessários..."
-              className={INPUT_CLS + " resize-none"}
-            />
-          </Field>
+            {/* Previsão de valor */}
+            {calculatedValue != null && (
+              <div className="p-3 rounded-lg bg-[var(--color-primary-light)] border border-[var(--color-primary-muted)]">
+                <p className="text-xs text-[var(--color-primary)] font-medium">
+                  Duração: {Math.floor(durationMin / 60)}h{durationMin % 60 > 0 ? `${durationMin % 60}min` : ""} ·{" "}
+                  Valor estimado: <strong>€{calculatedValue.toFixed(2)}</strong>
+                  {selectedLocation?.hourly_rate && (
+                    <span className="font-normal opacity-80"> ({selectedLocation.hourly_rate}€/h)</span>
+                  )}
+                </p>
+              </div>
+            )}
 
-          {message && (
-            <p className="text-sm px-3 py-2 rounded-lg bg-red-50 text-red-700 border border-red-100">
-              {message}
-            </p>
-          )}
-        </form>
+            {/* Notas */}
+            <Field label="Notas (opcional)">
+              <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={3}
+                placeholder="Instruções especiais, materiais necessários..."
+                className={INPUT_CLS + " resize-none"} />
+            </Field>
+
+            {message && (
+              <p className="text-sm px-3 py-2 rounded-lg bg-red-50 text-red-700 border border-red-100">{message}</p>
+            )}
+          </form>
+        </div>
 
         {/* Footer */}
         <div className="border-t border-[var(--color-border)] px-6 py-4">
