@@ -76,7 +76,7 @@ function ServiceTooltip({ service, pos }: { service: ServiceForBlock; pos: Toolt
       <div className="flex items-start justify-between gap-2 mb-3 pb-2.5 border-b border-[var(--color-border)]">
         <div className="min-w-0">
           <p className="font-bold text-sm text-[var(--color-text-main)] truncate">{service.location_name}</p>
-          <p className="text-[var(--color-text-muted)] truncate">{service.client_name}</p>
+          <p className="text-xs text-[var(--color-text-muted)] truncate">{service.client_name}</p>
         </div>
         <span
           className="shrink-0 text-[10px] font-semibold px-1.5 py-0.5 rounded-full"
@@ -103,7 +103,7 @@ function ServiceTooltip({ service, pos }: { service: ServiceForBlock; pos: Toolt
             className="pointer-events-auto text-[var(--color-primary)] hover:underline break-words"
             onClick={(e) => e.stopPropagation()}
           >
-            {service.location_address}
+            {service.location_address || service.location_name}
           </a>
         </Row>
 
@@ -281,12 +281,14 @@ export function ServiceBlock({ service, slotHeight, startHour, teamId, onClick, 
           <span className="text-[10px] font-semibold leading-tight tabular-nums" style={{ color: s.text }}>
             {format(start, "HH:mm")}–{format(end, "HH:mm")}
           </span>
+          {/* Local sempre visível, mesmo em cartão pequeno */}
           <span className="text-[11px] font-semibold leading-tight truncate pr-4" style={{ color: s.text }}>
-            {service.client_name}
+            {service.location_name}
           </span>
+          {/* Cliente visível a partir do cartão médio */}
           {!isShort && (
             <span className="text-[10px] leading-tight truncate" style={{ color: s.text, opacity: 0.75 }}>
-              {service.location_name}
+              {service.client_name}
             </span>
           )}
           {(isMedium || isLarge) && noteText && (
