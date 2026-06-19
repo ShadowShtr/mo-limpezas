@@ -63,14 +63,20 @@ em clients/locations/absences/vacation_requests e recria `services_full` com
 > determinar (suspeita: CORS ou auth na Storage signed URL em contexto mobile).
 > **Não bloqueia outras tasks. Retomar quando houver reprodução consistente.**
 
-**Feito na sessão de 2026-06-19 (auditoria crítica):**
+**Feito na sessão de 2026-06-19 (auditoria crítica — branch codex/auditoria-completa):**
 - ✅ Migration 030 (RLS tighten) — criada, **AINDA NÃO APLICADA em produção**
+- ✅ Migration 031 (reference_number unique constraint) — criada, **AINDA NÃO APLICADA**
+- ✅ TASK A — Migration 030: remove políticas RLS legacy + services_full security_invoker
+- ✅ TASK B — database.ts sincronizado (campos cancel de migration 019 + kanban_columns)
+- ✅ TASK C — deteção de conflito de horário no criar serviço (painel âmbar + force)
 - ✅ TASK D — access_code/instructions removidos do ServiceForBlock (bloco calendário)
-- ✅ TASK B — database.ts sincronizado com migrations 019 (cancel fields) e kanban_columns
-- ✅ TASK C — deteção de conflito adicionada ao criar serviço (panel âmbar + force)
+- ✅ TASK E — crons com maxDuration + batch limit + as any removidos
+- ✅ TASK F — localStorage → IndexedDB para fila de pontos offline
+- ✅ TASK G — uploadToSignedUrl → fetch PUT + AbortController na upload-runner
+- ✅ Issue 12 — race condition reference_number: geração server-side com retry
 
-**Próxima task:** TASK E — refatorar crons pesados para batch processing,
-depois TASK F (offline robusto para operações críticas) e TASK G (upload fotos).
+**Próxima task:** Aplicar migrations 030 e 031 via SQL Editor, depois merge
+`codex/auditoria-completa` → `main` e deploy produção.
 Feitas: 01–04, 06, 08–11, 13–15, 18, 19, 22, 23, 24, 46–60. Descartada: 12.
 
 > ❌ **TASK 12 (foto obrigatória) DESCARTADA** — o dono confirmou (2026-06-19) que
