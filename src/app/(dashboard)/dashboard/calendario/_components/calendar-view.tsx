@@ -345,26 +345,31 @@ export function CalendarView({
     if (!over || !active.data.current) return;
 
     const { service, teamId: fromColKey } = active.data.current as { service: ServiceForBlock; teamId: string };
-    const newTeamId   = over.id === "__sem__" ? null : (over.id as string);
-    // Converte a column key "sem equipa" para null para comparação correcta
-    const origTeamId  = fromColKey === "__sem__" ? null : fromColKey;
+    const newTeamId  = over.id === "__sem__" ? null : (over.id as string);
+    const origTeamId = fromColKey === "__sem__" ? null : fromColKey;
+    const changedTeam = newTeamId !== origTeamId;
 
-    const roundedDelta = Math.round(Math.round((delta.y / SLOT_HEIGHT) * 30) / 15) * 15;
+    // Ao mover para outra equipa: mantém o horário exacto (apenas muda equipa)
+    // Ao mover dentro da mesma equipa: ajusta o horário pelo delta vertical
+    const roundedDelta = changedTeam
+      ? 0
+      : Math.round(Math.round((delta.y / SLOT_HEIGHT) * 30) / 15) * 15;
 
-    // Fix: compara com o team_id real (null para "sem equipa") — evita chamada desnecessária ao backend
-    if (roundedDelta === 0 && newTeamId === origTeamId) return;
+    if (roundedDelta === 0 && !changedTeam) return;
 
-    const origStart  = parseISO(service.scheduled_start);
-    const origEnd    = parseISO(service.scheduled_end);
-    const duration   = differenceInMinutes(origEnd, origStart);
+    const origStart = parseISO(service.scheduled_start);
+    const origEnd   = parseISO(service.scheduled_end);
+    const duration  = differenceInMinutes(origEnd, origStart);
 
     let newStart = addMinutes(origStart, roundedDelta);
     let newEnd   = addMinutes(newStart, duration);
 
-    const dayBase = new Date(newStart); dayBase.setHours(START_HOUR, 0, 0, 0);
-    const dayEnd  = new Date(newStart); dayEnd.setHours(END_HOUR, 0, 0, 0);
-    if (newStart < dayBase) { newStart = dayBase; newEnd = addMinutes(newStart, duration); }
-    if (newEnd   > dayEnd)  { newEnd   = dayEnd;  newStart = addMinutes(newEnd, -duration); }
+    if (!changedTeam) {
+      const dayBase = new Date(newStart); dayBase.setHours(START_HOUR, 0, 0, 0);
+      const dayEnd  = new Date(newStart); dayEnd.setHours(END_HOUR, 0, 0, 0);
+      if (newStart < dayBase) { newStart = dayBase; newEnd = addMinutes(newStart, duration); }
+      if (newEnd   > dayEnd)  { newEnd   = dayEnd;  newStart = addMinutes(newEnd, -duration); }
+    }
 
     const previous   = localServices;
     const targetTeam = teams.find((t) => t.id === newTeamId);
@@ -405,8 +410,8 @@ export function CalendarView({
     if (result.conflicts.length > 0) {
       setConflictMsg(`Conflito registado (#${result.conflicts.map((c) => c.reference_number).join(", #")}).`);
     } else {
-      setConflictMsg(origTeamId !== newTeamId
-        ? `Serviço movido para ${targetTeam?.name ?? "outra equipa"}.`
+      setConflictMsg(changedTeam
+        ? `Serviço atribuído a ${targetTeam?.name ?? "outra equipa"}. Equipa notificada.`
         : "Serviço reagendado.",
       );
     }
