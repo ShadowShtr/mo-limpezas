@@ -137,7 +137,17 @@ interface Props {
   companyId: string;
   userId: string;
   clientes: { id: string; name: string }[];
-  locais: { id: string; client_id: string; name: string; address: string; hourly_rate: number | null }[];
+  locais: {
+    id: string;
+    client_id: string;
+    name: string;
+    address: string;
+    hourly_rate: number | null;
+    access_code?: string | null;
+    instructions?: string | null;
+    has_key?: boolean | null;
+    key_label?: string | null;
+  }[];
   equipas: { id: string; name: string; color: string }[];
   contrato?: ContratosTableRow;
   copyFrom?: ContratosTableRow;
@@ -195,6 +205,7 @@ export function ContratoSheet({
   const [endsOn, setEndsOn] = useState(source?.ends_on ?? "");
   const [notes, setNotes] = useState(source?.notes ?? "");
   const [status, setStatus] = useState(contrato?.status ?? "ativo");
+  const [editScope, setEditScope] = useState("pattern");
 
   // schedule_days: chave = day key (ex: "mon"), valor = config
   const initSchedule = (): Record<string, { start_time: string; duration_min: number; team_id: string }> => {
@@ -214,6 +225,7 @@ export function ContratoSheet({
 
   // Locais filtrados pelo cliente selecionado
   const locaisFiltrados = clienteId ? locais.filter((l) => l.client_id === clienteId) : locais;
+  const selectedLocal = locais.find((l) => l.id === localId) ?? null;
 
   function toggleWeekday(d: number) {
     setSelectedWeekdays((prev) =>
@@ -335,6 +347,8 @@ export function ContratoSheet({
             {/* Body */}
             <form id="contrato-form" onSubmit={handleSubmit} className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
 
+              <SectionLabel title="Identificação" />
+
               {/* Nome (opcional) */}
               <Field label={labels?.nameLabel ?? "Nome do contrato (opcional)"}>
                 <input
@@ -380,6 +394,35 @@ export function ContratoSheet({
                   </div>
                 </Field>
               </div>
+
+              {isEdit && (
+                <Field label="Edição segura da recorrência">
+                  <div className="grid gap-2 text-xs text-[var(--color-text-sub)]">
+                    {[
+                      ["single", "Alterar apenas esta ocorrência"],
+                      ["future", "Alterar esta e as próximas"],
+                      ["pattern", "Alterar o padrão recorrente"],
+                      ["exception", "Criar exceção só para este dia"],
+                    ].map(([value, label]) => (
+                      <label key={value} className="flex items-center gap-2 rounded-lg border border-[var(--color-border)] px-3 py-2">
+                        <input
+                          type="radio"
+                          name="editScope"
+                          value={value}
+                          checked={editScope === value}
+                          onChange={(e) => setEditScope(e.target.value)}
+                        />
+                        <span>{label}</span>
+                      </label>
+                    ))}
+                  </div>
+                  <p className="mt-2 text-xs text-[var(--color-text-muted)]">
+                    Esta tela atualiza o contrato. Ocorrências já concluídas, em curso, falta ou canceladas não são reescritas aqui.
+                  </p>
+                </Field>
+              )}
+
+              <SectionLabel title="Agenda" />
 
               {/* Frequência */}
               <Field label="Frequência *">
@@ -427,6 +470,30 @@ export function ContratoSheet({
                   />
                 </Field>
               )}
+
+              {/* Vigência */}
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="Data de início *">
+                  <input
+                    type="date"
+                    required
+                    value={startsOn}
+                    onChange={(e) => setStartsOn(e.target.value)}
+                    className={INPUT_CLS}
+                  />
+                </Field>
+                <Field label="Data de fim (opcional)">
+                  <input
+                    type="date"
+                    value={endsOn}
+                    min={startsOn}
+                    onChange={(e) => setEndsOn(e.target.value)}
+                    className={INPUT_CLS}
+                  />
+                </Field>
+              </div>
+
+              <SectionLabel title="Equipa e horários" />
 
               {/* Config por dia */}
               <div>
@@ -493,28 +560,6 @@ export function ContratoSheet({
                 intervalDays={intervalDays}
               />
 
-              {/* Vigência */}
-              <div className="grid grid-cols-2 gap-3">
-                <Field label="Data de início *">
-                  <input
-                    type="date"
-                    required
-                    value={startsOn}
-                    onChange={(e) => setStartsOn(e.target.value)}
-                    className={INPUT_CLS}
-                  />
-                </Field>
-                <Field label="Data de fim (opcional)">
-                  <input
-                    type="date"
-                    value={endsOn}
-                    min={startsOn}
-                    onChange={(e) => setEndsOn(e.target.value)}
-                    className={INPUT_CLS}
-                  />
-                </Field>
-              </div>
-
               {/* Estado (só edição) */}
               {isEdit && (
                 <Field label="Estado">
@@ -529,6 +574,8 @@ export function ContratoSheet({
                 </Field>
               )}
 
+              <SectionLabel title="Trabalho" />
+
               {/* Notas */}
               <Field label="Notas internas">
                 <textarea
@@ -539,6 +586,20 @@ export function ContratoSheet({
                   className={INPUT_CLS + " resize-none"}
                 />
               </Field>
+
+              <SectionLabel title="Acesso do local" />
+              <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-background)] p-3 text-xs text-[var(--color-text-sub)]">
+                {!selectedLocal ? (
+                  <p>Seleciona um local para ver instruções fixas de acesso.</p>
+                ) : (
+                  <div className="space-y-1">
+                    <p><strong>Morada:</strong> {selectedLocal.address}</p>
+                    <p><strong>Chave:</strong> {selectedLocal.has_key ? selectedLocal.key_label || "Registada" : "Não registada"}</p>
+                    <p><strong>Código:</strong> {selectedLocal.access_code ? "Registado" : "Não registado"}</p>
+                    {selectedLocal.instructions && <p><strong>Instruções:</strong> {selectedLocal.instructions}</p>}
+                  </div>
+                )}
+              </div>
 
               {message && (
                 <div className={`text-sm px-3 py-2 rounded-lg ${message.type === "error"
@@ -588,6 +649,14 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
     <div>
       <label className="block text-sm font-medium text-[var(--color-text-main)] mb-1.5">{label}</label>
       {children}
+    </div>
+  );
+}
+
+function SectionLabel({ title }: { title: string }) {
+  return (
+    <div className="border-b border-[var(--color-border)] pb-2">
+      <p className="text-xs font-bold uppercase tracking-wide text-[var(--color-text-muted)]">{title}</p>
     </div>
   );
 }

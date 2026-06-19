@@ -51,8 +51,9 @@ Lê este ficheiro no início de CADA sessão antes de fazer qualquer coisa.
 A `029_background_jobs.sql` foi confirmada no Supabase com
 `to_regclass('public.background_jobs') = background_jobs`.
 
-**Próxima task:** TASK 47 (formulário completo de criação/edição de intervenção/serviço).
-Feitas: 01–04, 06, 08–11, 13–15, 18, 19, 22, 23, 24, 46. Descartada: 12.
+**Próxima task:** Rever em produção com gestora os fluxos novos de intervenções,
+calendário drag/drop e backup semanal.
+Feitas: 01–04, 06, 08–11, 13–15, 18, 19, 22, 23, 24, 46–60. Descartada: 12.
 
 > ❌ **TASK 12 (foto obrigatória) DESCARTADA** — o dono confirmou (2026-06-19) que
 > as fotos são ocasionais, nunca obrigatórias. O foco é o ponto, offline,
@@ -147,6 +148,28 @@ serviço (thumbnails lazy, signed URL ao clicar)
 - Reaproveita `ContratoSheet` e `ServiceCreateSheet` com cliente fixo.
 - Ações: criar, editar, duplicar, pausar/arquivar recorrente; criar/duplicar pontual
   e abrir pontual no calendário.
+
+**TASK 47–48 — Formulário e recorrência segura (✅ FEITO)**
+- `ContratoSheet` organizado por blocos: identificação, agenda, equipa/horários,
+  trabalho e acesso do local.
+- Edição de recorrência explicita opções de escopo e mantém histórico fechado sem
+  reescrita automática de ocorrências concluídas/em curso/falta/canceladas.
+
+**TASK 49–50 — Calendário com observações e acesso protegido (✅ FEITO)**
+- Cartão do calendário mostra hora, cliente, local, observação curta, equipa,
+  status e ícones de chave/código conforme espaço.
+- Código completo deixou de aparecer no cartão/tooltip geral; fica só indicador.
+
+**TASK 51–53 e 60 — Backup simples (✅ FEITO)**
+- `Configurações > Backup` gera ZIP local via `/api/dashboard/backups/export`.
+- ZIP inclui `manifest.json`, `README_RESTORE.txt` e JSONs essenciais da empresa.
+- Sem histórico visual, sem botão de restore nesta fase.
+- Lembrete semanal no dashboard sexta-feira após 16:00 com snooze local.
+
+**TASK 54–59 — Drag/drop calendário (✅ FEITO)**
+- Drag/drop entre equipas com `@dnd-kit`, overlay, atualização otimista e rollback.
+- Server action valida admin/gestor, empresa, equipa ativa, status e conflitos.
+- Conflito pode ser cancelado ou forçado com motivo; mudança fica auditada.
 
 ---
 

@@ -126,7 +126,7 @@ function ServiceTooltip({ service, pos }: { service: ServiceForBlock; pos: Toolt
 
         {service.location_access_code && (
           <Row icon={Lock} label="Acesso">
-            <span className="font-mono font-semibold">{service.location_access_code}</span>
+            <span>Código registado</span>
           </Row>
         )}
 
@@ -217,6 +217,10 @@ export function ServiceBlock({ service, slotHeight, startHour, teamId, onClick, 
   const s = STATUS_BG[service.status] ?? STATUS_BG.agendado;
   const borderColor = service.team_color ?? s.fallbackBorder;
   const isShort = height <= slotHeight;
+  const isMedium = height > slotHeight && height < slotHeight * 3;
+  const isLarge = height >= slotHeight * 3;
+  const hasAccess = service.location_has_key || !!service.location_access_code;
+  const noteText = service.notes?.trim() || service.location_instructions?.trim() || "";
 
   // Overlay não usa transform nem posição absoluta — é controlado pelo DragOverlay
   const overlayStyle: React.CSSProperties = isOverlay ? {
@@ -274,17 +278,34 @@ export function ServiceBlock({ service, slotHeight, startHour, teamId, onClick, 
               {stopIndex}
             </span>
           )}
+          <span className="text-[10px] font-semibold leading-tight tabular-nums" style={{ color: s.text }}>
+            {format(start, "HH:mm")}–{format(end, "HH:mm")}
+          </span>
           <span className="text-[11px] font-semibold leading-tight truncate pr-4" style={{ color: s.text }}>
-            {service.location_name}
+            {service.client_name}
           </span>
           {!isShort && (
             <span className="text-[10px] leading-tight truncate" style={{ color: s.text, opacity: 0.75 }}>
-              {format(start, "HH:mm")}–{format(end, "HH:mm")}
+              {service.location_name}
             </span>
           )}
-          {!isShort && service.team_name && (
+          {(isMedium || isLarge) && noteText && (
+            <span className="text-[10px] leading-tight truncate" style={{ color: s.text, opacity: 0.72 }}>
+              Obs: {noteText}
+            </span>
+          )}
+          {!isShort && (service.team_name || hasAccess) && (
             <span className="text-[10px] leading-tight truncate mt-auto" style={{ color: s.text, opacity: 0.6 }}>
               {service.team_name}
+              {hasAccess && (
+                <span className="inline-flex items-center gap-0.5 ml-1 align-middle">
+                  {service.location_has_key && <Key className="inline w-2.5 h-2.5" />}
+                  {service.location_access_code && <Lock className="inline w-2.5 h-2.5" />}
+                </span>
+              )}
+              {isLarge && (
+                <span className="ml-1">{STATUS_LABEL[service.status] ?? service.status}</span>
+              )}
             </span>
           )}
         </div>

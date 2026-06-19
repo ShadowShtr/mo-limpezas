@@ -12,7 +12,17 @@ import { duplicatePointService, setContractInterventionStatus } from "@/app/acti
 import type { ContratosTableRow } from "../../../contratos/page";
 
 type ClientRef = { id: string; name: string };
-type LocalRef = { id: string; client_id: string; name: string; address: string; hourly_rate: number | null };
+type LocalRef = {
+  id: string;
+  client_id: string;
+  name: string;
+  address: string;
+  hourly_rate: number | null;
+  access_code?: string | null;
+  instructions?: string | null;
+  has_key?: boolean | null;
+  key_label?: string | null;
+};
 type TeamRef = { id: string; name: string; color: string };
 type PointService = {
   id: string;
@@ -303,4 +313,3 @@ export function InterventionsSection({
     </section>
   );
 }
-

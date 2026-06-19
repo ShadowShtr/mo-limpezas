@@ -38,7 +38,7 @@ export default async function ContratosPage() {
         .order("name"),
       supabase
         .from("locations")
-        .select("id, client_id, name, address, hourly_rate")
+        .select("id, client_id, name, address, hourly_rate, access_code, instructions, has_key, key_label")
         .eq("company_id", companyId)
         .eq("active", true)
         .order("name"),

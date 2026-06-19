@@ -176,6 +176,7 @@ export function CalendarView({
   const [allocationOpen,    setAllocationOpen]    = useState(false);
   const [avisosOpen,        setAvisosOpen]        = useState(false);
   const [viewMode,          setViewMode]          = useState<"calendar" | "list">("calendar");
+  const [localServices,     setLocalServices]     = useState<ServiceFull[]>(services);
 
   // ── Drag state ───────────────────────────────────────────────────────────
   const [draggingBlock, setDraggingBlock] = useState<{ service: ServiceForBlock; teamId: string } | null>(null);
@@ -197,6 +198,10 @@ export function CalendarView({
     setCurrentTop(computeTimeTop(d));
     setToday(new Date());
   }, [selectedDateISO]);
+
+  useEffect(() => {
+    setLocalServices(services);
+  }, [services]);
   /* eslint-enable react-hooks/set-state-in-effect */
 
   // Actualizar linha de hora actual a cada minuto
@@ -226,8 +231,8 @@ export function CalendarView({
 
   // Serviços do dia seleccionado, agrupados por equipa
   const dayServices = useMemo(
-    () => services.filter((s) => isSameDay(parseISO(s.scheduled_start), selectedDate)),
-    [services, selectedDate],
+    () => localServices.filter((s) => isSameDay(parseISO(s.scheduled_start), selectedDate)),
+    [localServices, selectedDate],
   );
 
   const byTeam = useMemo(() => {
@@ -342,25 +347,65 @@ export function CalendarView({
       newStart = addMinutes(newEnd, -duration);
     }
 
-    // Atualizar optimisticamente na UI e depois confirmar no servidor
-    const result = await rescheduleService(
+    const previous = localServices;
+    const previousService = localServices.find((s) => s.id === service.id);
+    const targetTeam = teams.find((t) => t.id === newTeamId);
+    setLocalServices((current) => current.map((s) =>
+      s.id === service.id
+        ? {
+          ...s,
+          scheduled_start: newStart.toISOString(),
+          scheduled_end: newEnd.toISOString(),
+          team_id: newTeamId,
+          team_name: targetTeam?.name ?? null,
+          team_color: targetTeam?.color ?? null,
+        }
+        : s,
+    ));
+
+    let result = await rescheduleService(
       service.id,
       newStart.toISOString(),
       newEnd.toISOString(),
       newTeamId,
     );
 
+    if (!result.ok && result.canForce) {
+      const details = result.conflicts?.length
+        ? result.conflicts.map((c) => `#${c.reference_number} ${c.location_name}`).join(", ")
+        : result.error;
+      const keep = window.confirm(`${details}\n\nDeseja mover mesmo assim?`);
+      if (!keep) {
+        setLocalServices(previous);
+        setConflictMsg("Movimento cancelado. O serviço voltou à posição anterior.");
+        return;
+      }
+      const reason = window.prompt("Motivo para manter apesar do conflito:", "Ajuste operacional validado pela gestora") ?? "";
+      result = await rescheduleService(
+        service.id,
+        newStart.toISOString(),
+        newEnd.toISOString(),
+        newTeamId,
+        { force: true, reason },
+      );
+    }
+
     if (!result.ok) {
+      setLocalServices(previous);
       setConflictMsg(`Erro ao reagendar: ${result.error}`);
       return;
     }
 
     if (result.conflicts.length > 0) {
       const names = result.conflicts.map((c) => `#${c.reference_number} ${c.location_name}`).join(", ");
-      setConflictMsg(`Conflito de horário com: ${names}`);
+      setConflictMsg(`Conflito mantido por exceção: ${names}`);
+    } else if (previousService) {
+      setConflictMsg(
+        previousService.team_id !== newTeamId
+          ? "Serviço movido para outra equipa."
+          : "Serviço reagendado.",
+      );
     }
-
-    router.refresh();
   }
 
   // today é null no SSR — guards abaixo garantem segurança
@@ -389,7 +434,7 @@ export function CalendarView({
             {weekDays.map((day, i) => {
               const isSel  = isSameDay(day, selectedDate);
               const isTody = today !== null && isSameDay(day, today);
-              const count  = services.filter((s) => isSameDay(parseISO(s.scheduled_start), day)).length;
+              const count  = localServices.filter((s) => isSameDay(parseISO(s.scheduled_start), day)).length;
               return (
                 <button
                   key={day.toISOString()}
@@ -515,7 +560,7 @@ export function CalendarView({
         {/* ── Vista Lista ────────────────────────────────────────────────── */}
         {viewMode === "list" && (
           <CalendarListView
-            services={services}
+            services={localServices}
             teams={teams}
             selectedDate={selectedDate}
             onChanged={handleChanged}
@@ -636,7 +681,7 @@ export function CalendarView({
                           slotHeight={SLOT_HEIGHT}
                           startHour={START_HOUR}
                           stopIndex={arr.length > 1 ? idx + 1 : undefined}
-                          onClick={(b) => setDetailSvc(services.find((s) => s.id === b.id) ?? null)}
+                          onClick={(b) => setDetailSvc(localServices.find((s) => s.id === b.id) ?? null)}
                         />
                         {showTravel && gapPx > 20 && (
                           <div

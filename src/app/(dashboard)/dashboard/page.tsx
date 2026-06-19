@@ -6,6 +6,7 @@ import { DashboardKPIs } from "./_components/kpis";
 import { TodayServices } from "./_components/today-services";
 import { AlertsPanel } from "./_components/alerts-panel";
 import { DocumentsBackupBanner } from "./_components/documents-backup-banner";
+import { BackupReminder } from "./_components/backup-reminder";
 import { formatDate } from "@/lib/utils";
 
 export default async function DashboardPage() {
@@ -61,6 +62,7 @@ export default async function DashboardPage() {
       <Header title="Dashboard" subtitle={subtitle} />
 
       <div className="px-4 py-5 sm:p-6 lg:px-8 space-y-6 mx-auto max-w-[1400px]">
+        <BackupReminder />
         <DocumentsBackupBanner expiringCount={expiringDocs} />
 
         <DashboardKPIs kpis={kpis} />
