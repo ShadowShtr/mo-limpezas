@@ -22,10 +22,12 @@ import {
   Bell,
 } from "lucide-react";
 import { logout } from "@/app/actions/auth";
+import { SidebarNotifBadge } from "./sidebar-notif-badge";
 
-const NAV = [
+// "notif" é um marcador especial para mostrar o SidebarNotifBadge neste item
+const NAV: { href: string; icon: typeof Bell; label: string; notif?: boolean }[] = [
   { href: "/dashboard",               icon: LayoutDashboard, label: "Dashboard" },
-  { href: "/dashboard/pendencias",    icon: Bell,            label: "Pendências" },
+  { href: "/dashboard/pendencias",    icon: Bell,            label: "Pendências", notif: true },
   { href: "/dashboard/calendario",    icon: Calendar,        label: "Calendário" },
   { href: "/dashboard/clientes",      icon: Building2,       label: "Clientes" },
   { href: "/dashboard/contratos",     icon: FileText,        label: "Contratos" },
@@ -126,7 +128,7 @@ export function Sidebar({ userName, userRole, avatarUrl, onClose }: SidebarProps
 
       {/* ── Navegação ────────────────────────────────────── */}
       <nav className="relative flex-1 px-3 py-3 space-y-0.5 overflow-y-auto">
-        {NAV.map(({ href, icon: Icon, label }) => {
+        {NAV.map(({ href, icon: Icon, label, notif }) => {
           const active = isActive(href);
           const pending = pendingHref === href && !active;
           return (
@@ -178,6 +180,7 @@ export function Sidebar({ userName, userRole, avatarUrl, onClose }: SidebarProps
               {pending && (
                 <span className="w-1.5 h-1.5 rounded-full bg-[#22C55E] animate-pulse" aria-hidden />
               )}
+              {notif && !pending && <SidebarNotifBadge />}
             </Link>
           );
         })}

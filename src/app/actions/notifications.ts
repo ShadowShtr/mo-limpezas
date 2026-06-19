@@ -63,6 +63,26 @@ export async function markAllNotificationsRead(): Promise<{ ok: boolean }> {
   return { ok: true };
 }
 
+/** Elimina uma notificação do utilizador autenticado. */
+export async function deleteNotification(id: string): Promise<{ ok: boolean }> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { ok: false };
+  await supabase.from("notifications").delete().eq("id", id).eq("user_id", user.id);
+  revalidatePath("/app/notificacoes");
+  return { ok: true };
+}
+
+/** Elimina todas as notificações já lidas do utilizador. */
+export async function deleteAllReadNotifications(): Promise<{ ok: boolean }> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { ok: false };
+  await supabase.from("notifications").delete().eq("user_id", user.id).not("read_at", "is", null);
+  revalidatePath("/app/notificacoes");
+  return { ok: true };
+}
+
 export async function notifyTeam(serviceId: string, message: string) {
   // ── Wrapper global: garante que NUNCA lança exceção ──────────────────────────
   try {

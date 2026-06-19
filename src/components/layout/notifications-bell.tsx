@@ -1,9 +1,10 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback, useId } from "react";
-import { Bell, CheckCheck } from "lucide-react";
+import { Bell, CheckCheck, X, Trash2 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { formatDistanceToNow } from "@/lib/utils";
+import { deleteNotification, deleteAllReadNotifications } from "@/app/actions/notifications";
 
 interface Notification {
   id: string;
@@ -29,21 +30,20 @@ const TYPE_LABELS: Record<string, string> = {
 };
 
 export function NotificationsBell() {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen]                   = useState(false);
   const [notifications, setNotifications] = useState<Notification[]>([]);
-  const [unread, setUnread] = useState(0);
-  const ref = useRef<HTMLDivElement>(null);
-  const [supabase] = useState(() => createClient());
-  // Nome único por instância para evitar conflito quando dois NotificationsBell montam em simultâneo
+  const [unread, setUnread]               = useState(0);
+  const [deletingId, setDeletingId]       = useState<string | null>(null);
+  const ref         = useRef<HTMLDivElement>(null);
+  const [supabase]  = useState(() => createClient());
   const channelName = `notifications-${useId()}`;
 
-  const loadNotifications = useCallback(async () => {
+  const load = useCallback(async () => {
     const { data } = await supabase
       .from("notifications")
       .select("id, type, title, body, read_at, created_at")
       .order("created_at", { ascending: false })
-      .limit(20);
-
+      .limit(30);
     if (data) {
       setNotifications(data);
       setUnread(data.filter((n) => !n.read_at).length);
@@ -53,108 +53,155 @@ export function NotificationsBell() {
   useEffect(() => {
     const channel = supabase
       .channel(channelName)
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "notifications" }, () => {
-        loadNotifications();
-      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "notifications" }, load)
       .subscribe();
-
-    // async — setState não é chamado sincronamente, regra é false-positive aqui
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    loadNotifications();
-
+    load();
     return () => { supabase.removeChannel(channel); };
-  }, [channelName, loadNotifications, supabase]);
+  }, [channelName, load, supabase]);
 
   useEffect(() => {
-    function handleClickOutside(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) {
-        setOpen(false);
-      }
+    function outside(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
     }
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
+    document.addEventListener("mousedown", outside);
+    return () => document.removeEventListener("mousedown", outside);
   }, []);
 
-  async function markAllRead() {
-    await supabase
-      .from("notifications")
-      .update({ read_at: new Date().toISOString() })
-      .is("read_at", null);
-    loadNotifications();
+  async function markRead(id: string) {
+    await supabase.from("notifications").update({ read_at: new Date().toISOString() }).eq("id", id);
+    load();
   }
 
-  async function markRead(id: string) {
-    await supabase
-      .from("notifications")
-      .update({ read_at: new Date().toISOString() })
-      .eq("id", id);
-    loadNotifications();
+  async function markAllRead() {
+    await supabase.from("notifications").update({ read_at: new Date().toISOString() }).is("read_at", null);
+    load();
   }
+
+  async function handleDelete(e: React.MouseEvent, id: string) {
+    e.stopPropagation();
+    setDeletingId(id);
+    setNotifications((prev) => prev.filter((n) => n.id !== id));
+    setUnread((prev) => {
+      const was = notifications.find((n) => n.id === id);
+      return was && !was.read_at ? Math.max(0, prev - 1) : prev;
+    });
+    await deleteNotification(id);
+    setDeletingId(null);
+  }
+
+  async function handleClearRead() {
+    setNotifications((prev) => prev.filter((n) => !n.read_at));
+    await deleteAllReadNotifications();
+  }
+
+  const hasRead = notifications.some((n) => !!n.read_at);
 
   return (
     <div ref={ref} className="relative">
+      {/* ── Botão sino ── */}
       <button
-        onClick={() => setOpen((o) => !o)}
+        onClick={() => { setOpen((o) => !o); if (!open) load(); }}
         className="relative p-2 rounded-lg text-[var(--color-text-sub)] hover:bg-[var(--color-background)] hover:text-[var(--color-text-main)] transition-colors"
+        aria-label="Notificações"
       >
-        <Bell className="w-5 h-5" />
+        <Bell className={`w-5 h-5 ${unread > 0 ? "animate-[bellShake_1s_ease-in-out_infinite]" : ""}`} />
         {unread > 0 && (
-          <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 bg-[var(--color-danger)] rounded-full text-white text-[10px] font-bold flex items-center justify-center leading-none">
+          <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 bg-red-500 rounded-full text-white text-[10px] font-bold flex items-center justify-center leading-none ring-2 ring-white">
             {unread > 99 ? "99+" : unread}
           </span>
         )}
       </button>
 
+      {/* ── Painel dropdown ── */}
       {open && (
-        <div className="absolute right-0 top-full mt-2 w-80 bg-white border border-[var(--color-border)] rounded-xl shadow-lg z-50">
+        <div className="absolute right-0 top-full mt-2 w-[340px] bg-white border border-[var(--color-border)] rounded-2xl shadow-xl z-50 overflow-hidden">
+
+          {/* Cabeçalho */}
           <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--color-border)]">
-            <h3 className="text-sm font-semibold text-[var(--color-text-main)]">
-              Notificações {unread > 0 && <span className="text-[var(--color-danger)]">({unread})</span>}
-            </h3>
-            {unread > 0 && (
-              <button
-                onClick={markAllRead}
-                className="flex items-center gap-1 text-xs text-[var(--color-primary)] hover:underline"
-              >
-                <CheckCheck className="w-3.5 h-3.5" />
-                Marcar tudo como lido
-              </button>
-            )}
+            <div className="flex items-center gap-2">
+              <h3 className="text-sm font-semibold text-[var(--color-text-main)]">Notificações</h3>
+              {unread > 0 && (
+                <span className="min-w-[20px] h-5 px-1.5 bg-red-500 rounded-full text-white text-[10px] font-bold flex items-center justify-center">
+                  {unread}
+                </span>
+              )}
+            </div>
+            <div className="flex items-center gap-1">
+              {unread > 0 && (
+                <button
+                  onClick={markAllRead}
+                  className="flex items-center gap-1 text-[11px] text-[var(--color-primary)] hover:underline px-2 py-1 rounded hover:bg-[var(--color-primary-light)] transition-colors"
+                >
+                  <CheckCheck className="w-3 h-3" />
+                  Marcar lidas
+                </button>
+              )}
+              {hasRead && (
+                <button
+                  onClick={handleClearRead}
+                  className="flex items-center gap-1 text-[11px] text-[var(--color-text-muted)] hover:text-red-500 px-2 py-1 rounded hover:bg-red-50 transition-colors"
+                  title="Limpar notificações lidas"
+                >
+                  <Trash2 className="w-3 h-3" />
+                  Limpar lidas
+                </button>
+              )}
+            </div>
           </div>
 
-          <div className="max-h-80 overflow-y-auto divide-y divide-[var(--color-border)]">
+          {/* Lista */}
+          <div className="max-h-[380px] overflow-y-auto">
             {notifications.length === 0 ? (
-              <p className="text-sm text-[var(--color-text-muted)] text-center py-6">
-                Sem notificações
-              </p>
+              <div className="flex flex-col items-center justify-center py-10 text-center">
+                <Bell className="w-8 h-8 text-[var(--color-text-muted)] mb-2 opacity-40" />
+                <p className="text-sm text-[var(--color-text-muted)]">Sem notificações</p>
+              </div>
             ) : (
-              notifications.map((n) => (
-                <button
-                  key={n.id}
-                  onClick={() => !n.read_at && markRead(n.id)}
-                  className={`w-full text-left px-4 py-3 hover:bg-[var(--color-background)] transition-colors ${
-                    !n.read_at ? "bg-[var(--color-primary-light)]" : ""
-                  }`}
-                >
-                  <div className="flex items-start gap-2">
-                    {!n.read_at && (
-                      <div className="w-1.5 h-1.5 rounded-full bg-[var(--color-primary)] mt-1.5 shrink-0" />
-                    )}
-                    <div className={!n.read_at ? "" : "pl-3.5"}>
-                      <p className="text-xs font-medium text-[var(--color-text-muted)] uppercase tracking-wide">
+              <div className="divide-y divide-[var(--color-border)]">
+                {notifications.map((n) => (
+                  <div
+                    key={n.id}
+                    className={`group flex items-start gap-3 px-4 py-3 transition-colors ${
+                      !n.read_at ? "bg-[var(--color-primary-light)] hover:bg-green-50" : "hover:bg-[var(--color-background)]"
+                    } ${deletingId === n.id ? "opacity-50" : ""}`}
+                  >
+                    {/* Dot não lida */}
+                    <div className="mt-1.5 shrink-0">
+                      {!n.read_at
+                        ? <span className="block w-2 h-2 rounded-full bg-red-500" />
+                        : <span className="block w-2 h-2" />
+                      }
+                    </div>
+
+                    {/* Conteúdo clicável */}
+                    <button
+                      className="flex-1 min-w-0 text-left"
+                      onClick={() => !n.read_at && markRead(n.id)}
+                    >
+                      <p className="text-[10px] font-semibold text-[var(--color-text-muted)] uppercase tracking-wider mb-0.5">
                         {TYPE_LABELS[n.type] ?? n.type}
                       </p>
-                      <p className="text-sm font-medium text-[var(--color-text-main)]">{n.title}</p>
+                      <p className="text-sm font-medium text-[var(--color-text-main)] leading-snug">{n.title}</p>
                       {n.body && (
-                        <p className="text-xs text-[var(--color-text-sub)] mt-0.5">{n.body}</p>
+                        <p className="text-xs text-[var(--color-text-sub)] mt-0.5 leading-relaxed">{n.body}</p>
                       )}
-                      <p className="text-xs text-[var(--color-text-muted)] mt-1">
+                      <p className="text-[10px] text-[var(--color-text-muted)] mt-1">
                         {formatDistanceToNow(n.created_at)}
                       </p>
-                    </div>
+                    </button>
+
+                    {/* X eliminar */}
+                    <button
+                      onClick={(e) => handleDelete(e, n.id)}
+                      className="shrink-0 p-1 rounded opacity-0 group-hover:opacity-100 text-[var(--color-text-muted)] hover:text-red-500 hover:bg-red-50 transition-all"
+                      title="Eliminar"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
                   </div>
-                </button>
-              ))
+                ))}
+              </div>
             )}
           </div>
         </div>
