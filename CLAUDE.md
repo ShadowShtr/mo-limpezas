@@ -51,8 +51,8 @@ Lê este ficheiro no início de CADA sessão antes de fazer qualquer coisa.
 A `029_background_jobs.sql` foi confirmada no Supabase com
 `to_regclass('public.background_jobs') = background_jobs`.
 
-**Próxima task:** TASK 07 (dashboard paginado) ou TASK 16/17/20 (produção/QA/go-live).
-Feitas: 01–04, 06, 08–11, 13–15, 18, 19, 22, 23, 24. Descartada: 12.
+**Próxima task:** TASK 47 (formulário completo de criação/edição de intervenção/serviço).
+Feitas: 01–04, 06, 08–11, 13–15, 18, 19, 22, 23, 24, 46. Descartada: 12.
 
 > ❌ **TASK 12 (foto obrigatória) DESCARTADA** — o dono confirmou (2026-06-19) que
 > as fotos são ocasionais, nunca obrigatórias. O foco é o ponto, offline,
@@ -140,6 +140,13 @@ serviço (thumbnails lazy, signed URL ao clicar)
 (seg 03:00): corrige pending presos, purga 'deleted' antigos; nunca apaga recente
 
 **TASK 24 — Anti-duplo-clique (✅)** — `useSingleFlight` (ref síncrono) no clock-in/out
+
+**TASK 46 — Intervenções na ficha do cliente (✅ FEITO)**
+- Nova seção `Intervenções / Serviços` em `/dashboard/clientes/[id]`, sem tabela nova.
+- Recorrentes continuam em `contracts`; pontuais continuam em `services`.
+- Reaproveita `ContratoSheet` e `ServiceCreateSheet` com cliente fixo.
+- Ações: criar, editar, duplicar, pausar/arquivar recorrente; criar/duplicar pontual
+  e abrir pontual no calendário.
 
 ---
 

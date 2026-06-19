@@ -11,8 +11,10 @@ import {
 import { Header } from "@/components/layout/header";
 import { ClienteSheet } from "../_components/sheet";
 import { CommunicationTab } from "./_components/communication-tab";
+import { InterventionsSection } from "./_components/interventions-section";
 import { LocaisTable } from "../../locais/_components/table";
 import { LocalSheet } from "../../locais/_components/sheet";
+import type { ContratosTableRow } from "../../contratos/page";
 
 const STATUS_STYLE: Record<string, { bg: string; text: string; label: string }> = {
   agendado:  { bg: "#F0FDF4", text: "#15803D", label: "Agendado" },
@@ -64,6 +66,8 @@ export default async function ClientDetailPage({
     { data: upcomingRaw },
     { data: recentRaw },
     { data: doneRaw },
+    { data: pointServicesRaw },
+    { data: teamsRaw },
   ] = await Promise.all([
     admin
       .from("clients")
@@ -116,6 +120,22 @@ export default async function ClientDetailPage({
       .eq("company_id", me.company_id)
       .eq("status", "concluido")
       .limit(2000),
+
+    admin
+      .from("services_full")
+      .select("id, reference_number, location_id, location_name, scheduled_start, scheduled_end, status, team_name, team_color, notes")
+      .eq("client_id", id)
+      .eq("company_id", me.company_id)
+      .is("contract_id", null)
+      .order("scheduled_start", { ascending: false })
+      .limit(20),
+
+    admin
+      .from("teams")
+      .select("id, name, color")
+      .eq("company_id", me.company_id)
+      .eq("active", true)
+      .order("name"),
   ]);
 
   if (!client) notFound();
@@ -124,11 +144,27 @@ export default async function ClientDetailPage({
     const r = l as typeof l & { fixed_price?: number | null; pricing_type?: string };
     return { ...r, fixed_price: r.fixed_price ?? null, pricing_type: (r.pricing_type ?? "hourly") as "hourly" | "fixed" };
   });
+  const locationIds = locais.map((l) => l.id);
+  const { data: contractsRaw } = locationIds.length
+    ? await admin
+      .from("contracts")
+      .select(`
+        id, name, frequency, interval_days, weekdays, schedule_days,
+        starts_on, ends_on, status, notes, created_at,
+        locations ( id, name, address, clients ( id, name ) )
+      `)
+      .eq("company_id", me.company_id)
+      .in("location_id", locationIds)
+      .order("created_at", { ascending: false })
+    : { data: [] };
   const clienteRef = [{ id: client.id, name: client.name }];
 
   const upcoming = upcomingRaw ?? [];
   const recent = recentRaw ?? [];
   const done = doneRaw ?? [];
+  const contracts = (contractsRaw ?? []) as unknown as ContratosTableRow[];
+  const pointServices = pointServicesRaw ?? [];
+  const teams = teamsRaw ?? [];
   const totalBilled = done.reduce((acc, s) => acc + serviceValue(s), 0);
   const nextService = upcoming[0] ?? null;
 
@@ -253,6 +289,16 @@ export default async function ClientDetailPage({
                 <p className="text-xs text-[var(--color-text-muted)] uppercase tracking-wide mt-1">Faturado</p>
               </div>
             </div>
+
+            <InterventionsSection
+              companyId={me.company_id}
+              userId={user.id}
+              client={{ id: client.id, name: client.name }}
+              locais={locais}
+              equipas={teams}
+              contratos={contracts}
+              pointServices={pointServices}
+            />
 
             {/* Próximas intervenções */}
             <section className="bg-white rounded-xl border border-[var(--color-border)] p-5">

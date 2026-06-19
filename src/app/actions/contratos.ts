@@ -162,7 +162,7 @@ export async function createContrato(input: ContratoInput) {
 
   const { data: location } = await admin
     .from("locations")
-    .select("id")
+    .select("id, client_id")
     .eq("id", input.location_id)
     .eq("company_id", profile.company_id)
     .single();
@@ -213,6 +213,7 @@ export async function createContrato(input: ContratoInput) {
 
   revalidatePath("/dashboard/contratos");
   revalidatePath("/dashboard/calendario");
+  revalidatePath(`/dashboard/clientes/${location.client_id}`);
   return { ok: true as const };
 }
 
@@ -233,7 +234,7 @@ export async function updateContrato(id: string, input: Omit<ContratoInput, "com
 
   const { data: location } = await admin
     .from("locations")
-    .select("id")
+    .select("id, client_id")
     .eq("id", input.location_id)
     .eq("company_id", profile.company_id)
     .single();
@@ -256,5 +257,6 @@ export async function updateContrato(id: string, input: Omit<ContratoInput, "com
 
   revalidatePath("/dashboard/contratos");
   revalidatePath("/dashboard/calendario");
+  revalidatePath(`/dashboard/clientes/${location.client_id}`);
   return { ok: true as const };
 }

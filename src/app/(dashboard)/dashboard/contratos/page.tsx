@@ -24,7 +24,7 @@ export default async function ContratosPage() {
       supabase
         .from("contracts")
         .select(`
-          id, name, frequency, weekdays, schedule_days,
+          id, name, frequency, interval_days, weekdays, schedule_days,
           starts_on, ends_on, status, notes, created_at,
           locations ( id, name, address, clients ( id, name ) )
         `)
@@ -89,6 +89,7 @@ export type ContratosTableRow = {
   id: string;
   name: string | null;
   frequency: string;
+  interval_days: number;
   weekdays: number[] | null;
   schedule_days: import("@/types/database").ScheduleDay[];
   starts_on: string;

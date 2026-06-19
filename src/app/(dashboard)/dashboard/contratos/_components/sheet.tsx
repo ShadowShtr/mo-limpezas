@@ -140,12 +140,40 @@ interface Props {
   locais: { id: string; client_id: string; name: string; address: string; hourly_rate: number | null }[];
   equipas: { id: string; name: string; color: string }[];
   contrato?: ContratosTableRow;
+  copyFrom?: ContratosTableRow;
+  fixedClientId?: string;
+  labels?: {
+    createTitle?: string;
+    editTitle?: string;
+    createButton?: string;
+    editButton?: string;
+    nameLabel?: string;
+    namePlaceholder?: string;
+    createdMessage?: string;
+    updatedMessage?: string;
+  };
 }
 
 // ─── Componente principal ────────────────────────────────────────────────────
 
-export function ContratoSheet({ trigger, companyId, userId, clientes, locais, equipas, contrato }: Props) {
+export function ContratoSheet({
+  trigger,
+  companyId,
+  userId,
+  clientes,
+  locais,
+  equipas,
+  contrato,
+  copyFrom,
+  fixedClientId,
+  labels,
+}: Props) {
   const isEdit = !!contrato;
+  const source = contrato ?? copyFrom;
+  const createTitle = labels?.createTitle ?? "Novo contrato";
+  const editTitle = labels?.editTitle ?? "Editar contrato";
+  const createButton = labels?.createButton ?? "Criar contrato";
+  const editButton = labels?.editButton ?? "Guardar alteraÃ§Ãµes";
 
   // UI state
   const [open, setOpen] = useState(false);
@@ -153,25 +181,26 @@ export function ContratoSheet({ trigger, companyId, userId, clientes, locais, eq
   const [message, setMessage] = useState<{ type: "error" | "success"; text: string } | null>(null);
 
   // Formulário
-  const [name, setName] = useState(contrato?.name ?? "");
+  const [name, setName] = useState(source?.name ?? "");
   const [clienteId, setClienteId] = useState<string>(() => {
-    if (contrato?.locations?.clients?.id) return contrato.locations.clients.id;
+    if (fixedClientId) return fixedClientId;
+    if (source?.locations?.clients?.id) return source.locations.clients.id;
     return "";
   });
-  const [localId, setLocalId] = useState(contrato?.locations?.id ?? "");
-  const [frequency, setFrequency] = useState(contrato?.frequency ?? "weekly");
-  const [intervalDays, setIntervalDays] = useState(1);
-  const [selectedWeekdays, setSelectedWeekdays] = useState<number[]>(contrato?.weekdays ?? [1, 3, 5]);
-  const [startsOn, setStartsOn] = useState(contrato?.starts_on ?? new Date().toISOString().split("T")[0]);
-  const [endsOn, setEndsOn] = useState(contrato?.ends_on ?? "");
-  const [notes, setNotes] = useState(contrato?.notes ?? "");
+  const [localId, setLocalId] = useState(source?.locations?.id ?? "");
+  const [frequency, setFrequency] = useState(source?.frequency ?? "weekly");
+  const [intervalDays, setIntervalDays] = useState(source?.interval_days ?? 1);
+  const [selectedWeekdays, setSelectedWeekdays] = useState<number[]>(source?.weekdays ?? [1, 3, 5]);
+  const [startsOn, setStartsOn] = useState(source?.starts_on ?? new Date().toISOString().split("T")[0]);
+  const [endsOn, setEndsOn] = useState(source?.ends_on ?? "");
+  const [notes, setNotes] = useState(source?.notes ?? "");
   const [status, setStatus] = useState(contrato?.status ?? "ativo");
 
   // schedule_days: chave = day key (ex: "mon"), valor = config
   const initSchedule = (): Record<string, { start_time: string; duration_min: number; team_id: string }> => {
-    if (contrato?.schedule_days?.length) {
+    if (source?.schedule_days?.length) {
       return Object.fromEntries(
-        contrato.schedule_days.map((s) => [
+        source.schedule_days.map((s) => [
           s.day,
           { start_time: s.start_time, duration_min: s.duration_min, team_id: s.team_id ?? "" },
         ]),
@@ -253,9 +282,14 @@ export function ContratoSheet({ trigger, companyId, userId, clientes, locais, eq
         : await createContrato({ ...input, company_id: companyId, created_by: userId });
 
       if (res.ok) {
-        setMessage({ type: "success", text: isEdit ? "Contrato atualizado." : "Contrato criado com sucesso." });
+        setMessage({
+          type: "success",
+          text: isEdit
+            ? labels?.updatedMessage ?? "Contrato atualizado."
+            : labels?.createdMessage ?? "Contrato criado com sucesso.",
+        });
         if (!isEdit) {
-          setName(""); setClienteId(""); setLocalId(""); setFrequency("weekly");
+          setName(""); setClienteId(fixedClientId ?? ""); setLocalId(""); setFrequency("weekly");
           setSelectedWeekdays([1, 3, 5]); setStartsOn(new Date().toISOString().split("T")[0]);
           setEndsOn(""); setNotes(""); setStatus("ativo"); setScheduleConfig({});
         }
@@ -287,7 +321,7 @@ export function ContratoSheet({ trigger, companyId, userId, clientes, locais, eq
               style={{ borderBottom: "1px solid rgba(15,23,42,0.08)" }}
             >
               <h2 className="text-[15px] font-bold" style={{ color: "var(--color-text-main)", letterSpacing: "-0.01em" }}>
-                {isEdit ? "Editar contrato" : "Novo contrato"}
+                {isEdit ? editTitle : createTitle}
               </h2>
               <button
                 onClick={() => setOpen(false)}
@@ -302,11 +336,11 @@ export function ContratoSheet({ trigger, companyId, userId, clientes, locais, eq
             <form id="contrato-form" onSubmit={handleSubmit} className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
 
               {/* Nome (opcional) */}
-              <Field label="Nome do contrato (opcional)">
+              <Field label={labels?.nameLabel ?? "Nome do contrato (opcional)"}>
                 <input
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  placeholder="ex: Limpeza semanal Escritórios Central"
+                  placeholder={labels?.namePlaceholder ?? "ex: Limpeza semanal Escritórios Central"}
                   className={INPUT_CLS}
                 />
               </Field>
@@ -318,7 +352,8 @@ export function ContratoSheet({ trigger, companyId, userId, clientes, locais, eq
                     <select
                       value={clienteId}
                       onChange={(e) => { setClienteId(e.target.value); setLocalId(""); }}
-                      className={SELECT_CLS}
+                      disabled={!!fixedClientId}
+                      className={SELECT_CLS + (fixedClientId ? " opacity-70 cursor-not-allowed" : "")}
                     >
                       <option value="">Selecionar...</option>
                       {clientes.map((c) => (
@@ -528,7 +563,7 @@ export function ContratoSheet({ trigger, companyId, userId, clientes, locais, eq
                 }}
               >
                 {pending && <Loader2 className="w-4 h-4 animate-spin" />}
-                {isEdit ? "Guardar alterações" : "Criar contrato"}
+                {isEdit ? editButton : createButton}
               </button>
             </div>
           </div>

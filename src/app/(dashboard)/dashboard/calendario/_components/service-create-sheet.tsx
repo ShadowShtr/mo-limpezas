@@ -22,6 +22,8 @@ interface Props {
   clients: Client[];
   locations: Location[];
   teams: Team[];
+  fixedClientId?: string;
+  fixedLocationId?: string;
 }
 
 const INPUT_CLS =
@@ -51,14 +53,15 @@ export function ServiceCreateSheet({
   companyId,
   date, initialStartTime, initialTeamId,
   clients, locations, teams,
+  fixedClientId, fixedLocationId,
 }: Props) {
   const supabase = createClient();
 
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
-  const [clientId, setClientId] = useState("");
-  const [locationId, setLocationId] = useState("");
+  const [clientId, setClientId] = useState(fixedClientId ?? "");
+  const [locationId, setLocationId] = useState(fixedLocationId ?? "");
   const [teamId, setTeamId] = useState(initialTeamId);
   const [startTime, setStartTime] = useState(initialStartTime);
   const [endTime, setEndTime] = useState(addMinutes(initialStartTime, 120));
@@ -153,7 +156,8 @@ export function ServiceCreateSheet({
                 <select
                   value={clientId}
                   onChange={(e) => { setClientId(e.target.value); setLocationId(""); }}
-                  className={SELECT_CLS}
+                  disabled={!!fixedClientId}
+                  className={SELECT_CLS + (fixedClientId ? " opacity-70 cursor-not-allowed" : "")}
                 >
                   <option value="">Selecionar...</option>
                   {clients.map((c) => (
