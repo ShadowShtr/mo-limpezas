@@ -161,8 +161,10 @@ function PendenciaCard({
               <p className="text-xs text-[var(--color-text-muted)] mt-0.5">{fmtTime(item.at)}</p>
             </div>
           );
-          return item.service_id ? (
-            <Link key={item.id} href={`/dashboard/calendario?service=${item.service_id}`} className="block">
+          // O calendário abre na semana da data indicada (?date=YYYY-MM-DD).
+          const day = item.at ? item.at.slice(0, 10) : null;
+          return item.service_id && day ? (
+            <Link key={item.id} href={`/dashboard/calendario?date=${day}`} className="block">
               {row}
             </Link>
           ) : (
