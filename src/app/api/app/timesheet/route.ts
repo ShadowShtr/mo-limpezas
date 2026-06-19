@@ -4,6 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { getCompanySettings } from "@/app/actions/settings";
 import { rateLimit, rateLimitKey } from "@/lib/rate-limit";
 import { haversineDistanceM } from "@/lib/calculations";
+import { withRouteMetrics } from "@/lib/observability/route-metrics";
 
 // Pontos offline aceites até 48h no passado; mais antigos vão para revisão automática
 const MAX_OFFLINE_AGE_MS = 48 * 60 * 60 * 1000;
@@ -40,7 +41,7 @@ async function logAudit(
   } catch { /* não bloquear operação se audit falhar */ }
 }
 
-export async function POST(req: NextRequest) {
+async function postHandler(req: NextRequest) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -176,7 +177,7 @@ export async function POST(req: NextRequest) {
   return NextResponse.json({ data, distance_m, location_warning, tooOld });
 }
 
-export async function PATCH(req: NextRequest) {
+async function patchHandler(req: NextRequest) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -263,3 +264,7 @@ export async function PATCH(req: NextRequest) {
 
   return NextResponse.json({ data: updatedTs, duration_minutes, tooOld });
 }
+
+// TASK 08 — instrumentação leve (duração + status), sem dados sensíveis.
+export const POST = withRouteMetrics("/api/app/timesheet", postHandler);
+export const PATCH = withRouteMetrics("/api/app/timesheet", patchHandler);

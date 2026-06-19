@@ -2,13 +2,14 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { rateLimit, rateLimitKey } from "@/lib/rate-limit";
+import { withRouteMetrics } from "@/lib/observability/route-metrics";
 
 /**
  * TASK 01/04 — Confirma que a foto chegou ao Storage e atualiza a metadata.
  * Chamado pelo telemóvel após o upload direto via signed URL. Idempotente:
  * uma segunda confirmação do mesmo client_event_id é tratada como sucesso.
  */
-export async function POST(req: NextRequest) {
+async function handle(req: NextRequest) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -92,3 +93,5 @@ export async function POST(req: NextRequest) {
 
   return NextResponse.json({ ok: true, upload_id: photo.id });
 }
+
+export const POST = withRouteMetrics("/api/app/uploads/confirm", handle);

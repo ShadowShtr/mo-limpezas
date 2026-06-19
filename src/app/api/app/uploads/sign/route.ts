@@ -8,6 +8,7 @@ import {
   validatePhotoUploadRequest,
   isValidPhotoKind,
 } from "@/lib/service-photos";
+import { startRouteTimer } from "@/lib/observability/route-metrics";
 
 /**
  * TASK 01 — Cria uma signed upload URL para o telemóvel enviar a foto
@@ -15,6 +16,13 @@ import {
  * caminho e grava metadata (nunca recebe o ficheiro).
  */
 export async function POST(req: NextRequest) {
+  const m = startRouteTimer("/api/app/uploads/sign", "POST");
+  const res = await handle(req, m);
+  m.record(res.status);
+  return res;
+}
+
+async function handle(req: NextRequest, m: ReturnType<typeof startRouteTimer>) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -48,6 +56,7 @@ export async function POST(req: NextRequest) {
   const { data: profile } = await admin
     .from("profiles").select("company_id").eq("id", user.id).single();
   if (!profile) return NextResponse.json({ error: "Perfil não encontrado" }, { status: 404 });
+  m.setContext({ companyId: profile.company_id, role: "colaborador" });
 
   const { data: service } = await admin
     .from("services_full")
