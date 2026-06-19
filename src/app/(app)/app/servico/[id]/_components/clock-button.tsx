@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { LogIn, LogOut, MapPin, AlertTriangle, Loader2, CheckCircle, CloudOff, MapPinOff } from "lucide-react";
 import { queueTimesheet } from "@/lib/offline-sync";
+import { useSingleFlight } from "@/lib/hooks/use-single-flight";
 
 function uuid() {
   if (typeof crypto !== "undefined" && crypto.randomUUID) return crypto.randomUUID();
@@ -64,6 +65,8 @@ export function ClockButton({ serviceId, initialTimesheet }: Props) {
   const [queued, setQueued] = useState<"in" | "out" | null>(null);
   // Fallback manual: ativado quando GPS é negado/indisponível
   const [needsManual, setNeedsManual] = useState<"in" | "out" | null>(null);
+  // Guarda síncrona contra duplo clique (TASK 24) — fecha a micro-janela do `loading`.
+  const singleFlight = useSingleFlight(1500);
 
   async function getCoords(): Promise<{
     lat: number | null; lng: number | null;
@@ -183,7 +186,7 @@ export function ClockButton({ serviceId, initialTimesheet }: Props) {
     return (
       <div className="space-y-2">
         <button
-          onClick={() => doClockIn(false)}
+          onClick={() => singleFlight(() => doClockIn(false))}
           disabled={loading}
           className="flex items-center justify-center gap-2 w-full py-4 rounded-2xl bg-[var(--color-primary)] text-white font-semibold text-sm active:bg-[var(--color-primary-hover)] transition-colors disabled:opacity-60"
         >
@@ -202,7 +205,7 @@ export function ClockButton({ serviceId, initialTimesheet }: Props) {
               GPS indisponível ou acesso negado. Confirme que está no local para registar manualmente.
             </div>
             <button
-              onClick={() => doClockIn(true)}
+              onClick={() => singleFlight(() => doClockIn(true))}
               disabled={loading}
               className="w-full py-2.5 rounded-xl bg-amber-600 text-white text-xs font-semibold active:bg-amber-700 transition-colors disabled:opacity-60"
             >
@@ -246,7 +249,7 @@ export function ClockButton({ serviceId, initialTimesheet }: Props) {
         </div>
 
         <button
-          onClick={() => doClockOut(false)}
+          onClick={() => singleFlight(() => doClockOut(false))}
           disabled={loading}
           className="flex items-center justify-center gap-2 w-full py-4 rounded-2xl bg-red-600 text-white font-semibold text-sm active:bg-red-700 transition-colors disabled:opacity-60"
         >
@@ -265,7 +268,7 @@ export function ClockButton({ serviceId, initialTimesheet }: Props) {
               GPS indisponível. Confirme que terminou o serviço para registar manualmente.
             </div>
             <button
-              onClick={() => doClockOut(true)}
+              onClick={() => singleFlight(() => doClockOut(true))}
               disabled={loading}
               className="w-full py-2.5 rounded-xl bg-amber-600 text-white text-xs font-semibold active:bg-amber-700 transition-colors disabled:opacity-60"
             >

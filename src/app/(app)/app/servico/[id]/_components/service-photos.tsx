@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { Camera, Loader2, CheckCircle, CloudOff, AlertTriangle, ImageIcon, RefreshCw } from "lucide-react";
 import { compressClientImage } from "@/lib/images/compress-client-image";
+import { validatePhotoUploadRequest } from "@/lib/service-photos";
 import {
   enqueueUpload,
   getAllUploads,
@@ -66,10 +67,38 @@ export function ServicePhotos({ serviceId, initialPhotos }: Props) {
     if (fileRef.current) fileRef.current.value = "";
     if (!file) return;
 
+    // TASK 11 — validar tipo/tamanho antes de comprimir (UX rápida; o backend
+    // valida de novo ao assinar). Bloqueia vídeo, PDF, ficheiro vazio, etc.
+    if (!file.type.startsWith("image/")) {
+      setMessage({ type: "error", text: "Só é possível enviar fotos (não vídeos nem ficheiros)." });
+      return;
+    }
+    if (file.size === 0) {
+      setMessage({ type: "error", text: "A foto parece vazia. Tire outra foto e tente novamente." });
+      return;
+    }
+    // Limite generoso antes da compressão (o original pode ser grande).
+    if (file.size > 40 * 1024 * 1024) {
+      setMessage({ type: "error", text: "Foto demasiado grande. Tire outra foto e tente novamente." });
+      return;
+    }
+
     setMessage(null);
     setBusy("compressing");
     try {
       const compressed = await compressClientImage(file);
+
+      // Após comprimir, validar contra o limite final aceite pelo backend.
+      const check = validatePhotoUploadRequest({
+        contentType: compressed.mimeType,
+        sizeBytes: compressed.compressedSize,
+        kind: "durante",
+      });
+      if (!check.ok) {
+        setBusy(null);
+        setMessage({ type: "error", text: check.error });
+        return;
+      }
       const clientEventId = uuid();
       const ok = await enqueueUpload({
         client_event_id: clientEventId,
