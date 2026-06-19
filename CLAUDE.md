@@ -47,8 +47,12 @@ Lê este ficheiro no início de CADA sessão antes de fazer qualquer coisa.
 
 ## ⚡ PRÓXIMA TASK A EXECUTAR
 
-**Próxima task:** TASK 19 (UX final tela funcionária) ou TASK 12 (modo "foto
-obrigatória" configurável por cliente). TASK 01–04 + TASK 13 feitas (checkpoint 2026-06-19).
+**Próxima task:** TASK 19 (UX final tela funcionária). TASK 01–04 + TASK 13 feitas
+(checkpoint 2026-06-19).
+
+> ❌ **TASK 12 (foto obrigatória) DESCARTADA** — o dono confirmou (2026-06-19) que
+> as fotos são ocasionais, nunca obrigatórias. O foco é o ponto, offline,
+> performance e estabilidade. Não dar destaque grande a fotos.
 
 > ℹ️ Migration 027 **✅ APLICADA** em 2026-06-19 via SQL Editor do dashboard
 > (token CLI/Management API e password da BD antigos expiraram — pooler correto é
