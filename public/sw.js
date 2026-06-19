@@ -1,5 +1,5 @@
 // Incrementar CACHE força purga do cache antigo em todos os clientes
-const CACHE = "mo-limpezas-v3";
+const CACHE = "mo-limpezas-v4";
 
 // Apenas assets estáticos são guardados — HTML é sempre da rede
 const PRECACHE = ["/offline"];
@@ -10,7 +10,8 @@ self.addEventListener("install", (e) => {
       .then((c) => c.addAll(PRECACHE))
       .catch(() => {})
   );
-  self.skipWaiting();
+  // NÃO skipWaiting() automático: o novo SW fica em "waiting" até a
+  // colaboradora tocar em "Atualizar" — evita recarregar a meio de um ponto.
 });
 
 self.addEventListener("activate", (e) => {
