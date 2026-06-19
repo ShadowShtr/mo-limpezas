@@ -29,6 +29,23 @@ Plataforma de gestão operacional para empresa de limpeza: agendamento, equipas,
    supabase/migrations/014_fix_rls_recursion.sql
    supabase/migrations/015_fix_trigger_resilient.sql
    supabase/migrations/016_vehicles.sql
+   supabase/migrations/017_collaborator_documents.sql
+   supabase/migrations/018_financial_practical.sql
+   supabase/migrations/019_payroll.sql
+   supabase/migrations/020_public_holidays.sql
+   supabase/migrations/021_collaborator_documents_visibility.sql
+   supabase/migrations/022_email_logs.sql
+   supabase/migrations/023_fix_collaborator_documents_mime_types.sql
+   supabase/migrations/024_timesheet_client_event_id.sql
+   supabase/migrations/025_timesheet_performance_indexes.sql
+   supabase/migrations/026_audit_logs.sql
+   supabase/migrations/027_service_photos.sql
+   supabase/migrations/028_growth_indexes.sql
+   supabase/migrations/029_background_jobs.sql
+   supabase/migrations/20260608_new_features.sql
+   supabase/migrations/20260609_kanban_columns.sql
+   supabase/migrations/20260609_profiles_hourly_rate.sql
+   supabase/migrations/20260609_timesheet_limits.sql
    ```
 3. Cria o primeiro utilizador (admin) manualmente em Authentication → Users
 4. Copia o `project URL` e as chaves `anon` e `service_role`

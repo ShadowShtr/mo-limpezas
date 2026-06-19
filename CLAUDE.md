@@ -47,9 +47,9 @@ Lê este ficheiro no início de CADA sessão antes de fazer qualquer coisa.
 
 ## ⚡ PRÓXIMA TASK A EXECUTAR
 
-**AÇÃO MANUAL PENDENTE:** Aplicar migration `029_background_jobs.sql` (TASK 14) no
-SQL Editor. Sem ela, a geração mensal grava erro ao tentar criar o job (mas o
-catch não bloqueia — convém aplicar).
+**Migrations críticas:** 027, 028 e 029 aplicadas/confirmadas em 2026-06-19.
+A `029_background_jobs.sql` foi confirmada no Supabase com
+`to_regclass('public.background_jobs') = background_jobs`.
 
 **Próxima task:** TASK 07 (dashboard paginado) ou TASK 16/17/20 (produção/QA/go-live).
 Feitas: 01–04, 06, 08–11, 13–15, 18, 19, 22, 23, 24. Descartada: 12.
@@ -61,6 +61,8 @@ Feitas: 01–04, 06, 08–11, 13–15, 18, 19, 22, 23, 24. Descartada: 12.
 > ℹ️ Migration 027 **✅ APLICADA** em 2026-06-19 via SQL Editor do dashboard
 > (token CLI/Management API e password da BD antigos expiraram — pooler correto é
 > `aws-1-eu-central-2`, não `aws-0` como no `scripts/run-migrations.mjs`).
+> ℹ️ Migration 029 **✅ APLICADA/CONFIRMADA** em 2026-06-19 via SQL Editor
+> (`background_jobs` existe no schema público).
 
 **Pendente antigo:** Verificar domínio `molimpezas.pt` no Resend (DNS → Restart →
 `RESEND_FROM_EMAIL` = `Mo Limpezas <noreply@molimpezas.pt>`).
@@ -83,7 +85,7 @@ Feitas: 01–04, 06, 08–11, 13–15, 18, 19, 22, 23, 24. Descartada: 12.
   (retry/backoff 10s/30s/2min, estados finais — cobre TASK 09)
 - **TASK 04** — `ServicePhotos` na tela do serviço, independente do clock-in
 - `src/types/database.ts` — adicionado tipo `service_photos`
-- Testes: `src/__tests__/service-photos.test.ts` (12) — total 283 a passar
+- Testes: `src/__tests__/service-photos.test.ts` (12) — total 288 a passar
 
 **TASK 13 — Painel de pendências da gestora (✅ FEITO)**
 - `src/app/actions/pendencias.ts` — `getPendencias()` (guard admin/gestor)
@@ -124,7 +126,7 @@ Feitas: 01–04, 06, 08–11, 13–15, 18, 19, 22, 23, 24. Descartada: 12.
 - `pwa-register.tsx`: banner "Atualização disponível" (botão), update ao voltar à app;
   reload só após ação do utilizador (não recarrega a meio de um ponto)
 
-**TASK 14 — Geração mensal em lotes (✅ CÓDIGO; migration 029 POR APLICAR)**
+**TASK 14 — Geração mensal em lotes (✅ FEITO; migration 029 APLICADA 2026-06-19)**
 - `background_jobs` (cursor/progresso) + generate-services em lotes de 25 com
   bulk-fetch/insert (fim do N+1), orçamento 40s e auto-continuação, maxDuration=60
 

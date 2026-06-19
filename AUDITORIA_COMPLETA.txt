@@ -2,7 +2,7 @@
   AUDITORIA COMPLETA — PLATAFORMA "ESCALA" (Mó Limpezas)
   Repositório: github.com/ShadowShtr/mo-limpezas
   Stack: Next.js 15 + TypeScript + Tailwind + Supabase + Mapbox + PWA
-  Data da auditoria: 2026-06-18
+  Data da auditoria: 2026-06-19
   Autor: sessão de auditoria assistida (Claude) + ShadowShtr
 ================================================================================
 
@@ -21,7 +21,7 @@ REGRA DE OURO DESTA AUDITORIA:
 
 
 ================================================================================
-PARTE 0 — RESUMO DO QUE FOI FEITO NESTA RONDA (2026-06-18)
+PARTE 0 — RESUMO DO QUE FOI FEITO NESTA RONDA (2026-06-19)
 ================================================================================
 
 1) FUNCIONALIDADE — Ficha completa de cliente
@@ -74,7 +74,7 @@ PARTE 0 — RESUMO DO QUE FOI FEITO NESTA RONDA (2026-06-18)
    Commits: ebc00b9 (deploy Vercel: ready)
 
 3) VERIFICAÇÕES AUTOMÁTICAS — estado no fecho desta ronda
-   [x] Testes (vitest): 271 a passar (266 + 5 novos de segurança)
+   [x] Testes (vitest): 288 a passar
    [x] Type-check (tsc --noEmit): 0 erros
    [x] ESLint: 0 erros e 0 warnings
    [x] Build local de produção: passa (prebuild check-env + audit-security passam)
@@ -88,6 +88,8 @@ PARTE 0 — RESUMO DO QUE FOI FEITO NESTA RONDA (2026-06-18)
    [x] Warnings ESLint eliminados: <img> trocado por next/image nos avatares,
        expressão ternária sem efeito removida, variáveis mortas removidas.
    [x] next.config.ts permite otimização de imagens Supabase via remotePatterns.
+   [x] Migrations 027/028/029 confirmadas como aplicadas; 029 valida
+       `background_jobs` no schema público.
 
 
 ================================================================================
@@ -399,7 +401,7 @@ PENDENTES REGISTADOS (para não se perder nada):
   [ ] Rotação de tokens/segredos (Parte 6).
 
 PROCESSO PARA PRÓXIMAS AUDITORIAS (não pular etapas):
-  1. npm test                        → tem de ficar a 100% (atualmente 271/271)
+  1. npm test                        → tem de ficar a 100% (atualmente 288/288)
   2. npx tsc --noEmit                → 0 erros
   3. npx eslint "src/**/*.{ts,tsx}"  → 0 erros (warnings registados na Parte 8)
   4. npx tsx scripts/audit-security.ts
@@ -410,8 +412,8 @@ PROCESSO PARA PRÓXIMAS AUDITORIAS (não pular etapas):
 
 
 ================================================================================
-FIM DO RELATÓRIO — última atualização: 2026-06-18
+FIM DO RELATÓRIO — última atualização: 2026-06-19
 Commits desta ronda: 2b96521 (ficha de cliente), ebc00b9 (correções de segurança),
 este commit (limpeza final da auditoria)
-Estado: 271 testes a passar · tsc limpo · ESLint 0 warnings · build local pronto
+Estado: 288 testes a passar · tsc limpo · ESLint 0 warnings · build local pronto
 ================================================================================
