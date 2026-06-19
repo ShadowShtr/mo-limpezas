@@ -47,8 +47,8 @@ Lê este ficheiro no início de CADA sessão antes de fazer qualquer coisa.
 
 ## ⚡ PRÓXIMA TASK A EXECUTAR
 
-**Próxima task:** TASK 08 (logs leves por rota) ou TASK 15 (índices de banco).
-TASK 01–04 + 06 + 13 + 19 feitas (checkpoint 2026-06-19).
+**Próxima task:** TASK 15 (índices de banco) ou TASK 22 (auditoria central).
+TASK 01–04 + 06 + 08 + 13 + 19 feitas (checkpoint 2026-06-19).
 
 > ❌ **TASK 12 (foto obrigatória) DESCARTADA** — o dono confirmou (2026-06-19) que
 > as fotos são ocasionais, nunca obrigatórias. O foco é o ponto, offline,
@@ -97,6 +97,12 @@ TASK 01–04 + 06 + 13 + 19 feitas (checkpoint 2026-06-19).
 - `ConnectionBanner` pausa polling com aba escondida, re-verifica ao voltar
 - Intervalo por contexto: colaboradora 5 min, gestora 2 min
 - AbortController + anti-acumulação (já existiam)
+
+**TASK 08 — Logs leves por rota (✅ FEITO)**
+- `src/lib/observability/route-metrics.ts` — `recordRouteMetric`, `startRouteTimer`,
+  `withRouteMetrics`. Linha JSON nos logs da Vercel; amostra rotas quentes (10%),
+  erros sempre; sem dados sensíveis; fire-and-forget
+- Instrumentadas: /api/app/timesheet, /api/app/uploads/sign, /api/app/uploads/confirm
 
 ---
 
