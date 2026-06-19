@@ -3,8 +3,8 @@
 import React, { useState, useMemo, useCallback, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import {
-  addWeeks, subWeeks, addDays, addMinutes,
-  isSameDay, parseISO, format, differenceInMinutes,
+  addWeeks, subWeeks, addDays,
+  isSameDay, parseISO, format,
   endOfWeek,
 } from "date-fns";
 import { pt } from "date-fns/locale";
@@ -347,55 +347,33 @@ export function CalendarView({
     const { service, teamId: fromColKey } = active.data.current as { service: ServiceForBlock; teamId: string };
     const newTeamId  = over.id === "__sem__" ? null : (over.id as string);
     const origTeamId = fromColKey === "__sem__" ? null : fromColKey;
-    const changedTeam = newTeamId !== origTeamId;
 
-    // Ao mover para outra equipa: mantém o horário exacto (apenas muda equipa)
-    // Ao mover dentro da mesma equipa: ajusta o horário pelo delta vertical
-    const roundedDelta = changedTeam
-      ? 0
-      : Math.round(Math.round((delta.y / SLOT_HEIGHT) * 30) / 15) * 15;
+    // Drag apenas muda equipa — horário nunca é alterado por drag
+    if (newTeamId === origTeamId) return;
 
-    if (roundedDelta === 0 && !changedTeam) return;
-
-    const origStart = parseISO(service.scheduled_start);
-    const origEnd   = parseISO(service.scheduled_end);
-    const duration  = differenceInMinutes(origEnd, origStart);
-
-    let newStart = addMinutes(origStart, roundedDelta);
-    let newEnd   = addMinutes(newStart, duration);
-
-    if (!changedTeam) {
-      const dayBase = new Date(newStart); dayBase.setHours(START_HOUR, 0, 0, 0);
-      const dayEnd  = new Date(newStart); dayEnd.setHours(END_HOUR, 0, 0, 0);
-      if (newStart < dayBase) { newStart = dayBase; newEnd = addMinutes(newStart, duration); }
-      if (newEnd   > dayEnd)  { newEnd   = dayEnd;  newStart = addMinutes(newEnd, -duration); }
-    }
-
+    const newStart = service.scheduled_start;
+    const newEnd   = service.scheduled_end;
     const previous   = localServices;
     const targetTeam = teams.find((t) => t.id === newTeamId);
 
     // Atualização otimista
     setLocalServices((curr) => curr.map((s) =>
       s.id === service.id
-        ? { ...s, scheduled_start: newStart.toISOString(), scheduled_end: newEnd.toISOString(),
-            team_id: newTeamId, team_name: targetTeam?.name ?? null, team_color: targetTeam?.color ?? null }
+        ? { ...s, team_id: newTeamId, team_name: targetTeam?.name ?? null, team_color: targetTeam?.color ?? null }
         : s,
     ));
 
-    const result = await rescheduleService(service.id, newStart.toISOString(), newEnd.toISOString(), newTeamId);
+    const result = await rescheduleService(service.id, newStart, newEnd, newTeamId);
 
     if (!result.ok && result.canForce) {
-      const hasConflicts = (result.conflicts?.length ?? 0) > 0;
       setPendingForce({
         serviceId: service.id,
-        newStart: newStart.toISOString(),
-        newEnd: newEnd.toISOString(),
+        newStart,
+        newEnd,
         newTeamId,
         previous,
-        title: hasConflicts ? "Conflito de horário" : "Serviço em curso",
-        message: hasConflicts
-          ? `${targetTeam?.name ?? "A equipa destino"} já tem ${result.conflicts!.length === 1 ? "um serviço" : "serviços"} neste horário.`
-          : `O serviço está em curso. Confirme que pretende movê-lo${targetTeam ? ` para ${targetTeam.name}` : ""}.`,
+        title: "Serviço em curso",
+        message: `O serviço está em curso. Confirme que pretende transferi-lo para ${targetTeam?.name ?? "outra equipa"}.`,
         conflicts: result.conflicts ?? [],
       });
       return;
@@ -410,10 +388,7 @@ export function CalendarView({
     if (result.conflicts.length > 0) {
       setConflictMsg(`Conflito registado (#${result.conflicts.map((c) => c.reference_number).join(", #")}).`);
     } else {
-      setConflictMsg(changedTeam
-        ? `Serviço atribuído a ${targetTeam?.name ?? "outra equipa"}. Equipa notificada.`
-        : "Serviço reagendado.",
-      );
+      setConflictMsg(`Serviço atribuído a ${targetTeam?.name ?? "outra equipa"}. Equipa notificada.`);
     }
   }
 
