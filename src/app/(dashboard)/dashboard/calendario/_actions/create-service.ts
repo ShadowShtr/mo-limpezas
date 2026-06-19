@@ -9,7 +9,6 @@ export interface CreateServiceInput {
   companyId: string;
   locationId: string;
   teamId: string | null;
-  referenceNumber: string;
   scheduledStart: string;
   scheduledEnd: string;
   hourlyRate: number | null;
@@ -58,25 +57,42 @@ export async function createService(
     }
   }
 
-  const { data, error } = await admin
-    .from("services")
-    .insert({
-      company_id: profile.company_id,
-      location_id: input.locationId,
-      team_id: input.teamId ?? null,
-      reference_number: input.referenceNumber,
-      scheduled_start: input.scheduledStart,
-      scheduled_end: input.scheduledEnd,
-      status: "agendado",
-      hourly_rate: input.hourlyRate,
-      calculated_value: input.calculatedValue,
-      notes: input.notes,
-      created_by: user.id,
-    })
-    .select("id")
-    .single();
+  // Gerar reference_number server-side para evitar race condition.
+  // Retenta até 5 vezes em caso de conflito de unicidade (migrations/031).
+  let data: { id: string } | null = null;
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const { count } = await admin
+      .from("services")
+      .select("id", { count: "exact", head: true })
+      .eq("company_id", profile.company_id);
+    const ref = String((count ?? 0) + 1 + attempt).padStart(4, "0");
 
-  if (error || !data) return { ok: false, error: error?.message ?? "Erro ao criar serviço" };
+    const res = await admin
+      .from("services")
+      .insert({
+        company_id: profile.company_id,
+        location_id: input.locationId,
+        team_id: input.teamId ?? null,
+        reference_number: ref,
+        scheduled_start: input.scheduledStart,
+        scheduled_end: input.scheduledEnd,
+        status: "agendado",
+        hourly_rate: input.hourlyRate,
+        calculated_value: input.calculatedValue,
+        notes: input.notes,
+        created_by: user.id,
+      })
+      .select("id")
+      .single();
+
+    if (!res.error) { data = res.data; break; }
+    // Código 23505 = unique_violation (reference_number duplicado) → retenta
+    if (!res.error.code || res.error.code !== "23505") {
+      return { ok: false, error: res.error.message };
+    }
+  }
+
+  if (!data) return { ok: false, error: "Não foi possível gerar um número de referência único." };
 
   revalidatePath("/dashboard/calendario");
   revalidatePath("/dashboard/mapa");

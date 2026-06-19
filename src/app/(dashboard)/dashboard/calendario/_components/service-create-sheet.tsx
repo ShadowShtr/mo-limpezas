@@ -4,7 +4,6 @@ import { useState, useMemo } from "react";
 import { X, Loader2, ChevronDown, Plus, UserPlus, Building2, User, MapPin, AlertTriangle } from "lucide-react";
 import { format, parseISO } from "date-fns";
 import { pt } from "date-fns/locale";
-import { createClient } from "@/lib/supabase/client";
 import { createService } from "../_actions/create-service";
 import type { ConflictInfo } from "../_actions/reschedule";
 import { createClienteComLocal } from "@/app/actions/clientes";
@@ -64,8 +63,6 @@ export function ServiceCreateSheet({
   clients: initialClients, locations, teams,
   fixedClientId, fixedLocationId,
 }: Props) {
-  const supabase = createClient();
-
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [conflicts, setConflicts] = useState<ConflictInfo[]>([]);
@@ -166,19 +163,12 @@ export function ServiceCreateSheet({
     setConflicts([]);
     setPendingForce(null);
 
-    const { count } = await supabase
-      .from("services")
-      .select("id", { count: "exact", head: true })
-      .eq("company_id", companyId);
-
-    const ref = String((count ?? 0) + 1).padStart(4, "0");
     const dateStr = format(date, "yyyy-MM-dd");
 
     const res = await createService({
       companyId,
       locationId,
       teamId: teamId || null,
-      referenceNumber: ref,
       scheduledStart: `${dateStr}T${startTime}:00`,
       scheduledEnd: `${dateStr}T${endTime}:00`,
       hourlyRate: selectedLocation?.hourly_rate ?? null,
