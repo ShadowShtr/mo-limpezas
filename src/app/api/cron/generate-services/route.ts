@@ -2,6 +2,14 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { ScheduleDay } from "@/types/database";
 
+// Permite até 60s na Vercel Pro (TASK 14/16); mesmo assim corre em lotes.
+export const maxDuration = 60;
+
+// TASK 14 — limites por execução: processa contratos em lotes, com orçamento de
+// tempo e auto-continuação. Evita timeout na geração mensal quando crescer.
+const BATCH_SIZE = 25;          // contratos por lote
+const TIME_BUDGET_MS = 40_000;  // para antes do limite serverless e retoma depois
+
 // ─── Tipos ───────────────────────────────────────────────────────────────────
 
 interface ContractRow {
@@ -184,87 +192,150 @@ export async function GET(req: NextRequest) {
     );
   }
 
-  // Contadores de referência por empresa (evita query por serviço)
-  const companyCounts: Record<string, number> = {};
+  const allContracts = (contracts ?? []) as unknown as ContractRow[];
+
+  // ── Job de progresso (criar ou retomar) ──────────────────────────────────────
+  const jobParam = req.nextUrl.searchParams.get("job");
+  let jobId = jobParam;
+  let cursor = 0;
   let totalCreated = 0;
   let totalSkipped = 0;
+  let totalFailed = 0;
+
+  if (jobId) {
+    const { data: job } = await supabase
+      .from("background_jobs").select("cursor, processed, failed, meta").eq("id", jobId).single();
+    if (job) {
+      cursor = job.cursor ?? 0;
+      totalCreated = job.processed ?? 0;
+      totalFailed = job.failed ?? 0;
+    }
+  } else {
+    const { data: created } = await supabase
+      .from("background_jobs")
+      .insert({
+        type: "generate_services",
+        status: "running",
+        total: allContracts.length,
+        meta: { month: monthStartStr },
+      })
+      .select("id")
+      .single();
+    jobId = created?.id ?? null;
+  }
+
+  // Contadores de referência por empresa (evita query por serviço)
+  const companyCounts: Record<string, number> = {};
   const insertErrors: string[] = [];
+  const startedAt = Date.now();
+  let stoppedEarly = false;
 
-  for (const contract of contracts ?? []) {
-    const occurrences = getOccurrences(
-      contract as unknown as ContractRow,
-      monthStart,
-      monthEnd,
+  // ── Processar contratos em lotes a partir do cursor ──────────────────────────
+  for (let i = cursor; i < allContracts.length; i += BATCH_SIZE) {
+    if (Date.now() - startedAt > TIME_BUDGET_MS) { stoppedEarly = true; cursor = i; break; }
+
+    const batch = allContracts.slice(i, i + BATCH_SIZE);
+
+    // Pré-carregar serviços já existentes deste lote no mês (1 query, não N).
+    const batchIds = batch.map((c) => c.id);
+    const { data: existingRows } = await supabase
+      .from("services")
+      .select("contract_id, scheduled_start")
+      .in("contract_id", batchIds)
+      .gte("scheduled_start", `${monthStartStr}T00:00:00`)
+      .lte("scheduled_start", `${monthEndStr}T23:59:59`);
+
+    const existingSet = new Set(
+      (existingRows ?? []).map((r) => `${r.contract_id}|${(r.scheduled_start as string).slice(0, 10)}`),
     );
-    if (occurrences.length === 0) continue;
 
-    // Inicializar contador de referências para esta empresa
-    if (!(contract.company_id in companyCounts)) {
-      const { count } = await supabase
-        .from("services")
-        .select("id", { count: "exact", head: true })
-        .eq("company_id", contract.company_id);
-      companyCounts[contract.company_id] = count ?? 0;
+    // Garantir contador de referência para cada empresa presente no lote.
+    for (const c of batch) {
+      if (!(c.company_id in companyCounts)) {
+        const { count } = await supabase
+          .from("services").select("id", { count: "exact", head: true }).eq("company_id", c.company_id);
+        companyCounts[c.company_id] = count ?? 0;
+      }
     }
 
-    for (const { date, schedule } of occurrences) {
-      const dateStr = toDateStr(date);
+    type ServiceInsert = {
+      company_id: string; location_id: string; team_id: string | null; contract_id: string;
+      reference_number: string; scheduled_start: string; scheduled_end: string;
+      hourly_rate: number | null; calculated_value: number | null; status: string;
+    };
+    const rows: ServiceInsert[] = [];
 
-      // Verificar se já existe um serviço para este contrato nesta data
-      const { data: existing } = await supabase
-        .from("services")
-        .select("id")
-        .eq("contract_id", contract.id)
-        .gte("scheduled_start", `${dateStr}T00:00:00`)
-        .lte("scheduled_start", `${dateStr}T23:59:59`)
-        .maybeSingle();
+    for (const contract of batch) {
+      const occurrences = getOccurrences(contract, monthStart, monthEnd);
+      for (const { date, schedule } of occurrences) {
+        const dateStr = toDateStr(date);
+        const key = `${contract.id}|${dateStr}`;
+        if (existingSet.has(key)) { totalSkipped++; continue; }
+        existingSet.add(key); // evita duplicado dentro do próprio lote
 
-      if (existing) {
-        totalSkipped++;
-        continue;
+        const endTime = addMinutesToTime(schedule.start_time, schedule.duration_min);
+        companyCounts[contract.company_id]++;
+        const ref = String(companyCounts[contract.company_id]).padStart(4, "0");
+        const hourlyRate = contract.locations?.hourly_rate ?? null;
+        const calculatedValue =
+          hourlyRate != null ? parseFloat(((schedule.duration_min / 60) * hourlyRate).toFixed(2)) : null;
+
+        rows.push({
+          company_id: contract.company_id,
+          location_id: contract.location_id,
+          team_id: schedule.team_id || null,
+          contract_id: contract.id,
+          reference_number: ref,
+          scheduled_start: `${dateStr}T${schedule.start_time}:00`,
+          scheduled_end: `${dateStr}T${endTime}:00`,
+          hourly_rate: hourlyRate,
+          calculated_value: calculatedValue,
+          status: "agendado",
+        });
       }
+    }
 
-      // Construir timestamps
-      const endTime = addMinutesToTime(schedule.start_time, schedule.duration_min);
-      const scheduledStart = `${dateStr}T${schedule.start_time}:00`;
-      const scheduledEnd = `${dateStr}T${endTime}:00`;
-
-      // Número de referência sequencial por empresa
-      companyCounts[contract.company_id]++;
-      const ref = String(companyCounts[contract.company_id]).padStart(4, "0");
-
-      // Calcular valor
-      const hourlyRate =
-        (contract.locations as unknown as { hourly_rate: number | null } | null)
-          ?.hourly_rate ?? null;
-      const calculatedValue =
-        hourlyRate != null
-          ? parseFloat(((schedule.duration_min / 60) * hourlyRate).toFixed(2))
-          : null;
-
-      const { error: insertError } = await supabase.from("services").insert({
-        company_id: contract.company_id,
-        location_id: contract.location_id,
-        team_id: schedule.team_id || null,
-        contract_id: contract.id,
-        reference_number: ref,
-        scheduled_start: scheduledStart,
-        scheduled_end: scheduledEnd,
-        hourly_rate: hourlyRate,
-        calculated_value: calculatedValue,
-        status: "agendado",
-      });
-
+    // Inserção em massa (1 query por lote).
+    if (rows.length > 0) {
+      const { error: insertError } = await supabase.from("services").insert(rows);
       if (insertError) {
-        insertErrors.push(
-          `contract=${contract.id} date=${dateStr}: ${insertError.message}`,
-        );
+        totalFailed += rows.length;
+        insertErrors.push(`batch@${i}: ${insertError.message}`);
       } else {
-        totalCreated++;
+        totalCreated += rows.length;
       }
+    }
+
+    cursor = Math.min(i + BATCH_SIZE, allContracts.length);
+
+    // Atualizar progresso do job (visibilidade).
+    if (jobId) {
+      await supabase.from("background_jobs").update({
+        cursor, processed: totalCreated, failed: totalFailed,
+        last_error: insertErrors.at(-1) ?? null, updated_at: new Date().toISOString(),
+      }).eq("id", jobId);
     }
   }
 
+  // ── Parou por orçamento de tempo: retomar noutra invocação ───────────────────
+  if (stoppedEarly) {
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL;
+    if (appUrl && jobId) {
+      const monthQs = targetMonthParam ? `&month=${targetMonthParam}` : "";
+      // Fire-and-forget: continua de onde parou (mesmo job → mesmo cursor).
+      void fetch(`${appUrl}/api/cron/generate-services?secret=${cronSecret}&job=${jobId}${monthQs}`, {
+        headers: { "x-cron-secret": cronSecret },
+      }).catch(() => {});
+    }
+    return NextResponse.json({
+      ok: true, status: "in_progress", job_id: jobId,
+      period: `${monthStartStr} → ${monthEndStr}`,
+      created: totalCreated, skipped: totalSkipped, failed: totalFailed,
+      cursor, total: allContracts.length,
+    });
+  }
+
+  // ── Terminou: deteção de conflitos só no fim ─────────────────────────────────
   // Detetar conflitos: mesma equipa, horários sobrepostos, no mês gerado
   const { data: rawConflicts } = await supabase.rpc("detect_schedule_conflicts", {
     p_start: monthStartStr,
@@ -313,11 +384,27 @@ export async function GET(req: NextRequest) {
     }
   }
 
+  // Marcar job como concluído.
+  if (jobId) {
+    await supabase.from("background_jobs").update({
+      status: totalFailed > 0 ? "failed" : "completed",
+      cursor: allContracts.length,
+      processed: totalCreated,
+      failed: totalFailed,
+      last_error: insertErrors.at(-1) ?? null,
+      finished_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    }).eq("id", jobId);
+  }
+
   return NextResponse.json({
     ok: true,
+    status: "completed",
+    job_id: jobId,
     period: `${monthStartStr} → ${monthEndStr}`,
     created: totalCreated,
     skipped: totalSkipped,
+    failed: totalFailed,
     conflicts: conflicts?.length ?? 0,
     errors: insertErrors.length > 0 ? insertErrors : undefined,
   });

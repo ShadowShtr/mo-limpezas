@@ -89,6 +89,12 @@ export type Database = {
         Update: Record<string, never>;
         Relationships: [];
       };
+      background_jobs: {
+        Row: { id: string; type: string; status: string; company_id: string | null; cursor: number; total: number; processed: number; failed: number; last_error: string | null; meta: Record<string, unknown>; started_at: string; finished_at: string | null; updated_at: string };
+        Insert: { type: string; status?: string; company_id?: string | null; cursor?: number; total?: number; processed?: number; failed?: number; last_error?: string | null; meta?: Record<string, unknown>; id?: string; started_at?: string; finished_at?: string | null; updated_at?: string };
+        Update: { status?: string; cursor?: number; total?: number; processed?: number; failed?: number; last_error?: string | null; meta?: Record<string, unknown>; finished_at?: string | null; updated_at?: string };
+        Relationships: [];
+      };
       service_photos: {
         Row: { id: string; company_id: string; service_id: string; collaborator_id: string; storage_path: string; kind: string; status: string; original_size_bytes: number | null; compressed_size_bytes: number | null; mime_type: string | null; width: number | null; height: number | null; client_event_id: string; created_at: string; uploaded_at: string | null; failed_at: string | null; failure_reason: string | null };
         Insert: { company_id: string; service_id: string; collaborator_id: string; storage_path: string; client_event_id: string; kind?: string; status?: string; original_size_bytes?: number | null; compressed_size_bytes?: number | null; mime_type?: string | null; width?: number | null; height?: number | null; id?: string; created_at?: string; uploaded_at?: string | null; failed_at?: string | null; failure_reason?: string | null };
