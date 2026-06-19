@@ -19,11 +19,13 @@ import {
   TrendingUp,
   CheckSquare,
   Clock,
+  Bell,
 } from "lucide-react";
 import { logout } from "@/app/actions/auth";
 
 const NAV = [
   { href: "/dashboard",               icon: LayoutDashboard, label: "Dashboard" },
+  { href: "/dashboard/pendencias",    icon: Bell,            label: "Pendências" },
   { href: "/dashboard/calendario",    icon: Calendar,        label: "Calendário" },
   { href: "/dashboard/clientes",      icon: Building2,       label: "Clientes" },
   { href: "/dashboard/contratos",     icon: FileText,        label: "Contratos" },
