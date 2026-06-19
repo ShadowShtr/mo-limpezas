@@ -47,9 +47,8 @@ Lê este ficheiro no início de CADA sessão antes de fazer qualquer coisa.
 
 ## ⚡ PRÓXIMA TASK A EXECUTAR
 
-**Próxima task:** TASK 06 (health check pausar quando aba escondida) ou TASK 08
-(logs leves por rota). TASK 01–04 + 13 + 19 feitas (checkpoint 2026-06-19).
-Nota: ConnectionBanner já usa AbortController/sem acumular (parte da TASK 06 feita).
+**Próxima task:** TASK 08 (logs leves por rota) ou TASK 15 (índices de banco).
+TASK 01–04 + 06 + 13 + 19 feitas (checkpoint 2026-06-19).
 
 > ❌ **TASK 12 (foto obrigatória) DESCARTADA** — o dono confirmou (2026-06-19) que
 > as fotos são ocasionais, nunca obrigatórias. O foco é o ponto, offline,
@@ -93,6 +92,11 @@ Nota: ConnectionBanner já usa AbortController/sem acumular (parte da TASK 06 fe
 - Card "A seguir hoje" (próximo serviço da equipa) no fim da tela
 - Bloco de fotos movido para o fim (foto é ocasional, não compete com o ponto)
 - Ponto + Navegar = ações primárias no topo; aviso offline via ConnectionBanner global
+
+**TASK 06 — Health check inteligente (✅ FEITO)**
+- `ConnectionBanner` pausa polling com aba escondida, re-verifica ao voltar
+- Intervalo por contexto: colaboradora 5 min, gestora 2 min
+- AbortController + anti-acumulação (já existiam)
 
 ---
 
