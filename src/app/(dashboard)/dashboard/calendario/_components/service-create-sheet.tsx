@@ -1,11 +1,12 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { X, Loader2, ChevronDown, Plus, UserPlus, Building2, User, MapPin } from "lucide-react";
-import { format } from "date-fns";
+import { X, Loader2, ChevronDown, Plus, UserPlus, Building2, User, MapPin, AlertTriangle } from "lucide-react";
+import { format, parseISO } from "date-fns";
 import { pt } from "date-fns/locale";
 import { createClient } from "@/lib/supabase/client";
 import { createService } from "../_actions/create-service";
+import type { ConflictInfo } from "../_actions/reschedule";
 import { createClienteComLocal } from "@/app/actions/clientes";
 
 type Client = { id: string; name: string };
@@ -67,6 +68,8 @@ export function ServiceCreateSheet({
 
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [conflicts, setConflicts] = useState<ConflictInfo[]>([]);
+  const [pendingForce, setPendingForce] = useState<object | null>(null);
   const [clientList, setClientList] = useState<Client[]>(initialClients);
   const [locationList, setLocationList] = useState<Location[]>(locations);
 
@@ -157,13 +160,11 @@ export function ServiceCreateSheet({
     resetNewClientForm();
   }
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    if (!locationId) { setMessage("Seleciona um local."); return; }
-    if (durationMin <= 0) { setMessage("A hora de fim deve ser posterior ao início."); return; }
-
+  async function doCreate(force = false) {
     setLoading(true);
     setMessage(null);
+    setConflicts([]);
+    setPendingForce(null);
 
     const { count } = await supabase
       .from("services")
@@ -183,11 +184,28 @@ export function ServiceCreateSheet({
       hourlyRate: selectedLocation?.hourly_rate ?? null,
       calculatedValue: calculatedValue ?? null,
       notes: notes || null,
+      force,
     });
 
     setLoading(false);
-    if (!res.ok) setMessage("Erro ao criar: " + res.error);
-    else { onCreated(); onClose(); }
+    if (!res.ok) {
+      if (res.canForce && res.conflicts && res.conflicts.length > 0) {
+        setConflicts(res.conflicts);
+        setPendingForce({});
+      } else {
+        setMessage("Erro ao criar: " + res.error);
+      }
+    } else {
+      onCreated();
+      onClose();
+    }
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!locationId) { setMessage("Seleciona um local."); return; }
+    if (durationMin <= 0) { setMessage("A hora de fim deve ser posterior ao início."); return; }
+    await doCreate(false);
   }
 
   if (!open) return null;
@@ -428,12 +446,47 @@ export function ServiceCreateSheet({
           </form>
         </div>
 
+        {/* Conflito de horário */}
+        {conflicts.length > 0 && pendingForce && (
+          <div className="mx-6 mb-3 rounded-lg border border-amber-200 bg-amber-50 p-3 space-y-2">
+            <div className="flex items-center gap-1.5 text-sm font-semibold text-amber-800">
+              <AlertTriangle className="w-4 h-4 shrink-0" />
+              Conflito de horário
+            </div>
+            <p className="text-xs text-amber-700">A equipa já tem {conflicts.length > 1 ? "serviços" : "um serviço"} neste horário:</p>
+            <ul className="text-xs text-amber-800 space-y-0.5">
+              {conflicts.map((c) => (
+                <li key={c.id}>
+                  #{c.reference_number} — {c.location_name} ({format(parseISO(c.scheduled_start), "HH:mm")}–{format(parseISO(c.scheduled_end), "HH:mm")})
+                </li>
+              ))}
+            </ul>
+            <div className="flex gap-2 pt-1">
+              <button
+                type="button"
+                onClick={() => { setConflicts([]); setPendingForce(null); }}
+                className="flex-1 py-1.5 rounded-lg border border-amber-300 text-xs font-medium text-amber-800 hover:bg-amber-100"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={() => void doCreate(true)}
+                disabled={loading}
+                className="flex-1 py-1.5 rounded-lg bg-amber-600 text-xs font-semibold text-white hover:bg-amber-700 disabled:opacity-50"
+              >
+                {loading ? <Loader2 className="w-3 h-3 animate-spin mx-auto" /> : "Criar mesmo assim"}
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Footer */}
         <div className="border-t border-[var(--color-border)] px-6 py-4">
           <button
             form="create-service-form"
             type="submit"
-            disabled={loading}
+            disabled={loading || conflicts.length > 0}
             className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-[var(--color-primary)] text-white text-sm font-semibold hover:bg-[var(--color-primary-hover)] transition-colors disabled:opacity-50"
           >
             {loading && <Loader2 className="w-4 h-4 animate-spin" />}
