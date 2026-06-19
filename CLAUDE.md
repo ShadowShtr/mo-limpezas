@@ -51,8 +51,21 @@ Lê este ficheiro no início de CADA sessão antes de fazer qualquer coisa.
 A `029_background_jobs.sql` foi confirmada no Supabase com
 `to_regclass('public.background_jobs') = background_jobs`.
 
-**Próxima task:** Rever em produção com gestora os fluxos novos de intervenções,
-calendário drag/drop e backup semanal.
+**Migration 030 criada (2026-06-19) — APLICAR VIA SQL EDITOR:**
+`supabase/migrations/030_rls_tighten.sql` — remove políticas permissivas legacy
+em clients/locations/absences/vacation_requests e recria `services_full` com
+`security_invoker=true`. **Ainda não aplicada em produção.**
+
+> ⚠️ **Upload de fotos/documentos do colaborador ainda instável** (2026-06-19).
+> Já aplicadas: timeout `canvas.toBlob` (6s), `fetch PUT` com AbortController (60s),
+> remoção do `useTransition`, reset de itens `uploading` órfãos.
+> O envio funciona esporadicamente mas falha noutras sessões — causa raiz por
+> determinar (suspeita: CORS ou auth na Storage signed URL em contexto mobile).
+> **Não bloqueia outras tasks. Retomar quando houver reprodução consistente.**
+
+**Próxima task:** Aplicar migration 030 e depois TASK D — remover
+`location_access_code`/`location_instructions` do SELECT do cartão do calendário
+(mostrar só boolean `has_access_code`/`has_key`; valores completos só na sheet).
 Feitas: 01–04, 06, 08–11, 13–15, 18, 19, 22, 23, 24, 46–60. Descartada: 12.
 
 > ❌ **TASK 12 (foto obrigatória) DESCARTADA** — o dono confirmou (2026-06-19) que
