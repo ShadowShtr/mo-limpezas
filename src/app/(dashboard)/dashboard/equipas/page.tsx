@@ -22,8 +22,7 @@ export default async function EquipasPage() {
     admin
       .from("teams_with_members")
       .select("*")
-      .eq("company_id", me?.company_id ?? "")
-      .order("name"),
+      .eq("company_id", me?.company_id ?? ""),
     admin
       .from("profiles")
       .select("id, full_name, avatar_url, role, status")
@@ -33,11 +32,15 @@ export default async function EquipasPage() {
       .order("full_name"),
   ]);
 
+  const equipas = [...(equipasRes.data ?? [])].sort((a, b) =>
+    (a.name as string).localeCompare(b.name as string, "pt", { numeric: true, sensitivity: "base" })
+  );
+
   return (
     <div>
       <Header
         title="Equipas"
-        subtitle={`${equipasRes.data?.length ?? 0} equipas`}
+        subtitle={`${equipas.length} equipas`}
         actions={
           <div className="flex items-center gap-2">
             <Link
@@ -62,7 +65,7 @@ export default async function EquipasPage() {
       />
       <div className="px-4 py-5 sm:p-6 lg:px-8 mx-auto max-w-[1400px]">
         <EquipasGrid
-          equipas={equipasRes.data ?? []}
+          equipas={equipas}
           colaboradores={colaboradoresRes.data ?? []}
           companyId={me?.company_id ?? ""}
         />
