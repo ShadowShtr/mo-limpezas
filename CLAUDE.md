@@ -47,7 +47,35 @@ Lê este ficheiro no início de CADA sessão antes de fazer qualquer coisa.
 
 ## ⚡ PRÓXIMA TASK A EXECUTAR
 
-**Próxima task:** Verificar domínio `molimpezas.pt` no Resend (adicionar registos DNS no registar do domínio → clicar Restart no Resend → atualizar `RESEND_FROM_EMAIL` para `Mo Limpezas <noreply@molimpezas.pt>`).
+**AÇÃO MANUAL PENDENTE:** Aplicar a migration `027_service_photos.sql` ao Supabase
+(`npx supabase db query --linked` ou via Management API). Cria a tabela
+`service_photos` + bucket `service-photos`. Sem isto, o upload de fotos do serviço falha.
+
+**Próxima task (Fase 1):** TASK 19 (UX final tela funcionária) + TASK 13 (painel de
+pendências de fotos para a gestora). TASK 01–04 já feitas (ver checkpoint 2026-06-19).
+
+**Pendente antigo:** Verificar domínio `molimpezas.pt` no Resend (DNS → Restart →
+`RESEND_FROM_EMAIL` = `Mo Limpezas <noreply@molimpezas.pt>`).
+
+---
+
+## 📍 PONTO DE PARAGEM — 2026-06-19 (Fase 1 fotos)
+
+**Pipeline de fotos do serviço — TASK 01 a 04 (✅ FEITO, commit `2a1ce57`)**
+
+- **TASK 01** — Upload direto Supabase com signed upload URL
+  - `supabase/migrations/027_service_photos.sql` — ⚠️ **AINDA NÃO APLICADA**
+    (tabela `service_photos`, índice único `(company_id, client_event_id)`,
+    bucket privado `service-photos`, RLS)
+  - `src/app/api/app/uploads/sign/route.ts` — valida permissão + cria signed URL
+  - `src/app/api/app/uploads/confirm/route.ts` — marca `uploaded`/`failed` (idempotente)
+  - `src/lib/service-photos.ts` — path `company/service/yyyy/mm/dd/event.ext` + validação
+- **TASK 02** — `src/lib/images/compress-client-image.ts` (1600px, 0.78→0.70→1280px, WebP)
+- **TASK 03** — `src/lib/offline/upload-queue.ts` (IndexedDB) + `upload-runner.ts`
+  (retry/backoff 10s/30s/2min, estados finais — cobre TASK 09)
+- **TASK 04** — `ServicePhotos` na tela do serviço, independente do clock-in
+- `src/types/database.ts` — adicionado tipo `service_photos`
+- Testes: `src/__tests__/service-photos.test.ts` (12) — total 283 a passar
 
 ---
 
