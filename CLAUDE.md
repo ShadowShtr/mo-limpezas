@@ -47,8 +47,12 @@ Lê este ficheiro no início de CADA sessão antes de fazer qualquer coisa.
 
 ## ⚡ PRÓXIMA TASK A EXECUTAR
 
-**Próxima task:** TASK 14 (crons em lotes) ou TASK 11 (validação tipo/tamanho — já
-parcial no helper service-photos). TASK 01–04 + 06 + 08 + 13 + 15 + 18 + 19 + 22 feitas.
+**AÇÃO MANUAL PENDENTE:** Aplicar migration `029_background_jobs.sql` (TASK 14) no
+SQL Editor. Sem ela, a geração mensal grava erro ao tentar criar o job (mas o
+catch não bloqueia — convém aplicar).
+
+**Próxima task:** TASK 07 (dashboard paginado) ou TASK 16/17/20 (produção/QA/go-live).
+Feitas: 01–04, 06, 08–11, 13–15, 18, 19, 22, 23, 24. Descartada: 12.
 
 > ❌ **TASK 12 (foto obrigatória) DESCARTADA** — o dono confirmou (2026-06-19) que
 > as fotos são ocasionais, nunca obrigatórias. O foco é o ponto, offline,
@@ -119,6 +123,21 @@ parcial no helper service-photos). TASK 01–04 + 06 + 08 + 13 + 15 + 18 + 19 + 
 - `public/sw.js` v4: sem skipWaiting automático; HTML/api sempre da rede
 - `pwa-register.tsx`: banner "Atualização disponível" (botão), update ao voltar à app;
   reload só após ação do utilizador (não recarrega a meio de um ponto)
+
+**TASK 14 — Geração mensal em lotes (✅ CÓDIGO; migration 029 POR APLICAR)**
+- `background_jobs` (cursor/progresso) + generate-services em lotes de 25 com
+  bulk-fetch/insert (fim do N+1), orçamento 40s e auto-continuação, maxDuration=60
+
+**TASK 10 — Galeria de fotos na gestora (✅)** — ServicePhotosGallery na ficha do
+serviço (thumbnails lazy, signed URL ao clicar)
+
+**TASK 11 — Validação tipo/tamanho foto (✅)** — frontend bloqueia vídeo/PDF/vazio/
+>40MB antes de comprimir + revalida vs limite backend (helper validatePhotoUploadRequest)
+
+**TASK 23 — Reconciliação de fotos (✅)** — `/api/cron/reconcile-photos` semanal
+(seg 03:00): corrige pending presos, purga 'deleted' antigos; nunca apaga recente
+
+**TASK 24 — Anti-duplo-clique (✅)** — `useSingleFlight` (ref síncrono) no clock-in/out
 
 ---
 
