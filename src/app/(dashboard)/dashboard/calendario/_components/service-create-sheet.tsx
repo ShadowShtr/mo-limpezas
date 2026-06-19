@@ -1,11 +1,12 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { X, Loader2, ChevronDown } from "lucide-react";
+import { X, Loader2, ChevronDown, Plus, UserPlus } from "lucide-react";
 import { format } from "date-fns";
 import { pt } from "date-fns/locale";
 import { createClient } from "@/lib/supabase/client";
 import { createService } from "../_actions/create-service";
+import { createClienteQuick } from "@/app/actions/clientes";
 
 type Client = { id: string; name: string };
 type Location = { id: string; client_id: string; name: string; address: string; hourly_rate: number | null };
@@ -52,7 +53,7 @@ export function ServiceCreateSheet({
   open, onClose, onCreated,
   companyId,
   date, initialStartTime, initialTeamId,
-  clients, locations, teams,
+  clients: initialClients, locations, teams,
   fixedClientId, fixedLocationId,
 }: Props) {
   const supabase = createClient();
@@ -60,12 +61,22 @@ export function ServiceCreateSheet({
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
+  // Lista local de clientes (pode crescer com cadastro rápido)
+  const [clientList, setClientList] = useState<Client[]>(initialClients);
+
   const [clientId, setClientId] = useState(fixedClientId ?? "");
   const [locationId, setLocationId] = useState(fixedLocationId ?? "");
   const [teamId, setTeamId] = useState(initialTeamId);
   const [startTime, setStartTime] = useState(initialStartTime);
   const [endTime, setEndTime] = useState(addMinutes(initialStartTime, 120));
   const [notes, setNotes] = useState("");
+
+  // Cadastro rápido de cliente
+  const [showNewClient, setShowNewClient] = useState(false);
+  const [newClientName, setNewClientName] = useState("");
+  const [newClientPhone, setNewClientPhone] = useState("");
+  const [creatingClient, setCreatingClient] = useState(false);
+  const [newClientError, setNewClientError] = useState<string | null>(null);
 
   const filteredLocations = useMemo(
     () => (clientId ? locations.filter((l) => l.client_id === clientId) : locations),
@@ -83,6 +94,22 @@ export function ServiceCreateSheet({
       ? (durationMin / 60) * selectedLocation.hourly_rate
       : null;
 
+  async function handleCreateClient() {
+    if (!newClientName.trim()) { setNewClientError("O nome é obrigatório."); return; }
+    setCreatingClient(true);
+    setNewClientError(null);
+    const res = await createClienteQuick(companyId, newClientName, newClientPhone || undefined);
+    setCreatingClient(false);
+    if (!res.ok || !res.id) { setNewClientError(res.error ?? "Erro ao criar cliente."); return; }
+    const newC: Client = { id: res.id, name: newClientName.trim() };
+    setClientList((prev) => [...prev, newC].sort((a, b) => a.name.localeCompare(b.name, "pt")));
+    setClientId(res.id);
+    setLocationId("");
+    setNewClientName("");
+    setNewClientPhone("");
+    setShowNewClient(false);
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!locationId) { setMessage("Seleciona um local."); return; }
@@ -91,7 +118,6 @@ export function ServiceCreateSheet({
     setLoading(true);
     setMessage(null);
 
-    // Reference number: count + 1 (zero-padded to 4)
     const { count } = await supabase
       .from("services")
       .select("id", { count: "exact", head: true })
@@ -150,39 +176,110 @@ export function ServiceCreateSheet({
         <form id="create-service-form" onSubmit={handleSubmit} className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
 
           {/* Cliente → Local */}
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="Cliente *">
-              <div className="relative">
-                <select
-                  value={clientId}
-                  onChange={(e) => { setClientId(e.target.value); setLocationId(""); }}
-                  disabled={!!fixedClientId}
-                  className={SELECT_CLS + (fixedClientId ? " opacity-70 cursor-not-allowed" : "")}
+          <div className="space-y-3">
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Cliente *">
+                <div className="relative">
+                  <select
+                    value={clientId}
+                    onChange={(e) => { setClientId(e.target.value); setLocationId(""); }}
+                    disabled={!!fixedClientId}
+                    className={SELECT_CLS + (fixedClientId ? " opacity-70 cursor-not-allowed" : "")}
+                  >
+                    <option value="">Selecionar...</option>
+                    {clientList.map((c) => (
+                      <option key={c.id} value={c.id}>{c.name}</option>
+                    ))}
+                  </select>
+                  <ChevronDown className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--color-text-muted)]" />
+                </div>
+              </Field>
+              <Field label="Local *">
+                <div className="relative">
+                  <select
+                    value={locationId}
+                    onChange={(e) => setLocationId(e.target.value)}
+                    disabled={!clientId}
+                    className={SELECT_CLS + (clientId ? "" : " opacity-50 cursor-not-allowed")}
+                  >
+                    <option value="">Selecionar...</option>
+                    {filteredLocations.map((l) => (
+                      <option key={l.id} value={l.id}>{l.name}</option>
+                    ))}
+                  </select>
+                  <ChevronDown className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--color-text-muted)]" />
+                </div>
+              </Field>
+            </div>
+
+            {/* Botão cadastro rápido de cliente */}
+            {!fixedClientId && !showNewClient && (
+              <button
+                type="button"
+                onClick={() => setShowNewClient(true)}
+                className="flex items-center gap-1.5 text-xs font-medium text-[var(--color-primary)] hover:underline"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                Cadastrar novo cliente
+              </button>
+            )}
+
+            {/* Formulário rápido de novo cliente */}
+            {showNewClient && (
+              <div className="rounded-xl border border-[var(--color-primary-muted)] bg-[var(--color-primary-light)] p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <p className="text-sm font-semibold text-[var(--color-primary)] flex items-center gap-1.5">
+                    <UserPlus className="w-4 h-4" />
+                    Novo cliente
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => { setShowNewClient(false); setNewClientError(null); setNewClientName(""); setNewClientPhone(""); }}
+                    className="p-1 rounded text-[var(--color-primary)] hover:bg-[var(--color-primary-muted)]"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-medium text-[var(--color-text-main)] mb-1">Nome *</label>
+                    <input
+                      type="text"
+                      value={newClientName}
+                      onChange={(e) => setNewClientName(e.target.value)}
+                      placeholder="Nome do cliente"
+                      className={INPUT_CLS}
+                      autoFocus
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-[var(--color-text-main)] mb-1">Telefone</label>
+                    <input
+                      type="tel"
+                      value={newClientPhone}
+                      onChange={(e) => setNewClientPhone(e.target.value)}
+                      placeholder="9XXXXXXXX"
+                      className={INPUT_CLS}
+                    />
+                  </div>
+                </div>
+
+                {newClientError && (
+                  <p className="text-xs text-red-600">{newClientError}</p>
+                )}
+
+                <button
+                  type="button"
+                  onClick={handleCreateClient}
+                  disabled={creatingClient || !newClientName.trim()}
+                  className="w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-[var(--color-primary)] text-white text-sm font-medium hover:bg-[var(--color-primary-hover)] transition-colors disabled:opacity-50"
                 >
-                  <option value="">Selecionar...</option>
-                  {clients.map((c) => (
-                    <option key={c.id} value={c.id}>{c.name}</option>
-                  ))}
-                </select>
-                <ChevronDown className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--color-text-muted)]" />
+                  {creatingClient ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
+                  Criar e selecionar
+                </button>
               </div>
-            </Field>
-            <Field label="Local *">
-              <div className="relative">
-                <select
-                  value={locationId}
-                  onChange={(e) => setLocationId(e.target.value)}
-                  disabled={!clientId}
-                  className={SELECT_CLS + (clientId ? "" : " opacity-50 cursor-not-allowed")}
-                >
-                  <option value="">Selecionar...</option>
-                  {filteredLocations.map((l) => (
-                    <option key={l.id} value={l.id}>{l.name}</option>
-                  ))}
-                </select>
-                <ChevronDown className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--color-text-muted)]" />
-              </div>
-            </Field>
+            )}
           </div>
 
           {/* Equipa */}

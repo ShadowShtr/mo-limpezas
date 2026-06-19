@@ -16,8 +16,8 @@ import { ServicePhotosGallery } from "./service-photos-gallery";
 import type { Database } from "@/types/database";
 
 type ServiceFull = Database["public"]["Views"]["services_full"]["Row"];
-// Usar só os campos base do timesheet, sem join (o FK para profiles não está mapeado no tipo)
 type Timesheet = Database["public"]["Tables"]["timesheets"]["Row"];
+type TimesheetWithName = Timesheet & { collaborator_name: string | null };
 
 // ─── Estilos de estado ────────────────────────────────────────────────────────
 
@@ -35,13 +35,17 @@ const INPUT_CLS =
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-async function fetchTimesheets(supabase: ReturnType<typeof createClient>, serviceId: string): Promise<Timesheet[]> {
+async function fetchTimesheets(supabase: ReturnType<typeof createClient>, serviceId: string): Promise<TimesheetWithName[]> {
   const { data } = await supabase
     .from("timesheets")
-    .select("*")
+    .select("*, profiles:collaborator_id(full_name)")
     .eq("service_id", serviceId)
     .order("clock_in_at");
-  return (data ?? []) as Timesheet[];
+  type Row = Timesheet & { profiles: { full_name: string } | null };
+  return ((data ?? []) as unknown as Row[]).map((r) => ({
+    ...r,
+    collaborator_name: r.profiles?.full_name ?? null,
+  }));
 }
 
 // ─── Componente principal ─────────────────────────────────────────────────────
@@ -54,7 +58,7 @@ interface Props {
 
 export function ServiceDetailSheet({ service, onClose, onChanged }: Props) {
   const supabase = createClient();
-  const [timesheets, setTimesheets] = useState<Timesheet[]>([]);
+  const [timesheets, setTimesheets] = useState<TimesheetWithName[]>([]);
   const [loadingTs,  setLoadingTs]  = useState(false);
   const [fixClockOut, setFixClockOut] = useState(false);
   const [clockOutTime, setClockOutTime] = useState("");
@@ -372,7 +376,7 @@ export function ServiceDetailSheet({ service, onClose, onChanged }: Props) {
                     <option value="">Selecionar...</option>
                     {timesheets.filter((t) => t.clock_in_at && !t.clock_out_at).map((ts) => (
                       <option key={ts.id} value={ts.id}>
-                        {ts.collaborator_id.slice(0, 8)}… (entrou {ts.clock_in_at ? format(parseISO(ts.clock_in_at), "HH:mm") : "?"})
+                        {ts.collaborator_name ?? ts.collaborator_id.slice(0, 8)} (entrou {ts.clock_in_at ? format(parseISO(ts.clock_in_at), "HH:mm") : "?"})
                       </option>
                     ))}
                   </select>
@@ -723,9 +727,10 @@ function InfoRow({
   );
 }
 
-function TimesheetRow({ ts }: { ts: Timesheet }) {
+function TimesheetRow({ ts }: { ts: TimesheetWithName }) {
   const hasWarning = ts.location_warning;
-  const initial    = ts.collaborator_id.slice(0, 2).toUpperCase();
+  const name       = ts.collaborator_name ?? ts.collaborator_id.slice(0, 8);
+  const initial    = name.slice(0, 2).toUpperCase();
 
   return (
     <div className="flex items-center justify-between py-1.5 px-3 rounded-lg bg-[var(--color-background)] border border-[var(--color-border)]">
@@ -733,8 +738,8 @@ function TimesheetRow({ ts }: { ts: Timesheet }) {
         <div className="w-6 h-6 rounded-full bg-[var(--color-primary-muted)] flex items-center justify-center shrink-0">
           <span className="text-[10px] font-bold text-[var(--color-primary)]">{initial}</span>
         </div>
-        <span className="text-xs text-[var(--color-text-muted)] font-mono truncate">
-          {ts.collaborator_id.slice(0, 8)}…
+        <span className="text-sm font-medium text-[var(--color-text-main)] truncate">
+          {name}
         </span>
         {hasWarning && (
           <span title="Fora do raio GPS">

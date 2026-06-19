@@ -50,6 +50,34 @@ export async function createCliente(input: ClienteInput) {
   return { ok: true as const };
 }
 
+/** Criação rápida de cliente (nome + telefone) a partir do formulário de serviço. Devolve o id criado. */
+export async function createClienteQuick(companyId: string, name: string, phone?: string) {
+  const supabase = await createClient();
+  const admin = createAdminClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { ok: false as const, error: "Nao autenticado.", id: null };
+
+  const { data: profile } = await admin
+    .from("profiles")
+    .select("company_id, role")
+    .eq("id", user.id)
+    .single();
+  if (!profile || !["admin", "gestor"].includes(profile.role) || profile.company_id !== companyId) {
+    return { ok: false as const, error: "Sem permissao.", id: null };
+  }
+
+  const { data, error } = await admin
+    .from("clients")
+    .insert({ name: name.trim(), phone: phone?.trim() || null, status: "ativo", company_id: companyId, type: "particular" })
+    .select("id")
+    .single();
+
+  if (error || !data) return { ok: false as const, error: error?.message ?? "Erro ao criar.", id: null };
+
+  revalidatePath("/dashboard/clientes");
+  return { ok: true as const, id: data.id as string };
+}
+
 /**
  * Arquiva (soft-delete) um cliente.
  * Bloqueia se houver serviços futuros associados ao cliente ou aos seus locais.
