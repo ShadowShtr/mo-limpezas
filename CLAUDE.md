@@ -47,8 +47,8 @@ Lê este ficheiro no início de CADA sessão antes de fazer qualquer coisa.
 
 ## ⚡ PRÓXIMA TASK A EXECUTAR
 
-**Próxima task (Fase 1):** TASK 19 (UX final tela funcionária) + TASK 13 (painel de
-pendências de fotos para a gestora). TASK 01–04 já feitas (ver checkpoint 2026-06-19).
+**Próxima task:** TASK 19 (UX final tela funcionária) ou TASK 12 (modo "foto
+obrigatória" configurável por cliente). TASK 01–04 + TASK 13 feitas (checkpoint 2026-06-19).
 
 > ℹ️ Migration 027 **✅ APLICADA** em 2026-06-19 via SQL Editor do dashboard
 > (token CLI/Management API e password da BD antigos expiraram — pooler correto é
@@ -76,6 +76,13 @@ pendências de fotos para a gestora). TASK 01–04 já feitas (ver checkpoint 20
 - **TASK 04** — `ServicePhotos` na tela do serviço, independente do clock-in
 - `src/types/database.ts` — adicionado tipo `service_photos`
 - Testes: `src/__tests__/service-photos.test.ts` (12) — total 283 a passar
+
+**TASK 13 — Painel de pendências da gestora (✅ FEITO)**
+- `src/app/actions/pendencias.ts` — `getPendencias()` (guard admin/gestor)
+- `/dashboard/pendencias` + link na sidebar (ícone Bell, 2º item)
+- Mostra: serviços sem checkout, iniciados sem ponto, pontos fora do raio GPS,
+  pontos manuais, fotos pendentes e falhadas. Cada item liga ao dia no calendário.
+- Não carrega no dashboard principal (mantém-no rápido — TASK 07)
 
 ---
 
