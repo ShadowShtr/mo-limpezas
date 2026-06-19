@@ -47,8 +47,8 @@ Lê este ficheiro no início de CADA sessão antes de fazer qualquer coisa.
 
 ## ⚡ PRÓXIMA TASK A EXECUTAR
 
-**Próxima task:** TASK 15 (índices de banco) ou TASK 22 (auditoria central).
-TASK 01–04 + 06 + 08 + 13 + 19 feitas (checkpoint 2026-06-19).
+**Próxima task:** TASK 22 (auditoria central).
+TASK 01–04 + 06 + 08 + 13 + 15 + 19 feitas (checkpoint 2026-06-19).
 
 > ❌ **TASK 12 (foto obrigatória) DESCARTADA** — o dono confirmou (2026-06-19) que
 > as fotos são ocasionais, nunca obrigatórias. O foco é o ponto, offline,
@@ -103,6 +103,12 @@ TASK 01–04 + 06 + 08 + 13 + 19 feitas (checkpoint 2026-06-19).
   `withRouteMetrics`. Linha JSON nos logs da Vercel; amostra rotas quentes (10%),
   erros sempre; sem dados sensíveis; fire-and-forget
 - Instrumentadas: /api/app/timesheet, /api/app/uploads/sign, /api/app/uploads/confirm
+
+**TASK 15 — Índices de crescimento (✅ FEITO, migration 028 APLICADA 2026-06-19)**
+- 5 índices novos: services(company_id,status,scheduled_start),
+  services(company_id,team_id,scheduled_start), timesheets(company_id,service_id),
+  clients(company_id,status), locations(company_id,client_id)
+- 6 já existiam (025/027); clock_out_at descartado de propósito (ver SQL)
 
 ---
 
