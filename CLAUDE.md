@@ -47,12 +47,12 @@ Lê este ficheiro no início de CADA sessão antes de fazer qualquer coisa.
 
 ## ⚡ PRÓXIMA TASK A EXECUTAR
 
-**AÇÃO MANUAL PENDENTE:** Aplicar a migration `027_service_photos.sql` ao Supabase
-(`npx supabase db query --linked` ou via Management API). Cria a tabela
-`service_photos` + bucket `service-photos`. Sem isto, o upload de fotos do serviço falha.
-
 **Próxima task (Fase 1):** TASK 19 (UX final tela funcionária) + TASK 13 (painel de
 pendências de fotos para a gestora). TASK 01–04 já feitas (ver checkpoint 2026-06-19).
+
+> ℹ️ Migration 027 **✅ APLICADA** em 2026-06-19 via SQL Editor do dashboard
+> (token CLI/Management API e password da BD antigos expiraram — pooler correto é
+> `aws-1-eu-central-2`, não `aws-0` como no `scripts/run-migrations.mjs`).
 
 **Pendente antigo:** Verificar domínio `molimpezas.pt` no Resend (DNS → Restart →
 `RESEND_FROM_EMAIL` = `Mo Limpezas <noreply@molimpezas.pt>`).
@@ -64,7 +64,7 @@ pendências de fotos para a gestora). TASK 01–04 já feitas (ver checkpoint 20
 **Pipeline de fotos do serviço — TASK 01 a 04 (✅ FEITO, commit `2a1ce57`)**
 
 - **TASK 01** — Upload direto Supabase com signed upload URL
-  - `supabase/migrations/027_service_photos.sql` — ⚠️ **AINDA NÃO APLICADA**
+  - `supabase/migrations/027_service_photos.sql` — ✅ **APLICADA (2026-06-19)**
     (tabela `service_photos`, índice único `(company_id, client_event_id)`,
     bucket privado `service-photos`, RLS)
   - `src/app/api/app/uploads/sign/route.ts` — valida permissão + cria signed URL
