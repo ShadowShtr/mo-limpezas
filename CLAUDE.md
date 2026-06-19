@@ -47,8 +47,8 @@ Lê este ficheiro no início de CADA sessão antes de fazer qualquer coisa.
 
 ## ⚡ PRÓXIMA TASK A EXECUTAR
 
-**Próxima task:** TASK 18 (service worker/cache) ou TASK 14 (crons em lotes).
-TASK 01–04 + 06 + 08 + 13 + 15 + 19 + 22 feitas (checkpoint 2026-06-19).
+**Próxima task:** TASK 14 (crons em lotes) ou TASK 11 (validação tipo/tamanho — já
+parcial no helper service-photos). TASK 01–04 + 06 + 08 + 13 + 15 + 18 + 19 + 22 feitas.
 
 > ❌ **TASK 12 (foto obrigatória) DESCARTADA** — o dono confirmou (2026-06-19) que
 > as fotos são ocasionais, nunca obrigatórias. O foco é o ponto, offline,
@@ -114,6 +114,11 @@ TASK 01–04 + 06 + 08 + 13 + 15 + 19 + 22 feitas (checkpoint 2026-06-19).
 - `src/lib/audit.ts` — `auditLog(...)` central (sanitiza segredos, trunca, não lança)
 - Auditado: cancelamento serviço, arquivar/editar cliente, ajuste+pagamento folha,
   ponto (timesheet) e foto (confirm). actor_id é NOT NULL → ações sem ator não auditam.
+
+**TASK 18 — Cache PWA seguro (✅ FEITO)**
+- `public/sw.js` v4: sem skipWaiting automático; HTML/api sempre da rede
+- `pwa-register.tsx`: banner "Atualização disponível" (botão), update ao voltar à app;
+  reload só após ação do utilizador (não recarrega a meio de um ponto)
 
 ---
 
