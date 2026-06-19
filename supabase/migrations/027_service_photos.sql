@@ -50,6 +50,7 @@ CREATE INDEX IF NOT EXISTS idx_service_photos_status
 ALTER TABLE service_photos ENABLE ROW LEVEL SECURITY;
 
 -- Gestor/admin leem as fotos da sua empresa.
+DROP POLICY IF EXISTS "service_photos_manager_read" ON service_photos;
 CREATE POLICY "service_photos_manager_read"
   ON service_photos FOR SELECT
   USING (
@@ -58,11 +59,13 @@ CREATE POLICY "service_photos_manager_read"
   );
 
 -- Colaboradora lê as suas próprias fotos.
+DROP POLICY IF EXISTS "service_photos_own_read" ON service_photos;
 CREATE POLICY "service_photos_own_read"
   ON service_photos FOR SELECT
   USING (collaborator_id = auth.uid());
 
 -- Escrita feita sempre via service-role (createAdminClient) no servidor.
+DROP POLICY IF EXISTS "service_photos_service_write" ON service_photos;
 CREATE POLICY "service_photos_service_write"
   ON service_photos FOR ALL
   USING (true)
@@ -83,6 +86,7 @@ ON CONFLICT (id) DO NOTHING;
 -- Políticas de storage: cada path começa por `${company_id}/...`.
 -- O upload é feito com signed upload URL (token), por isso não dependemos de RLS
 -- de storage para escrita; mas restringimos leitura/escrita autenticada à empresa.
+DROP POLICY IF EXISTS "service_photos_storage_company_read" ON storage.objects;
 CREATE POLICY "service_photos_storage_company_read"
   ON storage.objects FOR SELECT
   USING (
