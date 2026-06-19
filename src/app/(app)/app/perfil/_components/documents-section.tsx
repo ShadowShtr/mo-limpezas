@@ -1,11 +1,10 @@
 "use client";
 
-import { useState, useTransition, useRef } from "react";
+import { useState, useRef } from "react";
 import {
   FileText, File, Download, Loader2, Camera, Receipt,
   ChevronDown, ChevronUp, AlertTriangle,
 } from "lucide-react";
-import { createClient } from "@/lib/supabase/client";
 import {
   getDamageReportUploadUrl,
   saveDamageReportRecord,
@@ -13,8 +12,6 @@ import {
   type CollaboratorDocument,
   type DocumentCategory,
 } from "@/app/actions/collaborator-documents";
-
-const BUCKET = "collaborator-documents";
 
 const CATEGORY_LABELS: Record<DocumentCategory, string> = {
   recibo_salario: "Folha de Salário",
@@ -63,7 +60,7 @@ export function AppDocumentsSection({ initialDocuments }: Props) {
   const [docs, setDocs]             = useState<CollaboratorDocument[]>(initialDocuments);
   const [showDamageForm, setShowDamageForm] = useState(false);
   const [notes, setNotes]           = useState("");
-  const [uploading, startUpload]    = useTransition();
+  const [uploading, setUploading]   = useState(false);
   const [message, setMessage]       = useState<{ type: "error" | "success"; text: string } | null>(null);
   const [uploadStep, setUploadStep] = useState<"compressing" | "uploading" | "saving" | null>(null);
   const [expanded, setExpanded]     = useState(true);
@@ -102,12 +99,9 @@ export function AppDocumentsSection({ initialDocuments }: Props) {
 
   async function compressImage(file: File): Promise<File> {
     if (!file.type.startsWith("image/")) return file;
-    // Não comprimir se já for pequeno (< 800 KB)
     if (file.size < 800 * 1024) return file;
     return new Promise((resolve) => {
-      // 15s de timeout — canvas.toBlob() pode nunca chamar callback em alguns WebViews Android
-      const bail = setTimeout(() => resolve(file), 15000);
-
+      const bail = setTimeout(() => resolve(file), 10_000);
       const img = new Image();
       const url = URL.createObjectURL(file);
       img.onload = () => {
@@ -122,10 +116,13 @@ export function AppDocumentsSection({ initialDocuments }: Props) {
         const ctx = canvas.getContext("2d");
         if (!ctx) { clearTimeout(bail); resolve(file); return; }
         ctx.drawImage(img, 0, 0, w, h);
+        // toBlob pode nunca chamar callback em alguns WebViews — timeout extra de 6s
+        const blobTimer = setTimeout(() => { clearTimeout(bail); resolve(file); }, 6_000);
         canvas.toBlob(
           (blob) => {
+            clearTimeout(blobTimer);
             clearTimeout(bail);
-            if (!blob || blob.size >= file.size) { resolve(file); return; }
+            if (!blob || blob.size === 0 || blob.size >= file.size) { resolve(file); return; }
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             resolve(new (File as any)([blob], file.name.replace(/\.[^.]+$/, ".jpg"), { type: "image/jpeg" }) as File);
           },
@@ -138,95 +135,93 @@ export function AppDocumentsSection({ initialDocuments }: Props) {
     });
   }
 
-  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+  async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
 
     setMessage(null);
-    startUpload(async () => {
-      // Timeout global de 90s — garante que uploading nunca fica preso para sempre
-      let timedOut = false;
-      const globalTimeout = setTimeout(() => {
-        timedOut = true;
-        setUploadStep(null);
-        setMessage({ type: "error", text: "O envio demorou demasiado. Verifica a ligação e tenta novamente." });
-      }, 90_000);
+    setUploading(true);
 
-      try {
-        // 1. Comprimir imagem no dispositivo (máx 15s, senão usa original)
-        setUploadStep("compressing");
-        const compressed = await compressImage(file);
-        if (timedOut) return;
+    try {
+      // 1. Comprimir imagem (máx ~10s, senão usa original)
+      setUploadStep("compressing");
+      const compressed = await compressImage(file);
 
-        // 2. Pedir URL assinada ao servidor
-        setUploadStep("uploading");
-        const urlRes = await getDamageReportUploadUrl(compressed.name);
-        if (timedOut) return;
-        if (!urlRes.ok) {
-          setUploadStep(null);
-          setMessage({ type: "error", text: urlRes.error });
-          return;
-        }
-
-        // 3. Upload directo celular → Supabase via URL assinada
-        const supabase = createClient();
-        const { error: uploadError } = await supabase.storage
-          .from(BUCKET)
-          .uploadToSignedUrl(urlRes.path, urlRes.token, compressed, { contentType: compressed.type });
-        if (timedOut) return;
-        if (uploadError) {
-          setUploadStep(null);
-          setMessage({ type: "error", text: `Erro ao enviar ficheiro: ${uploadError.message}` });
-          return;
-        }
-
-        // 4. Guardar registo na BD e notificar gestores
-        setUploadStep("saving");
-        const saveRes = await saveDamageReportRecord({
-          path:      urlRes.path,
-          publicUrl: urlRes.publicUrl,
-          fileName:  compressed.name,
-          fileSize:  compressed.size,
-          mimeType:  compressed.type,
-          notes:     notes || null,
-        });
-        if (timedOut) return;
-
-        if (saveRes.ok) {
-          clearTimeout(globalTimeout);
-          setUploadStep(null);
-          setMessage({ type: "success", text: "Relatório enviado. O gestor foi notificado." });
-          setNotes("");
-          setShowDamageForm(false);
-          if (fileRef.current) fileRef.current.value = "";
-          setDocs((prev) => [{
-            id:                      saveRes.id ?? crypto.randomUUID(),
-            file_name:               compressed.name,
-            file_url:                urlRes.publicUrl,
-            file_size:               compressed.size,
-            mime_type:               compressed.type,
-            category:                "avaria",
-            notes:                   notes || null,
-            visible_to_collaborator: true,
-            uploaded_by_role:        "colaboradora",
-            expires_at:              null,
-            archived_at:             null,
-            created_at:              new Date().toISOString(),
-            uploaded_by_name:        null,
-          }, ...prev]);
-        } else {
-          setMessage({ type: "error", text: saveRes.error ?? "Erro ao guardar. Tenta novamente." });
-        }
-      } catch (err) {
-        if (!timedOut) {
-          setUploadStep(null);
-          setMessage({ type: "error", text: err instanceof Error ? err.message : "Erro inesperado. Tenta novamente." });
-        }
-      } finally {
-        clearTimeout(globalTimeout);
-        setUploadStep(null);
+      // 2. Pedir URL assinada ao servidor
+      setUploadStep("uploading");
+      const urlRes = await getDamageReportUploadUrl(compressed.name);
+      if (!urlRes.ok) {
+        setMessage({ type: "error", text: urlRes.error });
+        return;
       }
-    });
+
+      // 3. Upload direto celular → Supabase via signed URL (fetch + AbortController)
+      //    Evita que o SDK fique suspenso indefinidamente em mobile com rede lenta.
+      const controller = new AbortController();
+      const abortTimer = setTimeout(() => controller.abort(), 60_000);
+      let uploadOk = false;
+      try {
+        const resp = await fetch(urlRes.signedUrl, {
+          method:  "PUT",
+          body:    compressed,
+          headers: { "Content-Type": compressed.type || "image/jpeg" },
+          signal:  controller.signal,
+        });
+        clearTimeout(abortTimer);
+        if (!resp.ok) throw new Error(`Supabase ${resp.status}: ${resp.statusText}`);
+        uploadOk = true;
+      } catch (fetchErr) {
+        clearTimeout(abortTimer);
+        const isAbort = fetchErr instanceof Error && fetchErr.name === "AbortError";
+        throw new Error(
+          isAbort
+            ? "A ligação está lenta. Verifica a rede e tenta novamente."
+            : `Erro ao enviar: ${fetchErr instanceof Error ? fetchErr.message : "falha de rede"}`,
+        );
+      }
+
+      if (!uploadOk) return; // segurança, nunca chega aqui
+
+      // 4. Guardar registo na BD e notificar gestores
+      setUploadStep("saving");
+      const saveRes = await saveDamageReportRecord({
+        path:      urlRes.path,
+        publicUrl: urlRes.publicUrl,
+        fileName:  compressed.name,
+        fileSize:  compressed.size,
+        mimeType:  compressed.type,
+        notes:     notes || null,
+      });
+
+      if (saveRes.ok) {
+        setMessage({ type: "success", text: "Relatório enviado. O gestor foi notificado." });
+        setNotes("");
+        setShowDamageForm(false);
+        if (fileRef.current) fileRef.current.value = "";
+        setDocs((prev) => [{
+          id:                      saveRes.id ?? crypto.randomUUID(),
+          file_name:               compressed.name,
+          file_url:                urlRes.publicUrl,
+          file_size:               compressed.size,
+          mime_type:               compressed.type,
+          category:                "avaria",
+          notes:                   notes || null,
+          visible_to_collaborator: true,
+          uploaded_by_role:        "colaboradora",
+          expires_at:              null,
+          archived_at:             null,
+          created_at:              new Date().toISOString(),
+          uploaded_by_name:        null,
+        }, ...prev]);
+      } else {
+        setMessage({ type: "error", text: saveRes.error ?? "Erro ao guardar. Tenta novamente." });
+      }
+    } catch (err) {
+      setMessage({ type: "error", text: err instanceof Error ? err.message : "Erro inesperado. Tenta novamente." });
+    } finally {
+      setUploading(false);
+      setUploadStep(null);
+    }
   }
 
   function openFilePicker() {
@@ -396,7 +391,6 @@ export function AppDocumentsSection({ initialDocuments }: Props) {
                 accept="image/*,.pdf"
                 className="hidden"
                 onChange={handleFileChange}
-                disabled={uploading}
               />
 
               <button
