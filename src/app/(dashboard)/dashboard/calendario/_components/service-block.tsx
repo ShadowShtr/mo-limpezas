@@ -28,6 +28,18 @@ export type ServiceForBlock = {
   team_name: string | null;
 };
 
+// ─── Extrai cidade do endereço (padrão PT: XXXX-XXX Cidade) ─────────────────
+
+function extractCity(address: string): string {
+  // Tenta extrair cidade após código postal português (XXXX-XXX Cidade)
+  const m = address.match(/\d{4}-\d{3}\s+([^,]+)/);
+  if (m) return m[1].trim();
+  // Fallback: último segmento separado por vírgula
+  const parts = address.split(",");
+  if (parts.length >= 2) return parts[parts.length - 1].trim();
+  return address;
+}
+
 // ─── Estilos por estado ───────────────────────────────────────────────────────
 
 const STATUS_BG: Record<string, { bg: string; text: string; fallbackBorder: string }> = {
@@ -75,7 +87,9 @@ function ServiceTooltip({ service, pos }: { service: ServiceForBlock; pos: Toolt
       {/* Cabeçalho */}
       <div className="flex items-start justify-between gap-2 mb-3 pb-2.5 border-b border-[var(--color-border)]">
         <div className="min-w-0">
-          <p className="font-bold text-sm text-[var(--color-text-main)] truncate">{service.location_name}</p>
+          <p className="font-bold text-sm text-[var(--color-text-main)] truncate">
+            {extractCity(service.location_address) || service.location_name}
+          </p>
           <p className="text-xs text-[var(--color-text-muted)] truncate">{service.client_name}</p>
         </div>
         <span
@@ -281,9 +295,9 @@ export function ServiceBlock({ service, slotHeight, startHour, teamId, onClick, 
           <span className="text-[10px] font-semibold leading-tight tabular-nums" style={{ color: s.text }}>
             {format(start, "HH:mm")}–{format(end, "HH:mm")}
           </span>
-          {/* Local sempre visível, mesmo em cartão pequeno */}
+          {/* Cidade/localidade sempre visível, mesmo em cartão pequeno */}
           <span className="text-[11px] font-semibold leading-tight truncate pr-4" style={{ color: s.text }}>
-            {service.location_name}
+            {extractCity(service.location_address) || service.location_name}
           </span>
           {/* Cliente visível a partir do cartão médio */}
           {!isShort && (
