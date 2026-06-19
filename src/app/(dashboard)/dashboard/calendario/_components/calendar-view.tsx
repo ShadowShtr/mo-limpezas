@@ -15,7 +15,7 @@ import {
 import {
   DndContext, DragOverlay,
   PointerSensor, useSensor, useSensors,
-  type DragStartEvent, type DragEndEvent,
+  type DragStartEvent, type DragEndEvent, type DragOverEvent,
 } from "@dnd-kit/core";
 import { ServiceBlock, type ServiceForBlock } from "./service-block";
 import { travelMinutes, type TeamRoute } from "./day-pdf";
@@ -180,8 +180,9 @@ export function CalendarView({
   const [avisosOpen,     setAvisosOpen]     = useState(false);
   const [viewMode,       setViewMode]       = useState<"calendar" | "list">("calendar");
   const [localServices,  setLocalServices]  = useState<ServiceFull[]>(services);
-  const [draggingBlock,  setDraggingBlock]  = useState<{ service: ServiceForBlock; teamId: string } | null>(null);
-  const [conflictMsg,    setConflictMsg]    = useState<string | null>(null);
+  const [draggingBlock,   setDraggingBlock]  = useState<{ service: ServiceForBlock; teamId: string } | null>(null);
+  const [dragOverTeamId,  setDragOverTeamId] = useState<string | null>(null);
+  const [conflictMsg,     setConflictMsg]    = useState<string | null>(null);
   const [pdfLoading,     setPdfLoading]     = useState(false);
   const [pendingForce,   setPendingForce]   = useState<PendingForce | null>(null);
 
@@ -333,26 +334,35 @@ export function CalendarView({
 
   function handleDragStart(event: DragStartEvent) {
     const data = event.active.data.current as { service: ServiceForBlock; teamId: string } | undefined;
-    if (data) setDraggingBlock(data);
+    if (data) { setDraggingBlock(data); setDragOverTeamId(data.teamId); }
     setConflictMsg(null);
+  }
+
+  function handleDragOver(event: DragOverEvent) {
+    setDragOverTeamId(event.over ? (event.over.id as string) : null);
   }
 
   async function handleDragEnd(event: DragEndEvent) {
     wasDragging.current = true;
     setDraggingBlock(null);
+    setDragOverTeamId(null);
 
     const { active, over, delta } = event;
     if (!over || !active.data.current) return;
 
     const { service, teamId: fromColKey } = active.data.current as { service: ServiceForBlock; teamId: string };
-    const newTeamId   = over.id === "__sem__" ? null : (over.id as string);
-    // Converte a column key "sem equipa" para null para comparação correcta
-    const origTeamId  = fromColKey === "__sem__" ? null : fromColKey;
+    const newTeamId  = over.id === "__sem__" ? null : (over.id as string);
+    const origTeamId = fromColKey === "__sem__" ? null : fromColKey;
 
-    const roundedDelta = Math.round(Math.round((delta.y / SLOT_HEIGHT) * 30) / 15) * 15;
+    const changedTeam = newTeamId !== origTeamId;
 
-    // Fix: compara com o team_id real (null para "sem equipa") — evita chamada desnecessária ao backend
-    if (roundedDelta === 0 && newTeamId === origTeamId) return;
+    // Drag horizontal (mudança de equipa) → mantém o horário original
+    // Drag vertical (dentro da mesma coluna) → ajusta o horário
+    const roundedDelta = changedTeam
+      ? 0
+      : Math.round(Math.round((delta.y / SLOT_HEIGHT) * 30) / 15) * 15;
+
+    if (roundedDelta === 0 && !changedTeam) return;
 
     const origStart  = parseISO(service.scheduled_start);
     const origEnd    = parseISO(service.scheduled_end);
@@ -418,7 +428,7 @@ export function CalendarView({
   // ─── Render ───────────────────────────────────────────────────────────────
 
   return (
-    <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
+    <DndContext sensors={sensors} onDragStart={handleDragStart} onDragOver={handleDragOver} onDragEnd={handleDragEnd}>
       <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
 
         {/* ── Barra de navegação semanal ─────────────────────────────────── */}
@@ -717,15 +727,34 @@ export function CalendarView({
 
       {/* Overlay flutuante durante o drag */}
       <DragOverlay dropAnimation={null}>
-        {draggingBlock && (
-          <ServiceBlock
-            service={draggingBlock.service}
-            teamId={draggingBlock.teamId}
-            slotHeight={SLOT_HEIGHT}
-            startHour={START_HOUR}
-            isOverlay
-          />
-        )}
+        {draggingBlock && (() => {
+          const overTeam = dragOverTeamId && dragOverTeamId !== draggingBlock.teamId
+            ? columns.find((c) => c.id === dragOverTeamId)
+            : null;
+          return (
+            <div className="relative">
+              <ServiceBlock
+                service={draggingBlock.service}
+                teamId={draggingBlock.teamId}
+                slotHeight={SLOT_HEIGHT}
+                startHour={START_HOUR}
+                isOverlay
+              />
+              {overTeam && (
+                <div
+                  className="absolute -top-6 left-0 right-0 flex items-center justify-center"
+                >
+                  <span
+                    className="text-[10px] font-bold px-2 py-0.5 rounded-full text-white shadow-md whitespace-nowrap"
+                    style={{ backgroundColor: overTeam.color }}
+                  >
+                    → {overTeam.name}
+                  </span>
+                </div>
+              )}
+            </div>
+          );
+        })()}
       </DragOverlay>
 
       {/* Modal de conflito/confirmação — substitui window.confirm/prompt */}
