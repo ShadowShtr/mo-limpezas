@@ -17,7 +17,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 
+export const maxDuration = 60;
+
 const BUCKET = "collaborator-documents";
+// Limite por empresa para evitar timeout em empresas com muitos documentos expirados.
+const DOCS_PER_COMPANY = 100;
 
 export async function GET(req: NextRequest) {
   const cronSecret = process.env.CRON_SECRET;
@@ -53,20 +57,22 @@ export async function GET(req: NextRequest) {
 
     for (const company of companies ?? []) {
       try {
-        // 2. Buscar documentos expirados desta empresa
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const { data: expired } = await (admin as any)
+        // 2. Buscar documentos expirados desta empresa (limite para não saturar)
+        const { data: expired } = await admin
           .from("collaborator_documents")
-          .select(`
-            id, file_name, file_url, file_size, mime_type,
-            category, notes, visible_to_collaborator,
-            uploaded_by_role, expires_at, created_at,
-            collaborator_id,
-            profiles!collaborator_id(full_name)
-          `)
+          .select("id, file_name, file_url, file_size, mime_type, category, notes, visible_to_collaborator, uploaded_by_role, expires_at, created_at, collaborator_id")
           .eq("company_id", company.id)
           .lt("expires_at", now.toISOString())
-          .is("archived_at", null);
+          .is("archived_at", null)
+          .limit(DOCS_PER_COMPANY);
+
+        // Nome do colaborador buscado separadamente para evitar joins complexos
+        const collabIds = [...new Set((expired ?? []).map((d) => d.collaborator_id))];
+        const { data: collabRows } = collabIds.length > 0
+          ? await admin.from("profiles").select("id, full_name").in("id", collabIds)
+          : { data: [] };
+        const collabNameMap: Record<string, string> = {};
+        for (const p of collabRows ?? []) collabNameMap[p.id] = p.full_name;
 
         if (!expired || expired.length === 0) {
           results.push({ company_id: company.id, company_name: company.name, archived: 0, manifest_path: null });
@@ -89,8 +95,8 @@ export async function GET(req: NextRequest) {
         }> = {};
 
         for (const doc of expired) {
-          const collabName = (doc.profiles as { full_name?: string } | null)?.full_name ?? "Desconhecida";
-          const collabId   = doc.collaborator_id as string;
+          const collabName = collabNameMap[doc.collaborator_id] ?? "Desconhecida";
+          const collabId   = doc.collaborator_id;
 
           if (!byCollaborator[collabId]) {
             byCollaborator[collabId] = { name: collabName, documents: [] };
@@ -134,8 +140,7 @@ export async function GET(req: NextRequest) {
           });
 
         // 6. Apagar ficheiros originais do storage
-        type ExpiredDoc = { id: string; file_url: string };
-        const storagePaths = (expired as ExpiredDoc[])
+        const storagePaths = (expired ?? [])
           .map((d) => {
             const prefix = `/${BUCKET}/`;
             return typeof d.file_url === "string" && d.file_url.includes(prefix)
@@ -148,14 +153,12 @@ export async function GET(req: NextRequest) {
           await admin.storage.from(BUCKET).remove(storagePaths);
         }
 
-        // 7. Marcar como arquivados na DB
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const { error: archiveErr } = await (admin as any)
+        // 7. Marcar como arquivados na DB (apenas os IDs que buscámos — respeita o limite)
+        const expiredIds = (expired as Array<{ id: string }>).map((d) => d.id);
+        const { error: archiveErr } = await admin
           .from("collaborator_documents")
           .update({ archived_at: now.toISOString() })
-          .eq("company_id", company.id)
-          .lt("expires_at", now.toISOString())
-          .is("archived_at", null);
+          .in("id", expiredIds);
 
         if (archiveErr) {
           results.push({
