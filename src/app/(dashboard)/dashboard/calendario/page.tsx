@@ -72,7 +72,10 @@ export default async function CalendarioPage({
 
   // Modo de demonstração: usar dados de exemplo quando não há equipas configuradas
   const isDemo = !teams || teams.length === 0;
-  const finalTeams  = isDemo ? DEMO_TEAMS : (teams as Team[]);
+  const sortedTeams = [...(teams ?? [])].sort((a, b) =>
+    a.name.localeCompare(b.name, "pt", { numeric: true, sensitivity: "base" })
+  );
+  const finalTeams  = isDemo ? DEMO_TEAMS : (sortedTeams as Team[]);
   const finalSvcs   = isDemo ? getDemoServices() : (services ?? []) as ServiceFull[];
   const totalServices = finalSvcs.length;
 

@@ -19,8 +19,9 @@ export function DroppableColumn({ id, children, className, style, onClick }: Dro
       className={className}
       style={{
         ...style,
-        backgroundColor: isOver ? "rgba(22, 163, 74, 0.05)" : undefined,
-        transition: "background-color 0.15s ease",
+        backgroundColor: isOver ? "rgba(22, 163, 74, 0.10)" : undefined,
+        boxShadow: isOver ? "inset 0 0 0 2px rgba(22, 163, 74, 0.35)" : undefined,
+        transition: "background-color 0.15s ease, box-shadow 0.15s ease",
       }}
       onClick={onClick}
     >
