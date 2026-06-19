@@ -43,9 +43,7 @@ export async function cancelService(
   const hoursUntilService = (new Date(svc.scheduled_start).getTime() - Date.now()) / 3_600_000;
   const isLate = hoursUntilService < 24 && hoursUntilService > -24;
 
-  // Actualizar serviço (cast para contornar tipos gerados antes da migration 019)
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { error: updateErr } = await (admin.from("services") as any)
+  const { error: updateErr } = await admin.from("services")
     .update({
       status:         "cancelado",
       cancel_type:    cancelType,

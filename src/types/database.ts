@@ -18,9 +18,9 @@ export type Database = {
         Relationships: [];
       };
       company_settings: {
-        Row: { id: string; company_id: string; hourly_rate: number; meal_allowance_day: number; overtime_rate_pct: number; vacation_days_year: number; vat_rate: number; invoice_prefix: string; gps_radius_meters: number; timezone: string; primary_color: string; currency: string; checkin_before_minutes: number; checkout_after_minutes: number; created_at: string; updated_at: string };
-        Insert: { company_id: string; hourly_rate?: number; meal_allowance_day?: number; overtime_rate_pct?: number; vacation_days_year?: number; vat_rate?: number; invoice_prefix?: string; gps_radius_meters?: number; timezone?: string; primary_color?: string; currency?: string; checkin_before_minutes?: number; checkout_after_minutes?: number };
-        Update: { hourly_rate?: number; meal_allowance_day?: number; overtime_rate_pct?: number; vacation_days_year?: number; vat_rate?: number; invoice_prefix?: string; gps_radius_meters?: number; timezone?: string; primary_color?: string; currency?: string; checkin_before_minutes?: number; checkout_after_minutes?: number };
+        Row: { id: string; company_id: string; hourly_rate: number; meal_allowance_day: number; overtime_rate_pct: number; vacation_days_year: number; vat_rate: number; invoice_prefix: string; gps_radius_meters: number; timezone: string; primary_color: string; currency: string; checkin_before_minutes: number; checkout_after_minutes: number; kanban_columns: Array<{ id: string; name: string; color: string }> | null; created_at: string; updated_at: string };
+        Insert: { company_id: string; hourly_rate?: number; meal_allowance_day?: number; overtime_rate_pct?: number; vacation_days_year?: number; vat_rate?: number; invoice_prefix?: string; gps_radius_meters?: number; timezone?: string; primary_color?: string; currency?: string; checkin_before_minutes?: number; checkout_after_minutes?: number; kanban_columns?: Array<{ id: string; name: string; color: string }> | null };
+        Update: { hourly_rate?: number; meal_allowance_day?: number; overtime_rate_pct?: number; vacation_days_year?: number; vat_rate?: number; invoice_prefix?: string; gps_radius_meters?: number; timezone?: string; primary_color?: string; currency?: string; checkin_before_minutes?: number; checkout_after_minutes?: number; kanban_columns?: Array<{ id: string; name: string; color: string }> | null };
         Relationships: [];
       };
       profiles: {
@@ -66,9 +66,9 @@ export type Database = {
         Relationships: [];
       };
       services: {
-        Row: { id: string; company_id: string; location_id: string; team_id: string | null; contract_id: string | null; reference_number: string; scheduled_start: string; scheduled_end: string; hourly_rate: number | null; calculated_value: number | null; manual_value: number | null; discount_pct: number; status: string; actual_start: string | null; actual_end: string | null; is_exception: boolean; original_date: string | null; notes: string | null; created_by: string | null; created_at: string; updated_at: string };
+        Row: { id: string; company_id: string; location_id: string; team_id: string | null; contract_id: string | null; reference_number: string; scheduled_start: string; scheduled_end: string; hourly_rate: number | null; calculated_value: number | null; manual_value: number | null; discount_pct: number; status: string; actual_start: string | null; actual_end: string | null; is_exception: boolean; original_date: string | null; notes: string | null; cancel_type: string | null; cancel_reason: string | null; cancelled_at: string | null; cancelled_by: string | null; is_late_cancel: boolean; created_by: string | null; created_at: string; updated_at: string };
         Insert: { company_id: string; location_id: string; reference_number: string; scheduled_start: string; scheduled_end: string; team_id?: string | null; contract_id?: string | null; hourly_rate?: number | null; calculated_value?: number | null; manual_value?: number | null; discount_pct?: number; status?: string; is_exception?: boolean; original_date?: string | null; notes?: string | null; created_by?: string | null };
-        Update: { team_id?: string | null; status?: string; scheduled_start?: string; scheduled_end?: string; actual_start?: string | null; actual_end?: string | null; notes?: string | null; manual_value?: number | null; discount_pct?: number };
+        Update: { team_id?: string | null; status?: string; scheduled_start?: string; scheduled_end?: string; actual_start?: string | null; actual_end?: string | null; notes?: string | null; manual_value?: number | null; discount_pct?: number; cancel_type?: string | null; cancel_reason?: string | null; cancelled_at?: string | null; cancelled_by?: string | null; is_late_cancel?: boolean };
         Relationships: [];
       };
       service_reinforcements: {
