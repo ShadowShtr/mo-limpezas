@@ -12,6 +12,7 @@ import { notifyTeam } from "@/app/actions/notifications";
 import { cancelService } from "@/app/actions/cancellations";
 import { CANCEL_TYPE_LABELS, type CancelType } from "@/lib/cancel-types";
 import { sendBulkClientNotifications } from "@/app/actions/email";
+import { ServicePhotosGallery } from "./service-photos-gallery";
 import type { Database } from "@/types/database";
 
 type ServiceFull = Database["public"]["Views"]["services_full"]["Row"];
@@ -352,6 +353,9 @@ export function ServiceDetailSheet({ service, onClose, onChanged }: Props) {
               </div>
             )}
           </div>
+
+          {/* Fotos do serviço (TASK 10) */}
+          <ServicePhotosGallery serviceId={service.id} />
 
           {/* Formulário de corrigir clock-out */}
           {fixClockOut && timesheets.length > 0 && (
