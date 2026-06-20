@@ -46,8 +46,24 @@ type Team   = { id: string; name: string; color: string };
 type Client = { id: string; name: string };
 type Loc    = { id: string; client_id: string; name: string; address: string; hourly_rate: number | null };
 
+/** Versão segura de ServiceFull para o payload do calendário.
+ *  Campos sensíveis (código de acesso, instruções, contactos do cliente) são
+ *  stripped no RSC — o browser nunca recebe os valores brutos.
+ *  O boolean location_has_access_code é pré-calculado server-side.
+ */
+export type ServiceCalendar = Omit<
+  ServiceFull,
+  "location_access_code" | "location_instructions" | "client_phone" | "client_email"
+> & {
+  location_has_access_code: boolean;
+  location_access_code: null;
+  location_instructions: null;
+  client_phone: null;
+  client_email: null;
+};
+
 interface CalendarViewProps {
-  services: ServiceFull[];
+  services: ServiceCalendar[];
   teams: Team[];
   weekStartISO: string;
   selectedDateISO: string;
@@ -62,7 +78,7 @@ type PendingForce = {
   newStart: string;
   newEnd: string;
   newTeamId: string | null;
-  previous: ServiceFull[];
+  previous: ServiceCalendar[];
   title: string;
   message: string;
   conflicts: ConflictInfo[];
@@ -70,7 +86,7 @@ type PendingForce = {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function toBlock(s: ServiceFull): ServiceForBlock {
+function toBlock(s: ServiceCalendar): ServiceForBlock {
   return {
     id: s.id,
     reference_number: s.reference_number,
@@ -79,7 +95,7 @@ function toBlock(s: ServiceFull): ServiceForBlock {
     status: s.status,
     location_name: s.location_name,
     location_address: s.location_address,
-    location_has_access_code: !!s.location_access_code,
+    location_has_access_code: s.location_has_access_code,
     location_has_key: s.location_has_key ?? false,
     location_key_label: s.location_key_label ?? null,
     location_lat: s.location_lat ?? null,
@@ -175,11 +191,11 @@ export function CalendarView({
   const [currentTop,   setCurrentTop]   = useState<number | null>(null);
   const [today,        setToday]        = useState<Date | null>(null);
   const [createSheet,    setCreateSheet]    = useState<{ date: Date; startTime: string; teamId: string } | null>(null);
-  const [detailSvc,      setDetailSvc]      = useState<ServiceFull | null>(null);
+  const [detailSvc,      setDetailSvc]      = useState<ServiceCalendar | null>(null);
   const [allocationOpen, setAllocationOpen] = useState(false);
   const [avisosOpen,     setAvisosOpen]     = useState(false);
   const [viewMode,       setViewMode]       = useState<"calendar" | "list">("calendar");
-  const [localServices,  setLocalServices]  = useState<ServiceFull[]>(services);
+  const [localServices,  setLocalServices]  = useState<ServiceCalendar[]>(services);
   const [draggingBlock,  setDraggingBlock]  = useState<{ service: ServiceForBlock; teamId: string } | null>(null);
   const [conflictMsg,    setConflictMsg]    = useState<string | null>(null);
   const [pdfLoading,     setPdfLoading]     = useState(false);
