@@ -3,6 +3,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireProfile } from "@/lib/auth-guard";
+import { canAccessService } from "@/lib/auth/can-access-service";
 import {
   SERVICE_PHOTOS_BUCKET,
   isServicePhotoPathInCompany,
@@ -13,7 +14,7 @@ import {
 export interface ServicePhoto {
   id: string;
   service_id: string;
-  collaborator_id: string;
+  collaborator_id: string | null;
   storage_path: string;
   kind: PhotoKind;
   status: PhotoStatus;
@@ -21,44 +22,6 @@ export interface ServicePhoto {
   height: number | null;
   created_at: string;
   uploaded_at: string | null;
-}
-
-/** Verifica se o utilizador é gestor/admin OU pertence à equipa do serviço. */
-async function canAccessService(
-  admin: ReturnType<typeof createAdminClient>,
-  userId: string,
-  companyId: string,
-  serviceId: string,
-  role: string,
-): Promise<boolean> {
-  if (["admin", "gestor"].includes(role)) return true;
-
-  const { data: svc } = await admin
-    .from("services")
-    .select("team_id, company_id")
-    .eq("id", serviceId)
-    .eq("company_id", companyId)
-    .single();
-
-  if (!svc) return false;
-
-  if (svc.team_id) {
-    const { count } = await admin
-      .from("team_members")
-      .select("collaborator_id", { count: "exact", head: true })
-      .eq("team_id", svc.team_id)
-      .eq("collaborator_id", userId);
-    if ((count ?? 0) > 0) return true;
-  }
-
-  // Reforços também têm acesso
-  const { count: reinf } = await admin
-    .from("service_reinforcements")
-    .select("collaborator_id", { count: "exact", head: true })
-    .eq("service_id", serviceId)
-    .eq("collaborator_id", userId);
-
-  return (reinf ?? 0) > 0;
 }
 
 /** App da colaboradora: fotos do serviço (só se pertencer à equipa). */
