@@ -131,13 +131,16 @@ export async function GET(req: NextRequest) {
     const scheduledEnd = serviceEndMap[svcId];
     if (!scheduledEnd) continue;
 
-    const { count } = await admin
-      .from("timesheets")
-      .select("id", { count: "exact", head: true })
-      .eq("service_id", svcId)
-      .is("clock_out_at", null);
+    // Verificar timesheets abertos E total de timesheets.
+    // Exigir pelo menos 1 timesheet para concluir (garante que alguém bateu ponto).
+    const [{ count: openCount }, { count: totalCount }] = await Promise.all([
+      admin.from("timesheets").select("id", { count: "exact", head: true })
+        .eq("service_id", svcId).is("clock_out_at", null),
+      admin.from("timesheets").select("id", { count: "exact", head: true })
+        .eq("service_id", svcId),
+    ]);
 
-    if ((count ?? 1) === 0) {
+    if ((openCount ?? 1) === 0 && (totalCount ?? 0) > 0) {
       const clockOutAt = toClose.find((t) => t.service_id === svcId)?.clockOutAt ?? now;
       await admin
         .from("services")

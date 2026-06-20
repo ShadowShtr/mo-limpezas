@@ -20,16 +20,20 @@ const MAX_AGE_HOURS = 24;
 
 // ─── API pública ─────────────────────────────────────────────────────────────
 
-export function queueTimesheet(
+/**
+ * Guarda o registo de ponto na fila IndexedDB.
+ * Lança erro se a persistência falhar — o chamador deve mostrar aviso real
+ * em vez de "guardado offline" quando IndexedDB não estiver disponível.
+ */
+export async function queueTimesheet(
   entry: Omit<PendingTimesheet, "id" | "created_offline_at">,
-): PendingTimesheet {
+): Promise<PendingTimesheet> {
   const item: PendingTimesheet = {
     ...entry,
     id: `${entry.service_id}-${entry.kind}-${Date.now()}`,
     created_offline_at: new Date().toISOString(),
   };
-  // Fire-and-forget: persiste assincronamente; a hora é registada de imediato
-  void idbQueue(entry);
+  await idbQueue(entry); // propaga erro se IndexedDB falhar
   return item;
 }
 

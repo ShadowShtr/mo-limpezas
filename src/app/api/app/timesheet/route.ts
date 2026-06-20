@@ -234,10 +234,40 @@ async function patchHandler(req: NextRequest) {
     ? Math.max(0, Math.round((out.getTime() - new Date(ts.clock_in_at).getTime()) / 60000))
     : 0;
 
+  // Calcular distância no checkout para simetria com o clock-in.
+  let checkout_distance_m: number | null = null;
+  let checkout_location_warning = false;
+  if (lat != null && lng != null) {
+    const { data: svc } = await admin
+      .from("services")
+      .select("location_id, locations(lat, lng)")
+      .eq("id", service_id)
+      .single();
+    const loc = (svc?.locations as unknown as { lat: number | null; lng: number | null } | null);
+    if (loc?.lat != null && loc?.lng != null) {
+      const settings = await getCompanySettings(profile.company_id);
+      const radius = settings?.gps_radius_meters ?? 500;
+      checkout_distance_m = Math.round(haversineDistanceM(lat, lng, loc.lat, loc.lng));
+      checkout_location_warning = checkout_distance_m > radius;
+    }
+  }
+
   // Incluir .is("clock_out_at", null) no update para evitar checkout duplicado em corrida paralela
   const { data, error } = await admin
     .from("timesheets")
-    .update({ clock_out_at: clockOutAt, clock_out_lat: lat, clock_out_lng: lng, duration_minutes })
+    .update({
+      clock_out_at: clockOutAt,
+      clock_out_lat: lat,
+      clock_out_lng: lng,
+      duration_minutes,
+      // fields added by migration 032 — cast until types are regenerated
+      ...(({
+        manual_checkout: manual ?? false,
+        clock_out_distance_m: checkout_distance_m,
+        clock_out_accuracy_m: gps_accuracy ?? null,
+        clock_out_location_warning: checkout_location_warning,
+      }) as unknown as object),
+    })
     .eq("id", ts.id)
     .is("clock_out_at", null) // guard de corrida: só actualiza se ainda estiver aberto
     .select();

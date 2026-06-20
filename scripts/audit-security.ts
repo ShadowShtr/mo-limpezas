@@ -75,7 +75,11 @@ for (const file of clientFiles) {
 // com .eq() devem incluir company_id para garantir multi-tenancy.
 
 console.log('\n🔍  Verificando company_id em server actions...');
-const actionFiles = walkFiles(join(SRC, "app", "actions"));
+// Cobrir app/actions/ e todos os _actions/ dentro de app/**/
+const actionFiles = [
+  ...walkFiles(join(SRC, "app", "actions")),
+  ...walkFiles(join(SRC, "app")).filter((f) => f.includes(`${sep}_actions${sep}`)),
+];
 
 const SENSITIVE_TABLES = ["services", "timesheets", "profiles", "clients", "locations", "teams", "invoices"];
 

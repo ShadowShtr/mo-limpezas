@@ -104,9 +104,13 @@ export function ClockButton({ serviceId, initialTimesheet }: Props) {
     const client_event_id = uuid();
 
     if (isOffline()) {
-      queueTimesheet({ kind: "in", service_id: serviceId, lat, lng, at, manual, gps_accuracy: accuracy, client_event_id });
-      setTimesheet({ id: `local-${Date.now()}`, clock_in_at: at, clock_out_at: null, location_warning: manual, clock_in_distance_m: null });
-      setQueued("in");
+      try {
+        await queueTimesheet({ kind: "in", service_id: serviceId, lat, lng, at, manual, gps_accuracy: accuracy, client_event_id });
+        setTimesheet({ id: `local-${Date.now()}`, clock_in_at: at, clock_out_at: null, location_warning: manual, clock_in_distance_m: null });
+        setQueued("in");
+      } catch {
+        setError("Sem rede e não foi possível guardar offline. Não feche a aplicação e tente quando houver ligação.");
+      }
       setLoading(false);
       return;
     }
@@ -127,9 +131,13 @@ export function ClockButton({ serviceId, initialTimesheet }: Props) {
       if (json.location_warning) setDistanceWarning(json.distance_m);
       setTimesheet(json.data);
     } catch {
-      queueTimesheet({ kind: "in", service_id: serviceId, lat, lng, at, manual, gps_accuracy: accuracy, client_event_id });
-      setTimesheet({ id: `local-${Date.now()}`, clock_in_at: at, clock_out_at: null, location_warning: manual, clock_in_distance_m: null });
-      setQueued("in");
+      try {
+        await queueTimesheet({ kind: "in", service_id: serviceId, lat, lng, at, manual, gps_accuracy: accuracy, client_event_id });
+        setTimesheet({ id: `local-${Date.now()}`, clock_in_at: at, clock_out_at: null, location_warning: manual, clock_in_distance_m: null });
+        setQueued("in");
+      } catch {
+        setError("Sem rede e não foi possível guardar offline. Não feche a aplicação e tente quando houver ligação.");
+      }
       setLoading(false);
     }
   }
@@ -152,9 +160,13 @@ export function ClockButton({ serviceId, initialTimesheet }: Props) {
     const client_event_id = uuid();
 
     if (isOffline()) {
-      queueTimesheet({ kind: "out", service_id: serviceId, lat, lng, at, manual, gps_accuracy: accuracy, client_event_id });
-      setTimesheet((prev) => prev ? { ...prev, clock_out_at: at } : prev);
-      setQueued("out");
+      try {
+        await queueTimesheet({ kind: "out", service_id: serviceId, lat, lng, at, manual, gps_accuracy: accuracy, client_event_id });
+        setTimesheet((prev) => prev ? { ...prev, clock_out_at: at } : prev);
+        setQueued("out");
+      } catch {
+        setError("Sem rede e não foi possível guardar offline. Não feche a aplicação e tente quando houver ligação.");
+      }
       setLoading(false);
       return;
     }
@@ -174,9 +186,13 @@ export function ClockButton({ serviceId, initialTimesheet }: Props) {
       }
       setTimesheet(json.data);
     } catch {
-      queueTimesheet({ kind: "out", service_id: serviceId, lat, lng, at, manual, gps_accuracy: accuracy, client_event_id });
-      setTimesheet((prev) => prev ? { ...prev, clock_out_at: at } : prev);
-      setQueued("out");
+      try {
+        await queueTimesheet({ kind: "out", service_id: serviceId, lat, lng, at, manual, gps_accuracy: accuracy, client_event_id });
+        setTimesheet((prev) => prev ? { ...prev, clock_out_at: at } : prev);
+        setQueued("out");
+      } catch {
+        setError("Sem rede e não foi possível guardar offline. Não feche a aplicação e tente quando houver ligação.");
+      }
       setLoading(false);
     }
   }

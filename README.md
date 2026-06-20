@@ -2,7 +2,7 @@
 
 Plataforma de gestão operacional para empresa de limpeza: agendamento, equipas, folha de pagamento, faturação e app mobile PWA.
 
-**Stack:** Next.js 15 · TypeScript · Tailwind · shadcn/ui · Supabase · Mapbox · Vercel
+**Stack:** Next.js 16 · TypeScript · Tailwind · shadcn/ui · Supabase · Mapbox · Vercel
 
 ---
 
