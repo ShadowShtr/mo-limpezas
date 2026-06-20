@@ -269,7 +269,7 @@ export async function getInvoices(
   year: number,
   month: number,
 ): Promise<{ ok: true; invoices: Invoice[] } | { ok: false; error: string }> {
-  const guard = await requireProfile();
+  const guard = await requireProfile({ roles: ["admin", "gestor"] });
   if (!guard.ok) return { ok: false, error: guard.error };
   const { admin } = guard;
   const companyId = guard.profile.company_id;
@@ -455,7 +455,7 @@ export interface UnbilledService {
 export async function getUnbilledServices(
   _companyId?: string,
 ): Promise<{ ok: true; services: UnbilledService[] } | { ok: false; error: string }> {
-  const guard = await requireProfile();
+  const guard = await requireProfile({ roles: ["admin", "gestor"] });
   if (!guard.ok) return { ok: false, error: guard.error };
   const { admin } = guard;
   const companyId = guard.profile.company_id;

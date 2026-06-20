@@ -47,7 +47,7 @@ export interface TaskInput {
 export async function getManagementTasks(
   _companyId?: string,
 ): Promise<{ ok: true; tasks: ManagementTask[] } | { ok: false; error: string }> {
-  const guard = await requireProfile();
+  const guard = await requireProfile({ roles: ["admin", "gestor"] });
   if (!guard.ok) return { ok: false, error: guard.error };
   const { admin } = guard;
   const companyId = guard.profile.company_id;

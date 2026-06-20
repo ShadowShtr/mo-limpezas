@@ -23,7 +23,45 @@ export interface ServicePhoto {
   uploaded_at: string | null;
 }
 
-/** App da colaboradora: fotos de um serviço (próprias + as da equipa via metadata). */
+/** Verifica se o utilizador é gestor/admin OU pertence à equipa do serviço. */
+async function canAccessService(
+  admin: ReturnType<typeof createAdminClient>,
+  userId: string,
+  companyId: string,
+  serviceId: string,
+  role: string,
+): Promise<boolean> {
+  if (["admin", "gestor"].includes(role)) return true;
+
+  const { data: svc } = await admin
+    .from("services")
+    .select("team_id, company_id")
+    .eq("id", serviceId)
+    .eq("company_id", companyId)
+    .single();
+
+  if (!svc) return false;
+
+  if (svc.team_id) {
+    const { count } = await admin
+      .from("team_members")
+      .select("collaborator_id", { count: "exact", head: true })
+      .eq("team_id", svc.team_id)
+      .eq("collaborator_id", userId);
+    if ((count ?? 0) > 0) return true;
+  }
+
+  // Reforços também têm acesso
+  const { count: reinf } = await admin
+    .from("service_reinforcements")
+    .select("collaborator_id", { count: "exact", head: true })
+    .eq("service_id", serviceId)
+    .eq("collaborator_id", userId);
+
+  return (reinf ?? 0) > 0;
+}
+
+/** App da colaboradora: fotos do serviço (só se pertencer à equipa). */
 export async function getServicePhotos(
   serviceId: string,
 ): Promise<{ ok: true; photos: ServicePhoto[] } | { ok: false; error: string }> {
@@ -33,8 +71,11 @@ export async function getServicePhotos(
 
   const admin = createAdminClient();
   const { data: profile } = await admin
-    .from("profiles").select("company_id").eq("id", user.id).single();
+    .from("profiles").select("company_id, role").eq("id", user.id).single();
   if (!profile) return { ok: false, error: "Perfil não encontrado" };
+
+  const allowed = await canAccessService(admin, user.id, profile.company_id, serviceId, profile.role);
+  if (!allowed) return { ok: false, error: "Sem permissão para aceder a este serviço." };
 
   const { data, error } = await admin
     .from("service_photos")
@@ -68,7 +109,11 @@ export async function getServicePhotosForManager(
   return { ok: true, photos: (data ?? []) as ServicePhoto[] };
 }
 
-/** Gera um signed URL de leitura para um storage_path (curto, só da empresa). */
+/**
+ * Gera um signed URL de leitura para uma foto.
+ * Colaboradoras: só podem aceder a fotos de serviços onde estão na equipa.
+ * Gestoras: podem aceder a qualquer foto da empresa.
+ */
 export async function getSignedServicePhotoUrl(
   storagePath: string,
 ): Promise<{ ok: true; url: string } | { ok: false; error: string }> {
@@ -80,6 +125,17 @@ export async function getSignedServicePhotoUrl(
 
   if (!isServicePhotoPathInCompany(storagePath, profile.company_id)) {
     return { ok: false, error: "Sem permissão para aceder a esta foto." };
+  }
+
+  // Colaboradoras: verificar que o serviço a que a foto pertence é da sua equipa.
+  // O path é: {companyId}/{serviceId}/{yyyy}/{mm}/{dd}/{clientEventId}.ext
+  if (!["admin", "gestor"].includes(profile.role)) {
+    const parts = storagePath.split("/");
+    const serviceId = parts[1]; // índice 1 após company_id
+    if (!serviceId) return { ok: false, error: "Caminho inválido." };
+
+    const allowed = await canAccessService(admin, profile.id, profile.company_id, serviceId, profile.role);
+    if (!allowed) return { ok: false, error: "Sem permissão para aceder a esta foto." };
   }
 
   const { data, error } = await admin.storage

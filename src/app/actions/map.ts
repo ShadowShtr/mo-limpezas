@@ -53,11 +53,12 @@ export async function getMapServices(date: string): Promise<{ services: MapServi
 
   const { data: profile } = await admin
     .from("profiles")
-    .select("company_id")
+    .select("company_id, role")
     .eq("id", user.id)
     .single();
 
   if (!profile?.company_id) return { services: [], teams: [], clockPoints: [] };
+  if (!["admin", "gestor"].includes(profile.role)) return { services: [], teams: [], clockPoints: [] };
 
   const startOfDay = `${date}T00:00:00.000Z`;
   const endOfDay = `${date}T23:59:59.999Z`;

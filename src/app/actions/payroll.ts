@@ -200,7 +200,7 @@ export async function getPayrollRecords(
   year: number,
   month: number,
 ): Promise<{ ok: true; records: PayrollRecord[] } | { ok: false; error: string }> {
-  const guard = await requireProfile();
+  const guard = await requireProfile({ roles: ["admin", "gestor"] });
   if (!guard.ok) return { ok: false, error: guard.error };
   const { admin } = guard;
   const companyId = guard.profile.company_id;
