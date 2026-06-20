@@ -8,7 +8,6 @@ const COMPANY_TABLES = [
   "clients",
   "locations",
   "teams",
-  "profiles",
   "contracts",
   "services",
   "timesheets",
@@ -21,6 +20,14 @@ const COMPANY_TABLES = [
   "client_notifications",
   "service_photos",
 ] as const;
+
+// Perfis com colunas explícitas — evita incluir silenciosamente campos internos
+// que possam ser adicionados no futuro (ex: tokens, hashes).
+const PROFILES_COLUMNS = [
+  "id", "company_id", "full_name", "avatar_url", "role", "status",
+  "phone", "emergency_contact", "address", "nif", "iban",
+  "skills", "hourly_rate", "hire_date", "notes", "created_at", "updated_at",
+].join(", ");
 
 function stamp(date = new Date()) {
   const p = (n: number) => String(n).padStart(2, "0");
@@ -88,6 +95,16 @@ export async function GET() {
       .eq("company_id", profile.company_id);
     datasets[table] = error ? { error: error.message } : data ?? [];
     jsonFile(zip, `data/${table}.json`, datasets[table]);
+  }
+
+  // Perfis com colunas explícitas
+  {
+    const { data, error } = await admin
+      .from("profiles")
+      .select(PROFILES_COLUMNS)
+      .eq("company_id", profile.company_id);
+    datasets["profiles"] = error ? { error: error.message } : data ?? [];
+    jsonFile(zip, "data/profiles.json", datasets["profiles"]);
   }
 
   const services = Array.isArray(datasets.services) ? datasets.services as Array<{ id: string }> : [];

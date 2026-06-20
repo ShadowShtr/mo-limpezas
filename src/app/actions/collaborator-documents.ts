@@ -192,10 +192,29 @@ export async function getSignedDocumentUrl(
   if (!storagePath) return { ok: true, url: fileUrl };
 
   const decodedPath = decodeURIComponent(storagePath);
-  // O path tem o formato `${companyId}/${collaboratorId}/...` — só permitir
-  // assinar ficheiros da própria empresa (um signed URL ignora as políticas de storage).
+  // O path tem o formato `${companyId}/${collaboratorId}/...`
   if (!isStoragePathInCompany(decodedPath, profile.company_id)) {
     return { ok: false, error: "Sem permissão para aceder a este ficheiro." };
+  }
+
+  // Colaboradoras: verificar que o ficheiro lhes pertence E está visível.
+  // Admin/gestor: acesso a qualquer documento da empresa.
+  if (!["admin", "gestor"].includes(profile.role)) {
+    // Segmento [1] do path é o collaboratorId
+    const pathCollaboratorId = decodedPath.split("/")[1];
+    if (!pathCollaboratorId || pathCollaboratorId !== profile.id) {
+      return { ok: false, error: "Sem permissão para aceder a este ficheiro." };
+    }
+    const { data: doc } = await admin
+      .from("collaborator_documents")
+      .select("visible_to_collaborator")
+      .eq("company_id", profile.company_id)
+      .eq("collaborator_id", profile.id)
+      .eq("file_url", fileUrl)
+      .maybeSingle();
+    if (!doc?.visible_to_collaborator) {
+      return { ok: false, error: "Este documento não está disponível para visualização." };
+    }
   }
 
   const { data, error } = await admin.storage
