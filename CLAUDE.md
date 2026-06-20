@@ -56,6 +56,10 @@ A `029_background_jobs.sql` foi confirmada no Supabase com
 em clients/locations/absences/vacation_requests e recria `services_full` com
 `security_invoker=true`. **Ainda não aplicada em produção.**
 
+**Migration 031 criada (2026-06-19) — APLICAR VIA SQL EDITOR:**
+`supabase/migrations/031_reference_number_unique.sql` — índice único em
+`(company_id, reference_number)`. **Ainda não aplicada em produção.**
+
 > ⚠️ **Upload de fotos/documentos do colaborador ainda instável** (2026-06-19).
 > Já aplicadas: timeout `canvas.toBlob` (6s), `fetch PUT` com AbortController (60s),
 > remoção do `useTransition`, reset de itens `uploading` órfãos.
@@ -74,6 +78,13 @@ em clients/locations/absences/vacation_requests e recria `services_full` com
 - ✅ TASK F — localStorage → IndexedDB para fila de pontos offline
 - ✅ TASK G — uploadToSignedUrl → fetch PUT + AbortController na upload-runner
 - ✅ Issue 12 — race condition reference_number: geração server-side com retry
+
+**Feito na sessão de 2026-06-20 (auditoria — itens residuais):**
+- ✅ Audit #29 — Crons: secret apenas via header `x-cron-secret` em produção; query param `?secret=` só em dev (4 ficheiros); URL de auto-continuação sem `?secret=`
+- ✅ Audit #26 — Calendário: `select("*")` substituído por lista explícita de colunas (auditável)
+- ✅ Audit #28 — ServiceBlock: `canSeeFinancials: boolean` no tipo `ServiceForBlock`; valor financeiro no tooltip só aparece se `true`; calendário (manager-only) passa `true`
+- ✅ Audit #23 — `/api/health/deep` criado: requer auth admin/gestor, testa DB + storage + env vars, devolve latência de cada check
+- ✅ Audit #13 — Timezone: `generate-services` usa `nowInLisbon()` (Intl) para mês alvo e `toLisbonTimestamp()` para `scheduled_start`/`scheduled_end` com offset correto de Lisboa
 
 **Próxima task:** Aplicar migrations 030 e 031 via SQL Editor, depois merge
 `codex/auditoria-completa` → `main` e deploy produção.

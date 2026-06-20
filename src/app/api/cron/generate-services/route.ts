@@ -40,6 +40,44 @@ const DOW_TO_KEY: Record<number, ScheduleDay["day"]> = {
   0: "sun", 1: "mon", 2: "tue", 3: "wed", 4: "thu", 5: "fri", 6: "sat",
 };
 
+// ─── Timezone Europe/Lisbon ────────────────────────────────────────────────────
+
+const LISBON_TZ = "Europe/Lisbon";
+
+/** Retorna "now" decomposto em partes de data/hora no fuso de Lisboa. */
+function nowInLisbon(): { year: number; month: number; day: number } {
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: LISBON_TZ,
+    year: "numeric", month: "2-digit", day: "2-digit",
+  }).formatToParts(new Date());
+  const get = (type: string) => parseInt(parts.find((p) => p.type === type)?.value ?? "0", 10);
+  return { year: get("year"), month: get("month") - 1, day: get("day") };
+}
+
+/**
+ * Constrói um timestamp ISO com o offset de Lisboa para a data+hora dadas.
+ * Evita guardar datetimes "naivos" que o PostgreSQL interpreta como UTC.
+ */
+function toLisbonTimestamp(dateStr: string, timeStr: string): string {
+  // Aproximação: usa a meia do dia UTC para calcular o offset de Lisboa nessa data.
+  // Em dias de transição DST o desvio pode ser de ±1h — aceitável para agendamento.
+  const midday = new Date(`${dateStr}T12:00:00Z`);
+  const tzParts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: LISBON_TZ,
+    timeZoneName: "shortOffset",
+  }).formatToParts(midday);
+  const tzName = tzParts.find((p) => p.type === "timeZoneName")?.value ?? "GMT";
+  let offset = "+00:00";
+  const m = tzName.match(/GMT([+-])(\d+)(?::(\d+))?/);
+  if (m) {
+    const sign = m[1];
+    const h = m[2].padStart(2, "0");
+    const min = (m[3] ?? "00").padStart(2, "0");
+    offset = `${sign}${h}:${min}`;
+  }
+  return `${dateStr}T${timeStr}:00${offset}`;
+}
+
 // ─── Gerar ocorrências para um contrato num dado mês ─────────────────────────
 
 function getOccurrences(
@@ -148,9 +186,10 @@ export async function GET(req: NextRequest) {
   if (!cronSecret) {
     return NextResponse.json({ error: "Cron secret not configured" }, { status: 500 });
   }
-  const secret =
-    req.headers.get("x-cron-secret") ??
-    req.nextUrl.searchParams.get("secret");
+  // Em produção aceitar apenas header para não expor o secret nos logs.
+  const secret = process.env.NODE_ENV === "production"
+    ? req.headers.get("x-cron-secret")
+    : (req.headers.get("x-cron-secret") ?? req.nextUrl.searchParams.get("secret"));
   if (!secret || secret !== cronSecret) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
@@ -167,9 +206,10 @@ export async function GET(req: NextRequest) {
     monthStart = new Date(y, mo - 1, 1);
     monthEnd = new Date(y, mo, 0, 23, 59, 59);
   } else {
-    const now = new Date();
-    monthStart = new Date(now.getFullYear(), now.getMonth() + 1, 1);
-    monthEnd = new Date(now.getFullYear(), now.getMonth() + 2, 0, 23, 59, 59);
+    // Usar a data atual em Lisboa (não UTC) para determinar o próximo mês correto.
+    const { year, month } = nowInLisbon();
+    monthStart = new Date(year, month + 1, 1);
+    monthEnd = new Date(year, month + 2, 0, 23, 59, 59);
   }
 
   const monthStartStr = toDateStr(monthStart);
@@ -286,8 +326,8 @@ export async function GET(req: NextRequest) {
           team_id: schedule.team_id || null,
           contract_id: contract.id,
           reference_number: ref,
-          scheduled_start: `${dateStr}T${schedule.start_time}:00`,
-          scheduled_end: `${dateStr}T${endTime}:00`,
+          scheduled_start: toLisbonTimestamp(dateStr, schedule.start_time),
+          scheduled_end: toLisbonTimestamp(dateStr, endTime),
           hourly_rate: hourlyRate,
           calculated_value: calculatedValue,
           status: "agendado",
@@ -323,7 +363,7 @@ export async function GET(req: NextRequest) {
     if (appUrl && jobId) {
       const monthQs = targetMonthParam ? `&month=${targetMonthParam}` : "";
       // Fire-and-forget: continua de onde parou (mesmo job → mesmo cursor).
-      void fetch(`${appUrl}/api/cron/generate-services?secret=${cronSecret}&job=${jobId}${monthQs}`, {
+      void fetch(`${appUrl}/api/cron/generate-services?job=${jobId}${monthQs}`, {
         headers: { "x-cron-secret": cronSecret },
       }).catch(() => {});
     }

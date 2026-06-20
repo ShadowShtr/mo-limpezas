@@ -25,6 +25,8 @@ export type ServiceForBlock = {
   notes: string | null;
   team_color: string | null;
   team_name: string | null;
+  /** Gestores/admin veem valor financeiro; colaboradoras não */
+  canSeeFinancials: boolean;
 };
 
 // ─── Extrai cidade do endereço (padrão PT: XXXX-XXX Cidade) ─────────────────
@@ -149,7 +151,7 @@ function ServiceTooltip({ service, pos }: { service: ServiceForBlock; pos: Toolt
           </Row>
         )}
 
-        {value != null && (
+        {service.canSeeFinancials && value != null && (
           <Row icon={Euro} label="Valor">
             <span className="font-semibold text-[var(--color-primary)]">€{value.toFixed(2)}</span>
           </Row>

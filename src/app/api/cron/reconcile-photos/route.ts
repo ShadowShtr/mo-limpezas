@@ -17,7 +17,9 @@ const ORPHAN_GRACE_DAYS = 14;
 export async function GET(req: NextRequest) {
   const cronSecret = process.env.CRON_SECRET;
   if (!cronSecret) return NextResponse.json({ error: "Cron secret not configured" }, { status: 500 });
-  const secret = req.headers.get("x-cron-secret") ?? req.nextUrl.searchParams.get("secret");
+  const secret = process.env.NODE_ENV === "production"
+    ? req.headers.get("x-cron-secret")
+    : (req.headers.get("x-cron-secret") ?? req.nextUrl.searchParams.get("secret"));
   if (!secret || secret !== cronSecret) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const admin = createAdminClient();

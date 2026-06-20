@@ -90,6 +90,7 @@ function toBlock(s: ServiceFull): ServiceForBlock {
     notes: s.notes,
     team_color: s.team_color ?? null,
     team_name: s.team_name ?? null,
+    canSeeFinancials: true, // calendário é manager-only
   };
 }
 

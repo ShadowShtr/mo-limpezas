@@ -29,9 +29,10 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Cron secret not configured" }, { status: 500 });
   }
 
-  const secret =
-    req.headers.get("x-cron-secret") ??
-    req.nextUrl.searchParams.get("secret");
+  // Em produção aceitar apenas header para não expor o secret nos logs.
+  const secret = process.env.NODE_ENV === "production"
+    ? req.headers.get("x-cron-secret")
+    : (req.headers.get("x-cron-secret") ?? req.nextUrl.searchParams.get("secret"));
 
   if (!secret || secret !== cronSecret) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

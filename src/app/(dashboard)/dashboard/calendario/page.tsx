@@ -45,7 +45,16 @@ export default async function CalendarioPage({
   ] = await Promise.all([
     supabase
       .from("services_full")
-      .select("*")
+      .select([
+        "id", "company_id", "reference_number", "contract_id", "is_exception",
+        "scheduled_start", "scheduled_end", "actual_start", "actual_end",
+        "status", "notes", "calculated_value", "manual_value",
+        "location_id", "location_name", "location_address",
+        "location_lat", "location_lng", "location_has_key", "location_key_label",
+        "location_access_code", "location_instructions",
+        "client_id", "client_name", "client_phone", "client_email",
+        "team_id", "team_name", "team_color",
+      ].join(", "))
       .eq("company_id", companyId)
       .gte("scheduled_start", weekStart.toISOString())
       .lt("scheduled_start", weekEndExclusive.toISOString())
@@ -76,7 +85,7 @@ export default async function CalendarioPage({
     a.name.localeCompare(b.name, "pt", { numeric: true, sensitivity: "base" })
   );
   const finalTeams  = isDemo ? DEMO_TEAMS : (sortedTeams as Team[]);
-  const finalSvcs   = isDemo ? getDemoServices() : (services ?? []) as ServiceFull[];
+  const finalSvcs   = isDemo ? getDemoServices() : (services ?? []) as unknown as ServiceFull[];
   const totalServices = finalSvcs.length;
 
   return (
