@@ -287,11 +287,20 @@ async function patchHandler(req: NextRequest) {
     });
   }
 
-  const { count: openCount } = await admin
-    .from("timesheets").select("id", { count: "exact", head: true }).eq("service_id", service_id).is("clock_out_at", null);
+  const [{ count: openCount }, { count: totalCount }] = await Promise.all([
+    admin.from("timesheets").select("id", { count: "exact", head: true })
+      .eq("service_id", service_id).is("clock_out_at", null),
+    admin.from("timesheets").select("id", { count: "exact", head: true })
+      .eq("service_id", service_id),
+  ]);
 
-  if ((openCount ?? 0) === 0) {
-    await admin.from("services").update({ actual_end: clockOutAt, status: "concluido" }).eq("id", service_id);
+  // Só marcar concluido se todos fecharam E existe pelo menos 1 registo de ponto.
+  // O guard .eq("status","em_curso") evita dupla-promoção em corrida paralela.
+  if ((openCount ?? 1) === 0 && (totalCount ?? 0) > 0) {
+    await admin.from("services")
+      .update({ actual_end: clockOutAt, status: "concluido" })
+      .eq("id", service_id)
+      .eq("status", "em_curso");
   }
 
   return NextResponse.json({ data: updatedTs, duration_minutes, tooOld });

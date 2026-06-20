@@ -64,7 +64,7 @@ export async function adminEditTimesheet(
     duration_minutes = dur;
   }
 
-  const { error } = await admin
+  const { data: ts, error } = await admin
     .from("timesheets")
     .update({
       clock_in_at: data.clock_in_at,
@@ -72,9 +72,38 @@ export async function adminEditTimesheet(
       duration_minutes,
     })
     .eq("id", timesheetId)
-    .eq("company_id", profile.company_id);
+    .eq("company_id", profile.company_id)
+    .select("service_id")
+    .single();
 
   if (error) return { ok: false, error: error.message };
+
+  // Re-avaliar actual_end e status do serviço após correção manual.
+  if (ts?.service_id) {
+    const { data: timesheets } = await admin
+      .from("timesheets")
+      .select("clock_in_at, clock_out_at")
+      .eq("service_id", ts.service_id)
+      .eq("company_id", profile.company_id);
+
+    if (timesheets && timesheets.length > 0) {
+      const hasOpen = timesheets.some((t) => !t.clock_out_at);
+      const allOut = !hasOpen;
+      const latestOut = allOut
+        ? timesheets.reduce((max, t) =>
+            t.clock_out_at && t.clock_out_at > max ? t.clock_out_at : max, "")
+        : null;
+
+      await admin.from("services")
+        .update({
+          actual_end: latestOut,
+          status: allOut ? "concluido" : "em_curso",
+        })
+        .eq("id", ts.service_id)
+        .eq("company_id", profile.company_id);
+    }
+  }
+
   revalidatePath("/dashboard/colaboradores");
   revalidatePath("/dashboard/registo-ponto");
   return { ok: true };
