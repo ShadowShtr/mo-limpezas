@@ -70,22 +70,13 @@ CREATE POLICY "absences_own_select" ON absences
 -- ─── 5. contracts SELECT ─────────────────────────────────────────────────────
 -- Antes: "contracts_select" (só company_id) → colaboradora via ler todos os
 -- contratos (equipas, horários, preços, observações de acesso).
+-- A app mobile nunca consulta contratos diretamente (usa services/instâncias).
 DROP POLICY IF EXISTS "contracts_select" ON contracts;
--- Gestoras: veem todos
 CREATE POLICY "contracts_manager_select" ON contracts
   FOR SELECT
   USING (
     company_id = get_my_company_id()
     AND (SELECT role FROM profiles WHERE id = auth.uid()) IN ('admin', 'gestor')
-  );
--- Colaboradoras: só contratos da própria equipa
-CREATE POLICY "contracts_collaborator_select" ON contracts
-  FOR SELECT
-  USING (
-    company_id = get_my_company_id()
-    AND team_id IN (
-      SELECT team_id FROM team_members WHERE collaborator_id = auth.uid()
-    )
   );
 
 -- ─── 6. service_photos write ─────────────────────────────────────────────────
