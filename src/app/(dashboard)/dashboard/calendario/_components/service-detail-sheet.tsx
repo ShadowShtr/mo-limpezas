@@ -14,8 +14,8 @@ import { CANCEL_TYPE_LABELS, type CancelType } from "@/lib/cancel-types";
 import { sendBulkClientNotifications } from "@/app/actions/email";
 import { ServicePhotosGallery } from "./service-photos-gallery";
 import type { Database } from "@/types/database";
+import type { ServiceCalendar } from "./calendar-view";
 
-type ServiceFull = Database["public"]["Views"]["services_full"]["Row"];
 type Timesheet = Database["public"]["Tables"]["timesheets"]["Row"];
 type TimesheetWithName = Timesheet & { collaborator_name: string | null };
 
@@ -48,10 +48,19 @@ async function fetchTimesheets(supabase: ReturnType<typeof createClient>, servic
   }));
 }
 
+// ─── Tipos ────────────────────────────────────────────────────────────────────
+
+type ServiceExtras = {
+  location_access_code: string | null;
+  location_instructions: string | null;
+  client_phone: string | null;
+  client_email: string | null;
+};
+
 // ─── Componente principal ─────────────────────────────────────────────────────
 
 interface Props {
-  service: ServiceFull | null;
+  service: ServiceCalendar | null;
   onClose: () => void;
   onChanged: () => void;
 }
@@ -60,6 +69,7 @@ export function ServiceDetailSheet({ service, onClose, onChanged }: Props) {
   const supabase = createClient();
   const [timesheets, setTimesheets] = useState<TimesheetWithName[]>([]);
   const [loadingTs,  setLoadingTs]  = useState(false);
+  const [extras,     setExtras]     = useState<ServiceExtras | null>(null);
   const [fixClockOut, setFixClockOut] = useState(false);
   const [clockOutTime, setClockOutTime] = useState("");
   const [clockOutTsId, setClockOutTsId] = useState<string>("");
@@ -77,8 +87,9 @@ export function ServiceDetailSheet({ service, onClose, onChanged }: Props) {
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    if (!service) { setTimesheets([]); return; }
+    if (!service) { setTimesheets([]); setExtras(null); return; }
     setTimesheets([]);
+    setExtras(null);
     setActionMsg(null);
     setFixClockOut(false);
     setClockOutTime("");
@@ -93,8 +104,17 @@ export function ServiceDetailSheet({ service, onClose, onChanged }: Props) {
       `Serviço ${service.location_name} — ${format(parseISO(service.scheduled_start), "HH:mm")}–${format(parseISO(service.scheduled_end), "HH:mm")}`
     );
     setLoadingTs(true);
-    fetchTimesheets(supabase, service.id).then((rows) => {
+    Promise.all([
+      fetchTimesheets(supabase, service.id),
+      supabase
+        .from("services_full")
+        .select("location_access_code, location_instructions, client_phone, client_email")
+        .eq("id", service.id)
+        .single()
+        .then(({ data }) => data as ServiceExtras | null),
+    ]).then(([rows, extraData]) => {
       setTimesheets(rows);
+      setExtras(extraData);
       setLoadingTs(false);
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -115,10 +135,9 @@ export function ServiceDetailSheet({ service, onClose, onChanged }: Props) {
   const ss   = STATUS_STYLE[svc.status] ?? STATUS_STYLE.agendado;
   const value = svc.manual_value ?? svc.calculated_value;
   const canAct = svc.status !== "concluido";
-  // client_phone / client_email adicionados nas migrations 020/021 — cast até tipos serem regenerados
-  type SvcExtra = ServiceFull & { client_phone?: string | null; client_email?: string | null };
-  const clientPhone = (svc as SvcExtra).client_phone ?? null;
-  const clientEmail = (svc as SvcExtra).client_email ?? null;
+  // Campos sensíveis carregados on-demand quando o sheet abre
+  const clientPhone = extras?.client_phone ?? null;
+  const clientEmail = extras?.client_email ?? null;
 
   // ─── Acções ──────────────────────────────────────────────────────────────
 
@@ -308,15 +327,15 @@ export function ServiceDetailSheet({ service, onClose, onChanged }: Props) {
               </InfoRow>
             )}
 
-            {svc.location_access_code && (
+            {extras?.location_access_code && (
               <InfoRow icon={Lock} label="Código de acesso">
-                <span className="font-mono font-semibold">{svc.location_access_code}</span>
+                <span className="font-mono font-semibold">{extras.location_access_code}</span>
               </InfoRow>
             )}
 
-            {svc.location_instructions && (
+            {extras?.location_instructions && (
               <InfoRow icon={FileText} label="Instruções">
-                <p className="text-sm text-[var(--color-text-sub)] whitespace-pre-line">{svc.location_instructions}</p>
+                <p className="text-sm text-[var(--color-text-sub)] whitespace-pre-line">{extras.location_instructions}</p>
               </InfoRow>
             )}
 

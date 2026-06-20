@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { startOfWeek, parseISO } from "date-fns";
 import { Header } from "@/components/layout/header";
 import { CalendarView } from "./_components/calendar-view";
+import type { ServiceCalendar } from "./_components/calendar-view";
 import { getDemoServices, DEMO_TEAMS } from "./_demo/mock-data";
 import type { Database } from "@/types/database";
 
@@ -51,8 +52,8 @@ export default async function CalendarioPage({
         "status", "notes", "calculated_value", "manual_value",
         "location_id", "location_name", "location_address",
         "location_lat", "location_lng", "location_has_key", "location_key_label",
-        "location_access_code", "location_instructions",
-        "client_id", "client_name", "client_phone", "client_email",
+        "location_access_code",
+        "client_id", "client_name",
         "team_id", "team_name", "team_color",
       ].join(", "))
       .eq("company_id", companyId)
@@ -85,8 +86,23 @@ export default async function CalendarioPage({
     a.name.localeCompare(b.name, "pt", { numeric: true, sensitivity: "base" })
   );
   const finalTeams  = isDemo ? DEMO_TEAMS : (sortedTeams as Team[]);
-  const finalSvcs   = isDemo ? getDemoServices() : (services ?? []) as unknown as ServiceFull[];
-  const totalServices = finalSvcs.length;
+  const rawSvcs     = isDemo ? getDemoServices() : (services ?? []) as unknown as ServiceFull[];
+  const totalServices = rawSvcs.length;
+
+  // Converter para ServiceCalendar: computar boolean e strip de campos sensíveis.
+  // O RSC recebe location_access_code para derivar o boolean, mas não o serializa para o browser.
+  const processedServices: ServiceCalendar[] = rawSvcs.map((s) => {
+    const { location_access_code, location_instructions, client_phone, client_email, ...rest } =
+      s as ServiceFull & { location_access_code?: string | null; location_instructions?: string | null; client_phone?: string | null; client_email?: string | null };
+    return {
+      ...rest,
+      location_has_access_code: !!(location_access_code),
+      location_access_code: null,
+      location_instructions: null,
+      client_phone: null,
+      client_email: null,
+    } as ServiceCalendar;
+  });
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
@@ -99,7 +115,7 @@ export default async function CalendarioPage({
         }
       />
       <CalendarView
-        services={finalSvcs}
+        services={processedServices}
         teams={finalTeams}
         weekStartISO={weekStart.toISOString()}
         selectedDateISO={baseDate.toISOString()}
