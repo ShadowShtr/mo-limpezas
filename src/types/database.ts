@@ -90,9 +90,9 @@ export type Database = {
         Relationships: [];
       };
       background_jobs: {
-        Row: { id: string; type: string; status: string; company_id: string | null; cursor: number; total: number; processed: number; failed: number; last_error: string | null; meta: Record<string, unknown>; started_at: string; finished_at: string | null; updated_at: string };
-        Insert: { type: string; status?: string; company_id?: string | null; cursor?: number; total?: number; processed?: number; failed?: number; last_error?: string | null; meta?: Record<string, unknown>; id?: string; started_at?: string; finished_at?: string | null; updated_at?: string };
-        Update: { status?: string; cursor?: number; total?: number; processed?: number; failed?: number; last_error?: string | null; meta?: Record<string, unknown>; finished_at?: string | null; updated_at?: string };
+        Row: { id: string; type: string; status: string; company_id: string | null; cursor: number; total: number; processed: number; failed: number; last_error: string | null; meta: Record<string, unknown>; job_key: string | null; started_at: string; finished_at: string | null; updated_at: string };
+        Insert: { type: string; status?: string; company_id?: string | null; cursor?: number; total?: number; processed?: number; failed?: number; last_error?: string | null; meta?: Record<string, unknown>; job_key?: string | null; id?: string; started_at?: string; finished_at?: string | null; updated_at?: string };
+        Update: { status?: string; cursor?: number; total?: number; processed?: number; failed?: number; last_error?: string | null; meta?: Record<string, unknown>; job_key?: string | null; finished_at?: string | null; updated_at?: string };
         Relationships: [];
       };
       service_photos: {

@@ -40,8 +40,14 @@ export async function login(formData: FormData) {
     return { error: "Email ou password incorretos." };
   }
 
-  // O role real está em profiles, não no user_metadata — admins/gestores → /dashboard
-  const role = data.user?.user_metadata?.role as string | undefined;
+  // Usar profiles.role (fonte autoritativa) em vez de user_metadata que pode estar desatualizado
+  const { createAdminClient: mkAdmin } = await import("@/lib/supabase/admin");
+  const { data: profile } = await mkAdmin()
+    .from("profiles")
+    .select("role")
+    .eq("id", data.user.id)
+    .single();
+  const role = profile?.role as string | undefined;
   redirect(role === "colaborador" ? "/app" : "/dashboard");
 }
 
@@ -134,7 +140,13 @@ export async function updatePassword(formData: FormData) {
   const { error } = await supabase.auth.updateUser({ password });
   if (error) return { error: "Não foi possível alterar a password. Tenta novamente." };
 
-  const role = user.user_metadata?.role as string | undefined;
+  const { createAdminClient: mkAdmin2 } = await import("@/lib/supabase/admin");
+  const { data: profile } = await mkAdmin2()
+    .from("profiles")
+    .select("role")
+    .eq("id", user.id)
+    .single();
+  const role = profile?.role as string | undefined;
   return { success: "Password alterada com sucesso.", redirect: role === "colaborador" ? "/app" : "/dashboard" };
 }
 

@@ -38,7 +38,7 @@ function jsonFile(zip: JSZip, path: string, data: unknown) {
   zip.file(path, JSON.stringify(data, null, 2));
 }
 
-export async function GET() {
+export async function POST() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return Response.json({ error: "Nao autenticado." }, { status: 401 });

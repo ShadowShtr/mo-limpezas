@@ -26,7 +26,7 @@ export function BackupSection() {
     setStatus("working");
     setError(null);
     try {
-      const res = await fetch("/api/dashboard/backups/export");
+      const res = await fetch("/api/dashboard/backups/export", { method: "POST" });
       if (!res.ok) throw new Error(await res.text());
       const blob = await res.blob();
       const disposition = res.headers.get("content-disposition") ?? "";

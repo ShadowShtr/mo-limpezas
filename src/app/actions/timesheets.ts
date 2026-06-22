@@ -123,14 +123,21 @@ export async function adminCreateTimesheet(
   if (!guard.ok) return { ok: false, error: guard.error };
   const { admin, profile } = guard;
 
-  // O serviço tem de pertencer à empresa da sessão (isolamento multi-tenant)
-  const { data: svc, error: svcErr } = await admin
-    .from("services")
-    .select("company_id")
-    .eq("id", serviceId)
-    .eq("company_id", profile.company_id)
-    .single();
+  // Serviço e colaborador têm de pertencer à empresa da sessão
+  const [{ data: svc, error: svcErr }, { data: collab, error: collabErr }] = await Promise.all([
+    admin.from("services")
+      .select("company_id")
+      .eq("id", serviceId)
+      .eq("company_id", profile.company_id)
+      .single(),
+    admin.from("profiles")
+      .select("company_id")
+      .eq("id", collaboratorId)
+      .eq("company_id", profile.company_id)
+      .single(),
+  ]);
   if (svcErr || !svc) return { ok: false, error: "Serviço não encontrado." };
+  if (collabErr || !collab) return { ok: false, error: "Colaborador não encontrado nesta empresa." };
 
   let duration_minutes: number | null = null;
   if (data.clock_in_at && data.clock_out_at) {

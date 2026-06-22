@@ -4,7 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 
-async function getCompanyId() {
+async function getCallerContext() {
   const supabase = await createClient();
   const admin = createAdminClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -15,7 +15,7 @@ async function getCompanyId() {
     .eq("id", user.id)
     .single();
   if (!profile || !["admin", "gestor"].includes(profile.role)) return null;
-  return profile.company_id as string;
+  return { company_id: profile.company_id as string, role: profile.role as string };
 }
 
 // ─── Colaboradoras ───────────────────────────────────────────────────────────
@@ -29,8 +29,14 @@ export interface CsvColaboradora {
 }
 
 export async function importColaboradorasCSV(rows: CsvColaboradora[]) {
-  const company_id = await getCompanyId();
-  if (!company_id) return { ok: false as const, error: "Sem permissão." };
+  const ctx = await getCallerContext();
+  if (!ctx) return { ok: false as const, error: "Sem permissão." };
+  const { company_id, role: callerRole } = ctx;
+
+  // Gestor só pode criar colaborador; admin pode criar qualquer role.
+  const allowedRoles = callerRole === "admin"
+    ? ["admin", "gestor", "colaborador"]
+    : ["colaborador"];
 
   const admin = createAdminClient();
   const results: { row: number; ok: boolean; error?: string }[] = [];
@@ -42,9 +48,7 @@ export async function importColaboradorasCSV(rows: CsvColaboradora[]) {
       continue;
     }
 
-    const role = ["admin", "gestor", "colaborador"].includes(r.funcao ?? "")
-      ? r.funcao!
-      : "colaborador";
+    const role = allowedRoles.includes(r.funcao ?? "") ? r.funcao! : "colaborador";
 
     const email =
       r.email?.trim() ||
@@ -101,8 +105,9 @@ export interface CsvCliente {
 }
 
 export async function importClientesCSV(rows: CsvCliente[]) {
-  const company_id = await getCompanyId();
-  if (!company_id) return { ok: false as const, error: "Sem permissão." };
+  const ctx = await getCallerContext();
+  if (!ctx) return { ok: false as const, error: "Sem permissão." };
+  const { company_id } = ctx;
 
   const admin = createAdminClient();
   const results: { row: number; ok: boolean; error?: string }[] = [];
@@ -147,8 +152,9 @@ export interface CsvLocal {
 }
 
 export async function importLocaisCSV(rows: CsvLocal[]) {
-  const company_id = await getCompanyId();
-  if (!company_id) return { ok: false as const, error: "Sem permissão." };
+  const ctx = await getCallerContext();
+  if (!ctx) return { ok: false as const, error: "Sem permissão." };
+  const { company_id } = ctx;
 
   const admin = createAdminClient();
 

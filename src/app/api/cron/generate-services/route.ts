@@ -242,6 +242,8 @@ export async function GET(req: NextRequest) {
   let totalSkipped = 0;
   let totalFailed = 0;
 
+  const monthKey = monthStartStr.slice(0, 7); // "YYYY-MM"
+
   if (jobId) {
     const { data: job } = await supabase
       .from("background_jobs").select("cursor, processed, failed, meta").eq("id", jobId).single();
@@ -251,16 +253,25 @@ export async function GET(req: NextRequest) {
       totalFailed = job.failed ?? 0;
     }
   } else {
-    const { data: created } = await supabase
+    // job_key único por (type, job_key) enquanto status='running' —
+    // se dois Vercel workers arrancarem ao mesmo tempo, um deles recebe 23505 e sai.
+    const { data: created, error: jobErr } = await supabase
       .from("background_jobs")
       .insert({
         type: "generate_services",
         status: "running",
         total: allContracts.length,
+        job_key: monthKey,
         meta: { month: monthStartStr },
       })
       .select("id")
       .single();
+    if (jobErr) {
+      if (jobErr.code === "23505") {
+        return NextResponse.json({ ok: true, skipped: true, reason: "job already running for this month" });
+      }
+      return NextResponse.json({ error: jobErr.message }, { status: 500 });
+    }
     jobId = created?.id ?? null;
   }
 

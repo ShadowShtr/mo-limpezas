@@ -140,21 +140,10 @@ export async function GET(req: NextRequest) {
             upsert: true,
           });
 
-        // 6. Apagar ficheiros originais do storage
-        const storagePaths = (expired ?? [])
-          .map((d) => {
-            const prefix = `/${BUCKET}/`;
-            return typeof d.file_url === "string" && d.file_url.includes(prefix)
-              ? decodeURIComponent(d.file_url.split(prefix)[1])
-              : null;
-          })
-          .filter((p): p is string => p !== null);
-
-        if (storagePaths.length > 0) {
-          await admin.storage.from(BUCKET).remove(storagePaths);
-        }
-
-        // 7. Marcar como arquivados na DB (apenas os IDs que buscámos — respeita o limite)
+        // 6. Marcar como arquivados na DB ANTES de apagar storage.
+        // Se a DB falhar, os ficheiros ficam intactos e o cron pode repetir.
+        // Se o storage falhar depois, os metadados já estão corretos — ficheiros
+        // órfãos serão apanhados pela reconciliação.
         const expiredIds = (expired as Array<{ id: string }>).map((d) => d.id);
         const { error: archiveErr } = await admin
           .from("collaborator_documents")
@@ -170,6 +159,20 @@ export async function GET(req: NextRequest) {
             error:         archiveErr.message,
           });
           continue;
+        }
+
+        // 7. Apagar ficheiros originais do storage (após DB confirmada)
+        const storagePaths = (expired ?? [])
+          .map((d) => {
+            const prefix = `/${BUCKET}/`;
+            return typeof d.file_url === "string" && d.file_url.includes(prefix)
+              ? decodeURIComponent(d.file_url.split(prefix)[1])
+              : null;
+          })
+          .filter((p): p is string => p !== null);
+
+        if (storagePaths.length > 0) {
+          await admin.storage.from(BUCKET).remove(storagePaths);
         }
 
         results.push({

@@ -41,7 +41,12 @@ let upstashMod: UpstashMod | null = null;
 let upstashLoaded = false;
 
 async function getUpstashLimiter(max: number, windowMs: number) {
-  if (!process.env.UPSTASH_REDIS_REST_URL || !process.env.UPSTASH_REDIS_REST_TOKEN) {
+  const hasUpstash = !!(process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN);
+  // Em produção o fallback in-memory não é fiável entre instâncias Vercel.
+  if (!hasUpstash) {
+    if (process.env.NODE_ENV === "production") {
+      throw new Error("UPSTASH_REDIS_REST_URL e UPSTASH_REDIS_REST_TOKEN são obrigatórios em produção.");
+    }
     return null;
   }
   try {

@@ -13,8 +13,9 @@ const nextConfig: NextConfig = {
   },
   experimental: {
     serverActions: {
-      // Fotos de celular chegam a 10-15 MB; o padrão do Next.js é 1 MB
-      bodySizeLimit: "52mb",
+      // Uploads de fotos e documentos vão via signed URL (fetch PUT direto ao Supabase),
+      // não por server actions — o limite é para metadados e payloads normais.
+      bodySizeLimit: "4mb",
     },
   },
   // Headers de segurança HTTP
