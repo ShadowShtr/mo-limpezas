@@ -1,5 +1,7 @@
 ﻿import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+
+export const dynamic = "force-dynamic";
 import { Header } from "@/components/layout/header";
 import { ColaboradoresTable } from "./_components/table";
 import { ColaboradorSheet } from "./_components/sheet";

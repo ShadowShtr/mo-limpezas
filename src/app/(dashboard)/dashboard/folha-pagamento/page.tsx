@@ -1,5 +1,7 @@
 ﻿import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
+
+export const dynamic = "force-dynamic";
 import { Header } from "@/components/layout/header";
 import { getPayrollRecords } from "@/app/actions/payroll";
 import { PayrollClient } from "./_components/payroll-client";
