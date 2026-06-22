@@ -76,7 +76,7 @@ export async function calculateAndSavePayroll(
     .from("profiles")
     .select("id, full_name, avatar_url, contracted_hours_month, hourly_rate")
     .eq("company_id", companyId)
-    .in("role", ["colaborador", "gestor"])
+    .in("role", ["colaborador", "gestor", "admin"])
     .eq("status", "ativo")
     .order("full_name");
 

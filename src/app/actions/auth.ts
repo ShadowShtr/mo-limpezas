@@ -21,11 +21,16 @@ export async function login(formData: FormData) {
     return { error: "Demasiadas tentativas de login. Aguarda um minuto." };
   }
 
-  const rawEmail = formData.get("email") as string;
+  const rawInput = (formData.get("email") as string)?.trim();
   const rawPassword = formData.get("password") as string;
 
-  const emailResult = emailSchema.safeParse(rawEmail);
-  if (!emailResult.success) return { error: emailResult.error.issues[0].message };
+  // Aceita username puro (ex: admin1) ou email completo
+  const resolvedEmail = rawInput?.includes("@")
+    ? rawInput
+    : `${rawInput}@molimpezas.local`;
+
+  const emailResult = emailSchema.safeParse(resolvedEmail);
+  if (!emailResult.success) return { error: "Utilizador ou email inválido." };
 
   const passResult = passwordSchema.safeParse(rawPassword);
   if (!passResult.success) return { error: passResult.error.issues[0].message };

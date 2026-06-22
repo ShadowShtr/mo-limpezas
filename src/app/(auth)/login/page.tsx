@@ -55,13 +55,14 @@ export default function LoginPage() {
 
             <div>
               <label className="block text-sm font-medium text-[var(--color-text-main)] mb-1.5">
-                Email
+                Utilizador ou Email
               </label>
               <input
                 name="email"
-                type="email"
+                type="text"
                 required
-                placeholder="gestor@molimpezas.pt"
+                placeholder="admin1 ou gestor@molimpezas.pt"
+                autoComplete="username"
                 className="w-full px-3 py-2 rounded-lg border border-[var(--color-border)] text-sm
                            bg-white text-[var(--color-text-main)] placeholder:text-[var(--color-text-muted)]
                            focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] focus:border-transparent
