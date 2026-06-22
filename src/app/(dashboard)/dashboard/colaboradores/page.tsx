@@ -25,11 +25,19 @@ export default async function ColaboradoresPage() {
     .eq("company_id", company?.company_id ?? "")
     .order("full_name");
 
+  const sortedColaboradores = [...(colaboradores ?? [])].sort((a, b) => {
+    const roleOrder: Record<string, number> = { admin: 0, gestor: 1, colaborador: 2 };
+    const roleDiff = (roleOrder[a.role] ?? 3) - (roleOrder[b.role] ?? 3);
+    return roleDiff || a.full_name.localeCompare(b.full_name, "pt-PT");
+  });
+  const colaboradoresCount = sortedColaboradores.filter((c) => c.role === "colaborador").length;
+  const administracaoCount = sortedColaboradores.length - colaboradoresCount;
+
   return (
     <div>
       <Header
         title="Colaboradores"
-        subtitle={`${colaboradores?.length ?? 0} colaboradores`}
+        subtitle={`${colaboradoresCount} colaboradores + ${administracaoCount} administração`}
         actions={
           <ColaboradorSheet
             companyId={company?.company_id ?? ""}
@@ -44,7 +52,7 @@ export default async function ColaboradoresPage() {
       />
       <div className="px-4 py-5 sm:p-6 lg:px-8 mx-auto max-w-[1400px]">
         <ColaboradoresTable
-          colaboradores={(colaboradores ?? []).map((c) => {
+          colaboradores={sortedColaboradores.map((c) => {
             const r = c as typeof c & { nif?: string | null; iban?: string | null; hourly_rate?: number | null; contract_start?: string | null; contract_end?: string | null };
             return { ...r, nif: r.nif ?? null, iban: r.iban ?? null, hourly_rate: r.hourly_rate ?? null, contract_start: r.contract_start ?? null, contract_end: r.contract_end ?? null };
           })}
