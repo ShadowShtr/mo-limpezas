@@ -32,6 +32,7 @@ export default async function ColaboradoresPage() {
   });
   const colaboradoresCount = sortedColaboradores.filter((c) => c.role === "colaborador").length;
   const administracaoCount = sortedColaboradores.length - colaboradoresCount;
+  const administracao = sortedColaboradores.filter((c) => c.role !== "colaborador");
 
   return (
     <div>
@@ -51,6 +52,24 @@ export default async function ColaboradoresPage() {
         }
       />
       <div className="px-4 py-5 sm:p-6 lg:px-8 mx-auto max-w-[1400px]">
+        {administracao.length > 0 && (
+          <section className="mb-4">
+            <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-[var(--color-text-muted)]">
+              Administração
+            </h2>
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              {administracao.map((adminProfile) => (
+                <div key={adminProfile.id} className="rounded-xl border border-[var(--color-border)] bg-white p-4">
+                  <p className="text-sm font-semibold text-[var(--color-text-main)]">{adminProfile.full_name}</p>
+                  <p className="mt-0.5 text-xs text-[var(--color-text-muted)]">{adminProfile.email ?? "Sem email"}</p>
+                  <span className="mt-2 inline-flex rounded-full bg-[var(--color-primary-light)] px-2 py-0.5 text-xs font-medium capitalize text-[var(--color-primary)]">
+                    {adminProfile.role}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
         <ColaboradoresTable
           colaboradores={sortedColaboradores.map((c) => {
             const r = c as typeof c & { nif?: string | null; iban?: string | null; hourly_rate?: number | null; contract_start?: string | null; contract_end?: string | null };
