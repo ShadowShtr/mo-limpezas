@@ -3,7 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 import { Header } from "@/components/layout/header";
-import { getPayrollRecords } from "@/app/actions/payroll";
+import { calculateAndSavePayroll, getPayrollRecords } from "@/app/actions/payroll";
 import { PayrollClient } from "./_components/payroll-client";
 
 export const metadata = { title: "Folha de Pagamento — Escala" };
@@ -33,7 +33,19 @@ export default async function FolhaPagamentoPage({
   const [year, month] = mesParam.split("-").map(Number);
 
   const result = await getPayrollRecords(companyId, year, month);
-  const records = result.ok ? result.records : [];
+  let records = result.ok ? result.records : [];
+
+  const { count: activePayrollProfiles } = await admin
+    .from("profiles")
+    .select("id", { count: "exact", head: true })
+    .eq("company_id", companyId)
+    .eq("status", "ativo")
+    .in("role", ["colaborador", "gestor", "admin"]);
+
+  if (activePayrollProfiles && records.length < activePayrollProfiles) {
+    const refreshed = await calculateAndSavePayroll(companyId, year, month);
+    records = refreshed.ok ? refreshed.records : records;
+  }
 
   const mesLabel = new Date(year, month - 1).toLocaleDateString("pt-PT", {
     month: "long",

@@ -62,7 +62,7 @@ export function PayrollClient({ initialRecords, companyId, mesParam, year, month
   const totalDesc  = records.reduce((s, r) => s + r.absence_deductions + r.other_deductions, 0);
   const totalLiq   = records.reduce((s, r) => s + r.net_salary, 0);
 
-  const pag = usePagination(records, 10);
+  const pag = usePagination(records, 30);
 
   function toggleSelect(id: string) {
     setSelected((prev) => {

@@ -49,7 +49,7 @@ export function ColaboradoresTable({ colaboradores, companyId }: Props) {
     return matchSearch && matchStatus;
   });
 
-  const pag = usePagination(filtered, 10);
+  const pag = usePagination(filtered, 30);
   const paginated = pag.pageItems;
 
   function getInitials(name: string) {
