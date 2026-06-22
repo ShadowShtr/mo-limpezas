@@ -45,7 +45,7 @@ async function getUpstashLimiter(max: number, windowMs: number) {
   // Em produção o fallback in-memory não é fiável entre instâncias Vercel.
   if (!hasUpstash) {
     if (process.env.NODE_ENV === "production") {
-      throw new Error("UPSTASH_REDIS_REST_URL e UPSTASH_REDIS_REST_TOKEN são obrigatórios em produção.");
+      console.warn("Rate limit a usar fallback local: UPSTASH_REDIS_REST_URL/TOKEN nao configurados.");
     }
     return null;
   }
