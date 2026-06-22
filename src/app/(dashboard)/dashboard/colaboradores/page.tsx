@@ -21,7 +21,6 @@ export default async function ColaboradoresPage() {
     .from("profiles")
     .select("id, full_name, email, phone, role, status, contracted_hours_month, skills, avatar_url, created_at, invited_at, invite_accepted_at, nif, iban, hourly_rate, contract_start, contract_end")
     .eq("company_id", company?.company_id ?? "")
-    .not("role", "eq", "admin")
     .order("full_name");
 
   return (
