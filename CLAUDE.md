@@ -47,18 +47,28 @@ Lê este ficheiro no início de CADA sessão antes de fazer qualquer coisa.
 
 ## ⚡ PRÓXIMA TASK A EXECUTAR
 
-**Migrations críticas:** 027, 028 e 029 aplicadas/confirmadas em 2026-06-19.
-A `029_background_jobs.sql` foi confirmada no Supabase com
-`to_regclass('public.background_jobs') = background_jobs`.
+**Todas as migrations até 036 estão aplicadas em produção (2026-06-22).**
 
-**Migration 030 criada (2026-06-19) — APLICAR VIA SQL EDITOR:**
-`supabase/migrations/030_rls_tighten.sql` — remove políticas permissivas legacy
-em clients/locations/absences/vacation_requests e recria `services_full` com
-`security_invoker=true`. **Ainda não aplicada em produção.**
+Migrations aplicadas:
+- ✅ 027–029 (aplicadas 2026-06-19)
+- ✅ 030 — RLS tighten (vacation_requests + services_full security_invoker)
+- ✅ 031 — reference_number unique constraint
+- ✅ 033 — RLS blindagem (cash_flow, management_tasks, timesheets, absences, contracts, service_photos)
+- ✅ 034 — RLS serviços/clientes/locais + can_access_service() + background_jobs policy
+- ✅ 035 — Views por escopo (services_calendar_summary, services_mobile_collaborator, services_financial_private)
+- ✅ 036 — background_jobs job_key + índice único anti-duplicação de crons
 
-**Migration 031 criada (2026-06-19) — APLICAR VIA SQL EDITOR:**
-`supabase/migrations/031_reference_number_unique.sql` — índice único em
-`(company_id, reference_number)`. **Ainda não aplicada em produção.**
+**Correções de código aplicadas (commit a08a1fb, 2026-06-22):**
+- CSV: gestor só cria colaborador (P0-6)
+- Cron arquivo: DB marcada antes de apagar storage (P0-7)
+- Backup: GET → POST (P1-2)
+- Rate-limit: Upstash obrigatório em produção (P1-3)
+- Crons: advisory lock via job_key único (P1-4)
+- adminCreateTimesheet: valida empresa do colaborador (P1-5)
+- Login/updatePassword: redirect via profiles.role (P1-6)
+- serverActions.bodySizeLimit: 52mb → 4mb (P2-4)
+
+**Próxima task:** merge `master` → produção e deploy.
 
 > ⚠️ **Upload de fotos/documentos do colaborador ainda instável** (2026-06-19).
 > Já aplicadas: timeout `canvas.toBlob` (6s), `fetch PUT` com AbortController (60s),
