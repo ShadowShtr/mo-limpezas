@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { Header } from "@/components/layout/header";
 import { getFinancialDashboard } from "@/app/actions/financial-dashboard";
 import { FinancialDashboardClient } from "./_components/financial-dashboard-client";
+import { PaymentsReminderBanner } from "../_components/payments-reminder-banner";
 
 export const metadata = { title: "Financeiro — Escala" };
 
@@ -29,7 +30,8 @@ export default async function FinanceiroPage() {
         title="Dashboard Financeiro"
         subtitle={`Visão geral ${yearLabel}`}
       />
-      <div className="px-4 py-5 sm:p-6 lg:px-8 mx-auto max-w-[1400px]">
+      <div className="px-4 py-5 sm:p-6 lg:px-8 mx-auto max-w-[1400px] space-y-6">
+        <PaymentsReminderBanner />
         <FinancialDashboardClient
           data={result.ok ? result.data : null}
           error={result.ok ? null : result.error}

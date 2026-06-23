@@ -161,6 +161,12 @@ export type Database = {
         Update: { description?: string; amount?: number; date?: string; category?: string | null; status?: "pendente" | "confirmado"; notes?: string | null };
         Relationships: [];
       };
+      fixed_variable_payments: {
+        Row: { id: string; company_id: string; kind: "fixo" | "variavel"; description: string; amount: number | null; due_date: string | null; direct_debit: boolean | null; status: "pago" | "pendente"; recurring: boolean; period_year: number; period_month: number; paid_at: string | null; notes: string | null; sort_order: number; source_id: string | null; created_by: string | null; created_at: string; updated_at: string };
+        Insert: { company_id: string; kind: "fixo" | "variavel"; description: string; amount?: number | null; due_date?: string | null; direct_debit?: boolean | null; status?: "pago" | "pendente"; recurring?: boolean; period_year: number; period_month: number; paid_at?: string | null; notes?: string | null; sort_order?: number; source_id?: string | null; created_by?: string | null };
+        Update: { description?: string; amount?: number | null; due_date?: string | null; direct_debit?: boolean | null; status?: "pago" | "pendente"; recurring?: boolean; notes?: string | null; sort_order?: number; paid_at?: string | null; updated_at?: string };
+        Relationships: [];
+      };
       collaborator_documents: {
         Row: {
           id: string;
