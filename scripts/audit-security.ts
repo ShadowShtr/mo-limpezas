@@ -113,8 +113,9 @@ for (const file of apiFiles) {
   const isPublic = PUBLIC_ROUTES.includes(normalized);
 
   if (isCron) {
+    // Aceita verificação direta de CRON_SECRET ou o helper central checkCronAuth.
     check(
-      content.includes("CRON_SECRET"),
+      content.includes("CRON_SECRET") || content.includes("checkCronAuth"),
       file,
       "Rota cron sem verificação de CRON_SECRET."
     );

@@ -46,6 +46,9 @@ next-env.d.ts
 # Credenciais provisorias (segredos) - nunca commitar
 CREDENCIAIS_COLABORADORES.local.md
 *.local.md
+Credenciais_Colaboradores.pdf
+*credenciais*.pdf
+*.local.pdf
 
 # Ficheiros de dados de import (dados pessoais) - nunca commitar
 scripts/*.local.json
