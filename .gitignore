@@ -55,3 +55,6 @@ scripts/*.local.json
 scripts/_*.json
 scripts/_*.mjs
 *_data*.json
+
+# Supabase CLI — cache/estado local temporário (regenerado pelo CLI)
+supabase/.temp/
