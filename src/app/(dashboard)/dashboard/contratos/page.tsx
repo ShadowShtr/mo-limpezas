@@ -26,7 +26,7 @@ export default async function ContratosPage() {
         .select(`
           id, name, frequency, interval_days, weekdays, schedule_days,
           starts_on, ends_on, status, notes, created_at,
-          locations ( id, name, address, clients ( id, name ) )
+          locations ( id, name, address, hourly_rate, clients ( id, name ) )
         `)
         .eq("company_id", companyId)
         .order("created_at", { ascending: false }),
@@ -101,6 +101,7 @@ export type ContratosTableRow = {
     id: string;
     name: string;
     address: string;
+    hourly_rate: number | null;
     clients: { id: string; name: string } | null;
   } | null;
 };

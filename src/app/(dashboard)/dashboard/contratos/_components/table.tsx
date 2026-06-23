@@ -177,6 +177,11 @@ export function ContratosTable({ contratos, companyId, userId, clientes, locais,
                             ))}
                           </div>
                         )}
+                        {c.locations?.hourly_rate != null && (
+                          <p className="mt-1 text-xs font-medium text-[var(--color-text-sub)]">
+                            €{c.locations.hourly_rate.toFixed(2)}/h
+                          </p>
+                        )}
                         {/* Equipas do schedule_days */}
                         <TeamsPreview scheduleDays={c.schedule_days} equipas={equipas} />
                       </div>

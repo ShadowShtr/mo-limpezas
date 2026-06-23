@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition, useMemo } from "react";
+import { useEffect, useState, useTransition, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { X, Loader2, ChevronDown } from "lucide-react";
 import { createContrato, updateContrato } from "@/app/actions/contratos";
@@ -206,6 +206,9 @@ export function ContratoSheet({
   const [notes, setNotes] = useState(source?.notes ?? "");
   const [status, setStatus] = useState(contrato?.status ?? "ativo");
   const [editScope, setEditScope] = useState("pattern");
+  const [hourlyRate, setHourlyRate] = useState(
+    source?.locations?.hourly_rate != null ? String(source.locations.hourly_rate) : "",
+  );
 
   // schedule_days: chave = day key (ex: "mon"), valor = config
   const initSchedule = (): Record<string, { start_time: string; duration_min: number; team_id: string }> => {
@@ -226,6 +229,11 @@ export function ContratoSheet({
   // Locais filtrados pelo cliente selecionado
   const locaisFiltrados = clienteId ? locais.filter((l) => l.client_id === clienteId) : locais;
   const selectedLocal = locais.find((l) => l.id === localId) ?? null;
+
+  useEffect(() => {
+    if (!selectedLocal || isEdit) return;
+    setHourlyRate(selectedLocal.hourly_rate != null ? String(selectedLocal.hourly_rate) : "");
+  }, [isEdit, selectedLocal]);
 
   function toggleWeekday(d: number) {
     setSelectedWeekdays((prev) =>
@@ -251,6 +259,18 @@ export function ContratoSheet({
     return [{ num: -1, key: "all" as ScheduleDay["day"], label: "Configuração padrão" }];
   }, [frequency, selectedWeekdays]);
 
+  const parsedHourlyRate = hourlyRate.trim() === "" ? null : Number(hourlyRate.replace(",", "."));
+  const totalDurationMin = useMemo(
+    () => daysToConfig.reduce((sum, { key }) => {
+      const cfg = scheduleConfig[key] ?? { start_time: "09:00", duration_min: 120, team_id: "" };
+      return sum + Number(cfg.duration_min || 0);
+    }, 0),
+    [daysToConfig, scheduleConfig],
+  );
+  const calculatedValue = parsedHourlyRate != null && Number.isFinite(parsedHourlyRate)
+    ? (totalDurationMin / 60) * parsedHourlyRate
+    : null;
+
   function buildScheduleDays(): ScheduleDay[] {
     return daysToConfig.map(({ key }) => {
       const cfg = scheduleConfig[key] ?? { start_time: "09:00", duration_min: 120, team_id: "" };
@@ -274,11 +294,16 @@ export function ContratoSheet({
     if ((frequency === "weekly" || frequency === "biweekly") && selectedWeekdays.length === 0) {
       setMessage({ type: "error", text: "Aviso: nenhum dia da semana selecionado." });
     }
+    if (parsedHourlyRate != null && (!Number.isFinite(parsedHourlyRate) || parsedHourlyRate < 0)) {
+      setMessage({ type: "error", text: "Valor por hora inválido." });
+      return;
+    }
 
     startTransition(async () => {
       const input = {
         location_id: localId,
         name: name || undefined,
+        hourly_rate: parsedHourlyRate,
         frequency,
         interval_days: frequency === "custom" ? intervalDays : 1,
         weekdays: (frequency === "weekly" || frequency === "biweekly") ? selectedWeekdays : null,
@@ -559,6 +584,32 @@ export function ContratoSheet({
                 startsOn={startsOn}
                 intervalDays={intervalDays}
               />
+
+              <SectionLabel title="Valores" />
+
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="Valor por hora (€)">
+                  <input
+                    type="number"
+                    min={0}
+                    step="0.01"
+                    value={hourlyRate}
+                    onChange={(e) => setHourlyRate(e.target.value)}
+                    placeholder="ex: 18.50"
+                    className={INPUT_CLS}
+                  />
+                </Field>
+                <Field label="Valor calculado">
+                  <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-background)] px-3 py-2 text-sm font-semibold text-[var(--color-text-main)]">
+                    {calculatedValue == null
+                      ? "—"
+                      : `${calculatedValue.toLocaleString("pt-PT", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`}
+                  </div>
+                  <p className="mt-1 text-xs text-[var(--color-text-muted)]">
+                    {(totalDurationMin / 60).toLocaleString("pt-PT", { maximumFractionDigits: 2 })}h x valor/hora
+                  </p>
+                </Field>
+              </div>
 
               {/* Estado (só edição) */}
               {isEdit && (

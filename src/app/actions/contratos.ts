@@ -8,6 +8,7 @@ import type { ScheduleDay } from "@/types/database";
 export interface ContratoInput {
   location_id: string;
   name?: string;
+  hourly_rate?: number | null;
   frequency: string;
   interval_days: number;
   weekdays: number[] | null;
@@ -143,6 +144,37 @@ async function generateServicesForContract(
   }
 }
 
+async function updateFutureServiceValuesForContract(
+  admin: ReturnType<typeof createAdminClient>,
+  contractId: string,
+  companyId: string,
+  hourlyRate: number | null,
+) {
+  const { data: services } = await admin
+    .from("services")
+    .select("id, scheduled_start, scheduled_end")
+    .eq("company_id", companyId)
+    .eq("contract_id", contractId)
+    .eq("status", "agendado")
+    .gte("scheduled_start", new Date().toISOString());
+
+  for (const service of services ?? []) {
+    const start = new Date(service.scheduled_start).getTime();
+    const end = new Date(service.scheduled_end).getTime();
+    const durationMin = Math.max(0, Math.round((end - start) / 60000));
+    const calculatedValue =
+      hourlyRate != null
+        ? parseFloat(((durationMin / 60) * hourlyRate).toFixed(2))
+        : null;
+
+    await (admin as any)
+      .from("services")
+      .update({ hourly_rate: hourlyRate, calculated_value: calculatedValue })
+      .eq("id", service.id)
+      .eq("company_id", companyId);
+  }
+}
+
 // ─── Actions ─────────────────────────────────────────────────────────────────
 
 export async function createContrato(input: ContratoInput) {
@@ -168,6 +200,12 @@ export async function createContrato(input: ContratoInput) {
     .single();
   if (!location) return { ok: false as const, error: "Local invalido." };
 
+  await admin
+    .from("locations")
+    .update({ hourly_rate: input.hourly_rate ?? null })
+    .eq("id", input.location_id)
+    .eq("company_id", profile.company_id);
+
   const { data: contract, error } = await admin
     .from("contracts")
     .insert({
@@ -191,8 +229,7 @@ export async function createContrato(input: ContratoInput) {
 
   // Gerar serviços imediatamente para os próximos 3 meses
   if (input.status === "ativo") {
-    const hourlyRate =
-      (contract.locations as unknown as { hourly_rate: number | null } | null)?.hourly_rate ?? null;
+    const hourlyRate = input.hourly_rate ?? null;
 
     await generateServicesForContract(
       admin,
@@ -240,6 +277,12 @@ export async function updateContrato(id: string, input: Omit<ContratoInput, "com
     .single();
   if (!location) return { ok: false as const, error: "Local invalido." };
 
+  await admin
+    .from("locations")
+    .update({ hourly_rate: input.hourly_rate ?? null })
+    .eq("id", input.location_id)
+    .eq("company_id", profile.company_id);
+
   const { error } = await admin.from("contracts").update({
     location_id: input.location_id,
     name: input.name || null,
@@ -254,6 +297,13 @@ export async function updateContrato(id: string, input: Omit<ContratoInput, "com
   }).eq("id", id).eq("company_id", profile.company_id);
 
   if (error) return { ok: false as const, error: error.message };
+
+  await updateFutureServiceValuesForContract(
+    admin,
+    id,
+    profile.company_id,
+    input.hourly_rate ?? null,
+  );
 
   revalidatePath("/dashboard/contratos");
   revalidatePath("/dashboard/calendario");
