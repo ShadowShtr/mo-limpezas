@@ -544,13 +544,13 @@ export function ContratoSheet({
                             />
                           </div>
                           <div>
-                            <label className="block text-xs text-[var(--color-text-muted)] mb-1">Duração (min)</label>
+                            <label className="block text-xs text-[var(--color-text-muted)] mb-1">Duração (h)</label>
                             <input
                               type="number"
-                              min={15}
-                              step={15}
-                              value={cfg.duration_min}
-                              onChange={(e) => updateScheduleDay(key, "duration_min", Number(e.target.value))}
+                              min={0.25}
+                              step={0.25}
+                              value={Number((cfg.duration_min / 60).toFixed(2))}
+                              onChange={(e) => updateScheduleDay(key, "duration_min", Math.round(Number(e.target.value) * 60))}
                               className={INPUT_CLS}
                             />
                           </div>
