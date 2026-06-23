@@ -103,6 +103,46 @@ export async function updateLocation(id: string, input: Omit<LocationInput, "cli
   return { ok: true as const };
 }
 
+/** Atualiza apenas os campos de acesso do local (chave/código/instruções).
+ *  Usado para editar diretamente a partir do calendário, sem mexer no resto. */
+export async function updateLocationAccess(
+  id: string,
+  input: { has_key: boolean; key_label: string | null; access_code: string | null; instructions: string | null },
+) {
+  const supabase = await createClient();
+  const admin = createAdminClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { ok: false as const, error: "Não autenticado." };
+
+  const { data: me } = await admin
+    .from("profiles")
+    .select("company_id, role")
+    .eq("id", user.id)
+    .single();
+
+  if (!me || !["admin", "gestor"].includes(me.role)) {
+    return { ok: false as const, error: "Sem permissão para editar locais." };
+  }
+
+  const { error } = await admin
+    .from("locations")
+    .update({
+      has_key: input.has_key,
+      key_label: input.has_key ? (input.key_label?.trim() || null) : null,
+      access_code: input.access_code?.trim() || null,
+      instructions: input.instructions?.trim() || null,
+    })
+    .eq("id", id)
+    .eq("company_id", me.company_id);
+
+  if (error) return { ok: false as const, error: error.message };
+
+  revalidatePath("/dashboard/locais");
+  revalidatePath("/dashboard/clientes");
+  revalidatePath("/dashboard/calendario");
+  return { ok: true as const };
+}
+
 export async function deleteLocation(id: string) {
   const supabase = await createClient();
   const admin = createAdminClient();

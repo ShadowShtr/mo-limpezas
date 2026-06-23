@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo } from "react";
 import {
   X, MapPin, Users, Clock, Euro, FileText, Loader2, Key, Lock,
   AlertTriangle, Ban, CalendarX, CheckCircle2, ChevronDown, Bell, MessageCircle, Mail, Users2,
+  Pencil, Save,
 } from "lucide-react";
 import { format, parseISO } from "date-fns";
 import { pt } from "date-fns/locale";
@@ -12,6 +13,7 @@ import { notifyTeam } from "@/app/actions/notifications";
 import { cancelService } from "@/app/actions/cancellations";
 import { CANCEL_TYPE_LABELS, type CancelType } from "@/lib/cancel-types";
 import { sendBulkClientNotifications } from "@/app/actions/email";
+import { updateLocationAccess } from "@/app/actions/locations";
 import { ServicePhotosGallery } from "./service-photos-gallery";
 import type { Database } from "@/types/database";
 import type { ServiceCalendar } from "./calendar-view";
@@ -63,9 +65,11 @@ interface Props {
   service: ServiceCalendar | null;
   onClose: () => void;
   onChanged: () => void;
+  /** Abrir já com a observação em modo de edição */
+  initialEdit?: boolean;
 }
 
-export function ServiceDetailSheet({ service, onClose, onChanged }: Props) {
+export function ServiceDetailSheet({ service, onClose, onChanged, initialEdit = false }: Props) {
   const supabase = createClient();
   const [timesheets, setTimesheets] = useState<TimesheetWithName[]>([]);
   const [loadingTs,  setLoadingTs]  = useState(false);
@@ -85,6 +89,30 @@ export function ServiceDetailSheet({ service, onClose, onChanged }: Props) {
   const [cancelReason, setCancelReason] = useState("");
   const [cancelNotifyTeam, setCancelNotifyTeam] = useState(true);
 
+  // Observação (notas) editável
+  const [editingNotes, setEditingNotes] = useState(false);
+  const [notesValue, setNotesValue] = useState("");
+  const [currentNotes, setCurrentNotes] = useState<string | null>(null);
+  const [savingNotes, setSavingNotes] = useState(false);
+
+  // Acesso ao local (chave/código/instruções) — editável a partir do calendário
+  const [editingAccess, setEditingAccess] = useState(false);
+  const [savingAccess,  setSavingAccess]  = useState(false);
+  const [accHasKey,      setAccHasKey]      = useState(false);
+  const [accKeyLabel,    setAccKeyLabel]    = useState("");
+  const [accCode,        setAccCode]        = useState("");
+  const [accInstructions, setAccInstructions] = useState("");
+
+  // Horário editável
+  const [editingTime, setEditingTime] = useState(false);
+  const [dateValue, setDateValue] = useState("");
+  const [startTime, setStartTime] = useState("");
+  const [endTime, setEndTime] = useState("");
+  const [currentStart, setCurrentStart] = useState("");
+  const [currentEnd, setCurrentEnd] = useState("");
+  const [savingTime, setSavingTime] = useState(false);
+  const [timeConflict, setTimeConflict] = useState<{ reference_number: string; scheduled_start: string; scheduled_end: string }[] | null>(null);
+
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     if (!service) { setTimesheets([]); setExtras(null); return; }
@@ -100,6 +128,21 @@ export function ServiceDetailSheet({ service, onClose, onChanged }: Props) {
     setCancelType("client_request");
     setCancelReason("");
     setCancelNotifyTeam(true);
+    setEditingNotes(false);
+    setNotesValue(service.notes ?? "");
+    setCurrentNotes(service.notes ?? null);
+    setEditingAccess(false);
+    setAccHasKey(service.location_has_key ?? false);
+    setAccKeyLabel(service.location_key_label ?? "");
+    setAccCode("");          // preenchido quando os extras carregam
+    setAccInstructions("");
+    setEditingTime(false);
+    setTimeConflict(null);
+    setCurrentStart(service.scheduled_start);
+    setCurrentEnd(service.scheduled_end);
+    setDateValue(format(parseISO(service.scheduled_start), "yyyy-MM-dd"));
+    setStartTime(format(parseISO(service.scheduled_start), "HH:mm"));
+    setEndTime(format(parseISO(service.scheduled_end), "HH:mm"));
     setNotifyMsg(
       `Serviço ${service.location_name} — ${format(parseISO(service.scheduled_start), "HH:mm")}–${format(parseISO(service.scheduled_end), "HH:mm")}`
     );
@@ -115,10 +158,17 @@ export function ServiceDetailSheet({ service, onClose, onChanged }: Props) {
     ]).then(([rows, extraData]) => {
       setTimesheets(rows);
       setExtras(extraData);
+      setAccCode(extraData?.location_access_code ?? "");
+      setAccInstructions(extraData?.location_instructions ?? "");
       setLoadingTs(false);
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [service?.id]);
+
+  // Abrir já em edição quando vem do ícone de lápis (corre depois do reset acima).
+  useEffect(() => {
+    if (initialEdit && service?.id) setEditingNotes(true);
+  }, [initialEdit, service?.id]);
 
   // Calcular antes do early return (regras de hooks)
   const isLateCancelWarning = useMemo(() => {
@@ -180,6 +230,94 @@ export function ServiceDetailSheet({ service, onClose, onChanged }: Props) {
     }
 
     setActionLoading(null);
+  }
+
+  async function saveTime(force = false) {
+    if (!dateValue || !startTime || !endTime) {
+      setActionMsg({ type: "error", text: "Preenche a data e as horas." });
+      return;
+    }
+    // Interpreta no fuso local do browser (Lisboa) e guarda em UTC.
+    const startISO = new Date(`${dateValue}T${startTime}`).toISOString();
+    const endISO = new Date(`${dateValue}T${endTime}`).toISOString();
+    if (new Date(endISO).getTime() <= new Date(startISO).getTime()) {
+      setActionMsg({ type: "error", text: "A hora de fim tem de ser depois do início." });
+      return;
+    }
+
+    setSavingTime(true);
+    setActionMsg(null);
+
+    // Deteção de conflito: mesma equipa, horários sobrepostos (exceto este serviço).
+    // Avisa mas permite manter (force).
+    if (!force && svc.team_id) {
+      const { data: clashes } = await supabase
+        .from("services")
+        .select("reference_number, scheduled_start, scheduled_end")
+        .eq("team_id", svc.team_id)
+        .neq("id", svc.id)
+        .in("status", ["agendado", "em_curso"])
+        .lt("scheduled_start", endISO)
+        .gt("scheduled_end", startISO);
+      if (clashes && clashes.length > 0) {
+        setTimeConflict(clashes as { reference_number: string; scheduled_start: string; scheduled_end: string }[]);
+        setSavingTime(false);
+        return;
+      }
+    }
+
+    const { error } = await supabase
+      .from("services")
+      .update({ scheduled_start: startISO, scheduled_end: endISO })
+      .eq("id", svc.id);
+    setSavingTime(false);
+    if (error) { setActionMsg({ type: "error", text: error.message }); return; }
+    setCurrentStart(startISO);
+    setCurrentEnd(endISO);
+    setEditingTime(false);
+    setTimeConflict(null);
+    setActionMsg({ type: "success", text: force && (timeConflict?.length ?? 0) > 0 ? "Horário atualizado (conflito mantido)." : "Horário atualizado." });
+    onChanged();
+  }
+
+  async function saveNotes() {
+    setSavingNotes(true);
+    setActionMsg(null);
+    const trimmed = notesValue.trim();
+    const { error } = await supabase
+      .from("services")
+      .update({ notes: trimmed || null })
+      .eq("id", svc.id);
+    setSavingNotes(false);
+    if (error) { setActionMsg({ type: "error", text: error.message }); return; }
+    setCurrentNotes(trimmed || null);
+    setEditingNotes(false);
+    setActionMsg({ type: "success", text: "Observação guardada." });
+    onChanged();
+  }
+
+  async function saveAccess() {
+    setSavingAccess(true);
+    setActionMsg(null);
+    const code = accCode.trim() || null;
+    const instr = accInstructions.trim() || null;
+    const keyLabel = accHasKey ? (accKeyLabel.trim() || null) : null;
+    const res = await updateLocationAccess(svc.location_id, {
+      has_key: accHasKey, key_label: keyLabel, access_code: code, instructions: instr,
+    });
+    setSavingAccess(false);
+    if (!res.ok) { setActionMsg({ type: "error", text: res.error ?? "Erro ao guardar acesso." }); return; }
+    // Reflete localmente para mostrar de imediato
+    setExtras((prev) => ({
+      client_phone: prev?.client_phone ?? null,
+      client_email: prev?.client_email ?? null,
+      location_access_code: code,
+      location_instructions: instr,
+    }));
+    setAccKeyLabel(keyLabel ?? "");
+    setEditingAccess(false);
+    setActionMsg({ type: "success", text: "Acesso ao local atualizado." });
+    onChanged();
   }
 
   async function handleCancel() {
@@ -286,14 +424,95 @@ export function ServiceDetailSheet({ service, onClose, onChanged }: Props) {
 
           {/* Info principal */}
           <div className="space-y-3">
-            <InfoRow icon={Clock} label="Horário">
-              <span className="font-semibold">
-                {format(parseISO(svc.scheduled_start), "HH:mm")} – {format(parseISO(svc.scheduled_end), "HH:mm")}
-              </span>
-              <span className="text-[var(--color-text-muted)] ml-1.5">
-                {format(parseISO(svc.scheduled_start), "EEEE, d 'de' MMMM", { locale: pt })}
-              </span>
-            </InfoRow>
+            {/* Horário — editável */}
+            <div className="flex gap-3">
+              <div className="shrink-0 w-5 h-5 mt-0.5 flex items-center justify-center text-[var(--color-text-muted)]">
+                <Clock className="w-4 h-4" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center justify-between mb-0.5">
+                  <p className="text-[11px] font-medium text-[var(--color-text-muted)] uppercase tracking-wide">Horário</p>
+                  {!editingTime && (
+                    <button
+                      onClick={() => setEditingTime(true)}
+                      className="flex items-center gap-1 text-[11px] font-medium text-[var(--color-primary)] hover:underline"
+                    >
+                      <Pencil className="w-3 h-3" /> Editar
+                    </button>
+                  )}
+                </div>
+                {editingTime ? (
+                  <div className="space-y-2">
+                    <input
+                      type="date"
+                      value={dateValue}
+                      onChange={(e) => { setDateValue(e.target.value); setTimeConflict(null); }}
+                      className={INPUT_CLS}
+                    />
+                    <div className="flex items-center gap-2">
+                      <input type="time" value={startTime} onChange={(e) => { setStartTime(e.target.value); setTimeConflict(null); }} className={INPUT_CLS} />
+                      <span className="text-[var(--color-text-muted)] shrink-0">–</span>
+                      <input type="time" value={endTime} onChange={(e) => { setEndTime(e.target.value); setTimeConflict(null); }} className={INPUT_CLS} />
+                    </div>
+
+                    {/* Aviso de conflito — permite manter à mesma */}
+                    {timeConflict && timeConflict.length > 0 && (
+                      <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 space-y-2">
+                        <p className="text-xs font-semibold text-amber-800 flex items-center gap-1.5">
+                          <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                          Conflito de horário ({svc.team_name || "mesma equipa"})
+                        </p>
+                        <ul className="text-[11px] text-amber-800/90 space-y-0.5">
+                          {timeConflict.map((c) => (
+                            <li key={c.reference_number}>
+                              • #{c.reference_number} — {format(parseISO(c.scheduled_start), "HH:mm")}–{format(parseISO(c.scheduled_end), "HH:mm")}
+                            </li>
+                          ))}
+                        </ul>
+                        <p className="text-[11px] text-amber-700">A equipa fica com serviços sobrepostos. Podes manter mesmo assim.</p>
+                      </div>
+                    )}
+
+                    <div className="flex gap-2">
+                      {timeConflict && timeConflict.length > 0 ? (
+                        <button
+                          onClick={() => saveTime(true)}
+                          disabled={savingTime}
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-600 text-white text-xs font-medium hover:bg-amber-700 transition-colors disabled:opacity-50"
+                        >
+                          {savingTime ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+                          Guardar à mesma
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => saveTime()}
+                          disabled={savingTime}
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[var(--color-primary)] text-white text-xs font-medium hover:bg-[var(--color-primary-hover)] transition-colors disabled:opacity-50"
+                        >
+                          {savingTime ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+                          Guardar
+                        </button>
+                      )}
+                      <button
+                        onClick={() => { setEditingTime(false); setTimeConflict(null); }}
+                        className="px-3 py-1.5 rounded-lg border border-[var(--color-border)] text-xs text-[var(--color-text-sub)] hover:bg-[var(--color-background)] transition-colors"
+                      >
+                        Cancelar
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-sm text-[var(--color-text-main)]">
+                    <span className="font-semibold">
+                      {format(parseISO(currentStart || svc.scheduled_start), "HH:mm")} – {format(parseISO(currentEnd || svc.scheduled_end), "HH:mm")}
+                    </span>
+                    <span className="text-[var(--color-text-muted)] ml-1.5">
+                      {format(parseISO(currentStart || svc.scheduled_start), "EEEE, d 'de' MMMM", { locale: pt })}
+                    </span>
+                  </div>
+                )}
+              </div>
+            </div>
 
             <InfoRow icon={MapPin} label="Morada">{svc.location_address}</InfoRow>
 
@@ -319,31 +538,160 @@ export function ServiceDetailSheet({ service, onClose, onChanged }: Props) {
               </InfoRow>
             )}
 
-            {svc.location_has_key && (
-              <InfoRow icon={Key} label="Chave">
-                <span className="text-[var(--color-text-main)]">
-                  {svc.location_key_label || "A equipa tem chave deste local."}
-                </span>
-              </InfoRow>
-            )}
+            {/* Acesso ao local — editável (chave / código / instruções) */}
+            <div className="flex gap-3">
+              <div className="shrink-0 w-5 h-5 mt-0.5 flex items-center justify-center text-[var(--color-text-muted)]">
+                <Key className="w-4 h-4" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center justify-between mb-0.5">
+                  <p className="text-[11px] font-medium text-[var(--color-text-muted)] uppercase tracking-wide">Acesso ao local</p>
+                  {!editingAccess && (
+                    <button
+                      onClick={() => setEditingAccess(true)}
+                      className="flex items-center gap-1 text-[11px] font-medium text-[var(--color-primary)] hover:underline"
+                    >
+                      <Pencil className="w-3 h-3" /> {accHasKey || accCode || accInstructions ? "Editar" : "Adicionar"}
+                    </button>
+                  )}
+                </div>
 
-            {extras?.location_access_code && (
-              <InfoRow icon={Lock} label="Código de acesso">
-                <span className="font-mono font-semibold">{extras.location_access_code}</span>
-              </InfoRow>
-            )}
+                {editingAccess ? (
+                  <div className="space-y-2.5">
+                    <label className="flex items-center gap-2 text-sm text-[var(--color-text-main)] cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={accHasKey}
+                        onChange={(e) => setAccHasKey(e.target.checked)}
+                        className="w-4 h-4 rounded border-[var(--color-border)] accent-[var(--color-primary)]"
+                      />
+                      A equipa tem chave deste local
+                    </label>
+                    {accHasKey && (
+                      <input
+                        type="text"
+                        value={accKeyLabel}
+                        onChange={(e) => setAccKeyLabel(e.target.value)}
+                        className={INPUT_CLS}
+                        placeholder="Identificação da chave (ex: Chave nº 1974)"
+                      />
+                    )}
+                    <div>
+                      <label className="block text-[11px] font-medium text-[var(--color-text-muted)] mb-1">Código de acesso (prédio/porta)</label>
+                      <input
+                        type="text"
+                        value={accCode}
+                        onChange={(e) => setAccCode(e.target.value)}
+                        className={INPUT_CLS + " font-mono"}
+                        placeholder="ex: 1234#"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-medium text-[var(--color-text-muted)] mb-1">Instruções de acesso</label>
+                      <textarea
+                        value={accInstructions}
+                        onChange={(e) => setAccInstructions(e.target.value)}
+                        rows={2}
+                        className={INPUT_CLS + " resize-none"}
+                        placeholder="ex: Chave na caixa do correio, 2º andar à direita…"
+                      />
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={saveAccess}
+                        disabled={savingAccess}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[var(--color-primary)] text-white text-xs font-medium hover:bg-[var(--color-primary-hover)] transition-colors disabled:opacity-50"
+                      >
+                        {savingAccess ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+                        Guardar
+                      </button>
+                      <button
+                        onClick={() => setEditingAccess(false)}
+                        className="px-3 py-1.5 rounded-lg border border-[var(--color-border)] text-xs text-[var(--color-text-sub)] hover:bg-[var(--color-background)] transition-colors"
+                      >
+                        Cancelar
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-1 text-sm">
+                    {accHasKey && (
+                      <p className="flex items-center gap-1.5 text-[var(--color-text-main)]">
+                        <Key className="w-3.5 h-3.5 text-[var(--color-text-muted)] shrink-0" />
+                        {accKeyLabel || "A equipa tem chave deste local."}
+                      </p>
+                    )}
+                    {accCode && (
+                      <p className="flex items-center gap-1.5 text-[var(--color-text-main)]">
+                        <Lock className="w-3.5 h-3.5 text-[var(--color-text-muted)] shrink-0" />
+                        <span className="font-mono font-semibold">{accCode}</span>
+                      </p>
+                    )}
+                    {accInstructions && (
+                      <p className="flex items-start gap-1.5 text-[var(--color-text-sub)]">
+                        <FileText className="w-3.5 h-3.5 text-[var(--color-text-muted)] shrink-0 mt-0.5" />
+                        <span className="whitespace-pre-line">{accInstructions}</span>
+                      </p>
+                    )}
+                    {!accHasKey && !accCode && !accInstructions && (
+                      <p className="text-[var(--color-text-muted)] italic">Sem chave/código registado.</p>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
 
-            {extras?.location_instructions && (
-              <InfoRow icon={FileText} label="Instruções">
-                <p className="text-sm text-[var(--color-text-sub)] whitespace-pre-line">{extras.location_instructions}</p>
-              </InfoRow>
-            )}
-
-            {svc.notes && (
-              <InfoRow icon={FileText} label="Notas">
-                <p className="text-sm text-[var(--color-text-sub)] whitespace-pre-line">{svc.notes}</p>
-              </InfoRow>
-            )}
+            {/* Observação — editável */}
+            <div className="flex gap-3">
+              <div className="shrink-0 w-5 h-5 mt-0.5 flex items-center justify-center text-[var(--color-text-muted)]">
+                <FileText className="w-4 h-4" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center justify-between mb-0.5">
+                  <p className="text-[11px] font-medium text-[var(--color-text-muted)] uppercase tracking-wide">Observação</p>
+                  {!editingNotes && (
+                    <button
+                      onClick={() => { setNotesValue(currentNotes ?? ""); setEditingNotes(true); }}
+                      className="flex items-center gap-1 text-[11px] font-medium text-[var(--color-primary)] hover:underline"
+                    >
+                      <Pencil className="w-3 h-3" /> {currentNotes ? "Editar" : "Adicionar"}
+                    </button>
+                  )}
+                </div>
+                {editingNotes ? (
+                  <div className="space-y-2">
+                    <textarea
+                      value={notesValue}
+                      onChange={(e) => setNotesValue(e.target.value)}
+                      rows={3}
+                      autoFocus
+                      className={INPUT_CLS + " resize-none"}
+                      placeholder="Escreve uma observação sobre este serviço…"
+                    />
+                    <div className="flex gap-2">
+                      <button
+                        onClick={saveNotes}
+                        disabled={savingNotes}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[var(--color-primary)] text-white text-xs font-medium hover:bg-[var(--color-primary-hover)] transition-colors disabled:opacity-50"
+                      >
+                        {savingNotes ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+                        Guardar
+                      </button>
+                      <button
+                        onClick={() => setEditingNotes(false)}
+                        className="px-3 py-1.5 rounded-lg border border-[var(--color-border)] text-xs text-[var(--color-text-sub)] hover:bg-[var(--color-background)] transition-colors"
+                      >
+                        Cancelar
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-sm text-[var(--color-text-sub)] whitespace-pre-line">
+                    {currentNotes || <span className="text-[var(--color-text-muted)] italic">Sem observação.</span>}
+                  </p>
+                )}
+              </div>
+            </div>
           </div>
 
           {/* Tempos reais */}

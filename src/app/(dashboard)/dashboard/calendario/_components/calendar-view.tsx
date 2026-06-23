@@ -31,9 +31,9 @@ import type { Database } from "@/types/database";
 // ─── Constantes ───────────────────────────────────────────────────────────────
 
 const START_HOUR    = 7;
-const END_HOUR      = 22;
+const END_HOUR      = 18;
 const TOTAL_HOURS   = END_HOUR - START_HOUR;
-const SLOT_HEIGHT   = 40;
+const MIN_SLOT_HEIGHT = 28; // altura mínima legível; cresce para preencher a área visível
 const SLOTS_PER_HOUR = 2;
 const TOTAL_SLOTS   = TOTAL_HOURS * SLOTS_PER_HOUR;
 const GUTTER_W      = 56;
@@ -120,16 +120,16 @@ function svcBottomPx(svc: ServiceForBlock, startHour: number, slotH: number): nu
   return ((end.getHours() * 60 + end.getMinutes() - startHour * 60) / 30) * slotH;
 }
 
-function computeTimeTop(date: Date): number | null {
+function computeTimeTop(date: Date, slotH: number): number | null {
   if (!isSameDay(date, new Date())) return null;
   const now = new Date();
   const nowMin = now.getHours() * 60 + now.getMinutes();
   if (nowMin < START_HOUR * 60 || nowMin > END_HOUR * 60) return null;
-  return ((nowMin - START_HOUR * 60) / 30) * SLOT_HEIGHT;
+  return ((nowMin - START_HOUR * 60) / 30) * slotH;
 }
 
-function yToTime(y: number): string {
-  const slot = Math.max(0, Math.min(Math.floor(y / SLOT_HEIGHT), TOTAL_SLOTS - 1));
+function yToTime(y: number, slotH: number): string {
+  const slot = Math.max(0, Math.min(Math.floor(y / slotH), TOTAL_SLOTS - 1));
   const totalMin = START_HOUR * 60 + slot * 30;
   const h = Math.floor(totalMin / 60);
   const m = totalMin % 60;
@@ -189,9 +189,12 @@ export function CalendarView({
   // ── State ────────────────────────────────────────────────────────────────
   const [selectedDate, setSelectedDate] = useState(() => parseISO(selectedDateISO));
   const [currentTop,   setCurrentTop]   = useState<number | null>(null);
+  // Altura do slot adaptada à área visível: preenche todo o espaço, sem buraco em baixo.
+  const [slotH,        setSlotH]        = useState<number>(MIN_SLOT_HEIGHT);
   const [today,        setToday]        = useState<Date | null>(null);
   const [createSheet,    setCreateSheet]    = useState<{ date: Date; startTime: string; teamId: string } | null>(null);
   const [detailSvc,      setDetailSvc]      = useState<ServiceCalendar | null>(null);
+  const [detailEdit,     setDetailEdit]     = useState(false);
   const [allocationOpen, setAllocationOpen] = useState(false);
   const [avisosOpen,     setAvisosOpen]     = useState(false);
   const [viewMode,       setViewMode]       = useState<"calendar" | "list">("calendar");
@@ -227,29 +230,47 @@ export function CalendarView({
   /* eslint-disable react-hooks/exhaustive-deps */
   useEffect(() => {
     setToday(new Date());
-    setCurrentTop(computeTimeTop(parseISO(selectedDateISO)));
+    setCurrentTop(computeTimeTop(parseISO(selectedDateISO), slotH));
   }, []);
   /* eslint-enable react-hooks/exhaustive-deps */
 
   useEffect(() => {
     const d = parseISO(selectedDateISO);
     setSelectedDate(d);
-    setCurrentTop(computeTimeTop(d));
+    setCurrentTop(computeTimeTop(d, slotH));
     setToday(new Date());
   }, [selectedDateISO]);
 
   useEffect(() => { setLocalServices(services); }, [services]);
 
   useEffect(() => {
-    const id = setInterval(() => setCurrentTop(computeTimeTop(selectedDate)), 60_000);
+    const id = setInterval(() => setCurrentTop(computeTimeTop(selectedDate, slotH)), 60_000);
     return () => clearInterval(id);
-  }, [selectedDate]);
+  }, [selectedDate, slotH]);
+
+  // Adapta a altura do slot para a grelha preencher exatamente a área visível.
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const fit = () => {
+      const avail = el.clientHeight - HEADER_H;
+      const next = Math.max(MIN_SLOT_HEIGHT, Math.floor(avail / TOTAL_SLOTS));
+      setSlotH((prev) => (prev === next ? prev : next));
+    };
+    fit();
+    const ro = new ResizeObserver(fit);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [viewMode]);
+
+  // Recalcula a linha "agora" quando a altura do slot muda.
+  useEffect(() => { setCurrentTop(computeTimeTop(selectedDate, slotH)); }, [slotH, selectedDate]);
 
   useEffect(() => {
     if (!scrollRef.current) return;
-    const top = computeTimeTop(selectedDate);
-    scrollRef.current.scrollTop = HEADER_H + (top !== null ? Math.max(0, top - 80) : SLOTS_PER_HOUR * SLOT_HEIGHT);
-  }, [selectedDate]);
+    const top = computeTimeTop(selectedDate, slotH);
+    scrollRef.current.scrollTop = HEADER_H + (top !== null ? Math.max(0, top - 80) : SLOTS_PER_HOUR * slotH);
+  }, [selectedDate, slotH]);
 
   // ── Dados derivados ───────────────────────────────────────────────────────
 
@@ -299,13 +320,13 @@ export function CalendarView({
 
   function handleSelectDay(day: Date) {
     setSelectedDate(day);
-    setCurrentTop(computeTimeTop(day));
+    setCurrentTop(computeTimeTop(day, slotH));
   }
 
   function handleColumnClick(teamId: string, e: React.MouseEvent<HTMLDivElement>) {
     if (wasDragging.current) { wasDragging.current = false; return; }
     const y = e.clientY - e.currentTarget.getBoundingClientRect().top;
-    setCreateSheet({ date: selectedDate, startTime: yToTime(y), teamId: teamId === "__sem__" ? "" : teamId });
+    setCreateSheet({ date: selectedDate, startTime: yToTime(y, slotH), teamId: teamId === "__sem__" ? "" : teamId });
   }
 
   function handleChanged() { router.refresh(); }
@@ -584,7 +605,7 @@ export function CalendarView({
           <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
             {/* Scroll apenas vertical — colunas preenchem a largura total sem barra horizontal */}
             <div ref={scrollRef} className="flex-1 overflow-y-auto overflow-x-hidden calendar-scroll">
-              <div style={{ minHeight: `${HEADER_H + TOTAL_SLOTS * SLOT_HEIGHT}px` }}>
+              <div style={{ minHeight: `${HEADER_H + TOTAL_SLOTS * slotH}px` }}>
 
                 {/* ── Cabeçalho das equipas — sticky no topo ─────────────────── */}
                 <div className="flex sticky top-0 z-30 bg-white border-b border-[var(--color-border)] shadow-sm"
@@ -622,7 +643,7 @@ export function CalendarView({
                 </div>
 
                 {/* ── Corpo da grelha ────────────────────────────────────────── */}
-                <div className="flex" style={{ height: `${TOTAL_SLOTS * SLOT_HEIGHT}px` }}>
+                <div className="flex" style={{ height: `${TOTAL_SLOTS * slotH}px` }}>
 
                   {/* Coluna de horas */}
                   <div className="shrink-0 sticky left-0 z-20 border-r border-[var(--color-border)] relative bg-white"
@@ -632,7 +653,7 @@ export function CalendarView({
                       const transform = i === 0 ? "translateY(2px)" : i === TOTAL_HOURS ? "translateY(-100%)" : "translateY(-50%)";
                       return (
                         <div key={hour} className="absolute right-2 select-none"
-                          style={{ top: `${i * SLOTS_PER_HOUR * SLOT_HEIGHT}px`, transform }}>
+                          style={{ top: `${i * SLOTS_PER_HOUR * slotH}px`, transform }}>
                           <span className="text-[11px] text-[var(--color-text-muted)] font-medium">
                             {String(hour).padStart(2, "0")}:00
                           </span>
@@ -647,10 +668,10 @@ export function CalendarView({
                       key={col.key}
                       id={col.key}
                       className="flex-1 min-w-0 relative border-l border-[var(--color-border)] cursor-crosshair"
-                      style={{ height: `${TOTAL_SLOTS * SLOT_HEIGHT}px` }}
+                      style={{ height: `${TOTAL_SLOTS * slotH}px` }}
                       onClick={(e) => handleColumnClick(col.key, e)}
                     >
-                      <GridLines totalHours={TOTAL_HOURS} slotsPerHour={SLOTS_PER_HOUR} slotHeight={SLOT_HEIGHT} />
+                      <GridLines totalHours={TOTAL_HOURS} slotsPerHour={SLOTS_PER_HOUR} slotHeight={slotH} />
                       {isToday && currentTop !== null && <CurrentTimeLine top={currentTop} />}
 
                       {(byTeam[col.id] ?? []).map((svc, idx, arr) => {
@@ -661,8 +682,8 @@ export function CalendarView({
                         const travelMin  = showTravel
                           ? travelMinutes(svc.location_lat!, svc.location_lng!, next!.location_lat!, next!.location_lng!)
                           : 0;
-                        const bottomY  = svcBottomPx(svc, START_HOUR, SLOT_HEIGHT);
-                        const nextTopY = next ? svcTopPx(next, START_HOUR, SLOT_HEIGHT) : 0;
+                        const bottomY  = svcBottomPx(svc, START_HOUR, slotH);
+                        const nextTopY = next ? svcTopPx(next, START_HOUR, slotH) : 0;
                         const gapPx    = nextTopY - bottomY;
 
                         return (
@@ -670,10 +691,11 @@ export function CalendarView({
                             <ServiceBlock
                               service={svc}
                               teamId={col.key}
-                              slotHeight={SLOT_HEIGHT}
+                              slotHeight={slotH}
                               startHour={START_HOUR}
                               stopIndex={arr.length > 1 ? idx + 1 : undefined}
-                              onClick={(b) => setDetailSvc(localServices.find((s) => s.id === b.id) ?? null)}
+                              onClick={(b) => { setDetailEdit(false); setDetailSvc(localServices.find((s) => s.id === b.id) ?? null); }}
+                              onEdit={(b) => { setDetailEdit(true); setDetailSvc(localServices.find((s) => s.id === b.id) ?? null); }}
                             />
                             {showTravel && gapPx > 20 && (
                               <div
@@ -692,8 +714,8 @@ export function CalendarView({
                   )) : (
                     /* Grelha vazia quando todas as equipas estão ocultas */
                     <div className="flex-1 relative border-l border-[var(--color-border)]"
-                      style={{ height: `${TOTAL_SLOTS * SLOT_HEIGHT}px` }}>
-                      <GridLines totalHours={TOTAL_HOURS} slotsPerHour={SLOTS_PER_HOUR} slotHeight={SLOT_HEIGHT} />
+                      style={{ height: `${TOTAL_SLOTS * slotH}px` }}>
+                      <GridLines totalHours={TOTAL_HOURS} slotsPerHour={SLOTS_PER_HOUR} slotHeight={slotH} />
                       {isToday && currentTop !== null && <CurrentTimeLine top={currentTop} />}
                       {columns.length > 0 && (
                         <div className="absolute inset-0 flex items-center justify-center gap-2">
@@ -717,7 +739,7 @@ export function CalendarView({
           <ServiceBlock
             service={draggingBlock.service}
             teamId={draggingBlock.teamId}
-            slotHeight={SLOT_HEIGHT}
+            slotHeight={slotH}
             startHour={START_HOUR}
             isOverlay
           />
@@ -790,7 +812,8 @@ export function CalendarView({
       />
       <ServiceDetailSheet
         service={detailSvc}
-        onClose={() => setDetailSvc(null)}
+        initialEdit={detailEdit}
+        onClose={() => { setDetailSvc(null); setDetailEdit(false); }}
         onChanged={handleChanged}
       />
       <TeamAllocationModal

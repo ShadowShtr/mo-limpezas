@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { parseISO, format, differenceInMinutes } from "date-fns";
-import { MapPin, Clock, Euro, FileText, Lock, Key, Users } from "lucide-react";
+import { MapPin, Clock, Euro, FileText, Lock, Key, Users, Pencil } from "lucide-react";
 import { useDraggable } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
 
@@ -145,7 +145,7 @@ function ServiceTooltip({ service, pos }: { service: ServiceForBlock; pos: Toolt
           </Row>
         )}
 
-        {service.notes && (
+        {service.notes && !/^import:/i.test(service.notes.trim()) && (
           <Row icon={FileText} label="Obs.">
             <span className="text-[var(--color-text-sub)] break-words">{service.notes}</span>
           </Row>
@@ -192,13 +192,15 @@ interface ServiceBlockProps {
   startHour: number;
   teamId: string;
   onClick?: (service: ServiceForBlock) => void;
+  /** Abre o painel já em modo de edição (ícone de lápis) */
+  onEdit?: (service: ServiceForBlock) => void;
   /** Quando true, renderiza como overlay de drag (sem useDraggable, sem tooltip) */
   isOverlay?: boolean;
   /** Número da paragem da equipa neste dia (1, 2, 3...). Só mostrado se > 0 e a equipa tiver >1 serviço. */
   stopIndex?: number;
 }
 
-export function ServiceBlock({ service, slotHeight, startHour, teamId, onClick, isOverlay = false, stopIndex }: ServiceBlockProps) {
+export function ServiceBlock({ service, slotHeight, startHour, teamId, onClick, onEdit, isOverlay = false, stopIndex }: ServiceBlockProps) {
   const [tooltip, setTooltip] = useState<TooltipState | null>(null);
 
   const isDraggable = !isOverlay &&
@@ -229,7 +231,9 @@ export function ServiceBlock({ service, slotHeight, startHour, teamId, onClick, 
   const isMedium = height > slotHeight && height < slotHeight * 3;
   const isLarge = height >= slotHeight * 3;
   const hasAccess = service.location_has_key || service.location_has_access_code;
-  const noteText = service.notes?.trim() || "";
+  const rawNote = service.notes?.trim() || "";
+  // Marcadores internos de importação não são observações para mostrar no cartão.
+  const noteText = /^import:/i.test(rawNote) ? "" : rawNote;
 
   // Overlay não usa transform nem posição absoluta — é controlado pelo DragOverlay
   const overlayStyle: React.CSSProperties = isOverlay ? {
@@ -287,6 +291,18 @@ export function ServiceBlock({ service, slotHeight, startHour, teamId, onClick, 
               {stopIndex}
             </span>
           )}
+          {!isOverlay && onEdit && (
+            <button
+              type="button"
+              title="Editar / adicionar observação"
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={(e) => { e.stopPropagation(); onEdit(service); }}
+              className="absolute bottom-0.5 right-0.5 w-4 h-4 rounded flex items-center justify-center bg-white/70 hover:bg-white text-[var(--color-text-muted)] hover:text-[var(--color-primary)] shadow-sm"
+              style={{ zIndex: 3 }}
+            >
+              <Pencil className="w-2.5 h-2.5" />
+            </button>
+          )}
           <span className="text-[10px] font-semibold leading-tight tabular-nums" style={{ color: s.text }}>
             {format(start, "HH:mm")}–{format(end, "HH:mm")}
           </span>
@@ -306,7 +322,7 @@ export function ServiceBlock({ service, slotHeight, startHour, teamId, onClick, 
             </span>
           )}
           {!isShort && (service.team_name || hasAccess) && (
-            <span className="text-[10px] leading-tight truncate mt-auto" style={{ color: s.text, opacity: 0.6 }}>
+            <span className="text-[10px] leading-tight truncate" style={{ color: s.text, opacity: 0.6 }}>
               {service.team_name}
               {hasAccess && (
                 <span className="inline-flex items-center gap-0.5 ml-1 align-middle">
