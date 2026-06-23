@@ -16,6 +16,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { checkCronAuth } from "@/lib/cron-auth";
 
 export const maxDuration = 60;
 
@@ -24,19 +25,8 @@ const BUCKET = "collaborator-documents";
 const DOCS_PER_COMPANY = 100;
 
 export async function GET(req: NextRequest) {
-  const cronSecret = process.env.CRON_SECRET;
-  if (!cronSecret) {
-    return NextResponse.json({ error: "Cron secret not configured" }, { status: 500 });
-  }
-
-  // Em produção aceitar apenas header para não expor o secret nos logs.
-  const secret = process.env.NODE_ENV === "production"
-    ? req.headers.get("x-cron-secret")
-    : (req.headers.get("x-cron-secret") ?? req.nextUrl.searchParams.get("secret"));
-
-  if (!secret || secret !== cronSecret) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const auth = checkCronAuth(req);
+  if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status });
 
   const admin = createAdminClient();
   const now = new Date();

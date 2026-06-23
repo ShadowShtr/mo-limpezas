@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { checkCronAuth } from "@/lib/cron-auth";
 import type { ScheduleDay } from "@/types/database";
 
 // Permite até 60s na Vercel Pro (TASK 14/16); mesmo assim corre em lotes.
@@ -181,18 +182,10 @@ function addMinutesToTime(time: string, mins: number): string {
 // ─── Handler ──────────────────────────────────────────────────────────────────
 
 export async function GET(req: NextRequest) {
-  // Autenticação: header ou query param (para testes manuais)
-  const cronSecret = process.env.CRON_SECRET;
-  if (!cronSecret) {
-    return NextResponse.json({ error: "Cron secret not configured" }, { status: 500 });
-  }
-  // Em produção aceitar apenas header para não expor o secret nos logs.
-  const secret = process.env.NODE_ENV === "production"
-    ? req.headers.get("x-cron-secret")
-    : (req.headers.get("x-cron-secret") ?? req.nextUrl.searchParams.get("secret"));
-  if (!secret || secret !== cronSecret) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  // Autenticação central: Bearer (Vercel Cron) ou x-cron-secret; ?secret= só em dev.
+  const auth = checkCronAuth(req);
+  if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status });
+  const cronSecret = process.env.CRON_SECRET!;
 
   const supabase = createAdminClient();
 
