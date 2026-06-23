@@ -14,7 +14,17 @@ function redirectWithCookies(url: URL, supabaseResponse: NextResponse) {
 }
 
 export async function proxy(request: NextRequest) {
-  const { supabaseResponse, user, profileRole } = await updateSession(request);
+  // Contenção: o middleware corre em TODAS as rotas. Se a verificação de sessão
+  // falhar (Supabase indisponível, etc.) nunca pode rebentar o site — deixa
+  // passar e as próprias páginas fazem o seu guard de autenticação.
+  let session: Awaited<ReturnType<typeof updateSession>>;
+  try {
+    session = await updateSession(request);
+  } catch (e) {
+    console.error("[proxy] falha na verificação de sessão — fail-open:", e);
+    return NextResponse.next({ request });
+  }
+  const { supabaseResponse, user, profileRole } = session;
   const pathname = request.nextUrl.pathname;
 
   const isPublic = PUBLIC_ROUTES.some((r) => pathname.startsWith(r));

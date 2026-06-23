@@ -11,79 +11,109 @@ const emailSchema = z.email("Email inválido.");
 const passwordSchema = z.string().min(6, "Password deve ter pelo menos 6 caracteres.");
 
 async function getClientIp(): Promise<string> {
-  const h = await headers();
-  return h.get("x-forwarded-for")?.split(",")[0].trim() ?? "unknown";
+  try {
+    const h = await headers();
+    return h.get("x-forwarded-for")?.split(",")[0].trim() ?? "unknown";
+  } catch {
+    return "unknown";
+  }
+}
+
+// redirect()/notFound() do Next.js funcionam lançando um erro de controlo de fluxo.
+// Esse erro TEM de subir — nunca o tratar como falha.
+function isControlFlowError(e: unknown): boolean {
+  const d = (e as { digest?: string } | null)?.digest;
+  return typeof d === "string" && (d.startsWith("NEXT_REDIRECT") || d === "NEXT_NOT_FOUND");
 }
 
 export async function login(formData: FormData) {
-  const ip = await getClientIp();
-  if (!await checkRateLimit(rateLimitKey("auth-login", ip), 5, 60_000)) {
-    return { error: "Demasiadas tentativas de login. Aguarda um minuto." };
+  let target: string | null = null;
+  try {
+    // Rate limit já é "fail-open": se o Upstash falhar, deixa passar (nunca rebenta).
+    if (!await checkRateLimit(rateLimitKey("auth-login", await getClientIp()), 5, 60_000)) {
+      return { error: "Demasiadas tentativas de login. Aguarda um minuto." };
+    }
+
+    const rawInput = (formData.get("email") as string)?.trim();
+    const rawPassword = formData.get("password") as string;
+
+    // Aceita username puro (ex: admin1) ou email completo
+    const resolvedEmail = rawInput?.includes("@")
+      ? rawInput
+      : `${rawInput}@molimpezas.local`;
+
+    const emailResult = emailSchema.safeParse(resolvedEmail);
+    if (!emailResult.success) return { error: "Utilizador ou email inválido." };
+
+    const passResult = passwordSchema.safeParse(rawPassword);
+    if (!passResult.success) return { error: passResult.error.issues[0].message };
+
+    const supabase = await createClient();
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email: emailResult.data,
+      password: rawPassword,
+    });
+
+    if (error) {
+      return { error: "Email ou password incorretos." };
+    }
+
+    // Usar profiles.role (fonte autoritativa). Se a leitura falhar, segue para o dashboard.
+    let role: string | undefined;
+    try {
+      const { createAdminClient: mkAdmin } = await import("@/lib/supabase/admin");
+      const { data: profile } = await mkAdmin()
+        .from("profiles")
+        .select("role")
+        .eq("id", data.user.id)
+        .single();
+      role = profile?.role as string | undefined;
+    } catch {
+      role = undefined;
+    }
+    target = role === "colaborador" ? "/app" : "/dashboard";
+  } catch (e) {
+    if (isControlFlowError(e)) throw e;
+    console.error("[login] erro inesperado:", e);
+    return { error: "Erro temporário no login. Tenta novamente." };
   }
-
-  const rawInput = (formData.get("email") as string)?.trim();
-  const rawPassword = formData.get("password") as string;
-
-  // Aceita username puro (ex: admin1) ou email completo
-  const resolvedEmail = rawInput?.includes("@")
-    ? rawInput
-    : `${rawInput}@molimpezas.local`;
-
-  const emailResult = emailSchema.safeParse(resolvedEmail);
-  if (!emailResult.success) return { error: "Utilizador ou email inválido." };
-
-  const passResult = passwordSchema.safeParse(rawPassword);
-  if (!passResult.success) return { error: passResult.error.issues[0].message };
-
-  const supabase = await createClient();
-  const { data, error } = await supabase.auth.signInWithPassword({
-    email: emailResult.data,
-    password: rawPassword,
-  });
-
-  if (error) {
-    return { error: "Email ou password incorretos." };
-  }
-
-  // Usar profiles.role (fonte autoritativa) em vez de user_metadata que pode estar desatualizado
-  const { createAdminClient: mkAdmin } = await import("@/lib/supabase/admin");
-  const { data: profile } = await mkAdmin()
-    .from("profiles")
-    .select("role")
-    .eq("id", data.user.id)
-    .single();
-  const role = profile?.role as string | undefined;
-  redirect(role === "colaborador" ? "/app" : "/dashboard");
+  // redirect() fora do try — lança NEXT_REDIRECT de propósito (não é erro).
+  redirect(target ?? "/dashboard");
 }
 
 export async function loginMagicLink(formData: FormData) {
-  const ip = await getClientIp();
-  if (!await checkRateLimit(rateLimitKey("auth-magic", ip), 3, 60_000)) {
-    return { error: "Demasiadas tentativas. Aguarda um minuto." };
+  try {
+    if (!await checkRateLimit(rateLimitKey("auth-magic", await getClientIp()), 3, 60_000)) {
+      return { error: "Demasiadas tentativas. Aguarda um minuto." };
+    }
+
+    const rawEmail = formData.get("email") as string;
+    const emailResult = emailSchema.safeParse(rawEmail);
+    if (!emailResult.success) return { error: "Email inválido." };
+
+    const supabase = await createClient();
+    const { error } = await supabase.auth.signInWithOtp({
+      email: emailResult.data,
+      options: {
+        emailRedirectTo: `${process.env.NEXT_PUBLIC_APP_URL}/auth/callback`,
+      },
+    });
+
+    if (error) {
+      return { error: "Não foi possível enviar o link. Tenta novamente." };
+    }
+
+    return { success: "Link enviado para o teu email." };
+  } catch (e) {
+    if (isControlFlowError(e)) throw e;
+    console.error("[loginMagicLink] erro inesperado:", e);
+    return { error: "Erro temporário. Tenta novamente." };
   }
-
-  const rawEmail = formData.get("email") as string;
-  const emailResult = emailSchema.safeParse(rawEmail);
-  if (!emailResult.success) return { error: "Email inválido." };
-
-  const supabase = await createClient();
-  const { error } = await supabase.auth.signInWithOtp({
-    email: emailResult.data,
-    options: {
-      emailRedirectTo: `${process.env.NEXT_PUBLIC_APP_URL}/auth/callback`,
-    },
-  });
-
-  if (error) {
-    return { error: "Não foi possível enviar o link. Tenta novamente." };
-  }
-
-  return { success: "Link enviado para o teu email." };
 }
 
 export async function resetPassword(formData: FormData) {
-  const ip = await getClientIp();
-  if (!await checkRateLimit(rateLimitKey("auth-reset", ip), 3, 300_000)) {
+  try {
+  if (!await checkRateLimit(rateLimitKey("auth-reset", await getClientIp()), 3, 300_000)) {
     return { error: "Demasiados pedidos de recuperação. Aguarda 5 minutos." };
   }
 
@@ -125,40 +155,59 @@ export async function resetPassword(formData: FormData) {
   }
 
   return { success: "Se o email existir, enviámos as instruções de recuperação." };
+  } catch (e) {
+    if (isControlFlowError(e)) throw e;
+    console.error("[resetPassword] erro inesperado:", e);
+    // Resposta genérica — não revela se o email existe nem expõe o erro.
+    return { success: "Se o email existir, enviámos as instruções de recuperação." };
+  }
 }
 
 const newPasswordSchema = z.string().min(8, "A password deve ter pelo menos 8 caracteres.");
 
 // Define a nova password do utilizador autenticado (sessão de recuperação ativa).
 export async function updatePassword(formData: FormData) {
-  const password = formData.get("password") as string;
-  const confirm = formData.get("confirm") as string;
+  try {
+    const password = formData.get("password") as string;
+    const confirm = formData.get("confirm") as string;
 
-  const parsed = newPasswordSchema.safeParse(password);
-  if (!parsed.success) return { error: parsed.error.issues[0].message };
-  if (password !== confirm) return { error: "As passwords não coincidem." };
+    const parsed = newPasswordSchema.safeParse(password);
+    if (!parsed.success) return { error: parsed.error.issues[0].message };
+    if (password !== confirm) return { error: "As passwords não coincidem." };
 
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { error: "Sessão inválida ou expirada. Pede um novo link de recuperação." };
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return { error: "Sessão inválida ou expirada. Pede um novo link de recuperação." };
 
-  const { error } = await supabase.auth.updateUser({ password });
-  if (error) return { error: "Não foi possível alterar a password. Tenta novamente." };
+    const { error } = await supabase.auth.updateUser({ password });
+    if (error) return { error: "Não foi possível alterar a password. Tenta novamente." };
 
-  const { createAdminClient: mkAdmin2 } = await import("@/lib/supabase/admin");
-  const { data: profile } = await mkAdmin2()
-    .from("profiles")
-    .select("role")
-    .eq("id", user.id)
-    .single();
-  const role = profile?.role as string | undefined;
-  return { success: "Password alterada com sucesso.", redirect: role === "colaborador" ? "/app" : "/dashboard" };
+    let role: string | undefined;
+    try {
+      const { createAdminClient: mkAdmin2 } = await import("@/lib/supabase/admin");
+      const { data: profile } = await mkAdmin2().from("profiles").select("role").eq("id", user.id).single();
+      role = profile?.role as string | undefined;
+    } catch {
+      role = undefined;
+    }
+    return { success: "Password alterada com sucesso.", redirect: role === "colaborador" ? "/app" : "/dashboard" };
+  } catch (e) {
+    if (isControlFlowError(e)) throw e;
+    console.error("[updatePassword] erro inesperado:", e);
+    return { error: "Erro temporário. Tenta novamente." };
+  }
 }
 
 export async function logout() {
-  const supabase = await createClient();
-  await supabase.auth.signOut();
-  revalidatePath("/", "layout");
+  try {
+    const supabase = await createClient();
+    await supabase.auth.signOut();
+    revalidatePath("/", "layout");
+  } catch (e) {
+    if (isControlFlowError(e)) throw e;
+    // Mesmo que o signOut falhe, segue para /login.
+    console.error("[logout] erro ao terminar sessão:", e);
+  }
   redirect("/login");
 }
 

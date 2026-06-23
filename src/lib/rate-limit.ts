@@ -91,10 +91,21 @@ export async function rateLimit(
   maxRequests: number,
   windowMs: number,
 ): Promise<NextResponse | null> {
-  const limiter = await getUpstashLimiter(maxRequests, windowMs);
+  let limiter: Awaited<ReturnType<typeof getUpstashLimiter>> = null;
+  try {
+    limiter = await getUpstashLimiter(maxRequests, windowMs);
+  } catch {
+    limiter = null; // Upstash indisponível — nunca bloquear por causa disso.
+  }
 
   if (limiter) {
-    const { success, reset, remaining } = await limiter.limit(key);
+    let success = true, reset = Date.now() + windowMs, remaining = maxRequests;
+    try {
+      ({ success, reset, remaining } = await limiter.limit(key));
+    } catch {
+      // Falha a contactar o Upstash: fail-open (deixa passar), não parte o pedido.
+      return null;
+    }
     if (!success) {
       const retryAfter = Math.ceil((reset - Date.now()) / 1000);
       return NextResponse.json(
@@ -141,10 +152,19 @@ export async function checkRateLimit(
   maxRequests: number,
   windowMs: number,
 ): Promise<boolean> {
-  const limiter = await getUpstashLimiter(maxRequests, windowMs);
+  let limiter: Awaited<ReturnType<typeof getUpstashLimiter>> = null;
+  try {
+    limiter = await getUpstashLimiter(maxRequests, windowMs);
+  } catch {
+    limiter = null; // Upstash indisponível — não bloquear o login por causa disso.
+  }
   if (limiter) {
-    const { success } = await limiter.limit(key);
-    return success;
+    try {
+      const { success } = await limiter.limit(key);
+      return success;
+    } catch {
+      return inMemoryAllow(key, maxRequests, windowMs); // fail-open via fallback local
+    }
   }
   return inMemoryAllow(key, maxRequests, windowMs);
 }
