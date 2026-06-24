@@ -7,6 +7,13 @@ import { pt } from "date-fns/locale";
 import { createService } from "../_actions/create-service";
 import type { ConflictInfo } from "../_actions/reschedule";
 import { createClienteComLocal } from "@/app/actions/clientes";
+import {
+  CLEANING_TYPES,
+  PAYMENT_STATUSES,
+  UPHOLSTERY_TYPES,
+  showsPaymentStatus,
+  isUpholstery,
+} from "@/lib/cleaning-types";
 
 type Client = { id: string; name: string };
 type Location = { id: string; client_id: string; name: string; address: string; hourly_rate: number | null };
@@ -77,6 +84,19 @@ export function ServiceCreateSheet({
   const [startTime, setStartTime] = useState(initialStartTime);
   const [endTime, setEndTime] = useState(addMinutes(initialStartTime, 120));
   const [notes, setNotes] = useState("");
+  const [cleaningType, setCleaningType] = useState("");
+  const [paymentStatus, setPaymentStatus] = useState("nao_informado");
+  const [upholsteryType, setUpholsteryType] = useState("");
+  const [upholsteryNotes, setUpholsteryNotes] = useState("");
+  const [upholsteryUnits, setUpholsteryUnits] = useState("");
+  const [upholsteryUnitPrice, setUpholsteryUnitPrice] = useState("");
+
+  const showPayment = showsPaymentStatus(cleaningType);
+  const showUpholstery = isUpholstery(cleaningType);
+  const showUnits = showUpholstery && upholsteryType !== "";
+  const upholsteryTotal = showUnits
+    ? Number(upholsteryUnits || 0) * Number((upholsteryUnitPrice || "0").replace(",", "."))
+    : null;
 
   // Registo de novo cliente
   const [showNewClient, setShowNewClient] = useState(false);
@@ -172,8 +192,18 @@ export function ServiceCreateSheet({
       scheduledStart: `${dateStr}T${startTime}:00`,
       scheduledEnd: `${dateStr}T${endTime}:00`,
       hourlyRate: selectedLocation?.hourly_rate ?? null,
-      calculatedValue: calculatedValue ?? null,
+      // Estofos por unidade: o total (qtd × preço) tem prioridade sobre o cálculo por hora.
+      calculatedValue: upholsteryTotal != null && upholsteryTotal > 0
+        ? upholsteryTotal
+        : (calculatedValue ?? null),
       notes: notes || null,
+      cleaningType: cleaningType || null,
+      paymentStatus: showPayment ? paymentStatus : null,
+      upholsteryType: showUpholstery ? (upholsteryType || null) : null,
+      upholsteryNotes: showUpholstery ? (upholsteryNotes || null) : null,
+      upholsteryUnits: showUnits && upholsteryUnits !== "" ? Number(upholsteryUnits) : null,
+      upholsteryUnitPrice: showUnits && upholsteryUnitPrice !== ""
+        ? Number(upholsteryUnitPrice.replace(",", ".")) : null,
       force,
     });
 
@@ -398,6 +428,68 @@ export function ServiceCreateSheet({
                 <ChevronDown className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--color-text-muted)]" />
               </div>
             </Field>
+
+            {/* Tipo de limpeza */}
+            <Field label="Tipo de limpeza">
+              <div className="relative">
+                <select value={cleaningType} onChange={(e) => setCleaningType(e.target.value)} className={SELECT_CLS}>
+                  <option value="">Selecionar...</option>
+                  {CLEANING_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+                </select>
+                <ChevronDown className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--color-text-muted)]" />
+              </div>
+            </Field>
+
+            {/* Estado do pagamento — Geral / Pós-Obra */}
+            {showPayment && (
+              <Field label="Estado do pagamento">
+                <div className="relative">
+                  <select value={paymentStatus} onChange={(e) => setPaymentStatus(e.target.value)} className={SELECT_CLS}>
+                    {PAYMENT_STATUSES.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
+                  </select>
+                  <ChevronDown className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--color-text-muted)]" />
+                </div>
+              </Field>
+            )}
+
+            {/* Estofos — tipo + especificação */}
+            {showUpholstery && (
+              <div className="space-y-3 rounded-lg border border-[var(--color-primary-muted)] bg-[var(--color-primary-light)] p-3">
+                <Field label="Tipo de estofado">
+                  <div className="relative">
+                    <select value={upholsteryType} onChange={(e) => setUpholsteryType(e.target.value)} className={SELECT_CLS}>
+                      <option value="">Selecionar...</option>
+                      {UPHOLSTERY_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+                    </select>
+                    <ChevronDown className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--color-text-muted)]" />
+                  </div>
+                </Field>
+
+                {showUnits && (
+                  <div className="grid grid-cols-2 gap-3">
+                    <Field label="Nº de unidades">
+                      <input type="number" min="0" step="1" value={upholsteryUnits}
+                        onChange={(e) => setUpholsteryUnits(e.target.value)} placeholder="ex: 3" className={INPUT_CLS} />
+                    </Field>
+                    <Field label="Preço por unidade (€)">
+                      <input type="number" min="0" step="0.01" value={upholsteryUnitPrice}
+                        onChange={(e) => setUpholsteryUnitPrice(e.target.value)} placeholder="ex: 25.00" className={INPUT_CLS} />
+                    </Field>
+                    <div className="col-span-2 rounded-lg border border-[var(--color-primary-muted)] bg-white px-3 py-2 text-sm font-semibold text-[var(--color-text-main)]">
+                      Total: {upholsteryTotal == null || upholsteryTotal <= 0
+                        ? "—"
+                        : `${upholsteryTotal.toLocaleString("pt-PT", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`}
+                    </div>
+                  </div>
+                )}
+
+                <Field label="Especificação do estofado">
+                  <textarea value={upholsteryNotes} onChange={(e) => setUpholsteryNotes(e.target.value)} rows={2}
+                    placeholder="Tamanho, quantidade, tipo de tecido, manchas, etc."
+                    className={INPUT_CLS + " resize-none"} />
+                </Field>
+              </div>
+            )}
 
             {/* Horário */}
             <div className="grid grid-cols-2 gap-3">

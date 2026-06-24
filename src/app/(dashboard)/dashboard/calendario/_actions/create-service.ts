@@ -14,6 +14,12 @@ export interface CreateServiceInput {
   hourlyRate: number | null;
   calculatedValue: number | null;
   notes: string | null;
+  cleaningType?: string | null;
+  paymentStatus?: string | null;
+  upholsteryType?: string | null;
+  upholsteryNotes?: string | null;
+  upholsteryUnits?: number | null;
+  upholsteryUnitPrice?: number | null;
   force?: boolean;
 }
 
@@ -80,6 +86,12 @@ export async function createService(
         hourly_rate: input.hourlyRate,
         calculated_value: input.calculatedValue,
         notes: input.notes,
+        cleaning_type: input.cleaningType ?? null,
+        payment_status: input.paymentStatus ?? null,
+        upholstery_type: input.upholsteryType ?? null,
+        upholstery_notes: input.upholsteryNotes ?? null,
+        upholstery_units: input.upholsteryUnits ?? null,
+        upholstery_unit_price: input.upholsteryUnitPrice ?? null,
         created_by: user.id,
       })
       .select("id")
