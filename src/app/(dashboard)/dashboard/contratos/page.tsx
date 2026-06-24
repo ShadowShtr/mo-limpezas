@@ -26,6 +26,7 @@ export default async function ContratosPage() {
         .select(`
           id, name, frequency, interval_days, weekdays, schedule_days,
           starts_on, ends_on, status, notes, created_at,
+          cleaning_type, payment_status, upholstery_type, upholstery_notes,
           locations ( id, name, address, hourly_rate, clients ( id, name ) )
         `)
         .eq("company_id", companyId)
@@ -96,6 +97,10 @@ export type ContratosTableRow = {
   ends_on: string | null;
   status: string;
   notes: string | null;
+  cleaning_type: string | null;
+  payment_status: string | null;
+  upholstery_type: string | null;
+  upholstery_notes: string | null;
   created_at: string;
   locations: {
     id: string;

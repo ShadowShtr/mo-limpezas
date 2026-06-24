@@ -17,6 +17,10 @@ export interface ContratoInput {
   ends_on?: string;
   status: string;
   notes?: string;
+  cleaning_type?: string | null;
+  payment_status?: string | null;
+  upholstery_type?: string | null;
+  upholstery_notes?: string | null;
   company_id: string;
   created_by: string;
 }
@@ -96,6 +100,12 @@ async function generateServicesForContract(
   locationId: string,
   hourlyRate: number | null,
   contract: Parameters<typeof getOccurrences>[0],
+  extras: {
+    cleaning_type?: string | null;
+    payment_status?: string | null;
+    upholstery_type?: string | null;
+    upholstery_notes?: string | null;
+  } = {},
 ) {
   const now = new Date();
   // Generate from today until end of next 2 months
@@ -140,6 +150,10 @@ async function generateServicesForContract(
       hourly_rate: hourlyRate,
       calculated_value: calculatedValue,
       status: "agendado",
+      cleaning_type: extras.cleaning_type ?? null,
+      payment_status: extras.payment_status ?? null,
+      upholstery_type: extras.upholstery_type ?? null,
+      upholstery_notes: extras.upholstery_notes ?? null,
     });
   }
 }
@@ -219,6 +233,10 @@ export async function createContrato(input: ContratoInput) {
       ends_on: input.ends_on || null,
       status: input.status,
       notes: input.notes || null,
+      cleaning_type: input.cleaning_type ?? null,
+      payment_status: input.payment_status ?? null,
+      upholstery_type: input.upholstery_type ?? null,
+      upholstery_notes: input.upholstery_notes ?? null,
       company_id: profile.company_id,
       created_by: user.id,
     })
@@ -244,6 +262,12 @@ export async function createContrato(input: ContratoInput) {
         schedule_days: input.schedule_days,
         starts_on: input.starts_on,
         ends_on: input.ends_on || null,
+      },
+      {
+        cleaning_type: input.cleaning_type ?? null,
+        payment_status: input.payment_status ?? null,
+        upholstery_type: input.upholstery_type ?? null,
+        upholstery_notes: input.upholstery_notes ?? null,
       },
     );
   }
@@ -294,6 +318,10 @@ export async function updateContrato(id: string, input: Omit<ContratoInput, "com
     ends_on: input.ends_on || null,
     status: input.status,
     notes: input.notes || null,
+    cleaning_type: input.cleaning_type ?? null,
+    payment_status: input.payment_status ?? null,
+    upholstery_type: input.upholstery_type ?? null,
+    upholstery_notes: input.upholstery_notes ?? null,
   }).eq("id", id).eq("company_id", profile.company_id);
 
   if (error) return { ok: false as const, error: error.message };

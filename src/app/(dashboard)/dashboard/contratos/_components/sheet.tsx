@@ -2,10 +2,17 @@
 
 import { useEffect, useState, useTransition, useMemo } from "react";
 import { createPortal } from "react-dom";
-import { X, Loader2, ChevronDown } from "lucide-react";
+import { X, Loader2, ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
 import { createContrato, updateContrato } from "@/app/actions/contratos";
 import type { ScheduleDay } from "@/types/database";
 import type { ContratosTableRow } from "../page";
+import {
+  CLEANING_TYPES,
+  PAYMENT_STATUSES,
+  UPHOLSTERY_TYPES,
+  showsPaymentStatus,
+  isUpholstery,
+} from "@/lib/cleaning-types";
 
 // ─── Constantes ──────────────────────────────────────────────────────────────
 
@@ -183,10 +190,11 @@ export function ContratoSheet({
   const createTitle = labels?.createTitle ?? "Novo contrato";
   const editTitle = labels?.editTitle ?? "Editar contrato";
   const createButton = labels?.createButton ?? "Criar contrato";
-  const editButton = labels?.editButton ?? "Guardar alteraÃ§Ãµes";
+  const editButton = labels?.editButton ?? "Guardar alterações";
 
   // UI state
   const [open, setOpen] = useState(false);
+  const [step, setStep] = useState<1 | 2>(1);
   const [pending, startTransition] = useTransition();
   const [message, setMessage] = useState<{ type: "error" | "success"; text: string } | null>(null);
 
@@ -198,6 +206,7 @@ export function ContratoSheet({
     return "";
   });
   const [localId, setLocalId] = useState(source?.locations?.id ?? "");
+  const [cleaningType, setCleaningType] = useState(source?.cleaning_type ?? "");
   const [frequency, setFrequency] = useState(source?.frequency ?? "weekly");
   const [intervalDays, setIntervalDays] = useState(source?.interval_days ?? 1);
   const [selectedWeekdays, setSelectedWeekdays] = useState<number[]>(source?.weekdays ?? [1, 3, 5]);
@@ -206,6 +215,9 @@ export function ContratoSheet({
   const [notes, setNotes] = useState(source?.notes ?? "");
   const [status, setStatus] = useState(contrato?.status ?? "ativo");
   const [editScope, setEditScope] = useState("pattern");
+  const [paymentStatus, setPaymentStatus] = useState(source?.payment_status ?? "nao_informado");
+  const [upholsteryType, setUpholsteryType] = useState(source?.upholstery_type ?? "");
+  const [upholsteryNotes, setUpholsteryNotes] = useState(source?.upholstery_notes ?? "");
   const [hourlyRate, setHourlyRate] = useState(
     source?.locations?.hourly_rate != null ? String(source.locations.hourly_rate) : "",
   );
@@ -230,10 +242,22 @@ export function ContratoSheet({
   const locaisFiltrados = clienteId ? locais.filter((l) => l.client_id === clienteId) : locais;
   const selectedLocal = locais.find((l) => l.id === localId) ?? null;
 
+  // Visibilidade condicional dos campos da etapa 2
+  const showPayment = showsPaymentStatus(cleaningType);
+  const showUpholstery = isUpholstery(cleaningType);
+
   useEffect(() => {
     if (!selectedLocal || isEdit) return;
     setHourlyRate(selectedLocal.hourly_rate != null ? String(selectedLocal.hourly_rate) : "");
   }, [isEdit, selectedLocal]);
+
+  // Escape fecha o modal
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [open]);
 
   function toggleWeekday(d: number) {
     setSelectedWeekdays((prev) =>
@@ -283,6 +307,15 @@ export function ContratoSheet({
     });
   }
 
+  function resetForm() {
+    setName(""); setClienteId(fixedClientId ?? ""); setLocalId(""); setCleaningType("");
+    setFrequency("weekly"); setSelectedWeekdays([1, 3, 5]);
+    setStartsOn(new Date().toISOString().split("T")[0]);
+    setEndsOn(""); setNotes(""); setStatus("ativo"); setScheduleConfig({});
+    setPaymentStatus("nao_informado"); setUpholsteryType(""); setUpholsteryNotes("");
+    setStep(1);
+  }
+
   function handleSubmit(e: React.SyntheticEvent<HTMLFormElement>) {
     e.preventDefault();
     setMessage(null);
@@ -312,6 +345,10 @@ export function ContratoSheet({
         ends_on: endsOn || undefined,
         status,
         notes: notes || undefined,
+        cleaning_type: cleaningType || null,
+        payment_status: showPayment ? paymentStatus : null,
+        upholstery_type: showUpholstery ? (upholsteryType || null) : null,
+        upholstery_notes: showUpholstery ? (upholsteryNotes || null) : null,
       };
 
       const res = isEdit
@@ -325,11 +362,7 @@ export function ContratoSheet({
             ? labels?.updatedMessage ?? "Contrato atualizado."
             : labels?.createdMessage ?? "Contrato criado com sucesso.",
         });
-        if (!isEdit) {
-          setName(""); setClienteId(fixedClientId ?? ""); setLocalId(""); setFrequency("weekly");
-          setSelectedWeekdays([1, 3, 5]); setStartsOn(new Date().toISOString().split("T")[0]);
-          setEndsOn(""); setNotes(""); setStatus("ativo"); setScheduleConfig({});
-        }
+        if (!isEdit) resetForm();
       } else {
         setMessage({ type: "error", text: "Erro ao guardar: " + res.error });
       }
@@ -337,42 +370,36 @@ export function ContratoSheet({
   }
 
   const overlay = open ? createPortal(
-    <>
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
       <div
-        className="fixed inset-0 z-[9998]"
-        style={{ background: "rgba(9,14,26,0.45)", backdropFilter: "blur(6px)", WebkitBackdropFilter: "blur(6px)" }}
+        className="absolute inset-0 bg-black/40 backdrop-blur-sm"
         onClick={() => setOpen(false)}
       />
-      <div
-        className="fixed right-0 top-0 h-full w-full max-w-xl z-[9999] flex flex-col"
-        style={{
-          background: "rgba(255,255,255,0.97)",
-          backdropFilter: "blur(24px)",
-          WebkitBackdropFilter: "blur(24px)",
-          boxShadow: "-8px 0 40px rgba(9,14,26,0.14), -1px 0 0 rgba(15,23,42,0.07)",
-        }}
-      >
-            {/* Header */}
-            <div
-              className="flex items-center justify-between px-6 py-4"
-              style={{ borderBottom: "1px solid rgba(15,23,42,0.08)" }}
-            >
-              <h2 className="text-[15px] font-bold" style={{ color: "var(--color-text-main)", letterSpacing: "-0.01em" }}>
-                {isEdit ? editTitle : createTitle}
-              </h2>
-              <button
-                onClick={() => setOpen(false)}
-                className="p-1.5 rounded-xl transition-colors"
-                style={{ color: "var(--color-text-muted)", background: "rgba(15,23,42,0.04)" }}
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
+      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-xl max-h-[90vh] flex flex-col">
 
-            {/* Body */}
-            <form id="contrato-form" onSubmit={handleSubmit} className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-[var(--color-border)]">
+          <div>
+            <h2 className="text-base font-semibold text-[var(--color-text-main)]">
+              {isEdit ? editTitle : createTitle}
+            </h2>
+            <StepIndicator step={step} />
+          </div>
+          <button
+            onClick={() => setOpen(false)}
+            className="p-1.5 rounded-lg text-[var(--color-text-muted)] hover:bg-[var(--color-background)] transition-colors"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
 
-              <SectionLabel title="Identificação" />
+        {/* Body */}
+        <form id="contrato-form" onSubmit={handleSubmit} className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
+
+          {/* ── ETAPA 1 — Dados principais ── */}
+          {step === 1 && (
+            <>
+              <SectionLabel title="Dados principais" />
 
               {/* Nome (opcional) */}
               <Field label={labels?.nameLabel ?? "Nome do contrato (opcional)"}>
@@ -420,34 +447,18 @@ export function ContratoSheet({
                 </Field>
               </div>
 
-              {isEdit && (
-                <Field label="Edição segura da recorrência">
-                  <div className="grid gap-2 text-xs text-[var(--color-text-sub)]">
-                    {[
-                      ["single", "Alterar apenas esta ocorrência"],
-                      ["future", "Alterar esta e as próximas"],
-                      ["pattern", "Alterar o padrão recorrente"],
-                      ["exception", "Criar exceção só para este dia"],
-                    ].map(([value, label]) => (
-                      <label key={value} className="flex items-center gap-2 rounded-lg border border-[var(--color-border)] px-3 py-2">
-                        <input
-                          type="radio"
-                          name="editScope"
-                          value={value}
-                          checked={editScope === value}
-                          onChange={(e) => setEditScope(e.target.value)}
-                        />
-                        <span>{label}</span>
-                      </label>
+              {/* Tipo de limpeza */}
+              <Field label="Tipo de limpeza">
+                <div className="relative">
+                  <select value={cleaningType} onChange={(e) => setCleaningType(e.target.value)} className={SELECT_CLS}>
+                    <option value="">Selecionar...</option>
+                    {CLEANING_TYPES.map((t) => (
+                      <option key={t.value} value={t.value}>{t.label}</option>
                     ))}
-                  </div>
-                  <p className="mt-2 text-xs text-[var(--color-text-muted)]">
-                    Esta tela atualiza o contrato. Ocorrências já concluídas, em curso, falta ou canceladas não são reescritas aqui.
-                  </p>
-                </Field>
-              )}
-
-              <SectionLabel title="Agenda" />
+                  </select>
+                  <ChevronDown className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--color-text-muted)]" />
+                </div>
+              </Field>
 
               {/* Frequência */}
               <Field label="Frequência *">
@@ -501,7 +512,6 @@ export function ContratoSheet({
                 <Field label="Data de início *">
                   <input
                     type="date"
-                    required
                     value={startsOn}
                     onChange={(e) => setStartsOn(e.target.value)}
                     className={INPUT_CLS}
@@ -517,6 +527,71 @@ export function ContratoSheet({
                   />
                 </Field>
               </div>
+
+              {/* Preview ocorrências */}
+              <OccurrencePreview
+                frequency={frequency}
+                weekdays={selectedWeekdays}
+                startsOn={startsOn}
+                intervalDays={intervalDays}
+              />
+
+              {/* Valor por hora */}
+              <Field label="Valor por hora (€)">
+                <input
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  value={hourlyRate}
+                  onChange={(e) => setHourlyRate(e.target.value)}
+                  placeholder="ex: 18.50"
+                  className={INPUT_CLS}
+                />
+              </Field>
+
+              {/* Estado do contrato */}
+              <Field label="Estado do contrato">
+                <div className="relative">
+                  <select value={status} onChange={(e) => setStatus(e.target.value)} className={SELECT_CLS}>
+                    <option value="ativo">Ativo</option>
+                    <option value="pausado">Pausado</option>
+                    <option value="cancelado">Cancelado</option>
+                  </select>
+                  <ChevronDown className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--color-text-muted)]" />
+                </div>
+              </Field>
+            </>
+          )}
+
+          {/* ── ETAPA 2 — Detalhes ── */}
+          {step === 2 && (
+            <>
+              {isEdit && (
+                <Field label="Edição segura da recorrência">
+                  <div className="grid gap-2 text-xs text-[var(--color-text-sub)]">
+                    {[
+                      ["single", "Alterar apenas esta ocorrência"],
+                      ["future", "Alterar esta e as próximas"],
+                      ["pattern", "Alterar o padrão recorrente"],
+                      ["exception", "Criar exceção só para este dia"],
+                    ].map(([value, label]) => (
+                      <label key={value} className="flex items-center gap-2 rounded-lg border border-[var(--color-border)] px-3 py-2">
+                        <input
+                          type="radio"
+                          name="editScope"
+                          value={value}
+                          checked={editScope === value}
+                          onChange={(e) => setEditScope(e.target.value)}
+                        />
+                        <span>{label}</span>
+                      </label>
+                    ))}
+                  </div>
+                  <p className="mt-2 text-xs text-[var(--color-text-muted)]">
+                    Esta tela atualiza o contrato. Ocorrências já concluídas, em curso, falta ou canceladas não são reescritas aqui.
+                  </p>
+                </Field>
+              )}
 
               <SectionLabel title="Equipa e horários" />
 
@@ -577,68 +652,74 @@ export function ContratoSheet({
                 </div>
               </div>
 
-              {/* Preview ocorrências */}
-              <OccurrencePreview
-                frequency={frequency}
-                weekdays={selectedWeekdays}
-                startsOn={startsOn}
-                intervalDays={intervalDays}
-              />
+              {/* Valor calculado */}
+              <Field label="Valor calculado">
+                <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-background)] px-3 py-2 text-sm font-semibold text-[var(--color-text-main)]">
+                  {calculatedValue == null
+                    ? "—"
+                    : `${calculatedValue.toLocaleString("pt-PT", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`}
+                </div>
+                <p className="mt-1 text-xs text-[var(--color-text-muted)]">
+                  {(totalDurationMin / 60).toLocaleString("pt-PT", { maximumFractionDigits: 2 })}h x valor/hora
+                </p>
+              </Field>
 
-              <SectionLabel title="Valores" />
-
-              <div className="grid grid-cols-2 gap-3">
-                <Field label="Valor por hora (€)">
-                  <input
-                    type="number"
-                    min={0}
-                    step="0.01"
-                    value={hourlyRate}
-                    onChange={(e) => setHourlyRate(e.target.value)}
-                    placeholder="ex: 18.50"
-                    className={INPUT_CLS}
-                  />
-                </Field>
-                <Field label="Valor calculado">
-                  <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-background)] px-3 py-2 text-sm font-semibold text-[var(--color-text-main)]">
-                    {calculatedValue == null
-                      ? "—"
-                      : `${calculatedValue.toLocaleString("pt-PT", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`}
-                  </div>
-                  <p className="mt-1 text-xs text-[var(--color-text-muted)]">
-                    {(totalDurationMin / 60).toLocaleString("pt-PT", { maximumFractionDigits: 2 })}h x valor/hora
-                  </p>
-                </Field>
-              </div>
-
-              {/* Estado (só edição) */}
-              {isEdit && (
-                <Field label="Estado">
+              {/* Estado do pagamento — Geral / Pós-Obra */}
+              {showPayment && (
+                <Field label="Estado do pagamento">
                   <div className="relative">
-                    <select value={status} onChange={(e) => setStatus(e.target.value)} className={SELECT_CLS}>
-                      <option value="ativo">Ativo</option>
-                      <option value="pausado">Pausado</option>
-                      <option value="cancelado">Cancelado</option>
+                    <select value={paymentStatus} onChange={(e) => setPaymentStatus(e.target.value)} className={SELECT_CLS}>
+                      {PAYMENT_STATUSES.map((s) => (
+                        <option key={s.value} value={s.value}>{s.label}</option>
+                      ))}
                     </select>
                     <ChevronDown className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--color-text-muted)]" />
                   </div>
+                  <p className="mt-1 text-xs text-[var(--color-text-muted)]">
+                    Lembrete de sinal 50% ou pagamento total.
+                  </p>
                 </Field>
               )}
 
-              <SectionLabel title="Trabalho" />
+              {/* Estofos — tipo + especificação */}
+              {showUpholstery && (
+                <div className="space-y-3 rounded-lg border border-[var(--color-primary-muted)] bg-[var(--color-primary-light)] p-3">
+                  <Field label="Tipo de estofado">
+                    <div className="relative">
+                      <select value={upholsteryType} onChange={(e) => setUpholsteryType(e.target.value)} className={SELECT_CLS}>
+                        <option value="">Selecionar...</option>
+                        {UPHOLSTERY_TYPES.map((t) => (
+                          <option key={t.value} value={t.value}>{t.label}</option>
+                        ))}
+                      </select>
+                      <ChevronDown className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--color-text-muted)]" />
+                    </div>
+                  </Field>
+                  <Field label="Especificação do estofado">
+                    <textarea
+                      value={upholsteryNotes}
+                      onChange={(e) => setUpholsteryNotes(e.target.value)}
+                      rows={3}
+                      placeholder="Tamanho, quantidade, tipo de tecido, manchas, etc."
+                      className={INPUT_CLS + " resize-none"}
+                    />
+                  </Field>
+                </div>
+              )}
 
-              {/* Notas */}
-              <Field label="Notas internas">
+              {/* Observações internas */}
+              <Field label="Observações internas">
                 <textarea
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
                   rows={3}
-                  placeholder="Instruções especiais, código de acesso, etc."
+                  placeholder="Instruções do serviço, materiais necessários, etc."
                   className={INPUT_CLS + " resize-none"}
                 />
               </Field>
 
-              <SectionLabel title="Acesso do local" />
+              {/* Acesso do local (instruções fixas) */}
+              <SectionLabel title="Instruções do serviço / acesso do local" />
               <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-background)] p-3 text-xs text-[var(--color-text-sub)]">
                 {!selectedLocal ? (
                   <p>Seleciona um local para ver instruções fixas de acesso.</p>
@@ -651,23 +732,53 @@ export function ContratoSheet({
                   </div>
                 )}
               </div>
+            </>
+          )}
 
-              {message && (
-                <div className={`text-sm px-3 py-2 rounded-lg ${message.type === "error"
-                  ? "bg-red-50 text-red-700 border border-red-100"
-                  : "bg-[var(--color-primary-light)] text-[var(--color-primary)] border border-[var(--color-primary-muted)]"}`}>
-                  {message.text}
-                </div>
-              )}
-            </form>
+          {message && (
+            <div className={`text-sm px-3 py-2 rounded-lg ${message.type === "error"
+              ? "bg-red-50 text-red-700 border border-red-100"
+              : "bg-[var(--color-primary-light)] text-[var(--color-primary)] border border-[var(--color-primary-muted)]"}`}>
+              {message.text}
+            </div>
+          )}
+        </form>
 
-            {/* Footer */}
-            <div className="px-6 py-4" style={{ borderTop: "1px solid rgba(15,23,42,0.07)" }}>
+        {/* Footer — navegação */}
+        <div className="flex items-center gap-2 px-6 py-4 border-t border-[var(--color-border)]">
+          {step === 1 ? (
+            <>
+              <button
+                type="button"
+                onClick={() => setOpen(false)}
+                className="px-4 py-2.5 rounded-xl border border-[var(--color-border)] text-sm font-medium text-[var(--color-text-sub)] hover:bg-[var(--color-background)] transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={() => setStep(2)}
+                className="ml-auto flex items-center justify-center gap-1.5 px-5 py-2.5 rounded-xl bg-[var(--color-primary)] text-white text-sm font-semibold hover:bg-[var(--color-primary-hover)] transition-colors"
+              >
+                Seguinte
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </>
+          ) : (
+            <>
+              <button
+                type="button"
+                onClick={() => setStep(1)}
+                className="flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl border border-[var(--color-border)] text-sm font-medium text-[var(--color-text-sub)] hover:bg-[var(--color-background)] transition-colors"
+              >
+                <ChevronLeft className="w-4 h-4" />
+                Voltar
+              </button>
               <button
                 form="contrato-form"
                 type="submit"
                 disabled={pending}
-                className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all disabled:opacity-50"
+                className="ml-auto flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold transition-all disabled:opacity-50"
                 style={{
                   background: "linear-gradient(135deg, #22C55E 0%, #16A34A 100%)",
                   color: "white",
@@ -677,15 +788,17 @@ export function ContratoSheet({
                 {pending && <Loader2 className="w-4 h-4 animate-spin" />}
                 {isEdit ? editButton : createButton}
               </button>
-            </div>
-          </div>
-    </>,
+            </>
+          )}
+        </div>
+      </div>
+    </div>,
     document.body
   ) : null;
 
   return (
     <>
-      <span onClick={() => setOpen(true)} style={{ display: "contents", cursor: "pointer" }}>
+      <span onClick={() => { setStep(1); setOpen(true); }} style={{ display: "contents", cursor: "pointer" }}>
         {trigger}
       </span>
       {overlay}
@@ -694,6 +807,20 @@ export function ContratoSheet({
 }
 
 // ─── Helpers de estilo ────────────────────────────────────────────────────────
+
+function StepIndicator({ step }: { step: 1 | 2 }) {
+  return (
+    <div className="flex items-center gap-2 mt-1">
+      <span className={`text-xs font-medium ${step === 1 ? "text-[var(--color-primary)]" : "text-[var(--color-text-muted)]"}`}>
+        1. Dados principais
+      </span>
+      <span className="text-[var(--color-text-muted)]">›</span>
+      <span className={`text-xs font-medium ${step === 2 ? "text-[var(--color-primary)]" : "text-[var(--color-text-muted)]"}`}>
+        2. Detalhes
+      </span>
+    </div>
+  );
+}
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
