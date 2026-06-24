@@ -40,10 +40,18 @@ type UpstashMod = { Ratelimit: typeof import("@upstash/ratelimit").Ratelimit; Re
 let upstashMod: UpstashMod | null = null;
 let upstashLoaded = false;
 
+// Aceita tanto os nomes nativos do Upstash (UPSTASH_REDIS_REST_*) como os criados
+// pela integração Vercel/Upstash (KV_REST_API_*) — apontam para o mesmo endpoint REST.
+function getUpstashCreds(): { url: string; token: string } | null {
+  const url = process.env.UPSTASH_REDIS_REST_URL ?? process.env.KV_REST_API_URL;
+  const token = process.env.UPSTASH_REDIS_REST_TOKEN ?? process.env.KV_REST_API_TOKEN;
+  return url && token ? { url, token } : null;
+}
+
 async function getUpstashLimiter(max: number, windowMs: number) {
-  const hasUpstash = !!(process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN);
+  const creds = getUpstashCreds();
   // Em produção o fallback in-memory não é fiável entre instâncias Vercel.
-  if (!hasUpstash) {
+  if (!creds) {
     if (process.env.NODE_ENV === "production") {
       console.warn("Rate limit a usar fallback local: UPSTASH_REDIS_REST_URL/TOKEN nao configurados.");
     }
@@ -61,10 +69,7 @@ async function getUpstashLimiter(max: number, windowMs: number) {
     if (!upstashMod) return null;
 
     const { Ratelimit, Redis } = upstashMod;
-    const redis = new Redis({
-      url: process.env.UPSTASH_REDIS_REST_URL,
-      token: process.env.UPSTASH_REDIS_REST_TOKEN,
-    });
+    const redis = new Redis({ url: creds.url, token: creds.token });
     return new Ratelimit({
       redis,
       limiter: Ratelimit.slidingWindow(max, msToUpstashDuration(windowMs)),
