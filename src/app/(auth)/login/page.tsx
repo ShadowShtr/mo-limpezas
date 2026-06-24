@@ -61,7 +61,7 @@ export default function LoginPage() {
                 name="email"
                 type="text"
                 required
-                placeholder="admin1 ou gestor@molimpezas.pt"
+                placeholder="O teu utilizador ou email"
                 autoComplete="username"
                 className="w-full px-3 py-2 rounded-lg border border-[var(--color-border)] text-sm
                            bg-white text-[var(--color-text-main)] placeholder:text-[var(--color-text-muted)]

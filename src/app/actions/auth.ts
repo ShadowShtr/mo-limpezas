@@ -29,13 +29,26 @@ function isControlFlowError(e: unknown): boolean {
 export async function login(formData: FormData) {
   let target: string | null = null;
   try {
-    // Rate limit já é "fail-open": se o Upstash falhar, deixa passar (nunca rebenta).
-    if (!await checkRateLimit(rateLimitKey("auth-login", await getClientIp()), 5, 60_000)) {
-      return { error: "Demasiadas tentativas de login. Aguarda um minuto." };
-    }
-
     const rawInput = (formData.get("email") as string)?.trim();
     const rawPassword = formData.get("password") as string;
+
+    // ── Anti-brute-force em camadas ────────────────────────────────────────────
+    // Combina limites por IP (impede um IP a martelar) e por conta (impede ataque
+    // distribuído a um único utilizador, mesmo trocando de IP). Tudo "fail-open":
+    // se o Upstash falhar, deixa passar — o login nunca rebenta por causa disto.
+    const ip = await getClientIp();
+    const acct = (rawInput || "unknown").toLowerCase();
+    const limits: Array<{ key: string; max: number; windowMs: number }> = [
+      { key: rateLimitKey("auth-login-ip", ip), max: 5, windowMs: 60_000 },            // 5/min por IP
+      { key: rateLimitKey("auth-login-ip15", ip), max: 25, windowMs: 15 * 60_000 },    // 25/15min por IP
+      { key: rateLimitKey("auth-login-acct", acct), max: 5, windowMs: 5 * 60_000 },    // 5/5min por conta
+      { key: rateLimitKey("auth-login-acct-h", acct), max: 12, windowMs: 60 * 60_000 }, // 12/h por conta
+    ];
+    for (const { key, max, windowMs } of limits) {
+      if (!await checkRateLimit(key, max, windowMs)) {
+        return { error: "Demasiadas tentativas. Aguarda alguns minutos e tenta novamente." };
+      }
+    }
 
     // Aceita username puro (ex: admin1) ou email completo
     const resolvedEmail = rawInput?.includes("@")
