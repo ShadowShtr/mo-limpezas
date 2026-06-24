@@ -60,11 +60,6 @@ export const UPHOLSTERY_TYPE_LABELS: Record<string, string> = Object.fromEntries
   UPHOLSTERY_TYPES.map((t) => [t.value, t.label]),
 );
 
-/** Mostra os campos de quantidade × preço unitário quando o estofado é por unidade. */
-export function isUpholsteryUnit(upholsteryType: string | null | undefined): boolean {
-  return upholsteryType === "unidade";
-}
-
 // Tipos que exigem controlo de pagamento (sinal 50% / total).
 const PAYMENT_RELEVANT: ReadonlySet<string> = new Set<CleaningType>([
   "geral",

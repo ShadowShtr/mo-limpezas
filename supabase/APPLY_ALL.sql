@@ -1062,3 +1062,51 @@ INSERT INTO teams (id, company_id, name, color) VALUES
   ('30000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-000000000001', 'Equipa 01', '#16A34A'),
   ('30000000-0000-0000-0000-000000000002', '00000000-0000-0000-0000-000000000001', 'Equipa 02', '#3B82F6'),
   ('30000000-0000-0000-0000-000000000003', '00000000-0000-0000-0000-000000000001', 'Equipa 03', '#F59E0B');
+
+
+-- ============================================================
+-- 038_service_contract_fields.sql + 039_upholstery_units.sql
+-- ============================================================
+-- Tipo de limpeza, estado de pagamento e detalhes de estofos (contratos e serviços).
+-- Todos NULLABLE — compatíveis com registos antigos.
+
+ALTER TABLE contracts ADD COLUMN IF NOT EXISTS cleaning_type         TEXT;
+ALTER TABLE contracts ADD COLUMN IF NOT EXISTS payment_status        TEXT;
+ALTER TABLE contracts ADD COLUMN IF NOT EXISTS upholstery_type       TEXT;
+ALTER TABLE contracts ADD COLUMN IF NOT EXISTS upholstery_notes      TEXT;
+ALTER TABLE contracts ADD COLUMN IF NOT EXISTS upholstery_units      INTEGER;
+ALTER TABLE contracts ADD COLUMN IF NOT EXISTS upholstery_unit_price NUMERIC(10,2);
+
+ALTER TABLE services  ADD COLUMN IF NOT EXISTS cleaning_type         TEXT;
+ALTER TABLE services  ADD COLUMN IF NOT EXISTS payment_status        TEXT;
+ALTER TABLE services  ADD COLUMN IF NOT EXISTS upholstery_type       TEXT;
+ALTER TABLE services  ADD COLUMN IF NOT EXISTS upholstery_notes      TEXT;
+ALTER TABLE services  ADD COLUMN IF NOT EXISTS upholstery_units      INTEGER;
+ALTER TABLE services  ADD COLUMN IF NOT EXISTS upholstery_unit_price NUMERIC(10,2);
+
+DO $$ BEGIN
+  ALTER TABLE contracts ADD CONSTRAINT contracts_cleaning_type_chk
+    CHECK (cleaning_type IS NULL OR cleaning_type IN (
+      'manutencao','manutencao_lisboa','pos_obra','pos_obra_lisboa','geral','geral_lisboa','estofos'));
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN
+  ALTER TABLE contracts ADD CONSTRAINT contracts_payment_status_chk
+    CHECK (payment_status IS NULL OR payment_status IN ('nao_informado','sinal_50','pago_total'));
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN
+  ALTER TABLE contracts ADD CONSTRAINT contracts_upholstery_type_chk
+    CHECK (upholstery_type IS NULL OR upholstery_type IN ('sofa','poltrona','cadeira','tapete','colchao','unidade','outro'));
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN
+  ALTER TABLE services ADD CONSTRAINT services_cleaning_type_chk
+    CHECK (cleaning_type IS NULL OR cleaning_type IN (
+      'manutencao','manutencao_lisboa','pos_obra','pos_obra_lisboa','geral','geral_lisboa','estofos'));
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN
+  ALTER TABLE services ADD CONSTRAINT services_payment_status_chk
+    CHECK (payment_status IS NULL OR payment_status IN ('nao_informado','sinal_50','pago_total'));
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN
+  ALTER TABLE services ADD CONSTRAINT services_upholstery_type_chk
+    CHECK (upholstery_type IS NULL OR upholstery_type IN ('sofa','poltrona','cadeira','tapete','colchao','unidade','outro'));
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;

@@ -1,4 +1,6 @@
 // @vitest-environment jsdom
+import "fake-indexeddb/auto"; // jsdom não fornece IndexedDB — polyfill in-memory
+import { IDBFactory } from "fake-indexeddb";
 import { describe, it, expect, beforeEach, vi, afterEach } from "vitest";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -25,6 +27,8 @@ function entry(
 beforeEach(() => {
   localStorage.clear();
   vi.resetModules();
+  // BD IndexedDB limpa por teste — evita acumular entradas entre testes
+  globalThis.indexedDB = new IDBFactory();
 });
 
 afterEach(() => {
