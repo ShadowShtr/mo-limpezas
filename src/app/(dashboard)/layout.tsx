@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { DashboardShell } from "@/components/layout/dashboard-shell";
+import { SwUpdatePrompt } from "@/components/pwa/sw-update-prompt";
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient();
@@ -26,6 +27,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
       avatarUrl={profile.avatar_url}
     >
       {children}
+      <SwUpdatePrompt />
     </DashboardShell>
   );
 }

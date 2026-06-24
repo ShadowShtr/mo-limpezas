@@ -1,5 +1,7 @@
-// Incrementar CACHE força purga do cache antigo em todos os clientes
-const CACHE = "mo-limpezas-v9";
+// A versão da cache é carimbada automaticamente no build (scripts/stamp-sw.mjs).
+// Em dev fica "mo-limpezas-dev"; em cada deploy é substituída por um valor único,
+// o que purga a cache antiga e dispara o aviso "Nova versão disponível".
+const CACHE = "mo-limpezas-dev";
 
 // Apenas assets estáticos são guardados — HTML é sempre da rede
 const PRECACHE = ["/offline"];
