@@ -190,6 +190,7 @@ export function ServiceDetailSheet({ service, onClose, onChanged, initialEdit = 
 
   // Abrir já em edição quando vem do ícone de lápis (corre depois do reset acima).
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (initialEdit && service?.id) setEditingNotes(true);
   }, [initialEdit, service?.id]);
 

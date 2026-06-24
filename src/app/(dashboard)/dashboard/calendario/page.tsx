@@ -92,6 +92,8 @@ export default async function CalendarioPage({
   // Converter para ServiceCalendar: computar boolean e strip de campos sensíveis.
   // O RSC recebe location_access_code para derivar o boolean, mas não o serializa para o browser.
   const processedServices: ServiceCalendar[] = rawSvcs.map((s) => {
+    // Destructuring remove campos sensíveis de `rest` (não serializados para o browser).
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { location_access_code, location_instructions, client_phone, client_email, ...rest } =
       s as ServiceFull & { location_access_code?: string | null; location_instructions?: string | null; client_phone?: string | null; client_email?: string | null };
     return {

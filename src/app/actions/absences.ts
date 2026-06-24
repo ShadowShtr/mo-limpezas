@@ -47,8 +47,6 @@ export async function createAbsence(input: CreateAbsenceInput) {
   const { data: actor } = await admin.from("profiles").select("role, company_id").eq("id", user.id).single();
   if (!actor || !["admin", "gestor"].includes(actor.role)) return { ok: false as const, error: "Sem permissão." };
 
-  const companyId = actor.company_id;
-
   const { error } = await admin.from("absences").insert({
     company_id: actor.company_id,
     collaborator_id: input.collaborator_id,

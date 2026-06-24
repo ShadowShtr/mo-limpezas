@@ -95,7 +95,6 @@ export async function createClienteComLocal(companyId: string, input: ClienteCom
     .single();
   if (ce || !client) return { ok: false as const, error: ce?.message ?? "Erro ao criar cliente.", clientId: null, locationId: null };
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: location, error: le } = await admin
     .from("locations")
     .insert({
@@ -106,7 +105,7 @@ export async function createClienteComLocal(companyId: string, input: ClienteCom
       active: true,
       client_id: client.id,
       company_id: companyId,
-    } as any)
+    })
     .select("id")
     .single();
   if (le || !location) {

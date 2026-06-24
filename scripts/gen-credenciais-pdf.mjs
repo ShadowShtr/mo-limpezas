@@ -15,7 +15,7 @@ for (const l of lines) {
   // remove vazios das pontas
   const c = cols.filter((_, i) => i !== 0 && i !== cols.length - 1);
   if (c.length < 5) continue;
-  const [nome, login, tipo, papel, senha] = c;
+  const [nome, login, , papel, senha] = c;
   if (nome === "Nome" || nome.startsWith("---")) continue; // cabeçalho/separador
   rows.push({ nome, login, papel, senha: senha.replace(/`/g, "") });
 }

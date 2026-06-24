@@ -4,6 +4,10 @@ import { useState } from "react";
 import { Search, MoreHorizontal, Calendar, MapPin } from "lucide-react";
 import { ContratoSheet } from "./sheet";
 import { usePagination, Pagination } from "@/components/ui/pagination";
+import {
+  CLEANING_TYPE_LABELS,
+  PAYMENT_STATUS_LABELS,
+} from "@/lib/cleaning-types";
 import type { ContratosTableRow } from "../page";
 import type { ScheduleDay } from "@/types/database";
 
@@ -181,6 +185,21 @@ export function ContratosTable({ contratos, companyId, userId, clientes, locais,
                           <p className="mt-1 text-xs font-medium text-[var(--color-text-sub)]">
                             €{c.locations.hourly_rate.toFixed(2)}/h
                           </p>
+                        )}
+                        {/* Tipo de limpeza + estado do pagamento */}
+                        {(c.cleaning_type || c.payment_status) && (
+                          <div className="flex flex-wrap gap-1 mt-1">
+                            {c.cleaning_type && (
+                              <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-[var(--color-primary-light)] text-[var(--color-primary)]">
+                                {CLEANING_TYPE_LABELS[c.cleaning_type] ?? c.cleaning_type}
+                              </span>
+                            )}
+                            {c.payment_status && c.payment_status !== "nao_informado" && (
+                              <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-amber-50 text-amber-700">
+                                {PAYMENT_STATUS_LABELS[c.payment_status] ?? c.payment_status}
+                              </span>
+                            )}
+                          </div>
                         )}
                         {/* Equipas do schedule_days */}
                         <TeamsPreview scheduleDays={c.schedule_days} equipas={equipas} />

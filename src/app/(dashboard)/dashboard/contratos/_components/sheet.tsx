@@ -261,6 +261,7 @@ export function ContratoSheet({
 
   useEffect(() => {
     if (!selectedLocal || isEdit) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setHourlyRate(selectedLocal.hourly_rate != null ? String(selectedLocal.hourly_rate) : "");
   }, [isEdit, selectedLocal]);
 
@@ -343,6 +344,14 @@ export function ContratoSheet({
     }
     if (parsedHourlyRate != null && (!Number.isFinite(parsedHourlyRate) || parsedHourlyRate < 0)) {
       setMessage({ type: "error", text: "Valor por hora inválido." });
+      return;
+    }
+    if (showUpholstery && !upholsteryType) {
+      setMessage({ type: "error", text: "Seleciona o tipo de estofado." });
+      return;
+    }
+    if (showUnits && (upholsteryUnits === "" || Number(upholsteryUnits) <= 0)) {
+      setMessage({ type: "error", text: "Indica o número de unidades do estofado." });
       return;
     }
 
