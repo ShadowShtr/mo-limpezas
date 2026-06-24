@@ -193,7 +193,7 @@ async function updateFutureServiceValuesForContract(
         ? parseFloat(((durationMin / 60) * hourlyRate).toFixed(2))
         : null;
 
-    await (admin as any)
+    await admin
       .from("services")
       .update({ hourly_rate: hourlyRate, calculated_value: calculatedValue })
       .eq("id", service.id)

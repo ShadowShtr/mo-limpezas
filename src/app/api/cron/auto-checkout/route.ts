@@ -14,11 +14,8 @@ export async function GET(req: NextRequest) {
   const admin = createAdminClient();
   const now = new Date();
 
-  // Só processar timesheets de serviços cujo fim previsto já passou há mais de
-  // 1 hora — janela conservadora; a lógica por-empresa afina depois.
+  // Processa timesheets em aberto; a janela por-empresa afina-se na lógica abaixo.
   // Limitar a BATCH_LIMIT para não saturar a execução.
-  const oneHourAgo = new Date(now.getTime() - 60 * 60 * 1000).toISOString();
-
   const { data: openTimesheets, error: tsErr } = await admin
     .from("timesheets")
     .select("id, service_id, clock_in_at, company_id")

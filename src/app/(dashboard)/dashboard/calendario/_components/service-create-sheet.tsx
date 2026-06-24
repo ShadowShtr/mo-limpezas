@@ -225,6 +225,11 @@ export function ServiceCreateSheet({
     e.preventDefault();
     if (!locationId) { setMessage("Seleciona um local."); return; }
     if (durationMin <= 0) { setMessage("A hora de fim deve ser posterior ao início."); return; }
+    if (showUpholstery && !upholsteryType) { setMessage("Seleciona o tipo de estofado."); return; }
+    if (showUnits && (upholsteryUnits === "" || Number(upholsteryUnits) <= 0)) {
+      setMessage("Indica o número de unidades do estofado.");
+      return;
+    }
     await doCreate(false);
   }
 

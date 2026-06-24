@@ -5,10 +5,6 @@ import { fileURLToPath } from "url";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
-// Session Pooler (IPv4 compatible) — eu-central-2 (Zurich)
-const DATABASE_URL =
-  "postgresql://postgres.ceqzxgizhgmvcniapyla:%40vitortmf36978@aws-0-eu-central-2.pooler.supabase.com:5432/postgres";
-
 // Conexão direta via IPv6
 const client = new pg.Client({
   host: "db.ceqzxgizhgmvcniapyla.supabase.co",

@@ -227,12 +227,11 @@ export function CalendarView({
     try { localStorage.removeItem(`cal-hidden-teams-${companyId}`); } catch { /* noop */ }
   }, [companyId]);
 
-  /* eslint-disable react-hooks/exhaustive-deps */
+  /* eslint-disable react-hooks/exhaustive-deps, react-hooks/set-state-in-effect */
   useEffect(() => {
     setToday(new Date());
     setCurrentTop(computeTimeTop(parseISO(selectedDateISO), slotH));
   }, []);
-  /* eslint-enable react-hooks/exhaustive-deps */
 
   useEffect(() => {
     const d = parseISO(selectedDateISO);
@@ -242,6 +241,7 @@ export function CalendarView({
   }, [selectedDateISO]);
 
   useEffect(() => { setLocalServices(services); }, [services]);
+  /* eslint-enable react-hooks/exhaustive-deps, react-hooks/set-state-in-effect */
 
   useEffect(() => {
     const id = setInterval(() => setCurrentTop(computeTimeTop(selectedDate, slotH)), 60_000);
@@ -264,6 +264,7 @@ export function CalendarView({
   }, [viewMode]);
 
   // Recalcula a linha "agora" quando a altura do slot muda.
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { setCurrentTop(computeTimeTop(selectedDate, slotH)); }, [slotH, selectedDate]);
 
   useEffect(() => {
@@ -378,7 +379,7 @@ export function CalendarView({
     wasDragging.current = true;
     setDraggingBlock(null);
 
-    const { active, over, delta } = event;
+    const { active, over } = event;
     if (!over || !active.data.current) return;
 
     const { service, teamId: fromColKey } = active.data.current as { service: ServiceForBlock; teamId: string };
