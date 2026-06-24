@@ -218,6 +218,12 @@ export function ContratoSheet({
   const [paymentStatus, setPaymentStatus] = useState(source?.payment_status ?? "nao_informado");
   const [upholsteryType, setUpholsteryType] = useState(source?.upholstery_type ?? "");
   const [upholsteryNotes, setUpholsteryNotes] = useState(source?.upholstery_notes ?? "");
+  const [upholsteryUnits, setUpholsteryUnits] = useState(
+    source?.upholstery_units != null ? String(source.upholstery_units) : "",
+  );
+  const [upholsteryUnitPrice, setUpholsteryUnitPrice] = useState(
+    source?.upholstery_unit_price != null ? String(source.upholstery_unit_price) : "",
+  );
   const [hourlyRate, setHourlyRate] = useState(
     source?.locations?.hourly_rate != null ? String(source.locations.hourly_rate) : "",
   );
@@ -242,9 +248,15 @@ export function ContratoSheet({
   const locaisFiltrados = clienteId ? locais.filter((l) => l.client_id === clienteId) : locais;
   const selectedLocal = locais.find((l) => l.id === localId) ?? null;
 
-  // Visibilidade condicional dos campos da etapa 2
+  // Visibilidade condicional
   const showPayment = showsPaymentStatus(cleaningType);
   const showUpholstery = isUpholstery(cleaningType);
+  const showUnits = showUpholstery && upholsteryType === "unidade";
+
+  // Estofos por unidade: quantidade × preço unitário
+  const upholsteryTotal = showUnits
+    ? Number(upholsteryUnits || 0) * Number((upholsteryUnitPrice || "0").replace(",", "."))
+    : null;
 
   useEffect(() => {
     if (!selectedLocal || isEdit) return;
@@ -313,6 +325,7 @@ export function ContratoSheet({
     setStartsOn(new Date().toISOString().split("T")[0]);
     setEndsOn(""); setNotes(""); setStatus("ativo"); setScheduleConfig({});
     setPaymentStatus("nao_informado"); setUpholsteryType(""); setUpholsteryNotes("");
+    setUpholsteryUnits(""); setUpholsteryUnitPrice("");
     setStep(1);
   }
 
@@ -349,6 +362,11 @@ export function ContratoSheet({
         payment_status: showPayment ? paymentStatus : null,
         upholstery_type: showUpholstery ? (upholsteryType || null) : null,
         upholstery_notes: showUpholstery ? (upholsteryNotes || null) : null,
+        upholstery_units: showUnits && upholsteryUnits !== "" ? Number(upholsteryUnits) : null,
+        upholstery_unit_price: showUnits && upholsteryUnitPrice !== ""
+          ? Number(upholsteryUnitPrice.replace(",", ".")) : null,
+        // Estofos por unidade: o total (qtd × preço) passa a ser o valor por ocorrência
+        unit_value: upholsteryTotal != null && upholsteryTotal > 0 ? upholsteryTotal : null,
       };
 
       const res = isEdit
@@ -459,6 +477,82 @@ export function ContratoSheet({
                   <ChevronDown className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--color-text-muted)]" />
                 </div>
               </Field>
+
+              {/* Estado do pagamento — Geral / Pós-Obra */}
+              {showPayment && (
+                <Field label="Estado do pagamento">
+                  <div className="relative">
+                    <select value={paymentStatus} onChange={(e) => setPaymentStatus(e.target.value)} className={SELECT_CLS}>
+                      {PAYMENT_STATUSES.map((s) => (
+                        <option key={s.value} value={s.value}>{s.label}</option>
+                      ))}
+                    </select>
+                    <ChevronDown className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--color-text-muted)]" />
+                  </div>
+                  <p className="mt-1 text-xs text-[var(--color-text-muted)]">
+                    Lembrete de sinal 50% ou pagamento total.
+                  </p>
+                </Field>
+              )}
+
+              {/* Estofos — tipo + especificação (+ unidades) */}
+              {showUpholstery && (
+                <div className="space-y-3 rounded-lg border border-[var(--color-primary-muted)] bg-[var(--color-primary-light)] p-3">
+                  <Field label="Tipo de estofado">
+                    <div className="relative">
+                      <select value={upholsteryType} onChange={(e) => setUpholsteryType(e.target.value)} className={SELECT_CLS}>
+                        <option value="">Selecionar...</option>
+                        {UPHOLSTERY_TYPES.map((t) => (
+                          <option key={t.value} value={t.value}>{t.label}</option>
+                        ))}
+                      </select>
+                      <ChevronDown className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--color-text-muted)]" />
+                    </div>
+                  </Field>
+
+                  {showUnits && (
+                    <div className="grid grid-cols-2 gap-3">
+                      <Field label="Nº de unidades">
+                        <input
+                          type="number"
+                          min={0}
+                          step={1}
+                          value={upholsteryUnits}
+                          onChange={(e) => setUpholsteryUnits(e.target.value)}
+                          placeholder="ex: 3"
+                          className={INPUT_CLS}
+                        />
+                      </Field>
+                      <Field label="Preço por unidade (€)">
+                        <input
+                          type="number"
+                          min={0}
+                          step="0.01"
+                          value={upholsteryUnitPrice}
+                          onChange={(e) => setUpholsteryUnitPrice(e.target.value)}
+                          placeholder="ex: 25.00"
+                          className={INPUT_CLS}
+                        />
+                      </Field>
+                      <div className="col-span-2 rounded-lg border border-[var(--color-primary-muted)] bg-white px-3 py-2 text-sm font-semibold text-[var(--color-text-main)]">
+                        Total: {upholsteryTotal == null || upholsteryTotal <= 0
+                          ? "—"
+                          : `${upholsteryTotal.toLocaleString("pt-PT", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`}
+                      </div>
+                    </div>
+                  )}
+
+                  <Field label="Especificação do estofado">
+                    <textarea
+                      value={upholsteryNotes}
+                      onChange={(e) => setUpholsteryNotes(e.target.value)}
+                      rows={3}
+                      placeholder="Tamanho, quantidade, tipo de tecido, manchas, etc."
+                      className={INPUT_CLS + " resize-none"}
+                    />
+                  </Field>
+                </div>
+              )}
 
               {/* Frequência */}
               <Field label="Frequência *">
@@ -654,58 +748,25 @@ export function ContratoSheet({
 
               {/* Valor calculado */}
               <Field label="Valor calculado">
-                <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-background)] px-3 py-2 text-sm font-semibold text-[var(--color-text-main)]">
-                  {calculatedValue == null
-                    ? "—"
-                    : `${calculatedValue.toLocaleString("pt-PT", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`}
-                </div>
-                <p className="mt-1 text-xs text-[var(--color-text-muted)]">
-                  {(totalDurationMin / 60).toLocaleString("pt-PT", { maximumFractionDigits: 2 })}h x valor/hora
-                </p>
+                {(() => {
+                  const useUnits = upholsteryTotal != null && upholsteryTotal > 0;
+                  const shown = useUnits ? upholsteryTotal : calculatedValue;
+                  return (
+                    <>
+                      <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-background)] px-3 py-2 text-sm font-semibold text-[var(--color-text-main)]">
+                        {shown == null
+                          ? "—"
+                          : `${shown.toLocaleString("pt-PT", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`}
+                      </div>
+                      <p className="mt-1 text-xs text-[var(--color-text-muted)]">
+                        {useUnits
+                          ? `${upholsteryUnits || 0} unidade(s) x preço unitário`
+                          : `${(totalDurationMin / 60).toLocaleString("pt-PT", { maximumFractionDigits: 2 })}h x valor/hora`}
+                      </p>
+                    </>
+                  );
+                })()}
               </Field>
-
-              {/* Estado do pagamento — Geral / Pós-Obra */}
-              {showPayment && (
-                <Field label="Estado do pagamento">
-                  <div className="relative">
-                    <select value={paymentStatus} onChange={(e) => setPaymentStatus(e.target.value)} className={SELECT_CLS}>
-                      {PAYMENT_STATUSES.map((s) => (
-                        <option key={s.value} value={s.value}>{s.label}</option>
-                      ))}
-                    </select>
-                    <ChevronDown className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--color-text-muted)]" />
-                  </div>
-                  <p className="mt-1 text-xs text-[var(--color-text-muted)]">
-                    Lembrete de sinal 50% ou pagamento total.
-                  </p>
-                </Field>
-              )}
-
-              {/* Estofos — tipo + especificação */}
-              {showUpholstery && (
-                <div className="space-y-3 rounded-lg border border-[var(--color-primary-muted)] bg-[var(--color-primary-light)] p-3">
-                  <Field label="Tipo de estofado">
-                    <div className="relative">
-                      <select value={upholsteryType} onChange={(e) => setUpholsteryType(e.target.value)} className={SELECT_CLS}>
-                        <option value="">Selecionar...</option>
-                        {UPHOLSTERY_TYPES.map((t) => (
-                          <option key={t.value} value={t.value}>{t.label}</option>
-                        ))}
-                      </select>
-                      <ChevronDown className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--color-text-muted)]" />
-                    </div>
-                  </Field>
-                  <Field label="Especificação do estofado">
-                    <textarea
-                      value={upholsteryNotes}
-                      onChange={(e) => setUpholsteryNotes(e.target.value)}
-                      rows={3}
-                      placeholder="Tamanho, quantidade, tipo de tecido, manchas, etc."
-                      className={INPUT_CLS + " resize-none"}
-                    />
-                  </Field>
-                </div>
-              )}
 
               {/* Observações internas */}
               <Field label="Observações internas">

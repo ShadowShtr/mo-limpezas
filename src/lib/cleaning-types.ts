@@ -43,6 +43,7 @@ export type UpholsteryType =
   | "cadeira"
   | "tapete"
   | "colchao"
+  | "unidade"
   | "outro";
 
 export const UPHOLSTERY_TYPES: { value: UpholsteryType; label: string }[] = [
@@ -51,12 +52,18 @@ export const UPHOLSTERY_TYPES: { value: UpholsteryType; label: string }[] = [
   { value: "cadeira", label: "Cadeira" },
   { value: "tapete", label: "Tapete" },
   { value: "colchao", label: "Colchão" },
+  { value: "unidade", label: "Unidade" },
   { value: "outro", label: "Outro" },
 ];
 
 export const UPHOLSTERY_TYPE_LABELS: Record<string, string> = Object.fromEntries(
   UPHOLSTERY_TYPES.map((t) => [t.value, t.label]),
 );
+
+/** Mostra os campos de quantidade × preço unitário quando o estofado é por unidade. */
+export function isUpholsteryUnit(upholsteryType: string | null | undefined): boolean {
+  return upholsteryType === "unidade";
+}
 
 // Tipos que exigem controlo de pagamento (sinal 50% / total).
 const PAYMENT_RELEVANT: ReadonlySet<string> = new Set<CleaningType>([

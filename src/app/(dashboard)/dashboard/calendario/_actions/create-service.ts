@@ -18,6 +18,8 @@ export interface CreateServiceInput {
   paymentStatus?: string | null;
   upholsteryType?: string | null;
   upholsteryNotes?: string | null;
+  upholsteryUnits?: number | null;
+  upholsteryUnitPrice?: number | null;
   force?: boolean;
 }
 
@@ -88,6 +90,8 @@ export async function createService(
         payment_status: input.paymentStatus ?? null,
         upholstery_type: input.upholsteryType ?? null,
         upholstery_notes: input.upholsteryNotes ?? null,
+        upholstery_units: input.upholsteryUnits ?? null,
+        upholstery_unit_price: input.upholsteryUnitPrice ?? null,
         created_by: user.id,
       })
       .select("id")

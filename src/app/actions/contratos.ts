@@ -21,6 +21,10 @@ export interface ContratoInput {
   payment_status?: string | null;
   upholstery_type?: string | null;
   upholstery_notes?: string | null;
+  upholstery_units?: number | null;
+  upholstery_unit_price?: number | null;
+  // Estofos por unidade: valor fixo por ocorrência (qtd × preço); ignora cálculo por hora.
+  unit_value?: number | null;
   company_id: string;
   created_by: string;
 }
@@ -105,6 +109,9 @@ async function generateServicesForContract(
     payment_status?: string | null;
     upholstery_type?: string | null;
     upholstery_notes?: string | null;
+    upholstery_units?: number | null;
+    upholstery_unit_price?: number | null;
+    unit_value?: number | null;
   } = {},
 ) {
   const now = new Date();
@@ -133,8 +140,11 @@ async function generateServicesForContract(
     if (dup) continue;
 
     const endTime = addMins(schedule.start_time, schedule.duration_min);
+    // Estofos por unidade: valor fixo por ocorrência tem prioridade sobre o cálculo por hora.
     const calculatedValue =
-      hourlyRate != null
+      extras.unit_value != null && extras.unit_value > 0
+        ? parseFloat(extras.unit_value.toFixed(2))
+        : hourlyRate != null
         ? parseFloat(((schedule.duration_min / 60) * hourlyRate).toFixed(2))
         : null;
 
@@ -154,6 +164,8 @@ async function generateServicesForContract(
       payment_status: extras.payment_status ?? null,
       upholstery_type: extras.upholstery_type ?? null,
       upholstery_notes: extras.upholstery_notes ?? null,
+      upholstery_units: extras.upholstery_units ?? null,
+      upholstery_unit_price: extras.upholstery_unit_price ?? null,
     });
   }
 }
@@ -237,6 +249,8 @@ export async function createContrato(input: ContratoInput) {
       payment_status: input.payment_status ?? null,
       upholstery_type: input.upholstery_type ?? null,
       upholstery_notes: input.upholstery_notes ?? null,
+      upholstery_units: input.upholstery_units ?? null,
+      upholstery_unit_price: input.upholstery_unit_price ?? null,
       company_id: profile.company_id,
       created_by: user.id,
     })
@@ -268,6 +282,9 @@ export async function createContrato(input: ContratoInput) {
         payment_status: input.payment_status ?? null,
         upholstery_type: input.upholstery_type ?? null,
         upholstery_notes: input.upholstery_notes ?? null,
+        upholstery_units: input.upholstery_units ?? null,
+        upholstery_unit_price: input.upholstery_unit_price ?? null,
+        unit_value: input.unit_value ?? null,
       },
     );
   }
@@ -322,6 +339,8 @@ export async function updateContrato(id: string, input: Omit<ContratoInput, "com
     payment_status: input.payment_status ?? null,
     upholstery_type: input.upholstery_type ?? null,
     upholstery_notes: input.upholstery_notes ?? null,
+    upholstery_units: input.upholstery_units ?? null,
+    upholstery_unit_price: input.upholstery_unit_price ?? null,
   }).eq("id", id).eq("company_id", profile.company_id);
 
   if (error) return { ok: false as const, error: error.message };
