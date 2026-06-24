@@ -93,7 +93,7 @@ export function ServiceCreateSheet({
 
   const showPayment = showsPaymentStatus(cleaningType);
   const showUpholstery = isUpholstery(cleaningType);
-  const showUnits = showUpholstery && upholsteryType === "unidade";
+  const showUnits = showUpholstery && upholsteryType !== "";
   const upholsteryTotal = showUnits
     ? Number(upholsteryUnits || 0) * Number((upholsteryUnitPrice || "0").replace(",", "."))
     : null;

@@ -251,7 +251,8 @@ export function ContratoSheet({
   // Visibilidade condicional
   const showPayment = showsPaymentStatus(cleaningType);
   const showUpholstery = isUpholstery(cleaningType);
-  const showUnits = showUpholstery && upholsteryType === "unidade";
+  // Quantidade × preço unitário disponível para qualquer tipo de estofado selecionado.
+  const showUnits = showUpholstery && upholsteryType !== "";
 
   // Estofos por unidade: quantidade × preço unitário
   const upholsteryTotal = showUnits

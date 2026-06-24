@@ -15,6 +15,11 @@ import { CANCEL_TYPE_LABELS, type CancelType } from "@/lib/cancel-types";
 import { sendBulkClientNotifications } from "@/app/actions/email";
 import { updateLocationAccess } from "@/app/actions/locations";
 import { ServicePhotosGallery } from "./service-photos-gallery";
+import {
+  CLEANING_TYPE_LABELS,
+  PAYMENT_STATUS_LABELS,
+  UPHOLSTERY_TYPE_LABELS,
+} from "@/lib/cleaning-types";
 import type { Database } from "@/types/database";
 import type { ServiceCalendar } from "./calendar-view";
 
@@ -59,6 +64,15 @@ type ServiceExtras = {
   client_email: string | null;
 };
 
+type ServiceMeta = {
+  cleaning_type: string | null;
+  payment_status: string | null;
+  upholstery_type: string | null;
+  upholstery_notes: string | null;
+  upholstery_units: number | null;
+  upholstery_unit_price: number | null;
+};
+
 // ─── Componente principal ─────────────────────────────────────────────────────
 
 interface Props {
@@ -74,6 +88,7 @@ export function ServiceDetailSheet({ service, onClose, onChanged, initialEdit = 
   const [timesheets, setTimesheets] = useState<TimesheetWithName[]>([]);
   const [loadingTs,  setLoadingTs]  = useState(false);
   const [extras,     setExtras]     = useState<ServiceExtras | null>(null);
+  const [meta,       setMeta]       = useState<ServiceMeta | null>(null);
   const [fixClockOut, setFixClockOut] = useState(false);
   const [clockOutTime, setClockOutTime] = useState("");
   const [clockOutTsId, setClockOutTsId] = useState<string>("");
@@ -115,9 +130,10 @@ export function ServiceDetailSheet({ service, onClose, onChanged, initialEdit = 
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    if (!service) { setTimesheets([]); setExtras(null); return; }
+    if (!service) { setTimesheets([]); setExtras(null); setMeta(null); return; }
     setTimesheets([]);
     setExtras(null);
+    setMeta(null);
     setActionMsg(null);
     setFixClockOut(false);
     setClockOutTime("");
@@ -155,9 +171,16 @@ export function ServiceDetailSheet({ service, onClose, onChanged, initialEdit = 
         .eq("id", service.id)
         .single()
         .then(({ data }) => data as ServiceExtras | null),
-    ]).then(([rows, extraData]) => {
+      supabase
+        .from("services")
+        .select("cleaning_type, payment_status, upholstery_type, upholstery_notes, upholstery_units, upholstery_unit_price")
+        .eq("id", service.id)
+        .single()
+        .then(({ data }) => data as ServiceMeta | null),
+    ]).then(([rows, extraData, metaData]) => {
       setTimesheets(rows);
       setExtras(extraData);
+      setMeta(metaData);
       setAccCode(extraData?.location_access_code ?? "");
       setAccInstructions(extraData?.location_instructions ?? "");
       setLoadingTs(false);
@@ -535,6 +558,40 @@ export function ServiceDetailSheet({ service, onClose, onChanged, initialEdit = 
                     (manual · calculado: €{svc.calculated_value.toFixed(2)})
                   </span>
                 )}
+              </InfoRow>
+            )}
+
+            {/* Tipo de limpeza / pagamento / estofado (leitura) */}
+            {meta?.cleaning_type && (
+              <InfoRow icon={CheckCircle2} label="Tipo de limpeza">
+                {CLEANING_TYPE_LABELS[meta.cleaning_type] ?? meta.cleaning_type}
+              </InfoRow>
+            )}
+
+            {meta?.payment_status && (
+              <InfoRow icon={Euro} label="Estado do pagamento">
+                {PAYMENT_STATUS_LABELS[meta.payment_status] ?? meta.payment_status}
+              </InfoRow>
+            )}
+
+            {meta?.upholstery_type && (
+              <InfoRow icon={FileText} label="Estofado">
+                <div className="space-y-0.5">
+                  <p>
+                    <span className="font-medium">
+                      {UPHOLSTERY_TYPE_LABELS[meta.upholstery_type] ?? meta.upholstery_type}
+                    </span>
+                    {meta.upholstery_units != null && meta.upholstery_unit_price != null && (
+                      <span className="text-xs text-[var(--color-text-muted)] ml-1.5">
+                        ({meta.upholstery_units} × €{meta.upholstery_unit_price.toFixed(2)} = €
+                        {(meta.upholstery_units * meta.upholstery_unit_price).toFixed(2)})
+                      </span>
+                    )}
+                  </p>
+                  {meta.upholstery_notes && (
+                    <p className="text-xs text-[var(--color-text-sub)] whitespace-pre-line">{meta.upholstery_notes}</p>
+                  )}
+                </div>
               </InfoRow>
             )}
 
