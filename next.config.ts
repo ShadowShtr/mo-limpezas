@@ -18,6 +18,17 @@ const nextConfig: NextConfig = {
       bodySizeLimit: "4mb",
     },
   },
+  // Redireciona www → domínio principal (canónico)
+  async redirects() {
+    return [
+      {
+        source: "/:path*",
+        has: [{ type: "host", value: "www.molimpezas.pt" }],
+        destination: "https://molimpezas.pt/:path*",
+        permanent: true,
+      },
+    ];
+  },
   // Headers de segurança HTTP
   async headers() {
     return [
