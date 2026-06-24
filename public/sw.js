@@ -1,5 +1,5 @@
 // Incrementar CACHE força purga do cache antigo em todos os clientes
-const CACHE = "mo-limpezas-v4";
+const CACHE = "mo-limpezas-v5";
 
 // Apenas assets estáticos são guardados — HTML é sempre da rede
 const PRECACHE = ["/offline"];

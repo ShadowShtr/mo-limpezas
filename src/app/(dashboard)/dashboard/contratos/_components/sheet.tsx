@@ -757,7 +757,14 @@ export function ContratoSheet({
               </button>
               <button
                 type="button"
-                onClick={() => setStep(2)}
+                onClick={() => {
+                  if (!clienteId || !localId) {
+                    setMessage({ type: "error", text: "Seleciona o cliente e o local antes de continuar." });
+                    return;
+                  }
+                  setMessage(null);
+                  setStep(2);
+                }}
                 className="ml-auto flex items-center justify-center gap-1.5 px-5 py-2.5 rounded-xl bg-[var(--color-primary)] text-white text-sm font-semibold hover:bg-[var(--color-primary-hover)] transition-colors"
               >
                 Seguinte
