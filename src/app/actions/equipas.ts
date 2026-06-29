@@ -67,3 +67,38 @@ export async function saveEquipa(
   revalidatePath("/dashboard/equipas");
   return { ok: true, teamId: savedTeamId! };
 }
+
+export async function deleteEquipa(
+  teamId: string,
+  companyId: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { ok: false, error: "Não autenticado." };
+
+  const admin = createAdminClient();
+  const { data: profile } = await admin
+    .from("profiles")
+    .select("role, company_id")
+    .eq("id", user.id)
+    .single();
+  if (!profile || !["admin", "gestor"].includes(profile.role)) {
+    return { ok: false, error: "Sem permissão." };
+  }
+  if (profile.company_id !== companyId) {
+    return { ok: false, error: "Empresa inválida." };
+  }
+
+  // FKs: team_members e vehicle_allocations fazem CASCADE; services.team_id fica
+  // a NULL (serviços ficam "sem equipa"). Não perde os serviços.
+  const { error } = await admin
+    .from("teams")
+    .delete()
+    .eq("id", teamId)
+    .eq("company_id", companyId);
+  if (error) return { ok: false, error: error.message };
+
+  revalidatePath("/dashboard/equipas");
+  revalidatePath("/dashboard/calendario");
+  return { ok: true };
+}

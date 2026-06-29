@@ -96,14 +96,27 @@ export async function calculateAndSavePayroll(
 
   const profileIds = profiles.map((p) => p.id);
 
-  // 3. Timesheets do mês
-  const { data: timesheets } = await admin
-    .from("timesheets")
-    .select("collaborator_id, duration_minutes, clock_in_at")
+  // 3. Ponto GERAL do mês (entrada→saída). É isto que conta para o salário —
+  //    os pontos por serviço (timesheets) são apenas informativos.
+  const { data: dailyClocks } = await admin
+    .from("daily_clocks")
+    .select("collaborator_id, work_date, clock_in_at, clock_out_at")
     .eq("company_id", companyId)
     .in("collaborator_id", profileIds)
-    .gte("clock_in_at", `${start}T00:00:00`)
-    .lte("clock_in_at", `${end}T23:59:59`);
+    .gte("work_date", start)
+    .lte("work_date", end);
+
+  // Converte cada dia (com início e fim) numa entrada equivalente a um timesheet,
+  // para reutilizar o cálculo existente sem o alterar.
+  const timesheets = (dailyClocks ?? [])
+    .filter((d) => d.clock_in_at && d.clock_out_at)
+    .map((d) => ({
+      collaborator_id: d.collaborator_id,
+      clock_in_at: d.clock_in_at as string,
+      duration_minutes: Math.max(0, Math.round(
+        (new Date(d.clock_out_at as string).getTime() - new Date(d.clock_in_at as string).getTime()) / 60000,
+      )),
+    }));
 
   // 4. Faltas do mês
   const { data: absences } = await admin

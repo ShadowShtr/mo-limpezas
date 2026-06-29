@@ -1,8 +1,10 @@
 "use client";
 
-import { useState } from "react";
-import { Search, MoreHorizontal, Calendar, MapPin } from "lucide-react";
+import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
+import { Search, MoreHorizontal, Calendar, MapPin, Trash2 } from "lucide-react";
 import { ContratoSheet } from "./sheet";
+import { deleteContrato } from "@/app/actions/contratos";
 import { usePagination, Pagination } from "@/components/ui/pagination";
 import {
   CLEANING_TYPE_LABELS,
@@ -69,13 +71,27 @@ interface Props {
   userId: string;
   clientes: { id: string; name: string }[];
   locais: { id: string; client_id: string; name: string; address: string; hourly_rate: number | null }[];
-  equipas: { id: string; name: string; color: string }[];
+  equipas: { id: string; name: string; color: string; member_count?: number }[];
 }
 
 export function ContratosTable({ contratos, companyId, userId, clientes, locais, equipas }: Props) {
+  const router = useRouter();
   const [search, setSearch] = useState("");
   const [filterStatus, setFilterStatus] = useState("todos");
   const [filterFreq, setFilterFreq] = useState("todos");
+  const [deleting, startDelete] = useTransition();
+
+  function handleDelete(c: ContratosTableRow) {
+    const label = c.name || c.locations?.name || "esta intervenção";
+    if (!window.confirm(
+      `Excluir "${label}"?\n\nApaga a intervenção recorrente e os serviços futuros agendados dela. Os serviços passados/concluídos ficam no histórico. Não pode ser desfeito.`,
+    )) return;
+    startDelete(async () => {
+      const res = await deleteContrato(c.id);
+      if (!res.ok) { window.alert(res.error); return; }
+      router.refresh();
+    });
+  }
 
   const filtered = contratos.filter((c) => {
     const haystack = [
@@ -152,8 +168,14 @@ export function ContratosTable({ contratos, companyId, userId, clientes, locais,
                 </td>
               </tr>
             ) : (
-              paginated.map((c) => (
-                <tr key={c.id} className="hover:bg-[var(--color-background)] transition-colors">
+              paginated.map((c) => {
+                const clientId = c.locations?.clients?.id ?? null;
+                return (
+                <tr
+                  key={c.id}
+                  onClick={() => { if (clientId) router.push(`/dashboard/clientes/${clientId}`); }}
+                  className={`hover:bg-[var(--color-background)] transition-colors ${clientId ? "cursor-pointer" : ""}`}
+                >
                   {/* Contrato / Local */}
                   <td className="px-4 py-3">
                     <div className="flex items-start gap-3">
@@ -241,23 +263,34 @@ export function ContratosTable({ contratos, companyId, userId, clientes, locais,
                   </td>
 
                   {/* Ações */}
-                  <td className="px-4 py-3">
-                    <ContratoSheet
-                      companyId={companyId}
-                      userId={userId}
-                      clientes={clientes}
-                      locais={locais}
-                      equipas={equipas}
-                      contrato={c}
-                      trigger={
-                        <button className="p-1.5 rounded-lg text-[var(--color-text-muted)] hover:bg-[var(--color-background)] transition-colors">
-                          <MoreHorizontal className="w-4 h-4" />
-                        </button>
-                      }
-                    />
+                  <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
+                    <div className="flex items-center gap-1">
+                      <ContratoSheet
+                        companyId={companyId}
+                        userId={userId}
+                        clientes={clientes}
+                        locais={locais}
+                        equipas={equipas}
+                        contrato={c}
+                        trigger={
+                          <button className="p-1.5 rounded-lg text-[var(--color-text-muted)] hover:bg-[var(--color-background)] transition-colors">
+                            <MoreHorizontal className="w-4 h-4" />
+                          </button>
+                        }
+                      />
+                      <button
+                        title="Excluir intervenção"
+                        disabled={deleting}
+                        onClick={() => handleDelete(c)}
+                        className="p-1.5 rounded-lg text-[var(--color-text-muted)] hover:text-red-600 hover:bg-red-50 transition-colors disabled:opacity-50"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
                   </td>
                 </tr>
-              ))
+                );
+              })
             )}
           </tbody>
         </table>

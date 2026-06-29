@@ -62,6 +62,8 @@ export interface ClienteComLocalInput {
   address: string;
   hourlyRate: number | null;
   serviceType: string;
+  lat?: number | null;
+  lng?: number | null;
 }
 
 /** Cria cliente + local de uma vez. Devolve os dois ids. */
@@ -102,6 +104,8 @@ export async function createClienteComLocal(companyId: string, input: ClienteCom
       address: input.address.trim(),
       hourly_rate: input.hourlyRate,
       service_type: input.serviceType || "limpeza_regular",
+      lat: input.lat ?? null,
+      lng: input.lng ?? null,
       active: true,
       client_id: client.id,
       company_id: companyId,
@@ -228,5 +232,69 @@ export async function updateCliente(id: string, input: Omit<ClienteInput, "compa
 
   revalidatePath("/dashboard/clientes");
   revalidatePath(`/dashboard/clientes/${id}`);
+  return { ok: true as const };
+}
+
+export async function deleteCliente(id: string) {
+  const supabase = await createClient();
+  const admin = createAdminClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { ok: false as const, error: "Nao autenticado." };
+
+  const { data: profile } = await admin
+    .from("profiles")
+    .select("company_id, role")
+    .eq("id", user.id)
+    .single();
+  if (!profile || !["admin", "gestor"].includes(profile.role)) {
+    return { ok: false as const, error: "Sem permissao." };
+  }
+
+  const { data: client } = await admin
+    .from("clients")
+    .select("id, name")
+    .eq("id", id)
+    .eq("company_id", profile.company_id)
+    .single();
+  if (!client) return { ok: false as const, error: "Cliente invalido." };
+
+  // Locais do cliente (services/contracts têm FK RESTRICT para locations).
+  const { data: locations } = await admin
+    .from("locations")
+    .select("id")
+    .eq("client_id", id)
+    .eq("company_id", profile.company_id);
+  const locationIds = (locations ?? []).map((l) => l.id);
+
+  // 1) Serviços (cascade: timesheets, fotos, reforços, auditoria de preço).
+  if (locationIds.length > 0) {
+    await admin.from("services").delete()
+      .eq("company_id", profile.company_id).in("location_id", locationIds);
+    // 2) Contratos desses locais.
+    await admin.from("contracts").delete()
+      .eq("company_id", profile.company_id).in("location_id", locationIds);
+  }
+
+  // 3) Faturas do cliente (invoice_items fazem cascade do invoice).
+  await admin.from("invoices").delete()
+    .eq("company_id", profile.company_id).eq("client_id", id);
+
+  // 4) Cliente → cascade de locais + notificações do cliente.
+  const { error } = await admin.from("clients").delete()
+    .eq("id", id).eq("company_id", profile.company_id);
+  if (error) return { ok: false as const, error: error.message };
+
+  await auditLog({
+    companyId: profile.company_id,
+    actorId: user.id,
+    action: "client_deleted",
+    entityType: "client",
+    entityId: id,
+    before: { name: client.name },
+    source: "dashboard",
+  }, admin);
+
+  revalidatePath("/dashboard/clientes");
+  revalidatePath("/dashboard/calendario");
   return { ok: true as const };
 }

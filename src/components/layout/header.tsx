@@ -12,7 +12,7 @@ interface HeaderProps {
 export function Header({ title, subtitle, actions, backHref }: HeaderProps) {
   return (
     <header
-      className="h-[60px] flex items-center px-6 gap-4 sticky top-0 z-30"
+      className="h-[60px] flex items-center px-6 gap-4 sticky top-0 z-40"
       style={{
         background: "rgba(240,244,248,0.82)",
         backdropFilter: "blur(20px)",

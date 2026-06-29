@@ -80,6 +80,7 @@ export function EquipaSheet({ trigger, companyId, colaboradores, equipa }: Props
 
     setMessage({ type: "success", text: isEdit ? "Equipa atualizada." : "Equipa criada com sucesso." });
     router.refresh();
+    setTimeout(() => { setOpen(false); setMessage(null); }, 700);
   }
 
   const overlay = open ? createPortal(

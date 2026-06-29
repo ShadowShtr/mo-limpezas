@@ -5,10 +5,11 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { format, parseISO } from "date-fns";
 import { pt } from "date-fns/locale";
-import { CalendarClock, Copy, Edit2, Pause, Plus, Archive, CalendarPlus } from "lucide-react";
+import { CalendarClock, Copy, Edit2, Pause, Plus, Archive, CalendarPlus, Trash2 } from "lucide-react";
 import { ContratoSheet } from "../../../contratos/_components/sheet";
 import { ServiceCreateSheet } from "../../../calendario/_components/service-create-sheet";
 import { duplicatePointService, setContractInterventionStatus } from "@/app/actions/intervencoes";
+import { deleteContrato } from "@/app/actions/contratos";
 import type { ContratosTableRow } from "../../../contratos/page";
 
 type ClientRef = { id: string; name: string };
@@ -23,7 +24,7 @@ type LocalRef = {
   has_key?: boolean | null;
   key_label?: string | null;
 };
-type TeamRef = { id: string; name: string; color: string };
+type TeamRef = { id: string; name: string; color: string; member_count?: number };
 type PointService = {
   id: string;
   reference_number: string;
@@ -245,6 +246,17 @@ export function InterventionsSection({
                         <Archive className="w-4 h-4" />
                       </ActionButton>
                     )}
+                    <ActionButton
+                      title="Excluir intervenção"
+                      onClick={async () => {
+                        if (!window.confirm(
+                          `Excluir "${contract.name || contract.locations?.name || "esta intervenção"}"?\n\nApaga a intervenção e os serviços futuros agendados. Não pode ser desfeito.`,
+                        )) return;
+                        await refreshAfter(deleteContrato(contract.id));
+                      }}
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </ActionButton>
                   </div>
                 );
               })}

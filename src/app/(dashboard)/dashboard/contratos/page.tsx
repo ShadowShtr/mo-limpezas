@@ -27,7 +27,7 @@ export default async function ContratosPage() {
           id, name, frequency, interval_days, weekdays, schedule_days,
           starts_on, ends_on, status, notes, created_at,
           cleaning_type, payment_status, upholstery_type, upholstery_notes,
-          upholstery_units, upholstery_unit_price,
+          upholstery_units, upholstery_unit_price, num_people,
           locations ( id, name, address, hourly_rate, clients ( id, name ) )
         `)
         .eq("company_id", companyId)
@@ -45,12 +45,19 @@ export default async function ContratosPage() {
         .eq("active", true)
         .order("name"),
       supabase
-        .from("teams")
-        .select("id, name, color")
+        .from("teams_with_members")
+        .select("id, name, color, members")
         .eq("company_id", companyId)
         .eq("active", true)
         .order("name"),
     ]);
+
+  const equipasComContagem = (equipas ?? []).map((t) => ({
+    id: t.id,
+    name: t.name,
+    color: t.color,
+    member_count: Array.isArray(t.members) ? t.members.length : 0,
+  }));
 
   return (
     <div>
@@ -63,7 +70,7 @@ export default async function ContratosPage() {
             userId={user!.id}
             clientes={clientes ?? []}
             locais={locais ?? []}
-            equipas={equipas ?? []}
+            equipas={equipasComContagem}
             trigger={
               <button className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[var(--color-primary)] text-white text-sm font-medium hover:bg-[var(--color-primary-hover)] transition-colors">
                 <Plus className="w-4 h-4" />
@@ -80,7 +87,7 @@ export default async function ContratosPage() {
           userId={user!.id}
           clientes={clientes ?? []}
           locais={locais ?? []}
-          equipas={equipas ?? []}
+          equipas={equipasComContagem}
         />
       </div>
     </div>
@@ -104,6 +111,7 @@ export type ContratosTableRow = {
   upholstery_notes: string | null;
   upholstery_units: number | null;
   upholstery_unit_price: number | null;
+  num_people: number | null;
   created_at: string;
   locations: {
     id: string;

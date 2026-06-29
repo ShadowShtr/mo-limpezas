@@ -4,13 +4,13 @@ import { useState, useEffect, useMemo } from "react";
 import {
   X, MapPin, Users, Clock, Euro, FileText, Loader2, Key, Lock,
   AlertTriangle, Ban, CalendarX, CheckCircle2, ChevronDown, Bell, MessageCircle, Mail, Users2,
-  Pencil, Save,
+  Pencil, Save, Trash2,
 } from "lucide-react";
 import { format, parseISO } from "date-fns";
 import { pt } from "date-fns/locale";
 import { createClient } from "@/lib/supabase/client";
 import { notifyTeam } from "@/app/actions/notifications";
-import { cancelService } from "@/app/actions/cancellations";
+import { cancelService, deleteCalendarService } from "@/app/actions/cancellations";
 import { CANCEL_TYPE_LABELS, type CancelType } from "@/lib/cancel-types";
 import { sendBulkClientNotifications } from "@/app/actions/email";
 import { updateLocationAccess } from "@/app/actions/locations";
@@ -100,6 +100,7 @@ export function ServiceDetailSheet({ service, onClose, onChanged, initialEdit = 
 
   // Cancelamento
   const [showCancel, setShowCancel] = useState(false);
+  const [showDelete, setShowDelete] = useState(false);
   const [cancelType, setCancelType] = useState<CancelType>("client_request");
   const [cancelReason, setCancelReason] = useState("");
   const [cancelNotifyTeam, setCancelNotifyTeam] = useState(true);
@@ -359,6 +360,20 @@ export function ServiceDetailSheet({ service, onClose, onChanged, initialEdit = 
     if (res.sent) parts.push(`Equipa notificada (${res.sent} membro${res.sent !== 1 ? "s" : ""}).`);
     setActionMsg({ type: "success", text: parts.join(" ") });
     onChanged();
+  }
+
+  async function handleDelete(scope: "single" | "all") {
+    setActionLoading("excluir");
+    setActionMsg(null);
+    const res = await deleteCalendarService(svc.id, scope);
+    setActionLoading(null);
+    if (!res.ok) {
+      setActionMsg({ type: "error", text: res.error ?? "Erro ao excluir." });
+      return;
+    }
+    setShowDelete(false);
+    onChanged();
+    onClose();
   }
 
   async function handleNotifyEmail() {
@@ -1098,7 +1113,7 @@ export function ServiceDetailSheet({ service, onClose, onChanged, initialEdit = 
                 Marcar como falta
               </button>
             )}
-            {svc.status !== "cancelado" && !showCancel && (
+            {svc.status !== "cancelado" && !showCancel && !showDelete && (
               <button
                 onClick={() => setShowCancel(true)}
                 className="w-full flex items-center gap-2 px-4 py-2 rounded-lg border border-red-200 text-sm font-medium text-red-700 hover:bg-red-50 transition-colors"
@@ -1106,6 +1121,52 @@ export function ServiceDetailSheet({ service, onClose, onChanged, initialEdit = 
                 <Ban className="w-4 h-4" />
                 Cancelar serviço
               </button>
+            )}
+
+            {/* Excluir do calendário (some de tudo, incl. app das funcionárias) */}
+            {!showCancel && !showDelete && (
+              <button
+                onClick={() => setShowDelete(true)}
+                className="w-full flex items-center gap-2 px-4 py-2 rounded-lg border border-red-300 text-sm font-medium text-red-700 hover:bg-red-50 transition-colors"
+              >
+                <Trash2 className="w-4 h-4" />
+                Excluir do calendário
+              </button>
+            )}
+            {showDelete && (
+              <div className="rounded-lg border border-red-200 bg-red-50 p-3 space-y-2.5">
+                <p className="flex items-start gap-2 text-sm font-semibold text-red-800">
+                  <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
+                  {svc.contract_id
+                    ? "O que queres excluir? (apaga de tudo — calendário e app. Não pode ser desfeito.)"
+                    : "Excluir este serviço? Apaga de tudo (calendário e app). Não pode ser desfeito."}
+                </p>
+                <button
+                  onClick={() => handleDelete("single")}
+                  disabled={actionLoading === "excluir"}
+                  className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-red-600 text-white text-sm font-semibold hover:bg-red-700 transition-colors disabled:opacity-50"
+                >
+                  {actionLoading === "excluir" ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                  {svc.contract_id ? "Excluir só este dia" : "Excluir serviço"}
+                </button>
+                {svc.contract_id && (
+                  <button
+                    onClick={() => handleDelete("all")}
+                    disabled={actionLoading === "excluir"}
+                    className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-red-700 text-white text-sm font-semibold hover:bg-red-800 transition-colors disabled:opacity-50"
+                  >
+                    {actionLoading === "excluir" ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                    Excluir toda a recorrência
+                  </button>
+                )}
+                <button
+                  onClick={() => setShowDelete(false)}
+                  disabled={actionLoading === "excluir"}
+                  className="w-full px-4 py-2 rounded-lg border border-[var(--color-border)] text-sm font-medium text-[var(--color-text-sub)] hover:bg-white transition-colors"
+                >
+                  Voltar
+                </button>
+              </div>
             )}
           </div>
         ) : (
@@ -1123,6 +1184,51 @@ export function ServiceDetailSheet({ service, onClose, onChanged, initialEdit = 
               <CalendarX className="w-4 h-4" />
               Serviço concluído.
             </div>
+
+            {/* Excluir também serviços concluídos (limpar a vista) */}
+            {!showDelete ? (
+              <button
+                onClick={() => setShowDelete(true)}
+                className="w-full flex items-center gap-2 px-4 py-2 rounded-lg border border-red-300 text-sm font-medium text-red-700 hover:bg-red-50 transition-colors"
+              >
+                <Trash2 className="w-4 h-4" />
+                Excluir do calendário
+              </button>
+            ) : (
+              <div className="rounded-lg border border-red-200 bg-red-50 p-3 space-y-2.5">
+                <p className="flex items-start gap-2 text-sm font-semibold text-red-800">
+                  <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
+                  {svc.contract_id
+                    ? "O que queres excluir? (apaga de tudo — calendário e app. Não pode ser desfeito.)"
+                    : "Excluir este serviço? Apaga de tudo (calendário e app). Não pode ser desfeito."}
+                </p>
+                <button
+                  onClick={() => handleDelete("single")}
+                  disabled={actionLoading === "excluir"}
+                  className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-red-600 text-white text-sm font-semibold hover:bg-red-700 transition-colors disabled:opacity-50"
+                >
+                  {actionLoading === "excluir" ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                  {svc.contract_id ? "Excluir só este dia" : "Excluir serviço"}
+                </button>
+                {svc.contract_id && (
+                  <button
+                    onClick={() => handleDelete("all")}
+                    disabled={actionLoading === "excluir"}
+                    className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-red-700 text-white text-sm font-semibold hover:bg-red-800 transition-colors disabled:opacity-50"
+                  >
+                    {actionLoading === "excluir" ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                    Excluir toda a recorrência
+                  </button>
+                )}
+                <button
+                  onClick={() => setShowDelete(false)}
+                  disabled={actionLoading === "excluir"}
+                  className="w-full px-4 py-2 rounded-lg border border-[var(--color-border)] text-sm font-medium text-[var(--color-text-sub)] hover:bg-white transition-colors"
+                >
+                  Voltar
+                </button>
+              </div>
+            )}
           </div>
         )}
       </div>

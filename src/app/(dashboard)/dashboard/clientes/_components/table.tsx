@@ -1,9 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Search, MoreHorizontal, MapPin } from "lucide-react";
+import { Search, MoreHorizontal, MapPin, Trash2 } from "lucide-react";
 import { ClienteSheet } from "./sheet";
+import { deleteCliente } from "@/app/actions/clientes";
 import { usePagination, Pagination } from "@/components/ui/pagination";
 
 type Cliente = {
@@ -23,8 +25,21 @@ interface Props {
 }
 
 export function ClientesTable({ clientes, companyId }: Props) {
+  const router = useRouter();
   const [search, setSearch] = useState("");
   const [filterActive, setFilterActive] = useState("todos");
+  const [deleting, startDelete] = useTransition();
+
+  function handleDelete(c: Cliente) {
+    if (!window.confirm(
+      `Excluir o cliente "${c.name}"?\n\nIsto apaga os locais, intervenções, serviços futuros e faturas deste cliente. Esta ação não pode ser desfeita.`,
+    )) return;
+    startDelete(async () => {
+      const res = await deleteCliente(c.id);
+      if (!res.ok) { window.alert(res.error); return; }
+      router.refresh();
+    });
+  }
 
   const filtered = clientes.filter((c) => {
     const matchSearch =
@@ -127,6 +142,14 @@ export function ClientesTable({ clientes, companyId }: Props) {
                           </button>
                         }
                       />
+                      <button
+                        title="Excluir cliente"
+                        disabled={deleting}
+                        onClick={() => handleDelete(c)}
+                        className="p-1.5 rounded-lg text-[var(--color-text-muted)] hover:text-red-600 hover:bg-red-50 transition-colors disabled:opacity-50"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
                     </div>
                   </td>
                 </tr>

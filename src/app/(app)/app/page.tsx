@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { MapPin, Clock, ChevronRight, Sun, Moon, Coffee } from "lucide-react";
+import { MapPin, Clock, ChevronRight, Sun, Moon, Coffee, Users, AlertTriangle } from "lucide-react";
 import { formatTime, formatDate } from "@/lib/utils";
 import { StatusBadge } from "./_components/status-badge";
 import { getCurrentProfile } from "@/lib/auth/current-user";
@@ -37,6 +37,51 @@ export default async function AppHomePage() {
     : { data: [] };
 
   const list = services ?? [];
+
+  // Ponto geral de hoje — sem ele, os pontos de serviço ficam bloqueados.
+  const todayDateKey = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Europe/Lisbon", year: "numeric", month: "2-digit", day: "2-digit",
+  }).format(today);
+  const { data: dayClock } = await supabase
+    .from("daily_clocks")
+    .select("clock_in_at")
+    .eq("collaborator_id", user.id)
+    .eq("work_date", todayDateKey)
+    .maybeSingle();
+  const needsClockIn = !dayClock?.clock_in_at;
+
+  // ── Equipa/viatura de hoje ─────────────────────────────────────────────────
+  // Por defeito trabalha com a sua equipa; uma reatribuição do dia tem prioridade.
+  const todayDate = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+
+  const { data: dayTeam } = await supabase
+    .from("collaborator_ride_assignments")
+    .select("team_id")
+    .eq("collaborator_id", user.id)
+    .eq("date", todayDate)
+    .maybeSingle();
+
+  const effTeamId = dayTeam?.team_id ?? teamIds[0] ?? null;
+  const movido = Boolean(dayTeam?.team_id);
+
+  let todayTeam: { name: string; vehicle: string | null } | null = null;
+  if (effTeamId) {
+    const [{ data: teamRow }, { data: alloc }] = await Promise.all([
+      supabase.from("teams").select("name").eq("id", effTeamId).maybeSingle(),
+      supabase
+        .from("vehicle_allocations")
+        .select("vehicles(model, plate)")
+        .eq("team_id", effTeamId)
+        .eq("date", todayDate)
+        .maybeSingle(),
+    ]);
+    const v = alloc?.vehicles
+      ? (Array.isArray(alloc.vehicles) ? alloc.vehicles[0] : alloc.vehicles)
+      : null;
+    if (teamRow?.name) {
+      todayTeam = { name: teamRow.name, vehicle: v ? `${v.model} · ${v.plate}` : null };
+    }
+  }
 
   const hour = today.getHours();
   const greeting =
@@ -80,6 +125,52 @@ export default async function AppHomePage() {
             className="h-full bg-[var(--color-primary)] rounded-full transition-all"
             style={{ width: `${(done / total) * 100}%` }}
           />
+        </div>
+      )}
+
+      {/* Aviso: falta o ponto geral de início */}
+      {needsClockIn && (
+        <Link
+          href="/app/ponto"
+          className="rounded-2xl border border-amber-200 bg-amber-50 p-4 flex items-center gap-3 active:scale-[0.98] transition-transform"
+        >
+          <div className="w-10 h-10 rounded-xl bg-amber-100 flex items-center justify-center shrink-0">
+            <AlertTriangle className="w-5 h-5 text-amber-600" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-semibold text-amber-800">Bate o ponto de início</p>
+            <p className="text-xs text-amber-700">Sem isto não consegues registar ponto nos serviços.</p>
+          </div>
+          <ChevronRight className="w-4 h-4 text-amber-600 shrink-0" />
+        </Link>
+      )}
+
+      {/* Equipa/viatura de hoje */}
+      {todayTeam && (
+        <div className={`rounded-2xl border p-4 flex items-center gap-3 ${
+          movido ? "bg-amber-50 border-amber-200" : "bg-white border-[var(--color-border)]"
+        }`}>
+          <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
+            movido ? "bg-amber-100" : "bg-[var(--color-primary-light)]"
+          }`}>
+            <Users className={`w-5 h-5 ${movido ? "text-amber-600" : "text-[var(--color-primary)]"}`} />
+          </div>
+          <div className="min-w-0">
+            <p className="text-[11px] text-[var(--color-text-muted)] uppercase tracking-wide">
+              {movido ? "Hoje trabalhas com" : "A tua equipa hoje"}
+            </p>
+            <p className="text-sm font-semibold text-[var(--color-text-main)] truncate">
+              {todayTeam.name}
+              {todayTeam.vehicle && (
+                <span className="text-[var(--color-text-sub)] font-normal"> · {todayTeam.vehicle}</span>
+              )}
+            </p>
+          </div>
+          {movido && (
+            <span className="ml-auto text-[10px] font-semibold text-amber-600 bg-white border border-amber-200 rounded-full px-2 py-0.5 shrink-0">
+              Alterada
+            </span>
+          )}
         </div>
       )}
 

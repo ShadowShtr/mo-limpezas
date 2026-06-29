@@ -196,3 +196,178 @@ export async function removeAllocation(teamId: string, date: string) {
 
   if (error) throw error;
 }
+
+// ─── Trocar colaboradoras de equipa por dia ─────────────────────────────────────
+
+export interface DayTeamAssignment {
+  collaborator_id: string;
+  team_id: string;
+}
+
+/** Lê as reatribuições do dia (colaboradora → equipa com que trabalha hoje). */
+export async function getDayTeamAssignmentsForDate(date: string): Promise<DayTeamAssignment[]> {
+  const companyId = await getCompanyId();
+  const admin = createAdminClient();
+
+  const { data, error } = await admin
+    .from("collaborator_ride_assignments")
+    .select("collaborator_id, team_id")
+    .eq("company_id", companyId)
+    .eq("date", date);
+
+  if (error) throw error;
+  return (data ?? []) as DayTeamAssignment[];
+}
+
+/**
+ * Move uma colaboradora para a equipa `teamId` apenas nesse dia e avisa-a no
+ * telemóvel (push + notificação in-app). Se `teamId` for a equipa de origem
+ * (`homeTeamId`), remove a reatribuição — volta à sua equipa.
+ * Nunca lança: devolve sempre `{ ok }`.
+ */
+export async function moveCollaboratorToTeam(input: {
+  collaboratorId: string;
+  teamId: string;
+  homeTeamId: string | null;
+  date: string;
+}): Promise<{ ok: boolean; error?: string; notified?: boolean }> {
+  try {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return { ok: false, error: "Não autenticado." };
+
+    const admin = createAdminClient();
+    const { data: actor } = await admin
+      .from("profiles").select("company_id, role").eq("id", user.id).single();
+    if (!actor || !["admin", "gestor"].includes(actor.role)) {
+      return { ok: false, error: "Sem permissão." };
+    }
+    const companyId = actor.company_id;
+
+    const { data: collab } = await admin
+      .from("profiles").select("id, full_name, company_id").eq("id", input.collaboratorId).single();
+    if (!collab || collab.company_id !== companyId) {
+      return { ok: false, error: "Colaboradora inválida." };
+    }
+
+    const isReset = input.homeTeamId !== null && input.teamId === input.homeTeamId;
+
+    if (isReset) {
+      await admin
+        .from("collaborator_ride_assignments")
+        .delete()
+        .eq("company_id", companyId)
+        .eq("collaborator_id", input.collaboratorId)
+        .eq("date", input.date);
+    } else {
+      const { error } = await admin
+        .from("collaborator_ride_assignments")
+        .upsert(
+          {
+            company_id: companyId,
+            collaborator_id: input.collaboratorId,
+            team_id: input.teamId,
+            date: input.date,
+            assigned_by: user.id,
+          },
+          { onConflict: "collaborator_id,date" },
+        );
+      if (error) return { ok: false, error: error.message };
+    }
+
+    const notified = await notifyDayTeam({
+      admin,
+      companyId,
+      collaboratorId: input.collaboratorId,
+      teamId: input.teamId,
+      date: input.date,
+      isReset,
+    });
+
+    return { ok: true, notified };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Erro interno desconhecido";
+    console.error("[moveCollaboratorToTeam] uncaught:", err);
+    return { ok: false, error: msg };
+  }
+}
+
+/** Avisa a colaboradora (in-app + web push) da equipa com que trabalha nesse dia. */
+async function notifyDayTeam(args: {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  admin: any;
+  companyId: string;
+  collaboratorId: string;
+  teamId: string;
+  date: string;
+  isReset: boolean;
+}): Promise<boolean> {
+  const { admin, companyId, collaboratorId, teamId, date, isReset } = args;
+
+  const [{ data: team }, { data: alloc }] = await Promise.all([
+    admin.from("teams").select("name").eq("id", teamId).single(),
+    admin
+      .from("vehicle_allocations")
+      .select("vehicles(model, plate)")
+      .eq("company_id", companyId)
+      .eq("team_id", teamId)
+      .eq("date", date)
+      .maybeSingle(),
+  ]);
+
+  const vehicle = alloc?.vehicles
+    ? (Array.isArray(alloc.vehicles) ? alloc.vehicles[0] : alloc.vehicles)
+    : null;
+  const vehicleLabel = vehicle ? `${vehicle.model} (${vehicle.plate})` : null;
+  const teamName = team?.name ?? "outra equipa";
+
+  const dateLabel = new Date(`${date}T00:00:00`).toLocaleDateString("pt-PT", {
+    day: "2-digit", month: "2-digit",
+  });
+
+  const title = "🔄 Mudança de equipa";
+  const body = isReset
+    ? `${dateLabel}: voltas à tua equipa.`
+    : `${dateLabel}: trabalhas com a equipa ${teamName}${vehicleLabel ? ` (viatura ${vehicleLabel})` : ""}.`;
+
+  await admin.from("notifications").insert({
+    company_id: companyId,
+    user_id: collaboratorId,
+    type: "team_change",
+    title,
+    body,
+    data: { team_id: teamId, date },
+  }).then(() => null, () => null);
+
+  const { data: subs } = await admin
+    .from("push_subscriptions")
+    .select("endpoint, p256dh, auth_key")
+    .eq("user_id", collaboratorId)
+    .eq("company_id", companyId);
+
+  if (!subs?.length) return false;
+
+  const vapidPublic  = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
+  const vapidPrivate = process.env.VAPID_PRIVATE_KEY;
+  if (!vapidPublic || !vapidPrivate) return false;
+
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const webpushMod = ((await import("web-push")) as any).default ?? (await import("web-push"));
+    webpushMod.setVapidDetails("mailto:admin@molimpezas.pt", vapidPublic, vapidPrivate);
+
+    const payload = JSON.stringify({ title, body, url: "/app" });
+    const results = await Promise.allSettled(
+      subs.map((s: { endpoint: string; p256dh: string; auth_key: string }) =>
+        webpushMod.sendNotification(
+          { endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth_key } },
+          payload,
+        ),
+      ),
+    );
+    return results.some((r) => r.status === "fulfilled");
+  } catch (err) {
+    console.error("[notifyDayTeam] push falhou:", err);
+    return false;
+  }
+}

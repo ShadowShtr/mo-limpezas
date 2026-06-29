@@ -3,6 +3,7 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
+import { ensureLisbonOffset } from "@/lib/lisbon-time";
 import type { ConflictInfo } from "./reschedule";
 
 export interface CreateServiceInput {
@@ -13,6 +14,7 @@ export interface CreateServiceInput {
   scheduledEnd: string;
   hourlyRate: number | null;
   calculatedValue: number | null;
+  numPeople?: number | null;
   notes: string | null;
   cleaningType?: string | null;
   paymentStatus?: string | null;
@@ -53,10 +55,14 @@ export async function createService(
     .single();
   if (!location) return { ok: false, error: "Local invalido." };
 
+  // Normaliza para o fuso de Lisboa (o cliente envia hora "naive" sem offset).
+  const scheduledStart = ensureLisbonOffset(input.scheduledStart);
+  const scheduledEnd = ensureLisbonOffset(input.scheduledEnd);
+
   if (input.teamId && !input.force) {
     const conflicts = await getConflicts(
       admin, profile.company_id, null,
-      input.scheduledStart, input.scheduledEnd, input.teamId,
+      scheduledStart, scheduledEnd, input.teamId,
     );
     if (conflicts.length > 0) {
       return { ok: false, error: "A equipa tem conflito neste horário.", conflicts, canForce: true };
@@ -80,11 +86,12 @@ export async function createService(
         location_id: input.locationId,
         team_id: input.teamId ?? null,
         reference_number: ref,
-        scheduled_start: input.scheduledStart,
-        scheduled_end: input.scheduledEnd,
+        scheduled_start: scheduledStart,
+        scheduled_end: scheduledEnd,
         status: "agendado",
         hourly_rate: input.hourlyRate,
         calculated_value: input.calculatedValue,
+        num_people: input.numPeople != null && input.numPeople >= 1 ? Math.floor(input.numPeople) : 1,
         notes: input.notes,
         cleaning_type: input.cleaningType ?? null,
         payment_status: input.paymentStatus ?? null,

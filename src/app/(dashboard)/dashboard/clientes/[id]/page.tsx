@@ -2,8 +2,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { redirect, notFound } from "next/navigation";
 import Link from "next/link";
-import { format, parseISO, isToday, isTomorrow } from "date-fns";
-import { pt } from "date-fns/locale";
+import { parseISO, isToday, isTomorrow } from "date-fns";
+import { fmtLisbon } from "@/lib/lisbon-time";
 import {
   ArrowLeft, Plus, Edit2, Mail, Phone, Hash, Building2, User,
   StickyNote, CalendarClock, MapPin, BadgeEuro,
@@ -33,7 +33,7 @@ function dayLabel(iso: string) {
   const d = parseISO(iso);
   if (isToday(d)) return "Hoje";
   if (isTomorrow(d)) return "Amanhã";
-  return format(d, "EEE, d MMM", { locale: pt });
+  return fmtLisbon(iso, { weekday: "short", day: "numeric", month: "short" });
 }
 
 export default async function ClientDetailPage({
@@ -131,8 +131,8 @@ export default async function ClientDetailPage({
       .limit(20),
 
     admin
-      .from("teams")
-      .select("id, name, color")
+      .from("teams_with_members")
+      .select("id, name, color, members")
       .eq("company_id", me.company_id)
       .eq("active", true)
       .order("name"),
@@ -151,7 +151,9 @@ export default async function ClientDetailPage({
       .select(`
         id, name, frequency, interval_days, weekdays, schedule_days,
         starts_on, ends_on, status, notes, created_at,
-        locations ( id, name, address, clients ( id, name ) )
+        cleaning_type, payment_status, upholstery_type, upholstery_notes,
+        upholstery_units, upholstery_unit_price, num_people,
+        locations ( id, name, address, hourly_rate, clients ( id, name ) )
       `)
       .eq("company_id", me.company_id)
       .in("location_id", locationIds)
@@ -164,7 +166,12 @@ export default async function ClientDetailPage({
   const done = doneRaw ?? [];
   const contracts = (contractsRaw ?? []) as unknown as ContratosTableRow[];
   const pointServices = pointServicesRaw ?? [];
-  const teams = teamsRaw ?? [];
+  const teams = (teamsRaw ?? []).map((t) => ({
+    id: t.id,
+    name: t.name,
+    color: t.color,
+    member_count: Array.isArray(t.members) ? t.members.length : 0,
+  }));
   const totalBilled = done.reduce((acc, s) => acc + serviceValue(s), 0);
   const nextService = upcoming[0] ?? null;
 
@@ -323,10 +330,10 @@ export default async function ClientDetailPage({
                       <div key={s.id} className="flex items-center gap-3 px-3 py-2.5 rounded-lg border border-[var(--color-border)] hover:bg-[var(--color-background)] transition-colors">
                         <div className="flex flex-col items-center justify-center w-14 shrink-0 text-center">
                           <span className="text-xs font-semibold text-[var(--color-text-main)] capitalize leading-tight">
-                            {format(parseISO(s.scheduled_start), "d MMM", { locale: pt })}
+                            {fmtLisbon(s.scheduled_start, { day: "numeric", month: "short" })}
                           </span>
                           <span className="text-[11px] text-[var(--color-text-muted)]">
-                            {format(parseISO(s.scheduled_start), "HH:mm")}
+                            {fmtLisbon(s.scheduled_start, { hour: "2-digit", minute: "2-digit", hour12: false })}
                           </span>
                         </div>
                         <div className="flex-1 min-w-0">
@@ -365,7 +372,7 @@ export default async function ClientDetailPage({
                     return (
                       <div key={s.id} className="flex items-center gap-3 px-3 py-2 rounded-lg bg-[var(--color-background)] border border-[var(--color-border)] text-sm">
                         <span className="text-xs text-[var(--color-text-muted)] w-20 shrink-0">
-                          {format(parseISO(s.scheduled_start), "d MMM yyyy", { locale: pt })}
+                          {fmtLisbon(s.scheduled_start, { day: "numeric", month: "short", year: "numeric" })}
                         </span>
                         <span className="flex-1 min-w-0 truncate text-[var(--color-text-main)]">{s.location_name ?? "—"}</span>
                         <span className="text-xs text-[var(--color-text-sub)] flex items-center gap-1 shrink-0">

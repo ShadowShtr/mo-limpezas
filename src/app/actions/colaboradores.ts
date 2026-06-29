@@ -176,3 +176,46 @@ export async function resetColaboradorPassword(id: string) {
 
   return { ok: true as const, password, name: target.full_name as string };
 }
+
+export async function deleteColaborador(id: string, companyId: string) {
+  const supabase = await createClient();
+  const admin = createAdminClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { ok: false as const, error: "Não autenticado." };
+  if (user.id === id) return { ok: false as const, error: "Não podes excluir a tua própria conta." };
+
+  const { data: caller } = await admin
+    .from("profiles").select("company_id, role").eq("id", user.id).single();
+  if (!caller || !["admin", "gestor"].includes(caller.role)) {
+    return { ok: false as const, error: "Sem permissão." };
+  }
+  if (caller.company_id !== companyId) return { ok: false as const, error: "Empresa inválida." };
+
+  const { data: target } = await admin
+    .from("profiles").select("id, company_id, full_name").eq("id", id).single();
+  if (!target || target.company_id !== companyId) {
+    return { ok: false as const, error: "Colaboradora inválida." };
+  }
+
+  // Anula referências RESTRICT a este perfil (senão o cascade do auth bloqueia).
+  // Preserva os registos (serviços, contratos, faturas, etc.), só remove a autoria.
+  await admin.from("services").update({ created_by: null }).eq("company_id", companyId).eq("created_by", id);
+  await admin.from("services").update({ cancelled_by: null }).eq("company_id", companyId).eq("cancelled_by", id);
+  await admin.from("contracts").update({ created_by: null }).eq("company_id", companyId).eq("created_by", id);
+  await admin.from("absences").update({ created_by: null }).eq("company_id", companyId).eq("created_by", id);
+  await admin.from("absences").update({ approved_by: null }).eq("company_id", companyId).eq("approved_by", id);
+  await admin.from("absences").update({ replaced_by: null }).eq("company_id", companyId).eq("replaced_by", id);
+  await admin.from("vacation_requests").update({ reviewed_by: null }).eq("company_id", companyId).eq("reviewed_by", id);
+  await admin.from("invoices").update({ created_by: null }).eq("company_id", companyId).eq("created_by", id);
+  await admin.from("payroll_records").update({ approved_by: null }).eq("company_id", companyId).eq("approved_by", id);
+
+  // Apaga o utilizador auth → cascade do profile (team_members, timesheets,
+  // ausências, férias, folha, reforços, notificações).
+  const { error } = await admin.auth.admin.deleteUser(id);
+  if (error) return { ok: false as const, error: error.message };
+
+  revalidatePath("/dashboard/colaboradores");
+  revalidatePath("/dashboard/equipas");
+  revalidatePath("/dashboard/calendario");
+  return { ok: true as const };
+}

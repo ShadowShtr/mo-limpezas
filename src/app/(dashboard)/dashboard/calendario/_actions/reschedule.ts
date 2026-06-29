@@ -3,6 +3,7 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { auditLog } from "@/lib/audit";
+import { ensureLisbonOffset } from "@/lib/lisbon-time";
 
 export type ConflictInfo = {
   id: string;
@@ -28,6 +29,10 @@ export async function rescheduleService(
 
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { ok: false, error: "Nao autenticado." };
+
+  // Normaliza para o fuso de Lisboa (o cliente envia hora "naive" sem offset).
+  newStart = ensureLisbonOffset(newStart);
+  newEnd = ensureLisbonOffset(newEnd);
 
   const { data: profile } = await admin
     .from("profiles")

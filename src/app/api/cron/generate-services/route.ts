@@ -23,6 +23,7 @@ interface ContractRow {
   schedule_days: ScheduleDay[];
   starts_on: string;
   ends_on: string | null;
+  num_people: number | null;
   locations: { hourly_rate: number | null } | null;
 }
 
@@ -212,7 +213,7 @@ export async function GET(req: NextRequest) {
   const { data: contracts, error: contractsError } = await supabase
     .from("contracts")
     .select(
-      "id, company_id, location_id, frequency, weekdays, interval_days, schedule_days, starts_on, ends_on, locations(hourly_rate)",
+      "id, company_id, location_id, frequency, weekdays, interval_days, schedule_days, starts_on, ends_on, num_people, locations(hourly_rate)",
     )
     .eq("status", "ativo")
     .lte("starts_on", monthEndStr)
@@ -270,6 +271,19 @@ export async function GET(req: NextRequest) {
 
   // Contadores de referência por empresa (evita query por serviço)
   const companyCounts: Record<string, number> = {};
+  // Cache de tamanho de equipa (membros ativos), preenchido sob procura.
+  const teamSizes: Record<string, number> = {};
+  async function getTeamSize(teamId: string | null): Promise<number> {
+    if (!teamId) return 1;
+    if (teamId in teamSizes) return teamSizes[teamId];
+    const { count } = await supabase
+      .from("team_members")
+      .select("id", { count: "exact", head: true })
+      .eq("team_id", teamId)
+      .is("left_at", null);
+    teamSizes[teamId] = count && count > 0 ? count : 1;
+    return teamSizes[teamId];
+  }
   const insertErrors: string[] = [];
   const startedAt = Date.now();
   let stoppedEarly = false;
@@ -305,7 +319,7 @@ export async function GET(req: NextRequest) {
     type ServiceInsert = {
       company_id: string; location_id: string; team_id: string | null; contract_id: string;
       reference_number: string; scheduled_start: string; scheduled_end: string;
-      hourly_rate: number | null; calculated_value: number | null; status: string;
+      hourly_rate: number | null; calculated_value: number | null; num_people: number; status: string;
     };
     const rows: ServiceInsert[] = [];
 
@@ -321,8 +335,14 @@ export async function GET(req: NextRequest) {
         companyCounts[contract.company_id]++;
         const ref = String(companyCounts[contract.company_id]).padStart(4, "0");
         const hourlyRate = contract.locations?.hourly_rate ?? null;
+        // Nº de pessoas: com equipa → tamanho da equipa; sem equipa → num_people do dia.
+        const people = schedule.team_id
+          ? await getTeamSize(schedule.team_id)
+          : (schedule.num_people != null && schedule.num_people >= 1 ? Math.floor(schedule.num_people) : 1);
         const calculatedValue =
-          hourlyRate != null ? parseFloat(((schedule.duration_min / 60) * hourlyRate).toFixed(2)) : null;
+          hourlyRate != null
+            ? parseFloat(((schedule.duration_min / 60) * hourlyRate * people).toFixed(2))
+            : null;
 
         rows.push({
           company_id: contract.company_id,
@@ -334,6 +354,7 @@ export async function GET(req: NextRequest) {
           scheduled_end: toLisbonTimestamp(dateStr, endTime),
           hourly_rate: hourlyRate,
           calculated_value: calculatedValue,
+          num_people: people,
           status: "agendado",
         });
       }
@@ -409,20 +430,33 @@ export async function GET(req: NextRequest) {
         .eq("company_id", companyId)
         .in("role", ["admin", "gestor"]);
 
-      const notifications = (managers ?? []).map((m) => ({
-        company_id: companyId,
-        user_id: m.id,
-        type: "generation_conflict",
-        title: "Conflitos na geração automática",
-        body: `${companyConflicts.length} conflito(s) de horário para ${monthLabel}. Verifique o calendário.`,
-        data: {
-          month: monthStartStr,
-          conflict_count: companyConflicts.length,
-          sample_conflicts: companyConflicts.slice(0, 3),
-        },
-      }));
+      const managerIds = (managers ?? []).map((m) => m.id);
 
-      if (notifications.length > 0) {
+      if (managerIds.length > 0) {
+        // Anti-duplicação: remove avisos de conflito NÃO LIDOS do mesmo mês antes
+        // de inserir o atual. Cada execução da geração reconta os mesmos conflitos,
+        // por isso sem isto acumulava uma notificação por execução.
+        await supabase
+          .from("notifications")
+          .delete()
+          .eq("company_id", companyId)
+          .eq("type", "generation_conflict")
+          .is("read_at", null)
+          .filter("data->>month", "eq", monthStartStr);
+
+        const notifications = managerIds.map((id) => ({
+          company_id: companyId,
+          user_id: id,
+          type: "generation_conflict",
+          title: "Conflitos na geração automática",
+          body: `${companyConflicts.length} conflito(s) de horário para ${monthLabel}. Verifique o calendário.`,
+          data: {
+            month: monthStartStr,
+            conflict_count: companyConflicts.length,
+            sample_conflicts: companyConflicts.slice(0, 3),
+          },
+        }));
+
         await supabase.from("notifications").insert(notifications);
       }
     }

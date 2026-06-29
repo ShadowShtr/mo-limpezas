@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { createPortal } from "react-dom";
 import { X, Loader2, Plus, Trash2 } from "lucide-react";
 import { createColaborador, updateColaborador } from "@/app/actions/colaboradores";
@@ -36,6 +37,7 @@ const SKILLS_SUGESTOES = [
 ];
 
 export function ColaboradorSheet({ trigger, companyId, colaborador }: Props) {
+  const router = useRouter();
   const [open, setOpen] = useState(false);
   const [pending, startTransition] = useTransition();
   const [sending, setSending] = useState(false);
@@ -97,6 +99,8 @@ export function ColaboradorSheet({ trigger, companyId, colaborador }: Props) {
           setHourlyRate(""); setContractStart(""); setContractEnd("");
           setRole("colaborador"); setStatus("ativo"); setHours("168"); setSkills([]);
         }
+        router.refresh();
+        setTimeout(() => { setOpen(false); setMessage(null); }, 700);
       } else {
         setMessage({ type: "error", text: res.error });
       }

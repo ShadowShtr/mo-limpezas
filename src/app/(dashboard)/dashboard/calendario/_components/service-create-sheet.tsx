@@ -1,12 +1,14 @@
 "use client";
 
-import { useState, useMemo } from "react";
-import { X, Loader2, ChevronDown, Plus, UserPlus, Building2, User, MapPin, AlertTriangle } from "lucide-react";
+import { useState, useMemo, useEffect, useRef } from "react";
+import { X, Loader2, ChevronDown, Plus, UserPlus, Building2, User, MapPin, AlertTriangle, Search, CheckCircle2 } from "lucide-react";
 import { format, parseISO } from "date-fns";
 import { pt } from "date-fns/locale";
 import { createService } from "../_actions/create-service";
 import type { ConflictInfo } from "../_actions/reschedule";
 import { createClienteComLocal } from "@/app/actions/clientes";
+import { createContrato } from "@/app/actions/contratos";
+import type { ScheduleDay } from "@/types/database";
 import {
   CLEANING_TYPES,
   PAYMENT_STATUSES,
@@ -17,7 +19,18 @@ import {
 
 type Client = { id: string; name: string };
 type Location = { id: string; client_id: string; name: string; address: string; hourly_rate: number | null };
-type Team = { id: string; name: string; color: string };
+
+interface NominatimResult {
+  place_id: number;
+  display_name: string;
+  lat: string;
+  lon: string;
+  address: {
+    road?: string; pedestrian?: string; house_number?: string; postcode?: string;
+    city?: string; town?: string; village?: string; municipality?: string; county?: string;
+  };
+}
+type Team = { id: string; name: string; color: string; member_count?: number };
 
 interface Props {
   open: boolean;
@@ -52,6 +65,14 @@ const SERVICE_TYPE_LABELS: Record<string, string> = {
   outro: "Outro",
 };
 
+const REC_WEEKDAYS = [
+  { value: 1, label: "Seg" }, { value: 2, label: "Ter" }, { value: 3, label: "Qua" },
+  { value: 4, label: "Qui" }, { value: 5, label: "Sex" }, { value: 6, label: "Sáb" }, { value: 0, label: "Dom" },
+];
+const REC_DAY_KEY: Record<number, ScheduleDay["day"]> = {
+  0: "sun", 1: "mon", 2: "tue", 3: "wed", 4: "thu", 5: "fri", 6: "sat",
+};
+
 function addMinutes(time: string, mins: number): string {
   const [h, m] = time.split(":").map(Number);
   const total = h * 60 + m + mins;
@@ -71,6 +92,9 @@ export function ServiceCreateSheet({
   fixedClientId, fixedLocationId,
 }: Props) {
   const [loading, setLoading] = useState(false);
+  const [saved, setSaved] = useState(false);
+  // Guard síncrono: impede que duplo-clique/reenvio crie dois serviços/contratos.
+  const submittingRef = useRef(false);
   const [message, setMessage] = useState<string | null>(null);
   const [conflicts, setConflicts] = useState<ConflictInfo[]>([]);
   const [pendingForce, setPendingForce] = useState<object | null>(null);
@@ -81,8 +105,34 @@ export function ServiceCreateSheet({
   const [clientId, setClientId] = useState(fixedClientId ?? "");
   const [locationId, setLocationId] = useState(fixedLocationId ?? "");
   const [teamId, setTeamId] = useState(initialTeamId);
+  // Data do serviço (editável). Sincroniza quando o popup é reaberto noutra célula.
+  const [serviceDate, setServiceDate] = useState(date);
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setServiceDate(date);
+  }, [date]);
   const [startTime, setStartTime] = useState(initialStartTime);
   const [endTime, setEndTime] = useState(addMinutes(initialStartTime, 120));
+
+  // Recorrência (gerar intervenção recorrente em vez de serviço pontual).
+  const [recurring, setRecurring] = useState(false);
+  const [recFrequency, setRecFrequency] = useState<"weekly" | "biweekly" | "daily" | "monthly">("weekly");
+  const [recWeekdays, setRecWeekdays] = useState<number[]>([date.getDay()]);
+
+  // Ao reabrir o popup noutra célula (hora/equipa), sincroniza os campos e limpa
+  // o estado de "guardado". O componente fica montado, por isso é preciso reset.
+  useEffect(() => {
+    if (!open) return;
+    /* eslint-disable react-hooks/set-state-in-effect */
+    setStartTime(initialStartTime);
+    setEndTime(addMinutes(initialStartTime, 120));
+    setTeamId(initialTeamId);
+    setRecWeekdays([date.getDay()]);
+    setSaved(false);
+    setMessage(null);
+    /* eslint-enable react-hooks/set-state-in-effect */
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, initialStartTime, initialTeamId]);
   const [notes, setNotes] = useState("");
   const [cleaningType, setCleaningType] = useState("");
   const [paymentStatus, setPaymentStatus] = useState("nao_informado");
@@ -99,6 +149,7 @@ export function ServiceCreateSheet({
     : null;
 
   // Registo de novo cliente
+  const [clientSearch, setClientSearch] = useState("");
   const [showNewClient, setShowNewClient] = useState(false);
   const [newClientType, setNewClientType] = useState<"individual" | "empresa">("individual");
   const [newClientName, setNewClientName] = useState("");
@@ -110,6 +161,75 @@ export function ServiceCreateSheet({
   const [newLocAddress, setNewLocAddress] = useState("");
   const [newLocRate, setNewLocRate] = useState("");
   const [newLocServiceType, setNewLocServiceType] = useState("limpeza_regular");
+
+  // Autocomplete de morada (Nominatim) para o local novo — igual aos Locais.
+  const [addrRoad, setAddrRoad] = useState("");
+  const [addrNumber, setAddrNumber] = useState("");
+  const [addrComplement, setAddrComplement] = useState("");
+  const [addrPostal, setAddrPostal] = useState("");
+  const [addrCity, setAddrCity] = useState("");
+  const [addrLat, setAddrLat] = useState<string>("");
+  const [addrLng, setAddrLng] = useState<string>("");
+  const [addrSuggestions, setAddrSuggestions] = useState<NominatimResult[]>([]);
+  const [addrShow, setAddrShow] = useState(false);
+  const [addrSearching, setAddrSearching] = useState(false);
+  const [addrGeocoded, setAddrGeocoded] = useState(false);
+  const addrDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const addrWrapRef = useRef<HTMLDivElement>(null);
+
+  function composeNewAddress(): string {
+    const parts: string[] = [];
+    if (addrRoad) parts.push(`${addrRoad}${addrNumber ? " " + addrNumber : ""}`);
+    if (addrComplement) parts.push(addrComplement);
+    if (addrPostal || addrCity) parts.push(`${addrPostal}${addrPostal && addrCity ? " " : ""}${addrCity}`);
+    return parts.join(", ") || newLocAddress.trim();
+  }
+
+  function handleAddrSearch(value: string) {
+    setNewLocAddress(value);
+    setAddrGeocoded(false);
+    if (addrDebounceRef.current) clearTimeout(addrDebounceRef.current);
+    if (value.trim().length < 4) { setAddrSuggestions([]); setAddrShow(false); return; }
+    addrDebounceRef.current = setTimeout(async () => {
+      setAddrSearching(true);
+      try {
+        const encoded = encodeURIComponent(value + (value.toLowerCase().includes("portugal") ? "" : ", Portugal"));
+        const res = await fetch(
+          `https://nominatim.openstreetmap.org/search?q=${encoded}&format=json&limit=5&addressdetails=1&countrycodes=pt`,
+          { headers: { "Accept-Language": "pt" } },
+        );
+        const data: NominatimResult[] = await res.json();
+        setAddrSuggestions(data);
+        setAddrShow(data.length > 0);
+      } catch {
+        setAddrSuggestions([]);
+      } finally {
+        setAddrSearching(false);
+      }
+    }, 420);
+  }
+
+  function pickAddr(r: NominatimResult) {
+    const a = r.address;
+    const roadVal = a.road ?? a.pedestrian ?? "";
+    const numVal = a.house_number ?? "";
+    const pcVal = a.postcode ?? "";
+    const cityVal = a.city ?? a.town ?? a.village ?? a.municipality ?? a.county ?? "";
+    setAddrRoad(roadVal); setAddrNumber(numVal); setAddrPostal(pcVal); setAddrCity(cityVal);
+    setAddrLat(r.lat); setAddrLng(r.lon); setAddrGeocoded(true);
+    const display = [roadVal + (numVal ? " " + numVal : ""), pcVal + (pcVal && cityVal ? " " : "") + cityVal]
+      .filter(Boolean).join(", ");
+    setNewLocAddress(display);
+    setAddrSuggestions([]); setAddrShow(false);
+  }
+
+  useEffect(() => {
+    function onClickOutside(e: MouseEvent) {
+      if (addrWrapRef.current && !addrWrapRef.current.contains(e.target as Node)) setAddrShow(false);
+    }
+    document.addEventListener("mousedown", onClickOutside);
+    return () => document.removeEventListener("mousedown", onClickOutside);
+  }, []);
 
   const [creatingClient, setCreatingClient] = useState(false);
   const [newClientError, setNewClientError] = useState<string | null>(null);
@@ -124,22 +244,40 @@ export function ServiceCreateSheet({
     [locationId, locationList],
   );
 
+  // Valor/hora do serviço: pré-preenchido com o do local, mas editável aqui.
+  const [serviceRate, setServiceRate] = useState("");
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setServiceRate(selectedLocation?.hourly_rate != null ? String(selectedLocation.hourly_rate) : "");
+  }, [selectedLocation]);
+  const effectiveRate = serviceRate.trim() === "" ? null : Number(serviceRate.replace(",", "."));
+
+  // Nº de pessoas: tamanho da equipa selecionada (cada colaboradora conta como
+  // uma hora). Sem equipa = 1. Igual à lógica das intervenções recorrentes.
+  const selectedTeam = teams.find((t) => t.id === teamId) ?? null;
+  const numPeople = selectedTeam?.member_count && selectedTeam.member_count > 0
+    ? selectedTeam.member_count
+    : 1;
+
   const durationMin = calcDuration(startTime, endTime);
   const calculatedValue =
-    selectedLocation?.hourly_rate != null && durationMin > 0
-      ? (durationMin / 60) * selectedLocation.hourly_rate
+    effectiveRate != null && Number.isFinite(effectiveRate) && durationMin > 0
+      ? (durationMin / 60) * effectiveRate * numPeople
       : null;
 
   function resetNewClientForm() {
     setNewClientName(""); setNewClientPhone(""); setNewClientEmail(""); setNewClientNif("");
     setNewLocName(""); setNewLocAddress(""); setNewLocRate(""); setNewLocServiceType("limpeza_regular");
     setNewClientType("individual"); setNewClientError(null);
+    setAddrRoad(""); setAddrNumber(""); setAddrComplement(""); setAddrPostal(""); setAddrCity("");
+    setAddrLat(""); setAddrLng(""); setAddrSuggestions([]); setAddrShow(false); setAddrGeocoded(false);
   }
 
   async function handleCreateClient() {
+    const composedAddr = composeNewAddress();
     if (!newClientName.trim()) { setNewClientError("O nome é obrigatório."); return; }
     if (!newLocName.trim()) { setNewClientError("O nome do local é obrigatório."); return; }
-    if (!newLocAddress.trim()) { setNewClientError("A morada do local é obrigatória."); return; }
+    if (!composedAddr.trim()) { setNewClientError("A morada do local é obrigatória."); return; }
     setCreatingClient(true);
     setNewClientError(null);
 
@@ -150,9 +288,11 @@ export function ServiceCreateSheet({
       email: newClientEmail || undefined,
       nif: newClientNif || undefined,
       locationName: newLocName,
-      address: newLocAddress,
+      address: composedAddr,
       hourlyRate: newLocRate ? parseFloat(newLocRate) : null,
       serviceType: newLocServiceType,
+      lat: addrLat ? parseFloat(addrLat) : null,
+      lng: addrLng ? parseFloat(addrLng) : null,
     });
 
     setCreatingClient(false);
@@ -166,7 +306,7 @@ export function ServiceCreateSheet({
       id: res.locationId,
       client_id: res.clientId,
       name: newLocName.trim(),
-      address: newLocAddress.trim(),
+      address: composedAddr,
       hourly_rate: newLocRate ? parseFloat(newLocRate) : null,
     };
     setClientList((prev) => [...prev, newC].sort((a, b) => a.name.localeCompare(b.name, "pt")));
@@ -178,12 +318,55 @@ export function ServiceCreateSheet({
   }
 
   async function doCreate(force = false) {
+    // Single-flight: se já está a submeter, ignora cliques/reenvios extra.
+    if (submittingRef.current) return;
+    submittingRef.current = true;
     setLoading(true);
     setMessage(null);
     setConflicts([]);
     setPendingForce(null);
 
-    const dateStr = format(date, "yyyy-MM-dd");
+    const dateStr = format(serviceDate, "yyyy-MM-dd");
+
+    // ── Modo recorrente: cria uma intervenção (contrato) em vez de pontual ──
+    if (recurring) {
+      const isWeekly = recFrequency === "weekly" || recFrequency === "biweekly";
+      const days = isWeekly ? (recWeekdays.length ? recWeekdays : [serviceDate.getDay()]) : [];
+      const scheduleDays: ScheduleDay[] = isWeekly
+        ? days.map((d) => ({
+            day: REC_DAY_KEY[d], start_time: startTime, duration_min: durationMin,
+            team_id: teamId || null, num_people: teamId ? null : numPeople,
+          }))
+        : [{ day: "all", start_time: startTime, duration_min: durationMin, team_id: teamId || null, num_people: teamId ? null : numPeople }];
+
+      const recRes = await createContrato({
+        company_id: companyId,
+        created_by: "", // ignorado no servidor (usa o utilizador autenticado)
+        location_id: locationId,
+        frequency: recFrequency,
+        interval_days: 1,
+        weekdays: isWeekly ? days : null,
+        schedule_days: scheduleDays,
+        starts_on: dateStr,
+        status: "ativo",
+        hourly_rate: effectiveRate,
+        num_people: null,
+        cleaning_type: cleaningType || null,
+        payment_status: showPayment ? paymentStatus : null,
+        upholstery_type: showUpholstery ? (upholsteryType || null) : null,
+        upholstery_notes: showUpholstery ? (upholsteryNotes || null) : null,
+        upholstery_units: showUnits && upholsteryUnits !== "" ? Number(upholsteryUnits) : null,
+        upholstery_unit_price: showUnits && upholsteryUnitPrice !== "" ? Number(upholsteryUnitPrice.replace(",", ".")) : null,
+        unit_value: upholsteryTotal != null && upholsteryTotal > 0 ? upholsteryTotal : null,
+        notes: notes || undefined,
+      });
+      setLoading(false);
+      submittingRef.current = false;
+      if (!recRes.ok) { setMessage("Erro ao criar intervenção: " + recRes.error); return; }
+      setSaved(true);
+      onCreated();
+      return;
+    }
 
     const res = await createService({
       companyId,
@@ -191,7 +374,8 @@ export function ServiceCreateSheet({
       teamId: teamId || null,
       scheduledStart: `${dateStr}T${startTime}:00`,
       scheduledEnd: `${dateStr}T${endTime}:00`,
-      hourlyRate: selectedLocation?.hourly_rate ?? null,
+      hourlyRate: effectiveRate,
+      numPeople,
       // Estofos por unidade: o total (qtd × preço) tem prioridade sobre o cálculo por hora.
       calculatedValue: upholsteryTotal != null && upholsteryTotal > 0
         ? upholsteryTotal
@@ -208,6 +392,7 @@ export function ServiceCreateSheet({
     });
 
     setLoading(false);
+    submittingRef.current = false;
     if (!res.ok) {
       if (res.canForce && res.conflicts && res.conflicts.length > 0) {
         setConflicts(res.conflicts);
@@ -216,13 +401,14 @@ export function ServiceCreateSheet({
         setMessage("Erro ao criar: " + res.error);
       }
     } else {
+      setSaved(true);
       onCreated();
-      onClose();
     }
   }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    setSaved(false);
     if (!locationId) { setMessage("Seleciona um local."); return; }
     if (durationMin <= 0) { setMessage("A hora de fim deve ser posterior ao início."); return; }
     if (showUpholstery && !upholsteryType) { setMessage("Seleciona o tipo de estofado."); return; }
@@ -236,16 +422,17 @@ export function ServiceCreateSheet({
   if (!open) return null;
 
   return (
-    <>
-      <div className="fixed inset-0 bg-black/30 z-40" onClick={onClose} />
-      <div className="fixed right-0 top-0 h-full w-full max-w-lg bg-white shadow-xl z-50 flex flex-col">
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
+      {/* Fundo: NÃO fecha ao clicar (evita perder dados). Fecha pelo X. */}
+      <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
+      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] z-10 flex flex-col">
 
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-[var(--color-border)]">
           <div>
             <h2 className="text-base font-semibold text-[var(--color-text-main)]">Novo serviço</h2>
             <p className="text-xs text-[var(--color-text-muted)] mt-0.5">
-              {format(date, "EEEE, d 'de' MMMM yyyy", { locale: pt })} · {startTime}–{endTime}
+              {format(serviceDate, "EEEE, d 'de' MMMM yyyy", { locale: pt })} · {startTime}–{endTime}
             </p>
           </div>
           <button onClick={onClose} className="p-1.5 rounded-lg text-[var(--color-text-muted)] hover:bg-[var(--color-background)] transition-colors">
@@ -257,30 +444,76 @@ export function ServiceCreateSheet({
         <div className="flex-1 overflow-y-auto">
           <form id="create-service-form" onSubmit={handleSubmit} className="px-6 py-5 space-y-5">
 
-            {/* Cliente + Local */}
+            {/* Cliente (pesquisa) + Local */}
             <div className="space-y-3">
-              <div className="grid grid-cols-2 gap-3">
+              {fixedClientId ? null : clientId ? (
+                /* Cliente escolhido */
                 <Field label="Cliente *">
-                  <div className="relative">
-                    <select
-                      value={clientId}
-                      onChange={(e) => { setClientId(e.target.value); setLocationId(""); }}
-                      disabled={!!fixedClientId}
-                      className={SELECT_CLS + (fixedClientId ? " opacity-70 cursor-not-allowed" : "")}
+                  <div className="flex items-center justify-between gap-2 rounded-lg border border-[var(--color-border)] px-3 py-2">
+                    <span className="text-sm font-medium text-[var(--color-text-main)] truncate">
+                      {clientList.find((c) => c.id === clientId)?.name ?? "—"}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => { setClientId(""); setLocationId(""); setClientSearch(""); }}
+                      className="text-xs font-medium text-[var(--color-primary)] hover:underline shrink-0"
                     >
-                      <option value="">Selecionar...</option>
-                      {clientList.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-                    </select>
-                    <ChevronDown className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--color-text-muted)]" />
+                      Mudar
+                    </button>
                   </div>
                 </Field>
+              ) : (
+                /* Pesquisa de cliente */
+                <Field label="Cliente *">
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--color-text-muted)] pointer-events-none" />
+                    <input
+                      type="text"
+                      value={clientSearch}
+                      onChange={(e) => setClientSearch(e.target.value)}
+                      placeholder="Pesquisar cliente pelo nome..."
+                      className={INPUT_CLS + " pl-9"}
+                    />
+                  </div>
+                  {!showNewClient && (() => {
+                    const q = clientSearch.trim().toLowerCase();
+                    const matches = q
+                      ? clientList.filter((c) => c.name.toLowerCase().includes(q)).slice(0, 6)
+                      : clientList.slice(0, 6);
+                    return (
+                      <div className="mt-1.5 rounded-lg border border-[var(--color-border)] overflow-hidden">
+                        {matches.map((c) => (
+                          <button
+                            key={c.id}
+                            type="button"
+                            onClick={() => { setClientId(c.id); setLocationId(""); }}
+                            className="w-full text-left px-3 py-2 text-sm text-[var(--color-text-main)] hover:bg-[var(--color-background)] border-b border-[var(--color-border)] last:border-0"
+                          >
+                            {c.name}
+                          </button>
+                        ))}
+                        <button
+                          type="button"
+                          onClick={() => setShowNewClient(true)}
+                          className="w-full flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-[var(--color-primary)] hover:bg-[var(--color-primary-light)]"
+                        >
+                          <Plus className="w-4 h-4" />
+                          {q && matches.length === 0 ? `Adicionar "${clientSearch.trim()}"` : "Adicionar novo cliente"}
+                        </button>
+                      </div>
+                    );
+                  })()}
+                </Field>
+              )}
+
+              {/* Local — só depois de escolher o cliente */}
+              {(clientId || fixedClientId) && !showNewClient && (
                 <Field label="Local *">
                   <div className="relative">
                     <select
                       value={locationId}
                       onChange={(e) => setLocationId(e.target.value)}
-                      disabled={!clientId}
-                      className={SELECT_CLS + (clientId ? "" : " opacity-50 cursor-not-allowed")}
+                      className={SELECT_CLS}
                     >
                       <option value="">Selecionar...</option>
                       {filteredLocations.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
@@ -288,17 +521,6 @@ export function ServiceCreateSheet({
                     <ChevronDown className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--color-text-muted)]" />
                   </div>
                 </Field>
-              </div>
-
-              {!fixedClientId && !showNewClient && (
-                <button
-                  type="button"
-                  onClick={() => setShowNewClient(true)}
-                  className="flex items-center gap-1.5 text-xs font-medium text-[var(--color-primary)] hover:underline"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  Registar novo cliente
-                </button>
               )}
             </div>
 
@@ -381,10 +603,66 @@ export function ServiceCreateSheet({
                       <input type="text" value={newLocName} onChange={(e) => setNewLocName(e.target.value)}
                         placeholder='Ex: "Casa", "Escritório Lisboa"' className={INPUT_CLS} />
                     </div>
-                    <div>
+                    {/* Pesquisa de morada (autocomplete Nominatim) */}
+                    <div ref={addrWrapRef} className="relative">
                       <label className="block text-xs font-medium text-[var(--color-text-main)] mb-1">Morada *</label>
-                      <input type="text" value={newLocAddress} onChange={(e) => setNewLocAddress(e.target.value)}
-                        placeholder="Rua, número, código postal, cidade" className={INPUT_CLS} />
+                      <div className="relative">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--color-text-muted)] pointer-events-none" />
+                        <input
+                          type="text"
+                          value={newLocAddress}
+                          onChange={(e) => handleAddrSearch(e.target.value)}
+                          onFocus={() => addrSuggestions.length > 0 && setAddrShow(true)}
+                          placeholder="Rua, número, cidade..."
+                          className={INPUT_CLS + " pl-9 pr-9"}
+                        />
+                        {addrSearching && <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 animate-spin text-[var(--color-text-muted)]" />}
+                        {addrGeocoded && !addrSearching && <CheckCircle2 className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--color-primary)]" />}
+                      </div>
+                      <p className="text-[11px] text-[var(--color-text-muted)] mt-1">
+                        Clica numa sugestão para puxar a localização (GPS), ou preenche abaixo.
+                      </p>
+                      {addrShow && addrSuggestions.length > 0 && (
+                        <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-[var(--color-border)] rounded-lg shadow-lg z-50 overflow-hidden">
+                          {addrSuggestions.map((s) => (
+                            <button
+                              key={s.place_id}
+                              type="button"
+                              onClick={() => pickAddr(s)}
+                              className="w-full flex items-start gap-2.5 px-3 py-2.5 text-left hover:bg-[var(--color-background)] transition-colors border-b border-[var(--color-border)] last:border-0"
+                            >
+                              <MapPin className="w-3.5 h-3.5 mt-0.5 shrink-0 text-[var(--color-primary)]" />
+                              <span className="text-xs text-[var(--color-text-main)] leading-relaxed line-clamp-2">{s.display_name}</span>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Campos estruturados (auto pela pesquisa ou manual) */}
+                    <div className="grid grid-cols-3 gap-2">
+                      <div className="col-span-2">
+                        <label className="block text-xs font-medium text-[var(--color-text-muted)] mb-1">Rua / Avenida</label>
+                        <input value={addrRoad} onChange={(e) => setAddrRoad(e.target.value)} placeholder="Rua das Flores" className={INPUT_CLS + " text-xs"} />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-[var(--color-text-muted)] mb-1">Nº / Lote</label>
+                        <input value={addrNumber} onChange={(e) => setAddrNumber(e.target.value)} placeholder="10" className={INPUT_CLS + " text-xs"} />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-[var(--color-text-muted)] mb-1">Andar / Complemento</label>
+                      <input value={addrComplement} onChange={(e) => setAddrComplement(e.target.value)} placeholder="2º Dto, Loja A..." className={INPUT_CLS + " text-xs"} />
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="block text-xs font-medium text-[var(--color-text-muted)] mb-1">Código Postal</label>
+                        <input value={addrPostal} onChange={(e) => setAddrPostal(e.target.value)} placeholder="1150-007" className={INPUT_CLS + " text-xs"} />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-[var(--color-text-muted)] mb-1">Cidade</label>
+                        <input value={addrCity} onChange={(e) => setAddrCity(e.target.value)} placeholder="Lisboa" className={INPUT_CLS + " text-xs"} />
+                      </div>
                     </div>
                     <div className="grid grid-cols-2 gap-3">
                       <div>
@@ -413,7 +691,7 @@ export function ServiceCreateSheet({
                   <button
                     type="button"
                     onClick={handleCreateClient}
-                    disabled={creatingClient || !newClientName.trim() || !newLocName.trim() || !newLocAddress.trim()}
+                    disabled={creatingClient || !newClientName.trim() || !newLocName.trim() || !composeNewAddress().trim()}
                     className="w-full flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-lg bg-[var(--color-primary)] text-white text-sm font-semibold hover:bg-[var(--color-primary-hover)] transition-colors disabled:opacity-50"
                   >
                     {creatingClient ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
@@ -496,6 +774,17 @@ export function ServiceCreateSheet({
               </div>
             )}
 
+            {/* Data */}
+            <Field label="Data *">
+              <input
+                type="date"
+                value={format(serviceDate, "yyyy-MM-dd")}
+                onChange={(e) => { if (e.target.value) setServiceDate(parseISO(e.target.value)); }}
+                className={INPUT_CLS}
+                required
+              />
+            </Field>
+
             {/* Horário */}
             <div className="grid grid-cols-2 gap-3">
               <Field label="Hora de início *">
@@ -507,14 +796,84 @@ export function ServiceCreateSheet({
               </Field>
             </div>
 
+            {/* Recorrência */}
+            <div className="rounded-xl border border-[var(--color-border)] p-3 space-y-3">
+              <label className="flex items-center gap-2.5 cursor-pointer">
+                <button
+                  type="button"
+                  onClick={() => setRecurring((r) => !r)}
+                  className={`relative w-10 h-5 rounded-full transition-colors ${recurring ? "bg-[var(--color-primary)]" : "bg-[var(--color-border)]"}`}
+                >
+                  <span className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-all ${recurring ? "left-[22px]" : "left-0.5"}`} />
+                </button>
+                <span className="text-sm font-medium text-[var(--color-text-main)]">Repetir (intervenção recorrente)</span>
+              </label>
+
+              {recurring && (
+                <div className="space-y-3">
+                  <Field label="Frequência">
+                    <div className="relative">
+                      <select value={recFrequency} onChange={(e) => setRecFrequency(e.target.value as typeof recFrequency)} className={SELECT_CLS}>
+                        <option value="weekly">Semanal</option>
+                        <option value="biweekly">Quinzenal</option>
+                        <option value="daily">Diária (dias úteis)</option>
+                        <option value="monthly">Mensal</option>
+                      </select>
+                      <ChevronDown className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--color-text-muted)]" />
+                    </div>
+                  </Field>
+                  {(recFrequency === "weekly" || recFrequency === "biweekly") && (
+                    <div>
+                      <label className="block text-xs font-medium text-[var(--color-text-main)] mb-1.5">Dias da semana</label>
+                      <div className="flex flex-wrap gap-1.5">
+                        {REC_WEEKDAYS.map((w) => (
+                          <button
+                            key={w.value}
+                            type="button"
+                            onClick={() => setRecWeekdays((prev) => prev.includes(w.value) ? prev.filter((x) => x !== w.value) : [...prev, w.value].sort())}
+                            className={`px-2.5 py-1 rounded-lg text-xs font-medium border transition-colors ${
+                              recWeekdays.includes(w.value)
+                                ? "bg-[var(--color-primary)] text-white border-[var(--color-primary)]"
+                                : "bg-white text-[var(--color-text-sub)] border-[var(--color-border)]"
+                            }`}
+                          >
+                            {w.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  <p className="text-xs text-[var(--color-text-muted)]">
+                    A data acima é o início. As ocorrências são geradas automaticamente.
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {/* Valor/hora do serviço (editável) */}
+            <Field label="Valor/hora (€)">
+              <input
+                type="number"
+                min="0"
+                step="0.5"
+                value={serviceRate}
+                onChange={(e) => setServiceRate(e.target.value)}
+                placeholder="Ex: 15.00"
+                className={INPUT_CLS}
+              />
+              <p className="mt-1 text-xs text-[var(--color-text-muted)]">
+                Pré-preenchido com o valor do local. Podes ajustar só para este serviço.
+              </p>
+            </Field>
+
             {/* Previsão de valor */}
             {calculatedValue != null && (
               <div className="p-3 rounded-lg bg-[var(--color-primary-light)] border border-[var(--color-primary-muted)]">
                 <p className="text-xs text-[var(--color-primary)] font-medium">
                   Duração: {Math.floor(durationMin / 60)}h{durationMin % 60 > 0 ? `${durationMin % 60}min` : ""} ·{" "}
                   Valor estimado: <strong>€{calculatedValue.toFixed(2)}</strong>
-                  {selectedLocation?.hourly_rate && (
-                    <span className="font-normal opacity-80"> ({selectedLocation.hourly_rate}€/h)</span>
+                  {effectiveRate != null && (
+                    <span className="font-normal opacity-80"> ({effectiveRate}€/h × {numPeople} pessoa{numPeople !== 1 ? "s" : ""})</span>
                   )}
                 </p>
               </div>
@@ -570,18 +929,33 @@ export function ServiceCreateSheet({
 
         {/* Footer */}
         <div className="border-t border-[var(--color-border)] px-6 py-4">
-          <button
-            form="create-service-form"
-            type="submit"
-            disabled={loading || conflicts.length > 0}
-            className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-[var(--color-primary)] text-white text-sm font-semibold hover:bg-[var(--color-primary-hover)] transition-colors disabled:opacity-50"
-          >
-            {loading && <Loader2 className="w-4 h-4 animate-spin" />}
-            Criar serviço
-          </button>
+          {saved ? (
+            <div className="flex items-center justify-between gap-3">
+              <span className="flex items-center gap-2 text-sm font-semibold text-[var(--color-primary)]">
+                <CheckCircle2 className="w-5 h-5" /> Guardado
+              </span>
+              <button
+                type="button"
+                onClick={onClose}
+                className="px-5 py-2.5 rounded-lg bg-[var(--color-primary)] text-white text-sm font-semibold hover:bg-[var(--color-primary-hover)] transition-colors"
+              >
+                Fechar
+              </button>
+            </div>
+          ) : (
+            <button
+              form="create-service-form"
+              type="submit"
+              disabled={loading || conflicts.length > 0}
+              className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-[var(--color-primary)] text-white text-sm font-semibold hover:bg-[var(--color-primary-hover)] transition-colors disabled:opacity-50"
+            >
+              {loading && <Loader2 className="w-4 h-4 animate-spin" />}
+              {recurring ? "Criar intervenção recorrente" : "Criar serviço"}
+            </button>
+          )}
         </div>
       </div>
-    </>
+    </div>
   );
 }
 

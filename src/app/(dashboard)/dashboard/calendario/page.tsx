@@ -9,7 +9,7 @@ import { getDemoServices, DEMO_TEAMS } from "./_demo/mock-data";
 import type { Database } from "@/types/database";
 
 type ServiceFull = Database["public"]["Views"]["services_full"]["Row"];
-type Team = { id: string; name: string; color: string };
+type Team = { id: string; name: string; color: string; member_count?: number };
 
 export default async function CalendarioPage({
   searchParams,
@@ -28,7 +28,7 @@ export default async function CalendarioPage({
     .eq("id", user.id)
     .single();
 
-  if (!me || me.role === "colaborador") redirect("/app");
+  if (!me || !["admin", "gestor"].includes(me.role)) redirect("/app");
 
   const companyId = me.company_id;
 
@@ -44,7 +44,11 @@ export default async function CalendarioPage({
     { data: clients },
     { data: locations },
   ] = await Promise.all([
-    supabase
+    // Página só de gestores: lê via `admin` para garantir que TODOS os serviços
+    // registados aparecem. A view services_full é security_invoker e o JOIN com
+    // locations/clients sob RLS pode esconder linhas da sessão autenticada,
+    // fazendo um serviço sumir do calendário apesar de estar no contrato.
+    admin
       .from("services_full")
       .select([
         "id", "company_id", "reference_number", "contract_id", "is_exception",
@@ -61,8 +65,8 @@ export default async function CalendarioPage({
       .lt("scheduled_start", weekEndExclusive.toISOString())
       .order("scheduled_start"),
     supabase
-      .from("teams")
-      .select("id, name, color")
+      .from("teams_with_members")
+      .select("id, name, color, members")
       .eq("company_id", companyId)
       .eq("active", true)
       .order("name"),
@@ -82,7 +86,13 @@ export default async function CalendarioPage({
 
   // Modo de demonstração: usar dados de exemplo quando não há equipas configuradas
   const isDemo = !teams || teams.length === 0;
-  const sortedTeams = [...(teams ?? [])].sort((a, b) =>
+  const teamsWithCount = (teams ?? []).map((t) => ({
+    id: t.id as string,
+    name: t.name as string,
+    color: t.color as string,
+    member_count: Array.isArray(t.members) ? t.members.length : 0,
+  }));
+  const sortedTeams = teamsWithCount.sort((a, b) =>
     a.name.localeCompare(b.name, "pt", { numeric: true, sensitivity: "base" })
   );
   const finalTeams  = isDemo ? DEMO_TEAMS : (sortedTeams as Team[]);

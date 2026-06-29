@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useState, useTransition, useMemo } from "react";
+import { useRouter } from "next/navigation";
 import { createPortal } from "react-dom";
-import { X, Loader2, ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
+import { X, Loader2, Check, Users, ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
 import { createContrato, updateContrato } from "@/app/actions/contratos";
 import type { ScheduleDay } from "@/types/database";
 import type { ContratosTableRow } from "../page";
@@ -29,6 +30,10 @@ const WEEKDAYS = [
 const DAY_KEY: Record<number, ScheduleDay["day"]> = {
   0: "sun", 1: "mon", 2: "tue", 3: "wed", 4: "thu", 5: "fri", 6: "sat",
 };
+
+// Config de um dia do horário. num_people só conta quando NÃO há equipa.
+type CfgDay = { start_time: string; duration_min: number; team_id: string; num_people: number };
+const DEFAULT_CFG: CfgDay = { start_time: "09:00", duration_min: 120, team_id: "", num_people: 1 };
 
 const FREQUENCY_OPTS = [
   { value: "weekly",   label: "Semanal — mesmos dias todas as semanas" },
@@ -155,7 +160,7 @@ interface Props {
     has_key?: boolean | null;
     key_label?: string | null;
   }[];
-  equipas: { id: string; name: string; color: string }[];
+  equipas: { id: string; name: string; color: string; member_count?: number }[];
   contrato?: ContratosTableRow;
   copyFrom?: ContratosTableRow;
   fixedClientId?: string;
@@ -192,10 +197,13 @@ export function ContratoSheet({
   const createButton = labels?.createButton ?? "Criar contrato";
   const editButton = labels?.editButton ?? "Guardar alterações";
 
+  const router = useRouter();
+
   // UI state
   const [open, setOpen] = useState(false);
   const [step, setStep] = useState<1 | 2>(1);
   const [pending, startTransition] = useTransition();
+  const [saved, setSaved] = useState(false);
   const [message, setMessage] = useState<{ type: "error" | "success"; text: string } | null>(null);
 
   // Formulário
@@ -227,22 +235,25 @@ export function ContratoSheet({
   const [hourlyRate, setHourlyRate] = useState(
     source?.locations?.hourly_rate != null ? String(source.locations.hourly_rate) : "",
   );
-
-  // schedule_days: chave = day key (ex: "mon"), valor = config
-  const initSchedule = (): Record<string, { start_time: string; duration_min: number; team_id: string }> => {
+  // schedule_days: chave = day key (ex: "mon"), valor = config.
+  // num_people só é usado quando NÃO há equipa (preenchido à mão).
+  const initSchedule = (): Record<string, CfgDay> => {
     if (source?.schedule_days?.length) {
       return Object.fromEntries(
         source.schedule_days.map((s) => [
           s.day,
-          { start_time: s.start_time, duration_min: s.duration_min, team_id: s.team_id ?? "" },
+          {
+            start_time: s.start_time,
+            duration_min: s.duration_min,
+            team_id: s.team_id ?? "",
+            num_people: s.num_people != null && s.num_people >= 1 ? s.num_people : 1,
+          },
         ]),
       );
     }
     return {};
   };
-  const [scheduleConfig, setScheduleConfig] = useState<
-    Record<string, { start_time: string; duration_min: number; team_id: string }>
-  >(initSchedule);
+  const [scheduleConfig, setScheduleConfig] = useState<Record<string, CfgDay>>(initSchedule);
 
   // Locais filtrados pelo cliente selecionado
   const locaisFiltrados = clienteId ? locais.filter((l) => l.client_id === clienteId) : locais;
@@ -268,10 +279,10 @@ export function ContratoSheet({
   // Escape fecha o modal
   useEffect(() => {
     if (!open) return;
-    const handler = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
+    const handler = (e: KeyboardEvent) => { if (e.key === "Escape" && !pending) setOpen(false); };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [open]);
+  }, [open, pending]);
 
   function toggleWeekday(d: number) {
     setSelectedWeekdays((prev) =>
@@ -280,10 +291,10 @@ export function ContratoSheet({
   }
 
   function updateScheduleDay(dayKey: string, field: string, value: string | number) {
-    setScheduleConfig((prev) => {
-      const defaults = { start_time: "09:00", duration_min: 120, team_id: "" };
-      return { ...prev, [dayKey]: { ...defaults, ...prev[dayKey], [field]: value } };
-    });
+    setScheduleConfig((prev) => ({
+      ...prev,
+      [dayKey]: { ...DEFAULT_CFG, ...prev[dayKey], [field]: value },
+    }));
   }
 
   // Quais dias precisam de config
@@ -298,25 +309,48 @@ export function ContratoSheet({
   }, [frequency, selectedWeekdays]);
 
   const parsedHourlyRate = hourlyRate.trim() === "" ? null : Number(hourlyRate.replace(",", "."));
+
+  // Tamanho da equipa atribuída (membros ativos). 0 → 1 para o cálculo.
+  const teamSize = (teamId: string) => {
+    const eq = equipas.find((e) => e.id === teamId);
+    return eq?.member_count && eq.member_count > 0 ? eq.member_count : 1;
+  };
+  // Nº de pessoas efetivo de um dia: com equipa = tamanho da equipa;
+  // sem equipa = quantidade preenchida à mão.
+  const peopleForDay = (cfg: CfgDay) =>
+    cfg.team_id ? teamSize(cfg.team_id) : Math.max(1, Math.floor(cfg.num_people || 1));
+
   const totalDurationMin = useMemo(
     () => daysToConfig.reduce((sum, { key }) => {
-      const cfg = scheduleConfig[key] ?? { start_time: "09:00", duration_min: 120, team_id: "" };
+      const cfg = scheduleConfig[key] ?? DEFAULT_CFG;
       return sum + Number(cfg.duration_min || 0);
     }, 0),
     [daysToConfig, scheduleConfig],
   );
+
+  // Valor = Σ por dia de (horas × valor/hora × nº de pessoas desse dia).
+  // Cada colaboradora conta como uma hora: 12€/h com 3 pessoas = 36€/h.
   const calculatedValue = parsedHourlyRate != null && Number.isFinite(parsedHourlyRate)
-    ? (totalDurationMin / 60) * parsedHourlyRate
+    ? daysToConfig.reduce((sum, { key }) => {
+        const cfg = scheduleConfig[key] ?? DEFAULT_CFG;
+        return sum + (Number(cfg.duration_min || 0) / 60) * parsedHourlyRate * peopleForDay(cfg);
+      }, 0)
     : null;
+  // Nº de pessoas representativo para o resumo (1.º dia configurado).
+  const summaryPeople = daysToConfig.length > 0
+    ? peopleForDay(scheduleConfig[daysToConfig[0].key] ?? DEFAULT_CFG)
+    : 1;
 
   function buildScheduleDays(): ScheduleDay[] {
     return daysToConfig.map(({ key }) => {
-      const cfg = scheduleConfig[key] ?? { start_time: "09:00", duration_min: 120, team_id: "" };
+      const cfg = scheduleConfig[key] ?? DEFAULT_CFG;
       return {
         day: key,
         start_time: cfg.start_time,
         duration_min: Number(cfg.duration_min),
         team_id: cfg.team_id || null,
+        // Sem equipa → guarda o nº de pessoas preenchido; com equipa → null.
+        num_people: cfg.team_id ? null : Math.max(1, Math.floor(cfg.num_people || 1)),
       };
     });
   }
@@ -334,6 +368,7 @@ export function ContratoSheet({
   function handleSubmit(e: React.SyntheticEvent<HTMLFormElement>) {
     e.preventDefault();
     setMessage(null);
+    setSaved(false);
 
     // Avisos não bloqueantes
     if (!localId) {
@@ -360,6 +395,9 @@ export function ContratoSheet({
         location_id: localId,
         name: name || undefined,
         hourly_rate: parsedHourlyRate,
+        // Nº de pessoas agora é por dia (em schedule_days). Mantém o campo do
+        // contrato a null para retrocompatibilidade.
+        num_people: null,
         frequency,
         interval_days: frequency === "custom" ? intervalDays : 1,
         weekdays: (frequency === "weekly" || frequency === "biweekly") ? selectedWeekdays : null,
@@ -384,13 +422,16 @@ export function ContratoSheet({
         : await createContrato({ ...input, company_id: companyId, created_by: userId });
 
       if (res.ok) {
+        // Não fecha automaticamente: mostra "Guardado" no botão e o utilizador
+        // fecha no X quando quiser (confirma visualmente que guardou).
+        setSaved(true);
         setMessage({
           type: "success",
           text: isEdit
             ? labels?.updatedMessage ?? "Contrato atualizado."
             : labels?.createdMessage ?? "Contrato criado com sucesso.",
         });
-        if (!isEdit) resetForm();
+        router.refresh();
       } else {
         setMessage({ type: "error", text: "Erro ao guardar: " + res.error });
       }
@@ -399,10 +440,9 @@ export function ContratoSheet({
 
   const overlay = open ? createPortal(
     <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
-      <div
-        className="absolute inset-0 bg-black/40 backdrop-blur-sm"
-        onClick={() => setOpen(false)}
-      />
+      {/* Fundo: NÃO fecha ao clicar (evita perder a edição por clique acidental).
+          Fecha só pelo X, Cancelar ou ao guardar. */}
+      <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
       <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-xl max-h-[90vh] flex flex-col">
 
         {/* Header */}
@@ -750,6 +790,27 @@ export function ContratoSheet({
                             </div>
                           </div>
                         </div>
+                        {cfg.team_id ? (
+                          <p className="mt-2 flex items-center gap-1.5 text-xs text-[var(--color-text-muted)]">
+                            <Users className="w-3.5 h-3.5 text-[var(--color-primary)]" />
+                            {teamSize(cfg.team_id)} colaboradora(s) na equipa · usado no cálculo do valor
+                          </p>
+                        ) : (
+                          <div className="mt-2">
+                            <label className="block text-xs text-[var(--color-text-muted)] mb-1 flex items-center gap-1.5">
+                              <Users className="w-3.5 h-3.5 text-[var(--color-primary)]" />
+                              Nº de colaboradoras (sem equipa)
+                            </label>
+                            <input
+                              type="number"
+                              min={1}
+                              step={1}
+                              value={cfg.num_people}
+                              onChange={(e) => updateScheduleDay(key, "num_people", Math.max(1, Math.floor(Number(e.target.value) || 1)))}
+                              className={INPUT_CLS + " max-w-[8rem]"}
+                            />
+                          </div>
+                        )}
                       </div>
                     );
                   })}
@@ -771,7 +832,7 @@ export function ContratoSheet({
                       <p className="mt-1 text-xs text-[var(--color-text-muted)]">
                         {useUnits
                           ? `${upholsteryUnits || 0} unidade(s) x preço unitário`
-                          : `${(totalDurationMin / 60).toLocaleString("pt-PT", { maximumFractionDigits: 2 })}h x valor/hora`}
+                          : `${(totalDurationMin / 60).toLocaleString("pt-PT", { maximumFractionDigits: 2 })}h x valor/hora x ${summaryPeople} pessoa(s)`}
                       </p>
                     </>
                   );
@@ -858,13 +919,26 @@ export function ContratoSheet({
                 disabled={pending}
                 className="ml-auto flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold transition-all disabled:opacity-50"
                 style={{
-                  background: "linear-gradient(135deg, #22C55E 0%, #16A34A 100%)",
+                  background: saved
+                    ? "linear-gradient(135deg, #16A34A 0%, #15803D 100%)"
+                    : "linear-gradient(135deg, #22C55E 0%, #16A34A 100%)",
                   color: "white",
                   boxShadow: "0 4px 12px rgba(34,197,94,0.28)",
                 }}
               >
-                {pending && <Loader2 className="w-4 h-4 animate-spin" />}
-                {isEdit ? editButton : createButton}
+                {pending ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    A guardar...
+                  </>
+                ) : saved ? (
+                  <>
+                    <Check className="w-4 h-4" />
+                    Guardado
+                  </>
+                ) : (
+                  isEdit ? editButton : createButton
+                )}
               </button>
             </>
           )}
@@ -876,7 +950,14 @@ export function ContratoSheet({
 
   return (
     <>
-      <span onClick={() => { setStep(1); setOpen(true); }} style={{ display: "contents", cursor: "pointer" }}>
+      <span
+        onClick={() => {
+          // Form novo (não edição, não duplicação) começa limpo a cada abertura.
+          if (!isEdit && !copyFrom) resetForm();
+          setStep(1); setSaved(false); setMessage(null); setOpen(true);
+        }}
+        style={{ display: "contents", cursor: "pointer" }}
+      >
         {trigger}
       </span>
       {overlay}

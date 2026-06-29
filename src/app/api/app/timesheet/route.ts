@@ -82,6 +82,23 @@ async function postHandler(req: NextRequest) {
   if (!profile)
     return NextResponse.json({ error: "Perfil não encontrado" }, { status: 404 });
 
+  // Gate: exige o ponto GERAL de início do dia antes de bater ponto em serviços.
+  const lisbonDate = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Europe/Lisbon", year: "numeric", month: "2-digit", day: "2-digit",
+  }).format(new Date());
+  const { data: dayClock } = await admin
+    .from("daily_clocks")
+    .select("clock_in_at")
+    .eq("collaborator_id", user.id)
+    .eq("work_date", lisbonDate)
+    .maybeSingle();
+  if (!dayClock?.clock_in_at) {
+    return NextResponse.json(
+      { error: "Bate o ponto de início do dia (aba Ponto) antes de registar pontos nos serviços.", needsDailyClockIn: true },
+      { status: 409 },
+    );
+  }
+
   const { data: service } = await admin
     .from("services_full")
     .select("id, company_id, team_id, location_lat, location_lng, scheduled_start, scheduled_end, status")

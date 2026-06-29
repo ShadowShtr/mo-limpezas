@@ -1,9 +1,11 @@
 "use client";
 
-import { useState } from "react";
-import { Search, Filter, MoreHorizontal, ExternalLink } from "lucide-react";
+import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
+import { Search, Filter, MoreHorizontal, ExternalLink, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { ColaboradorSheet } from "./sheet";
+import { deleteColaborador } from "@/app/actions/colaboradores";
 import { usePagination, Pagination } from "@/components/ui/pagination";
 
 type Colaborador = {
@@ -38,8 +40,21 @@ interface Props {
 }
 
 export function ColaboradoresTable({ colaboradores, companyId }: Props) {
+  const router = useRouter();
   const [search, setSearch] = useState("");
   const [filterStatus, setFilterStatus] = useState<string>("todos");
+  const [deleting, startDelete] = useTransition();
+
+  function handleDelete(c: Colaborador) {
+    if (!window.confirm(
+      `Excluir a colaboradora "${c.full_name}"?\n\nApaga a conta de acesso e os registos dela (equipas, pontos, ausências, férias, folha). Os serviços e contratos ficam, sem a autoria. Não pode ser desfeito.`,
+    )) return;
+    startDelete(async () => {
+      const res = await deleteColaborador(c.id, companyId);
+      if (!res.ok) { window.alert(res.error); return; }
+      router.refresh();
+    });
+  }
 
   const filtered = colaboradores.filter((c) => {
     const matchSearch =
@@ -198,6 +213,14 @@ export function ColaboradoresTable({ colaboradores, companyId }: Props) {
                             </button>
                           }
                         />
+                        <button
+                          title="Excluir colaboradora"
+                          disabled={deleting}
+                          onClick={() => handleDelete(c)}
+                          className="p-1.5 rounded-lg text-[var(--color-text-muted)] hover:text-red-600 hover:bg-red-50 transition-colors disabled:opacity-50"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
                       </div>
                     </td>
                   </tr>

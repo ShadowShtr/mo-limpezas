@@ -1,7 +1,10 @@
 "use client";
 
-import { Users } from "lucide-react";
+import { useTransition } from "react";
+import { useRouter } from "next/navigation";
+import { Users, Trash2 } from "lucide-react";
 import { EquipaSheet } from "./sheet";
+import { deleteEquipa } from "@/app/actions/equipas";
 
 type Member = { id: string; full_name: string; avatar_url: string | null };
 
@@ -29,6 +32,20 @@ interface Props {
 }
 
 export function EquipasGrid({ equipas, colaboradores, companyId }: Props) {
+  const router = useRouter();
+  const [deleting, startDelete] = useTransition();
+
+  function handleDelete(equipa: Equipa) {
+    if (!window.confirm(
+      `Excluir a equipa "${equipa.name}"?\n\nOs serviços que tinham esta equipa ficam "sem equipa" (não são apagados). Não pode ser desfeito.`,
+    )) return;
+    startDelete(async () => {
+      const res = await deleteEquipa(equipa.id, companyId);
+      if (!res.ok) { window.alert(res.error); return; }
+      router.refresh();
+    });
+  }
+
   if (equipas.length === 0) {
     return (
       <div className="bg-white rounded-xl border border-[var(--color-border)] py-16 text-center">
@@ -104,17 +121,27 @@ export function EquipasGrid({ equipas, colaboradores, companyId }: Props) {
                 <p className="text-xs text-[var(--color-text-muted)] mb-4">Sem membros</p>
               )}
 
-              {/* Editar */}
-              <EquipaSheet
-                companyId={companyId}
-                colaboradores={colaboradores}
-                equipa={{ ...equipa, members }}
-                trigger={
-                  <button className="w-full text-sm text-[var(--color-text-sub)] py-1.5 rounded-lg border border-[var(--color-border)] hover:bg-[var(--color-background)] transition-colors font-medium">
-                    Editar equipa
-                  </button>
-                }
-              />
+              {/* Editar / Excluir */}
+              <div className="flex items-center gap-2">
+                <EquipaSheet
+                  companyId={companyId}
+                  colaboradores={colaboradores}
+                  equipa={{ ...equipa, members }}
+                  trigger={
+                    <button className="flex-1 text-sm text-[var(--color-text-sub)] py-1.5 rounded-lg border border-[var(--color-border)] hover:bg-[var(--color-background)] transition-colors font-medium">
+                      Editar equipa
+                    </button>
+                  }
+                />
+                <button
+                  title="Excluir equipa"
+                  disabled={deleting}
+                  onClick={() => handleDelete(equipa)}
+                  className="p-2 rounded-lg border border-[var(--color-border)] text-[var(--color-text-muted)] hover:text-red-600 hover:bg-red-50 hover:border-red-200 transition-colors disabled:opacity-50"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              </div>
             </div>
           </div>
         );

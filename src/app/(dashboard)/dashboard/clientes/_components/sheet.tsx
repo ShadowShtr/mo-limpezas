@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { createPortal } from "react-dom";
 import { X, Loader2 } from "lucide-react";
 import { createCliente, updateCliente } from "@/app/actions/clientes";
@@ -24,6 +25,7 @@ interface Props {
 }
 
 export function ClienteSheet({ trigger, companyId, cliente }: Props) {
+  const router = useRouter();
   const [open, setOpen] = useState(false);
   const [pending, startTransition] = useTransition();
   const [message, setMessage] = useState<{ type: "error" | "success"; text: string } | null>(null);
@@ -66,6 +68,8 @@ export function ClienteSheet({ trigger, companyId, cliente }: Props) {
         if (!isEdit) {
           setName(""); setEmail(""); setPhone(""); setNif(""); setType("empresa"); setNotes(""); setStatus("ativo"); setVatExempt(false);
         }
+        router.refresh();
+        setTimeout(() => { setOpen(false); setMessage(null); }, 700);
       } else {
         setMessage({ type: "error", text: res.error });
       }

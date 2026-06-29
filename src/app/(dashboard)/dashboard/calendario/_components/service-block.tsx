@@ -198,10 +198,15 @@ interface ServiceBlockProps {
   isOverlay?: boolean;
   /** Número da paragem da equipa neste dia (1, 2, 3...). Só mostrado se > 0 e a equipa tiver >1 serviço. */
   stopIndex?: number;
+  /** Sub-coluna (lane) quando há serviços sobrepostos no tempo. */
+  lane?: number;
+  /** Total de sub-colunas no grupo sobreposto. */
+  lanes?: number;
 }
 
-export function ServiceBlock({ service, slotHeight, startHour, teamId, onClick, onEdit, isOverlay = false, stopIndex }: ServiceBlockProps) {
+export function ServiceBlock({ service, slotHeight, startHour, teamId, onClick, onEdit, isOverlay = false, stopIndex, lane = 0, lanes = 1 }: ServiceBlockProps) {
   const [tooltip, setTooltip] = useState<TooltipState | null>(null);
+  const [hovered, setHovered] = useState(false);
 
   const isDraggable = !isOverlay &&
     service.status !== "concluido" &&
@@ -222,8 +227,10 @@ export function ServiceBlock({ service, slotHeight, startHour, teamId, onClick, 
   const offsetMin   = startMin - startHour * 60;
   const durationMin = endMin - startMin;
 
-  const top    = (offsetMin / 30) * slotHeight;
-  const height = Math.max((durationMin / 30) * slotHeight, slotHeight);
+  // slotHeight é por slot de 15 min (SLOT_MIN). Dividir por 15 para a escala correta.
+  const top    = (offsetMin / 15) * slotHeight;
+  // Altura mínima legível (~64px) para mostrar nome, morada, hora e equipa.
+  const height = Math.max((durationMin / 15) * slotHeight, 64);
 
   const s = STATUS_BG[service.status] ?? STATUS_BG.agendado;
   const borderColor = service.team_color ?? s.fallbackBorder;
@@ -246,22 +253,32 @@ export function ServiceBlock({ service, slotHeight, startHour, teamId, onClick, 
     borderRadius: "4px",
     boxShadow: "0 8px 24px rgba(0,0,0,0.18)",
     cursor: "grabbing",
-  } : {
-    position: "absolute",
+    } : (() => {
+    // Ao passar o rato, o cartão expande para se conseguir ler:
+    // - em largura, à coluna toda quando há sobreposição (lanes > 1);
+    // - em altura, crescendo para baixo até uma altura mínima legível.
+    const MIN_READABLE = 84; // px — chega para nome + zona + hora + equipa
+    const hov = hovered && !isDragging;
+    const expandW = hov && lanes > 1;
+    const visH = hov ? Math.max(height, MIN_READABLE) : height;
+    return {
+    position: "absolute" as const,
     top: `${top + 1}px`,
-    height: `${height - 2}px`,
-    left: "2px",
-    right: "2px",
+    height: `${visH - 2}px`,
+    left: expandW ? "2px" : `calc(${(lane * 100) / lanes}% + 2px)`,
+    width: expandW ? "calc(100% - 4px)" : `calc(${100 / lanes}% - 4px)`,
     backgroundColor: s.bg,
     borderLeft: `3px solid ${borderColor}`,
     border: `1px solid ${borderColor}30`,
     borderLeftWidth: "3px",
-    zIndex: isDragging ? 50 : 1,
+    zIndex: isDragging ? 50 : hov ? 40 : 1,
     opacity: isDragging ? 0.35 : 1,
     transform: CSS.Translate.toString(transform),
     cursor: isDraggable ? (isDragging ? "grabbing" : "grab") : "pointer",
-    transition: isDragging ? undefined : "opacity 0.15s ease",
-  };
+    boxShadow: hov ? "0 6px 20px rgba(0,0,0,0.16)" : undefined,
+    transition: isDragging ? undefined : "left 0.12s ease, width 0.12s ease, height 0.12s ease, opacity 0.15s ease",
+    };
+  })();
 
   return (
     <>
@@ -275,9 +292,9 @@ export function ServiceBlock({ service, slotHeight, startHour, teamId, onClick, 
           onClick?.(service);
         }}
         onKeyDown={(e) => e.key === "Enter" && onClick?.(service)}
-        onMouseEnter={(e) => !isDragging && setTooltip({ x: e.clientX, y: e.clientY })}
-        onMouseLeave={() => setTooltip(null)}
-        onMouseMove={(e) => !isDragging && setTooltip({ x: e.clientX, y: e.clientY })}
+        onMouseEnter={(e) => { setHovered(true); if (!isDragging && lanes === 1) setTooltip({ x: e.clientX, y: e.clientY }); }}
+        onMouseLeave={() => { setHovered(false); setTooltip(null); }}
+        onMouseMove={(e) => !isDragging && lanes === 1 && setTooltip({ x: e.clientX, y: e.clientY })}
         className="rounded overflow-hidden select-none focus:outline-none focus:ring-1 focus:ring-[var(--color-primary)] hover:brightness-95 hover:shadow-md"
         style={overlayStyle}
         {...(isOverlay ? {} : { ...listeners, ...attributes })}
@@ -303,19 +320,18 @@ export function ServiceBlock({ service, slotHeight, startHour, teamId, onClick, 
               <Pencil className="w-2.5 h-2.5" />
             </button>
           )}
-          <span className="text-[10px] font-semibold leading-tight tabular-nums" style={{ color: s.text }}>
-            {format(start, "HH:mm")}–{format(end, "HH:mm")}
-          </span>
-          {/* Cidade/localidade sempre visível, mesmo em cartão pequeno */}
+          {/* 1.º Nome do cliente — sempre visível */}
           <span className="text-[11px] font-semibold leading-tight truncate pr-4" style={{ color: s.text }}>
+            {service.client_name}
+          </span>
+          {/* 2.º Zona/localidade */}
+          <span className="text-[10px] font-medium leading-tight truncate pr-4" style={{ color: s.text, opacity: 0.8 }}>
             {extractCity(service.location_address) || service.location_name}
           </span>
-          {/* Cliente visível a partir do cartão médio */}
-          {!isShort && (
-            <span className="text-[10px] leading-tight truncate" style={{ color: s.text, opacity: 0.75 }}>
-              {service.client_name}
-            </span>
-          )}
+          {/* 3.º Horário */}
+          <span className="text-[10px] font-semibold leading-tight tabular-nums" style={{ color: s.text, opacity: 0.9 }}>
+            {format(start, "HH:mm")}–{format(end, "HH:mm")}
+          </span>
           {(isMedium || isLarge) && noteText && (
             <span className="text-[10px] leading-tight truncate" style={{ color: s.text, opacity: 0.72 }}>
               Obs: {noteText}

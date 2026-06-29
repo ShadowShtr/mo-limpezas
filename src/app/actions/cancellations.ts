@@ -1,5 +1,6 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { CANCEL_TYPE_LABELS } from "@/lib/cancel-types";
@@ -132,4 +133,81 @@ export async function cancelService(
 
   const sent = results.filter((r) => r.status === "fulfilled").length;
   return { ok: true, isLate, sent };
+}
+
+/**
+ * Exclui serviços do calendário (e da app das funcionárias). Diferente de
+ * cancelar: o serviço desaparece de tudo (não fica "cancelado").
+ * - scope "single": apaga só ESTA ocorrência.
+ * - scope "all": apaga TODAS as ocorrências da intervenção recorrente (passadas
+ *   e futuras) e arquiva a intervenção para não voltar a gerar. Num serviço
+ *   pontual, "all" é igual a "single".
+ */
+export async function deleteCalendarService(
+  serviceId: string,
+  scope: "single" | "all" = "single",
+): Promise<{ ok: true; deleted: number; recurring: boolean } | { ok: false; error: string }> {
+  const supabase = await createClient();
+  const admin = createAdminClient();
+
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { ok: false, error: "Não autenticado." };
+
+  const { data: profile } = await admin
+    .from("profiles").select("company_id, role").eq("id", user.id).single();
+  if (!profile || !["admin", "gestor"].includes(profile.role)) {
+    return { ok: false, error: "Sem permissão." };
+  }
+
+  const { data: svc } = await admin
+    .from("services")
+    .select("id, company_id, contract_id, scheduled_start, location_id")
+    .eq("id", serviceId)
+    .eq("company_id", profile.company_id)
+    .single();
+  if (!svc) return { ok: false, error: "Serviço não encontrado." };
+
+  let deleted = 0;
+  const recurring = !!svc.contract_id;
+
+  if (scope === "all" && svc.contract_id) {
+    // Apaga TODAS as ocorrências da intervenção e arquiva a recorrência.
+    const { data: del } = await admin
+      .from("services").delete()
+      .eq("company_id", profile.company_id)
+      .eq("contract_id", svc.contract_id)
+      .select("id");
+    deleted = del?.length ?? 0;
+    await admin.from("contracts")
+      .update({ status: "cancelado" })
+      .eq("id", svc.contract_id).eq("company_id", profile.company_id);
+  } else {
+    // Só esta ocorrência. Se for recorrente, marca a data como exceção no
+    // contrato (via ends_on não serve); simplesmente apaga a linha — o cron só
+    // gera o mês seguinte e a verificação de duplicados não recria o passado.
+    const { data: del } = await admin
+      .from("services").delete()
+      .eq("id", serviceId)
+      .eq("company_id", profile.company_id)
+      .select("id");
+    deleted = del?.length ?? 0;
+  }
+
+  await auditLog({
+    companyId: profile.company_id,
+    actorId: user.id,
+    action: "service.deleted_from_calendar",
+    entityType: "service",
+    entityId: serviceId,
+    meta: { recurring, deleted, scope, contract_id: svc.contract_id },
+    source: "dashboard",
+  }, admin);
+
+  const { data: loc } = await admin
+    .from("locations").select("client_id").eq("id", svc.location_id).maybeSingle();
+  revalidatePath("/dashboard/calendario");
+  revalidatePath("/dashboard");
+  if (loc?.client_id) revalidatePath(`/dashboard/clientes/${loc.client_id}`);
+
+  return { ok: true, deleted, recurring };
 }

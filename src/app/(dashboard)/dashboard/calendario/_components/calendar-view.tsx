@@ -23,6 +23,7 @@ import { DroppableColumn } from "./droppable-column";
 import { ServiceCreateSheet } from "./service-create-sheet";
 import { ServiceDetailSheet } from "./service-detail-sheet";
 import { TeamAllocationModal } from "./team-allocation-modal";
+import { MonthDatePicker } from "./month-date-picker";
 import { CalendarListView } from "./calendar-list-view";
 import { ClientNotificationsModal } from "./client-notifications-modal";
 import { rescheduleService, type ConflictInfo } from "../_actions/reschedule";
@@ -33,8 +34,9 @@ import type { Database } from "@/types/database";
 const START_HOUR    = 7;
 const END_HOUR      = 18;
 const TOTAL_HOURS   = END_HOUR - START_HOUR;
-const MIN_SLOT_HEIGHT = 28; // altura mínima legível; cresce para preencher a área visível
-const SLOTS_PER_HOUR = 2;
+const MIN_SLOT_HEIGHT = 26; // altura mínima por slot de 15 min (espaço p/ etiquetas não colarem)
+const SLOTS_PER_HOUR = 4;   // divisões de 15 em 15 minutos
+const SLOT_MIN      = 60 / SLOTS_PER_HOUR; // minutos por slot
 const TOTAL_SLOTS   = TOTAL_HOURS * SLOTS_PER_HOUR;
 const GUTTER_W      = 56;
 const HEADER_H      = 44;
@@ -42,7 +44,7 @@ const HEADER_H      = 44;
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 
 type ServiceFull = Database["public"]["Views"]["services_full"]["Row"];
-type Team   = { id: string; name: string; color: string };
+type Team   = { id: string; name: string; color: string; member_count?: number };
 type Client = { id: string; name: string };
 type Loc    = { id: string; client_id: string; name: string; address: string; hourly_rate: number | null };
 
@@ -112,12 +114,51 @@ function toBlock(s: ServiceCalendar): ServiceForBlock {
 
 function svcTopPx(svc: ServiceForBlock, startHour: number, slotH: number): number {
   const start = parseISO(svc.scheduled_start);
-  return ((start.getHours() * 60 + start.getMinutes() - startHour * 60) / 30) * slotH;
+  return ((start.getHours() * 60 + start.getMinutes() - startHour * 60) / SLOT_MIN) * slotH;
 }
 
 function svcBottomPx(svc: ServiceForBlock, startHour: number, slotH: number): number {
   const end = parseISO(svc.scheduled_end);
-  return ((end.getHours() * 60 + end.getMinutes() - startHour * 60) / 30) * slotH;
+  return ((end.getHours() * 60 + end.getMinutes() - startHour * 60) / SLOT_MIN) * slotH;
+}
+
+/**
+ * Atribui sub-colunas (lanes) a serviços que se sobrepõem no tempo dentro da
+ * mesma coluna de equipa, para ficarem lado a lado em vez de empilhados.
+ * Devolve um Map id → { lane, lanes }.
+ */
+function computeLanes(items: ServiceForBlock[]): Map<string, { lane: number; lanes: number }> {
+  const map = new Map<string, { lane: number; lanes: number }>();
+  const ms = (iso: string) => new Date(iso).getTime();
+  const sorted = [...items].sort((a, b) => ms(a.scheduled_start) - ms(b.scheduled_start));
+
+  let i = 0;
+  while (i < sorted.length) {
+    // Junta um grupo de serviços que se sobrepõem em cadeia
+    let clusterEnd = ms(sorted[i].scheduled_end);
+    const cluster = [sorted[i]];
+    let j = i + 1;
+    while (j < sorted.length && ms(sorted[j].scheduled_start) < clusterEnd) {
+      cluster.push(sorted[j]);
+      clusterEnd = Math.max(clusterEnd, ms(sorted[j].scheduled_end));
+      j++;
+    }
+    // Atribui lanes de forma greedy dentro do grupo
+    const laneEnds: number[] = [];
+    for (const it of cluster) {
+      let placed = -1;
+      for (let L = 0; L < laneEnds.length; L++) {
+        if (ms(it.scheduled_start) >= laneEnds[L]) { placed = L; break; }
+      }
+      if (placed === -1) { placed = laneEnds.length; laneEnds.push(0); }
+      laneEnds[placed] = ms(it.scheduled_end);
+      map.set(it.id, { lane: placed, lanes: 1 });
+    }
+    const lanes = laneEnds.length;
+    for (const it of cluster) map.get(it.id)!.lanes = lanes;
+    i = j;
+  }
+  return map;
 }
 
 function computeTimeTop(date: Date, slotH: number): number | null {
@@ -125,12 +166,12 @@ function computeTimeTop(date: Date, slotH: number): number | null {
   const now = new Date();
   const nowMin = now.getHours() * 60 + now.getMinutes();
   if (nowMin < START_HOUR * 60 || nowMin > END_HOUR * 60) return null;
-  return ((nowMin - START_HOUR * 60) / 30) * slotH;
+  return ((nowMin - START_HOUR * 60) / SLOT_MIN) * slotH;
 }
 
 function yToTime(y: number, slotH: number): string {
   const slot = Math.max(0, Math.min(Math.floor(y / slotH), TOTAL_SLOTS - 1));
-  const totalMin = START_HOUR * 60 + slot * 30;
+  const totalMin = START_HOUR * 60 + slot * SLOT_MIN;
   const h = Math.floor(totalMin / 60);
   const m = totalMin % 60;
   return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
@@ -150,14 +191,41 @@ function GridLines({ totalHours, slotsPerHour, slotHeight }: {
           style={{ top: `${i * slotsPerHour * slotHeight}px` }}
         />
       ))}
-      {Array.from({ length: totalHours }, (_, i) => (
-        <div
-          key={`hh-${i}`}
-          className="absolute left-0 right-0 pointer-events-none"
-          style={{ top: `${(i * slotsPerHour + 1) * slotHeight}px`, borderTop: "1px dashed var(--color-border)", opacity: 0.4 }}
-        />
-      ))}
+      {Array.from({ length: totalHours * slotsPerHour }, (_, s) => {
+        const sub = s % slotsPerHour;
+        if (sub === 0) return null; // a linha cheia da hora já é desenhada acima
+        const isHalf = sub * 2 === slotsPerHour; // marca dos 30 min mais visível
+        return (
+          <div
+            key={`q-${s}`}
+            className="absolute left-0 right-0 border-t border-[var(--color-border)] pointer-events-none"
+            style={{ top: `${s * slotHeight}px`, opacity: isHalf ? 0.7 : 0.45 }}
+          />
+        );
+      })}
     </>
+  );
+}
+
+/**
+ * Células clicáveis de 15 min. Apenas afordância visual (hover + "+"); o clique
+ * borbulha para a coluna, que calcula a hora pela posição vertical.
+ */
+function SlotCells({ slotHeight, totalSlots }: { slotHeight: number; totalSlots: number }) {
+  return (
+    <div className="absolute inset-0 z-0">
+      {Array.from({ length: totalSlots }, (_, s) => (
+        <div
+          key={s}
+          className="absolute left-0 right-0 group hover:bg-[var(--color-primary)]/[0.06] transition-colors"
+          style={{ top: `${s * slotHeight}px`, height: `${slotHeight}px` }}
+        >
+          <span className="hidden group-hover:flex absolute inset-0 items-center justify-center text-[var(--color-primary)] text-xs font-semibold pointer-events-none">
+            +
+          </span>
+        </div>
+      ))}
+    </div>
   );
 }
 
@@ -254,7 +322,9 @@ export function CalendarView({
     if (!el) return;
     const fit = () => {
       const avail = el.clientHeight - HEADER_H;
-      const next = Math.max(MIN_SLOT_HEIGHT, Math.floor(avail / TOTAL_SLOTS));
+      // +2px por slot → a grelha fica um pouco maior que a área visível, dando
+      // uma rolagem moderada (meia "bolinha" para cima e para baixo).
+      const next = Math.max(MIN_SLOT_HEIGHT, Math.floor(avail / TOTAL_SLOTS) + 2);
       setSlotH((prev) => (prev === next ? prev : next));
     };
     fit();
@@ -290,8 +360,9 @@ export function CalendarView({
     teams.forEach((t) => { map[t.id] = []; });
     map["__sem__"] = [];
     dayServices.forEach((s) => {
-      const key = s.team_id ?? "__sem__";
-      if (!map[key]) map[key] = [];
+      // Se a equipa do serviço não tiver coluna (equipa inativa/apagada),
+      // encaminha para "Sem equipa" para o serviço nunca desaparecer do calendário.
+      const key = s.team_id && map[s.team_id] ? s.team_id : "__sem__";
       map[key].push(toBlock(s));
     });
     Object.keys(map).forEach((k) => map[k].sort((a, b) => a.scheduled_start.localeCompare(b.scheduled_start)));
@@ -386,18 +457,46 @@ export function CalendarView({
     const newTeamId  = over.id === "__sem__" ? null : (over.id as string);
     const origTeamId = fromColKey === "__sem__" ? null : fromColKey;
 
-    // Drag apenas muda equipa — horário nunca é alterado por drag
-    if (newTeamId === origTeamId) return;
+    // ── Horário: deslocamento vertical → passos de 30 min ──────────────────────
+    const pad = (n: number) => String(n).padStart(2, "0");
+    const buildTime = (dayStr: string, mins: number) =>
+      `${dayStr}T${pad(Math.floor(mins / 60))}:${pad(mins % 60)}:00`;
 
-    const newStart = service.scheduled_start;
-    const newEnd   = service.scheduled_end;
+    const startD = parseISO(service.scheduled_start);
+    const endD   = parseISO(service.scheduled_end);
+    const dayStr = format(startD, "yyyy-MM-dd");
+    const origStartMin = startD.getHours() * 60 + startD.getMinutes();
+    const durMin = (endD.getHours() * 60 + endD.getMinutes()) - origStartMin;
+
+    // Cada slot = 15 min; arredonda o arrasto vertical ao slot mais próximo
+    const slotsMoved = slotH > 0 ? Math.round(event.delta.y / slotH) : 0;
+    let newStartMin = origStartMin + slotsMoved * SLOT_MIN;
+    // Mantém dentro do horário de trabalho (e o fim não passa do limite)
+    newStartMin = Math.max(START_HOUR * 60, Math.min(newStartMin, END_HOUR * 60 - durMin));
+
+    const newStart = buildTime(dayStr, newStartMin);
+    const newEnd   = buildTime(dayStr, newStartMin + durMin);
+
+    const teamChanged = newTeamId !== origTeamId;
+    const timeChanged = newStartMin !== origStartMin;
+
+    // Sem mudança de equipa nem de horário → nada a fazer
+    if (!teamChanged && !timeChanged) return;
+
     const previous   = localServices;
     const targetTeam = teams.find((t) => t.id === newTeamId);
 
-    // Atualização otimista
+    // Atualização otimista (equipa + horário)
     setLocalServices((curr) => curr.map((s) =>
       s.id === service.id
-        ? { ...s, team_id: newTeamId, team_name: targetTeam?.name ?? null, team_color: targetTeam?.color ?? null }
+        ? {
+            ...s,
+            team_id: newTeamId,
+            team_name: targetTeam?.name ?? (teamChanged ? null : s.team_name),
+            team_color: targetTeam?.color ?? (teamChanged ? null : s.team_color),
+            scheduled_start: newStart,
+            scheduled_end: newEnd,
+          }
         : s,
     ));
 
@@ -425,8 +524,14 @@ export function CalendarView({
 
     if (result.conflicts.length > 0) {
       setConflictMsg(`Conflito registado (#${result.conflicts.map((c) => c.reference_number).join(", #")}).`);
+    } else if (teamChanged) {
+      setConflictMsg(
+        timeChanged
+          ? `Serviço movido para ${targetTeam?.name ?? "outra equipa"} às ${buildTime(dayStr, newStartMin).slice(11, 16)}.`
+          : `Serviço atribuído a ${targetTeam?.name ?? "outra equipa"}.`,
+      );
     } else {
-      setConflictMsg(`Serviço atribuído a ${targetTeam?.name ?? "outra equipa"}.`);
+      setConflictMsg(`Serviço movido para as ${buildTime(dayStr, newStartMin).slice(11, 16)}.`);
     }
   }
 
@@ -477,10 +582,13 @@ export function CalendarView({
             Hoje
           </button>
 
+          <MonthDatePicker
+            selectedDate={selectedDate}
+            today={today}
+            onSelect={(d) => router.push(`/dashboard/calendario?date=${format(d, "yyyy-MM-dd")}`)}
+          />
+
           <div className="ml-auto flex items-center gap-2">
-            <span className="text-sm font-medium text-[var(--color-text-main)] hidden sm:block">
-              {format(selectedDate, "EEEE, d 'de' MMMM yyyy", { locale: pt })}
-            </span>
             <span className="text-xs text-[var(--color-text-muted)] hidden md:block mr-1">{weekRange}</span>
 
             <div className="flex rounded-lg border border-[var(--color-border)] overflow-hidden">
@@ -646,17 +754,22 @@ export function CalendarView({
                 {/* ── Corpo da grelha ────────────────────────────────────────── */}
                 <div className="flex" style={{ height: `${TOTAL_SLOTS * slotH}px` }}>
 
-                  {/* Coluna de horas */}
+                  {/* Coluna de horas — marcas de 15 em 15 min */}
                   <div className="shrink-0 sticky left-0 z-20 border-r border-[var(--color-border)] relative bg-white"
                     style={{ width: `${GUTTER_W}px` }}>
-                    {Array.from({ length: TOTAL_HOURS + 1 }, (_, i) => {
-                      const hour = START_HOUR + i;
-                      const transform = i === 0 ? "translateY(2px)" : i === TOTAL_HOURS ? "translateY(-100%)" : "translateY(-50%)";
+                    {Array.from({ length: TOTAL_SLOTS + 1 }, (_, s) => {
+                      const totalMin = (START_HOUR * 60) + s * SLOT_MIN;
+                      const hh = Math.floor(totalMin / 60);
+                      const mm = totalMin % 60;
+                      const isHour = mm === 0;
+                      // 1ª etiqueta alinha ao topo, última ao fundo; as restantes centradas na linha.
+                      const transform = s === 0 ? "translateY(0)" : s === TOTAL_SLOTS ? "translateY(-100%)" : "translateY(-50%)";
                       return (
-                        <div key={hour} className="absolute right-2 select-none"
-                          style={{ top: `${i * SLOTS_PER_HOUR * slotH}px`, transform }}>
-                          <span className="text-[11px] text-[var(--color-text-muted)] font-medium">
-                            {String(hour).padStart(2, "0")}:00
+                        <div key={s} className="absolute right-2 select-none" style={{ top: `${s * slotH}px`, transform }}>
+                          <span className={isHour
+                            ? "text-[10px] text-[var(--color-text-main)] font-semibold tabular-nums"
+                            : "text-[10px] text-[var(--color-text-muted)] tabular-nums"}>
+                            {String(hh).padStart(2, "0")}:{String(mm).padStart(2, "0")}
                           </span>
                         </div>
                       );
@@ -664,7 +777,10 @@ export function CalendarView({
                   </div>
 
                   {/* Colunas das equipas visíveis */}
-                  {visibleColumns.length > 0 ? visibleColumns.map((col) => (
+                  {visibleColumns.length > 0 ? visibleColumns.map((col) => {
+                    const colServices = byTeam[col.id] ?? [];
+                    const laneMap = computeLanes(colServices);
+                    return (
                     <DroppableColumn
                       key={col.key}
                       id={col.key}
@@ -673,11 +789,14 @@ export function CalendarView({
                       onClick={(e) => handleColumnClick(col.key, e)}
                     >
                       <GridLines totalHours={TOTAL_HOURS} slotsPerHour={SLOTS_PER_HOUR} slotHeight={slotH} />
+                      <SlotCells slotHeight={slotH} totalSlots={TOTAL_SLOTS} />
                       {isToday && currentTop !== null && <CurrentTimeLine top={currentTop} />}
 
-                      {(byTeam[col.id] ?? []).map((svc, idx, arr) => {
+                      {colServices.map((svc, idx, arr) => {
+                        const { lane = 0, lanes = 1 } = laneMap.get(svc.id) ?? {};
                         const next = arr[idx + 1];
-                        const showTravel = next != null
+                        // Só mostra tempo de viagem entre serviços em sequência (não sobrepostos)
+                        const showTravel = lanes === 1 && next != null
                           && svc.location_lat != null && svc.location_lng != null
                           && next.location_lat != null && next.location_lng != null;
                         const travelMin  = showTravel
@@ -695,6 +814,8 @@ export function CalendarView({
                               slotHeight={slotH}
                               startHour={START_HOUR}
                               stopIndex={arr.length > 1 ? idx + 1 : undefined}
+                              lane={lane}
+                              lanes={lanes}
                               onClick={(b) => { setDetailEdit(false); setDetailSvc(localServices.find((s) => s.id === b.id) ?? null); }}
                               onEdit={(b) => { setDetailEdit(true); setDetailSvc(localServices.find((s) => s.id === b.id) ?? null); }}
                             />
@@ -712,7 +833,8 @@ export function CalendarView({
                         );
                       })}
                     </DroppableColumn>
-                  )) : (
+                    );
+                  }) : (
                     /* Grelha vazia quando todas as equipas estão ocultas */
                     <div className="flex-1 relative border-l border-[var(--color-border)]"
                       style={{ height: `${TOTAL_SLOTS * slotH}px` }}>
