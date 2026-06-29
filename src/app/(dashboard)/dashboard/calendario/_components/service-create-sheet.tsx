@@ -5,6 +5,7 @@ import { X, Loader2, ChevronDown, Plus, UserPlus, Building2, User, MapPin, Alert
 import { format, parseISO } from "date-fns";
 import { pt } from "date-fns/locale";
 import { createService } from "../_actions/create-service";
+import { getCompanySettings } from "@/app/actions/settings";
 import { createClient } from "@/lib/supabase/client";
 import type { ConflictInfo } from "../_actions/reschedule";
 import { createClienteComLocal } from "@/app/actions/clientes";
@@ -106,12 +107,24 @@ export function ServiceCreateSheet({
   const [clientId, setClientId] = useState(fixedClientId ?? "");
   const [locationId, setLocationId] = useState(fixedLocationId ?? "");
   const [teamId, setTeamId] = useState(initialTeamId);
+  // IVA: taxa da empresa + interruptor para mostrar o total com IVA na estimativa.
+  const [vatRate, setVatRate] = useState(23);
+  const [withVat, setWithVat] = useState(false);
   // Data do serviço (editável). Sincroniza quando o popup é reaberto noutra célula.
   const [serviceDate, setServiceDate] = useState(date);
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setServiceDate(date);
   }, [date]);
+  // Carrega a taxa de IVA da empresa ao abrir (para o total com IVA).
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    getCompanySettings()
+      .then((s) => { if (!cancelled && s?.vat_rate != null) setVatRate(s.vat_rate); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [open]);
   const [startTime, setStartTime] = useState(initialStartTime);
   const [endTime, setEndTime] = useState(addMinutes(initialStartTime, 120));
 
@@ -888,7 +901,7 @@ export function ServiceCreateSheet({
 
             {/* Previsão de valor */}
             {calculatedValue != null && (
-              <div className="p-3 rounded-lg bg-[var(--color-primary-light)] border border-[var(--color-primary-muted)]">
+              <div className="p-3 rounded-lg bg-[var(--color-primary-light)] border border-[var(--color-primary-muted)] space-y-2">
                 <p className="text-xs text-[var(--color-primary)] font-medium">
                   Duração: {Math.floor(durationMin / 60)}h{durationMin % 60 > 0 ? `${durationMin % 60}min` : ""} ·{" "}
                   Valor estimado: <strong>€{calculatedValue.toFixed(2)}</strong>
@@ -896,6 +909,25 @@ export function ServiceCreateSheet({
                     <span className="font-normal opacity-80"> ({effectiveRate}€/h × {numPeople} pessoa{numPeople !== 1 ? "s" : ""})</span>
                   )}
                 </p>
+
+                {/* Interruptor: mostrar total com IVA */}
+                <label className="flex items-center gap-2.5 cursor-pointer">
+                  <button
+                    type="button"
+                    onClick={() => setWithVat((v) => !v)}
+                    className={`relative w-10 h-5 rounded-full transition-colors shrink-0 ${withVat ? "bg-[var(--color-primary)]" : "bg-[var(--color-border)]"}`}
+                  >
+                    <span className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-all ${withVat ? "left-[22px]" : "left-0.5"}`} />
+                  </button>
+                  <span className="text-xs font-medium text-[var(--color-text-main)]">Adicionar IVA ({vatRate}%)</span>
+                </label>
+
+                {withVat && (
+                  <p className="text-sm text-[var(--color-primary)] font-semibold">
+                    Total com IVA: €{(calculatedValue * (1 + vatRate / 100)).toFixed(2)}
+                    <span className="font-normal text-xs opacity-80"> (IVA: €{(calculatedValue * vatRate / 100).toFixed(2)})</span>
+                  </p>
+                )}
               </div>
             )}
 
