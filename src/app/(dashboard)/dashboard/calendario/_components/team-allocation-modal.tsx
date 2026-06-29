@@ -13,7 +13,6 @@ import {
   getAllocationsForDate,
   upsertAllocation,
   removeAllocation,
-  getDayTeamAssignmentsForDate,
   moveCollaboratorToTeam,
   type VehicleAllocation,
 } from "@/app/actions/vehicles";
@@ -262,12 +261,9 @@ export function TeamAllocationModal({
     setAbsent(absentProfiles);
     setVehicles((vehiclesData ?? []) as VehicleOption[]);
 
-    // Carregar alocações + reatribuições existentes para o dia
+    // Carregar alocações de viatura para o dia.
     try {
-      const [existingAllocations, dayTeams] = await Promise.all([
-        getAllocationsForDate(dateStr),
-        getDayTeamAssignmentsForDate(dateStr),
-      ]);
+      const existingAllocations = await getAllocationsForDate(dateStr);
       const map: Record<string, TeamAllocation> = {};
       for (const alloc of existingAllocations as VehicleAllocation[]) {
         map[alloc.team_id] = {
@@ -277,9 +273,10 @@ export function TeamAllocationModal({
       }
       setAllocationMap(map);
 
-      const ov: Record<string, string> = {};
-      for (const r of dayTeams) ov[r.collaborator_id] = r.team_id;
-      setOverrideMap(ov);
+      // As reatribuições de equipa passaram a ser PERMANENTES (escritas em
+      // team_members), por isso já não se usam overrides diários: a composição
+      // vem toda de team_members (allocated). Mantém o mapa vazio.
+      setOverrideMap({});
     } catch {
       // não bloquear se falhar
     }
@@ -363,10 +360,11 @@ export function TeamAllocationModal({
       const targetName = allocated.find((t) => t.id === targetTeamId)?.name ?? "equipa";
       setMessage({
         type: res.notified ? "success" : "info",
-        text: isReset
-          ? `${name} voltou à sua equipa.${res.notified ? " Avisada no telemóvel." : " (sem telemóvel registado)"}`
-          : `${name} → ${targetName} (só hoje).${res.notified ? " Avisada no telemóvel." : " (sem telemóvel registado)"}`,
+        text: `${name} → ${targetName} (equipa permanente).${res.notified ? " Avisada no telemóvel." : ""}`,
       });
+      // Movimento permanente: recarrega a composição real das equipas (team_members)
+      // para refletir a mudança e limpar marcadores de override.
+      await fetchData();
     } catch {
       setOverrideMap(previous);
       setMessage({ type: "error", text: "Erro ao mover colaboradora." });
@@ -455,7 +453,7 @@ export function TeamAllocationModal({
                       Equipas ({allocated.length})
                     </h3>
                     <p className="text-[11px] text-[var(--color-text-muted)] mb-3">
-                      Arrasta uma colaboradora para outra equipa (só para este dia) — ela é avisada no telemóvel.
+                      Arrasta uma colaboradora para outra equipa — a mudança é permanente (afeta também a aba Equipas) e ela é avisada no telemóvel.
                     </p>
                     <div className="space-y-3">
                       {allocated.length === 0 && (

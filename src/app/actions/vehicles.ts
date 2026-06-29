@@ -250,31 +250,48 @@ export async function moveCollaboratorToTeam(input: {
       return { ok: false, error: "Colaboradora inválida." };
     }
 
-    const isReset = input.homeTeamId !== null && input.teamId === input.homeTeamId;
+    // Validar que a equipa de destino é da empresa.
+    const { data: targetTeam } = await admin
+      .from("teams")
+      .select("id")
+      .eq("id", input.teamId)
+      .eq("company_id", companyId)
+      .single();
+    if (!targetTeam) return { ok: false, error: "Equipa inválida." };
 
-    if (isReset) {
-      await admin
-        .from("collaborator_ride_assignments")
-        .delete()
-        .eq("company_id", companyId)
-        .eq("collaborator_id", input.collaboratorId)
-        .eq("date", input.date);
-    } else {
-      const { error } = await admin
-        .from("collaborator_ride_assignments")
-        .upsert(
-          {
-            company_id: companyId,
-            collaborator_id: input.collaboratorId,
-            team_id: input.teamId,
-            date: input.date,
-            assigned_by: user.id,
-          },
-          { onConflict: "collaborator_id,date" },
-        );
-      if (error) return { ok: false, error: error.message };
-    }
+    // Movimento PERMANENTE: atualiza a composição da equipa (team_members), para
+    // que a aba Equipas e o calendário fiquem sempre iguais.
+    // 1) Fecha qualquer pertença ativa noutras equipas.
+    await admin
+      .from("team_members")
+      .update({ left_at: input.date })
+      .eq("collaborator_id", input.collaboratorId)
+      .is("left_at", null)
+      .neq("team_id", input.teamId);
 
+    // 2) Ativa (ou cria) a pertença à equipa de destino.
+    const { error: upErr } = await admin
+      .from("team_members")
+      .upsert(
+        {
+          team_id: input.teamId,
+          collaborator_id: input.collaboratorId,
+          left_at: null,
+          joined_at: input.date,
+        },
+        { onConflict: "team_id,collaborator_id" },
+      );
+    if (upErr) return { ok: false, error: upErr.message };
+
+    // 3) Limpa reatribuições diárias antigas desta colaboradora (agora obsoletas:
+    //    a mudança passou a ser permanente).
+    await admin
+      .from("collaborator_ride_assignments")
+      .delete()
+      .eq("company_id", companyId)
+      .eq("collaborator_id", input.collaboratorId);
+
+    const isReset = false;
     const notified = await notifyDayTeam({
       admin,
       companyId,
