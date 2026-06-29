@@ -89,11 +89,30 @@ export default async function CalendarioPage({
 
   // Modo de demonstração: usar dados de exemplo quando não há equipas configuradas
   const isDemo = !teams || teams.length === 0;
+
+  // Nº de membros por equipa via contagem DIRETA em team_members (fonte fiável,
+  // a mesma do modal de alocação). Não depende da view teams_with_members, cujo
+  // array `members` chegou a vir vazio e fazia o nº de pessoas assumir 1.
+  const teamIds = (teams ?? []).map((t) => t.id as string);
+  const memberCountByTeam: Record<string, number> = {};
+  if (teamIds.length > 0) {
+    const { data: memberRows } = await admin
+      .from("team_members")
+      .select("team_id")
+      .in("team_id", teamIds)
+      .is("left_at", null);
+    for (const row of memberRows ?? []) {
+      const tid = row.team_id as string;
+      memberCountByTeam[tid] = (memberCountByTeam[tid] ?? 0) + 1;
+    }
+  }
+
   const teamsWithCount = (teams ?? []).map((t) => ({
     id: t.id as string,
     name: t.name as string,
     color: t.color as string,
-    member_count: Array.isArray(t.members) ? t.members.length : 0,
+    member_count: memberCountByTeam[t.id as string]
+      ?? (Array.isArray(t.members) ? t.members.length : 0),
   }));
   const sortedTeams = teamsWithCount.sort((a, b) =>
     a.name.localeCompare(b.name, "pt", { numeric: true, sensitivity: "base" })
