@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { auditLog } from "@/lib/audit";
+import { maxReferenceNumber } from "@/lib/services/reference";
 
 type ActionResult = { ok: true } | { ok: false; error: string };
 
@@ -93,32 +94,36 @@ export async function duplicatePointService(serviceId: string): Promise<ActionRe
     .eq("company_id", companyId)
     .single();
 
-  const { count } = await admin
-    .from("services")
-    .select("id", { count: "exact", head: true })
-    .eq("company_id", companyId);
-
   const originalStart = new Date(service.scheduled_start);
   const originalEnd = new Date(service.scheduled_end);
   originalStart.setDate(originalStart.getDate() + 7);
   originalEnd.setDate(originalEnd.getDate() + 7);
 
-  const { error } = await admin.from("services").insert({
-    company_id: companyId,
-    location_id: service.location_id,
-    team_id: service.team_id,
-    reference_number: String((count ?? 0) + 1).padStart(4, "0"),
-    scheduled_start: originalStart.toISOString(),
-    scheduled_end: originalEnd.toISOString(),
-    hourly_rate: service.hourly_rate,
-    calculated_value: service.calculated_value,
-    manual_value: service.manual_value,
-    notes: service.notes,
-    status: "agendado",
-    created_by: userId,
-  });
-
-  if (error) return { ok: false, error: error.message };
+  // Referência baseada no MÁXIMO existente (não count(*), que colide com buracos
+  // deixados por serviços apagados). Retenta em caso de corrida de unicidade.
+  const baseRef = await maxReferenceNumber(admin, companyId);
+  let inserted = false;
+  let lastErr = "";
+  for (let attempt = 0; attempt < 8; attempt++) {
+    const { error } = await admin.from("services").insert({
+      company_id: companyId,
+      location_id: service.location_id,
+      team_id: service.team_id,
+      reference_number: String(baseRef + 1 + attempt).padStart(4, "0"),
+      scheduled_start: originalStart.toISOString(),
+      scheduled_end: originalEnd.toISOString(),
+      hourly_rate: service.hourly_rate,
+      calculated_value: service.calculated_value,
+      manual_value: service.manual_value,
+      notes: service.notes,
+      status: "agendado",
+      created_by: userId,
+    });
+    if (!error) { inserted = true; break; }
+    if (error.code !== "23505") return { ok: false, error: error.message };
+    lastErr = error.message;
+  }
+  if (!inserted) return { ok: false, error: lastErr || "Não foi possível gerar um número de referência único." };
 
   await auditLog({
     companyId,

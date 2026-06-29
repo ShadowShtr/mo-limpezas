@@ -235,6 +235,10 @@ export function ContratoSheet({
   const [hourlyRate, setHourlyRate] = useState(
     source?.locations?.hourly_rate != null ? String(source.locations.hourly_rate) : "",
   );
+  // Valor fixo por serviço: quando preenchido, ignora o cálculo por hora.
+  const [fixedPrice, setFixedPrice] = useState(
+    source?.fixed_price != null ? String(source.fixed_price) : "",
+  );
   // schedule_days: chave = day key (ex: "mon"), valor = config.
   // num_people só é usado quando NÃO há equipa (preenchido à mão).
   const initSchedule = (): Record<string, CfgDay> => {
@@ -309,6 +313,8 @@ export function ContratoSheet({
   }, [frequency, selectedWeekdays]);
 
   const parsedHourlyRate = hourlyRate.trim() === "" ? null : Number(hourlyRate.replace(",", "."));
+  const parsedFixedPrice = fixedPrice.trim() === "" ? null : Number(fixedPrice.replace(",", "."));
+  const useFixedPrice = parsedFixedPrice != null && Number.isFinite(parsedFixedPrice) && parsedFixedPrice > 0;
 
   // Tamanho da equipa atribuída (membros ativos). 0 → 1 para o cálculo.
   const teamSize = (teamId: string) => {
@@ -330,7 +336,9 @@ export function ContratoSheet({
 
   // Valor = Σ por dia de (horas × valor/hora × nº de pessoas desse dia).
   // Cada colaboradora conta como uma hora: 12€/h com 3 pessoas = 36€/h.
-  const calculatedValue = parsedHourlyRate != null && Number.isFinite(parsedHourlyRate)
+  const calculatedValue = useFixedPrice
+    ? parsedFixedPrice
+    : parsedHourlyRate != null && Number.isFinite(parsedHourlyRate)
     ? daysToConfig.reduce((sum, { key }) => {
         const cfg = scheduleConfig[key] ?? DEFAULT_CFG;
         return sum + (Number(cfg.duration_min || 0) / 60) * parsedHourlyRate * peopleForDay(cfg);
@@ -415,6 +423,8 @@ export function ContratoSheet({
           ? Number(upholsteryUnitPrice.replace(",", ".")) : null,
         // Estofos por unidade: o total (qtd × preço) passa a ser o valor por ocorrência
         unit_value: upholsteryTotal != null && upholsteryTotal > 0 ? upholsteryTotal : null,
+        // Valor fixo por serviço: tem prioridade sobre o cálculo por hora.
+        fixed_price: useFixedPrice ? parsedFixedPrice : null,
       };
 
       const res = isEdit
@@ -689,8 +699,25 @@ export function ContratoSheet({
                   value={hourlyRate}
                   onChange={(e) => setHourlyRate(e.target.value)}
                   placeholder="ex: 18.50"
+                  disabled={useFixedPrice}
                   className={INPUT_CLS}
                 />
+              </Field>
+
+              {/* Valor fixo por serviço (alternativa ao valor/hora) */}
+              <Field label="Valor fixo por serviço (€)">
+                <input
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  value={fixedPrice}
+                  onChange={(e) => setFixedPrice(e.target.value)}
+                  placeholder="ex: 50.00 (deixa vazio para faturar por hora)"
+                  className={INPUT_CLS}
+                />
+                <p className="mt-1 text-xs text-[var(--color-text-muted)]">
+                  Se preencheres, cada serviço deste contrato vale este valor fixo (ignora o valor/hora).
+                </p>
               </Field>
 
               {/* Estado do contrato */}
@@ -821,7 +848,7 @@ export function ContratoSheet({
               <Field label="Valor calculado">
                 {(() => {
                   const useUnits = upholsteryTotal != null && upholsteryTotal > 0;
-                  const shown = useUnits ? upholsteryTotal : calculatedValue;
+                  const shown = useFixedPrice ? parsedFixedPrice : useUnits ? upholsteryTotal : calculatedValue;
                   return (
                     <>
                       <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-background)] px-3 py-2 text-sm font-semibold text-[var(--color-text-main)]">
@@ -830,7 +857,9 @@ export function ContratoSheet({
                           : `${shown.toLocaleString("pt-PT", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`}
                       </div>
                       <p className="mt-1 text-xs text-[var(--color-text-muted)]">
-                        {useUnits
+                        {useFixedPrice
+                          ? "valor fixo por serviço"
+                          : useUnits
                           ? `${upholsteryUnits || 0} unidade(s) x preço unitário`
                           : `${(totalDurationMin / 60).toLocaleString("pt-PT", { maximumFractionDigits: 2 })}h x valor/hora x ${summaryPeople} pessoa(s)`}
                       </p>

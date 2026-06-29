@@ -3,6 +3,7 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
+import { maxReferenceNumber } from "@/lib/services/reference";
 import type { ScheduleDay } from "@/types/database";
 
 export interface ContratoInput {
@@ -25,6 +26,8 @@ export interface ContratoInput {
   upholstery_unit_price?: number | null;
   // Estofos por unidade: valor fixo por ocorrência (qtd × preço); ignora cálculo por hora.
   unit_value?: number | null;
+  // Valor fixo por serviço (faturação fixa, não por hora). Tem prioridade.
+  fixed_price?: number | null;
   // Override do nº de pessoas que multiplica o valor/hora. null = usar o tamanho da equipa.
   num_people?: number | null;
   company_id: string;
@@ -188,9 +191,12 @@ async function generateServicesForContract(
     upholstery_units?: number | null;
     upholstery_unit_price?: number | null;
     unit_value?: number | null;
+    fixed_price?: number | null;
     num_people?: number | null;
   } = {},
 ) {
+  const fixedPrice = extras.fixed_price != null && extras.fixed_price > 0
+    ? parseFloat(extras.fixed_price.toFixed(2)) : null;
   // Tamanhos das equipas usadas no padrão (para o cálculo por pessoa).
   const teamSizes = await getTeamSizes(
     admin,
@@ -208,11 +214,9 @@ async function generateServicesForContract(
   const rangeStart = anchor;
   const rangeEnd = new Date(anchor.getFullYear(), anchor.getMonth() + 3, 0, 23, 59, 59);
 
-  const { count: existing } = await admin
-    .from("services")
-    .select("id", { count: "exact", head: true })
-    .eq("company_id", companyId);
-  let counter = existing ?? 0;
+  // Contador de referência baseado no MÁXIMO existente (não count(*), que colide
+  // com buracos deixados por serviços apagados/cancelados → erro de unicidade).
+  let counter = await maxReferenceNumber(admin, companyId);
 
   const occurrences = getOccurrences(contract, rangeStart, rangeEnd);
 
@@ -231,13 +235,17 @@ async function generateServicesForContract(
     const endTime = addMins(schedule.start_time, schedule.duration_min);
     // Nº de pessoas desta ocorrência: cada colaboradora conta como uma hora.
     const people = resolvePeople(schedule, teamSizes);
-    // Estofos por unidade: valor fixo por ocorrência tem prioridade sobre o cálculo por hora.
+    // Prioridade do valor: valor fixo do contrato > estofos por unidade > hora.
     const calculatedValue =
-      extras.unit_value != null && extras.unit_value > 0
+      fixedPrice != null
+        ? fixedPrice
+        : extras.unit_value != null && extras.unit_value > 0
         ? parseFloat(extras.unit_value.toFixed(2))
         : hourlyRate != null
         ? parseFloat(((schedule.duration_min / 60) * hourlyRate * people).toFixed(2))
         : null;
+    // Faturação fixa não usa valor/hora no serviço.
+    const rowHourlyRate = fixedPrice != null ? null : hourlyRate;
 
     // Insere com retry: reference_number tem constraint única (migration 031) e
     // o contador baseado em count pode colidir com refs já existentes (gaps).
@@ -250,7 +258,7 @@ async function generateServicesForContract(
       contract_id: contractId,
       scheduled_start: toLisbonTimestamp(dateStr, schedule.start_time),
       scheduled_end: toLisbonTimestamp(dateStr, endTime),
-      hourly_rate: hourlyRate,
+      hourly_rate: rowHourlyRate,
       calculated_value: calculatedValue,
       num_people: people,
       status: "agendado",
@@ -285,7 +293,9 @@ async function updateFutureServiceValuesForContract(
   companyId: string,
   hourlyRate: number | null,
   scheduleDays: ScheduleDay[],
+  fixedPrice: number | null = null,
 ) {
+  const fixed = fixedPrice != null && fixedPrice > 0 ? parseFloat(fixedPrice.toFixed(2)) : null;
   const { data: services } = await admin
     .from("services")
     .select("id, scheduled_start, team_id, is_exception")
@@ -315,7 +325,9 @@ async function updateFutureServiceValuesForContract(
     const endTime = addMins(schedule.start_time, schedule.duration_min);
     const people = resolvePeople(schedule, teamSizes);
     const calculatedValue =
-      hourlyRate != null
+      fixed != null
+        ? fixed
+        : hourlyRate != null
         ? parseFloat(((schedule.duration_min / 60) * hourlyRate * people).toFixed(2))
         : null;
 
@@ -325,7 +337,7 @@ async function updateFutureServiceValuesForContract(
         team_id: schedule.team_id || null,
         scheduled_start: toLisbonTimestamp(dateStr, schedule.start_time),
         scheduled_end: toLisbonTimestamp(dateStr, endTime),
-        hourly_rate: hourlyRate,
+        hourly_rate: fixed != null ? null : hourlyRate,
         calculated_value: calculatedValue,
         num_people: people,
       })
@@ -431,6 +443,7 @@ export async function createContrato(input: ContratoInput) {
       upholstery_notes: input.upholstery_notes ?? null,
       upholstery_units: input.upholstery_units ?? null,
       upholstery_unit_price: input.upholstery_unit_price ?? null,
+      fixed_price: input.fixed_price ?? null,
       num_people: input.num_people ?? null,
       company_id: profile.company_id,
       created_by: user.id,
@@ -466,6 +479,7 @@ export async function createContrato(input: ContratoInput) {
         upholstery_units: input.upholstery_units ?? null,
         upholstery_unit_price: input.upholstery_unit_price ?? null,
         unit_value: input.unit_value ?? null,
+        fixed_price: input.fixed_price ?? null,
         num_people: input.num_people ?? null,
       },
     );
@@ -523,6 +537,7 @@ export async function updateContrato(id: string, input: Omit<ContratoInput, "com
     upholstery_notes: input.upholstery_notes ?? null,
     upholstery_units: input.upholstery_units ?? null,
     upholstery_unit_price: input.upholstery_unit_price ?? null,
+    fixed_price: input.fixed_price ?? null,
     num_people: input.num_people ?? null,
   }).eq("id", id).eq("company_id", profile.company_id);
 
@@ -550,6 +565,7 @@ export async function updateContrato(id: string, input: Omit<ContratoInput, "com
     profile.company_id,
     input.hourly_rate ?? null,
     input.schedule_days,
+    input.fixed_price ?? null,
   );
 
   // Preenche ocorrências em falta dentro da janela (6 meses). É aditivo:
@@ -578,6 +594,7 @@ export async function updateContrato(id: string, input: Omit<ContratoInput, "com
         upholstery_units: input.upholstery_units ?? null,
         upholstery_unit_price: input.upholstery_unit_price ?? null,
         unit_value: input.unit_value ?? null,
+        fixed_price: input.fixed_price ?? null,
         num_people: input.num_people ?? null,
       },
     );

@@ -4,6 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { ensureLisbonOffset } from "@/lib/lisbon-time";
+import { getTeamSize, maxReferenceNumber } from "@/lib/services/reference";
 import type { ConflictInfo } from "./reschedule";
 
 export interface CreateServiceInput {
@@ -69,15 +70,27 @@ export async function createService(
     }
   }
 
-  // Gerar reference_number server-side para evitar race condition.
-  // Retenta até 5 vezes em caso de conflito de unicidade (migrations/031).
+  // Nº de pessoas autoritativo no servidor: com equipa = tamanho real da equipa
+  // (cada colaboradora ativa conta), senão o valor enviado (mín. 1).
+  const numPeople = input.teamId
+    ? await getTeamSize(admin, input.teamId)
+    : (input.numPeople != null && input.numPeople >= 1 ? Math.floor(input.numPeople) : 1);
+
+  // Recalcula o valor com base no nº de pessoas real, se houver valor/hora.
+  let calculatedValue = input.calculatedValue;
+  if (input.hourlyRate != null) {
+    const durationMin = (new Date(scheduledEnd).getTime() - new Date(scheduledStart).getTime()) / 60000;
+    if (durationMin > 0) {
+      calculatedValue = parseFloat(((durationMin / 60) * input.hourlyRate * numPeople).toFixed(2));
+    }
+  }
+
+  // Gerar reference_number server-side baseado no MÁXIMO existente (não count(*),
+  // que colide quando há serviços apagados). Retenta em caso de corrida (031).
   let data: { id: string } | null = null;
-  for (let attempt = 0; attempt < 5; attempt++) {
-    const { count } = await admin
-      .from("services")
-      .select("id", { count: "exact", head: true })
-      .eq("company_id", profile.company_id);
-    const ref = String((count ?? 0) + 1 + attempt).padStart(4, "0");
+  const baseRef = await maxReferenceNumber(admin, profile.company_id);
+  for (let attempt = 0; attempt < 8; attempt++) {
+    const ref = String(baseRef + 1 + attempt).padStart(4, "0");
 
     const res = await admin
       .from("services")
@@ -90,8 +103,8 @@ export async function createService(
         scheduled_end: scheduledEnd,
         status: "agendado",
         hourly_rate: input.hourlyRate,
-        calculated_value: input.calculatedValue,
-        num_people: input.numPeople != null && input.numPeople >= 1 ? Math.floor(input.numPeople) : 1,
+        calculated_value: calculatedValue,
+        num_people: numPeople,
         notes: input.notes,
         cleaning_type: input.cleaningType ?? null,
         payment_status: input.paymentStatus ?? null,

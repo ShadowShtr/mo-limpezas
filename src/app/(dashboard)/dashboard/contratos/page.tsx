@@ -27,7 +27,7 @@ export default async function ContratosPage() {
           id, name, frequency, interval_days, weekdays, schedule_days,
           starts_on, ends_on, status, notes, created_at,
           cleaning_type, payment_status, upholstery_type, upholstery_notes,
-          upholstery_units, upholstery_unit_price, num_people,
+          upholstery_units, upholstery_unit_price, fixed_price, num_people,
           locations ( id, name, address, hourly_rate, clients ( id, name ) )
         `)
         .eq("company_id", companyId)
@@ -111,6 +111,7 @@ export type ContratosTableRow = {
   upholstery_notes: string | null;
   upholstery_units: number | null;
   upholstery_unit_price: number | null;
+  fixed_price: number | null;
   num_people: number | null;
   created_at: string;
   locations: {

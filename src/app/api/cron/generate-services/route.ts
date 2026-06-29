@@ -24,6 +24,7 @@ interface ContractRow {
   starts_on: string;
   ends_on: string | null;
   num_people: number | null;
+  fixed_price: number | null;
   locations: { hourly_rate: number | null } | null;
 }
 
@@ -213,7 +214,7 @@ export async function GET(req: NextRequest) {
   const { data: contracts, error: contractsError } = await supabase
     .from("contracts")
     .select(
-      "id, company_id, location_id, frequency, weekdays, interval_days, schedule_days, starts_on, ends_on, num_people, locations(hourly_rate)",
+      "id, company_id, location_id, frequency, weekdays, interval_days, schedule_days, starts_on, ends_on, num_people, fixed_price, locations(hourly_rate)",
     )
     .eq("status", "ativo")
     .lte("starts_on", monthEndStr)
@@ -310,9 +311,18 @@ export async function GET(req: NextRequest) {
     // Garantir contador de referência para cada empresa presente no lote.
     for (const c of batch) {
       if (!(c.company_id in companyCounts)) {
-        const { count } = await supabase
-          .from("services").select("id", { count: "exact", head: true }).eq("company_id", c.company_id);
-        companyCounts[c.company_id] = count ?? 0;
+        // Baseia o contador no MÁXIMO de referência existente (não count(*), que
+        // colide com buracos deixados por serviços apagados/cancelados).
+        const { data: recent } = await supabase
+          .from("services").select("reference_number")
+          .eq("company_id", c.company_id)
+          .order("created_at", { ascending: false }).limit(500);
+        let maxRef = 0;
+        for (const r of recent ?? []) {
+          const n = parseInt(r.reference_number as string, 10);
+          if (Number.isFinite(n) && n > maxRef) maxRef = n;
+        }
+        companyCounts[c.company_id] = maxRef;
       }
     }
 
@@ -334,13 +344,18 @@ export async function GET(req: NextRequest) {
         const endTime = addMinutesToTime(schedule.start_time, schedule.duration_min);
         companyCounts[contract.company_id]++;
         const ref = String(companyCounts[contract.company_id]).padStart(4, "0");
+        const fixedPrice = contract.fixed_price != null && contract.fixed_price > 0
+          ? parseFloat(contract.fixed_price.toFixed(2)) : null;
         const hourlyRate = contract.locations?.hourly_rate ?? null;
         // Nº de pessoas: com equipa → tamanho da equipa; sem equipa → num_people do dia.
         const people = schedule.team_id
           ? await getTeamSize(schedule.team_id)
           : (schedule.num_people != null && schedule.num_people >= 1 ? Math.floor(schedule.num_people) : 1);
+        // Valor fixo do contrato tem prioridade sobre o cálculo por hora.
         const calculatedValue =
-          hourlyRate != null
+          fixedPrice != null
+            ? fixedPrice
+            : hourlyRate != null
             ? parseFloat(((schedule.duration_min / 60) * hourlyRate * people).toFixed(2))
             : null;
 
@@ -352,7 +367,7 @@ export async function GET(req: NextRequest) {
           reference_number: ref,
           scheduled_start: toLisbonTimestamp(dateStr, schedule.start_time),
           scheduled_end: toLisbonTimestamp(dateStr, endTime),
-          hourly_rate: hourlyRate,
+          hourly_rate: fixedPrice != null ? null : hourlyRate,
           calculated_value: calculatedValue,
           num_people: people,
           status: "agendado",

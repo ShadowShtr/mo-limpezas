@@ -64,7 +64,10 @@ export default async function CalendarioPage({
       .gte("scheduled_start", weekStart.toISOString())
       .lt("scheduled_start", weekEndExclusive.toISOString())
       .order("scheduled_start"),
-    supabase
+    // Via `admin`: o RLS sobre team_members filtra os membros quando lido pela
+    // sessão autenticada, devolvendo `members` vazio → member_count caía para 0
+    // e o nº de pessoas assumia sempre 1. Com admin o tamanho da equipa é real.
+    admin
       .from("teams_with_members")
       .select("id, name, color, members")
       .eq("company_id", companyId)
