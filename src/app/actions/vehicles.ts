@@ -301,6 +301,11 @@ export async function moveCollaboratorToTeam(input: {
       isReset,
     });
 
+    // Mudança permanente em team_members → refrescar as telas que dependem da
+    // composição das equipas (aba Equipas, calendário e geração de serviços).
+    revalidatePath("/dashboard/equipas");
+    revalidatePath("/dashboard/calendario");
+
     return { ok: true, notified };
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Erro interno desconhecido";
