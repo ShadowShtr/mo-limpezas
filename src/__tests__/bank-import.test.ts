@@ -71,6 +71,32 @@ describe("fingerprint", () => {
   it("difere quando o valor muda", () => {
     expect(transactionFingerprint(base)).not.toBe(transactionFingerprint({ ...base, amount: 101 }));
   });
+  it("movimentos idênticos com índices diferentes não colidem", () => {
+    expect(transactionFingerprint(base, 0)).not.toBe(transactionFingerprint(base, 1));
+  });
+  it("usa o saldo da linha para distinguir (ignora o índice)", () => {
+    const a = { ...base, raw_data: { Saldo: "1.000,00" } };
+    const b = { ...base, raw_data: { Saldo: "991,00" } };
+    expect(transactionFingerprint(a, 0)).not.toBe(transactionFingerprint(b, 0));
+    // com o mesmo saldo, o índice é ignorado → mesmo fingerprint (reimportação)
+    expect(transactionFingerprint(a, 0)).toBe(transactionFingerprint(a, 5));
+  });
+});
+
+describe("index · withFingerprints (via parseStatement não, direto)", () => {
+  it("8 movimentos legítimos iguais ficam com 8 fingerprints distintos", async () => {
+    const { parseStatement } = await import("@/lib/bank-import");
+    const lines = ["Data;Descrição;Valor"];
+    for (let i = 0; i < 8; i++) lines.push("09/06/2026;Pagamento Brisa S.A.;9,00");
+    const buf = Buffer.from(lines.join("\n"), "utf-8");
+    const res = await parseStatement("csv", buf);
+    expect(res.ok).toBe(true);
+    if (res.ok) {
+      const fps = new Set(res.transactions.map((t) => t.fingerprint));
+      expect(res.transactions.length).toBe(8);
+      expect(fps.size).toBe(8); // nenhum colide → nenhum falso duplicado
+    }
+  });
 });
 
 describe("matching · scoreMatch", () => {

@@ -21,7 +21,22 @@ export type ParseStatementResult =
 const MAX_TEXT_BYTES = 25 * 1024 * 1024; // proteção contra ficheiros texto gigantes
 
 function withFingerprints(txs: NormalizedTransaction[]): ParsedTransaction[] {
-  return txs.map((t) => ({ ...t, fingerprint: transactionFingerprint(t) }));
+  // Conta ocorrências de movimentos idênticos para lhes dar um índice estável.
+  // Sem isto, vários movimentos legítimos iguais (mesma data/valor/descrição)
+  // colidiriam no mesmo fingerprint e seriam marcados como duplicados.
+  const counts = new Map<string, number>();
+  return txs.map((t) => {
+    const baseKey = [
+      t.transaction_date,
+      t.amount.toFixed(2),
+      t.direction,
+      t.description.toLowerCase().trim(),
+      (t.reference ?? "").toLowerCase().trim(),
+    ].join("|");
+    const idx = counts.get(baseKey) ?? 0;
+    counts.set(baseKey, idx + 1);
+    return { ...t, fingerprint: transactionFingerprint(t, idx) };
+  });
 }
 
 export async function parseStatement(

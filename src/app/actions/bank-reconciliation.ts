@@ -460,6 +460,43 @@ export async function createEntryFromTransaction(bankTransactionId: string, opts
   return { ok: true };
 }
 
+/**
+ * Apaga uma importação e, em cascata, os seus movimentos e sugestões.
+ * NÃO apaga lançamentos financeiros (cash_flow_entries) criados a partir dela.
+ * Útil para limpar uma importação errada e reimportar.
+ */
+export async function deleteImport(importId: string): Promise<{ ok: boolean; error?: string }> {
+  const guard = await requireProfile({ roles: ["admin", "gestor"] });
+  if (!guard.ok) return { ok: false, error: guard.error };
+  const { admin } = guard;
+  const companyId = guard.profile.company_id;
+
+  const { data: imp } = await admin
+    .from("bank_statement_imports")
+    .select("id, file_name")
+    .eq("id", importId)
+    .eq("company_id", companyId)
+    .single();
+  if (!imp) return { ok: false, error: "Importação não encontrada." };
+
+  // bank_transactions e bank_reconciliation_matches têm ON DELETE CASCADE.
+  const { error } = await admin
+    .from("bank_statement_imports")
+    .delete()
+    .eq("id", importId)
+    .eq("company_id", companyId);
+  if (error) return { ok: false, error: error.message };
+
+  await auditLog({
+    companyId, actorId: guard.profile.id, action: "bank_import_deleted",
+    entityType: "bank_statement_import", entityId: importId,
+    meta: { file_name: imp.file_name }, source: "dashboard",
+  }, admin);
+
+  revalidatePath(RECON_PATH);
+  return { ok: true };
+}
+
 /** Recalcula sugestões para os movimentos ainda pendentes. */
 export async function recalcSuggestions(): Promise<{ ok: boolean; error?: string; created?: number }> {
   const guard = await requireProfile({ roles: ["admin", "gestor"] });

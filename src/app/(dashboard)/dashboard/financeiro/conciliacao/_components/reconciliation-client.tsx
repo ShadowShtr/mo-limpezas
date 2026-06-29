@@ -3,13 +3,14 @@
 import { useState, useRef, useTransition } from "react";
 import {
   Upload, X, Loader2, AlertCircle, CheckCircle2, ArrowDownRight, ArrowUpRight,
-  Check, Ban, Link2, EyeOff, FilePlus2, RefreshCw, History, Search,
+  Check, Ban, Link2, EyeOff, FilePlus2, RefreshCw, History, Search, Trash2,
 } from "lucide-react";
 import { usePagination, Pagination } from "@/components/ui/pagination";
 import { useToast } from "@/components/ui/toast";
 import {
   getBankReconciliationData, confirmMatch, rejectMatch, manualMatch,
   ignoreTransaction, createEntryFromTransaction, recalcSuggestions, searchCashFlowEntries,
+  deleteImport,
   type BankTransactionDTO, type ImportDTO, type BankAccountDTO,
 } from "@/app/actions/bank-reconciliation";
 
@@ -163,7 +164,13 @@ export function ReconciliationClient({ initial, error: initErr }: Props) {
           onDone={() => { setShowImport(false); reload(); }}
         />
       )}
-      {showHistory && <HistoryModal imports={data.imports} onClose={() => setShowHistory(false)} />}
+      {showHistory && (
+        <HistoryModal
+          imports={data.imports}
+          onClose={() => setShowHistory(false)}
+          onDelete={(id) => act(() => deleteImport(id), "Importação apagada.")}
+        />
+      )}
       {manualFor && (
         <ManualMatchModal
           tx={manualFor}
@@ -412,7 +419,7 @@ function ImportModal({ accounts, onClose, onDone }: { accounts: BankAccountDTO[]
 
 // ─── Modal de histórico ──────────────────────────────────────────────────────
 
-function HistoryModal({ imports, onClose }: { imports: ImportDTO[]; onClose: () => void }) {
+function HistoryModal({ imports, onClose, onDelete }: { imports: ImportDTO[]; onClose: () => void; onDelete: (id: string) => void }) {
   return (
     <Modal onClose={onClose} title="Histórico de importações" wide>
       {imports.length === 0 ? (
@@ -428,6 +435,7 @@ function HistoryModal({ imports, onClose }: { imports: ImportDTO[]; onClose: () 
                 <th className="px-3 py-2 font-medium text-center">Importados</th>
                 <th className="px-3 py-2 font-medium text-center">Duplicados</th>
                 <th className="px-3 py-2 font-medium">Estado</th>
+                <th className="px-3 py-2 font-medium text-right">Ações</th>
               </tr>
             </thead>
             <tbody>
@@ -443,6 +451,15 @@ function HistoryModal({ imports, onClose }: { imports: ImportDTO[]; onClose: () 
                       {imp.status}
                     </span>
                     {imp.error_message && <p className="text-xs text-red-500 mt-1">{imp.error_message}</p>}
+                  </td>
+                  <td className="px-3 py-2 text-right">
+                    <button
+                      title="Apagar importação e os seus movimentos"
+                      onClick={() => { if (confirm(`Apagar a importação "${imp.file_name}" e todos os seus movimentos? Esta ação não pode ser desfeita.`)) onDelete(imp.id); }}
+                      className="p-1.5 rounded-lg text-red-500 hover:bg-red-50"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
                   </td>
                 </tr>
               ))}
