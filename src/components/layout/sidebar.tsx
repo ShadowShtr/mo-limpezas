@@ -21,6 +21,7 @@ import {
   Clock,
   Bell,
   Repeat,
+  Landmark,
 } from "lucide-react";
 import { logout } from "@/app/actions/auth";
 import { SidebarNotifBadge } from "./sidebar-notif-badge";
@@ -40,6 +41,7 @@ const NAV: { href: string; icon: typeof Bell; label: string; notif?: boolean }[]
   { href: "/dashboard/relatorios",    icon: BarChart3,       label: "Relatórios" },
   { href: "/dashboard/financeiro",    icon: TrendingUp,      label: "Financeiro" },
   { href: "/dashboard/financeiro/pagamentos", icon: Repeat,  label: "Pagamentos Fixos" },
+  { href: "/dashboard/financeiro/conciliacao", icon: Landmark, label: "Conciliação Bancária" },
   { href: "/dashboard/tarefas",       icon: CheckSquare,     label: "Tarefas" },
 ];
 

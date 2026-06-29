@@ -6,6 +6,9 @@ export type ScheduleDay = {
   start_time: string; // "HH:MM"
   duration_min: number;
   team_id: string | null;
+  // Nº de pessoas quando NÃO há equipa atribuída (preenchido à mão).
+  // Com equipa, o nº vem do tamanho da equipa.
+  num_people?: number | null;
 };
 
 export type Database = {
@@ -53,6 +56,12 @@ export type Database = {
         Update: { name?: string; color?: string; leader_id?: string | null; active?: boolean; vehicle?: string | null };
         Relationships: [];
       };
+      daily_clocks: {
+        Row: { id: string; company_id: string; collaborator_id: string; work_date: string; clock_in_at: string | null; clock_out_at: string | null; lunch_start_at: string | null; lunch_end_at: string | null; clock_in_lat: number | null; clock_in_lng: number | null; clock_out_lat: number | null; clock_out_lng: number | null; created_at: string; updated_at: string };
+        Insert: { company_id: string; collaborator_id: string; work_date: string; clock_in_at?: string | null; clock_out_at?: string | null; lunch_start_at?: string | null; lunch_end_at?: string | null; clock_in_lat?: number | null; clock_in_lng?: number | null; clock_out_lat?: number | null; clock_out_lng?: number | null };
+        Update: { clock_in_at?: string | null; clock_out_at?: string | null; lunch_start_at?: string | null; lunch_end_at?: string | null; clock_in_lat?: number | null; clock_in_lng?: number | null; clock_out_lat?: number | null; clock_out_lng?: number | null; updated_at?: string };
+        Relationships: [];
+      };
       team_members: {
         Row: { id: string; team_id: string; collaborator_id: string; joined_at: string; left_at: string | null };
         Insert: { team_id: string; collaborator_id: string; joined_at?: string; left_at?: string | null };
@@ -60,15 +69,15 @@ export type Database = {
         Relationships: [];
       };
       contracts: {
-        Row: { id: string; company_id: string; location_id: string; name: string | null; frequency: string; interval_days: number; weekdays: number[] | null; month_day: number | null; month_week: number | null; month_weekday: number | null; schedule_days: ScheduleDay[]; starts_on: string; ends_on: string | null; status: string; notes: string | null; cleaning_type: string | null; payment_status: string | null; upholstery_type: string | null; upholstery_notes: string | null; upholstery_units: number | null; upholstery_unit_price: number | null; created_by: string | null; created_at: string; updated_at: string };
-        Insert: { company_id: string; location_id: string; frequency: string; schedule_days: ScheduleDay[]; starts_on: string; name?: string | null; interval_days?: number; weekdays?: number[] | null; month_day?: number | null; ends_on?: string | null; status?: string; notes?: string | null; cleaning_type?: string | null; payment_status?: string | null; upholstery_type?: string | null; upholstery_notes?: string | null; upholstery_units?: number | null; upholstery_unit_price?: number | null; created_by?: string | null };
-        Update: { location_id?: string; name?: string | null; frequency?: string; interval_days?: number; weekdays?: number[] | null; schedule_days?: ScheduleDay[]; starts_on?: string; ends_on?: string | null; status?: string; notes?: string | null; cleaning_type?: string | null; payment_status?: string | null; upholstery_type?: string | null; upholstery_notes?: string | null; upholstery_units?: number | null; upholstery_unit_price?: number | null };
+        Row: { id: string; company_id: string; location_id: string; name: string | null; frequency: string; interval_days: number; weekdays: number[] | null; month_day: number | null; month_week: number | null; month_weekday: number | null; schedule_days: ScheduleDay[]; starts_on: string; ends_on: string | null; status: string; notes: string | null; cleaning_type: string | null; payment_status: string | null; upholstery_type: string | null; upholstery_notes: string | null; upholstery_units: number | null; upholstery_unit_price: number | null; num_people: number | null; created_by: string | null; created_at: string; updated_at: string };
+        Insert: { company_id: string; location_id: string; frequency: string; schedule_days: ScheduleDay[]; starts_on: string; name?: string | null; interval_days?: number; weekdays?: number[] | null; month_day?: number | null; ends_on?: string | null; status?: string; notes?: string | null; cleaning_type?: string | null; payment_status?: string | null; upholstery_type?: string | null; upholstery_notes?: string | null; upholstery_units?: number | null; upholstery_unit_price?: number | null; num_people?: number | null; created_by?: string | null };
+        Update: { location_id?: string; name?: string | null; frequency?: string; interval_days?: number; weekdays?: number[] | null; schedule_days?: ScheduleDay[]; starts_on?: string; ends_on?: string | null; status?: string; notes?: string | null; cleaning_type?: string | null; payment_status?: string | null; upholstery_type?: string | null; upholstery_notes?: string | null; upholstery_units?: number | null; upholstery_unit_price?: number | null; num_people?: number | null; created_by?: string | null };
         Relationships: [];
       };
       services: {
-        Row: { id: string; company_id: string; location_id: string; team_id: string | null; contract_id: string | null; reference_number: string; scheduled_start: string; scheduled_end: string; hourly_rate: number | null; calculated_value: number | null; manual_value: number | null; discount_pct: number; status: string; actual_start: string | null; actual_end: string | null; is_exception: boolean; original_date: string | null; notes: string | null; cleaning_type: string | null; payment_status: string | null; upholstery_type: string | null; upholstery_notes: string | null; upholstery_units: number | null; upholstery_unit_price: number | null; cancel_type: string | null; cancel_reason: string | null; cancelled_at: string | null; cancelled_by: string | null; is_late_cancel: boolean; created_by: string | null; created_at: string; updated_at: string };
-        Insert: { company_id: string; location_id: string; reference_number: string; scheduled_start: string; scheduled_end: string; team_id?: string | null; contract_id?: string | null; hourly_rate?: number | null; calculated_value?: number | null; manual_value?: number | null; discount_pct?: number; status?: string; is_exception?: boolean; original_date?: string | null; notes?: string | null; cleaning_type?: string | null; payment_status?: string | null; upholstery_type?: string | null; upholstery_notes?: string | null; upholstery_units?: number | null; upholstery_unit_price?: number | null; created_by?: string | null };
-        Update: { team_id?: string | null; status?: string; scheduled_start?: string; scheduled_end?: string; actual_start?: string | null; actual_end?: string | null; notes?: string | null; hourly_rate?: number | null; calculated_value?: number | null; cleaning_type?: string | null; payment_status?: string | null; upholstery_type?: string | null; upholstery_notes?: string | null; upholstery_units?: number | null; upholstery_unit_price?: number | null; manual_value?: number | null; discount_pct?: number; cancel_type?: string | null; cancel_reason?: string | null; cancelled_at?: string | null; cancelled_by?: string | null; is_late_cancel?: boolean };
+        Row: { id: string; company_id: string; location_id: string; team_id: string | null; contract_id: string | null; reference_number: string; scheduled_start: string; scheduled_end: string; hourly_rate: number | null; calculated_value: number | null; manual_value: number | null; discount_pct: number; status: string; actual_start: string | null; actual_end: string | null; is_exception: boolean; original_date: string | null; notes: string | null; cleaning_type: string | null; payment_status: string | null; upholstery_type: string | null; upholstery_notes: string | null; upholstery_units: number | null; upholstery_unit_price: number | null; num_people: number; cancel_type: string | null; cancel_reason: string | null; cancelled_at: string | null; cancelled_by: string | null; is_late_cancel: boolean; created_by: string | null; created_at: string; updated_at: string };
+        Insert: { company_id: string; location_id: string; reference_number: string; scheduled_start: string; scheduled_end: string; team_id?: string | null; contract_id?: string | null; hourly_rate?: number | null; calculated_value?: number | null; manual_value?: number | null; discount_pct?: number; status?: string; is_exception?: boolean; original_date?: string | null; notes?: string | null; cleaning_type?: string | null; payment_status?: string | null; upholstery_type?: string | null; upholstery_notes?: string | null; upholstery_units?: number | null; upholstery_unit_price?: number | null; num_people?: number; created_by?: string | null };
+        Update: { team_id?: string | null; status?: string; scheduled_start?: string; scheduled_end?: string; actual_start?: string | null; actual_end?: string | null; notes?: string | null; hourly_rate?: number | null; calculated_value?: number | null; cleaning_type?: string | null; payment_status?: string | null; upholstery_type?: string | null; upholstery_notes?: string | null; upholstery_units?: number | null; upholstery_unit_price?: number | null; num_people?: number; manual_value?: number | null; discount_pct?: number; cancel_type?: string | null; cancel_reason?: string | null; cancelled_at?: string | null; cancelled_by?: string | null; is_late_cancel?: boolean; created_by?: string | null };
         Relationships: [];
       };
       service_reinforcements: {
@@ -104,7 +113,7 @@ export type Database = {
       absences: {
         Row: { id: string; company_id: string; collaborator_id: string; absence_type: string; starts_on: string; ends_on: string; notes: string | null; document_url: string | null; replaced_by: string | null; approved_by: string | null; created_by: string | null; created_at: string };
         Insert: { company_id: string; collaborator_id: string; absence_type: string; starts_on: string; ends_on: string; notes?: string | null; document_url?: string | null; replaced_by?: string | null; approved_by?: string | null; created_by?: string | null };
-        Update: { absence_type?: string; starts_on?: string; ends_on?: string; notes?: string | null; approved_by?: string | null; replaced_by?: string | null };
+        Update: { absence_type?: string; starts_on?: string; ends_on?: string; notes?: string | null; approved_by?: string | null; replaced_by?: string | null; created_by?: string | null };
         Relationships: [];
       };
       vacation_requests: {
@@ -116,7 +125,7 @@ export type Database = {
       invoices: {
         Row: { id: string; company_id: string; client_id: string; invoice_number: string; invoice_date: string; due_date: string | null; period_start: string | null; period_end: string | null; subtotal: number; vat_rate: number; vat_amount: number; total: number; status: string; paid_at: string | null; payment_method: string | null; notes: string | null; created_by: string | null; created_at: string; updated_at: string };
         Insert: { company_id: string; client_id: string; invoice_number: string; invoice_date: string; subtotal: number; vat_rate?: number; vat_amount: number; total: number; status?: string; due_date?: string | null; period_start?: string | null; period_end?: string | null; notes?: string | null; created_by?: string | null };
-        Update: { status?: string; paid_at?: string | null; payment_method?: string | null; due_date?: string | null; notes?: string | null };
+        Update: { status?: string; paid_at?: string | null; payment_method?: string | null; due_date?: string | null; notes?: string | null; created_by?: string | null };
         Relationships: [];
       };
       invoice_items: {
@@ -155,10 +164,40 @@ export type Database = {
         Update: { vehicle_id?: string; team_id?: string; driver_id?: string | null };
         Relationships: [];
       };
+      collaborator_ride_assignments: {
+        Row: { id: string; company_id: string; collaborator_id: string; team_id: string; date: string; assigned_by: string | null; created_at: string; updated_at: string };
+        Insert: { company_id: string; collaborator_id: string; team_id: string; date: string; assigned_by?: string | null; id?: string };
+        Update: { team_id?: string; assigned_by?: string | null };
+        Relationships: [];
+      };
       cash_flow_entries: {
         Row: { id: string; company_id: string; type: "entrada" | "saida"; amount: number; description: string; category: "faturacao" | "salario" | "despesa" | "fornecedor" | "outro" | null; date: string; reference_id: string | null; reference_type: "invoice" | "payroll" | null; status: "pendente" | "confirmado"; notes: string | null; created_by: string | null; created_at: string };
         Insert: { company_id: string; type: "entrada" | "saida"; amount: number; description: string; date: string; category?: "faturacao" | "salario" | "despesa" | "fornecedor" | "outro" | null; reference_id?: string | null; reference_type?: "invoice" | "payroll" | null; status?: "pendente" | "confirmado"; notes?: string | null; created_by?: string | null };
         Update: { description?: string; amount?: number; date?: string; category?: string | null; status?: "pendente" | "confirmado"; notes?: string | null };
+        Relationships: [];
+      };
+      bank_accounts: {
+        Row: { id: string; company_id: string; bank_name: string; account_name: string; iban_last4: string | null; currency: string; is_active: boolean; created_at: string; updated_at: string };
+        Insert: { company_id: string; bank_name: string; account_name: string; iban_last4?: string | null; currency?: string; is_active?: boolean };
+        Update: { bank_name?: string; account_name?: string; iban_last4?: string | null; currency?: string; is_active?: boolean; updated_at?: string };
+        Relationships: [];
+      };
+      bank_statement_imports: {
+        Row: { id: string; company_id: string; bank_account_id: string | null; file_name: string; file_type: "csv" | "xlsx" | "xls" | "pdf"; file_hash: string; status: "pending" | "processing" | "completed" | "failed"; total_rows: number; imported_rows: number; duplicate_rows: number; error_message: string | null; uploaded_by: string | null; created_at: string; completed_at: string | null };
+        Insert: { company_id: string; file_name: string; file_type: "csv" | "xlsx" | "xls" | "pdf"; file_hash: string; bank_account_id?: string | null; status?: "pending" | "processing" | "completed" | "failed"; total_rows?: number; imported_rows?: number; duplicate_rows?: number; error_message?: string | null; uploaded_by?: string | null; completed_at?: string | null };
+        Update: { status?: "pending" | "processing" | "completed" | "failed"; total_rows?: number; imported_rows?: number; duplicate_rows?: number; error_message?: string | null; bank_account_id?: string | null; completed_at?: string | null };
+        Relationships: [];
+      };
+      bank_transactions: {
+        Row: { id: string; company_id: string; bank_account_id: string | null; statement_import_id: string | null; transaction_date: string; value_date: string | null; description: string; counterparty_name: string | null; reference: string | null; amount: number; direction: "credit" | "debit"; currency: string; raw_data: Record<string, unknown> | null; fingerprint: string; status: "pending" | "matched" | "reconciled" | "ignored" | "duplicate"; created_at: string; updated_at: string };
+        Insert: { company_id: string; transaction_date: string; description?: string; amount: number; direction: "credit" | "debit"; fingerprint: string; bank_account_id?: string | null; statement_import_id?: string | null; value_date?: string | null; counterparty_name?: string | null; reference?: string | null; currency?: string; raw_data?: Record<string, unknown> | null; status?: "pending" | "matched" | "reconciled" | "ignored" | "duplicate" };
+        Update: { status?: "pending" | "matched" | "reconciled" | "ignored" | "duplicate"; description?: string; counterparty_name?: string | null; reference?: string | null; updated_at?: string };
+        Relationships: [];
+      };
+      bank_reconciliation_matches: {
+        Row: { id: string; company_id: string; bank_transaction_id: string; cash_flow_entry_id: string | null; match_score: number; match_reason: string | null; status: "suggested" | "confirmed" | "rejected"; confirmed_by: string | null; confirmed_at: string | null; created_at: string };
+        Insert: { company_id: string; bank_transaction_id: string; cash_flow_entry_id?: string | null; match_score?: number; match_reason?: string | null; status?: "suggested" | "confirmed" | "rejected"; confirmed_by?: string | null; confirmed_at?: string | null };
+        Update: { status?: "suggested" | "confirmed" | "rejected"; match_score?: number; match_reason?: string | null; cash_flow_entry_id?: string | null; confirmed_by?: string | null; confirmed_at?: string | null };
         Relationships: [];
       };
       fixed_variable_payments: {
