@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import {
   Receipt, RefreshCw, Loader2, AlertCircle,
-  Eye, Trash2, Download, FileSpreadsheet, X, Clock, CheckCircle2,
+  Eye, Trash2, Download, FileSpreadsheet, X, Clock, CheckCircle2, MessageCircle,
 } from "lucide-react";
 import {
   generateInvoices,
@@ -23,6 +23,37 @@ function fmtEur(v: number) {
 }
 function fmtDate(s: string | null) {
   return s ? new Date(s).toLocaleDateString("pt-PT") : "—";
+}
+
+/**
+ * Constrói o link wa.me com a mensagem de cobrança pré-preenchida (nome + valores).
+ * Devolve null se o cliente não tiver telefone. Números PT de 9 dígitos recebem
+ * o indicativo 351 (obrigatório no wa.me).
+ */
+function buildCobrancaLink(inv: Invoice): string | null {
+  if (!inv.client_phone) return null;
+  const digits = inv.client_phone.replace(/\D/g, "");
+  if (!digits) return null;
+  const phone = digits.length === 9 ? `351${digits}` : digits;
+
+  const lines = [
+    `Olá ${inv.client_name},`,
+    ``,
+    `Segue a cobrança da Mó Limpezas:`,
+    `• Fatura: ${inv.invoice_number}`,
+    inv.period_start && inv.period_end
+      ? `• Período: ${fmtDate(inv.period_start)} a ${fmtDate(inv.period_end)}`
+      : null,
+    `• Subtotal: ${fmtEur(inv.subtotal)}`,
+    inv.vat_amount > 0 ? `• IVA (${inv.vat_rate}%): ${fmtEur(inv.vat_amount)}` : null,
+    `• *Total a pagar: ${fmtEur(inv.total)}*`,
+    inv.due_date ? `• Vencimento: ${fmtDate(inv.due_date)}` : null,
+    ``,
+    `Agradecemos o pagamento. Para qualquer questão, estamos à disposição.`,
+    `Obrigado!`,
+  ].filter(Boolean) as string[];
+
+  return `https://wa.me/${phone}?text=${encodeURIComponent(lines.join("\n"))}`;
 }
 
 const STATUS_LABEL: Record<Invoice["status"], string> = {
@@ -377,6 +408,18 @@ export function InvoicesClient({ initialInvoices, unbilledServices, companyId, m
                         >
                           <Eye className="w-3.5 h-3.5" />
                         </button>
+                        {(inv.status === "pendente" || inv.status === "vencido") && buildCobrancaLink(inv) && (
+                          <a
+                            href={buildCobrancaLink(inv)!}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center gap-1 text-xs px-2 py-1 rounded-lg border border-green-200 text-green-700 bg-green-50 hover:bg-green-100 transition-colors"
+                            title="Enviar cobrança por WhatsApp"
+                          >
+                            <MessageCircle className="w-3.5 h-3.5" />
+                            Cobrar
+                          </a>
+                        )}
                         <button
                           onClick={() => handleExportPdf(inv)}
                           className="p-1.5 rounded-lg text-[var(--color-text-muted)] hover:text-[var(--color-primary)] hover:bg-[var(--color-primary-light)] transition-colors"

@@ -22,6 +22,7 @@ export interface Invoice {
   id: string;
   client_id: string;
   client_name: string;
+  client_phone: string | null;
   invoice_number: string;
   invoice_date: string;
   due_date: string | null;
@@ -281,7 +282,7 @@ export async function getInvoices(
       id, client_id, invoice_number, invoice_date, due_date,
       period_start, period_end, subtotal, vat_rate, vat_amount, total,
       status, paid_at, payment_method, notes,
-      clients ( name ),
+      clients ( name, phone ),
       invoice_items ( id, service_id, description, quantity, unit_price, total, sort_order )
     `)
     .eq("company_id", companyId)
@@ -293,13 +294,14 @@ export async function getInvoices(
 
   const invoices: Invoice[] = (data ?? []).map((row) => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const c = (row as any).clients as { name: string } | null;
+    const c = (row as any).clients as { name: string; phone: string | null } | null;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const rawItems = (row as any).invoice_items as InvoiceItem[] ?? [];
     return {
       id:             row.id,
       client_id:      row.client_id,
       client_name:    c?.name ?? "—",
+      client_phone:   c?.phone ?? null,
       invoice_number: row.invoice_number,
       invoice_date:   row.invoice_date,
       due_date:       row.due_date ?? null,
