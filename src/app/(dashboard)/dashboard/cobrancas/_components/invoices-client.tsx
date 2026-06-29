@@ -408,17 +408,27 @@ export function InvoicesClient({ initialInvoices, unbilledServices, companyId, m
                         >
                           <Eye className="w-3.5 h-3.5" />
                         </button>
-                        {(inv.status === "pendente" || inv.status === "vencido") && buildCobrancaLink(inv) && (
-                          <a
-                            href={buildCobrancaLink(inv)!}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="flex items-center gap-1 text-xs px-2 py-1 rounded-lg border border-green-200 text-green-700 bg-green-50 hover:bg-green-100 transition-colors"
-                            title="Enviar cobrança por WhatsApp"
-                          >
-                            <MessageCircle className="w-3.5 h-3.5" />
-                            Cobrar
-                          </a>
+                        {inv.status !== "pago" && inv.status !== "cancelado" && inv.total > 0 && (
+                          buildCobrancaLink(inv) ? (
+                            <a
+                              href={buildCobrancaLink(inv)!}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="flex items-center gap-1 text-xs px-2 py-1 rounded-lg border border-green-200 text-green-700 bg-green-50 hover:bg-green-100 transition-colors"
+                              title="Enviar cobrança por WhatsApp"
+                            >
+                              <MessageCircle className="w-3.5 h-3.5" />
+                              Cobrar
+                            </a>
+                          ) : (
+                            <span
+                              className="flex items-center gap-1 text-xs px-2 py-1 rounded-lg border border-[var(--color-border)] text-[var(--color-text-muted)] bg-gray-50 cursor-not-allowed"
+                              title="Cliente sem telefone — adicione o número na ficha do cliente"
+                            >
+                              <MessageCircle className="w-3.5 h-3.5" />
+                              Cobrar
+                            </span>
+                          )
                         )}
                         <button
                           onClick={() => handleExportPdf(inv)}
