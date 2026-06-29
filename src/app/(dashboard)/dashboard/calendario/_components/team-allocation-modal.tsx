@@ -558,16 +558,22 @@ export function TeamAllocationModal({
                           Todas as colaboradoras têm equipa.
                         </p>
                       ) : (
-                        <div className="space-y-1.5">
-                          {available.map((m) => (
-                            <div key={m.id} className="flex items-center gap-2 px-3 py-2 rounded-lg bg-green-50 border border-green-100">
-                              <div className="w-6 h-6 rounded-full bg-green-200 flex items-center justify-center text-xs font-bold text-green-700 shrink-0">
-                                {m.full_name.charAt(0).toUpperCase()}
-                              </div>
-                              <span className="text-sm text-[var(--color-text-main)]">{m.full_name}</span>
-                            </div>
-                          ))}
-                        </div>
+                        <>
+                          <p className="text-[11px] text-[var(--color-text-muted)] mb-2">
+                            Arrasta para uma equipa para a adicionar.
+                          </p>
+                          <div className="flex flex-wrap gap-1.5">
+                            {available.map((m) => (
+                              <MemberChip
+                                key={m.id}
+                                member={m}
+                                color="#64748b"
+                                fromTeamId=""
+                                moved={false}
+                              />
+                            ))}
+                          </div>
+                        </>
                       )}
                     </div>
 
