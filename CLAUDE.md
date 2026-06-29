@@ -47,9 +47,21 @@ Lê este ficheiro no início de CADA sessão antes de fazer qualquer coisa.
 
 ## ⚡ PRÓXIMA TASK A EXECUTAR
 
-**Todas as migrations até 036 estão aplicadas em produção (2026-06-22).**
+**Migrations 040–043 aplicadas em produção (2026-06-29). Deploy feito.**
+Não há task pendente definida. Perguntar ao dono qual a próxima.
 
 Migrations aplicadas:
+- ✅ 037 — fixed_variable_payments (pagamentos fixos/variáveis)
+- ✅ 038 — service_contract_fields
+- ✅ 039 — upholstery_units
+- ✅ 040 — collaborator_day_team (equipa por dia)
+- ✅ 041 — num_people
+- ✅ 042 — daily_clocks (registo de ponto diário)
+- ✅ 043 — **Conciliação Bancária** (bank_accounts, bank_statement_imports,
+  bank_transactions, bank_reconciliation_matches + RLS admin/gestor) — aplicada
+  via SQL Editor (PRODUCTION) em 2026-06-29
+
+Migrations antigas aplicadas:
 - ✅ 027–029 (aplicadas 2026-06-19)
 - ✅ 030 — RLS tighten (vacation_requests + services_full security_invoker)
 - ✅ 031 — reference_number unique constraint
@@ -68,7 +80,37 @@ Migrations aplicadas:
 - Login/updatePassword: redirect via profiles.role (P1-6)
 - serverActions.bodySizeLimit: 52mb → 4mb (P2-4)
 
-**Próxima task:** merge `master` → produção e deploy.
+**Próxima task:** (definir com o dono).
+
+---
+
+## 📍 PONTO DE PARAGEM — 2026-06-29 (Conciliação Bancária)
+
+**Feature nova: Conciliação Bancária no módulo Financeiro (✅ FEITO + EM PRODUÇÃO)**
+Branch `feature/bank-statement-reconciliation` → merge `master` → deploy
+`vercel --prod --force` (dpl_ubEFcqfcHGPQkEt4vosMN4kohnus). Commits `9d140f0`
+(trabalho antigo: ponto diário/equipa por dia/nº pessoas) e `50cc14e` (conciliação).
+
+- **Migration 043** — 4 tabelas + RLS (só admin/gestor da própria company_id;
+  colaborador sem política = sem acesso; service-role processa importações).
+  **APLICADA em produção (SQL Editor)**.
+- **Parser** `src/lib/bank-import/` — CSV, XLSX (via `jszip`, sem nova dep),
+  XLS (binário antigo → mensagem a pedir xlsx/csv), PDF texto (best-effort com
+  `zlib`; digitalizado → mensagem clara). normalize/fingerprint/matching.
+- **Endpoint** `POST /api/finance/bank-statements/import` — modo preview/commit,
+  valida tipo/tamanho (8MB), hash anti-reimportação (409), fingerprint
+  anti-duplicado de movimentos, gera sugestões, audita.
+- **Matching** — pontuação 0–100 (valor/data/descrição/contraparte/referência).
+  **Só sugere, NUNCA confirma automaticamente** (MVP).
+- **Actions** `src/app/actions/bank-reconciliation.ts` — contas, leitura,
+  confirmar/rejeitar/associar manual/ignorar/criar lançamento + auditoria.
+- **UI** — aba `/dashboard/financeiro/conciliacao` (page + reconciliation-client)
+  com Importar Extrato → pré-visualização → confirmar, tabela com sugestão/
+  pontuação/estado/ações, histórico de importações. Link na sidebar (ícone Landmark).
+- **Testes** — `src/__tests__/bank-import.test.ts` (26 novos). Total: 307 a passar.
+
+> ℹ️ Notas: `.xls` binário e PDF imagem dão mensagem clara (não suportados no MVP).
+> Não foram adicionadas dependências novas (XLSX lido com o `jszip` já existente).
 
 > ⚠️ **Upload de fotos/documentos do colaborador ainda instável** (2026-06-19).
 > Já aplicadas: timeout `canvas.toBlob` (6s), `fetch PUT` com AbortController (60s),
