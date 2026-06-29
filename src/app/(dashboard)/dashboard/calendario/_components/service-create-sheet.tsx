@@ -5,6 +5,7 @@ import { X, Loader2, ChevronDown, Plus, UserPlus, Building2, User, MapPin, Alert
 import { format, parseISO } from "date-fns";
 import { pt } from "date-fns/locale";
 import { createService } from "../_actions/create-service";
+import { createClient } from "@/lib/supabase/client";
 import type { ConflictInfo } from "../_actions/reschedule";
 import { createClienteComLocal } from "@/app/actions/clientes";
 import { createContrato } from "@/app/actions/contratos";
@@ -252,12 +253,31 @@ export function ServiceCreateSheet({
   }, [selectedLocation]);
   const effectiveRate = serviceRate.trim() === "" ? null : Number(serviceRate.replace(",", "."));
 
-  // Nº de pessoas: tamanho da equipa selecionada (cada colaboradora conta como
-  // uma hora). Sem equipa = 1. Igual à lógica das intervenções recorrentes.
+  // Nº de pessoas: tamanho REAL da equipa selecionada (cada colaboradora conta
+  // como uma hora). Busca direta a team_members (mesma fonte fiável do modal de
+  // alocação) — não depende do member_count vindo da view, que chegou a vir 0.
   const selectedTeam = teams.find((t) => t.id === teamId) ?? null;
-  const numPeople = selectedTeam?.member_count && selectedTeam.member_count > 0
-    ? selectedTeam.member_count
-    : 1;
+  const [fetchedTeamSize, setFetchedTeamSize] = useState<number | null>(null);
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (!teamId) { setFetchedTeamSize(null); return; }
+    let cancelled = false;
+    const supabase = createClient();
+    (async () => {
+      const { count } = await supabase
+        .from("team_members")
+        .select("id", { count: "exact", head: true })
+        .eq("team_id", teamId)
+        .is("left_at", null);
+      if (!cancelled) setFetchedTeamSize(count && count > 0 ? count : 1);
+    })();
+    return () => { cancelled = true; };
+  }, [teamId]);
+
+  const numPeople = !teamId
+    ? 1
+    : (fetchedTeamSize
+        ?? (selectedTeam?.member_count && selectedTeam.member_count > 0 ? selectedTeam.member_count : 1));
 
   const durationMin = calcDuration(startTime, endTime);
   const calculatedValue =
