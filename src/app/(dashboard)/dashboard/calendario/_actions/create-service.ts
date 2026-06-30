@@ -16,6 +16,7 @@ export interface CreateServiceInput {
   hourlyRate: number | null;
   calculatedValue: number | null;
   numPeople?: number | null;
+  applyVat?: boolean;
   notes: string | null;
   cleaningType?: string | null;
   paymentStatus?: string | null;
@@ -115,6 +116,7 @@ export async function createService(
         hourly_rate: input.hourlyRate,
         calculated_value: calculatedValue,
         num_people: numPeople,
+        apply_vat: input.applyVat !== false,
         notes: input.notes,
         cleaning_type: input.cleaningType ?? null,
         payment_status: input.paymentStatus ?? null,

@@ -85,7 +85,7 @@ export async function generateInvoices(
   // Serviços concluídos no período
   const { data: services, error: sErr } = await admin
     .from("services")
-    .select("id, location_id, calculated_value, manual_value, scheduled_start, actual_start, actual_end")
+    .select("id, location_id, calculated_value, manual_value, scheduled_start, actual_start, actual_end, apply_vat")
     .eq("company_id", companyId)
     .eq("status", "concluido")
     .gte("scheduled_start", `${start}T00:00:00`)
@@ -177,6 +177,7 @@ export async function generateInvoices(
       scheduled_start: `${start}T00:00:00`,
       actual_start: null,
       actual_end: null,
+      apply_vat: true,
     });
   }
 
@@ -191,15 +192,18 @@ export async function generateInvoices(
 
     const clientData = clientMap[clientId];
     const isVatExempt = (clientData as { vat_exempt?: boolean })?.vat_exempt === true;
-    const effectiveVatFactor = isVatExempt ? 0 : vatFactor;
-    const effectiveVatRate   = isVatExempt ? 0 : vatRate;
 
+    // Base tributável: só os serviços com apply_vat (e cliente não isento)
+    // contribuem para o IVA. Permite serviços com e sem IVA na mesma fatura.
+    let taxedBase = 0;
     const items = svcs
       .sort((a, b) => a.scheduled_start.localeCompare(b.scheduled_start))
       .map((s, idx) => {
         const loc   = locationMap[s.location_id];
         const isFixed = (s.id as string).startsWith("fixed:");
         const value = s.manual_value ?? s.calculated_value ?? 0;
+        const serviceHasVat = (s as { apply_vat?: boolean }).apply_vat !== false;
+        if (!isVatExempt && serviceHasVat) taxedBase += value;
 
         let description: string;
         if (isFixed) {
@@ -230,7 +234,7 @@ export async function generateInvoices(
       });
 
     const subtotal  = Math.round(items.reduce((s, i) => s + i.total, 0) * 100) / 100;
-    const vatAmount = Math.round(subtotal * effectiveVatFactor * 100) / 100;
+    const vatAmount = Math.round(taxedBase * vatFactor * 100) / 100;
     const total     = Math.round((subtotal + vatAmount) * 100) / 100;
 
     const { data: inv, error: invErr } = await admin
@@ -244,7 +248,7 @@ export async function generateInvoices(
         period_start:   start,
         period_end:     end,
         subtotal,
-        vat_rate:       effectiveVatRate,
+        vat_rate:       vatAmount > 0 ? vatRate : 0,
         vat_amount:     vatAmount,
         total,
         status:         "rascunho",

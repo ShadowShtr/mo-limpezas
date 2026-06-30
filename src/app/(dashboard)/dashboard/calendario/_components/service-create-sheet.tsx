@@ -107,9 +107,10 @@ export function ServiceCreateSheet({
   const [clientId, setClientId] = useState(fixedClientId ?? "");
   const [locationId, setLocationId] = useState(fixedLocationId ?? "");
   const [teamId, setTeamId] = useState(initialTeamId);
-  // IVA: taxa da empresa + interruptor para mostrar o total com IVA na estimativa.
+  // IVA: taxa da empresa + interruptor. Quando ligado (predefinição), o serviço
+  // é faturado com IVA (apply_vat) e o total com IVA entra na fatura.
   const [vatRate, setVatRate] = useState(23);
-  const [withVat, setWithVat] = useState(false);
+  const [withVat, setWithVat] = useState(true);
   // Data do serviço (editável). Sincroniza quando o popup é reaberto noutra célula.
   const [serviceDate, setServiceDate] = useState(date);
   useEffect(() => {
@@ -409,6 +410,7 @@ export function ServiceCreateSheet({
       scheduledEnd: `${dateStr}T${endTime}:00`,
       hourlyRate: effectiveRate,
       numPeople,
+      applyVat: withVat,
       // Estofos por unidade: o total (qtd × preço) tem prioridade sobre o cálculo por hora.
       calculatedValue: upholsteryTotal != null && upholsteryTotal > 0
         ? upholsteryTotal
@@ -919,14 +921,16 @@ export function ServiceCreateSheet({
                   >
                     <span className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-all ${withVat ? "left-[22px]" : "left-0.5"}`} />
                   </button>
-                  <span className="text-xs font-medium text-[var(--color-text-main)]">Adicionar IVA ({vatRate}%)</span>
+                  <span className="text-xs font-medium text-[var(--color-text-main)]">Faturar com IVA ({vatRate}%)</span>
                 </label>
 
-                {withVat && (
+                {withVat ? (
                   <p className="text-sm text-[var(--color-primary)] font-semibold">
                     Total com IVA: €{(calculatedValue * (1 + vatRate / 100)).toFixed(2)}
                     <span className="font-normal text-xs opacity-80"> (IVA: €{(calculatedValue * vatRate / 100).toFixed(2)})</span>
                   </p>
+                ) : (
+                  <p className="text-xs text-[var(--color-text-muted)]">Este serviço será faturado <strong>sem IVA</strong>.</p>
                 )}
               </div>
             )}
