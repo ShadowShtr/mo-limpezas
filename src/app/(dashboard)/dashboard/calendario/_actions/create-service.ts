@@ -76,9 +76,19 @@ export async function createService(
     ? await getTeamSize(admin, input.teamId)
     : (input.numPeople != null && input.numPeople >= 1 ? Math.floor(input.numPeople) : 1);
 
-  // Recalcula o valor com base no nº de pessoas real, se houver valor/hora.
+  // Valor do serviço, por prioridade: estofos por unidade (qtd × preço) tem
+  // precedência sobre o cálculo por hora. Recalcula por hora com o nº de pessoas
+  // real para garantir a multiplicação correta por colaboradora.
+  const upholsteryTotal =
+    input.upholsteryUnits != null && input.upholsteryUnits > 0 &&
+    input.upholsteryUnitPrice != null && input.upholsteryUnitPrice > 0
+      ? parseFloat((input.upholsteryUnits * input.upholsteryUnitPrice).toFixed(2))
+      : null;
+
   let calculatedValue = input.calculatedValue;
-  if (input.hourlyRate != null) {
+  if (upholsteryTotal != null) {
+    calculatedValue = upholsteryTotal;
+  } else if (input.hourlyRate != null) {
     const durationMin = (new Date(scheduledEnd).getTime() - new Date(scheduledStart).getTime()) / 60000;
     if (durationMin > 0) {
       calculatedValue = parseFloat(((durationMin / 60) * input.hourlyRate * numPeople).toFixed(2));
