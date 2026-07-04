@@ -25,6 +25,9 @@ interface ContractRow {
   ends_on: string | null;
   num_people: number | null;
   fixed_price: number | null;
+  fixed_monthly: boolean | null;
+  apply_vat: boolean | null;
+  excluded_dates: string[] | null;
   locations: { hourly_rate: number | null } | null;
 }
 
@@ -96,13 +99,16 @@ function getOccurrences(
   const contractEnd = contract.ends_on
     ? new Date(contract.ends_on + "T23:59:59")
     : null;
+  // Datas excluídas manualmente (apagadas do calendário) — nunca são recriadas.
+  const excluded = new Set(contract.excluded_dates ?? []);
 
   function inRange(d: Date): boolean {
     return (
       d >= monthStart &&
       d <= monthEnd &&
       d >= contractStart &&
-      (!contractEnd || d <= contractEnd)
+      (!contractEnd || d <= contractEnd) &&
+      !excluded.has(toDateStr(d))
     );
   }
 
@@ -214,7 +220,7 @@ export async function GET(req: NextRequest) {
   const { data: contracts, error: contractsError } = await supabase
     .from("contracts")
     .select(
-      "id, company_id, location_id, frequency, weekdays, interval_days, schedule_days, starts_on, ends_on, num_people, fixed_price, locations(hourly_rate)",
+      "id, company_id, location_id, frequency, weekdays, interval_days, schedule_days, starts_on, ends_on, num_people, fixed_price, fixed_monthly, apply_vat, excluded_dates, locations(hourly_rate)",
     )
     .eq("status", "ativo")
     .lte("starts_on", monthEndStr)
@@ -329,7 +335,8 @@ export async function GET(req: NextRequest) {
     type ServiceInsert = {
       company_id: string; location_id: string; team_id: string | null; contract_id: string;
       reference_number: string; scheduled_start: string; scheduled_end: string;
-      hourly_rate: number | null; calculated_value: number | null; num_people: number; status: string;
+      hourly_rate: number | null; calculated_value: number | null; apply_vat: boolean;
+      num_people: number; status: string;
     };
     const rows: ServiceInsert[] = [];
 
@@ -344,6 +351,7 @@ export async function GET(req: NextRequest) {
         const endTime = addMinutesToTime(schedule.start_time, schedule.duration_min);
         companyCounts[contract.company_id]++;
         const ref = String(companyCounts[contract.company_id]).padStart(4, "0");
+        const monthly = contract.fixed_monthly === true;
         const fixedPrice = contract.fixed_price != null && contract.fixed_price > 0
           ? parseFloat(contract.fixed_price.toFixed(2)) : null;
         const hourlyRate = contract.locations?.hourly_rate ?? null;
@@ -351,9 +359,12 @@ export async function GET(req: NextRequest) {
         const people = schedule.team_id
           ? await getTeamSize(schedule.team_id)
           : (schedule.num_people != null && schedule.num_people >= 1 ? Math.floor(schedule.num_people) : 1);
-        // Valor fixo do contrato tem prioridade sobre o cálculo por hora.
+        // Prioridade do valor: mensal (avença) → 0 (fatura 1x/mês) > valor fixo
+        // por-serviço > por hora.
         const calculatedValue =
-          fixedPrice != null
+          monthly
+            ? 0
+            : fixedPrice != null
             ? fixedPrice
             : hourlyRate != null
             ? parseFloat(((schedule.duration_min / 60) * hourlyRate * people).toFixed(2))
@@ -367,8 +378,9 @@ export async function GET(req: NextRequest) {
           reference_number: ref,
           scheduled_start: toLisbonTimestamp(dateStr, schedule.start_time),
           scheduled_end: toLisbonTimestamp(dateStr, endTime),
-          hourly_rate: fixedPrice != null ? null : hourlyRate,
+          hourly_rate: monthly || fixedPrice != null ? null : hourlyRate,
           calculated_value: calculatedValue,
+          apply_vat: contract.apply_vat ?? false,
           num_people: people,
           status: "agendado",
         });

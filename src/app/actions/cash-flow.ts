@@ -104,6 +104,7 @@ export async function createCashFlowEntry(
 
   if (error) return { ok: false, error: error.message };
   revalidatePath("/dashboard/financeiro/fluxo-caixa");
+  revalidatePath("/dashboard/financeiro/contas");
   return { ok: true };
 }
 
@@ -140,6 +141,7 @@ export async function updateCashFlowEntry(
     .eq("company_id", profile.company_id);
   if (error) return { ok: false, error: error.message };
   revalidatePath("/dashboard/financeiro/fluxo-caixa");
+  revalidatePath("/dashboard/financeiro/contas");
   return { ok: true };
 }
 
@@ -169,6 +171,7 @@ export async function deleteCashFlowEntry(id: string): Promise<{ ok: boolean; er
 
   if (error) return { ok: false, error: error.message };
   revalidatePath("/dashboard/financeiro/fluxo-caixa");
+  revalidatePath("/dashboard/financeiro/contas");
   return { ok: true };
 }
 

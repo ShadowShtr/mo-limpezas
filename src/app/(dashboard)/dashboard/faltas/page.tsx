@@ -6,6 +6,7 @@ import { AbsenceSheet } from "./_components/absence-sheet";
 import { VacationRequests } from "./_components/vacation-requests";
 import { getPendingVacationRequests } from "@/app/actions/vacation";
 import { AlertTriangle } from "lucide-react";
+import { PontoTabs } from "../registo-ponto/_components/ponto-tabs";
 
 interface SearchParams {
   mes?: string;
@@ -105,6 +106,8 @@ export default async function FaltasPage({
       />
 
       <div className="px-4 py-5 sm:p-6 lg:px-8 space-y-5 mx-auto max-w-[1400px]">
+        <PontoTabs />
+
         {/* Pedidos de férias pendentes */}
         <VacationRequests requests={vacationRequests} />
 

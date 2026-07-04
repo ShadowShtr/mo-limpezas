@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
+import { useRouter } from "next/navigation";
 import {
   X, MapPin, Users, Clock, Euro, FileText, Loader2, Key, Lock,
   AlertTriangle, Ban, CalendarX, CheckCircle2, ChevronDown, Bell, MessageCircle, Mail, Users2,
@@ -10,6 +11,7 @@ import { format, parseISO } from "date-fns";
 import { pt } from "date-fns/locale";
 import { createClient } from "@/lib/supabase/client";
 import { notifyTeam } from "@/app/actions/notifications";
+import { getCompanySettings } from "@/app/actions/settings";
 import { cancelService, deleteCalendarService } from "@/app/actions/cancellations";
 import { CANCEL_TYPE_LABELS, type CancelType } from "@/lib/cancel-types";
 import { sendBulkClientNotifications } from "@/app/actions/email";
@@ -71,6 +73,7 @@ type ServiceMeta = {
   upholstery_notes: string | null;
   upholstery_units: number | null;
   upholstery_unit_price: number | null;
+  apply_vat: boolean | null;
 };
 
 // ─── Componente principal ─────────────────────────────────────────────────────
@@ -85,6 +88,7 @@ interface Props {
 
 export function ServiceDetailSheet({ service, onClose, onChanged, initialEdit = false }: Props) {
   const supabase = createClient();
+  const router = useRouter();
   const [timesheets, setTimesheets] = useState<TimesheetWithName[]>([]);
   const [loadingTs,  setLoadingTs]  = useState(false);
   const [extras,     setExtras]     = useState<ServiceExtras | null>(null);
@@ -126,8 +130,25 @@ export function ServiceDetailSheet({ service, onClose, onChanged, initialEdit = 
   const [endTime, setEndTime] = useState("");
   const [currentStart, setCurrentStart] = useState("");
   const [currentEnd, setCurrentEnd] = useState("");
+  const [currentValue, setCurrentValue] = useState<number | null>(null);
   const [savingTime, setSavingTime] = useState(false);
   const [timeConflict, setTimeConflict] = useState<{ reference_number: string; scheduled_start: string; scheduled_end: string }[] | null>(null);
+
+  // Valor + IVA deste serviço — editável, afeta só esta ocorrência (não o contrato).
+  const [editingValue, setEditingValue] = useState(false);
+  const [valueInput, setValueInput] = useState("");
+  const [applyVat, setApplyVat] = useState(true);
+  const [savingValue, setSavingValue] = useState(false);
+  const [vatRate, setVatRate] = useState(23);
+
+  // Taxa de IVA da empresa (para o total com IVA) — carrega uma vez.
+  useEffect(() => {
+    let cancelled = false;
+    getCompanySettings()
+      .then((s) => { if (!cancelled && s?.vat_rate != null) setVatRate(s.vat_rate); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -157,6 +178,13 @@ export function ServiceDetailSheet({ service, onClose, onChanged, initialEdit = 
     setTimeConflict(null);
     setCurrentStart(service.scheduled_start);
     setCurrentEnd(service.scheduled_end);
+    setCurrentValue(service.manual_value ?? service.calculated_value ?? null);
+    setEditingValue(false);
+    setValueInput(
+      service.manual_value != null ? String(service.manual_value)
+        : service.calculated_value != null ? String(service.calculated_value)
+        : ""
+    );
     setDateValue(format(parseISO(service.scheduled_start), "yyyy-MM-dd"));
     setStartTime(format(parseISO(service.scheduled_start), "HH:mm"));
     setEndTime(format(parseISO(service.scheduled_end), "HH:mm"));
@@ -174,7 +202,7 @@ export function ServiceDetailSheet({ service, onClose, onChanged, initialEdit = 
         .then(({ data }) => data as ServiceExtras | null),
       supabase
         .from("services")
-        .select("cleaning_type, payment_status, upholstery_type, upholstery_notes, upholstery_units, upholstery_unit_price")
+        .select("cleaning_type, payment_status, upholstery_type, upholstery_notes, upholstery_units, upholstery_unit_price, apply_vat")
         .eq("id", service.id)
         .single()
         .then(({ data }) => data as ServiceMeta | null),
@@ -184,6 +212,7 @@ export function ServiceDetailSheet({ service, onClose, onChanged, initialEdit = 
       setMeta(metaData);
       setAccCode(extraData?.location_access_code ?? "");
       setAccInstructions(extraData?.location_instructions ?? "");
+      setApplyVat(metaData?.apply_vat ?? true);
       setLoadingTs(false);
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -208,7 +237,6 @@ export function ServiceDetailSheet({ service, onClose, onChanged, initialEdit = 
   // Capturar em const para que o TypeScript saiba que não é null dentro das closures
   const svc = service;
   const ss   = STATUS_STYLE[svc.status] ?? STATUS_STYLE.agendado;
-  const value = svc.manual_value ?? svc.calculated_value;
   const canAct = svc.status !== "concluido";
   // Campos sensíveis carregados on-demand quando o sheet abre
   const clientPhone = extras?.client_phone ?? null;
@@ -291,17 +319,72 @@ export function ServiceDetailSheet({ service, onClose, onChanged, initialEdit = 
       }
     }
 
+    // Recalcula o valor pela nova duração (só serviços faturados por hora).
+    // Não mexe em valor manual, estofos por unidade, nem avença/valor fixo
+    // (esses têm hourly_rate a null → ficam como estão).
+    const update: { scheduled_start: string; scheduled_end: string; calculated_value?: number } = {
+      scheduled_start: startISO,
+      scheduled_end: endISO,
+    };
+    let recalculated: number | null = null;
+    const { data: svcRow } = await supabase
+      .from("services")
+      .select("hourly_rate, num_people, manual_value, upholstery_unit_price")
+      .eq("id", svc.id)
+      .single();
+    const durationMin = (new Date(endISO).getTime() - new Date(startISO).getTime()) / 60000;
+    if (
+      svcRow?.hourly_rate != null &&
+      svcRow.manual_value == null &&
+      svcRow.upholstery_unit_price == null &&
+      durationMin > 0
+    ) {
+      const ppl = svcRow.num_people != null && svcRow.num_people >= 1 ? svcRow.num_people : 1;
+      recalculated = Math.round((durationMin / 60) * svcRow.hourly_rate * ppl * 100) / 100;
+      update.calculated_value = recalculated;
+    }
+
     const { error } = await supabase
       .from("services")
-      .update({ scheduled_start: startISO, scheduled_end: endISO })
+      .update(update)
       .eq("id", svc.id);
     setSavingTime(false);
     if (error) { setActionMsg({ type: "error", text: error.message }); return; }
     setCurrentStart(startISO);
     setCurrentEnd(endISO);
+    if (recalculated != null) setCurrentValue(recalculated);
     setEditingTime(false);
     setTimeConflict(null);
-    setActionMsg({ type: "success", text: force && (timeConflict?.length ?? 0) > 0 ? "Horário atualizado (conflito mantido)." : "Horário atualizado." });
+    setActionMsg({
+      type: "success",
+      text: recalculated != null
+        ? `Horário atualizado. Valor recalculado: €${recalculated.toFixed(2)}.`
+        : (force && (timeConflict?.length ?? 0) > 0 ? "Horário atualizado (conflito mantido)." : "Horário atualizado."),
+    });
+    onChanged();
+  }
+
+  // Valor + IVA: edita só esta ocorrência (services.manual_value / apply_vat).
+  // Não mexe no contrato — o padrão/tarifa do contrato mantém-se; só este dia muda.
+  async function saveValue() {
+    const trimmed = valueInput.trim();
+    const parsed = trimmed === "" ? null : Number(trimmed.replace(",", "."));
+    if (trimmed !== "" && (parsed == null || !Number.isFinite(parsed) || parsed < 0)) {
+      setActionMsg({ type: "error", text: "Valor inválido." });
+      return;
+    }
+    setSavingValue(true);
+    setActionMsg(null);
+    const { error } = await supabase
+      .from("services")
+      .update({ manual_value: parsed, apply_vat: applyVat })
+      .eq("id", svc.id);
+    setSavingValue(false);
+    if (error) { setActionMsg({ type: "error", text: error.message }); return; }
+    setCurrentValue(parsed ?? svc.calculated_value ?? null);
+    setMeta((prev) => (prev ? { ...prev, apply_vat: applyVat } : prev));
+    setEditingValue(false);
+    setActionMsg({ type: "success", text: "Valor atualizado — aplica-se só a este dia, o contrato mantém-se." });
     onChanged();
   }
 
@@ -447,8 +530,20 @@ export function ServiceDetailSheet({ service, onClose, onChanged, initialEdit = 
                 {ss.label}
               </span>
             </div>
-            <h2 className="text-base font-bold text-[var(--color-text-main)] truncate">{svc.location_name}</h2>
-            <p className="text-sm text-[var(--color-text-muted)] mt-0.5">{svc.client_name}</p>
+            <button
+              type="button"
+              onClick={() => { if (svc.client_id) router.push(`/dashboard/clientes/${svc.client_id}`); }}
+              disabled={!svc.client_id}
+              title="Abrir o contrato / ficha do cliente"
+              className="text-left group w-full disabled:cursor-default"
+            >
+              <h2 className="text-base font-bold text-[var(--color-text-main)] truncate group-hover:text-[var(--color-primary)] group-hover:underline transition-colors">
+                {svc.location_name}
+              </h2>
+              <p className="text-sm text-[var(--color-text-muted)] mt-0.5 truncate">
+                {svc.client_name}
+              </p>
+            </button>
           </div>
           <button
             onClick={onClose}
@@ -566,16 +661,90 @@ export function ServiceDetailSheet({ service, onClose, onChanged, initialEdit = 
               </InfoRow>
             )}
 
-            {value != null && (
-              <InfoRow icon={Euro} label="Valor">
-                <span className="font-semibold">€{value.toFixed(2)}</span>
-                {svc.manual_value != null && svc.calculated_value != null && (
-                  <span className="text-xs text-[var(--color-text-muted)] ml-1.5">
-                    (manual · calculado: €{svc.calculated_value.toFixed(2)})
-                  </span>
+            <div className="flex gap-3">
+              <div className="shrink-0 w-5 h-5 mt-0.5 flex items-center justify-center text-[var(--color-text-muted)]">
+                <Euro className="w-4 h-4" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center justify-between mb-0.5">
+                  <p className="text-[11px] font-medium text-[var(--color-text-muted)] uppercase tracking-wide">Valor</p>
+                  {!editingValue && (
+                    <button
+                      onClick={() => setEditingValue(true)}
+                      className="flex items-center gap-1 text-[11px] font-medium text-[var(--color-primary)] hover:underline"
+                    >
+                      <Pencil className="w-3 h-3" /> Editar
+                    </button>
+                  )}
+                </div>
+
+                {editingValue ? (
+                  <div className="space-y-2.5">
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={valueInput}
+                      onChange={(e) => setValueInput(e.target.value)}
+                      placeholder="Ex: 50.00"
+                      className={INPUT_CLS}
+                    />
+                    <label className="flex items-center gap-2.5 cursor-pointer">
+                      <button
+                        type="button"
+                        onClick={() => setApplyVat((v) => !v)}
+                        className={`relative w-10 h-5 rounded-full transition-colors shrink-0 ${applyVat ? "bg-[var(--color-primary)]" : "bg-[var(--color-border)]"}`}
+                      >
+                        <span className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-all ${applyVat ? "left-[22px]" : "left-0.5"}`} />
+                      </button>
+                      <span className="text-xs font-medium text-[var(--color-text-main)]">Faturar com IVA ({vatRate}%)</span>
+                    </label>
+                    {valueInput.trim() !== "" && Number.isFinite(Number(valueInput.replace(",", "."))) && (
+                      <p className="text-xs text-[var(--color-text-muted)]">
+                        Total {applyVat ? "com IVA" : "sem IVA"}: <strong className="text-[var(--color-text-main)]">
+                          €{(Number(valueInput.replace(",", ".")) * (applyVat ? 1 + vatRate / 100 : 1)).toFixed(2)}
+                        </strong>
+                      </p>
+                    )}
+                    <p className="text-[11px] text-[var(--color-text-muted)]">
+                      Esta alteração aplica-se só a este dia — não muda o padrão do contrato.
+                    </p>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={saveValue}
+                        disabled={savingValue}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[var(--color-primary)] text-white text-xs font-medium hover:bg-[var(--color-primary-hover)] transition-colors disabled:opacity-50"
+                      >
+                        {savingValue ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+                        Guardar
+                      </button>
+                      <button
+                        onClick={() => setEditingValue(false)}
+                        className="px-3 py-1.5 rounded-lg border border-[var(--color-border)] text-xs text-[var(--color-text-sub)] hover:bg-[var(--color-background)] transition-colors"
+                      >
+                        Cancelar
+                      </button>
+                    </div>
+                  </div>
+                ) : currentValue != null ? (
+                  <div className="text-sm text-[var(--color-text-main)]">
+                    <span className="font-semibold">
+                      €{(currentValue * (applyVat ? 1 + vatRate / 100 : 1)).toFixed(2)}
+                    </span>
+                    <span className="text-xs text-[var(--color-text-muted)] ml-1.5">
+                      {applyVat ? `(com IVA ${vatRate}% · base €${currentValue.toFixed(2)})` : "(sem IVA)"}
+                    </span>
+                    {svc.manual_value != null && svc.calculated_value != null && (
+                      <span className="text-xs text-[var(--color-text-muted)] ml-1.5 block">
+                        Valor manual — calculado seria €{svc.calculated_value.toFixed(2)}
+                      </span>
+                    )}
+                  </div>
+                ) : (
+                  <p className="text-sm text-[var(--color-text-muted)] italic">Sem valor definido.</p>
                 )}
-              </InfoRow>
-            )}
+              </div>
+            </div>
 
             {/* Tipo de limpeza / pagamento / estofado (leitura) */}
             {meta?.cleaning_type && (
@@ -1134,39 +1303,12 @@ export function ServiceDetailSheet({ service, onClose, onChanged, initialEdit = 
               </button>
             )}
             {showDelete && (
-              <div className="rounded-lg border border-red-200 bg-red-50 p-3 space-y-2.5">
-                <p className="flex items-start gap-2 text-sm font-semibold text-red-800">
-                  <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
-                  {svc.contract_id
-                    ? "O que queres excluir? (apaga de tudo — calendário e app. Não pode ser desfeito.)"
-                    : "Excluir este serviço? Apaga de tudo (calendário e app). Não pode ser desfeito."}
-                </p>
-                <button
-                  onClick={() => handleDelete("single")}
-                  disabled={actionLoading === "excluir"}
-                  className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-red-600 text-white text-sm font-semibold hover:bg-red-700 transition-colors disabled:opacity-50"
-                >
-                  {actionLoading === "excluir" ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
-                  {svc.contract_id ? "Excluir só este dia" : "Excluir serviço"}
-                </button>
-                {svc.contract_id && (
-                  <button
-                    onClick={() => handleDelete("all")}
-                    disabled={actionLoading === "excluir"}
-                    className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-red-700 text-white text-sm font-semibold hover:bg-red-800 transition-colors disabled:opacity-50"
-                  >
-                    {actionLoading === "excluir" ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
-                    Excluir toda a recorrência
-                  </button>
-                )}
-                <button
-                  onClick={() => setShowDelete(false)}
-                  disabled={actionLoading === "excluir"}
-                  className="w-full px-4 py-2 rounded-lg border border-[var(--color-border)] text-sm font-medium text-[var(--color-text-sub)] hover:bg-white transition-colors"
-                >
-                  Voltar
-                </button>
-              </div>
+              <DeleteExclusionPanel
+                hasContract={!!svc.contract_id}
+                loading={actionLoading === "excluir"}
+                onConfirm={handleDelete}
+                onCancel={() => setShowDelete(false)}
+              />
             )}
           </div>
         ) : (
@@ -1195,39 +1337,12 @@ export function ServiceDetailSheet({ service, onClose, onChanged, initialEdit = 
                 Excluir do calendário
               </button>
             ) : (
-              <div className="rounded-lg border border-red-200 bg-red-50 p-3 space-y-2.5">
-                <p className="flex items-start gap-2 text-sm font-semibold text-red-800">
-                  <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
-                  {svc.contract_id
-                    ? "O que queres excluir? (apaga de tudo — calendário e app. Não pode ser desfeito.)"
-                    : "Excluir este serviço? Apaga de tudo (calendário e app). Não pode ser desfeito."}
-                </p>
-                <button
-                  onClick={() => handleDelete("single")}
-                  disabled={actionLoading === "excluir"}
-                  className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-red-600 text-white text-sm font-semibold hover:bg-red-700 transition-colors disabled:opacity-50"
-                >
-                  {actionLoading === "excluir" ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
-                  {svc.contract_id ? "Excluir só este dia" : "Excluir serviço"}
-                </button>
-                {svc.contract_id && (
-                  <button
-                    onClick={() => handleDelete("all")}
-                    disabled={actionLoading === "excluir"}
-                    className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-red-700 text-white text-sm font-semibold hover:bg-red-800 transition-colors disabled:opacity-50"
-                  >
-                    {actionLoading === "excluir" ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
-                    Excluir toda a recorrência
-                  </button>
-                )}
-                <button
-                  onClick={() => setShowDelete(false)}
-                  disabled={actionLoading === "excluir"}
-                  className="w-full px-4 py-2 rounded-lg border border-[var(--color-border)] text-sm font-medium text-[var(--color-text-sub)] hover:bg-white transition-colors"
-                >
-                  Voltar
-                </button>
-              </div>
+              <DeleteExclusionPanel
+                hasContract={!!svc.contract_id}
+                loading={actionLoading === "excluir"}
+                onConfirm={handleDelete}
+                onCancel={() => setShowDelete(false)}
+              />
             )}
           </div>
         )}
@@ -1237,6 +1352,75 @@ export function ServiceDetailSheet({ service, onClose, onChanged, initialEdit = 
 }
 
 // ─── Subcomponentes ───────────────────────────────────────────────────────────
+
+// Exclusão do calendário: antes mostrava as duas opções destrutivas (só este
+// dia / toda a recorrência) juntas, sem escolha prévia — confuso e fácil de
+// clicar na errada. Agora escolhe-se primeiro o âmbito, só depois confirma.
+function DeleteExclusionPanel({
+  hasContract, loading, onConfirm, onCancel,
+}: {
+  hasContract: boolean;
+  loading: boolean;
+  onConfirm: (scope: "single" | "all") => void;
+  onCancel: () => void;
+}) {
+  const [scope, setScope] = useState<"single" | "all" | null>(hasContract ? null : "single");
+
+  return (
+    <div className="rounded-lg border border-red-200 bg-red-50 p-3 space-y-2.5">
+      <p className="flex items-start gap-2 text-sm font-semibold text-red-800">
+        <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
+        Excluir do calendário — apaga de tudo (calendário e app). Não pode ser desfeito.
+      </p>
+
+      {hasContract ? (
+        <div className="space-y-1.5">
+          <p className="text-xs font-medium text-red-700">O que queres excluir?</p>
+          <button
+            type="button"
+            onClick={() => setScope("single")}
+            className={`w-full text-left px-3 py-2 rounded-lg border text-sm transition-colors ${
+              scope === "single" ? "bg-red-600 text-white border-red-600" : "bg-white text-red-800 border-red-200 hover:bg-red-100"
+            }`}
+          >
+            Só este dia
+            <span className="block text-xs font-normal opacity-80">A recorrência continua nos outros dias.</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setScope("all")}
+            className={`w-full text-left px-3 py-2 rounded-lg border text-sm transition-colors ${
+              scope === "all" ? "bg-red-700 text-white border-red-700" : "bg-white text-red-800 border-red-200 hover:bg-red-100"
+            }`}
+          >
+            Toda a recorrência
+            <span className="block text-xs font-normal opacity-80">Apaga esta e todas as próximas ocorrências desta intervenção.</span>
+          </button>
+        </div>
+      ) : (
+        <p className="text-xs text-red-700">Este serviço pontual será excluído.</p>
+      )}
+
+      <div className="flex gap-2 pt-1">
+        <button
+          onClick={() => scope && onConfirm(scope)}
+          disabled={loading || !scope}
+          className="flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-red-600 text-white text-sm font-semibold hover:bg-red-700 transition-colors disabled:opacity-50"
+        >
+          {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+          {scope === "all" ? "Confirmar — excluir toda a recorrência" : "Confirmar exclusão"}
+        </button>
+        <button
+          onClick={onCancel}
+          disabled={loading}
+          className="px-4 py-2 rounded-lg border border-[var(--color-border)] text-sm font-medium text-[var(--color-text-sub)] hover:bg-white transition-colors"
+        >
+          Voltar
+        </button>
+      </div>
+    </div>
+  );
+}
 
 function InfoRow({
   icon: Icon, label, children,

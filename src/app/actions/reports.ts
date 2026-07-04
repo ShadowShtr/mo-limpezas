@@ -47,11 +47,20 @@ export interface ServicosRow {
   total: number;
 }
 
+export interface FaturacaoDiaRow {
+  date: string;
+  servicos_count: number;
+  subtotal: number;
+  iva: number;
+  total: number;
+}
+
 export interface ReportsData {
   horas: HorasRow[];
   absentismo: AbsentismoRow[];
   receita: ReceitaRow[];
   servicosPorEquipa: ServicosRow[];
+  faturacaoDiaria: FaturacaoDiaRow[];
   vatRate: number;
 }
 
@@ -154,10 +163,20 @@ export async function getReportsData(
 
   const absentismo = Array.from(absMap.values()).filter((r) => r.total_dias > 0);
 
+  // Taxa de IVA das configurações da empresa (usada na Receita e na Faturação diária)
+  const { data: settingsRow } = await admin
+    .from("company_settings")
+    .select("vat_rate")
+    .eq("company_id", companyId)
+    .single();
+
+  const vatRate: number = settingsRow?.vat_rate ?? 23;
+  const vatFactor = vatRate / 100;
+
   // ─── 3. RECEITA ───────────────────────────────────────────
   const { data: services } = await admin
     .from("services")
-    .select("id, location_id, calculated_value, manual_value, status, scheduled_start, actual_start, actual_end")
+    .select("id, location_id, contract_id, calculated_value, manual_value, apply_vat, status, scheduled_start, actual_start, actual_end")
     .eq("company_id", companyId)
     .eq("status", "concluido")
     .gte("scheduled_start", `${startDate}T00:00:00`)
@@ -252,14 +271,61 @@ export async function getReportsData(
 
   const servicosPorEquipa = Array.from(servicosMap.values()).sort((a, b) => b.total - a.total);
 
-  // Buscar IVA das configurações da empresa (sem import circular)
-  const { data: settingsRow } = await admin
-    .from("company_settings")
-    .select("vat_rate")
-    .eq("company_id", companyId)
-    .single();
+  // ─── 5. FATURAÇÃO DIÁRIA ───────────────────────────────────
+  // Reaproveita os serviços concluídos já carregados para a Receita, mas trata
+  // as avenças (contracts.fixed_monthly) à parte: o serviço em si fica gravado
+  // com calculated_value=0 (só agenda; fatura-se 1x/mês), por isso o valor
+  // mensal da avença é dividido pelos serviços realmente prestados NESTE mês
+  // (o intervalo startDate–endDate do ecrã de Relatórios é sempre um mês
+  // completo). Ex.: avença de 300€ com 3 serviços no mês → 100€ em cada dia
+  // em que houve serviço.
+  const contractIds = [...new Set((services ?? []).map((s) => s.contract_id).filter(Boolean))] as string[];
+  const { data: contractsData } = contractIds.length > 0
+    ? await admin
+        .from("contracts")
+        .select("id, fixed_monthly, fixed_price, apply_vat")
+        .in("id", contractIds)
+    : { data: [] as { id: string; fixed_monthly: boolean; fixed_price: number | null; apply_vat: boolean }[] };
+  const contractMap = Object.fromEntries((contractsData ?? []).map((c) => [c.id, c]));
 
-  const vatRate: number = settingsRow?.vat_rate ?? 23;
+  const avencaCountByContract = new Map<string, number>();
+  for (const s of services ?? []) {
+    if (!s.contract_id) continue;
+    if (!contractMap[s.contract_id]?.fixed_monthly) continue;
+    avencaCountByContract.set(s.contract_id, (avencaCountByContract.get(s.contract_id) ?? 0) + 1);
+  }
 
-  return { horas, absentismo, receita, servicosPorEquipa, vatRate };
+  const diaMap = new Map<string, { servicos_count: number; subtotal: number; iva: number }>();
+  for (const s of services ?? []) {
+    const day = (s.scheduled_start as string).slice(0, 10);
+    if (!diaMap.has(day)) diaMap.set(day, { servicos_count: 0, subtotal: 0, iva: 0 });
+    const entry = diaMap.get(day)!;
+    entry.servicos_count += 1;
+
+    const contract = s.contract_id ? contractMap[s.contract_id] : null;
+    let value: number;
+    let hasVat: boolean;
+    if (contract?.fixed_monthly) {
+      const count = avencaCountByContract.get(s.contract_id!) ?? 1;
+      value = (contract.fixed_price ?? 0) / count;
+      hasVat = contract.apply_vat === true;
+    } else {
+      value = s.manual_value ?? s.calculated_value ?? 0;
+      hasVat = s.apply_vat !== false;
+    }
+    entry.subtotal += value;
+    entry.iva += hasVat ? value * vatFactor : 0;
+  }
+
+  const faturacaoDiaria: FaturacaoDiaRow[] = Array.from(diaMap.entries())
+    .map(([date, v]) => ({
+      date,
+      servicos_count: v.servicos_count,
+      subtotal: Math.round(v.subtotal * 100) / 100,
+      iva: Math.round(v.iva * 100) / 100,
+      total: Math.round((v.subtotal + v.iva) * 100) / 100,
+    }))
+    .sort((a, b) => a.date.localeCompare(b.date));
+
+  return { horas, absentismo, receita, servicosPorEquipa, faturacaoDiaria, vatRate };
 }

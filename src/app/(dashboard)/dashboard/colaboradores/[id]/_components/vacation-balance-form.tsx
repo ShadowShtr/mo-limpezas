@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Loader2, Umbrella } from "lucide-react";
-import { createClient } from "@/lib/supabase/client";
+import { updateVacationBalance } from "@/app/actions/colaboradores";
 
 interface Props {
   colaboradorId: string;
@@ -13,19 +13,24 @@ export function VacationBalanceForm({ colaboradorId, currentBalance }: Props) {
   const [balance, setBalance] = useState(String(currentBalance));
   const [loading, setLoading] = useState(false);
   const [saved, setSaved] = useState(false);
-  const supabase = createClient();
+  const [error, setError] = useState<string | null>(null);
 
   async function handleSave() {
     setLoading(true);
     setSaved(false);
+    setError(null);
     const val = parseFloat(balance);
-    if (!isNaN(val)) {
-      await supabase
-        .from("profiles")
-        .update({ vacation_balance: val })
-        .eq("id", colaboradorId);
+    if (isNaN(val)) {
+      setLoading(false);
+      setError("Valor inválido.");
+      return;
     }
+    const res = await updateVacationBalance(colaboradorId, val);
     setLoading(false);
+    if (!res.ok) {
+      setError(res.error);
+      return;
+    }
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
   }
@@ -65,6 +70,7 @@ export function VacationBalanceForm({ colaboradorId, currentBalance }: Props) {
           {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : saved ? "Guardado ✓" : "Guardar"}
         </button>
       </div>
+      {error && <p className="mt-2 text-xs text-red-600">{error}</p>}
     </div>
   );
 }

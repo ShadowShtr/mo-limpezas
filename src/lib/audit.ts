@@ -61,7 +61,7 @@ export async function auditLog(
     if (params.after !== undefined) meta.after = sanitize(params.after);
     if (params.source) meta.source = params.source;
 
-    await admin.from("audit_logs").insert({
+    const { error } = await admin.from("audit_logs").insert({
       company_id: params.companyId,
       actor_id: params.actorId,
       action: params.action,
@@ -69,7 +69,13 @@ export async function auditLog(
       entity_id: params.entityId ?? null,
       meta,
     });
-  } catch {
-    /* auditoria nunca bloqueia a operação principal */
+    // Auditoria nunca bloqueia a operação principal, mas uma falha aqui não
+    // pode desaparecer sem rasto — sem isto, a trilha de auditoria da app
+    // inteira podia sumir silenciosamente (ex.: RLS/schema drift).
+    if (error) {
+      console.error(`[auditLog] falha ao gravar "${params.action}" (${params.entityType}):`, error.message);
+    }
+  } catch (e) {
+    console.error(`[auditLog] erro inesperado ao gravar "${params.action}" (${params.entityType}):`, e);
   }
 }

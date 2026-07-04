@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { Header } from "@/components/layout/header";
 import { dailyContractedMinutes, isAbsentOn } from "@/lib/ponto-calc";
 import { RegistoPontoClient, type PontoRow } from "./_components/registo-ponto-client";
+import { PontoTabs } from "./_components/ponto-tabs";
 
 export const metadata = { title: "Registo de Ponto — Mó Limpezas" };
 
@@ -180,6 +181,7 @@ export default async function RegistoPontoPage({
     <div>
       <Header title="Registo de Ponto" subtitle="Recursos Humanos" />
       <div className="px-4 py-5 sm:p-6 lg:px-8 mx-auto max-w-[1400px]">
+        <PontoTabs />
         <RegistoPontoClient
           rows={rows}
           collaborators={(allCollabsRes.data ?? []) as { id: string; full_name: string }[]}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useTransition, useMemo } from "react";
+import { useEffect, useState, useTransition, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { createPortal } from "react-dom";
 import { X, Loader2, Check, Users, ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
@@ -164,6 +164,7 @@ interface Props {
   contrato?: ContratosTableRow;
   copyFrom?: ContratosTableRow;
   fixedClientId?: string;
+  vatRate?: number;
   labels?: {
     createTitle?: string;
     editTitle?: string;
@@ -188,6 +189,7 @@ export function ContratoSheet({
   contrato,
   copyFrom,
   fixedClientId,
+  vatRate = 23,
   labels,
 }: Props) {
   const isEdit = !!contrato;
@@ -202,6 +204,24 @@ export function ContratoSheet({
   // UI state
   const [open, setOpen] = useState(false);
   const [step, setStep] = useState<1 | 2>(1);
+  // Pequeno "cooldown" ao entrar no passo 2: evita que o mesmo gesto de clique
+  // que avança de passo (no botão "Seguinte") também acabe por acionar o botão
+  // "Guardar" que passa a ocupar a mesma posição no ecrã (observado em testes:
+  // um clique podia gravar o contrato sem o utilizador nunca ver/confirmar o
+  // passo 2). O botão de gravar só fica ativo depois deste intervalo.
+  const [step2Ready, setStep2Ready] = useState(false);
+  const step2ReadyTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  function goToStep(next: 1 | 2) {
+    if (step2ReadyTimer.current) clearTimeout(step2ReadyTimer.current);
+    setStep2Ready(false);
+    if (next === 2) {
+      step2ReadyTimer.current = setTimeout(() => setStep2Ready(true), 400);
+    }
+    setStep(next);
+  }
+  useEffect(() => () => {
+    if (step2ReadyTimer.current) clearTimeout(step2ReadyTimer.current);
+  }, []);
   const [pending, startTransition] = useTransition();
   const [saved, setSaved] = useState(false);
   const [message, setMessage] = useState<{ type: "error" | "success"; text: string } | null>(null);
@@ -222,7 +242,6 @@ export function ContratoSheet({
   const [endsOn, setEndsOn] = useState(source?.ends_on ?? "");
   const [notes, setNotes] = useState(source?.notes ?? "");
   const [status, setStatus] = useState(contrato?.status ?? "ativo");
-  const [editScope, setEditScope] = useState("pattern");
   const [paymentStatus, setPaymentStatus] = useState(source?.payment_status ?? "nao_informado");
   const [upholsteryType, setUpholsteryType] = useState(source?.upholstery_type ?? "");
   const [upholsteryNotes, setUpholsteryNotes] = useState(source?.upholstery_notes ?? "");
@@ -235,10 +254,22 @@ export function ContratoSheet({
   const [hourlyRate, setHourlyRate] = useState(
     source?.locations?.hourly_rate != null ? String(source.locations.hourly_rate) : "",
   );
-  // Valor fixo por serviço: quando preenchido, ignora o cálculo por hora.
+  // Valor fixo: no modo mensal é o valor da avença/mês. Reutiliza fixed_price.
   const [fixedPrice, setFixedPrice] = useState(
     source?.fixed_price != null ? String(source.fixed_price) : "",
   );
+  // Mecânica de faturação: "hourly" (por hora, default) ou "monthly" (valor fixo mensal).
+  const [billingMode, setBillingMode] = useState<"hourly" | "monthly">(
+    source?.fixed_monthly ? "monthly" : "hourly",
+  );
+  // IVA do contrato (chavinha). Default desligado.
+  const [applyVat, setApplyVat] = useState<boolean>(source?.apply_vat ?? false);
+  // Duração por serviço (horas) — definida logo no passo 1 para fazer a conta.
+  // Em edição arranca com a duração do 1.º dia do padrão; senão 2h.
+  const [baseHours, setBaseHours] = useState<string>(() => {
+    const first = source?.schedule_days?.[0];
+    return first?.duration_min ? String(first.duration_min / 60) : "2";
+  });
   // schedule_days: chave = day key (ex: "mon"), valor = config.
   // num_people só é usado quando NÃO há equipa (preenchido à mão).
   const initSchedule = (): Record<string, CfgDay> => {
@@ -297,7 +328,7 @@ export function ContratoSheet({
   function updateScheduleDay(dayKey: string, field: string, value: string | number) {
     setScheduleConfig((prev) => ({
       ...prev,
-      [dayKey]: { ...DEFAULT_CFG, ...prev[dayKey], [field]: value },
+      [dayKey]: { ...defaultCfg, ...prev[dayKey], [field]: value },
     }));
   }
 
@@ -314,7 +345,15 @@ export function ContratoSheet({
 
   const parsedHourlyRate = hourlyRate.trim() === "" ? null : Number(hourlyRate.replace(",", "."));
   const parsedFixedPrice = fixedPrice.trim() === "" ? null : Number(fixedPrice.replace(",", "."));
-  const useFixedPrice = parsedFixedPrice != null && Number.isFinite(parsedFixedPrice) && parsedFixedPrice > 0;
+  // Modo mensal ativo com valor válido → o valor da avença ignora o cálculo por hora.
+  const isMonthly = billingMode === "monthly";
+  const useFixedPrice = isMonthly && parsedFixedPrice != null && Number.isFinite(parsedFixedPrice) && parsedFixedPrice > 0;
+
+  // Config padrão de um dia, com a duração vinda do campo do passo 1 (baseHours).
+  // Usada como fallback quando um dia ainda não foi configurado no passo 2.
+  const baseMinRaw = Number(baseHours.replace(",", "."));
+  const baseMin = Number.isFinite(baseMinRaw) && baseMinRaw > 0 ? Math.round(baseMinRaw * 60) : 120;
+  const defaultCfg: CfgDay = { ...DEFAULT_CFG, duration_min: baseMin };
 
   // Tamanho da equipa atribuída (membros ativos). 0 → 1 para o cálculo.
   const teamSize = (teamId: string) => {
@@ -326,13 +365,10 @@ export function ContratoSheet({
   const peopleForDay = (cfg: CfgDay) =>
     cfg.team_id ? teamSize(cfg.team_id) : Math.max(1, Math.floor(cfg.num_people || 1));
 
-  const totalDurationMin = useMemo(
-    () => daysToConfig.reduce((sum, { key }) => {
-      const cfg = scheduleConfig[key] ?? DEFAULT_CFG;
-      return sum + Number(cfg.duration_min || 0);
-    }, 0),
-    [daysToConfig, scheduleConfig],
-  );
+  const totalDurationMin = daysToConfig.reduce((sum, { key }) => {
+    const cfg = scheduleConfig[key] ?? defaultCfg;
+    return sum + Number(cfg.duration_min || 0);
+  }, 0);
 
   // Valor = Σ por dia de (horas × valor/hora × nº de pessoas desse dia).
   // Cada colaboradora conta como uma hora: 12€/h com 3 pessoas = 36€/h.
@@ -340,18 +376,18 @@ export function ContratoSheet({
     ? parsedFixedPrice
     : parsedHourlyRate != null && Number.isFinite(parsedHourlyRate)
     ? daysToConfig.reduce((sum, { key }) => {
-        const cfg = scheduleConfig[key] ?? DEFAULT_CFG;
+        const cfg = scheduleConfig[key] ?? defaultCfg;
         return sum + (Number(cfg.duration_min || 0) / 60) * parsedHourlyRate * peopleForDay(cfg);
       }, 0)
     : null;
   // Nº de pessoas representativo para o resumo (1.º dia configurado).
   const summaryPeople = daysToConfig.length > 0
-    ? peopleForDay(scheduleConfig[daysToConfig[0].key] ?? DEFAULT_CFG)
+    ? peopleForDay(scheduleConfig[daysToConfig[0].key] ?? defaultCfg)
     : 1;
 
   function buildScheduleDays(): ScheduleDay[] {
     return daysToConfig.map(({ key }) => {
-      const cfg = scheduleConfig[key] ?? DEFAULT_CFG;
+      const cfg = scheduleConfig[key] ?? defaultCfg;
       return {
         day: key,
         start_time: cfg.start_time,
@@ -370,11 +406,16 @@ export function ContratoSheet({
     setEndsOn(""); setNotes(""); setStatus("ativo"); setScheduleConfig({});
     setPaymentStatus("nao_informado"); setUpholsteryType(""); setUpholsteryNotes("");
     setUpholsteryUnits(""); setUpholsteryUnitPrice("");
-    setStep(1);
+    setFixedPrice(""); setBillingMode("hourly"); setApplyVat(false); setBaseHours("2");
+    goToStep(1);
   }
 
   function handleSubmit(e: React.SyntheticEvent<HTMLFormElement>) {
     e.preventDefault();
+    // Guarda contra submissão prematura: nunca gravar antes do utilizador
+    // chegar de facto ao passo final (e passado o cooldown de step2Ready —
+    // ver comentário na declaração do estado).
+    if (step !== 2 || !step2Ready) return;
     setMessage(null);
     setSaved(false);
 
@@ -423,8 +464,11 @@ export function ContratoSheet({
           ? Number(upholsteryUnitPrice.replace(",", ".")) : null,
         // Estofos por unidade: o total (qtd × preço) passa a ser o valor por ocorrência
         unit_value: upholsteryTotal != null && upholsteryTotal > 0 ? upholsteryTotal : null,
-        // Valor fixo por serviço: tem prioridade sobre o cálculo por hora.
-        fixed_price: useFixedPrice ? parsedFixedPrice : null,
+        // Modo mensal → guarda o valor da avença; caso contrário preserva o
+        // eventual valor fixo por-serviço já existente (contratos antigos).
+        fixed_price: isMonthly ? parsedFixedPrice : (isEdit ? contrato?.fixed_price ?? null : null),
+        fixed_monthly: isMonthly,
+        apply_vat: applyVat,
       };
 
       const res = isEdit
@@ -690,34 +734,132 @@ export function ContratoSheet({
                 intervalDays={intervalDays}
               />
 
-              {/* Valor por hora */}
-              <Field label="Valor por hora (€)">
-                <input
-                  type="number"
-                  min={0}
-                  step="0.01"
-                  value={hourlyRate}
-                  onChange={(e) => setHourlyRate(e.target.value)}
-                  placeholder="ex: 18.50"
-                  disabled={useFixedPrice}
-                  className={INPUT_CLS}
-                />
+              {/* Mecânica de faturação: por hora ou valor fixo mensal (avença) */}
+              <Field label="Mecânica de faturação">
+                <div className="grid grid-cols-2 gap-2">
+                  {[
+                    { value: "hourly", label: "Por hora" },
+                    { value: "monthly", label: "Avença" },
+                  ].map((m) => (
+                    <button
+                      type="button"
+                      key={m.value}
+                      onClick={() => setBillingMode(m.value as "hourly" | "monthly")}
+                      className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors border ${
+                        billingMode === m.value
+                          ? "bg-[var(--color-primary)] text-white border-[var(--color-primary)]"
+                          : "bg-white text-[var(--color-text-sub)] border-[var(--color-border)] hover:border-[var(--color-primary)]"
+                      }`}
+                    >
+                      {m.label}
+                    </button>
+                  ))}
+                </div>
               </Field>
 
-              {/* Valor fixo por serviço (alternativa ao valor/hora) */}
-              <Field label="Valor fixo por serviço (€)">
-                <input
-                  type="number"
-                  min={0}
-                  step="0.01"
-                  value={fixedPrice}
-                  onChange={(e) => setFixedPrice(e.target.value)}
-                  placeholder="ex: 50.00 (deixa vazio para faturar por hora)"
-                  className={INPUT_CLS}
-                />
+              {/* Valor por hora + duração por serviço (modo por hora) */}
+              {!isMonthly && (
+                <div className="grid grid-cols-2 gap-3">
+                  <Field label="Valor por hora (€)">
+                    <input
+                      type="number"
+                      min={0}
+                      step="0.01"
+                      value={hourlyRate}
+                      onChange={(e) => setHourlyRate(e.target.value)}
+                      placeholder="ex: 18.50"
+                      className={INPUT_CLS}
+                    />
+                  </Field>
+                  <Field label="Duração por serviço (h)">
+                    <input
+                      type="number"
+                      min={0.25}
+                      step={0.25}
+                      value={baseHours}
+                      onChange={(e) => setBaseHours(e.target.value)}
+                      placeholder="ex: 2"
+                      className={INPUT_CLS}
+                    />
+                  </Field>
+                </div>
+              )}
+
+              {/* Valor mensal (modo avença) */}
+              {isMonthly && (
+                <Field label="Valor mensal (€)">
+                  <input
+                    type="number"
+                    min={0}
+                    step="0.01"
+                    value={fixedPrice}
+                    onChange={(e) => setFixedPrice(e.target.value)}
+                    placeholder="ex: 300.00"
+                    className={INPUT_CLS}
+                  />
+                  <p className="mt-1 text-xs text-[var(--color-text-muted)]">
+                    Faturado uma vez por mês (dia 1 ao fim do mês), independente do nº de
+                    serviços. Os serviços continuam a aparecer no calendário nos dias marcados.
+                  </p>
+                </Field>
+              )}
+
+              {/* Chavinha do IVA */}
+              <Field label="IVA">
+                <button
+                  type="button"
+                  onClick={() => setApplyVat((v) => !v)}
+                  role="switch"
+                  aria-checked={applyVat}
+                  className="flex items-center gap-3 w-full text-left"
+                >
+                  <span
+                    className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors ${
+                      applyVat ? "bg-[var(--color-primary)]" : "bg-[var(--color-border)]"
+                    }`}
+                  >
+                    <span
+                      className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${
+                        applyVat ? "translate-x-5" : "translate-x-0.5"
+                      }`}
+                    />
+                  </span>
+                  <span className="text-sm text-[var(--color-text-sub)]">
+                    {applyVat ? "Com IVA" : "Sem IVA"}
+                  </span>
+                </button>
                 <p className="mt-1 text-xs text-[var(--color-text-muted)]">
-                  Se preencheres, cada serviço deste contrato vale este valor fixo (ignora o valor/hora).
+                  Quando ligado, a faturação deste contrato soma IVA (exceto clientes isentos).
                 </p>
+
+                {/* Conferência de valores: fórmula (por hora) ou avença (mensal) + IVA */}
+                {(() => {
+                  const base = isMonthly
+                    ? (parsedFixedPrice != null && parsedFixedPrice > 0 ? parsedFixedPrice : null)
+                    : calculatedValue;
+                  if (base == null) return null;
+                  const iva = applyVat ? base * (vatRate / 100) : 0;
+                  const total = base + iva;
+                  const eur = (n: number) =>
+                    n.toLocaleString("pt-PT", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " €";
+                  const per = isMonthly ? "/mês" : "/serviço";
+                  return (
+                    <div className="mt-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-background)] px-3 py-2 text-sm space-y-1">
+                      <div className="flex justify-between text-[var(--color-text-sub)]">
+                        <span>Subtotal{per}</span>
+                        <span>{eur(base)}</span>
+                      </div>
+                      <div className="flex justify-between text-[var(--color-text-sub)]">
+                        <span>+ IVA ({applyVat ? vatRate : 0}%)</span>
+                        <span>{eur(iva)}</span>
+                      </div>
+                      <div className="flex justify-between font-semibold text-[var(--color-text-main)] pt-1 border-t border-[var(--color-border)]">
+                        <span>Total{per}</span>
+                        <span>{eur(total)}</span>
+                      </div>
+                    </div>
+                  );
+                })()}
               </Field>
 
               {/* Estado do contrato */}
@@ -738,28 +880,13 @@ export function ContratoSheet({
           {step === 2 && (
             <>
               {isEdit && (
-                <Field label="Edição segura da recorrência">
-                  <div className="grid gap-2 text-xs text-[var(--color-text-sub)]">
-                    {[
-                      ["single", "Alterar apenas esta ocorrência"],
-                      ["future", "Alterar esta e as próximas"],
-                      ["pattern", "Alterar o padrão recorrente"],
-                      ["exception", "Criar exceção só para este dia"],
-                    ].map(([value, label]) => (
-                      <label key={value} className="flex items-center gap-2 rounded-lg border border-[var(--color-border)] px-3 py-2">
-                        <input
-                          type="radio"
-                          name="editScope"
-                          value={value}
-                          checked={editScope === value}
-                          onChange={(e) => setEditScope(e.target.value)}
-                        />
-                        <span>{label}</span>
-                      </label>
-                    ))}
-                  </div>
-                  <p className="mt-2 text-xs text-[var(--color-text-muted)]">
-                    Esta tela atualiza o contrato. Ocorrências já concluídas, em curso, falta ou canceladas não são reescritas aqui.
+                <Field label="Edição da recorrência">
+                  <p className="rounded-lg border border-[var(--color-border)] bg-[var(--color-background)] px-3 py-2 text-xs text-[var(--color-text-sub)]">
+                    Guardar aqui atualiza o <strong>padrão recorrente</strong> do contrato: as
+                    ocorrências futuras ainda por realizar são reescritas segundo os novos
+                    dados (equipa, horário, valor). Ocorrências já concluídas, em curso, falta
+                    ou canceladas nunca são reescritas. Para mudar apenas um dia específico sem
+                    afetar o padrão, edita essa ocorrência diretamente no calendário.
                   </p>
                 </Field>
               )}
@@ -773,7 +900,7 @@ export function ContratoSheet({
                 </p>
                 <div className="space-y-3">
                   {daysToConfig.map(({ key, label }) => {
-                    const cfg = scheduleConfig[key] ?? { start_time: "09:00", duration_min: 120, team_id: "" };
+                    const cfg = scheduleConfig[key] ?? defaultCfg;
                     return (
                       <div key={key} className="p-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-background)]">
                         {daysToConfig.length > 1 && (
@@ -858,7 +985,7 @@ export function ContratoSheet({
                       </div>
                       <p className="mt-1 text-xs text-[var(--color-text-muted)]">
                         {useFixedPrice
-                          ? "valor fixo por serviço"
+                          ? "valor fixo mensal (avença) — 1 faturação por mês"
                           : useUnits
                           ? `${upholsteryUnits || 0} unidade(s) x preço unitário`
                           : `${(totalDurationMin / 60).toLocaleString("pt-PT", { maximumFractionDigits: 2 })}h x valor/hora x ${summaryPeople} pessoa(s)`}
@@ -924,7 +1051,7 @@ export function ContratoSheet({
                     return;
                   }
                   setMessage(null);
-                  setStep(2);
+                  goToStep(2);
                 }}
                 className="ml-auto flex items-center justify-center gap-1.5 px-5 py-2.5 rounded-xl bg-[var(--color-primary)] text-white text-sm font-semibold hover:bg-[var(--color-primary-hover)] transition-colors"
               >
@@ -936,7 +1063,7 @@ export function ContratoSheet({
             <>
               <button
                 type="button"
-                onClick={() => setStep(1)}
+                onClick={() => goToStep(1)}
                 className="flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl border border-[var(--color-border)] text-sm font-medium text-[var(--color-text-sub)] hover:bg-[var(--color-background)] transition-colors"
               >
                 <ChevronLeft className="w-4 h-4" />
@@ -945,7 +1072,7 @@ export function ContratoSheet({
               <button
                 form="contrato-form"
                 type="submit"
-                disabled={pending}
+                disabled={pending || !step2Ready}
                 className="ml-auto flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold transition-all disabled:opacity-50"
                 style={{
                   background: saved
@@ -983,7 +1110,7 @@ export function ContratoSheet({
         onClick={() => {
           // Form novo (não edição, não duplicação) começa limpo a cada abertura.
           if (!isEdit && !copyFrom) resetForm();
-          setStep(1); setSaved(false); setMessage(null); setOpen(true);
+          goToStep(1); setSaved(false); setMessage(null); setOpen(true);
         }}
         style={{ display: "contents", cursor: "pointer" }}
       >

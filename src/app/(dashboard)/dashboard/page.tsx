@@ -1,4 +1,6 @@
-﻿import { createClient } from "@/lib/supabase/server";
+﻿import Link from "next/link";
+import { Bell, ChevronRight } from "lucide-react";
+import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { redirect } from "next/navigation";
 import { Header } from "@/components/layout/header";
@@ -66,6 +68,23 @@ export default async function DashboardPage() {
         <BackupReminder />
         <PaymentsReminderBanner />
         <DocumentsBackupBanner expiringCount={expiringDocs} />
+
+        {/* Pendências vivem dentro do Dashboard (saíram do menu lateral) */}
+        <Link
+          href="/dashboard/pendencias"
+          className="flex items-center gap-3 p-4 bg-white rounded-xl border border-[var(--color-border)] hover:border-[var(--color-primary)] hover:bg-[var(--color-primary-light)] transition-colors group"
+        >
+          <div className="w-9 h-9 rounded-lg bg-amber-50 flex items-center justify-center shrink-0">
+            <Bell className="w-4 h-4 text-amber-600" />
+          </div>
+          <div className="flex-1">
+            <p className="text-sm font-semibold text-[var(--color-text-main)]">Pendências</p>
+            <p className="text-xs text-[var(--color-text-muted)]">
+              Serviços sem checkout, pontos fora do raio, fotos falhadas e mais
+            </p>
+          </div>
+          <ChevronRight className="w-4 h-4 text-[var(--color-text-muted)] group-hover:text-[var(--color-primary)]" />
+        </Link>
 
         <DashboardKPIs kpis={kpis} />
 

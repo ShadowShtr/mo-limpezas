@@ -122,6 +122,14 @@ export function CashFlowClient({ initialData, error: initErr, companyId, mesPara
     });
   }
 
+  // Reverter um registo manual confirmado para pendente (enganos acontecem).
+  async function handleMarkPending(id: string) {
+    startTransition(async () => {
+      await updateCashFlowEntry(id, { status: "pendente" });
+      reload(year, month);
+    });
+  }
+
   const filtered = (data?.entries ?? []).filter((e) => {
     if (filterType && e.type !== filterType) return false;
     if (filterStatus && e.status !== filterStatus) return false;
@@ -273,9 +281,18 @@ export function CashFlowClient({ initialData, error: initErr, companyId, mesPara
                       {e.status === "pendente" ? (
                         <button
                           onClick={() => handleConfirm(e.id)}
+                          title="Marcar como pago/recebido"
                           className="text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 font-medium hover:bg-amber-200 transition-colors"
                         >
                           Pendente — confirmar
+                        </button>
+                      ) : !e.reference_type ? (
+                        <button
+                          onClick={() => handleMarkPending(e.id)}
+                          title="Voltar a pendente (por pagar)"
+                          className="text-xs px-2 py-0.5 rounded-full bg-green-100 text-green-700 font-medium hover:bg-amber-100 hover:text-amber-700 transition-colors"
+                        >
+                          Confirmado — repor pendente
                         </button>
                       ) : (
                         <span className="text-xs px-2 py-0.5 rounded-full bg-green-100 text-green-700 font-medium">Confirmado</span>
@@ -318,11 +335,14 @@ export function CashFlowClient({ initialData, error: initErr, companyId, mesPara
               <div>
                 <label className="block text-sm font-medium text-[var(--color-text-main)] mb-1.5">Tipo</label>
                 <div className="flex rounded-lg border border-[var(--color-border)] overflow-hidden">
-                  <button type="button" onClick={() => setNewType("entrada")}
+                  {/* Ao trocar o tipo, o estado acompanha a intenção habitual:
+                      entrada = dinheiro que entrou (confirmado); saída = despesa
+                      a pagar (pendente). Continua alterável no seletor abaixo. */}
+                  <button type="button" onClick={() => { setNewType("entrada"); setNewStatus("confirmado"); }}
                     className={`flex-1 py-2 text-sm font-medium transition-colors ${newType === "entrada" ? "bg-green-600 text-white" : "text-[var(--color-text-sub)] hover:bg-[var(--color-background)]"}`}>
                     + Entrada
                   </button>
-                  <button type="button" onClick={() => setNewType("saida")}
+                  <button type="button" onClick={() => { setNewType("saida"); setNewStatus("pendente"); }}
                     className={`flex-1 py-2 text-sm font-medium border-l border-[var(--color-border)] transition-colors ${newType === "saida" ? "bg-red-600 text-white" : "text-[var(--color-text-sub)] hover:bg-[var(--color-background)]"}`}>
                     − Saída
                   </button>
@@ -353,8 +373,8 @@ export function CashFlowClient({ initialData, error: initErr, companyId, mesPara
                 <div>
                   <label className="block text-sm font-medium text-[var(--color-text-main)] mb-1.5">Estado</label>
                   <select value={newStatus} onChange={(e) => setNewStatus(e.target.value as CashFlowStatus)} className={inputCls}>
-                    <option value="confirmado">Confirmado</option>
-                    <option value="pendente">Pendente</option>
+                    <option value="pendente">Pendente (por pagar)</option>
+                    <option value="confirmado">Confirmado (pago/recebido)</option>
                   </select>
                 </div>
               </div>

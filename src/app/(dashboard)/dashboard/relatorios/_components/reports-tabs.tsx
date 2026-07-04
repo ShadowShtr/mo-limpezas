@@ -8,17 +8,19 @@ import {
   BarChart3,
   Download,
   FileText,
+  CalendarDays,
 } from "lucide-react";
-import type { HorasRow, AbsentismoRow, ReceitaRow, ServicosRow } from "@/app/actions/reports";
+import type { HorasRow, AbsentismoRow, ReceitaRow, ServicosRow, FaturacaoDiaRow } from "@/app/actions/reports";
 import { downloadCsv } from "@/lib/csv";
 
-type Tab = "horas" | "absentismo" | "receita" | "servicos";
+type Tab = "horas" | "absentismo" | "receita" | "servicos" | "faturacao";
 
 interface Props {
   horas: HorasRow[];
   absentismo: AbsentismoRow[];
   receita: ReceitaRow[];
   servicosPorEquipa: ServicosRow[];
+  faturacaoDiaria: FaturacaoDiaRow[];
   mesLabel: string;
   mesParam: string;
   vatRate: number;
@@ -126,6 +128,7 @@ const TABS: { key: Tab; label: string; icon: React.ElementType }[] = [
   { key: "absentismo", label: "Absentismo", icon: AlertTriangle },
   { key: "receita",    label: "Receita",    icon: TrendingUp },
   { key: "servicos",   label: "Serviços",   icon: BarChart3 },
+  { key: "faturacao",  label: "Faturação diária", icon: CalendarDays },
 ];
 
 const ABSENCE_LABELS: Record<string, string> = {
@@ -137,7 +140,7 @@ const ABSENCE_LABELS: Record<string, string> = {
   outros:              "Outros",
 };
 
-export function ReportsTabs({ horas, absentismo, receita, servicosPorEquipa, mesLabel, mesParam, vatRate }: Props) {
+export function ReportsTabs({ horas, absentismo, receita, servicosPorEquipa, faturacaoDiaria, mesLabel, mesParam, vatRate }: Props) {
   const vatFactor = vatRate / 100;
   const [tab, setTab] = useState<Tab>("horas");
 
@@ -477,6 +480,146 @@ export function ReportsTabs({ horas, absentismo, receita, servicosPorEquipa, mes
           )}
         </div>
       )}
+
+      {/* ── FATURAÇÃO DIÁRIA ── */}
+      {tab === "faturacao" && (
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <p className="text-sm text-[var(--color-text-muted)]">
+              {faturacaoDiaria.length} dia{faturacaoDiaria.length !== 1 ? "s" : ""} com faturação · Total:{" "}
+              <span className="font-semibold text-green-600">
+                {fmtEuros(faturacaoDiaria.reduce((s, r) => s + r.total, 0))}
+              </span>
+            </p>
+            <button
+              onClick={() =>
+                exportCsv(
+                  `faturacao-diaria-${mesParam}.csv`,
+                  ["Data", "Serviços", "Subtotal", `IVA`, "Total"],
+                  faturacaoDiaria.map((r) => [
+                    r.date,
+                    r.servicos_count.toString(),
+                    r.subtotal.toFixed(2),
+                    r.iva.toFixed(2),
+                    r.total.toFixed(2),
+                  ]),
+                )
+              }
+              className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-[var(--color-border)] text-sm text-[var(--color-text-sub)] hover:bg-[var(--color-background)] transition-colors"
+            >
+              <Download className="w-4 h-4" />
+              CSV
+            </button>
+          </div>
+
+          {faturacaoDiaria.length === 0 ? (
+            <EmptyState text="Sem faturação neste período." />
+          ) : (
+            <>
+              <DailyBillingCalendar mesParam={mesParam} rows={faturacaoDiaria} />
+
+              <div className="bg-white rounded-xl border border-[var(--color-border)] overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-[var(--color-border)]">
+                      <Th>Data</Th>
+                      <Th align="right">Serviços</Th>
+                      <Th align="right">Subtotal</Th>
+                      <Th align="right">IVA</Th>
+                      <Th align="right">Total</Th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[var(--color-border)]">
+                    {faturacaoDiaria.map((r) => (
+                      <tr key={r.date} className="hover:bg-[var(--color-background)]">
+                        <Td>
+                          {new Date(`${r.date}T00:00:00`).toLocaleDateString("pt-PT", {
+                            weekday: "short", day: "2-digit", month: "2-digit",
+                          })}
+                        </Td>
+                        <Td align="right">{r.servicos_count}</Td>
+                        <Td align="right">{fmtEuros(r.subtotal)}</Td>
+                        <Td align="right">{fmtEuros(r.iva)}</Td>
+                        <Td align="right">
+                          <span className="font-semibold text-green-700">{fmtEuros(r.total)}</span>
+                        </Td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot>
+                    <tr className="border-t-2 border-[var(--color-border)] bg-[var(--color-background)]">
+                      <Td><span className="font-semibold">Total</span></Td>
+                      <Td align="right">
+                        <span className="font-semibold">{faturacaoDiaria.reduce((s, r) => s + r.servicos_count, 0)}</span>
+                      </Td>
+                      <Td align="right">
+                        <span className="font-semibold">{fmtEuros(faturacaoDiaria.reduce((s, r) => s + r.subtotal, 0))}</span>
+                      </Td>
+                      <Td align="right">
+                        <span className="font-semibold">{fmtEuros(faturacaoDiaria.reduce((s, r) => s + r.iva, 0))}</span>
+                      </Td>
+                      <Td align="right">
+                        <span className="font-bold text-green-700">{fmtEuros(faturacaoDiaria.reduce((s, r) => s + r.total, 0))}</span>
+                      </Td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Vista de calendário do mês: cada dia mostra o total faturado nesse dia
+// (inclui a fatia diária das avenças). Tom de verde proporcional ao valor —
+// dá para ver de relance em que dias fechou mais.
+function DailyBillingCalendar({ mesParam, rows }: { mesParam: string; rows: FaturacaoDiaRow[] }) {
+  const [year, month] = mesParam.split("-").map(Number);
+  const totalByDate = new Map(rows.map((r) => [r.date, r]));
+  const daysInMonth = new Date(year, month, 0).getDate();
+  const firstWeekday = (new Date(year, month - 1, 1).getDay() + 6) % 7; // 0 = Segunda
+  const maxTotal = Math.max(1, ...rows.map((r) => r.total));
+  const cells: (number | null)[] = [
+    ...Array(firstWeekday).fill(null),
+    ...Array.from({ length: daysInMonth }, (_, i) => i + 1),
+  ];
+  const WEEKDAYS = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"];
+
+  return (
+    <div className="bg-white rounded-xl border border-[var(--color-border)] p-4">
+      <div className="grid grid-cols-7 gap-1.5 mb-1.5">
+        {WEEKDAYS.map((w) => (
+          <div key={w} className="text-center text-[10px] font-semibold text-[var(--color-text-muted)] uppercase">
+            {w}
+          </div>
+        ))}
+      </div>
+      <div className="grid grid-cols-7 gap-1.5">
+        {cells.map((day, i) => {
+          if (day == null) return <div key={`empty-${i}`} />;
+          const dateStr = `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+          const entry = totalByDate.get(dateStr);
+          const intensity = entry ? Math.min(1, entry.total / maxTotal) : 0;
+          return (
+            <div
+              key={dateStr}
+              title={entry ? `${entry.servicos_count} serviço${entry.servicos_count !== 1 ? "s" : ""} · ${fmtEuros(entry.total)}` : "Sem faturação"}
+              className="aspect-square rounded-lg border border-[var(--color-border)] flex flex-col items-center justify-center p-1"
+              style={{ backgroundColor: entry ? `rgba(22, 163, 74, ${0.08 + intensity * 0.42})` : "transparent" }}
+            >
+              <span className="text-[11px] font-medium text-[var(--color-text-main)]">{day}</span>
+              {entry && (
+                <span className="text-[9px] font-semibold text-green-700 leading-tight">
+                  {entry.total.toFixed(0)}€
+                </span>
+              )}
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }

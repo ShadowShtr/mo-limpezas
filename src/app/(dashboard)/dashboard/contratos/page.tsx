@@ -19,7 +19,7 @@ export default async function ContratosPage() {
 
   const companyId = me?.company_id ?? "";
 
-  const [{ data: contratos }, { data: clientes }, { data: locais }, { data: equipas }] =
+  const [{ data: contratos }, { data: clientes }, { data: locais }, { data: equipas }, { data: settings }] =
     await Promise.all([
       supabase
         .from("contracts")
@@ -27,7 +27,7 @@ export default async function ContratosPage() {
           id, name, frequency, interval_days, weekdays, schedule_days,
           starts_on, ends_on, status, notes, created_at,
           cleaning_type, payment_status, upholstery_type, upholstery_notes,
-          upholstery_units, upholstery_unit_price, fixed_price, num_people,
+          upholstery_units, upholstery_unit_price, fixed_price, fixed_monthly, apply_vat, num_people,
           locations ( id, name, address, hourly_rate, clients ( id, name ) )
         `)
         .eq("company_id", companyId)
@@ -50,7 +50,14 @@ export default async function ContratosPage() {
         .eq("company_id", companyId)
         .eq("active", true)
         .order("name"),
+      admin
+        .from("company_settings")
+        .select("vat_rate")
+        .eq("company_id", companyId)
+        .single(),
     ]);
+
+  const vatRate = settings?.vat_rate ?? 23;
 
   const equipasComContagem = (equipas ?? []).map((t) => ({
     id: t.id,
@@ -71,6 +78,7 @@ export default async function ContratosPage() {
             clientes={clientes ?? []}
             locais={locais ?? []}
             equipas={equipasComContagem}
+            vatRate={vatRate}
             trigger={
               <button className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[var(--color-primary)] text-white text-sm font-medium hover:bg-[var(--color-primary-hover)] transition-colors">
                 <Plus className="w-4 h-4" />
@@ -88,6 +96,7 @@ export default async function ContratosPage() {
           clientes={clientes ?? []}
           locais={locais ?? []}
           equipas={equipasComContagem}
+          vatRate={vatRate}
         />
       </div>
     </div>
@@ -112,6 +121,8 @@ export type ContratosTableRow = {
   upholstery_units: number | null;
   upholstery_unit_price: number | null;
   fixed_price: number | null;
+  fixed_monthly: boolean;
+  apply_vat: boolean;
   num_people: number | null;
   created_at: string;
   locations: {

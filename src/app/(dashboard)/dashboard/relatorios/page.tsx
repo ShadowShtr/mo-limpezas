@@ -101,6 +101,7 @@ export default async function RelatoriosPage({
           absentismo={data.absentismo}
           receita={data.receita}
           servicosPorEquipa={data.servicosPorEquipa}
+          faturacaoDiaria={data.faturacaoDiaria}
           mesLabel={mesLabel}
           mesParam={mesParam}
           vatRate={data.vatRate}

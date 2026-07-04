@@ -182,15 +182,31 @@ export async function deleteCalendarService(
       .update({ status: "cancelado" })
       .eq("id", svc.contract_id).eq("company_id", profile.company_id);
   } else {
-    // Só esta ocorrência. Se for recorrente, marca a data como exceção no
-    // contrato (via ends_on não serve); simplesmente apaga a linha — o cron só
-    // gera o mês seguinte e a verificação de duplicados não recria o passado.
+    // Só esta ocorrência: apaga a linha e, se for recorrente, regista a data como
+    // exceção PERMANENTE no contrato (excluded_dates). Assim a geração (cron mensal
+    // e ao editar o contrato) nunca recria este dia.
     const { data: del } = await admin
       .from("services").delete()
       .eq("id", serviceId)
       .eq("company_id", profile.company_id)
       .select("id");
     deleted = del?.length ?? 0;
+
+    if (svc.contract_id) {
+      const svcDate = (svc.scheduled_start as string).slice(0, 10); // YYYY-MM-DD
+      const { data: contract } = await admin
+        .from("contracts")
+        .select("excluded_dates")
+        .eq("id", svc.contract_id)
+        .eq("company_id", profile.company_id)
+        .single();
+      const current = (contract?.excluded_dates as string[] | null) ?? [];
+      if (!current.includes(svcDate)) {
+        await admin.from("contracts")
+          .update({ excluded_dates: [...current, svcDate] })
+          .eq("id", svc.contract_id).eq("company_id", profile.company_id);
+      }
+    }
   }
 
   await auditLog({

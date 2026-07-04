@@ -58,3 +58,6 @@ scripts/_*.mjs
 
 # Supabase CLI — cache/estado local temporário (regenerado pelo CLI)
 supabase/.temp/
+
+# Backups de dados reais (export completo da BD) - nunca commitar
+/backups/

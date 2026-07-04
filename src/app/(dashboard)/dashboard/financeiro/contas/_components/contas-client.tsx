@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useEffect, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { AlertCircle, ArrowUpRight, ArrowDownRight, ShoppingBag, Plus, X, Loader2, CheckCircle2, Trash2 } from "lucide-react";
 import Link from "next/link";
 import {
@@ -65,6 +66,14 @@ export function ContasClient({ toReceive, toPay, expenses: initialExpenses, comp
   const [expenses, setExpenses] = useState<PendingExpense[]>(initialExpenses);
   const [showSheet, setShowSheet] = useState(false);
   const [isPending, startTransition] = useTransition();
+  const router = useRouter();
+
+  // Sincroniza com os dados do servidor após router.refresh() — substitui as
+  // linhas otimistas (id temporário) pelas reais, com botões funcionais.
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setExpenses(initialExpenses);
+  }, [initialExpenses]);
 
   // Form state
   const [desc,     setDesc]     = useState("");
@@ -106,13 +115,16 @@ export function ContasClient({ toReceive, toPay, expenses: initialExpenses, comp
         notes: notes.trim() || undefined,
       });
       if (!res.ok) { setFormErr(res.error ?? "Erro ao registar."); return; }
-      // Optimistic update
+      // Otimista (feedback imediato) + refresh para trocar o id temporário
+      // pelo real — sem isto os botões "Pago"/eliminar não funcionavam até
+      // recarregar a página à mão.
       setExpenses((prev) => [
         ...prev,
         { id: `temp-${Date.now()}`, description: desc.trim(), amount: val, category, date, notes: notes || null },
       ].sort((a, b) => a.date.localeCompare(b.date)));
       setShowSheet(false);
       resetForm();
+      router.refresh();
     });
   }
 
@@ -313,6 +325,7 @@ export function ContasClient({ toReceive, toPay, expenses: initialExpenses, comp
                   <th className="text-left px-4 py-3 text-xs font-medium text-[var(--color-text-muted)] uppercase tracking-wide">Descrição</th>
                   <th className="text-left px-4 py-3 text-xs font-medium text-[var(--color-text-muted)] uppercase tracking-wide">Categoria</th>
                   <th className="text-right px-4 py-3 text-xs font-medium text-[var(--color-text-muted)] uppercase tracking-wide">Valor</th>
+                  <th className="text-left px-4 py-3 text-xs font-medium text-[var(--color-text-muted)] uppercase tracking-wide">Estado</th>
                   <th className="px-4 py-3" />
                 </tr>
               </thead>
@@ -331,15 +344,18 @@ export function ContasClient({ toReceive, toPay, expenses: initialExpenses, comp
                     </td>
                     <td className="px-4 py-3 text-sm font-semibold text-right text-amber-600">{fmtEur(e.amount)}</td>
                     <td className="px-4 py-3">
+                      <span className="text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 font-medium">Pendente</span>
+                    </td>
+                    <td className="px-4 py-3">
                       <div className="flex items-center gap-1 justify-end">
                         <button
                           onClick={() => handleMarkPaid(e.id)}
                           disabled={isPending}
-                          title="Marcar como pago"
-                          className="flex items-center gap-1 text-xs px-2 py-1 rounded-lg border border-green-200 text-green-700 bg-green-50 hover:bg-green-100 transition-colors disabled:opacity-40"
+                          title="Marcar esta despesa como paga (sai desta lista)"
+                          className="flex items-center gap-1 text-xs px-2.5 py-1.5 rounded-lg bg-green-600 text-white font-semibold hover:bg-green-700 transition-colors disabled:opacity-40"
                         >
                           <CheckCircle2 className="w-3.5 h-3.5" />
-                          Pago
+                          Marcar como paga
                         </button>
                         <button
                           onClick={() => handleDelete(e.id)}
@@ -358,7 +374,7 @@ export function ContasClient({ toReceive, toPay, expenses: initialExpenses, comp
                 <tr>
                   <td colSpan={3} className="px-4 py-3 text-sm font-semibold text-[var(--color-text-main)]">Total a pagar</td>
                   <td className="px-4 py-3 text-sm font-bold text-right text-amber-600">{fmtEur(totalExpenses)}</td>
-                  <td />
+                  <td colSpan={2} />
                 </tr>
               </tfoot>
             </table>

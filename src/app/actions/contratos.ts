@@ -26,8 +26,12 @@ export interface ContratoInput {
   upholstery_unit_price?: number | null;
   // Estofos por unidade: valor fixo por ocorrência (qtd × preço); ignora cálculo por hora.
   unit_value?: number | null;
-  // Valor fixo por serviço (faturação fixa, não por hora). Tem prioridade.
+  // Valor fixo: no modo mensal é o valor da avença/mês. Tem prioridade.
   fixed_price?: number | null;
+  // Mecânica de faturação: true = valor fixo mensal (avença); false = por hora/serviço.
+  fixed_monthly?: boolean;
+  // IVA do contrato (propaga-se aos serviços gerados).
+  apply_vat?: boolean;
   // Override do nº de pessoas que multiplica o valor/hora. null = usar o tamanho da equipa.
   num_people?: number | null;
   company_id: string;
@@ -41,7 +45,7 @@ const DOW_TO_KEY: Record<number, ScheduleDay["day"]> = {
 };
 
 function getOccurrences(
-  contract: { frequency: string; weekdays: number[] | null; interval_days: number; schedule_days: ScheduleDay[]; starts_on: string; ends_on: string | null },
+  contract: { frequency: string; weekdays: number[] | null; interval_days: number; schedule_days: ScheduleDay[]; starts_on: string; ends_on: string | null; excluded_dates?: string[] | null },
   monthStart: Date,
   monthEnd: Date,
 ): Array<{ date: Date; schedule: ScheduleDay }> {
@@ -51,9 +55,12 @@ function getOccurrences(
 
   const contractStart = new Date(contract.starts_on + "T00:00:00");
   const contractEnd = contract.ends_on ? new Date(contract.ends_on + "T23:59:59") : null;
+  // Datas excluídas manualmente (apagadas do calendário) — nunca são recriadas.
+  const excluded = new Set(contract.excluded_dates ?? []);
 
   function inRange(d: Date) {
-    return d >= monthStart && d <= monthEnd && d >= contractStart && (!contractEnd || d <= contractEnd);
+    return d >= monthStart && d <= monthEnd && d >= contractStart
+      && (!contractEnd || d <= contractEnd) && !excluded.has(toLocalDateStr(d));
   }
 
   if (contract.frequency === "daily") {
@@ -192,9 +199,13 @@ async function generateServicesForContract(
     upholstery_unit_price?: number | null;
     unit_value?: number | null;
     fixed_price?: number | null;
+    fixed_monthly?: boolean;
+    apply_vat?: boolean;
     num_people?: number | null;
   } = {},
 ) {
+  const monthly = extras.fixed_monthly === true;
+  const applyVat = extras.apply_vat ?? false;
   const fixedPrice = extras.fixed_price != null && extras.fixed_price > 0
     ? parseFloat(extras.fixed_price.toFixed(2)) : null;
   // Tamanhos das equipas usadas no padrão (para o cálculo por pessoa).
@@ -235,17 +246,20 @@ async function generateServicesForContract(
     const endTime = addMins(schedule.start_time, schedule.duration_min);
     // Nº de pessoas desta ocorrência: cada colaboradora conta como uma hora.
     const people = resolvePeople(schedule, teamSizes);
-    // Prioridade do valor: valor fixo do contrato > estofos por unidade > hora.
+    // Prioridade do valor: mensal (avença) → 0 (só agenda; fatura 1x/mês) >
+    // valor fixo por-serviço > estofos por unidade > hora.
     const calculatedValue =
-      fixedPrice != null
+      monthly
+        ? 0
+        : fixedPrice != null
         ? fixedPrice
         : extras.unit_value != null && extras.unit_value > 0
         ? parseFloat(extras.unit_value.toFixed(2))
         : hourlyRate != null
         ? parseFloat(((schedule.duration_min / 60) * hourlyRate * people).toFixed(2))
         : null;
-    // Faturação fixa não usa valor/hora no serviço.
-    const rowHourlyRate = fixedPrice != null ? null : hourlyRate;
+    // Faturação fixa (mensal ou por-serviço) não usa valor/hora no serviço.
+    const rowHourlyRate = monthly || fixedPrice != null ? null : hourlyRate;
 
     // Insere com retry: reference_number tem constraint única (migration 031) e
     // o contador baseado em count pode colidir com refs já existentes (gaps).
@@ -260,6 +274,7 @@ async function generateServicesForContract(
       scheduled_end: toLisbonTimestamp(dateStr, endTime),
       hourly_rate: rowHourlyRate,
       calculated_value: calculatedValue,
+      apply_vat: applyVat,
       num_people: people,
       status: "agendado",
       cleaning_type: extras.cleaning_type ?? null,
@@ -294,6 +309,8 @@ async function updateFutureServiceValuesForContract(
   hourlyRate: number | null,
   scheduleDays: ScheduleDay[],
   fixedPrice: number | null = null,
+  fixedMonthly = false,
+  applyVat = false,
 ) {
   const fixed = fixedPrice != null && fixedPrice > 0 ? parseFloat(fixedPrice.toFixed(2)) : null;
   const { data: services } = await admin
@@ -325,7 +342,9 @@ async function updateFutureServiceValuesForContract(
     const endTime = addMins(schedule.start_time, schedule.duration_min);
     const people = resolvePeople(schedule, teamSizes);
     const calculatedValue =
-      fixed != null
+      fixedMonthly
+        ? 0
+        : fixed != null
         ? fixed
         : hourlyRate != null
         ? parseFloat(((schedule.duration_min / 60) * hourlyRate * people).toFixed(2))
@@ -337,8 +356,9 @@ async function updateFutureServiceValuesForContract(
         team_id: schedule.team_id || null,
         scheduled_start: toLisbonTimestamp(dateStr, schedule.start_time),
         scheduled_end: toLisbonTimestamp(dateStr, endTime),
-        hourly_rate: fixed != null ? null : hourlyRate,
+        hourly_rate: fixedMonthly || fixed != null ? null : hourlyRate,
         calculated_value: calculatedValue,
+        apply_vat: applyVat,
         num_people: people,
       })
       .eq("id", service.id)
@@ -444,6 +464,8 @@ export async function createContrato(input: ContratoInput) {
       upholstery_units: input.upholstery_units ?? null,
       upholstery_unit_price: input.upholstery_unit_price ?? null,
       fixed_price: input.fixed_price ?? null,
+      fixed_monthly: input.fixed_monthly ?? false,
+      apply_vat: input.apply_vat ?? false,
       num_people: input.num_people ?? null,
       company_id: profile.company_id,
       created_by: user.id,
@@ -470,6 +492,7 @@ export async function createContrato(input: ContratoInput) {
         schedule_days: input.schedule_days,
         starts_on: input.starts_on,
         ends_on: input.ends_on || null,
+        excluded_dates: [],
       },
       {
         cleaning_type: input.cleaning_type ?? null,
@@ -480,6 +503,8 @@ export async function createContrato(input: ContratoInput) {
         upholstery_unit_price: input.upholstery_unit_price ?? null,
         unit_value: input.unit_value ?? null,
         fixed_price: input.fixed_price ?? null,
+        fixed_monthly: input.fixed_monthly ?? false,
+        apply_vat: input.apply_vat ?? false,
         num_people: input.num_people ?? null,
       },
     );
@@ -538,10 +563,18 @@ export async function updateContrato(id: string, input: Omit<ContratoInput, "com
     upholstery_units: input.upholstery_units ?? null,
     upholstery_unit_price: input.upholstery_unit_price ?? null,
     fixed_price: input.fixed_price ?? null,
+    fixed_monthly: input.fixed_monthly ?? false,
+    apply_vat: input.apply_vat ?? false,
     num_people: input.num_people ?? null,
   }).eq("id", id).eq("company_id", profile.company_id);
 
   if (error) return { ok: false as const, error: error.message };
+
+  // Datas excluídas manualmente (apagadas do calendário): preservam-se e continuam
+  // a ser saltadas na regeneração, para o dia apagado nunca voltar.
+  const { data: existing } = await admin
+    .from("contracts").select("excluded_dates").eq("id", id).eq("company_id", profile.company_id).single();
+  const excludedDates = (existing?.excluded_dates as string[] | null) ?? [];
 
   // Remove ocorrências futuras que deixaram de encaixar no padrão (ex.: data de
   // início mudou para mais tarde → apaga as visitas anteriores já geradas).
@@ -556,6 +589,7 @@ export async function updateContrato(id: string, input: Omit<ContratoInput, "com
       schedule_days: input.schedule_days,
       starts_on: input.starts_on,
       ends_on: input.ends_on || null,
+      excluded_dates: excludedDates,
     },
   );
 
@@ -566,6 +600,8 @@ export async function updateContrato(id: string, input: Omit<ContratoInput, "com
     input.hourly_rate ?? null,
     input.schedule_days,
     input.fixed_price ?? null,
+    input.fixed_monthly ?? false,
+    input.apply_vat ?? false,
   );
 
   // Preenche ocorrências em falta dentro da janela (6 meses). É aditivo:
@@ -585,6 +621,7 @@ export async function updateContrato(id: string, input: Omit<ContratoInput, "com
         schedule_days: input.schedule_days,
         starts_on: input.starts_on,
         ends_on: input.ends_on || null,
+        excluded_dates: excludedDates,
       },
       {
         cleaning_type: input.cleaning_type ?? null,
@@ -595,6 +632,8 @@ export async function updateContrato(id: string, input: Omit<ContratoInput, "com
         upholstery_unit_price: input.upholstery_unit_price ?? null,
         unit_value: input.unit_value ?? null,
         fixed_price: input.fixed_price ?? null,
+        fixed_monthly: input.fixed_monthly ?? false,
+        apply_vat: input.apply_vat ?? false,
         num_people: input.num_people ?? null,
       },
     );

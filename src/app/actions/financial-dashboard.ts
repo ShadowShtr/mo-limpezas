@@ -33,6 +33,191 @@ export interface FinancialDashboardData {
   byClient: ClientRevenue[];
 }
 
+// ─── Resumo operacional (dia / semana / mês, direto do calendário) ────────────
+
+export interface PeriodSummary {
+  /** Valor total previsto (serviços não cancelados no período, c/ IVA quando aplicável) */
+  expected: number;
+  /** Valor dos serviços já concluídos */
+  done: number;
+  services: number;
+  concluded: number;
+}
+
+/** Linha individual para a lista de conferência (clicar num cartão). */
+export interface SummaryServiceRow {
+  id: string;
+  /** YYYY-MM-DD */
+  day: string;
+  client_name: string;
+  location_name: string;
+  /** Valor c/ IVA quando aplicável (avenças: fatia mensal ÷ serviços do mês) */
+  value: number;
+  status: string;
+  is_avenca: boolean;
+}
+
+export interface OperationalSummary {
+  today: PeriodSummary;
+  week: PeriodSummary;
+  month: PeriodSummary;
+  /** Todos os serviços do intervalo (semana ∪ mês) para o detalhe por período. */
+  rows: SummaryServiceRow[];
+  /** Limites dos períodos (YYYY-MM-DD) para filtrar as rows no cliente. */
+  bounds: { today: string; weekStart: string; weekEnd: string; monthStart: string; monthEnd: string };
+  vatRate: number;
+}
+
+/**
+ * Resumo do dia/semana/mês calculado DIRETO da tabela services (o calendário):
+ * criar um card no calendário aparece aqui de imediato; apagar, desaparece.
+ * Avenças (fixed_monthly): o valor mensal é dividido pelos serviços do mês.
+ */
+export async function getOperationalSummary(): Promise<
+  { ok: true; data: OperationalSummary } | { ok: false; error: string }
+> {
+  try {
+    return await _getOperationalSummary();
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Erro ao carregar resumo." };
+  }
+}
+
+async function _getOperationalSummary(): Promise<
+  { ok: true; data: OperationalSummary } | { ok: false; error: string }
+> {
+  const guard = await requireProfile({ roles: ["admin", "gestor"] });
+  if (!guard.ok) return { ok: false, error: guard.error };
+  const { admin, profile } = guard;
+  const companyId = profile.company_id;
+
+  const now = new Date();
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const dstr = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+
+  const todayStr = dstr(now);
+  // Semana: segunda a domingo
+  const weekStart = new Date(now);
+  weekStart.setDate(now.getDate() - ((now.getDay() + 6) % 7));
+  const weekEnd = new Date(weekStart);
+  weekEnd.setDate(weekStart.getDate() + 6);
+  // Mês
+  const monthStartStr = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-01`;
+  const monthEndStr = dstr(new Date(now.getFullYear(), now.getMonth() + 1, 0));
+
+  // Intervalo mais largo que cobre os três períodos (a semana pode atravessar meses)
+  const rangeStart = dstr(weekStart) < monthStartStr ? dstr(weekStart) : monthStartStr;
+  const rangeEnd = dstr(weekEnd) > monthEndStr ? dstr(weekEnd) : monthEndStr;
+
+  const [{ data: services, error: sErr }, { data: settingsRow }] = await Promise.all([
+    admin
+      .from("services")
+      .select("id, location_id, contract_id, calculated_value, manual_value, apply_vat, status, scheduled_start")
+      .eq("company_id", companyId)
+      .neq("status", "cancelado")
+      .gte("scheduled_start", `${rangeStart}T00:00:00`)
+      .lte("scheduled_start", `${rangeEnd}T23:59:59`),
+    admin.from("company_settings").select("vat_rate").eq("company_id", companyId).single(),
+  ]);
+  if (sErr) return { ok: false, error: sErr.message };
+
+  // Nomes de local/cliente para a lista de conferência
+  const locationIds = [...new Set((services ?? []).map((s) => s.location_id).filter(Boolean))];
+  const { data: locations } = locationIds.length > 0
+    ? await admin.from("locations").select("id, name, clients(name)").in("id", locationIds)
+    : { data: [] };
+  const locMap = Object.fromEntries(
+    (locations ?? []).map((l) => {
+      const client = l.clients as unknown as { name: string } | null;
+      return [l.id, { name: l.name as string, clientName: client?.name ?? "—" }];
+    }),
+  );
+
+  const vatRate: number = settingsRow?.vat_rate ?? 23;
+  const vatFactor = vatRate / 100;
+
+  // Avenças: valor mensal ÷ serviços do mês (por contrato e por mês do intervalo)
+  const contractIds = [...new Set((services ?? []).map((s) => s.contract_id).filter(Boolean))] as string[];
+  const { data: contracts } = contractIds.length > 0
+    ? await admin.from("contracts").select("id, fixed_monthly, fixed_price, apply_vat").in("id", contractIds)
+    : { data: [] as { id: string; fixed_monthly: boolean; fixed_price: number | null; apply_vat: boolean }[] };
+  const contractMap = Object.fromEntries((contracts ?? []).map((c) => [c.id, c]));
+
+  const avencaCount = new Map<string, number>(); // `${contractId}|${YYYY-MM}`
+  for (const s of services ?? []) {
+    if (!s.contract_id || !contractMap[s.contract_id]?.fixed_monthly) continue;
+    const key = `${s.contract_id}|${s.scheduled_start.slice(0, 7)}`;
+    avencaCount.set(key, (avencaCount.get(key) ?? 0) + 1);
+  }
+
+  function valueOf(s: NonNullable<typeof services>[number]): number {
+    const contract = s.contract_id ? contractMap[s.contract_id] : null;
+    if (contract?.fixed_monthly) {
+      const count = avencaCount.get(`${s.contract_id}|${s.scheduled_start.slice(0, 7)}`) ?? 1;
+      const base = (contract.fixed_price ?? 0) / Math.max(1, count);
+      return base * (contract.apply_vat === true ? 1 + vatFactor : 1);
+    }
+    const base = s.manual_value ?? s.calculated_value ?? 0;
+    return base * (s.apply_vat !== false ? 1 + vatFactor : 1);
+  }
+
+  const empty = (): PeriodSummary => ({ expected: 0, done: 0, services: 0, concluded: 0 });
+  const today = empty(), week = empty(), month = empty();
+
+  const weekStartStr = dstr(weekStart);
+  const weekEndStr = dstr(weekEnd);
+
+  const rows: SummaryServiceRow[] = [];
+  for (const s of services ?? []) {
+    const day = s.scheduled_start.slice(0, 10);
+    const v = valueOf(s);
+    const buckets: PeriodSummary[] = [];
+    if (day === todayStr) buckets.push(today);
+    if (day >= weekStartStr && day <= weekEndStr) buckets.push(week);
+    if (day >= monthStartStr && day <= monthEndStr) buckets.push(month);
+    for (const b of buckets) {
+      b.expected += v;
+      b.services += 1;
+      if (s.status === "concluido") { b.done += v; b.concluded += 1; }
+    }
+    const loc = locMap[s.location_id] ?? { name: "—", clientName: "—" };
+    rows.push({
+      id: s.id,
+      day,
+      client_name: loc.clientName,
+      location_name: loc.name,
+      value: Math.round(v * 100) / 100,
+      status: s.status,
+      is_avenca: s.contract_id != null && contractMap[s.contract_id]?.fixed_monthly === true,
+    });
+  }
+
+  const round = (b: PeriodSummary): PeriodSummary => ({
+    expected: Math.round(b.expected * 100) / 100,
+    done: Math.round(b.done * 100) / 100,
+    services: b.services,
+    concluded: b.concluded,
+  });
+
+  return {
+    ok: true,
+    data: {
+      today: round(today),
+      week: round(week),
+      month: round(month),
+      rows,
+      bounds: {
+        today: todayStr,
+        weekStart: weekStartStr,
+        weekEnd: weekEndStr,
+        monthStart: monthStartStr,
+        monthEnd: monthEndStr,
+      },
+      vatRate,
+    },
+  };
+}
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 const MONTH_LABELS = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];

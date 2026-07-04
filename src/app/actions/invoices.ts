@@ -120,7 +120,25 @@ export async function generateInvoices(
     activeFixedLocationIds = [...new Set((activeContracts ?? []).map((c) => c.location_id))];
   }
 
-  const allLocationIds = [...new Set([...serviceLocationIds, ...activeFixedLocationIds])];
+  // Contratos com faturação por VALOR FIXO MENSAL (avença) ativos no período.
+  // Cada um gera uma linha mensal única, independente do nº de serviços.
+  const { data: monthlyContracts } = await admin
+    .from("contracts")
+    .select("id, location_id, fixed_price, apply_vat")
+    .eq("company_id", companyId)
+    .eq("status", "ativo")
+    .eq("fixed_monthly", true)
+    .lte("starts_on", end)
+    .or(`ends_on.is.null,ends_on.gte.${start}`);
+
+  const activeMonthlyContracts = (monthlyContracts ?? []).filter(
+    (c) => c.fixed_price != null && c.fixed_price > 0,
+  );
+  const monthlyContractLocationIds = activeMonthlyContracts.map((c) => c.location_id);
+
+  const allLocationIds = [
+    ...new Set([...serviceLocationIds, ...activeFixedLocationIds, ...monthlyContractLocationIds]),
+  ];
   const { data: locations } = await admin
     .from("locations")
     .select("id, name, client_id, hourly_rate, fixed_price, pricing_type")
@@ -150,21 +168,28 @@ export async function generateInvoices(
 
   const existingClientIds = new Set((existing ?? []).map((e) => e.client_id));
 
+  // Locais cobertos por um contrato de avença mensal — o contrato tem prioridade
+  // e trata a faturação; os serviços destes locais (valor 0) não entram por-serviço.
+  const monthlyLocationSet = new Set(monthlyContractLocationIds);
+
   // Agrupar serviços por cliente (excluindo locais com preço fixo — tratados à parte)
   const byClient = new Map<string, typeof services>();
   for (const s of services) {
     const loc = locationMap[s.location_id];
     if (!loc?.client_id) continue;
     if (loc.pricing_type === "fixed") continue; // preço fixo: linha separada
+    if (monthlyLocationSet.has(s.location_id)) continue; // avença mensal: linha única
     if (existingClientIds.has(loc.client_id)) continue; // já tem fatura
     if (!byClient.has(loc.client_id)) byClient.set(loc.client_id, []);
     byClient.get(loc.client_id)!.push(s);
   }
 
   // Locais com preço fixo activos → adicionar ao mapa de clientes
+  // (salta os que já são cobertos por um contrato de avença mensal).
   for (const locId of activeFixedLocationIds) {
     const loc = locationMap[locId];
     if (!loc?.client_id || !loc.fixed_price) continue;
+    if (monthlyLocationSet.has(locId)) continue;
     if (existingClientIds.has(loc.client_id)) continue;
     // Registo sintético para o preço fixo
     if (!byClient.has(loc.client_id)) byClient.set(loc.client_id, []);
@@ -178,6 +203,24 @@ export async function generateInvoices(
       actual_start: null,
       actual_end: null,
       apply_vat: true,
+    });
+  }
+
+  // Contratos de avença mensal → uma linha fixa por contrato, com o IVA do contrato.
+  for (const c of activeMonthlyContracts) {
+    const loc = locationMap[c.location_id];
+    if (!loc?.client_id) continue;
+    if (existingClientIds.has(loc.client_id)) continue;
+    if (!byClient.has(loc.client_id)) byClient.set(loc.client_id, []);
+    byClient.get(loc.client_id)!.push({
+      id: `monthly:${c.id}`,
+      location_id: c.location_id,
+      calculated_value: c.fixed_price,
+      manual_value: null,
+      scheduled_start: `${start}T00:00:00`,
+      actual_start: null,
+      actual_end: null,
+      apply_vat: c.apply_vat === true,
     });
   }
 
@@ -200,7 +243,9 @@ export async function generateInvoices(
       .sort((a, b) => a.scheduled_start.localeCompare(b.scheduled_start))
       .map((s, idx) => {
         const loc   = locationMap[s.location_id];
-        const isFixed = (s.id as string).startsWith("fixed:");
+        // Linhas sintéticas de avença: preço fixo do local ("fixed:") ou
+        // contrato de valor fixo mensal ("monthly:"). Ambas faturam 1 linha/mês.
+        const isFixed = (s.id as string).startsWith("fixed:") || (s.id as string).startsWith("monthly:");
         const value = s.manual_value ?? s.calculated_value ?? 0;
         const serviceHasVat = (s as { apply_vat?: boolean }).apply_vat !== false;
         if (!isVatExempt && serviceHasVat) taxedBase += value;

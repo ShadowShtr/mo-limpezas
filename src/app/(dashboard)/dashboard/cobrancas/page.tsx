@@ -1,8 +1,9 @@
-﻿import { createAdminClient } from "@/lib/supabase/admin";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { Header } from "@/components/layout/header";
 import { getInvoices, getUnbilledServices } from "@/app/actions/invoices";
-import { InvoicesClient } from "./_components/invoices-client";
+import { getDailyBilling } from "@/app/actions/daily-billing";
+import { CobrancasTabs } from "./_components/cobrancas-tabs";
 
 export const metadata = { title: "Cobranças — Escala" };
 
@@ -29,12 +30,14 @@ export default async function CobrancastPage({
   const now = new Date();
   const mesParam = params.mes ?? `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
   const [year, month] = mesParam.split("-").map(Number);
+  const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
 
-  const [result, unbilledResult] = await Promise.all([
+  const [result, unbilledResult, dailyResult] = await Promise.all([
     getInvoices(companyId, year, month),
     getUnbilledServices(companyId),
+    getDailyBilling(todayStr),
   ]);
-  const invoices        = result.ok ? result.invoices : [];
+  const invoices         = result.ok ? result.invoices : [];
   const unbilledServices = unbilledResult.ok ? unbilledResult.services : [];
 
   const mesLabel = new Date(year, month - 1).toLocaleDateString("pt-PT", {
@@ -46,10 +49,10 @@ export default async function CobrancastPage({
     <div>
       <Header
         title="Cobranças"
-        subtitle={mesLabel}
+        subtitle="Controlo diário e faturas mensais"
       />
       <div className="px-4 py-5 sm:p-6 lg:px-8 mx-auto max-w-[1400px]">
-        <InvoicesClient
+        <CobrancasTabs
           initialInvoices={invoices}
           unbilledServices={unbilledServices}
           companyId={companyId}
@@ -57,6 +60,9 @@ export default async function CobrancastPage({
           year={year}
           month={month}
           mesLabel={mesLabel}
+          dailyDate={todayStr}
+          dailyData={dailyResult.ok ? dailyResult.data : null}
+          dailyError={dailyResult.ok ? null : dailyResult.error}
         />
       </div>
     </div>

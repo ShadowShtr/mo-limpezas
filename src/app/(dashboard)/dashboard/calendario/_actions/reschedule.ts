@@ -4,6 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { auditLog } from "@/lib/audit";
 import { ensureLisbonOffset } from "@/lib/lisbon-time";
+import { getTeamSize } from "@/lib/services/reference";
 
 export type ConflictInfo = {
   id: string;
@@ -46,7 +47,7 @@ export async function rescheduleService(
 
   const { data: service } = await admin
     .from("services")
-    .select("id, company_id, team_id, status, scheduled_start, scheduled_end")
+    .select("id, company_id, team_id, status, scheduled_start, scheduled_end, hourly_rate, num_people, manual_value, upholstery_unit_price")
     .eq("id", serviceId)
     .eq("company_id", profile.company_id)
     .single();
@@ -80,9 +81,30 @@ export async function rescheduleService(
     };
   }
 
+  // Recalcula o valor pela nova duração/equipa (só serviços faturados por hora).
+  // Valor manual, estofos por unidade e avença/valor fixo (hourly_rate null) ficam intactos.
+  const update: {
+    scheduled_start: string; scheduled_end: string; team_id: string | null;
+    calculated_value?: number; num_people?: number;
+  } = { scheduled_start: newStart, scheduled_end: newEnd, team_id: newTeamId };
+
+  const durationMin = (new Date(newEnd).getTime() - new Date(newStart).getTime()) / 60000;
+  if (
+    service.hourly_rate != null &&
+    service.manual_value == null &&
+    service.upholstery_unit_price == null &&
+    durationMin > 0
+  ) {
+    const ppl = newTeamId
+      ? await getTeamSize(admin, newTeamId)
+      : (service.num_people != null && service.num_people >= 1 ? service.num_people : 1);
+    update.calculated_value = Math.round((durationMin / 60) * service.hourly_rate * ppl * 100) / 100;
+    update.num_people = ppl;
+  }
+
   const { error } = await admin
     .from("services")
-    .update({ scheduled_start: newStart, scheduled_end: newEnd, team_id: newTeamId })
+    .update(update)
     .eq("id", serviceId)
     .eq("company_id", profile.company_id);
 

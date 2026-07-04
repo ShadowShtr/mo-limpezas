@@ -138,6 +138,39 @@ export async function updateColaborador(
   return { ok: true as const };
 }
 
+// Define o saldo de férias (dias) de uma colaboradora.
+export async function updateVacationBalance(id: string, balance: number) {
+  if (!Number.isFinite(balance) || balance < 0 || balance > 60) {
+    return { ok: false as const, error: "Saldo inválido." };
+  }
+
+  const supabase = await createClient();
+  const admin    = createAdminClient();
+
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { ok: false as const, error: "Não autenticado." };
+
+  const { data: callerProfile } = await admin
+    .from("profiles")
+    .select("company_id, role")
+    .eq("id", user.id)
+    .single();
+  if (!callerProfile || !["admin", "gestor"].includes(callerProfile.role)) {
+    return { ok: false as const, error: "Sem permissão." };
+  }
+
+  const { error } = await admin
+    .from("profiles")
+    .update({ vacation_balance: balance })
+    .eq("id", id)
+    .eq("company_id", callerProfile.company_id);
+
+  if (error) return { ok: false as const, error: error.message };
+
+  revalidatePath(`/dashboard/colaboradores/${id}`);
+  return { ok: true as const };
+}
+
 // Redefine a password de uma colaboradora gerando uma nova provisória.
 // Sem email/domínio: o admin/gestor recebe a senha no ecrã para a entregar.
 export async function resetColaboradorPassword(id: string) {

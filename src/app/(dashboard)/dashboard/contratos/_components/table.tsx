@@ -72,9 +72,10 @@ interface Props {
   clientes: { id: string; name: string }[];
   locais: { id: string; client_id: string; name: string; address: string; hourly_rate: number | null }[];
   equipas: { id: string; name: string; color: string; member_count?: number }[];
+  vatRate?: number;
 }
 
-export function ContratosTable({ contratos, companyId, userId, clientes, locais, equipas }: Props) {
+export function ContratosTable({ contratos, companyId, userId, clientes, locais, equipas, vatRate }: Props) {
   const router = useRouter();
   const [search, setSearch] = useState("");
   const [filterStatus, setFilterStatus] = useState("todos");
@@ -271,6 +272,7 @@ export function ContratosTable({ contratos, companyId, userId, clientes, locais,
                         clientes={clientes}
                         locais={locais}
                         equipas={equipas}
+                        vatRate={vatRate}
                         contrato={c}
                         trigger={
                           <button className="p-1.5 rounded-lg text-[var(--color-text-muted)] hover:bg-[var(--color-background)] transition-colors">

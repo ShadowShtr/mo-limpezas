@@ -47,8 +47,12 @@ Lê este ficheiro no início de CADA sessão antes de fazer qualquer coisa.
 
 ## ⚡ PRÓXIMA TASK A EXECUTAR
 
-**Migrations 040–043 aplicadas em produção (2026-06-29). Deploy feito.**
-Não há task pendente definida. Perguntar ao dono qual a próxima.
+**Migration 049 (cash_flow_service_payment_reference) — ✅ APLICADA em
+produção (2026-07-04, via SQL Editor) e testada em runtime real (ver
+AUDITORIA_COMPLETA.txt PARTE 11.1).** Falta apenas fazer commit + deploy
+das correções de código desta ronda (PARTE 10 e 11 do AUDITORIA_COMPLETA.txt).
+
+Migrations 040–043 aplicadas em produção (2026-06-29). Deploy feito.
 
 Migrations aplicadas:
 - ✅ 037 — fixed_variable_payments (pagamentos fixos/variáveis)
@@ -81,6 +85,52 @@ Migrations antigas aplicadas:
 - serverActions.bodySizeLimit: 52mb → 4mb (P2-4)
 
 **Próxima task:** (definir com o dono).
+
+---
+
+## 📍 PONTO DE PARAGEM — 2026-07-04 (auditoria completa de fluxo)
+
+**Auditoria manual de formulários + financeiro + código órfão (✅ FEITO,
+5 correções críticas aplicadas — ver AUDITORIA_COMPLETA.txt PARTE 10):**
+- Cobrança Diária (`daily-billing.ts`) não gerava `cash_flow_entries` ao
+  marcar um serviço como pago → corrigido (`syncServicePaymentCashFlow`).
+  **Precisa da migration 049 aplicada em produção antes do deploy.**
+- `ContratoSheet`: opção de âmbito de edição de recorrência era decorativa
+  (nunca chegava ao backend) → removida, substituída por nota clara.
+- `/recuperar/nova-senha` reimplementava lógica antiga (user_metadata.role)
+  em vez de usar a action `updatePassword` já corrigida (P1-6) → religado.
+- `vacation-balance-form.tsx` escrevia direto no Supabase do browser e
+  ignorava erros (mesmo bug histórico das equipas) → nova action
+  `updateVacationBalance` com guard.
+- `audit.ts` engolia falhas ao gravar `audit_logs` sem log → agora regista
+  `console.error`.
+
+**Verificação em runtime real (não só testes/tsc) — ver AUDITORIA_COMPLETA.txt
+PARTE 11 — encontrou 2 problemas que os testes automáticos NUNCA apanhariam:**
+- ⚠️ **KPI "Recebido" da Cobrança Diária** usava valor sem IVA como fallback
+  (mostrava 100,00 € em vez de 123,00 €) → corrigido em `daily-billing-client.tsx`.
+- ⚠️ **`VacationBalanceForm` estava construído mas nunca ligado a nenhuma
+  página** — não havia NENHUMA forma de editar saldo de férias na UI →
+  ligado a `colaboradores/[id]/page.tsx`.
+- 🔴 **CRÍTICO — `ContratoSheet`: clicar "Seguinte" podia gravar o contrato
+  sem o utilizador nunca ver o passo 2** (o botão "Guardar" nasce na mesma
+  posição do "Seguinte"). Reproduzido por acidente num contrato REAL (sem
+  dano, porque estava cancelado) e depois isolado deliberadamente. Corrigido
+  com cooldown de 400ms (`goToStep`/`step2Ready`) antes do botão "Guardar"
+  ficar mesmo clicável. **Sem esta correção, editar qualquer contrato reagenda
+  o cliente com risco de gravação acidental — prioridade alta para deploy.**
+
+**Registado para próxima ronda (não corrigido ainda, ver PARTE 10.2/10.3):**
+`generateInvoices` sem proteção contra fatura duplicada em cliques
+concorrentes; upload de fotos instável tem pista forte de causa raiz
+(fetch PUT sem headers apikey/Authorization); taxa de hora extra hardcoded
+em `adjustPayrollRecord`; guard de conciliação bancária já reconciliada;
+~10 ações que ignoram o resultado da server action (Kanban, Locais, Faltas,
+Fluxo de Caixa, Pagamentos, Viaturas); código órfão (whatsapp, magic link,
+contas bancárias sem UI, `ConfirmDialog` nunca usado).
+
+Verificação: 310 testes a passar · tsc 0 erros · ESLint 0 erros/warnings ·
+audit-security.ts sem problemas.
 
 ---
 

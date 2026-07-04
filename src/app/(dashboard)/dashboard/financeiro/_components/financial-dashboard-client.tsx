@@ -1,13 +1,20 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useEffect, useCallback, useTransition } from "react";
 import Link from "next/link";
 import {
   Euro, AlertCircle, Loader2,
   ArrowUpRight, ArrowDownRight, RefreshCw, Receipt, Wallet,
-  BarChart2, FileText, Repeat,
+  BarChart2, FileText, Repeat, CalendarDays, Landmark, BarChart3,
+  ChevronDown, CheckCircle2, Circle,
 } from "lucide-react";
-import { getFinancialDashboard, type FinancialDashboardData } from "@/app/actions/financial-dashboard";
+import { createClient } from "@/lib/supabase/client";
+import {
+  getFinancialDashboard,
+  getOperationalSummary,
+  type FinancialDashboardData,
+  type OperationalSummary,
+} from "@/app/actions/financial-dashboard";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -155,11 +162,11 @@ function ClientRevenueChart({ data }: { data: FinancialDashboardData["byClient"]
 // ─── Tabela mensal resumida ────────────────────────────────────────────────────
 
 function MonthlyTable({ data }: { data: FinancialDashboardData["monthly"] }) {
-  const visible = [...data].reverse().slice(0, 6);
+  const visible = [...data].reverse();
 
   return (
     <div className="bg-white rounded-xl border border-[var(--color-border)] p-5">
-      <p className="text-sm font-semibold text-[var(--color-text-main)] mb-4">Resumo Mensal (últimos 6 meses)</p>
+      <p className="text-sm font-semibold text-[var(--color-text-main)] mb-4">Receita e Custos — últimos 12 meses</p>
       <div className="overflow-x-auto">
         <table className="w-full text-xs">
           <thead>
@@ -195,21 +202,209 @@ function MonthlyTable({ data }: { data: FinancialDashboardData["monthly"] }) {
   );
 }
 
+// ─── Resumo operacional (dia / semana / mês, em tempo real) ────────────────────
+
+type Period = "today" | "week" | "month";
+
+function PeriodCard({ label, sub, summary, selected, onClick }: {
+  label: string;
+  sub: string;
+  summary: OperationalSummary["today"] | null;
+  selected: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`bg-white rounded-xl border p-5 text-left transition-colors ${
+        selected
+          ? "border-[var(--color-primary)] ring-2 ring-[var(--color-primary-muted)]"
+          : "border-[var(--color-border)] hover:border-[var(--color-primary)]"
+      }`}
+    >
+      <div className="flex items-center justify-between mb-2">
+        <p className="text-sm font-semibold text-[var(--color-text-main)]">{label}</p>
+        <span className="flex items-center gap-1.5 text-[11px] text-[var(--color-text-muted)]">
+          {sub}
+          <ChevronDown className={`w-3.5 h-3.5 transition-transform ${selected ? "rotate-180 text-[var(--color-primary)]" : ""}`} />
+        </span>
+      </div>
+      {summary == null ? (
+        <div className="flex items-center gap-2 text-sm text-[var(--color-text-muted)] py-2">
+          <Loader2 className="w-4 h-4 animate-spin" /> A carregar…
+        </div>
+      ) : (
+        <>
+          <p className="text-2xl font-bold text-[var(--color-text-main)]">{fmtEur(summary.expected)}</p>
+          <div className="mt-2 space-y-1 text-xs text-[var(--color-text-muted)]">
+            <p>
+              <span className="font-semibold text-green-600">{fmtEur(summary.done)}</span> já concluído
+              ({summary.concluded}/{summary.services} serviço{summary.services !== 1 ? "s" : ""})
+            </p>
+            <div className="w-full h-1.5 bg-gray-100 rounded-full overflow-hidden">
+              <div
+                className="h-full bg-[var(--color-primary)] rounded-full transition-all"
+                style={{ width: `${summary.expected > 0 ? Math.min(100, (summary.done / summary.expected) * 100) : 0}%` }}
+              />
+            </div>
+          </div>
+        </>
+      )}
+    </button>
+  );
+}
+
+// Lista de conferência do período selecionado: no dia mostra serviço a serviço;
+// na semana/mês agrupa por cliente — para bater o total do cartão linha a linha.
+function PeriodBreakdown({ period, summary }: { period: Period; summary: OperationalSummary }) {
+  const { rows, bounds } = summary;
+  const inPeriod = (day: string) =>
+    period === "today"
+      ? day === bounds.today
+      : period === "week"
+      ? day >= bounds.weekStart && day <= bounds.weekEnd
+      : day >= bounds.monthStart && day <= bounds.monthEnd;
+
+  const periodRows = rows.filter((r) => inPeriod(r.day));
+  const total = periodRows.reduce((s, r) => s + r.value, 0);
+  const title = period === "today" ? "Serviços de hoje" : period === "week" ? "Clientes da semana" : "Clientes do mês";
+
+  if (periodRows.length === 0) {
+    return (
+      <div className="bg-white rounded-xl border border-[var(--color-border)] p-6 text-center text-sm text-[var(--color-text-muted)]">
+        Sem serviços neste período.
+      </div>
+    );
+  }
+
+  if (period === "today") {
+    const sorted = [...periodRows].sort((a, b) => a.client_name.localeCompare(b.client_name, "pt"));
+    return (
+      <BreakdownShell title={title} total={total} count={periodRows.length}>
+        {sorted.map((r) => (
+          <div key={r.id} className="flex items-center gap-3 px-4 py-2.5">
+            {r.status === "concluido"
+              ? <CheckCircle2 className="w-4 h-4 text-green-600 shrink-0" />
+              : <Circle className="w-4 h-4 text-[var(--color-border)] shrink-0" />}
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium text-[var(--color-text-main)] truncate">
+                {r.client_name}
+                {r.is_avenca && <span className="ml-2 text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200">Avença</span>}
+              </p>
+              <p className="text-xs text-[var(--color-text-muted)] truncate">{r.location_name}</p>
+            </div>
+            <p className="text-sm font-semibold text-[var(--color-text-main)] shrink-0">{fmtEur(r.value)}</p>
+          </div>
+        ))}
+      </BreakdownShell>
+    );
+  }
+
+  // Semana / mês: agrupar por cliente
+  const byClient = new Map<string, { count: number; done: number; total: number; hasAvenca: boolean }>();
+  for (const r of periodRows) {
+    const e = byClient.get(r.client_name) ?? { count: 0, done: 0, total: 0, hasAvenca: false };
+    e.count += 1;
+    e.total += r.value;
+    if (r.status === "concluido") e.done += 1;
+    if (r.is_avenca) e.hasAvenca = true;
+    byClient.set(r.client_name, e);
+  }
+  const grouped = [...byClient.entries()].sort((a, b) => b[1].total - a[1].total);
+
+  return (
+    <BreakdownShell title={title} total={total} count={periodRows.length}>
+      {grouped.map(([client, e]) => (
+        <div key={client} className="flex items-center gap-3 px-4 py-2.5">
+          {e.done === e.count
+            ? <CheckCircle2 className="w-4 h-4 text-green-600 shrink-0" />
+            : <Circle className="w-4 h-4 text-[var(--color-border)] shrink-0" />}
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium text-[var(--color-text-main)] truncate">
+              {client}
+              {e.hasAvenca && <span className="ml-2 text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200">Avença</span>}
+            </p>
+            <p className="text-xs text-[var(--color-text-muted)]">
+              {e.count} serviço{e.count !== 1 ? "s" : ""} · {e.done} concluído{e.done !== 1 ? "s" : ""}
+            </p>
+          </div>
+          <p className="text-sm font-semibold text-[var(--color-text-main)] shrink-0">{fmtEur(e.total)}</p>
+        </div>
+      ))}
+    </BreakdownShell>
+  );
+}
+
+function BreakdownShell({ title, total, count, children }: {
+  title: string;
+  total: number;
+  count: number;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="bg-white rounded-xl border border-[var(--color-border)] overflow-hidden">
+      <div className="px-4 py-3 border-b border-[var(--color-border)] flex items-center justify-between bg-[var(--color-background)]">
+        <p className="text-sm font-semibold text-[var(--color-text-main)]">{title}</p>
+        <p className="text-xs text-[var(--color-text-muted)]">{count} serviço{count !== 1 ? "s" : ""}</p>
+      </div>
+      <div className="divide-y divide-[var(--color-border)] max-h-[420px] overflow-y-auto">
+        {children}
+      </div>
+      <div className="px-4 py-3 border-t-2 border-[var(--color-border)] flex items-center justify-between bg-[var(--color-background)]">
+        <p className="text-sm font-semibold text-[var(--color-text-main)]">Total</p>
+        <p className="text-sm font-bold text-green-700">{fmtEur(total)}</p>
+      </div>
+    </div>
+  );
+}
+
 // ─── Componente principal ─────────────────────────────────────────────────────
 
 interface Props {
   data: FinancialDashboardData | null;
   error: string | null;
   companyId: string;
+  initialSummary: OperationalSummary | null;
 }
 
-export function FinancialDashboardClient({ data: initialData, error: initialError, companyId }: Props) {
+export function FinancialDashboardClient({ data: initialData, error: initialError, companyId, initialSummary }: Props) {
   const [data,  setData]  = useState<FinancialDashboardData | null>(initialData);
   const [error, setError] = useState<string | null>(initialError);
+  const [summary, setSummary] = useState<OperationalSummary | null>(initialSummary);
+  const [selectedPeriod, setSelectedPeriod] = useState<Period | null>(null);
   const [isPending, startTransition] = useTransition();
+
+  const refreshSummary = useCallback(async () => {
+    const res = await getOperationalSummary();
+    if (res.ok) setSummary(res.data);
+  }, []);
+
+  // Tempo real: qualquer alteração no calendário (services) atualiza o resumo
+  // dia/semana/mês. Fallback: refetch a cada 60s e ao voltar à janela.
+  useEffect(() => {
+    const supabase = createClient();
+    const channel = supabase
+      .channel(`financeiro-summary-${companyId}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "services", filter: `company_id=eq.${companyId}` },
+        () => void refreshSummary(),
+      )
+      .subscribe();
+    const interval = setInterval(() => void refreshSummary(), 60_000);
+    const onFocus = () => void refreshSummary();
+    window.addEventListener("focus", onFocus);
+    return () => {
+      supabase.removeChannel(channel);
+      clearInterval(interval);
+      window.removeEventListener("focus", onFocus);
+    };
+  }, [companyId, refreshSummary]);
 
   function handleRefresh() {
     setError(null);
+    void refreshSummary();
     startTransition(async () => {
       const res = await getFinancialDashboard(companyId);
       if (res.ok) setData(res.data);
@@ -222,6 +417,46 @@ export function FinancialDashboardClient({ data: initialData, error: initialErro
 
   return (
     <div className="space-y-6">
+
+      {/* ── Resumo operacional: dia / semana / mês (tempo real, do calendário) ── */}
+      <div>
+        <div className="flex items-center gap-2 mb-3">
+          <CalendarDays className="w-4 h-4 text-[var(--color-primary)]" />
+          <p className="text-xs font-semibold text-[var(--color-text-muted)] uppercase tracking-wider">
+            Resumo do calendário — atualiza em tempo real
+          </p>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <PeriodCard
+            label="Hoje"
+            sub={now.toLocaleDateString("pt-PT", { day: "numeric", month: "short" })}
+            summary={summary?.today ?? null}
+            selected={selectedPeriod === "today"}
+            onClick={() => setSelectedPeriod((p) => (p === "today" ? null : "today"))}
+          />
+          <PeriodCard
+            label="Esta semana"
+            sub="seg – dom"
+            summary={summary?.week ?? null}
+            selected={selectedPeriod === "week"}
+            onClick={() => setSelectedPeriod((p) => (p === "week" ? null : "week"))}
+          />
+          <PeriodCard
+            label="Este mês"
+            sub={mesAtualLabel}
+            summary={summary?.month ?? null}
+            selected={selectedPeriod === "month"}
+            onClick={() => setSelectedPeriod((p) => (p === "month" ? null : "month"))}
+          />
+        </div>
+
+        {/* Lista de conferência do período clicado */}
+        {selectedPeriod && summary && (
+          <div className="mt-4">
+            <PeriodBreakdown period={selectedPeriod} summary={summary} />
+          </div>
+        )}
+      </div>
 
       {/* Atalhos para módulos financeiros */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
@@ -283,6 +518,30 @@ export function FinancialDashboardClient({ data: initialData, error: initialErro
           <div>
             <p className="text-sm font-semibold text-[var(--color-text-main)]">Pagamentos Fixos</p>
             <p className="text-xs text-[var(--color-text-muted)]">Fixos e variáveis · lembrete</p>
+          </div>
+        </Link>
+        <Link
+          href="/dashboard/financeiro/conciliacao"
+          className="flex items-center gap-3 p-4 bg-white rounded-xl border border-[var(--color-border)] hover:border-[var(--color-primary)] hover:bg-[var(--color-primary-light)] transition-colors group"
+        >
+          <div className="w-9 h-9 rounded-lg bg-green-50 flex items-center justify-center shrink-0 group-hover:bg-[var(--color-primary-muted)]">
+            <Landmark className="w-4 h-4 text-[var(--color-primary)]" />
+          </div>
+          <div>
+            <p className="text-sm font-semibold text-[var(--color-text-main)]">Conciliação Bancária</p>
+            <p className="text-xs text-[var(--color-text-muted)]">Extratos e movimentos</p>
+          </div>
+        </Link>
+        <Link
+          href="/dashboard/relatorios"
+          className="flex items-center gap-3 p-4 bg-white rounded-xl border border-[var(--color-border)] hover:border-[var(--color-primary)] hover:bg-[var(--color-primary-light)] transition-colors group"
+        >
+          <div className="w-9 h-9 rounded-lg bg-green-50 flex items-center justify-center shrink-0 group-hover:bg-[var(--color-primary-muted)]">
+            <BarChart3 className="w-4 h-4 text-[var(--color-primary)]" />
+          </div>
+          <div>
+            <p className="text-sm font-semibold text-[var(--color-text-main)]">Relatórios</p>
+            <p className="text-xs text-[var(--color-text-muted)]">Horas, receita e faturação diária</p>
           </div>
         </Link>
       </div>
@@ -358,10 +617,19 @@ export function FinancialDashboardClient({ data: initialData, error: initialErro
             </div>
           </div>
 
-          {/* KPIs — ano */}
+          {/* Gráficos */}
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+            <RevenueChart data={data.monthly} />
+            <ClientRevenueChart data={data.byClient} />
+          </div>
+
+          {/* Tabela de custos/receita dos 12 meses */}
+          <MonthlyTable data={data.monthly} />
+
+          {/* Resumo do ano — no fundo, como fecho */}
           <div>
             <p className="text-xs font-semibold text-[var(--color-text-muted)] uppercase tracking-wider mb-3">
-              Ano {now.getFullYear()}
+              Resumo do ano {now.getFullYear()}
             </p>
             <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
               <KpiCard
@@ -387,15 +655,6 @@ export function FinancialDashboardClient({ data: initialData, error: initialErro
               />
             </div>
           </div>
-
-          {/* Gráficos */}
-          <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-            <RevenueChart data={data.monthly} />
-            <ClientRevenueChart data={data.byClient} />
-          </div>
-
-          {/* Tabela resumo mensal */}
-          <MonthlyTable data={data.monthly} />
         </>
       )}
 

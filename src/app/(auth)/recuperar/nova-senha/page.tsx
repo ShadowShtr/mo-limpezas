@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { updatePassword } from "@/app/actions/auth";
 import { Button } from "@/components/ui/button";
 import { Loader2, CheckCircle2 } from "lucide-react";
 
@@ -45,20 +46,14 @@ export default function NovaSenhaPage() {
     e.preventDefault();
     setMessage(null);
     const fd = new FormData(e.currentTarget);
-    const password = fd.get("password") as string;
-    const confirm = fd.get("confirm") as string;
-    if (password.length < 8) return setMessage({ type: "error", text: "A password deve ter pelo menos 8 caracteres." });
-    if (password !== confirm) return setMessage({ type: "error", text: "As passwords não coincidem." });
 
     setLoading(true);
-    const supabase = createClient();
-    const { data, error } = await supabase.auth.updateUser({ password });
+    const result = await updatePassword(fd);
     setLoading(false);
-    if (error) return setMessage({ type: "error", text: "Não foi possível alterar a password. Pede um novo link." });
+    if ("error" in result) return setMessage({ type: "error", text: result.error });
 
     setDone(true);
-    const role = data.user?.user_metadata?.role as string | undefined;
-    setTimeout(() => router.push(role === "colaborador" ? "/app" : "/dashboard"), 1500);
+    setTimeout(() => router.push(result.redirect ?? "/dashboard"), 1500);
   }
 
   return (

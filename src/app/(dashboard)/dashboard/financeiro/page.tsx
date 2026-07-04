@@ -1,7 +1,7 @@
 ﻿import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { Header } from "@/components/layout/header";
-import { getFinancialDashboard } from "@/app/actions/financial-dashboard";
+import { getFinancialDashboard, getOperationalSummary } from "@/app/actions/financial-dashboard";
 import { FinancialDashboardClient } from "./_components/financial-dashboard-client";
 import { PaymentsReminderBanner } from "../_components/payments-reminder-banner";
 
@@ -19,7 +19,10 @@ export default async function FinanceiroPage() {
     .single();
 
   const companyId = profile?.company_id ?? "";
-  const result    = await getFinancialDashboard(companyId);
+  const [result, summaryResult] = await Promise.all([
+    getFinancialDashboard(companyId),
+    getOperationalSummary(),
+  ]);
 
   const now = new Date();
   const yearLabel = now.getFullYear().toString();
@@ -27,8 +30,8 @@ export default async function FinanceiroPage() {
   return (
     <div>
       <Header
-        title="Dashboard Financeiro"
-        subtitle={`Visão geral ${yearLabel}`}
+        title="Financeiro"
+        subtitle={`Resumo do dia, semana e mês · Visão geral ${yearLabel}`}
       />
       <div className="px-4 py-5 sm:p-6 lg:px-8 mx-auto max-w-[1400px] space-y-6">
         <PaymentsReminderBanner />
@@ -36,6 +39,7 @@ export default async function FinanceiroPage() {
           data={result.ok ? result.data : null}
           error={result.ok ? null : result.error}
           companyId={companyId}
+          initialSummary={summaryResult.ok ? summaryResult.data : null}
         />
       </div>
     </div>

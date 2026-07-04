@@ -179,7 +179,9 @@ export async function resetPassword(formData: FormData) {
 const newPasswordSchema = z.string().min(8, "A password deve ter pelo menos 8 caracteres.");
 
 // Define a nova password do utilizador autenticado (sessão de recuperação ativa).
-export async function updatePassword(formData: FormData) {
+export async function updatePassword(
+  formData: FormData,
+): Promise<{ error: string } | { success: string; redirect: string }> {
   try {
     const password = formData.get("password") as string;
     const confirm = formData.get("confirm") as string;

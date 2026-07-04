@@ -401,7 +401,7 @@ PENDENTES REGISTADOS (para não se perder nada):
   [ ] Rotação de tokens/segredos (Parte 6).
 
 PROCESSO PARA PRÓXIMAS AUDITORIAS (não pular etapas):
-  1. npm test                        → tem de ficar a 100% (atualmente 288/288)
+  1. npm test                        → tem de ficar a 100% (atualmente 310/310)
   2. npx tsc --noEmit                → 0 erros
   3. npx eslint "src/**/*.{ts,tsx}"  → 0 erros (warnings registados na Parte 8)
   4. npx tsx scripts/audit-security.ts
@@ -412,8 +412,210 @@ PROCESSO PARA PRÓXIMAS AUDITORIAS (não pular etapas):
 
 
 ================================================================================
-FIM DO RELATÓRIO — última atualização: 2026-06-19
-Commits desta ronda: 2b96521 (ficha de cliente), ebc00b9 (correções de segurança),
-este commit (limpeza final da auditoria)
-Estado: 288 testes a passar · tsc limpo · ESLint 0 warnings · build local pronto
+PARTE 10 — AUDITORIA COMPLETA DE FLUXO (formulários, financeiro, código órfão)
+Data: 2026-07-04
+================================================================================
+
+MÉTODO: verificação automática completa (testes, tsc, eslint, audit-security)
+seguida de 3 auditorias manuais dedicadas: (a) todos os formulários/sheets e
+se a submissão chega mesmo à action e o resultado é tratado; (b) rastreio do
+dinheiro serviço→fatura→caixa→folha→conciliação; (c) código órfão, crons,
+catch que engolem erros, TODOs.
+
+VERIFICAÇÃO AUTOMÁTICA:
+  [x] Testes (vitest): 310 a passar (subiu de 288 — novos: bank-import,
+      utils, cash-flow-integrity, audit)
+  [x] Type-check (tsc --noEmit): 0 erros
+  [x] ESLint: 0 erros e 0 warnings
+  [x] audit-security.ts: sem problemas
+
+10.1 — CRÍTICO (corrigido nesta ronda — commit pendente)
+  [x] daily-billing.ts:setServicePayment marcava services.payment_status como
+      pago SEM criar cash_flow_entries nem invoices — dois sistemas de "pago"
+      desligados entre si (Cobrança Diária vs Fluxo de Caixa/KPIs financeiros).
+      → FIX: syncServicePaymentCashFlow cria/atualiza/remove uma entrada em
+      cash_flow_entries (reference_type="service_payment") em espelho ao
+      estado de pagamento (nao_informado/sinal_50/pago_total), recalculando
+      o valor (com split de avença + IVA quando aplicável) igual à leitura.
+      ⚠ Migration 049 (novo valor "service_payment" no CHECK de
+      reference_type) AINDA NÃO APLICADA em produção — aplicar via SQL
+      Editor antes do deploy (ver supabase/migrations/049_*.sql).
+  [x] ContratoSheet oferecia 4 opções de âmbito de edição de recorrência
+      (só esta ocorrência / esta e as próximas / padrão todo / criar exceção)
+      mas editScope NUNCA era enviado a updateContrato — guardar alterava
+      SEMPRE o contrato inteiro, independentemente da opção escolhida, e o
+      componente não tem contexto de "qual ocorrência" (não há data-alvo).
+      → FIX: removida a escolha decorativa; substituída por nota clara de
+      que a edição aqui altera sempre o padrão futuro (comportamento real,
+      inalterado) e que edições pontuais devem ser feitas no calendário.
+      Implementar single/future/exception a sério exigiria escolher uma
+      data-alvo no formulário — decisão de produto para o dono, não incluída
+      nesta correção.
+  [x] Fix de segurança "Login/updatePassword: redirect via profiles.role"
+      (commit a08a1fb, P1-6) só existia na server action updatePassword, que
+      estava ÓRFÃ — nunca chamada. O fluxo real (/recuperar/nova-senha) ainda
+      usava user_metadata?.role (padrão antigo, pré-correção).
+      → FIX: a página passou a chamar a própria action updatePassword em vez
+      de reimplementar a lógica no cliente — resolve o bug E o código órfão
+      ao mesmo tempo.
+  [x] vacation-balance-form.tsx escrevia direto no Supabase do browser,
+      ignorava o erro e mostrava sempre "Guardado ✓" — mesmo bug histórico
+      das equipas ("RLS bloqueava silenciosamente, sucesso falso").
+      → FIX: nova action updateVacationBalance (guard admin/gestor + scoping
+      por company_id) em colaboradores.ts; o formulário trata o erro e só
+      mostra sucesso se a escrita confirmar.
+  [x] audit.ts engolia qualquer erro ao gravar audit_logs sem log — a
+      trilha de auditoria de toda a app podia desaparecer sem rasto.
+      → FIX: console.error no catch (e no erro do insert) com contexto da
+      ação que falhou.
+
+  Verificação pós-correção: 310 testes a passar · tsc 0 erros · ESLint 0
+  erros/warnings · audit-security.ts sem problemas.
+
+10.2 — ALTO (registado, correção futura)
+  [ ] generateInvoices sem lock/constraint única — 2 cliques concorrentes em
+      "Gerar cobranças" podem duplicar faturas do mesmo cliente/período.
+  [ ] Upload de fotos instável (ver PONTO DE PARAGEM 2026-06-19): pista forte
+      encontrada — upload-runner.ts faz fetch PUT manual para o Storage SEM
+      headers apikey/Authorization, ao contrário do uploadToSignedUrl oficial
+      do SDK (multipart + headers). Consistente com a suspeita já registada
+      ("CORS ou auth"). NÃO aplicado ainda — precisa de teste em telemóvel
+      real antes de mudar o runner de produção.
+  [ ] adjustPayrollRecord: taxa de hora extra hardcoded em 25%, ignora
+      overtime_rate_pct configurável usado no resto do sistema.
+  [ ] Conciliação bancária: confirmMatch/manualMatch sem guard contra
+      transação já reconciliada (duas sugestões podem, em teoria, confirmar
+      a mesma transação duas vezes).
+
+10.3 — MÉDIO (registado, correção futura)
+  [ ] Resultado de server action ignorado (falha silenciosa) em: Kanban de
+      Tarefas (editar tarefa/colunas), Locais (apagar), Faltas/Férias
+      (aprovar/rejeitar, apagar), Fluxo de Caixa (apagar/confirmar/pendente),
+      Pagamentos (marcar pago/apagar), Viaturas (apagar, sem catch).
+  [ ] Extrato PDF de cliente (reports-tabs.tsx) calcula IVA de forma
+      simplificada, divergente da fórmula real da fatura.
+  [ ] Fórmula avença÷serviços+IVA reimplementada de forma independente em 4
+      ficheiros (invoices.ts, financial-dashboard.ts, reports.ts,
+      daily-billing.ts) — hoje equivalentes, risco de divergência futura.
+
+10.4 — BAIXO / limpeza (sem impacto funcional, registado)
+  [ ] Código órfão: sendWhatsAppToClient, loginMagicLink, getBankAccounts/
+      createBankAccount (sem UI para criar conta bancária), archiveCliente
+      (existe soft-delete auditado mas a tabela usa hard-delete protegido só
+      por window.confirm), listDocumentsToArchive/archiveExpiredDocuments
+      (cron reimplementa a lógica em vez de reusar), createVacationRequest,
+      getActiveVehicles/getDayTeamAssignmentsForDate, componente
+      ConfirmDialog nunca usado (confirmações destrutivas usam window.confirm
+      nativo em vez do dialog reutilizável).
+
+10.5 — CONFIRMADO SÓLIDO (sem ação necessária)
+  [x] Bug histórico "use server exportando objeto": eliminado nos 30
+      ficheiros de actions — nenhum exporta objeto/const, só funções e types.
+  [x] Isolamento multi-tenant (company_id da sessão via requireProfile)
+      correto em todas as actions financeiras e na esmagadora maioria dos
+      formulários verificados (45+).
+  [x] Folha de pagamento idempotente (upsert + unique constraint real).
+  [x] cash_flow_entries automáticos protegidos por unique index (migration 024).
+  [x] Todos os crons protegidos por CRON_SECRET e sincronizados 1:1 com
+      vercel.json (nenhum órfão dos dois lados).
+  [x] Nenhum TODO/FIXME/stub esquecido em src/.
+  [x] Nenhum import quebrado nem feature flag sempre-false.
+
+PENDENTES REGISTADOS PARA PRÓXIMA RONDA (por ordem de risco):
+  [ ] Testar e aplicar fix do upload de fotos (apikey/Authorization no PUT).
+  [ ] Adicionar constraint única/lock em generateInvoices.
+  [ ] Corrigir taxa de hora extra hardcoded em adjustPayrollRecord.
+  [ ] Guard de "já reconciliado" em confirmMatch/manualMatch.
+  [ ] Tratar resultado das ações listadas em 10.3 (Kanban, Locais, Faltas,
+      Fluxo de Caixa, Pagamentos, Viaturas).
+  [ ] Extrair fórmula de avença/IVA partilhada (10.3).
+  [ ] Corrigir IVA do extrato PDF de cliente (10.3).
+  [ ] Decidir sobre código órfão de 10.4: apagar ou ligar à UI.
+
+
+================================================================================
+PARTE 11 — VERIFICAÇÃO REAL EM RUNTIME (não só testes/tsc) — 2026-07-04
+================================================================================
+
+MÉTODO: `npm test`/`tsc`/`eslint` só provam que o código compila e os testes
+unitários passam — NÃO provam que o fluxo real funciona. Esta parte corre a
+app de verdade (`next dev` ligado à BD de PRODUÇÃO — não há staging) e conduz
+os fluxos ponto a ponto por browser (Playwright + Chrome), com dados de teste
+isolados (clientes/locais/serviços/contratos/utilizador "TESTE ... (apagar)")
+criados e apagados a cada verificação. Nenhum dado real de cliente foi
+alterado permanentemente.
+
+11.1 — Confirmado a funcionar de verdade (evidência: cliques reais + BD)
+  [x] daily-billing.ts↔cash_flow_entries (10.1): 100%/50%/Por-pagar cria,
+      atualiza e remove a entrada certa; sem duplicar em cliques repetidos.
+  [x] KPI "Recebido" da Cobrança Diária usava r.value (SEM IVA) como fallback
+      quando paid_amount é null — subestimava o valor recebido em serviços
+      com IVA (100,00 € em vez de 123,00 €). FIX aplicado em
+      daily-billing-client.tsx (receivedOf agora recebe vatRate e calcula o
+      total com IVA, igual à linha e ao Fluxo de Caixa). Confirmado por teste.
+  [x] /recuperar/nova-senha → profiles.role (10.1): confirmado com utilizador
+      descartável + link de recovery real gerado via admin API — redireciona
+      corretamente para /app (role=colaborador). Link inválido/expirado dá
+      erro limpo, não rebenta.
+  [x] updateVacationBalance (10.1): guardar valor válido persiste em BD;
+      valor inválido (9999, fora de 0–60) é rejeitado com "Saldo inválido."
+      e NÃO é escrito — confirmado a ler o valor real da BD depois.
+  [x] auditLog continua a registar corretamente no caminho feliz (confirmado
+      via audit_logs após ações reais) — a correção do catch não quebrou o
+      caso normal, só deixou de engolir falhas em silêncio.
+
+  ⚠ ACHADO — VacationBalanceForm estava construído mas NUNCA importado em
+    lado nenhum (`src/app/(dashboard)/dashboard/colaboradores/[id]/page.tsx`
+    só mostrava `profile.vacation_balance ?? 22` como texto fixo, sem
+    nenhuma forma de editar). Ou seja: a correção do bug de "sucesso falso"
+    tinha sido aplicada a um componente inatingível — não havia NENHUMA
+    forma de editar o saldo de férias pela UI. FIX: componente ligado à
+    página real (troca o texto fixo pelo formulário). Confirmado a funcionar
+    de ponta a ponta (browser → server action → BD) só depois disto.
+
+11.2 — CRÍTICO NOVO ENCONTRADO E CORRIGIDO: submissão prematura em Contratos
+  [x] Ao editar um contrato (ContratoSheet), clicar em "Seguinte" (passo 1→2)
+      podia, no MESMO gesto de clique, acionar também o botão "Guardar" do
+      passo 2 (que ocupa a mesma posição no ecrã) — GRAVANDO o contrato sem
+      o utilizador nunca ver nem confirmar o passo 2. Reproduzido 2×: uma vez
+      por acidente num contrato REAL (Claudia Gomes, id 939cad43…, sem dano
+      porque estava cancelado e os valores não mudaram — só bateu
+      `updated_at`), e depois isolado deliberadamente num contrato de teste
+      descartável (confirmado pelo log do servidor: updateContrato disparado
+      a ~70ms do clique em "Seguinte", nunca com clique sintético/JS puro —
+      só com o gesto de rato real).
+  [x] Uma primeira tentativa de guarda (`if (step !== 2) return` no
+      handleSubmit) NÃO chegou a bloquear — confirmou que, pelo mecanismo
+      exato do bug, o estado `step` já tinha avançado para 2 antes do
+      submit indevido chegar a correr.
+  [x] FIX aplicado (contratos/_components/sheet.tsx): cooldown de 400ms ao
+      entrar no passo 2 — o botão "Guardar" fica desativado
+      (`disabled={pending || !step2Ready}`) e handleSubmit recusa-se a
+      gravar (`if (step !== 2 || !step2Ready) return`) até esse intervalo
+      passar. Reencaminhado por `goToStep()` (novo helper) em todos os
+      sítios que mudam de passo, com o timer limpo corretamente
+      (sem violar a regra de lint "no setState síncrono em useEffect").
+  [x] Reverificado depois do fix: clique real em "Seguinte" já NÃO grava
+      nada (confirmado: sem POST ao servidor). Gravação deliberada (esperar
+      o cooldown + clicar "Guardar" de propósito) continua a funcionar e a
+      persistir os dados corretamente.
+  ⚠ Causa exata do "clique fantasma" não foi 100% isolada ao nível de evento
+    do browser (não reproduz com .click()/dispatchEvent sintéticos, só com o
+    gesto completo mousemove→mousedown→mouseup→click do Playwright) — pode
+    ser um "moving target" real (o botão "Guardar" nasce exatamente onde
+    "Seguinte" estava) ou um artefacto do motor de automação. O FIX aplicado
+    resolve o RESULTADO (gravação indevida) independentemente da causa exata,
+    por isso não bloqueia — mas fica registado para não se perder o contexto.
+
+VERIFICAÇÃO PÓS-CORREÇÃO (repetida): 310 testes a passar · tsc 0 erros ·
+ESLint 0 erros/warnings. Todos os dados de teste (clientes/locais/serviços/
+contratos "TESTE... (apagar)" e o utilizador descartável) foram apagados da
+produção no final.
+
+
+================================================================================
+FIM DO RELATÓRIO — última atualização: 2026-07-04
+Commits desta ronda: (a definir após commit das correções críticas 10.1 + 11.1 + 11.2)
+Estado: 310 testes a passar · tsc limpo · ESLint 0 warnings · build local pronto ·
+fluxos críticos verificados em runtime real (não só automação estática)
 ================================================================================

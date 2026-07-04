@@ -267,6 +267,12 @@ export function ServiceCreateSheet({
   }, [selectedLocation]);
   const effectiveRate = serviceRate.trim() === "" ? null : Number(serviceRate.replace(",", "."));
 
+  // Mecânica de faturação deste serviço: "hourly" (por hora) ou "fixed" (valor fixo).
+  const [billingMode, setBillingMode] = useState<"hourly" | "fixed">("hourly");
+  const [fixedValue, setFixedValue] = useState("");
+  const isFixed = billingMode === "fixed";
+  const parsedFixed = fixedValue.trim() === "" ? null : Number(fixedValue.replace(",", "."));
+
   // Nº de pessoas: tamanho REAL da equipa selecionada (cada colaboradora conta
   // como uma hora). Busca direta a team_members (mesma fonte fiável do modal de
   // alocação) — não depende do member_count vindo da view, que chegou a vir 0.
@@ -294,10 +300,14 @@ export function ServiceCreateSheet({
         ?? (selectedTeam?.member_count && selectedTeam.member_count > 0 ? selectedTeam.member_count : 1));
 
   const durationMin = calcDuration(startTime, endTime);
-  const calculatedValue =
+  const hourlyCalc =
     effectiveRate != null && Number.isFinite(effectiveRate) && durationMin > 0
       ? (durationMin / 60) * effectiveRate * numPeople
       : null;
+  // Valor efetivo do serviço: valor fixo quando nesse modo, senão o cálculo por hora.
+  const calculatedValue = isFixed
+    ? (parsedFixed != null && Number.isFinite(parsedFixed) ? parsedFixed : null)
+    : hourlyCalc;
 
   function resetNewClientForm() {
     setNewClientName(""); setNewClientPhone(""); setNewClientEmail(""); setNewClientNif("");
@@ -315,21 +325,29 @@ export function ServiceCreateSheet({
     setCreatingClient(true);
     setNewClientError(null);
 
-    const res = await createClienteComLocal(companyId, {
-      name: newClientName,
-      type: newClientType,
-      phone: newClientPhone || undefined,
-      email: newClientEmail || undefined,
-      nif: newClientNif || undefined,
-      locationName: newLocName,
-      address: composedAddr,
-      hourlyRate: newLocRate ? parseFloat(newLocRate) : null,
-      serviceType: newLocServiceType,
-      lat: addrLat ? parseFloat(addrLat) : null,
-      lng: addrLng ? parseFloat(addrLng) : null,
-    });
+    let res;
+    try {
+      res = await createClienteComLocal(companyId, {
+        name: newClientName,
+        type: newClientType,
+        phone: newClientPhone || undefined,
+        email: newClientEmail || undefined,
+        nif: newClientNif || undefined,
+        locationName: newLocName,
+        address: composedAddr,
+        hourlyRate: newLocRate ? parseFloat(newLocRate) : null,
+        serviceType: newLocServiceType,
+        lat: addrLat ? parseFloat(addrLat) : null,
+        lng: addrLng ? parseFloat(addrLng) : null,
+      });
+    } catch (e) {
+      // A server action rejeitou (rede/exceção): não deixa o botão preso a carregar.
+      setNewClientError(e instanceof Error ? e.message : "Erro ao criar cliente. Tenta novamente.");
+      return;
+    } finally {
+      setCreatingClient(false);
+    }
 
-    setCreatingClient(false);
     if (!res.ok || !res.clientId || !res.locationId) {
       setNewClientError(res.error ?? "Erro ao criar.");
       return;
@@ -384,6 +402,11 @@ export function ServiceCreateSheet({
         starts_on: dateStr,
         status: "ativo",
         hourly_rate: effectiveRate,
+        fixed_price: isFixed ? parsedFixed : null,
+        // "Avença" numa intervenção recorrente = valor fixo MENSAL (o total é
+        // dividido pelos serviços realizados no mês), não um valor por serviço.
+        fixed_monthly: isFixed,
+        apply_vat: withVat,
         num_people: null,
         cleaning_type: cleaningType || null,
         payment_status: showPayment ? paymentStatus : null,
@@ -408,10 +431,10 @@ export function ServiceCreateSheet({
       teamId: teamId || null,
       scheduledStart: `${dateStr}T${startTime}:00`,
       scheduledEnd: `${dateStr}T${endTime}:00`,
-      hourlyRate: effectiveRate,
+      hourlyRate: isFixed ? null : effectiveRate,
       numPeople,
       applyVat: withVat,
-      // Estofos por unidade: o total (qtd × preço) tem prioridade sobre o cálculo por hora.
+      // Prioridade: estofos por unidade > valor fixo/cálculo por hora.
       calculatedValue: upholsteryTotal != null && upholsteryTotal > 0
         ? upholsteryTotal
         : (calculatedValue ?? null),
@@ -446,6 +469,7 @@ export function ServiceCreateSheet({
     setSaved(false);
     if (!locationId) { setMessage("Seleciona um local."); return; }
     if (durationMin <= 0) { setMessage("A hora de fim deve ser posterior ao início."); return; }
+    if (isFixed && (parsedFixed == null || parsedFixed <= 0)) { setMessage("Indica o valor fixo do serviço."); return; }
     if (showUpholstery && !upholsteryType) { setMessage("Seleciona o tipo de estofado."); return; }
     if (showUnits && (upholsteryUnits === "" || Number(upholsteryUnits) <= 0)) {
       setMessage("Indica o número de unidades do estofado.");
@@ -885,29 +909,74 @@ export function ServiceCreateSheet({
               )}
             </div>
 
-            {/* Valor/hora do serviço (editável) */}
-            <Field label="Valor/hora (€)">
-              <input
-                type="number"
-                min="0"
-                step="0.5"
-                value={serviceRate}
-                onChange={(e) => setServiceRate(e.target.value)}
-                placeholder="Ex: 15.00"
-                className={INPUT_CLS}
-              />
-              <p className="mt-1 text-xs text-[var(--color-text-muted)]">
-                Pré-preenchido com o valor do local. Podes ajustar só para este serviço.
-              </p>
+            {/* Mecânica de faturação: por hora ou valor fixo */}
+            <Field label="Mecânica de faturação">
+              <div className="grid grid-cols-2 gap-2">
+                {[
+                  { value: "hourly", label: "Por hora" },
+                  { value: "fixed", label: "Avença" },
+                ].map((m) => (
+                  <button
+                    type="button"
+                    key={m.value}
+                    onClick={() => setBillingMode(m.value as "hourly" | "fixed")}
+                    className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors border ${
+                      billingMode === m.value
+                        ? "bg-[var(--color-primary)] text-white border-[var(--color-primary)]"
+                        : "bg-white text-[var(--color-text-sub)] border-[var(--color-border)] hover:border-[var(--color-primary)]"
+                    }`}
+                  >
+                    {m.label}
+                  </button>
+                ))}
+              </div>
             </Field>
+
+            {/* Valor/hora (modo por hora) */}
+            {!isFixed && (
+              <Field label="Valor/hora (€)">
+                <input
+                  type="number"
+                  min="0"
+                  step="0.5"
+                  value={serviceRate}
+                  onChange={(e) => setServiceRate(e.target.value)}
+                  placeholder="Ex: 15.00"
+                  className={INPUT_CLS}
+                />
+                <p className="mt-1 text-xs text-[var(--color-text-muted)]">
+                  Pré-preenchido com o valor do local. Podes ajustar só para este serviço.
+                </p>
+              </Field>
+            )}
+
+            {/* Valor fixo (modo valor fixo) */}
+            {isFixed && (
+              <Field label={recurring ? "Valor mensal da avença (€)" : "Valor fixo (€)"}>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={fixedValue}
+                  onChange={(e) => setFixedValue(e.target.value)}
+                  placeholder={recurring ? "Ex: 300.00" : "Ex: 50.00"}
+                  className={INPUT_CLS}
+                />
+                <p className="mt-1 text-xs text-[var(--color-text-muted)]">
+                  {recurring
+                    ? "Valor total mensal desta avença. Nos relatórios é dividido pelos serviços realizados no mês (ex: €300 ÷ 3 serviços = €100 cada)."
+                    : "Valor fixo deste serviço, independente da duração e do nº de pessoas."}
+                </p>
+              </Field>
+            )}
 
             {/* Previsão de valor */}
             {calculatedValue != null && (
               <div className="p-3 rounded-lg bg-[var(--color-primary-light)] border border-[var(--color-primary-muted)] space-y-2">
                 <p className="text-xs text-[var(--color-primary)] font-medium">
                   Duração: {Math.floor(durationMin / 60)}h{durationMin % 60 > 0 ? `${durationMin % 60}min` : ""} ·{" "}
-                  Valor estimado: <strong>€{calculatedValue.toFixed(2)}</strong>
-                  {effectiveRate != null && (
+                  {isFixed ? "Valor fixo" : "Valor estimado"}: <strong>€{calculatedValue.toFixed(2)}</strong>
+                  {!isFixed && effectiveRate != null && (
                     <span className="font-normal opacity-80"> ({effectiveRate}€/h × {numPeople} pessoa{numPeople !== 1 ? "s" : ""})</span>
                   )}
                 </p>
