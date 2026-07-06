@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { requireProfile } from "@/lib/auth-guard";
 import { getMissingCashFlowReferenceIds, isValidCashFlowAmount } from "@/lib/cash-flow-integrity";
 import { revalidatePath } from "next/cache";
+import { todayInLisbon, addDaysToDateString, toLisbonTimestamp } from "@/lib/lisbon-time";
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 
@@ -88,8 +89,8 @@ export async function generateInvoices(
     .select("id, location_id, calculated_value, manual_value, scheduled_start, actual_start, actual_end, apply_vat")
     .eq("company_id", companyId)
     .eq("status", "concluido")
-    .gte("scheduled_start", `${start}T00:00:00`)
-    .lte("scheduled_start", `${end}T23:59:59`);
+    .gte("scheduled_start", toLisbonTimestamp(start, "00:00"))
+    .lt("scheduled_start", toLisbonTimestamp(addDaysToDateString(end, 1), "00:00"));
 
   if (sErr) return { ok: false, error: sErr.message };
   if (!services?.length) return { ok: true, invoices: [] };
@@ -227,8 +228,8 @@ export async function generateInvoices(
   if (!byClient.size) return getInvoices(companyId, year, month);
 
   // Criar fatura por cliente
-  const invoiceDate = new Date().toISOString().split("T")[0];
-  const dueDate     = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
+  const invoiceDate = todayInLisbon();
+  const dueDate     = addDaysToDateString(invoiceDate, 30);
 
   for (const [clientId, svcs] of byClient) {
     const invoiceNumber = await nextInvoiceNumber(companyId, prefix, year);
@@ -436,7 +437,7 @@ export async function updateInvoiceStatus(
         amount: inv.total,
         description: `Fatura ${inv.invoice_number} - ${(clientData as { name?: string })?.name ?? "Cliente"}`,
         category: "faturacao",
-        date: new Date().toISOString().split("T")[0],
+        date: todayInLisbon(),
         reference_id: id,
         reference_type: "invoice",
         status: "confirmado",

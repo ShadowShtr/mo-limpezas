@@ -4,6 +4,7 @@ import { requireProfile } from "@/lib/auth-guard";
 import { auditLog } from "@/lib/audit";
 import { revalidatePath } from "next/cache";
 import { isValidCashFlowAmount } from "@/lib/cash-flow-integrity";
+import { todayInLisbon, addDaysToDateString, toLisbonTimestamp } from "@/lib/lisbon-time";
 import type { createAdminClient } from "@/lib/supabase/admin";
 
 type AdminClient = ReturnType<typeof createAdminClient>;
@@ -79,9 +80,8 @@ async function _getDailyBilling(
   }
 
   // Janela de pendentes: 60 dias antes do dia selecionado.
-  const pendingStart = new Date(`${dateStr}T00:00:00`);
-  pendingStart.setDate(pendingStart.getDate() - 60);
-  const pendingStartStr = pendingStart.toISOString().slice(0, 10);
+  const pendingStartStr = addDaysToDateString(dateStr, -60);
+  const dayEndExclusive = addDaysToDateString(dateStr, 1);
 
   const [{ data: dayRows, error: dErr }, { data: pastRows, error: pErr }, { data: settingsRow }] =
     await Promise.all([
@@ -89,16 +89,16 @@ async function _getDailyBilling(
         .from("services")
         .select(SERVICE_COLS)
         .eq("company_id", companyId)
-        .gte("scheduled_start", `${dateStr}T00:00:00`)
-        .lte("scheduled_start", `${dateStr}T23:59:59`)
+        .gte("scheduled_start", toLisbonTimestamp(dateStr, "00:00"))
+        .lt("scheduled_start", toLisbonTimestamp(dayEndExclusive, "00:00"))
         .neq("status", "cancelado")
         .order("scheduled_start"),
       admin
         .from("services")
         .select(SERVICE_COLS)
         .eq("company_id", companyId)
-        .gte("scheduled_start", `${pendingStartStr}T00:00:00`)
-        .lt("scheduled_start", `${dateStr}T00:00:00`)
+        .gte("scheduled_start", toLisbonTimestamp(pendingStartStr, "00:00"))
+        .lt("scheduled_start", toLisbonTimestamp(dateStr, "00:00"))
         .neq("status", "cancelado")
         .neq("payment_status", "pago_total")
         .order("scheduled_start", { ascending: false }),
@@ -138,14 +138,16 @@ async function _getDailyBilling(
     if (avencaContractIds.length === 0) break;
     const [y, m] = ym.split("-").map(Number);
     const monthEnd = new Date(y, m, 0).getDate();
+    const monthStartStr = `${ym}-01`;
+    const nextMonthStartStr = addDaysToDateString(`${ym}-${String(monthEnd).padStart(2, "0")}`, 1);
     const { data: monthRows } = await admin
       .from("services")
       .select("contract_id")
       .eq("company_id", companyId)
       .in("contract_id", avencaContractIds)
       .neq("status", "cancelado")
-      .gte("scheduled_start", `${ym}-01T00:00:00`)
-      .lte("scheduled_start", `${ym}-${String(monthEnd).padStart(2, "0")}T23:59:59`);
+      .gte("scheduled_start", toLisbonTimestamp(monthStartStr, "00:00"))
+      .lt("scheduled_start", toLisbonTimestamp(nextMonthStartStr, "00:00"));
     for (const r of monthRows ?? []) {
       const key = `${r.contract_id}|${ym}`;
       avencaCount.set(key, (avencaCount.get(key) ?? 0) + 1);
@@ -241,14 +243,15 @@ async function computeServiceBillingValue(
   const ym = service.scheduled_start.slice(0, 7);
   const [y, m] = ym.split("-").map(Number);
   const monthEnd = new Date(y, m, 0).getDate();
+  const nextMonthStartStr = addDaysToDateString(`${ym}-${String(monthEnd).padStart(2, "0")}`, 1);
   const { data: monthRows } = await admin
     .from("services")
     .select("id")
     .eq("company_id", companyId)
     .eq("contract_id", service.contract_id)
     .neq("status", "cancelado")
-    .gte("scheduled_start", `${ym}-01T00:00:00`)
-    .lte("scheduled_start", `${ym}-${String(monthEnd).padStart(2, "0")}T23:59:59`);
+    .gte("scheduled_start", toLisbonTimestamp(`${ym}-01`, "00:00"))
+    .lt("scheduled_start", toLisbonTimestamp(nextMonthStartStr, "00:00"));
   const count = Math.max(1, monthRows?.length ?? 1);
 
   return {
@@ -281,7 +284,7 @@ async function syncServicePaymentCashFlow(
     if (existingEntry) {
       const { error } = await admin
         .from("cash_flow_entries")
-        .update({ amount: receivedAmount, date: new Date().toISOString().split("T")[0], status: "confirmado" })
+        .update({ amount: receivedAmount, date: todayInLisbon(), status: "confirmado" })
         .eq("id", existingEntry.id);
       if (error) return { ok: false, error: error.message };
     } else {
@@ -291,7 +294,7 @@ async function syncServicePaymentCashFlow(
         amount: receivedAmount,
         description: `Cobrança serviço ${referenceLabel}`,
         category: "faturacao",
-        date: new Date().toISOString().split("T")[0],
+        date: todayInLisbon(),
         reference_id: serviceId,
         reference_type: "service_payment",
         status: "confirmado",

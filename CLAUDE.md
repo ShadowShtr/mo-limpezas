@@ -47,6 +47,58 @@ Lê este ficheiro no início de CADA sessão antes de fazer qualquer coisa.
 
 ## ⚡ PRÓXIMA TASK A EXECUTAR
 
+**✅ 2 bugs novos encontrados E CORRIGIDOS em runtime real (2026-07-06, ver
+AUDITORIA_COMPLETA.txt PARTE 12/12.7) — falta fazer commit + deploy:**
+1. **Folha de Pagamento rebentava a página** sempre que havia um perfil
+   ativo novo (admin/gestor/colaborador) sem folha calculada no mês em
+   vista — `folha-pagamento/page.tsx` chamava `calculateAndSavePayroll`
+   (que faz `revalidatePath`) a meio do render do Server Component; o
+   Next.js 16 rejeita isso e mostrava o error boundary.
+   FIX: `calculateAndSavePayroll` dividida em `runPayrollCalculation`
+   (privada, sem revalidar) + `ensurePayrollCalculated` (nova, usada pela
+   página) + `calculateAndSavePayroll` (mantida para o botão cliente, essa
+   sim revalida). Reverificado ao vivo: já não rebenta.
+2. **Registo de Ponto mostrava o dia errado e perdia os serviços de hoje**
+   enquanto Portugal está em hora de verão (até final de outubro) —
+   `dayRange`/`toExclusive` faziam `new Date(\`${data}T00:00:00\`)` (meia-
+   -noite de Lisboa) seguido de `.toISOString()` (UTC), desfasando tudo em
+   1 dia. Bloqueava criar registo manual de ponto para o dia atual.
+   FIX: novos helpers `todayInLisbon()` e `addDaysToDateString()` em
+   `src/lib/lisbon-time.ts` (aritmética por `Date.UTC`, sem depender do
+   fuso do processo). Reverificado ao vivo: mostra o dia certo e encontra
+   o serviço de hoje. Testes novos em `lisbon-time.test.ts` (6, total 316).
+
+**✅ Auditoria ficheiro-a-ficheiro do mesmo padrão de fuso horário em TODO o
+resto do código (2026-07-06, ver AUDITORIA_COMPLETA.txt PARTE 13) — feita
+na mesma sessão, a pedido do dono ("audite todos de um a um"):**
+- Descoberta de fundo: não há `TZ` configurada no deploy — em produção
+  (Vercel) o processo Node corre em UTC, não em Europe/Lisbon. Qualquer
+  `new Date()` local no servidor para decidir "hoje"/"este mês" reflete o
+  dia em UTC. Só desalinha na 1ª hora do dia em Lisboa (hora de verão),
+  mas o padrão de risco estava espalhado por ~20 ficheiros.
+- 33 ficheiros revistos um a um; ~20 correções aplicadas com os novos
+  helpers `todayInLisbon()`/`addDaysToDateString()`/`toLisbonTimestamp()`
+  (`src/lib/lisbon-time.ts`) — limites de consulta à BD (Cobrança Diária,
+  Relatórios, Dashboard Financeiro, Faturação, Contratos, calendário,
+  Faltas, cron de geração de serviços, Mapa) e "hoje" por omissão em
+  vários formulários (contratos, despesas, fluxo de caixa, ausências,
+  pagamentos, backup).
+- Deixado de propósito (risco/benefício não justificava mexer): a janela
+  de reconciliação de recorrência de contratos (já verificada ao vivo na
+  Parte 12.1) e a âncora da semana em `app/escala` (vista móvel só
+  leitura, impacto real limitado a 1h/dia no verão).
+- Reverificado tudo: tsc 0 erros, ESLint 0 erros/warnings, 316 testes a
+  passar, smoke test em runtime das 14 páginas alteradas sem crash, e
+  confirmação dirigida de que gerar cobranças do mês corrente continua a
+  incluir o dia de hoje com o IVA certo.
+
+**Ainda por corrigir (não faz parte desta ronda de fixes):**
+- Taxa de hora extra hardcoded em 25% no ajuste manual da folha
+  (`adjustPayrollRecord`), ignora `overtime_rate_pct` configurável
+  (PARTE 12.4 / 10.2).
+- Coluna de Kanban "TESTE" residual em `company_settings.kanban_columns`
+  (não desta sessão, decidir se remover).
+
 **Migration 049 (cash_flow_service_payment_reference) — ✅ APLICADA em
 produção (2026-07-04, via SQL Editor) e testada em runtime real (ver
 AUDITORIA_COMPLETA.txt PARTE 11.1).** Falta apenas fazer commit + deploy

@@ -1,6 +1,7 @@
 "use server";
 
 import { requireProfile } from "@/lib/auth-guard";
+import { todayInLisbon, addDaysToDateString, toLisbonTimestamp } from "@/lib/lisbon-time";
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 
@@ -91,23 +92,26 @@ async function _getOperationalSummary(): Promise<
   const { admin, profile } = guard;
   const companyId = profile.company_id;
 
-  const now = new Date();
-  const pad = (n: number) => String(n).padStart(2, "0");
-  const dstr = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-
-  const todayStr = dstr(now);
+  // todayInLisbon() usa Intl (Europe/Lisbon) em vez de `new Date()` local —
+  // essencial porque o servidor (Vercel) corre em UTC por omissão, sem TZ
+  // configurada, e "hoje"/"esta semana" têm de refletir o dia real em Lisboa.
+  const todayStr = todayInLisbon();
+  const [ty, tm, td] = todayStr.split("-").map(Number);
+  // Dia da semana da data (calendário puro via Date.UTC — não depende do
+  // fuso do processo, só da data já correta em Lisboa).
+  const dow = new Date(Date.UTC(ty, tm - 1, td)).getUTCDay();
   // Semana: segunda a domingo
-  const weekStart = new Date(now);
-  weekStart.setDate(now.getDate() - ((now.getDay() + 6) % 7));
-  const weekEnd = new Date(weekStart);
-  weekEnd.setDate(weekStart.getDate() + 6);
+  const weekStartStr = addDaysToDateString(todayStr, -((dow + 6) % 7));
+  const weekEndStr = addDaysToDateString(weekStartStr, 6);
   // Mês
-  const monthStartStr = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-01`;
-  const monthEndStr = dstr(new Date(now.getFullYear(), now.getMonth() + 1, 0));
+  const monthStartStr = `${todayStr.slice(0, 7)}-01`;
+  const monthEndDay = new Date(ty, tm, 0).getDate();
+  const monthEndStr = `${todayStr.slice(0, 7)}-${String(monthEndDay).padStart(2, "0")}`;
 
   // Intervalo mais largo que cobre os três períodos (a semana pode atravessar meses)
-  const rangeStart = dstr(weekStart) < monthStartStr ? dstr(weekStart) : monthStartStr;
-  const rangeEnd = dstr(weekEnd) > monthEndStr ? dstr(weekEnd) : monthEndStr;
+  const rangeStart = weekStartStr < monthStartStr ? weekStartStr : monthStartStr;
+  const rangeEnd = weekEndStr > monthEndStr ? weekEndStr : monthEndStr;
+  const rangeEndExclusive = addDaysToDateString(rangeEnd, 1);
 
   const [{ data: services, error: sErr }, { data: settingsRow }] = await Promise.all([
     admin
@@ -115,8 +119,8 @@ async function _getOperationalSummary(): Promise<
       .select("id, location_id, contract_id, calculated_value, manual_value, apply_vat, status, scheduled_start")
       .eq("company_id", companyId)
       .neq("status", "cancelado")
-      .gte("scheduled_start", `${rangeStart}T00:00:00`)
-      .lte("scheduled_start", `${rangeEnd}T23:59:59`),
+      .gte("scheduled_start", toLisbonTimestamp(rangeStart, "00:00"))
+      .lt("scheduled_start", toLisbonTimestamp(rangeEndExclusive, "00:00")),
     admin.from("company_settings").select("vat_rate").eq("company_id", companyId).single(),
   ]);
   if (sErr) return { ok: false, error: sErr.message };
@@ -163,9 +167,6 @@ async function _getOperationalSummary(): Promise<
 
   const empty = (): PeriodSummary => ({ expected: 0, done: 0, services: 0, concluded: 0 });
   const today = empty(), week = empty(), month = empty();
-
-  const weekStartStr = dstr(weekStart);
-  const weekEndStr = dstr(weekEnd);
 
   const rows: SummaryServiceRow[] = [];
   for (const s of services ?? []) {

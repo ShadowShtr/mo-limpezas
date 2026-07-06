@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Plus, X, Loader2, Stethoscope, CalendarDays, AlertCircle } from "lucide-react";
 import { createOwnAbsence } from "@/app/actions/vacation";
+import { todayInLisbon } from "@/lib/lisbon-time";
 
 interface AbsenceRow {
   id: string;
@@ -39,7 +40,7 @@ export function AusenciasClient({ absences }: Props) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [absType, setAbsType] = useState<"doenca_com_baixa" | "doenca_sem_baixa" | "pessoal_justificado" | "outro">("doenca_sem_baixa");
-  const today = new Date().toISOString().split("T")[0];
+  const today = todayInLisbon();
   const [start, setStart] = useState(today);
   const [end, setEnd] = useState(today);
   const [notes, setNotes] = useState("");

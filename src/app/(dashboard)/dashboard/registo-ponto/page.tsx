@@ -3,22 +3,19 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { redirect } from "next/navigation";
 import { Header } from "@/components/layout/header";
 import { dailyContractedMinutes, isAbsentOn } from "@/lib/ponto-calc";
+import { todayInLisbon, addDaysToDateString, toLisbonTimestamp } from "@/lib/lisbon-time";
 import { RegistoPontoClient, type PontoRow } from "./_components/registo-ponto-client";
 import { PontoTabs } from "./_components/ponto-tabs";
 
 export const metadata = { title: "Registo de Ponto — Mó Limpezas" };
 
-function todayISO(): string {
-  return new Date().toISOString().slice(0, 10);
-}
-
 /** Lista de dias YYYY-MM-DD entre from e to (inclusive), com limite de segurança. */
 function dayRange(from: string, to: string): string[] {
   const days: string[] = [];
-  const start = new Date(`${from}T00:00:00`);
-  const end = new Date(`${to}T00:00:00`);
-  for (let d = start, i = 0; d <= end && i < 92; d = new Date(d.getTime() + 86_400_000), i++) {
-    days.push(d.toISOString().slice(0, 10));
+  let cursor = from;
+  for (let i = 0; cursor <= to && i < 92; i++) {
+    days.push(cursor);
+    cursor = addDaysToDateString(cursor, 1);
   }
   return days;
 }
@@ -29,7 +26,7 @@ export default async function RegistoPontoPage({
   searchParams: Promise<{ from?: string; to?: string; collab?: string }>;
 }) {
   const sp = await searchParams;
-  const from = sp.from || todayISO();
+  const from = sp.from || todayInLisbon();
   const to = sp.to && sp.to >= from ? sp.to : from;
   const collabFilter = sp.collab || "";
 
@@ -48,9 +45,7 @@ export default async function RegistoPontoPage({
   if (!["admin", "gestor"].includes(me.role)) redirect("/app");
 
   const companyId = me.company_id;
-  const toExclusive = new Date(new Date(`${to}T00:00:00`).getTime() + 86_400_000)
-    .toISOString()
-    .slice(0, 10);
+  const toExclusive = addDaysToDateString(to, 1);
 
   // ── Colaboradores ──────────────────────────────────────────────────────────
   let collabQuery = admin
@@ -71,8 +66,8 @@ export default async function RegistoPontoPage({
       .from("timesheets")
       .select("id, collaborator_id, clock_in_at, clock_out_at, duration_minutes, service_id")
       .eq("company_id", companyId)
-      .gte("clock_in_at", `${from}T00:00:00`)
-      .lt("clock_in_at", `${toExclusive}T00:00:00`),
+      .gte("clock_in_at", toLisbonTimestamp(from, "00:00"))
+      .lt("clock_in_at", toLisbonTimestamp(toExclusive, "00:00")),
     admin
       .from("absences")
       .select("collaborator_id, starts_on, ends_on")
@@ -87,8 +82,8 @@ export default async function RegistoPontoPage({
       .select("id, team_id, scheduled_start, scheduled_end")
       .eq("company_id", companyId)
       .not("team_id", "is", null)
-      .gte("scheduled_start", `${from}T00:00:00`)
-      .lt("scheduled_start", `${toExclusive}T00:00:00`),
+      .gte("scheduled_start", toLisbonTimestamp(from, "00:00"))
+      .lt("scheduled_start", toLisbonTimestamp(toExclusive, "00:00")),
     // Para o seletor de colaborador (lista completa, independente do filtro)
     admin
       .from("profiles")

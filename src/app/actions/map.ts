@@ -2,6 +2,7 @@
 
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
+import { addDaysToDateString, toLisbonTimestamp } from "@/lib/lisbon-time";
 
 export interface MapService {
   id: string;
@@ -60,8 +61,8 @@ export async function getMapServices(date: string): Promise<{ services: MapServi
   if (!profile?.company_id) return { services: [], teams: [], clockPoints: [] };
   if (!["admin", "gestor"].includes(profile.role)) return { services: [], teams: [], clockPoints: [] };
 
-  const startOfDay = `${date}T00:00:00.000Z`;
-  const endOfDay = `${date}T23:59:59.999Z`;
+  const startOfDay = toLisbonTimestamp(date, "00:00");
+  const endOfDay = toLisbonTimestamp(addDaysToDateString(date, 1), "00:00");
 
   const { data: services } = await admin
     .from("services")
@@ -87,7 +88,7 @@ export async function getMapServices(date: string): Promise<{ services: MapServi
     `)
     .eq("company_id", profile.company_id)
     .gte("scheduled_start", startOfDay)
-    .lte("scheduled_start", endOfDay)
+    .lt("scheduled_start", endOfDay)
     .neq("status", "cancelado")
     .order("scheduled_start");
 

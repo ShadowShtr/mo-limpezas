@@ -4,6 +4,7 @@ import { useState } from "react";
 import { createPortal } from "react-dom";
 import { X, Loader2 } from "lucide-react";
 import { createAbsence, type AbsenceType } from "@/app/actions/absences";
+import { todayInLisbon } from "@/lib/lisbon-time";
 
 const ABSENCE_OPTIONS: { value: AbsenceType; label: string }[] = [
   { value: "doenca_com_baixa", label: "Doença com baixa médica" },
@@ -32,7 +33,7 @@ export function AbsenceSheet({ trigger, colaboradores, defaultCollaboratorId }: 
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<{ type: "error" | "success"; text: string } | null>(null);
 
-  const today = new Date().toISOString().split("T")[0];
+  const today = todayInLisbon();
   const [collaboratorId, setCollaboratorId] = useState(defaultCollaboratorId ?? "");
   const [absenceType, setAbsenceType] = useState<AbsenceType>("doenca_sem_baixa");
   const [startsOn, setStartsOn] = useState(today);

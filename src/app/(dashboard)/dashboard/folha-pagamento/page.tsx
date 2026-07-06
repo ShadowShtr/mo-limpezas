@@ -3,7 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 import { Header } from "@/components/layout/header";
-import { calculateAndSavePayroll, getPayrollRecords } from "@/app/actions/payroll";
+import { ensurePayrollCalculated, getPayrollRecords } from "@/app/actions/payroll";
 import { PayrollClient } from "./_components/payroll-client";
 
 export const metadata = { title: "Folha de Pagamento — Escala" };
@@ -43,7 +43,7 @@ export default async function FolhaPagamentoPage({
     .in("role", ["colaborador", "gestor", "admin"]);
 
   if (activePayrollProfiles && records.length < activePayrollProfiles) {
-    const refreshed = await calculateAndSavePayroll(companyId, year, month);
+    const refreshed = await ensurePayrollCalculated(year, month);
     records = refreshed.ok ? refreshed.records : records;
   }
 

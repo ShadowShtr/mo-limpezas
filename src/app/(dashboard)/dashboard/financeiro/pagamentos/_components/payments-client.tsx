@@ -9,6 +9,7 @@ import {
   getPayments, createPayment, updatePayment, setPaymentStatus, deletePayment,
   type PaymentsData, type Payment, type PaymentKind,
 } from "@/app/actions/payments";
+import { todayInLisbon } from "@/lib/lisbon-time";
 
 function fmtEur(v: number | null) {
   if (v === null || v === undefined) return "—";
@@ -18,10 +19,6 @@ function fmtDate(s: string | null) {
   if (!s) return "—";
   return new Date(s + "T00:00:00").toLocaleDateString("pt-PT", { day: "2-digit", month: "short" });
 }
-function todayISO() {
-  return new Date().toISOString().split("T")[0];
-}
-
 interface Props {
   initialData: PaymentsData | null;
   error: string | null;
@@ -113,7 +110,7 @@ export function PaymentsClient({ initialData, error: initErr, mesParam, year, mo
     });
   }
 
-  const today = todayISO();
+  const today = todayInLisbon();
 
   return (
     <div className="space-y-5">

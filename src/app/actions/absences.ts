@@ -3,6 +3,7 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
+import { addDaysToDateString, toLisbonTimestamp } from "@/lib/lisbon-time";
 
 export type AbsenceType =
   | "doenca_com_baixa"
@@ -161,8 +162,8 @@ export async function getSubstituteSuggestions(
       .from("services")
       .select("team_id")
       .in("team_id", allTeamIds)
-      .gte("scheduled_start", `${startsOn}T00:00:00`)
-      .lte("scheduled_start", `${endsOn}T23:59:59`)
+      .gte("scheduled_start", toLisbonTimestamp(startsOn, "00:00"))
+      .lt("scheduled_start", toLisbonTimestamp(addDaysToDateString(endsOn, 1), "00:00"))
       .in("status", ["agendado", "em_curso"]);
     for (const s of services ?? []) {
       if (!s.team_id) continue;

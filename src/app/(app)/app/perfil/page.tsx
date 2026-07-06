@@ -7,15 +7,18 @@ import { ChangePasswordSection } from "./_components/change-password-section";
 import { AppDocumentsSection } from "./_components/documents-section";
 import { getCurrentUser } from "@/lib/auth/current-user";
 import { getMyDocuments } from "@/app/actions/collaborator-documents";
+import { todayInLisbon, toLisbonTimestamp } from "@/lib/lisbon-time";
 
 export default async function PerfilPage() {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
 
   const admin = createAdminClient();
-  const now = new Date();
-  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split("T")[0];
-  const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split("T")[0];
+  const today = todayInLisbon();
+  const [ty, tm] = today.split("-").map(Number);
+  const monthStart = `${today.slice(0, 7)}-01`;
+  const monthEndDay = new Date(ty, tm, 0).getDate();
+  const monthEnd = `${today.slice(0, 7)}-${String(monthEndDay).padStart(2, "0")}`;
 
   const [profileRes, timesheetsRes, absencesRes, docsRes] = await Promise.all([
     admin
@@ -27,7 +30,7 @@ export default async function PerfilPage() {
       .from("timesheets")
       .select("duration_minutes")
       .eq("collaborator_id", user.id)
-      .gte("clock_in_at", new Date(now.getFullYear(), now.getMonth(), 1).toISOString())
+      .gte("clock_in_at", toLisbonTimestamp(monthStart, "00:00"))
       .not("clock_out_at", "is", null),
     admin
       .from("absences")

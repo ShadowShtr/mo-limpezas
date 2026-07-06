@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { AlertTriangle, Download, Loader2, CheckCircle } from "lucide-react";
 import { getDocumentsForBackup } from "@/app/actions/collaborator-documents";
+import { todayInLisbon } from "@/lib/lisbon-time";
 
 const CATEGORY_FOLDERS: Record<string, string> = {
   recibo_salario: "Folhas de Salario",
@@ -97,7 +98,7 @@ export function DocumentsBackupBanner({ expiringCount }: Props) {
     const companySlug = (res.company_name ?? "Empresa")
       .normalize("NFD").replace(/[̀-ͯ]/g, "")
       .replace(/[^\w ]/g, "").trim().replace(/ +/g, "_");
-    const date = new Date().toISOString().slice(0, 10);
+    const date = todayInLisbon();
     const url  = URL.createObjectURL(zipBlob);
     const a    = document.createElement("a");
     a.href     = url;

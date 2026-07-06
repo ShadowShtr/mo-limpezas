@@ -233,13 +233,14 @@ async function generateServicesForContract(
 
   for (const { date, schedule } of occurrences) {
     const dateStr = toLocalDateStr(date);
+    const nextDateStr = toLocalDateStr(new Date(date.getFullYear(), date.getMonth(), date.getDate() + 1));
 
     const { data: dup } = await admin
       .from("services")
       .select("id")
       .eq("contract_id", contractId)
-      .gte("scheduled_start", `${dateStr}T00:00:00`)
-      .lte("scheduled_start", `${dateStr}T23:59:59`)
+      .gte("scheduled_start", toLisbonTimestamp(dateStr, "00:00"))
+      .lt("scheduled_start", toLisbonTimestamp(nextDateStr, "00:00"))
       .maybeSingle();
     if (dup) continue;
 

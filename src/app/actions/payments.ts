@@ -3,6 +3,7 @@
 import { requireProfile } from "@/lib/auth-guard";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { revalidatePath } from "next/cache";
+import { todayInLisbon } from "@/lib/lisbon-time";
 
 type AdminClient = ReturnType<typeof createAdminClient>;
 
@@ -39,10 +40,6 @@ export interface PaymentsData {
 }
 
 const COLS = "id, kind, description, amount, due_date, direct_debit, status, recurring, period_year, period_month, paid_at, notes, sort_order";
-
-function todayISO() {
-  return new Date().toISOString().split("T")[0];
-}
 
 // Desloca uma data para o mês alvo, mantendo o dia (limitado ao último dia do mês).
 function shiftDate(due: string | null, year: number, month: number): string | null {
@@ -131,7 +128,7 @@ export async function getPayments(year: number, month: number): Promise<{ ok: tr
   const all = (data ?? []) as Payment[];
   const fixos = all.filter((p) => p.kind === "fixo");
   const variaveis = all.filter((p) => p.kind === "variavel");
-  const today = todayISO();
+  const today = todayInLisbon();
   const totalPendente = all.filter((p) => p.status === "pendente").reduce((s, p) => s + (p.amount ?? 0), 0);
   const totalPago = all.filter((p) => p.status === "pago").reduce((s, p) => s + (p.amount ?? 0), 0);
   const countPendente = all.filter((p) => p.status === "pendente").length;
@@ -162,9 +159,7 @@ export async function getPaymentsReminder(): Promise<{ ok: true; data: PaymentsR
   const { admin } = guard;
   const companyId = guard.profile.company_id;
 
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = now.getMonth() + 1;
+  const [year, month] = todayInLisbon().split("-").map(Number);
   await ensureMonth(admin, companyId, year, month);
 
   const { data, error } = await admin
@@ -177,7 +172,7 @@ export async function getPaymentsReminder(): Promise<{ ok: true; data: PaymentsR
     .order("due_date", { ascending: true });
   if (error) return { ok: false, error: error.message };
 
-  const today = todayISO();
+  const today = todayInLisbon();
   const rows = data ?? [];
   const items = rows.map((r) => ({
     id: r.id, description: r.description, amount: r.amount, due_date: r.due_date,

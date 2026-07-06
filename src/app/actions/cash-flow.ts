@@ -40,7 +40,10 @@ export async function getCashFlowEntries(
   const { admin } = guard;
   const companyId = guard.profile.company_id;
   const start = `${filters.year}-${String(filters.month).padStart(2, "0")}-01`;
-  const end   = new Date(filters.year, filters.month, 0).toISOString().split("T")[0];
+  // getDate() lê o dia em hora local (sem round-trip por toISOString/UTC, que
+  // desloca o resultado 1 dia para trás em hora de verão de Lisboa).
+  const monthEndDay = new Date(filters.year, filters.month, 0).getDate();
+  const end = `${filters.year}-${String(filters.month).padStart(2, "0")}-${String(monthEndDay).padStart(2, "0")}`;
 
   let query = admin
     .from("cash_flow_entries")

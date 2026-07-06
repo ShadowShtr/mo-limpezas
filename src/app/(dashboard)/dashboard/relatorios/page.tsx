@@ -2,6 +2,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { Header } from "@/components/layout/header";
 import { getReportsData } from "@/app/actions/reports";
+import { todayInLisbon } from "@/lib/lisbon-time";
 import { ReportsTabs } from "./_components/reports-tabs";
 
 interface SearchParams {
@@ -26,11 +27,11 @@ export default async function RelatoriosPage({
 
   const companyId = profile?.company_id ?? "";
 
-  const now = new Date();
-  const mesParam = params.mes ?? `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  const mesParam = params.mes ?? todayInLisbon().slice(0, 7);
   const [year, month] = mesParam.split("-").map(Number);
   const startDate = `${year}-${String(month).padStart(2, "0")}-01`;
-  const endDate = new Date(year, month, 0).toISOString().split("T")[0];
+  const monthEndDay = new Date(year, month, 0).getDate();
+  const endDate = `${year}-${String(month).padStart(2, "0")}-${String(monthEndDay).padStart(2, "0")}`;
 
   const mesLabel = new Date(year, month - 1).toLocaleDateString("pt-PT", {
     month: "long",

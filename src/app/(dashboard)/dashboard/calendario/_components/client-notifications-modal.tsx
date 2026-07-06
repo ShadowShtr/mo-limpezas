@@ -6,6 +6,7 @@ import { pt } from "date-fns/locale";
 import { X, Loader2, CheckSquare, Square, Send, Bell } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { sendBulkClientNotifications } from "@/app/actions/email";
+import { addDaysToDateString, toLisbonTimestamp } from "@/lib/lisbon-time";
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 
@@ -66,8 +67,8 @@ export function ClientNotificationsModal({
         .from("services_full")
         .select("id, client_id, client_name, scheduled_start")
         .eq("company_id", companyId)
-        .gte("scheduled_start", `${startStr}T00:00:00`)
-        .lte("scheduled_start", `${endStr}T23:59:59`)
+        .gte("scheduled_start", toLisbonTimestamp(startStr, "00:00"))
+        .lt("scheduled_start", toLisbonTimestamp(addDaysToDateString(endStr, 1), "00:00"))
         .not("status", "in", '("cancelado","falta")')
         .order("scheduled_start"),
 
@@ -75,8 +76,8 @@ export function ClientNotificationsModal({
         .from("client_notifications")
         .select("service_id")
         .eq("company_id", companyId)
-        .gte("sent_at", `${startStr}T00:00:00`)
-        .lte("sent_at",   `${endStr}T23:59:59`)
+        .gte("sent_at", toLisbonTimestamp(startStr, "00:00"))
+        .lt("sent_at", toLisbonTimestamp(addDaysToDateString(endStr, 1), "00:00"))
         .eq("status", "enviado"),
     ]);
 

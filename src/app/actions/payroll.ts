@@ -60,8 +60,7 @@ type PayrollPaidProfileJoin = {
 
 // ─── Calcular e guardar folha de pagamento ────────────────────────────────────
 
-export async function calculateAndSavePayroll(
-  _companyId: string,
+async function runPayrollCalculation(
   year: number,
   month: number,
 ): Promise<{ ok: true; records: PayrollRecord[] } | { ok: false; error: string }> {
@@ -202,8 +201,30 @@ export async function calculateAndSavePayroll(
 
   if (uErr) return { ok: false, error: uErr.message };
 
-  revalidatePath("/dashboard/folha-pagamento");
   return getPayrollRecords(companyId, year, month);
+}
+
+/**
+ * Usada por páginas Server Component para garantir que a folha do mês está
+ * calculada. NUNCA chama revalidatePath — revalidar dentro do render de uma
+ * página não é suportado pelo Next.js (rebenta para o error boundary).
+ */
+export async function ensurePayrollCalculated(
+  year: number,
+  month: number,
+): Promise<{ ok: true; records: PayrollRecord[] } | { ok: false; error: string }> {
+  return runPayrollCalculation(year, month);
+}
+
+/** Usada pelo botão "Calcular"/"Recalcular" no cliente — aqui revalidar é válido. */
+export async function calculateAndSavePayroll(
+  _companyId: string,
+  year: number,
+  month: number,
+): Promise<{ ok: true; records: PayrollRecord[] } | { ok: false; error: string }> {
+  const result = await runPayrollCalculation(year, month);
+  if (result.ok) revalidatePath("/dashboard/folha-pagamento");
+  return result;
 }
 
 // ─── Ler registos guardados ───────────────────────────────────────────────────

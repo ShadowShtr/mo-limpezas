@@ -614,8 +614,362 @@ produção no final.
 
 
 ================================================================================
-FIM DO RELATÓRIO — última atualização: 2026-07-04
-Commits desta ronda: (a definir após commit das correções críticas 10.1 + 11.1 + 11.2)
-Estado: 310 testes a passar · tsc limpo · ESLint 0 warnings · build local pronto ·
-fluxos críticos verificados em runtime real (não só automação estática)
+PARTE 12 — VERIFICAÇÃO END-TO-END DE DADOS, MATEMÁTICA E BOTÕES — 2026-07-06
+================================================================================
+
+MÉTODO: pedido explícito do dono para validar "todos os valores, contas,
+matemática, envios de dados e receção — se cada botão está a enviar e a
+receber os dados corretamente, se guardar envia mesmo os dados, chegando ao
+local certo com o resultado certo". Verificação automática (310 testes,
+tsc, eslint, audit-security — todos limpos) seguida de runtime real com
+Playwright + Chromium contra a BD de PRODUÇÃO (não há staging), usando um
+admin descartável (`auditoria.teste.apagar@molimpezas.local`, apagado no
+fim) e dados de teste "TESTE AUDITORIA (apagar)". Cada clique foi cruzado
+com uma leitura direta da BD (service role) para confirmar que o valor
+mostrado no ecrã é o valor realmente gravado. Todos os dados de teste
+(clientes, locais, contratos, serviços, equipa, colaboradora, faturas,
+folha de pagamento) foram apagados da produção no final — confirmado por
+verificação posterior (0 resíduos em todas as tabelas).
+
+12.1 — CONFIRMADO CORRETO (evidência: clique real + leitura da BD)
+  [x] Clientes: criar e editar — nome, email, telefone, NIF, tipo, notas,
+      estado e "Isento de IVA" chegam todos corretos à tabela `clients`.
+  [x] Locais: criar e editar — morada composta, cliente associado, tipo de
+      cobrança (por hora ↔ fixo, com limpeza do campo não usado), código de
+      acesso e estado ativo/inativo — todos corretos em `locations`.
+  [x] Contratos — matemática do valor: fórmula horas × valor/hora × nº de
+      pessoas confirmada linha a linha (2h × 20€ × 3 pessoas = 120,00€,
+      igual no ecrã e na BD) e a conferência de IVA (120€ + 23% = 147,60€)
+      bate certo com `company_settings.vat_rate`.
+  [x] Contratos — geração automática de serviços: criar um contrato semanal
+      gerou 13 ocorrências (~3 meses) com `hourly_rate`, `num_people`,
+      `apply_vat` e `calculated_value` corretos em cada uma; guardar o
+      contrato também atualiza `locations.hourly_rate` (propagação
+      intencional, confirmada).
+  [x] Contratos — edição de recorrência: mudar o valor/hora reescreveu as
+      12 ocorrências futuras ainda "agendado" (150,00€ = 2h×25€×3) e NÃO
+      tocou na ocorrência já marcada "concluído" (manteve 120,00€) —
+      exatamente o comportamento documentado na Parte 10.1.
+  [x] Regressão confirmada corrigida: o bug crítico de 2026-07-04 ("Seguinte"
+      podia gravar o contrato sem passar pelo passo 2) foi reproduzido com o
+      MESMO gesto de rato real (Playwright) e confirmado que já NÃO dispara
+      nenhum POST de gravação — o cooldown de 400ms continua a funcionar.
+  [x] Faturação — IVA e isenção: gerar cobranças para um cliente "Isento de
+      IVA" com um serviço concluído de 120€ (apply_vat=true) produziu
+      corretamente subtotal 120€, IVA 0€, total 120€ — a isenção do CLIENTE
+      anula corretamente o IVA do SERVIÇO. `invoice_items` bate com o valor.
+  [x] Fluxo de Caixa ↔ Cobrança Diária: marcar um serviço como "100%" criou
+      uma entrada em `cash_flow_entries` (reference_type=service_payment)
+      com o valor exato (40€ = 2h×20€×1 pessoa); reverter para "Por pagar"
+      removeu a entrada. Confirma que a correção crítica da Parte 10.1
+      continua sólida.
+
+12.2 — NOVO E CRÍTICO — Folha de Pagamento pode rebentar a página inteira
+  [x] `src/app/(dashboard)/dashboard/folha-pagamento/page.tsx:45-47`: sempre
+      que o nº de perfis ativos (admin/gestor/colaborador) é MAIOR do que o
+      nº de registos de folha já calculados para o mês em vista, a página
+      chama `calculateAndSavePayroll` A MEIO DO RENDER do Server Component
+      — e essa função termina com `revalidatePath(...)`. O Next.js 16
+      rejeita `revalidatePath` durante render ("used ... during render
+      which is unsupported") e a página CAI no error boundary em vez de
+      mostrar a tabela.
+  [x] Reproduzido ao vivo: criar um novo perfil ativo (admin/gestor/
+      colaborador) e abrir a Folha de Pagamento do mês corrente rebentou a
+      página consistentemente (3 tentativas, mesmo erro). Isto acontece a
+      QUALQUER empresa sempre que se contrata alguém novo (ou se cria uma
+      conta) e a folha desse mês ainda não foi recalculada — cenário normal
+      e frequente, não um caso extremo.
+  [x] Boa notícia: os registos de folha SÃO gravados corretamente antes do
+      `revalidatePath` rebentar (confirmado — 32 registos corretos ficaram
+      na BD, incluindo o novo perfil, com os valores certos). Ao recarregar
+      a página uma segunda vez, a contagem já bate certo e a página volta a
+      abrir normalmente — é um crash de UMA VEZ por "pessoa nova este mês",
+      auto-recuperável, sem perda de dados, mas mostra um ecrã de erro em
+      vez da folha à primeira gestora que abrir a página.
+  → RECOMENDAÇÃO: mover a chamada a `calculateAndSavePayroll` para fora do
+    render (ex.: endpoint/server action chamada pelo cliente ao detetar
+    `records.length < activePayrollProfiles`, ou pré-calcular via cron),
+    nunca invocar uma função com `revalidatePath` diretamente do corpo da
+    página.
+
+12.3 — NOVO E SÉRIO — Registo de Ponto mostra o dia errado e "perde" os
+       serviços de hoje enquanto Portugal está em hora de verão (até out.)
+  [x] `src/app/(dashboard)/dashboard/registo-ponto/page.tsx`: as funções
+      `dayRange` (linhas 15-23) e `toExclusive` (linha 51) fazem
+      `new Date(`${data}T00:00:00`)` — isto é interpretado como MEIA-NOITE
+      NO FUSO DO SERVIDOR (Europe/Lisbon) — e depois formatam o resultado
+      com `.toISOString().slice(0,10)`, que devolve a data em UTC. Em hora
+      de verão (WEST, UTC+1, aprox. final de março a final de outubro),
+      meia-noite de Lisboa = 23h da véspera em UTC, por isso a data
+      calculada fica sempre UM DIA ATRÁS da data pedida.
+  [x] Reproduzido isoladamente (fora do browser, só Node/servidor):
+      `dayRange("2026-07-06","2026-07-06")` devolve `["2026-07-05"]`.
+  [x] Efeito 1 — rótulos errados: TODAS as datas na tabela do Registo de
+      Ponto aparecem com o dia anterior ao real (ex.: hoje 06-Seg aparece
+      como "05 Dom").
+  [x] Efeito 2 — muito mais grave — `toExclusive` faz o filtro de serviços
+      do dia usar `.gte(scheduled_start, hojeT00:00) AND .lt(scheduled_start,
+      hojeT00:00)` (o mesmo valor dos dois lados) sempre que se vê um único
+      dia (o ecrã abre por omissão em "hoje") — isto devolve SEMPRE ZERO
+      serviços da BD para esse dia. Confirmado ao vivo: criámos uma
+      colaboradora, equipa e serviço reais de hoje e a gestora via
+      "Este dia não tem serviço agendado — não é possível criar um registo
+      manual", apesar do serviço existir e estar corretamente atribuído.
+  [x] Impacto real: durante os ~7 meses de hora de verão, uma gestora que
+      tente corrigir/criar manualmente um ponto em falta de HOJE não
+      encontra o serviço candidato e fica bloqueada — tem de escolher outro
+      dia (errado) ou esperar que passe a meia-noite. A coluna "Prev.
+      Serviços" também fica sempre vazia para o dia corrente nesta janela.
+      No inverno (hora padrão, UTC+0) o bug não se manifesta, porque meia-
+      -noite de Lisboa coincide com meia-noite UTC.
+  → RECOMENDAÇÃO: construir `dayRange`/`toExclusive` por aritmética pura de
+    string (YYYY-MM-DD) sem passar por `Date`/fuso — ex.: usar
+    `date-fns` (`addDays`, já usado no projeto) sobre a data já em Europe/
+    Lisbon, ou seguir o padrão já usado corretamente noutros pontos do
+    código (`nowInLisbon()`/`toLisbonTimestamp()` em generate-services,
+    Audit #13 da Parte 0). Vale a pena procurar o mesmo padrão
+    `new Date(\`${x}T00:00:00\`)` seguido de `.toISOString()` nos outros
+    ficheiros que o usam (daily-billing.ts, reports.ts, financial-
+    dashboard.ts, invoices.ts, calendario/_actions, absences.ts,
+    vehicles.ts — 16 ficheiros ao todo) — não foram todos re-verificados
+    nesta ronda, mas partilham o mesmo padrão de risco.
+
+12.4 — RECONFIRMADO AO VIVO (já registado na Parte 10.2, ainda por corrigir)
+  [x] `adjustPayrollRecord` (src/app/actions/payroll.ts:317): o bónus de
+      hora extra usa sempre 25% fixo no código
+      (`overtimeHours * hourlyRate * 0.25`), ignorando
+      `company_settings.overtime_rate_pct`. Reproduzido ao vivo: com a taxa
+      configurada em 50%, ajustar manualmente 10h extra a 20€/hora devolveu
+      50,00€ (25%) em vez dos 100,00€ esperados (50%). A geração automática
+      (`calcCollaboratorPayroll`, usada por "Calcular folha") já usa a taxa
+      configurável corretamente — o erro está isolado ao ajuste manual.
+      Only afeta empresas com `overtime_rate_pct` ≠ 25% (esta empresa está
+      em 25%, por isso o erro é invisível na prática até alguém mudar a
+      configuração).
+
+12.5 — OBSERVAÇÕES MENORES (sem ação urgente)
+  [~] Editar um contrato recorrente APAGA e RECRIA as ocorrências futuras
+      (novos `id`), em vez de as atualizar no lugar — confirmado (13
+      ocorrências, mesma contagem e datas, mas ids todos novos, exceto a já
+      concluída). Sem impacto hoje porque nenhuma ocorrência futura tem
+      ainda fotos/pontos/tarefas associadas, mas qualquer referência externa
+      a um `service.id` futuro (link direto, notificação agendada) ficaria
+      inválida após uma edição do contrato.
+  [~] Aviso do React "Each child in a list should have a unique key prop"
+      no `PayrollClient` (folha de pagamento) — cosmético/consola, sem
+      impacto funcional observado.
+  [ ] Coluna de Kanban residual "TESTE" (id 062b8a7b…) encontrada em
+      `company_settings.kanban_columns` — não foi criada nesta sessão (já
+      lá estava antes de começar); parece resíduo de um teste anterior.
+      Não fica clara a data/origem — sinalizado para o dono decidir se quer
+      remover em Configurações > Tarefas.
+
+12.6 — NÃO COBERTO NESTA RONDA (por limite de tempo, registar para a próxima)
+  [ ] Drag & drop do calendário, Conciliação Bancária (importar/confirmar
+      match), Kanban de Tarefas, Faltas/Férias, Viaturas — não foram
+      exercitados em runtime nesta ronda. Os itens de "resultado da action
+      ignorado" da Parte 10.3 (Kanban, Locais, Faltas, Fluxo de Caixa,
+      Pagamentos, Viaturas) continuam por tratar.
+  [ ] Ponto/GPS pelo telemóvel (clock-in real com geolocalização) não foi
+      re-testado em runtime desta vez — a matemática (haversine, duração)
+      continua coberta pelos 39 testes automáticos dedicados
+      (clockin-concurrent + ponto-calc), que passaram sem alterações.
+
+VERIFICAÇÃO PÓS-RONDA: 310 testes a passar · tsc 0 erros · ESLint 0
+erros/warnings · audit-security.ts sem problemas · git status limpo (nenhum
+ficheiro do projeto foi alterado — apenas leitura + dados de teste
+descartáveis em produção, todos removidos e verificados a 0 resíduos).
+
+12.7 — CORRIGIDO E VERIFICADO EM RUNTIME (2026-07-06, mesma sessão)
+  [x] Folha de Pagamento (12.2): `calculateAndSavePayroll` dividida em
+      `runPayrollCalculation` (privada, sem `revalidatePath`) + duas
+      wrappers exportadas — `ensurePayrollCalculated` (usada pela página,
+      sem revalidar) e `calculateAndSavePayroll` (usada pelo botão
+      cliente, continua a revalidar). `folha-pagamento/page.tsx` passou a
+      chamar `ensurePayrollCalculated`.
+      → src/app/actions/payroll.ts, src/app/(dashboard)/dashboard/
+        folha-pagamento/page.tsx
+      VERIFICADO AO VIVO: apagado o registo de folha de um perfil de teste
+      e recarregada a página — já não rebenta, mostra a tabela normal e o
+      registo é recalculado e gravado corretamente.
+  [x] Registo de Ponto (12.3): `dayRange`/`toExclusive`/`todayISO` deixaram
+      de passar por `new Date(...)` + `.toISOString()` (fuso ambíguo).
+      Novos helpers partilhados em `src/lib/lisbon-time.ts`:
+      `todayInLisbon()` (hoje no fuso de Lisboa, via Intl) e
+      `addDaysToDateString()` (aritmética pura em `Date.UTC`, sem depender
+      do fuso do processo).
+      → src/app/(dashboard)/dashboard/registo-ponto/page.tsx
+      VERIFICADO AO VIVO: criada colaboradora+equipa+serviço de hoje —
+      a linha mostra "06 Seg" (dia certo) e o modal de edição já encontra
+      o serviço candidato ("Guardar" disponível, sem o aviso de "não há
+      serviço agendado").
+  [x] Testes novos: `src/__tests__/lisbon-time.test.ts` (6 testes) cobre a
+      regressão específica (`addDaysToDateString` em hora de verão/inverno,
+      viradas de mês/ano). Total: 316 testes a passar, tsc 0 erros, ESLint
+      0 erros/warnings.
+  [ ] AINDA POR FAZER (não corrigido nesta ronda): taxa de hora extra
+      hardcoded em `adjustPayrollRecord` (12.4), auditoria dos restantes
+      ~14 ficheiros com o mesmo padrão de risco de fuso horário fora do
+      Registo de Ponto, e a coluna Kanban "TESTE" residual (12.5).
+
+PENDENTES (por ordem de risco):
+  [ ] Corrigir taxa de hora extra hardcoded em `adjustPayrollRecord` (12.4
+      / já em 10.2).
+  [x] Auditar os restantes ficheiros com o padrão de risco de fuso horário
+      fora do Registo de Ponto — ver PARTE 13, feito nesta mesma sessão.
+  [ ] Decidir sobre a coluna Kanban "TESTE" residual em produção (12.5).
+
+
+================================================================================
+PARTE 13 — AUDITORIA FICHEIRO-A-FICHEIRO DO PADRÃO DE FUSO HORÁRIO — 2026-07-06
+================================================================================
+
+MÉTODO: pedido do dono para "auditar todos, um a um" os ficheiros que
+partilhavam o mesmo padrão de risco encontrado no Registo de Ponto (12.3).
+Levantamento amplo (`new Date(\`\${x}T00:00:00\`)` seguido de `.toISOString()`,
+e variantes `new Date().toISOString().slice/split` para "hoje") encontrou
+33 ficheiros. Cada um foi lido e classificado individualmente:
+  BUG REAL   → corrigido com os helpers de `src/lib/lisbon-time.ts`
+               (`todayInLisbon`, `addDaysToDateString`, `toLisbonTimestamp`).
+  SEGURO     → parse-local + formatação-local (`toLocaleDateString`) no
+               MESMO ambiente, ou já usa `Date.UTC`/sufixo "Z" explícito —
+               sem round-trip ambíguo. Deixado como estava.
+
+13.1 — DESCOBERTA DE FUNDO (afeta a gravidade de tudo nesta parte)
+  ⚠ Não há `TZ` configurada no `vercel.json`/`next.config.ts`. Em produção
+    (Vercel), o processo Node corre em UTC por omissão — NÃO em
+    Europe/Lisbon. Isto significa que qualquer `new Date()` local (sem
+    `Intl`/offset explícito) usado no SERVIDOR para decidir "hoje"/"este
+    mês" reflete o dia em UTC, não em Lisboa. Na prática só desalinha
+    numa janela estreita (a 1ª hora do dia em Lisboa, quando em Lisboa já
+    é amanhã mas em UTC ainda é hoje, durante a hora de verão) — mas é
+    sistemático em todo o código que faz essa suposição sem pensar nisso.
+    O padrão correto já existia em `nowInLisbon()` (só local a
+    generate-services/route.ts) — foi generalizado para `lisbon-time.ts`.
+
+13.2 — BUGS REAIS CORRIGIDOS (limites de consulta à BD — services/timesheets)
+  Em todos os casos abaixo, o limite superior "naive" (`...T23:59:59`) foi
+  substituído por um limite exclusivo do dia seguinte com offset de Lisboa
+  explícito (`toLisbonTimestamp` + `addDaysToDateString`), evitando que
+  serviços entre as 00:00–00:59 de Lisboa caiam no dia/mês errado:
+  [x] daily-billing.ts — janela do dia da Cobrança Diária, janela de
+      "pendentes" (60 dias) e as DUAS contagens de serviços/mês para o
+      split de avenças mensais. Também corrigido `date: todayInLisbon()`
+      em vez de UTC ao gravar `cash_flow_entries` ao marcar um pagamento.
+  [x] reports.ts (Relatórios) — as 3 queries por intervalo (Horas, Receita,
+      Serviços por Equipa) partilhavam `startDate`/`endDate`; agora usam um
+      único `startTs`/`endExclusiveTs` calculado uma vez.
+  [x] financial-dashboard.ts — `hoje`/`semana`/`mês` deixaram de vir de
+      `new Date()` local; usam `todayInLisbon()` + dia-da-semana calculado
+      via `Date.UTC` (calendário puro, não depende do fuso do processo).
+  [x] invoices.ts (`generateInvoices`) — limite do mês na query de serviços
+      concluídos; `invoiceDate`/`dueDate` passam a `todayInLisbon()` /
+      `addDaysToDateString(...,30)` em vez de UTC.
+  [x] contratos.ts — verificação de duplicado ao gerar ocorrências
+      (`generateServicesForContract`) passou a usar o `toLisbonTimestamp`
+      já existente no próprio ficheiro, com limite exclusivo.
+  [x] calendario/_actions/reschedule.ts e create-service.ts — deteção de
+      conflito de horário (mesma equipa, mesmo dia) ao arrastar/criar um
+      serviço no calendário.
+  [x] calendario/_components/client-notifications-modal.tsx — janela da
+      semana ao listar serviços por notificar e ao verificar notificações
+      já enviadas (evita reenvio/omissão por causa do limite do dia).
+  [x] absences.ts — janela de datas ao procurar serviços da equipa para
+      sugerir substituta durante uma falta.
+  [x] api/cron/generate-services/route.ts — verificação de serviços já
+      existentes no mês (idempotência), usando o `toLisbonTimestamp` já
+      local ao ficheiro. A lógica de geração de ocorrências em si
+      (`getOccurrences`) já era internamente consistente (usa sempre o
+      mesmo referencial local do processo do início ao fim) — não alterada.
+  [x] map.ts (Mapa) — janela do dia ao listar serviços/equipas no mapa.
+  [x] registo-ponto/page.tsx — limite final: os `dayRange`/`toExclusive` já
+      corrigidos na Parte 12 ainda eram enviados à BD como string "naive"
+      (`\${from}T00:00:00`); passaram a `toLisbonTimestamp`, fechando a
+      janela de risco por completo neste ficheiro.
+
+13.3 — BUGS REAIS CORRIGIDOS ("hoje" por omissão em formulários — cosmético,
+       mas real: durante a 1ª hora do dia em Lisboa no verão, o campo vinha
+       pré-preenchido com a data de ontem)
+  [x] contratos/_components/sheet.tsx — data de início do contrato.
+  [x] financeiro/contas/_components/contas-client.tsx — data da despesa.
+  [x] financeiro/fluxo-caixa/_components/cash-flow-client.tsx — data do
+      registo manual.
+  [x] app/ausencias/_components/ausencias-client.tsx — datas de início/fim
+      de uma ausência pedida pela própria colaboradora.
+  [x] faltas/_components/absence-sheet.tsx — idem, no ecrã da gestora.
+  [x] dashboard/_components/documents-backup-banner.tsx — data no nome do
+      ficheiro ZIP de backup.
+  [x] payments.ts / financeiro/pagamentos/_components/payments-client.tsx —
+      "hoje" usado para marcar pagamentos em atraso e para determinar o mês
+      corrente do lembrete de pagamentos.
+  [x] relatorios/page.tsx e faltas/page.tsx — mês por omissão ao abrir os
+      ecrãs sem parâmetro `?mes=`, e o fim do mês (mesmo bug do
+      `new Date(y,m,0).toISOString()` já corrigido noutros ficheiros).
+  [x] app/perfil/page.tsx — intervalo "este mês" do resumo de horas
+      trabalhadas mostrado à colaboradora.
+  [x] app/escala/page.tsx — "hoje" usado para destacar o dia atual na
+      escala semanal da colaboradora (o cálculo dos limites da própria
+      semana não foi alterado — ver 13.4).
+
+13.4 — DEIXADO DE PROPÓSITO (risco/benefício não justifica tocar agora)
+  [~] contratos.ts `reconcileFutureServicesForContract` — usa `new Date()`
+      local para o limite "a partir de hoje" ao decidir que ocorrências
+      futuras apagar/recriar num contrato editado. Efeito prático: em
+      produção (UTC) a janela fica ligeiramente MAIS LARGA do que a Lisboa
+      real (nunca mais estreita) — sobra, não falta, dados. Este é
+      exatamente o fluxo já verificado ao vivo na Parte 12.1 (edição de
+      recorrência) e confirmado correto; não foi tocado para não
+      arriscar uma regressão num fluxo já validado manualmente.
+  [~] app/escala/page.tsx `getWeekBounds` — a semana (segunda a domingo) em
+      si continua ancorada em `new Date()` local em vez de Lisboa pura.
+      Só o destaque "hoje" foi corrigido (13.3). Corrigir a âncora da
+      semana exigiria reescrever a vista inteira para aritmética de string
+      (como feito no Registo de Ponto) — adiado por ser a vista semanal da
+      app móvel (leitura, sem escrita de dados) com impacto real limitado
+      a uma janela de 1h/dia no verão.
+  [ ] invoices.ts — `since`/60 dias (serviços por faturar) e os
+      `scheduled_start` sintéticos das linhas de avença/preço fixo: sem
+      impacto real (o primeiro só alarga a janela, o segundo nunca é
+      persistido nem usado em queries).
+  [ ] api/seed-demo/route.ts — bloqueado em produção (403), gera dados
+      falsos de demonstração; não vale o risco de tocar.
+
+13.5 — CONFIRMADOS SEGUROS (parse-local + formatação-local, sem round-trip
+       por UTC — não são bugs, não alterados)
+  [x] vehicles.ts, reports-tabs.tsx, registo-ponto-client.tsx,
+      daily-billing-client.tsx, financeiro/contas e fluxo-caixa
+      (`fmtDate`), bank-import/reconcile-db.ts (`shiftDays`, já usa "Z"
+      explícito), lib/payroll-calc.ts (`monthRange`, já usa `Date.UTC`).
+
+13.6 — VERIFICAÇÃO PÓS-CORREÇÃO
+  [x] tsc --noEmit: 0 erros. ESLint: 0 erros/warnings (incluindo a regra
+      `react-hooks/purity` do React 19, que apanhou um `Date.now()`
+      introduzido a mais em faltas/page.tsx durante a correção — revertido
+      para `new Date().getTime()`, que a regra aceita).
+  [x] Testes automáticos: 316 a passar (sem alteração face à Parte 12).
+  [x] audit-security.ts: sem problemas.
+  [x] Smoke test em runtime real (Playwright, admin descartável): as 14
+      páginas alteradas (Cobranças, Relatórios, Fluxo de Caixa, Contas,
+      Pagamentos, Faltas, Mapa, Folha de Pagamento, Registo de Ponto,
+      Contratos, Calendário, Escala, Perfil, Ausências) abrem sem erro de
+      render nem exceção de consola.
+  [x] Verificação dirigida: gerar cobranças do mês corrente com um serviço
+      concluído "hoje" continua a incluir esse serviço (limite do mês não
+      corta o dia atual) e o IVA continua a bater certo (10€ + 23% =
+      12,30€) — confirma que a mudança de `.lte` para `.lt` (limite
+      exclusivo) não excluiu acidentalmente dados válidos.
+  [x] Dados de teste desta ronda apagados da produção e verificados a 0
+      resíduos em clients/locations/services/profiles/teams/
+      payroll_records/invoices.
+
+================================================================================
+FIM DO RELATÓRIO — última atualização: 2026-07-06
+Estado: 316 testes a passar · tsc limpo · ESLint 0 warnings · build local pronto ·
+Parte 12: 2 bugs novos encontrados E CORRIGIDOS em runtime real (Folha de
+Pagamento crash + Registo de Ponto fuso horário). Parte 13: auditoria
+ficheiro-a-ficheiro de todo o resto do padrão de fuso horário (33
+ficheiros revistos, ~20 correções aplicadas, todas re-verificadas com
+tsc/eslint/testes/smoke-test em runtime). Pendente: taxa de hora extra
+hardcoded (12.4) e a coluna Kanban "TESTE" residual (12.5). Código alterado
+nesta sessão ainda não commitado nem deployado.
 ================================================================================

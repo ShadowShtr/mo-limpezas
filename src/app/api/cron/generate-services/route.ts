@@ -303,12 +303,13 @@ export async function GET(req: NextRequest) {
 
     // Pré-carregar serviços já existentes deste lote no mês (1 query, não N).
     const batchIds = batch.map((c) => c.id);
+    const nextMonthStartStr = toDateStr(new Date(monthStart.getFullYear(), monthStart.getMonth() + 1, 1));
     const { data: existingRows } = await supabase
       .from("services")
       .select("contract_id, scheduled_start")
       .in("contract_id", batchIds)
-      .gte("scheduled_start", `${monthStartStr}T00:00:00`)
-      .lte("scheduled_start", `${monthEndStr}T23:59:59`);
+      .gte("scheduled_start", toLisbonTimestamp(monthStartStr, "00:00"))
+      .lt("scheduled_start", toLisbonTimestamp(nextMonthStartStr, "00:00"));
 
     const existingSet = new Set(
       (existingRows ?? []).map((r) => `${r.contract_id}|${(r.scheduled_start as string).slice(0, 10)}`),

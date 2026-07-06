@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { createPortal } from "react-dom";
 import { X, Loader2, Check, Users, ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
 import { createContrato, updateContrato } from "@/app/actions/contratos";
+import { todayInLisbon } from "@/lib/lisbon-time";
 import type { ScheduleDay } from "@/types/database";
 import type { ContratosTableRow } from "../page";
 import {
@@ -238,7 +239,7 @@ export function ContratoSheet({
   const [frequency, setFrequency] = useState(source?.frequency ?? "weekly");
   const [intervalDays, setIntervalDays] = useState(source?.interval_days ?? 1);
   const [selectedWeekdays, setSelectedWeekdays] = useState<number[]>(source?.weekdays ?? [1, 3, 5]);
-  const [startsOn, setStartsOn] = useState(source?.starts_on ?? new Date().toISOString().split("T")[0]);
+  const [startsOn, setStartsOn] = useState(source?.starts_on ?? todayInLisbon());
   const [endsOn, setEndsOn] = useState(source?.ends_on ?? "");
   const [notes, setNotes] = useState(source?.notes ?? "");
   const [status, setStatus] = useState(contrato?.status ?? "ativo");
@@ -402,7 +403,7 @@ export function ContratoSheet({
   function resetForm() {
     setName(""); setClienteId(fixedClientId ?? ""); setLocalId(""); setCleaningType("");
     setFrequency("weekly"); setSelectedWeekdays([1, 3, 5]);
-    setStartsOn(new Date().toISOString().split("T")[0]);
+    setStartsOn(todayInLisbon());
     setEndsOn(""); setNotes(""); setStatus("ativo"); setScheduleConfig({});
     setPaymentStatus("nao_informado"); setUpholsteryType(""); setUpholsteryNotes("");
     setUpholsteryUnits(""); setUpholsteryUnitPrice("");

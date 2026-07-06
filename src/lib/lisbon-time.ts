@@ -41,3 +41,25 @@ export function ensureLisbonOffset(value: string): string {
 export function fmtLisbon(iso: string, options: Intl.DateTimeFormatOptions): string {
   return new Date(iso).toLocaleString("pt-PT", { timeZone: LISBON_TZ, ...options });
 }
+
+/**
+ * Data de "hoje" (YYYY-MM-DD) no fuso de Lisboa, não no fuso do servidor nem
+ * em UTC. Evita o erro de `new Date().toISOString().slice(0,10)`, que na
+ * primeira hora do dia em hora de verão (WEST, UTC+1) ainda devolve a data
+ * de ontem.
+ */
+export function todayInLisbon(): string {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: LISBON_TZ }).format(new Date());
+}
+
+/**
+ * Soma (ou subtrai) dias a uma data "YYYY-MM-DD" por aritmética de calendário
+ * pura (Date.UTC), sem passar pelo fuso local do processo — evita o desvio de
+ * ±1 dia que ocorre ao interpretar `${data}T00:00:00` como hora local de
+ * Lisboa e depois formatar com `.toISOString()` (sempre UTC).
+ */
+export function addDaysToDateString(dateStr: string, days: number): string {
+  const [y, m, d] = dateStr.split("-").map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d + days));
+  return dt.toISOString().slice(0, 10);
+}

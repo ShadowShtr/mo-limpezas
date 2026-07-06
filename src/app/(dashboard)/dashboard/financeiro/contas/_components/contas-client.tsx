@@ -12,6 +12,7 @@ import {
   type CashFlowCategory,
 } from "@/app/actions/cash-flow";
 import { usePagination, Pagination } from "@/components/ui/pagination";
+import { todayInLisbon } from "@/lib/lisbon-time";
 
 function fmtEur(v: number) {
   return v.toLocaleString("pt-PT", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " €";
@@ -79,7 +80,7 @@ export function ContasClient({ toReceive, toPay, expenses: initialExpenses, comp
   const [desc,     setDesc]     = useState("");
   const [amount,   setAmount]   = useState("");
   const [category, setCategory] = useState<CashFlowCategory>("despesa");
-  const [date,     setDate]     = useState(new Date().toISOString().split("T")[0]);
+  const [date,     setDate]     = useState(todayInLisbon());
   const [notes,    setNotes]    = useState("");
   const [formErr,  setFormErr]  = useState("");
 
@@ -93,7 +94,7 @@ export function ContasClient({ toReceive, toPay, expenses: initialExpenses, comp
 
   function resetForm() {
     setDesc(""); setAmount(""); setCategory("despesa");
-    setDate(new Date().toISOString().split("T")[0]);
+    setDate(todayInLisbon());
     setNotes(""); setFormErr("");
   }
 

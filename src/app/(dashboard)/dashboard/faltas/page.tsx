@@ -7,6 +7,7 @@ import { VacationRequests } from "./_components/vacation-requests";
 import { getPendingVacationRequests } from "@/app/actions/vacation";
 import { AlertTriangle } from "lucide-react";
 import { PontoTabs } from "../registo-ponto/_components/ponto-tabs";
+import { todayInLisbon } from "@/lib/lisbon-time";
 
 interface SearchParams {
   mes?: string;
@@ -32,11 +33,11 @@ export default async function FaltasPage({
   const companyId = profile?.company_id ?? "";
 
   // Período padrão: mês atual
-  const now = new Date();
-  const mesParam = params.mes ?? `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  const mesParam = params.mes ?? todayInLisbon().slice(0, 7);
   const [year, month] = mesParam.split("-").map(Number);
   const startOfMonth = `${year}-${String(month).padStart(2, "0")}-01`;
-  const endOfMonth = new Date(year, month, 0).toISOString().split("T")[0];
+  const endOfMonthDay = new Date(year, month, 0).getDate();
+  const endOfMonth = `${year}-${String(month).padStart(2, "0")}-${String(endOfMonthDay).padStart(2, "0")}`;
 
   // Colaboradores da empresa
   const { data: colaboradores } = await admin
@@ -67,7 +68,7 @@ export default async function FaltasPage({
     (colaboradores ?? []).map((c) => [c.id, c.full_name]),
   );
 
-  const nowMs = now.getTime();
+  const nowMs = new Date().getTime();
   const absences = (rawAbsences ?? []).map((a) => ({
     id: a.id,
     collaborator_id: a.collaborator_id,

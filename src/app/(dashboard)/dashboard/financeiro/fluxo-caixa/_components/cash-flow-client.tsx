@@ -15,6 +15,7 @@ import {
   type CashFlowStatus,
 } from "@/app/actions/cash-flow";
 import { usePagination, Pagination } from "@/components/ui/pagination";
+import { todayInLisbon } from "@/lib/lisbon-time";
 
 function fmtEur(v: number) {
   return v.toLocaleString("pt-PT", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " €";
@@ -66,7 +67,7 @@ export function CashFlowClient({ initialData, error: initErr, companyId, mesPara
   const [newAmount, setNewAmount] = useState("");
   const [newDesc, setNewDesc] = useState("");
   const [newCat, setNewCat] = useState<CashFlowCategory>("outro");
-  const [newDate, setNewDate] = useState(new Date().toISOString().split("T")[0]);
+  const [newDate, setNewDate] = useState(todayInLisbon());
   const [newStatus, setNewStatus] = useState<CashFlowStatus>("confirmado");
   const [newNotes, setNewNotes] = useState("");
   const [formError, setFormError] = useState("");

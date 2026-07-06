@@ -3,7 +3,7 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
-import { ensureLisbonOffset } from "@/lib/lisbon-time";
+import { ensureLisbonOffset, addDaysToDateString, toLisbonTimestamp } from "@/lib/lisbon-time";
 import { getTeamSize, maxReferenceNumber } from "@/lib/services/reference";
 import type { ConflictInfo } from "./reschedule";
 
@@ -160,8 +160,8 @@ async function getConflicts(
     .select("id, reference_number, location_name, scheduled_start, scheduled_end")
     .eq("company_id", companyId)
     .eq("team_id", teamId)
-    .gte("scheduled_start", `${dayStr}T00:00:00`)
-    .lte("scheduled_start", `${dayStr}T23:59:59`)
+    .gte("scheduled_start", toLisbonTimestamp(dayStr, "00:00"))
+    .lt("scheduled_start", toLisbonTimestamp(addDaysToDateString(dayStr, 1), "00:00"))
     .in("status", ["agendado", "em_curso"]);
 
   if (excludeId) q = q.neq("id", excludeId);

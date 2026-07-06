@@ -1,6 +1,7 @@
 "use server";
 
 import { requireProfile } from "@/lib/auth-guard";
+import { addDaysToDateString, toLisbonTimestamp } from "@/lib/lisbon-time";
 
 export interface HorasRow {
   id: string;
@@ -74,6 +75,10 @@ export async function getReportsData(
   const { admin, profile } = guard;
   // company_id vem SEMPRE da sessão — nunca confiar no parâmetro do cliente.
   const companyId = profile.company_id;
+  // Limites do intervalo ancorados ao fuso de Lisboa (nunca strings "naive",
+  // que o Postgres interpreta como UTC e desloca a janela em hora de verão).
+  const startTs = toLisbonTimestamp(startDate, "00:00");
+  const endExclusiveTs = toLisbonTimestamp(addDaysToDateString(endDate, 1), "00:00");
 
   // ─── 1. HORAS ─────────────────────────────────────────────
   const { data: profiles } = await admin
@@ -92,8 +97,8 @@ export async function getReportsData(
         .select("collaborator_id, duration_minutes, service_id")
         .eq("company_id", companyId)
         .in("collaborator_id", profileIds)
-        .gte("clock_in_at", `${startDate}T00:00:00`)
-        .lte("clock_in_at", `${endDate}T23:59:59`)
+        .gte("clock_in_at", startTs)
+        .lt("clock_in_at", endExclusiveTs)
     : { data: [] as { collaborator_id: string; duration_minutes: number | null; service_id: string }[] };
 
   const horasMap = new Map<string, { minutes: number; serviceIds: Set<string> }>();
@@ -179,8 +184,8 @@ export async function getReportsData(
     .select("id, location_id, contract_id, calculated_value, manual_value, apply_vat, status, scheduled_start, actual_start, actual_end")
     .eq("company_id", companyId)
     .eq("status", "concluido")
-    .gte("scheduled_start", `${startDate}T00:00:00`)
-    .lte("scheduled_start", `${endDate}T23:59:59`);
+    .gte("scheduled_start", startTs)
+    .lt("scheduled_start", endExclusiveTs);
 
   const locationIds = [
     ...new Set((services ?? []).map((s) => s.location_id).filter(Boolean)),
@@ -242,8 +247,8 @@ export async function getReportsData(
     .from("services")
     .select("team_id, status")
     .eq("company_id", companyId)
-    .gte("scheduled_start", `${startDate}T00:00:00`)
-    .lte("scheduled_start", `${endDate}T23:59:59`);
+    .gte("scheduled_start", startTs)
+    .lt("scheduled_start", endExclusiveTs);
 
   const { data: teams } = await admin
     .from("teams")

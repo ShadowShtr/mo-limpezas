@@ -5,6 +5,7 @@ import { ChevronLeft, ChevronRight, MapPin, Clock } from "lucide-react";
 import { formatTime } from "@/lib/utils";
 import { StatusBadge } from "../_components/status-badge";
 import { getCurrentUser } from "@/lib/auth/current-user";
+import { todayInLisbon } from "@/lib/lisbon-time";
 
 const WEEKDAYS = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
 const MONTHS = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
@@ -68,8 +69,8 @@ export default async function EscalaPage({ searchParams }: Props) {
     if (byDay[key]) byDay[key].push(s);
   }
 
-  const today = toDateParam(new Date());
-  const isCurrentWeek = mon <= new Date() && new Date() <= sun;
+  const today = todayInLisbon();
+  const isCurrentWeek = today >= toDateParam(mon) && today <= toDateParam(sun);
 
   return (
     <div className="flex flex-col gap-4 pb-2">
