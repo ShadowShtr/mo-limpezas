@@ -4,6 +4,9 @@
 
 import type { createAdminClient } from "@/lib/supabase/admin";
 import { suggestMatches, type CashEntryLike } from "./matching";
+import { detectDatabaseDuplicates } from "./fingerprint";
+import type { ParsedTransaction } from "./preview";
+import { auditLog } from "@/lib/audit";
 
 type AdminClient = ReturnType<typeof createAdminClient>;
 
@@ -106,4 +109,142 @@ function shiftDays(iso: string, days: number): string {
   const d = new Date(iso + "T00:00:00Z");
   d.setUTCDate(d.getUTCDate() + days);
   return d.toISOString().slice(0, 10);
+}
+
+/** Fingerprints já gravados para a empresa+conta — usado para detetar duplicados já existentes. */
+export async function fetchExistingFingerprints(
+  admin: AdminClient,
+  companyId: string,
+  bankAccountId: string | null,
+): Promise<Set<string>> {
+  let q = admin.from("bank_transactions").select("fingerprint").eq("company_id", companyId);
+  q = bankAccountId ? q.eq("bank_account_id", bankAccountId) : q.is("bank_account_id", null);
+  const { data } = await q;
+  return new Set((data ?? []).map((r) => r.fingerprint));
+}
+
+export interface ConfirmImportParams {
+  companyId: string;
+  bankAccountId: string | null;
+  fileName: string;
+  fileHash: string;
+  userId: string;
+  transactions: ParsedTransaction[]; // já filtradas (válidas, sem duplicados) pelo preview
+  totalRows: number;
+}
+
+export type ConfirmImportResult =
+  | { ok: true; importId: string; imported: number; duplicates: number; suggestions: number }
+  | { ok: false; error: string; status: number };
+
+/**
+ * Grava a importação confirmada pelo utilizador: cria o registo de
+ * importação, insere os movimentos (deduplicando de novo contra a BD, para
+ * cobrir corridas concorrentes entre o preview e o commit), gera sugestões
+ * de conciliação só para os não-duplicados, e audita.
+ */
+export async function confirmBankStatementImport(
+  admin: AdminClient,
+  params: ConfirmImportParams,
+): Promise<ConfirmImportResult> {
+  const { companyId, bankAccountId, fileName, fileHash, userId, transactions, totalRows } = params;
+
+  const { data: existingImport } = await admin
+    .from("bank_statement_imports")
+    .select("id")
+    .eq("company_id", companyId)
+    .eq("file_hash", fileHash)
+    .maybeSingle();
+  if (existingImport) {
+    return { ok: false, error: "Este ficheiro já foi importado anteriormente.", status: 409 };
+  }
+
+  const { data: imp, error: impErr } = await admin
+    .from("bank_statement_imports")
+    .insert({
+      company_id: companyId,
+      bank_account_id: bankAccountId,
+      file_name: fileName,
+      file_type: "csv",
+      file_hash: fileHash,
+      status: "processing",
+      total_rows: totalRows,
+      uploaded_by: userId,
+    })
+    .select("id")
+    .single();
+  if (impErr || !imp) {
+    return { ok: false, error: "Falha a registar importação.", status: 500 };
+  }
+
+  try {
+    const existingFingerprints = await fetchExistingFingerprints(admin, companyId, bankAccountId);
+    const nowDuplicate = detectDatabaseDuplicates(transactions.map((t) => t.fingerprint), existingFingerprints);
+
+    const toInsert = transactions.map((t) => ({
+      company_id: companyId,
+      bank_account_id: bankAccountId,
+      statement_import_id: imp.id,
+      transaction_date: t.transaction_date,
+      value_date: t.value_date,
+      description: t.description,
+      counterparty_name: t.counterparty_name,
+      reference: t.reference,
+      amount: t.amount,
+      direction: t.direction,
+      currency: t.currency,
+      raw_data: t.raw_data,
+      fingerprint: t.fingerprint,
+      status: nowDuplicate.has(t.fingerprint) ? ("duplicate" as const) : ("pending" as const),
+    }));
+
+    const inserted: { id: string; transaction_date: string; amount: number; direction: "credit" | "debit"; description: string; counterparty_name: string | null; reference: string | null; status: string }[] = [];
+    const BATCH = 200;
+    for (let i = 0; i < toInsert.length; i += BATCH) {
+      const slice = toInsert.slice(i, i + BATCH);
+      const { data: batchRows, error: insErr } = await admin
+        .from("bank_transactions")
+        .upsert(slice, { onConflict: "company_id,bank_account_id,fingerprint", ignoreDuplicates: true })
+        .select("id, transaction_date, amount, direction, description, counterparty_name, reference, status");
+      if (insErr) throw new Error(insErr.message);
+      if (batchRows) inserted.push(...batchRows);
+    }
+
+    const pendingTx = inserted.filter((r) => r.status === "pending");
+    const suggestionsCreated = await generateSuggestions(admin, companyId, pendingTx);
+
+    const duplicateRows = inserted.filter((r) => r.status === "duplicate").length;
+    const importedRows = inserted.length - duplicateRows;
+
+    await admin
+      .from("bank_statement_imports")
+      .update({
+        status: "completed",
+        imported_rows: importedRows,
+        duplicate_rows: duplicateRows,
+        completed_at: new Date().toISOString(),
+      })
+      .eq("id", imp.id);
+
+    await auditLog(
+      {
+        companyId,
+        actorId: userId,
+        action: "bank_statement_imported",
+        entityType: "bank_statement_import",
+        entityId: imp.id,
+        meta: { file_name: fileName, total: transactions.length, imported: importedRows, duplicates: duplicateRows, suggestions: suggestionsCreated },
+        source: "dashboard",
+      },
+      admin,
+    );
+
+    return { ok: true, importId: imp.id, imported: importedRows, duplicates: duplicateRows, suggestions: suggestionsCreated };
+  } catch (e) {
+    await admin
+      .from("bank_statement_imports")
+      .update({ status: "failed", error_message: e instanceof Error ? e.message.slice(0, 500) : "erro" })
+      .eq("id", imp.id);
+    return { ok: false, error: "Falha ao processar movimentos.", status: 500 };
+  }
 }

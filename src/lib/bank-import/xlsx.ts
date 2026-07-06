@@ -62,7 +62,7 @@ export async function parseXlsx(buffer: Buffer | Uint8Array): Promise<CsvTable> 
     if (anySheet) sheetPath = anySheet;
   }
   const sheetFile = zip.file(sheetPath);
-  if (!sheetFile) return { headers: [], rows: [] };
+  if (!sheetFile) return { headers: [], rows: [], hasRecognizedHeader: false };
   const sheetXml = await sheetFile.async("string");
 
   const grid: string[][] = [];
@@ -98,12 +98,13 @@ export async function parseXlsx(buffer: Buffer | Uint8Array): Promise<CsvTable> 
 
   // descarta linhas vazias e escolhe cabeçalho (1ª linha com >= 2 células)
   const nonEmpty = grid.filter((r) => r.some((c) => c !== ""));
-  if (nonEmpty.length === 0) return { headers: [], rows: [] };
+  if (nonEmpty.length === 0) return { headers: [], rows: [], hasRecognizedHeader: false };
   let headerIdx = nonEmpty.findIndex((r) => r.filter((c) => c !== "").length >= 2);
   if (headerIdx === -1) headerIdx = 0;
 
   return {
     headers: nonEmpty[headerIdx],
     rows: nonEmpty.slice(headerIdx + 1),
+    hasRecognizedHeader: headerIdx !== -1,
   };
 }

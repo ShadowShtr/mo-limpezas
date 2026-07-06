@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useTransition } from "react";
+import { useState, useTransition } from "react";
 import {
   Upload, X, Loader2, AlertCircle, CheckCircle2, ArrowDownRight, ArrowUpRight,
   Check, Ban, Link2, EyeOff, FilePlus2, RefreshCw, History, Search, Trash2,
@@ -303,36 +303,96 @@ function IconBtn({ title, onClick, cls, children }: { title: string; onClick: ()
 
 // ─── Modal de importação ────────────────────────────────────────────────────────
 
+type FieldKey = "date" | "valueDate" | "description" | "debit" | "credit" | "amount" | "balance" | "reference" | "counterparty";
+
+const FIELD_LABELS: Record<FieldKey, string> = {
+  date: "Data", valueDate: "Data Valor", description: "Descrição", debit: "Débito",
+  credit: "Crédito", amount: "Valor", balance: "Saldo", reference: "Referência", counterparty: "Contraparte",
+};
+const MAPPABLE_FIELDS = Object.keys(FIELD_LABELS) as FieldKey[];
+
+type RowStatus = "valid" | "error" | "duplicate_internal" | "duplicate_existing";
+const ROW_STATUS_BADGE: Record<RowStatus, { label: string; cls: string }> = {
+  valid: { label: "Válido", cls: "bg-green-100 text-green-700" },
+  error: { label: "Erro", cls: "bg-red-100 text-red-600" },
+  duplicate_internal: { label: "Duplicado (ficheiro)", cls: "bg-amber-100 text-amber-700" },
+  duplicate_existing: { label: "Já importado", cls: "bg-gray-100 text-gray-500" },
+};
+
 interface PreviewRow {
-  transaction_date: string;
+  index: number;
+  status: RowStatus;
+  date: string | null;
   description: string;
-  amount: number;
-  direction: "credit" | "debit";
-  counterparty_name: string | null;
+  debit: number | null;
+  credit: number | null;
+  amount: number | null;
+  direction: "credit" | "debit" | null;
+  error?: string;
+}
+
+interface PreviewState {
+  headers: string[];
+  detectedMapping: Partial<Record<FieldKey, number>>;
+  hasRecognizedHeader: boolean;
+  total: number;
+  valid: number;
+  errors: number;
+  duplicatesInternal: number;
+  duplicatesExisting: number;
+  sampleErrors: { row: number; reason: string }[];
+  rows: PreviewRow[];
 }
 
 function ImportModal({ accounts, onClose, onDone }: { accounts: BankAccountDTO[]; onClose: () => void; onDone: () => void }) {
   const { toast } = useToast();
-  const fileRef = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<File | null>(null);
   const [accountId, setAccountId] = useState<string>("");
-  const [preview, setPreview] = useState<{ total: number; skipped: number; rows: PreviewRow[] } | null>(null);
+  const [preview, setPreview] = useState<PreviewState | null>(null);
+  const [mapping, setMapping] = useState<Record<number, FieldKey | "">>({});
+  const [showMapping, setShowMapping] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
 
-  async function send(mode: "preview" | "commit") {
-    if (!file) { setErr("Selecione um ficheiro."); return; }
+  function mappingToColumnMap(): Partial<Record<FieldKey, number | null>> {
+    const map: Partial<Record<FieldKey, number | null>> = {};
+    for (const f of MAPPABLE_FIELDS) map[f] = null;
+    for (const [idxStr, field] of Object.entries(mapping)) {
+      if (field) map[field] = Number(idxStr);
+    }
+    return map;
+  }
+
+  async function send(mode: "preview" | "commit", useMapping: boolean) {
+    if (!file) { setErr("Selecione um ficheiro CSV."); return; }
     setErr(""); setBusy(true);
     try {
       const fd = new FormData();
       fd.append("file", file);
       fd.append("mode", mode);
       if (accountId) fd.append("bank_account_id", accountId);
+      if (useMapping) fd.append("column_map", JSON.stringify(mappingToColumnMap()));
       const resp = await fetch("/api/finance/bank-statements/import", { method: "POST", body: fd });
       const json = await resp.json();
       if (!resp.ok) { setErr(json.error ?? "Falha na importação."); return; }
       if (mode === "preview") {
-        setPreview({ total: json.total, skipped: json.skipped, rows: json.transactions });
+        const detected: Partial<Record<FieldKey, number>> = json.detected_mapping ?? {};
+        setPreview({
+          headers: json.headers ?? [],
+          detectedMapping: detected,
+          hasRecognizedHeader: !!json.has_recognized_header,
+          total: json.total, valid: json.valid, errors: json.errors,
+          duplicatesInternal: json.duplicates_internal, duplicatesExisting: json.duplicates_existing,
+          sampleErrors: json.sample_errors ?? [], rows: json.rows ?? [],
+        });
+        if (!useMapping) {
+          const inverted: Record<number, FieldKey | ""> = {};
+          for (const [field, idx] of Object.entries(detected)) {
+            if (typeof idx === "number") inverted[idx] = field as FieldKey;
+          }
+          setMapping(inverted);
+          if (!json.has_recognized_header || json.valid === 0) setShowMapping(true);
+        }
       } else {
         toast(`${json.imported} movimentos importados · ${json.duplicates} duplicados · ${json.suggestions} sugestões.`, "success");
         onDone();
@@ -360,15 +420,16 @@ function ImportModal({ accounts, onClose, onDone }: { accounts: BankAccountDTO[]
         )}
 
         <div>
-          <label className="block text-sm font-medium mb-1">Ficheiro (CSV, XLSX, XLS ou PDF com texto)</label>
+          <label className="block text-sm font-medium mb-1">Ficheiro (CSV)</label>
           <input
-            ref={fileRef}
             type="file"
-            accept=".csv,.xlsx,.xls,.pdf"
-            onChange={(e) => { setFile(e.target.files?.[0] ?? null); setPreview(null); }}
+            accept=".csv,text/csv"
+            onChange={(e) => { setFile(e.target.files?.[0] ?? null); setPreview(null); setShowMapping(false); setMapping({}); }}
             className="block w-full text-sm border border-[var(--color-border)] rounded-lg p-2"
           />
-          <p className="text-xs text-[var(--color-text-muted)] mt-1">Máx 8 MB. PDF digitalizado/imagem não é suportado.</p>
+          <p className="text-xs text-[var(--color-text-muted)] mt-1">
+            Máx 8 MB. Nesta versão só CSV é aceite — exporte o extrato do banco em CSV.
+          </p>
         </div>
 
         {err && (
@@ -378,36 +439,98 @@ function ImportModal({ accounts, onClose, onDone }: { accounts: BankAccountDTO[]
         )}
 
         {preview && (
-          <div className="border border-[var(--color-border)] rounded-lg overflow-hidden">
-            <div className="px-3 py-2 bg-gray-50 text-sm font-medium flex justify-between">
-              <span>Pré-visualização: {preview.total} movimentos{preview.skipped > 0 ? ` · ${preview.skipped} linhas ignoradas` : ""}</span>
+          <>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="text-sm flex flex-wrap gap-3">
+                <span className="text-[var(--color-text-muted)]">Total: <b className="text-[var(--color-text)]">{preview.total}</b></span>
+                <span className="text-green-700">Válidos: <b>{preview.valid}</b></span>
+                {preview.errors > 0 && <span className="text-red-600">Erros: <b>{preview.errors}</b></span>}
+                {preview.duplicatesInternal > 0 && <span className="text-amber-700">Dup. ficheiro: <b>{preview.duplicatesInternal}</b></span>}
+                {preview.duplicatesExisting > 0 && <span className="text-gray-500">Já importados: <b>{preview.duplicatesExisting}</b></span>}
+              </div>
+              <button onClick={() => setShowMapping((v) => !v)} className="text-xs font-medium text-[var(--color-primary)] hover:underline">
+                {showMapping ? "Esconder mapeamento de colunas" : "Ajustar mapeamento de colunas"}
+              </button>
             </div>
-            <div className="max-h-64 overflow-y-auto">
-              <table className="w-full text-sm">
-                <tbody>
-                  {preview.rows.slice(0, 50).map((r, i) => (
-                    <tr key={i} className="border-b border-[var(--color-border)] last:border-0">
-                      <td className="px-3 py-1.5 whitespace-nowrap">{fmtDate(r.transaction_date)}</td>
-                      <td className="px-3 py-1.5 max-w-[320px] truncate" title={r.description}>{r.description || "—"}</td>
-                      <td className={`px-3 py-1.5 text-right whitespace-nowrap ${r.direction === "credit" ? "text-[var(--color-primary)]" : "text-red-500"}`}>
-                        {r.direction === "credit" ? "+" : "−"}{fmtEur(r.amount)}
-                      </td>
-                    </tr>
+
+            {preview.sampleErrors.length > 0 && (
+              <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-xs text-red-700 space-y-0.5">
+                {preview.sampleErrors.slice(0, 5).map((e, i) => <div key={i}>Linha {e.row}: {e.reason}</div>)}
+              </div>
+            )}
+
+            {showMapping && (
+              <div className="border border-[var(--color-border)] rounded-lg p-3 space-y-2">
+                <p className="text-xs text-[var(--color-text-muted)]">
+                  Diga ao sistema o que é cada coluna do ficheiro. O saldo nunca é usado como valor do movimento.
+                </p>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                  {preview.headers.map((h, idx) => (
+                    <div key={idx}>
+                      <label className="block text-[11px] text-[var(--color-text-muted)] truncate" title={h || `Coluna ${idx + 1}`}>{h || `Coluna ${idx + 1}`}</label>
+                      <select
+                        value={mapping[idx] ?? ""}
+                        onChange={(e) => setMapping((m) => ({ ...m, [idx]: e.target.value as FieldKey | "" }))}
+                        className="w-full border border-[var(--color-border)] rounded-lg px-2 py-1 text-xs"
+                      >
+                        <option value="">Ignorar</option>
+                        {MAPPABLE_FIELDS.map((f) => <option key={f} value={f}>{FIELD_LABELS[f]}</option>)}
+                      </select>
+                    </div>
                   ))}
-                </tbody>
-              </table>
+                </div>
+                <button onClick={() => send("preview", true)} disabled={busy} className="text-xs font-semibold px-3 py-1.5 rounded-lg border border-[var(--color-primary)] text-[var(--color-primary)] hover:bg-green-50 disabled:opacity-50">
+                  {busy && <Loader2 className="w-3 h-3 animate-spin inline mr-1" />} Atualizar pré-visualização
+                </button>
+              </div>
+            )}
+
+            <div className="border border-[var(--color-border)] rounded-lg overflow-hidden">
+              <div className="max-h-64 overflow-y-auto">
+                <table className="w-full text-sm">
+                  <thead className="bg-gray-50 sticky top-0">
+                    <tr className="text-left text-xs text-[var(--color-text-muted)]">
+                      <th className="px-3 py-1.5 font-medium">Data</th>
+                      <th className="px-3 py-1.5 font-medium">Descrição</th>
+                      <th className="px-3 py-1.5 font-medium text-right">Débito</th>
+                      <th className="px-3 py-1.5 font-medium text-right">Crédito</th>
+                      <th className="px-3 py-1.5 font-medium">Estado</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {preview.rows.slice(0, 100).map((r) => {
+                      const badge = ROW_STATUS_BADGE[r.status];
+                      const debit = r.direction === "debit" ? r.amount : (r.debit && r.debit < 0 ? r.debit : null);
+                      const credit = r.direction === "credit" ? r.amount : (r.credit && r.credit > 0 ? r.credit : null);
+                      return (
+                        <tr key={r.index} className="border-b border-[var(--color-border)] last:border-0">
+                          <td className="px-3 py-1.5 whitespace-nowrap">{r.date ? fmtDate(r.date) : "—"}</td>
+                          <td className="px-3 py-1.5 max-w-[260px] truncate" title={r.error ?? r.description}>
+                            {r.description || (r.error ? <span className="text-red-600">{r.error}</span> : "—")}
+                          </td>
+                          <td className="px-3 py-1.5 text-right whitespace-nowrap text-red-500">{debit != null ? fmtEur(Math.abs(debit)) : ""}</td>
+                          <td className="px-3 py-1.5 text-right whitespace-nowrap text-[var(--color-primary)]">{credit != null ? fmtEur(Math.abs(credit)) : ""}</td>
+                          <td className="px-3 py-1.5 whitespace-nowrap">
+                            <span className={`px-1.5 py-0.5 rounded text-[11px] font-medium ${badge.cls}`}>{badge.label}</span>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
             </div>
-          </div>
+          </>
         )}
 
         <div className="flex justify-end gap-2 pt-1">
           <button onClick={onClose} className="px-4 py-2 rounded-lg text-sm border border-[var(--color-border)] bg-white hover:bg-gray-50">Cancelar</button>
           {!preview ? (
-            <button onClick={() => send("preview")} disabled={busy || !file} className="px-4 py-2 rounded-lg text-sm font-semibold bg-white border border-[var(--color-primary)] text-[var(--color-primary)] hover:bg-green-50 disabled:opacity-50 inline-flex items-center gap-1.5">
+            <button onClick={() => send("preview", false)} disabled={busy || !file} className="px-4 py-2 rounded-lg text-sm font-semibold bg-white border border-[var(--color-primary)] text-[var(--color-primary)] hover:bg-green-50 disabled:opacity-50 inline-flex items-center gap-1.5">
               {busy && <Loader2 className="w-4 h-4 animate-spin" />} Pré-visualizar
             </button>
           ) : (
-            <button onClick={() => send("commit")} disabled={busy} className="px-4 py-2 rounded-lg text-sm font-semibold bg-[var(--color-primary)] text-white hover:opacity-90 disabled:opacity-50 inline-flex items-center gap-1.5">
+            <button onClick={() => send("commit", true)} disabled={busy || preview.valid === 0} className="px-4 py-2 rounded-lg text-sm font-semibold bg-[var(--color-primary)] text-white hover:opacity-90 disabled:opacity-50 inline-flex items-center gap-1.5">
               {busy && <Loader2 className="w-4 h-4 animate-spin" />} Confirmar importação
             </button>
           )}

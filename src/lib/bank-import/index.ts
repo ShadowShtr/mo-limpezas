@@ -1,98 +1,36 @@
 // Ponto de entrada do parsing de extratos bancários.
-// Recebe o tipo de ficheiro + buffer e devolve movimentos normalizados já com
-// fingerprint, prontos a gravar em bank_transactions.
+// Nesta fase só CSV é aceite — XLS/XLSX/PDF ficam para uma fase futura
+// (os módulos xlsx.ts/pdf.ts continuam no repo, só deixam de ser chamados).
 
-import { parseCsv } from "./csv";
-import { parseXlsx, isLegacyXls } from "./xlsx";
-import { parsePdf } from "./pdf";
-import { mapRowsToTransactions, type NormalizedTransaction } from "./normalize";
-import { transactionFingerprint, fileHash } from "./fingerprint";
+import { parseCsvFile } from "./csv";
+import { buildImportPreview, type BuildPreviewOptions, type ImportPreview } from "./preview";
+import { fileHash } from "./fingerprint";
 
-export type BankFileType = "csv" | "xlsx" | "xls" | "pdf";
+export type BankFileType = "csv";
 
-export interface ParsedTransaction extends NormalizedTransaction {
-  fingerprint: string;
-}
-
-export type ParseStatementResult =
-  | { ok: true; transactions: ParsedTransaction[]; skipped: number }
+export type ParseCsvResult =
+  | { ok: true; preview: ImportPreview }
   | { ok: false; error: string };
 
 const MAX_TEXT_BYTES = 25 * 1024 * 1024; // proteção contra ficheiros texto gigantes
 
-function withFingerprints(txs: NormalizedTransaction[]): ParsedTransaction[] {
-  // Conta ocorrências de movimentos idênticos para lhes dar um índice estável.
-  // Sem isto, vários movimentos legítimos iguais (mesma data/valor/descrição)
-  // colidiriam no mesmo fingerprint e seriam marcados como duplicados.
-  const counts = new Map<string, number>();
-  return txs.map((t) => {
-    const baseKey = [
-      t.transaction_date,
-      t.amount.toFixed(2),
-      t.direction,
-      t.description.toLowerCase().trim(),
-      (t.reference ?? "").toLowerCase().trim(),
-    ].join("|");
-    const idx = counts.get(baseKey) ?? 0;
-    counts.set(baseKey, idx + 1);
-    return { ...t, fingerprint: transactionFingerprint(t, idx) };
-  });
-}
-
-export async function parseStatement(
-  fileType: BankFileType,
+export function parseCsvStatement(
   buffer: Buffer,
-): Promise<ParseStatementResult> {
-  try {
-    if (fileType === "csv") {
-      if (buffer.length > MAX_TEXT_BYTES) return { ok: false, error: "Ficheiro CSV demasiado grande." };
-      const text = buffer.toString("utf-8");
-      const table = parseCsv(text);
-      if (table.headers.length === 0) return { ok: false, error: "CSV vazio ou ilegível." };
-      const { transactions, skipped } = mapRowsToTransactions(table.headers, table.rows);
-      if (transactions.length === 0) {
-        return { ok: false, error: "Não foi possível identificar movimentos no CSV (verifique as colunas data/valor)." };
-      }
-      return { ok: true, transactions: withFingerprints(transactions), skipped };
-    }
-
-    if (fileType === "xls") {
-      // .xls antigo (binário OLE2) não é suportado neste MVP.
-      if (isLegacyXls(buffer)) {
-        return {
-          ok: false,
-          error: "Formato .xls antigo não suportado. Guarde como .xlsx ou CSV e tente novamente.",
-        };
-      }
-      // alguns .xls exportados são na verdade XLSX ou CSV renomeados — tenta XLSX
-      return parseExcel(buffer);
-    }
-
-    if (fileType === "xlsx") {
-      return parseExcel(buffer);
-    }
-
-    if (fileType === "pdf") {
-      const res = parsePdf(buffer);
-      if (!res.ok) return res;
-      return { ok: true, transactions: withFingerprints(res.transactions), skipped: 0 };
-    }
-
-    return { ok: false, error: "Tipo de ficheiro não suportado." };
-  } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Erro ao processar o ficheiro." };
+  options: Omit<BuildPreviewOptions, "hasRecognizedHeader">,
+): ParseCsvResult {
+  if (buffer.length > MAX_TEXT_BYTES) return { ok: false, error: "Ficheiro CSV demasiado grande." };
+  const text = buffer.toString("utf-8");
+  const table = parseCsvFile(text);
+  if (table.headers.length === 0 || table.rows.length === 0) {
+    return { ok: false, error: "CSV vazio ou ilegível." };
   }
-}
-
-async function parseExcel(buffer: Buffer): Promise<ParseStatementResult> {
-  const table = await parseXlsx(buffer);
-  if (table.headers.length === 0) return { ok: false, error: "Excel vazio ou ilegível." };
-  const { transactions, skipped } = mapRowsToTransactions(table.headers, table.rows);
-  if (transactions.length === 0) {
-    return { ok: false, error: "Não foi possível identificar movimentos no Excel (verifique as colunas data/valor)." };
-  }
-  return { ok: true, transactions: withFingerprints(transactions), skipped };
+  const preview = buildImportPreview(table.headers, table.rows, {
+    ...options,
+    hasRecognizedHeader: table.hasRecognizedHeader,
+  });
+  return { ok: true, preview };
 }
 
 export { fileHash };
-export type { NormalizedTransaction } from "./normalize";
+export type { NormalizedTransaction, FieldKey, Direction } from "./normalize";
+export type { ParsedTransaction, ImportPreview, PreviewRow, PreviewRowStatus } from "./preview";

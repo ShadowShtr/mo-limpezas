@@ -6,7 +6,7 @@
 // não faz OCR.
 
 import { inflateSync } from "zlib";
-import { parseDate, parseAmount, normalizeDescription, type NormalizedTransaction } from "./normalize";
+import { parseBankDate, parseMoney, normalizeDescription, type NormalizedTransaction } from "./normalize";
 
 export type PdfParseResult =
   | { ok: true; transactions: NormalizedTransaction[] }
@@ -95,12 +95,12 @@ function rowsFromText(text: string): NormalizedTransaction[] {
     if (!line) continue;
     const dateMatch = line.match(DATE_RE);
     if (!dateMatch) continue;
-    const iso = parseDate(dateMatch[1]);
+    const iso = parseBankDate(dateMatch[1]);
     if (!iso) continue;
 
     const amounts = line.match(AMOUNT_RE);
     if (!amounts || amounts.length === 0) continue;
-    const value = parseAmount(amounts[amounts.length - 1]);
+    const value = parseMoney(amounts[amounts.length - 1]);
     if (value == null || value === 0) continue;
 
     const afterDate = line.slice(dateMatch.index! + dateMatch[1].length);
