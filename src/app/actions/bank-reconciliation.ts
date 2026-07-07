@@ -116,7 +116,13 @@ export async function getBankReconciliationData(filters?: {
     .from("bank_transactions")
     .select("id, transaction_date, description, counterparty_name, reference, amount, direction, status")
     .eq("company_id", companyId)
+    // Desempate estável: mesma data → import mais recente primeiro → ordem
+    // original da linha no ficheiro. Sem isto, movimentos do mesmo dia saem
+    // numa ordem diferente da do extrato importado (a BD não garante ordem
+    // por data sozinha quando há empates).
     .order("transaction_date", { ascending: false })
+    .order("statement_import_id", { ascending: false })
+    .order("source_row_index", { ascending: true })
     .limit(500);
   if (filters?.status) txQuery = txQuery.eq("status", filters.status);
   if (filters?.accountId) txQuery = txQuery.eq("bank_account_id", filters.accountId);

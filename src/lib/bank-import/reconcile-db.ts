@@ -181,40 +181,50 @@ export async function confirmBankStatementImport(
     const existingFingerprints = await fetchExistingFingerprints(admin, companyId, bankAccountId);
     const nowDuplicate = detectDatabaseDuplicates(transactions.map((t) => t.fingerprint), existingFingerprints);
 
-    const toInsert = transactions.map((t) => ({
-      company_id: companyId,
-      bank_account_id: bankAccountId,
-      statement_import_id: imp.id,
-      transaction_date: t.transaction_date,
-      value_date: t.value_date,
-      description: t.description,
-      counterparty_name: t.counterparty_name,
-      reference: t.reference,
-      amount: t.amount,
-      direction: t.direction,
-      currency: t.currency,
-      raw_data: t.raw_data,
-      fingerprint: t.fingerprint,
-      status: nowDuplicate.has(t.fingerprint) ? ("duplicate" as const) : ("pending" as const),
-    }));
+    // Duplicados contra a BD não podem ser inseridos (o unique index nunca os
+    // deixaria persistir — daria conflito com a linha já existente). Calcular
+    // a contagem ANTES do insert e só tentar gravar os movimentos realmente
+    // novos evita depender do que o upsert(ignoreDuplicates) devolve, que
+    // omite silenciosamente as linhas em conflito.
+    const duplicateRows = nowDuplicate.size;
+    const toInsert = transactions
+      .filter((t) => !nowDuplicate.has(t.fingerprint))
+      .map((t) => ({
+        company_id: companyId,
+        bank_account_id: bankAccountId,
+        statement_import_id: imp.id,
+        transaction_date: t.transaction_date,
+        value_date: t.value_date,
+        description: t.description,
+        counterparty_name: t.counterparty_name,
+        reference: t.reference,
+        amount: t.amount,
+        direction: t.direction,
+        currency: t.currency,
+        raw_data: t.raw_data,
+        fingerprint: t.fingerprint,
+        source_row_index: t.index,
+        status: "pending" as const,
+      }));
 
     const inserted: { id: string; transaction_date: string; amount: number; direction: "credit" | "debit"; description: string; counterparty_name: string | null; reference: string | null; status: string }[] = [];
     const BATCH = 200;
     for (let i = 0; i < toInsert.length; i += BATCH) {
       const slice = toInsert.slice(i, i + BATCH);
+      // onConflict usa bank_account_key (coluna gerada, NULL-safe) em vez de
+      // bank_account_id — ver migration 050. ignoreDuplicates cobre apenas a
+      // corrida concorrente entre o preview e este commit, não os duplicados
+      // já filtrados acima.
       const { data: batchRows, error: insErr } = await admin
         .from("bank_transactions")
-        .upsert(slice, { onConflict: "company_id,bank_account_id,fingerprint", ignoreDuplicates: true })
+        .upsert(slice, { onConflict: "company_id,bank_account_key,fingerprint", ignoreDuplicates: true })
         .select("id, transaction_date, amount, direction, description, counterparty_name, reference, status");
       if (insErr) throw new Error(insErr.message);
       if (batchRows) inserted.push(...batchRows);
     }
 
-    const pendingTx = inserted.filter((r) => r.status === "pending");
-    const suggestionsCreated = await generateSuggestions(admin, companyId, pendingTx);
-
-    const duplicateRows = inserted.filter((r) => r.status === "duplicate").length;
-    const importedRows = inserted.length - duplicateRows;
+    const suggestionsCreated = await generateSuggestions(admin, companyId, inserted);
+    const importedRows = inserted.length;
 
     await admin
       .from("bank_statement_imports")

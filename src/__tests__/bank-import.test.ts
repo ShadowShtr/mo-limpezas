@@ -347,6 +347,199 @@ describe("matching · scoreMatch", () => {
   });
 });
 
+describe("fixture real 'descarga.csv' (extrato completo, 117 movimentos, vírgula + aspas)", () => {
+  // Ficheiro real fornecido pelo dono (cabeçalho de aviso + nome do titular +
+  // linhas em branco antes do cabeçalho real, exatamente como o banco exporta).
+  const descargaCsv = [
+    '"Segunda-feira, 6 de Julho de 2026","","","",""',
+    '"MONICA SOFIA MARQUES RIBEIRO","","","",""',
+    '"","","","",""',
+    '"Saldos e movimentos","","","",""',
+    '"","","","",""',
+    '"Listagem de Movimentos","","","",""',
+    '"Data Operação","Data valor","Descrição","Montante( EUR )","Saldo Contabilístico( EUR )"',
+    '"03-07-2026","03-07-2026","Levantamento Carregado","-70","11304.3"',
+    '"03-07-2026","03-07-2026","Monica","-388.8","11374.3"',
+    '"03-07-2026","03-07-2026","Transferência para Monica Sofia Marques Ribeiro","-50","11763.1"',
+    '"03-07-2026","03-07-2026","Imp.Selo-Mo Limpezas-E05869186","-0.05","11813.1"',
+    '"03-07-2026","03-07-2026","Comissao-Mo Limpezas-E05869186","-1.25","11813.15"',
+    '"03-07-2026","03-07-2026","Mo Limpezas","-175","11814.4"',
+    '"03-07-2026","03-07-2026","Trf. MB WAY de Dra Rita Andrea Cordeiro Veiga","42","11989.4"',
+    '"03-07-2026","03-07-2026","Transferência de Dra Vania Cristina Branco Mateus","420","11947.4"',
+    '"03-07-2026","03-07-2026","Imp.Selo-Ordenado - Junho-E05868802","-0.05","11527.4"',
+    '"03-07-2026","03-07-2026","Comissao-Ordenado - Junho-E05868802","-1.25","11527.45"',
+    '"03-07-2026","03-07-2026","Ordenado - Junho","-430","11528.7"',
+    '"03-07-2026","03-07-2026","Imp.Selo-Ordenado - Junho-E05868756","-0.05","11958.7"',
+    '"03-07-2026","03-07-2026","Comissao-Ordenado - Junho-E05868756","-1.25","11958.75"',
+    '"03-07-2026","03-07-2026","Ordenado - Junho","-1300","11960"',
+    '"03-07-2026","03-07-2026","Ordenado - Junho","-1058.67","13260"',
+    '"03-07-2026","03-07-2026","Imp.Selo-Ordenado - Junho-E00779423","-0.05","14318.67"',
+    '"03-07-2026","03-07-2026","Comissao-Ordenado - Junho-E00779423","-1.25","14318.72"',
+    '"03-07-2026","03-07-2026","Ordenado - Junho-E00779423","-1078.27","14319.97"',
+    '"03-07-2026","03-07-2026","Transferência para Monica Sofia Marques Ribeiro","-30","15398.24"',
+    '"03-07-2026","03-07-2026","Trf.Imed.   de Natalia Cardoso Nielsen-R22964231","31.5","15428.24"',
+    '"03-07-2026","03-07-2026","Pastelaria Norbertoscarre","-2.3","15396.74"',
+    '"03-07-2026","03-07-2026","Trf. MB WAY de Carina Isabel Carvalho Piedade","15","15399.04"',
+    '"03-07-2026","03-07-2026","Trf. MB WAY de Liliana Monica Fernandes Silva","100","15384.04"',
+    '"03-07-2026","03-07-2026","Trf. MB WAY para Igor Ricardo Bezerra Silva","-15","15284.04"',
+    '"03-07-2026","03-07-2026","Transferência para Monica Sofia Marques Ribeiro","-40","15299.04"',
+    '"03-07-2026","03-07-2026","Trf. MB WAY de Claudia Patricia Costeira Luca","157.5","15339.04"',
+    '"03-07-2026","03-07-2026","Transferência de Agito Global Limited","1589.65","15181.54"',
+    '"03-07-2026","03-07-2026","Transferência de Condominio Rua Gil Eanes Lote 104","56.54","13591.89"',
+    '"03-07-2026","03-07-2026","Transferência de Rui Manuel Moreira Marques","755","13535.35"',
+    '"03-07-2026","03-07-2026","Transferência de N Ribeiro J Ribeiro-servico Limpeza,lda","108.24","12780.35"',
+    '"03-07-2026","03-07-2026","Transferência de Sun Charge, Unipessoal Lda","135.3","12672.11"',
+    '"02-07-2026","02-07-2026","Transferência de Cond R Liberdade Lote 1","34.91","12536.81"',
+    '"02-07-2026","02-07-2026","Transferência de Ana Cristina Brito Santos Nobre","76","12501.9"',
+    '"02-07-2026","02-07-2026","Trf. MB WAY de Carlos Manuel C Cristovao Garces","76","12425.9"',
+    '"02-07-2026","02-07-2026","Transferência de Vertente Humana Emp Tra Temporario Lda","297.66","12349.9"',
+    '"02-07-2026","02-07-2026","Pastelaria Norbertos","-5","12052.24"',
+    '"02-07-2026","02-07-2026","Levantamento Carregado","-30","12057.24"',
+    '"02-07-2026","02-07-2026","Transferência para Monica Sofia Marques Ribeiro","-6","12087.24"',
+    '"02-07-2026","02-07-2026","Transferência de Carla Alexandra Teixeira Angelino Dinis Da Silva","40.48","12093.24"',
+    '"02-07-2026","02-07-2026","Transferência de Carla Alexandra Teixeira Angelino Dinis Da Silva","176","12052.76"',
+    '"02-07-2026","02-07-2026","Transferência de Cond Av Comb G Guerra 7,lg D J Palha,r Palh Blanco","151.29","11876.76"',
+    '"02-07-2026","02-07-2026","Trf. MB WAY para Joana Da Paixao Dos Anjos","-15","11725.47"',
+    '"02-07-2026","02-07-2026","Transferência de Reservilustrada Lda","442.8","11740.47"',
+    '"02-07-2026","02-07-2026","Trf. MB WAY de Maria Emília De Oliveira Santos","126","11297.67"',
+    '"02-07-2026","02-07-2026","Trf. MB WAY de Maria Gabriela Marques Fe","42","11171.67"',
+    '"02-07-2026","01-07-2026","Transferência para Gilceli A Coelho","20","11129.67"',
+    '"02-07-2026","02-07-2026","Transferência de Cond Predio Sito Rua Julio Jose Pedro Goes 13","88.68","11109.67"',
+    '"02-07-2026","02-07-2026","Una Seguros","-347.48","11020.99"',
+    '"02-07-2026","02-07-2026","Una Seguros Vida","-80.72","11368.47"',
+    '"02-07-2026","02-07-2026","Aegon Santander Portugal Nao Vida","-13.04","11449.19"',
+    '"01-07-2026","01-07-2026","Trf. MB WAY de Mariana Francisco Silva","132","11462.23"',
+    '"01-07-2026","01-07-2026","Transferência de Cond.predio Sito R. Manuel Rodrigues G Girio N 14","83.26","11330.23"',
+    '"01-07-2026","01-07-2026","Trf. MB WAY de Maria Teresa Esteves Teles Touguinha Biscaia Da Silva","84","11246.97"',
+    '"01-07-2026","01-07-2026","Levantamento Carregado","-10","11162.97"',
+    '"01-07-2026","01-07-2026","Trf. MB WAY de Ana Margarida Nunes Francisquinho","126","11172.97"',
+    '"01-07-2026","01-07-2026","Trf. MB WAY de Ines Novo De Sa Nogueira","126","11046.97"',
+    '"01-07-2026","01-07-2026","Trf. MB WAY de Claudia Sofia Alves Cruz Prioste Gomes","80","10920.97"',
+    '"01-07-2026","01-07-2026","Trf. MB WAY de Catarina Alexandra Franco Rodr","230.52","10840.97"',
+    '"01-07-2026","01-07-2026","Transferência de Anteoportugal, Lda","180.81","10610.45"',
+    '"01-07-2026","01-07-2026","Trf. MB WAY de Marina Filipa M Santos","92","10429.64"',
+    '"01-07-2026","01-07-2026","Transferência de Dra Maria Antonia Silva Pascoa Cs","76","10337.64"',
+    '"01-07-2026","01-07-2026","Transferência de Micael F C R T Unipessoal,lda","221.71","10261.64"',
+    '"01-07-2026","01-07-2026","Transferência para Monica Sofia Marques Ribeiro","-40","10039.93"',
+    '"01-07-2026","01-07-2026","Transferência de Etapa Refletida Unipessoal Lda","22.2","10079.93"',
+    '"01-07-2026","01-07-2026","Transferência para Monica Sofia Marques Ribeiro","-30","10057.73"',
+    '"01-07-2026","01-07-2026","Trf. MB WAY para Gilceli A Coelho","-20","10087.73"',
+    '"01-07-2026","01-07-2026","Transferência de Helena F Silva","40","10107.73"',
+    '"01-07-2026","01-07-2026","Transferência para Monica Sofia Marques Ribeiro","-13","10067.73"',
+    '"01-07-2026","01-07-2026","Trf. MB WAY de Zulmira M O L Oliveira","44","10080.73"',
+    '"01-07-2026","01-07-2026","Trf. MB WAY de Isabel Sofia Bento Fernandes Goncalves","120","10036.73"',
+    '"01-07-2026","01-07-2026","Trf. MB WAY de Alexandra Isabel Ramalho Rocha","292","9916.73"',
+    '"01-07-2026","01-07-2026","Transferência para Monica Ribeiro","-4","9624.73"',
+    '"01-07-2026","01-07-2026","Imp.Selo-Monica Ribeiro-02378653","-0.05","9628.73"',
+    '"01-07-2026","01-07-2026","Comisso Trf Cred SEPA+ -Monica Ribeiro-02378653","-1.25","9628.78"',
+    '"01-07-2026","01-07-2026","Transferência de Filipa Figueiras - Events, Unipessoal Lda","826.56","9630.03"',
+    '"01-07-2026","01-07-2026","Festim Real Unip Lda","-79.9","8803.47"',
+    '"01-07-2026","01-07-2026","Trf. MB WAY de Mónica Sofia Marques Ribeiro","39.95","8883.37"',
+    '"01-07-2026","01-07-2026","Trf. MB WAY para Rute C Costa","-30","8843.42"',
+    '"01-07-2026","01-07-2026","Resta 33 Sabores","-4.6","8873.42"',
+    '"01-07-2026","01-07-2026","Trf. MB WAY de Carina Alexandra P Henriques Castro","132","8878.02"',
+    '"01-07-2026","01-07-2026","Comissão de disponibilização de cartão de débito","-6","8746.02"',
+    '"01-07-2026","01-07-2026","Imposto do selo sobre comissão","-0.24","8752.02"',
+    '"01-07-2026","01-07-2026","Uber Eats","-15.34","8752.26"',
+    '"01-07-2026","01-07-2026","Transferência de Liliana Ribeiro","120","8767.6"',
+    '"01-07-2026","01-07-2026","Transferência para Monica Sofia Marques Ribeiro","-30","8647.6"',
+    '"01-07-2026","01-07-2026","Trf. MB WAY de Ana Teresa Garces Ferreira Sardinha","176","8677.6"',
+    '"01-07-2026","01-07-2026","Trf. MB WAY de Pedro Pereira","185","8501.6"',
+    '"01-07-2026","01-07-2026","Trf. MB WAY de Ana Filipa Coias Martins","80","8316.6"',
+    '"01-07-2026","01-07-2026","Trf. MB WAY de Sandra Maria Ferreira Pinto","115","8236.6"',
+    '"01-07-2026","01-07-2026","Trf. MB WAY de Ricardo Alexandre Silva Ferreira Cs","40","8121.6"',
+    '"01-07-2026","01-07-2026","Trf. MB WAY de Thamara Hessel Silva","84","8081.6"',
+    '"01-07-2026","01-07-2026","Trf. MB WAY de Eduardo Jose Madeira Albuquerque Machado","315","7997.6"',
+    '"01-07-2026","01-07-2026","Transferência de Maria Preciosa Piedade Batista","88","7682.6"',
+    '"01-07-2026","01-07-2026","Trf. MB WAY de Daniela Figueiredo Ramos","180","7594.6"',
+    '"01-07-2026","01-07-2026","Trf. MB WAY de Marina Alexandra Rodrigues Carvalho","38","7414.6"',
+    '"01-07-2026","01-07-2026","Trf. MB WAY de Eng Paulo Jorge M Carvalho Parreira","252","7376.6"',
+    '"01-07-2026","01-07-2026","Trf. MB WAY de Dra Patricia Isabel Henriques Miguel Sa","36","7124.6"',
+    '"01-07-2026","01-07-2026","Trf. MB WAY de Mari Leena Manty Faria Carvalho","132","7088.6"',
+    '"01-07-2026","01-07-2026","Trf. MB WAY de Antonio Pedro Hilario Galhardo","138","6956.6"',
+    '"01-07-2026","01-07-2026","Trf. MB WAY de Susana Carla Rodrigues Miguel","120","6818.6"',
+    '"01-07-2026","01-07-2026","Trf. MB WAY de Jose Miguel Barbosa Costa","320","6698.6"',
+    '"01-07-2026","01-07-2026","Trf. MB WAY de Irene Goncalves Bernardo","168","6378.6"',
+    '"01-07-2026","01-07-2026","Trf. MB WAY de Liliete Rosario Santos Pereira","84","6210.6"',
+    '"01-07-2026","01-07-2026","Trf. MB WAY de Eng Domingos Monteiro Morgado","85","6126.6"',
+    '"01-07-2026","01-07-2026","Trf. MB WAY de Marisa Sa Teixeira","80","6041.6"',
+    '"01-07-2026","01-07-2026","Transferência de Mosca Portugal Lda","314.24","5961.6"',
+    '"01-07-2026","01-07-2026","Transferência de Condominio Predio Sito Travessa Dos Pinheiros Lt 55","69.83","5647.36"',
+    '"01-07-2026","01-07-2026","Medicare","-19.9","5577.53"',
+    '"01-07-2026","01-07-2026","Una Seguros","-39.22","5597.43"',
+    '"01-07-2026","01-07-2026","Una Seguros Vida","-98.03","5636.65"',
+    '"01-07-2026","01-07-2026","Transferência de Condominio Do Predio Sito Na Praceta Joao Goncalves Zarco Lote 51","69.83","5734.68"',
+    '"01-07-2026","01-07-2026","Transferência de Condominio Do Predio Sito Na Rua Diogo Afonso Lote 67","69.83","5664.85"',
+    '"01-07-2026","01-07-2026","Transferência de Condominio Predio Sito Praceta G","87.55","5595.02"',
+    '"01-07-2026","01-07-2026","Transferência de Condominio Do Predio Sito Quinta","87.55","5507.47"',
+    '"01-07-2026","01-07-2026","Transferência de Susana Isabel Costa Pais","42","5419.92"',
+    '"01-07-2026","01-07-2026","Transferência de Cond Predio Rua Pedro Sintra -lt 82","92.69","5377.92"',
+    '"01-07-2026","01-07-2026","Transferência de Condom Ed Horta Del R P D R N 6 11 B 1 6","811.8","5285.23"',
+    '"","","","",""',
+    '"","","","",""',
+    '"","","","",""',
+  ].join("\n");
+
+  it("deteta o cabeçalho real (salta as linhas de aviso/nome/'Listagem de Movimentos') e ignora linhas em branco finais", () => {
+    const t = parseCsvFile(descargaCsv);
+    expect(t.hasRecognizedHeader).toBe(true);
+    expect(t.headers).toEqual(["Data Operação", "Data valor", "Descrição", "Montante( EUR )", "Saldo Contabilístico( EUR )"]);
+    expect(t.rows.length).toBe(117);
+  });
+
+  it("importa os 117 movimentos sem erros, com Montante( EUR ) como valor e Saldo Contabilístico( EUR ) nunca usado", () => {
+    const buf = Buffer.from(descargaCsv, "utf-8");
+    const result = parseCsvStatement(buf, {});
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const { preview } = result;
+    expect(preview.errorCount).toBe(0);
+    expect(preview.validCount).toBe(117);
+
+    const cols = mapBankColumns(preview.headers);
+    expect(cols.amount).toBe(3);
+    expect(cols.balance).toBe(4);
+  });
+
+  it("preserva a ordem original do ficheiro (transactions[i].index é sequencial e crescente)", () => {
+    const buf = Buffer.from(descargaCsv, "utf-8");
+    const result = parseCsvStatement(buf, {});
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const indexes = result.preview.transactions.map((t) => t.index);
+    expect(indexes).toEqual([...indexes].sort((a, b) => a - b));
+    expect(indexes[0]).toBe(0);
+    expect(indexes[indexes.length - 1]).toBe(116);
+  });
+
+  it("preserva os valores exatos pedidos pelo dono, com sinal correto (-70, -388.80, -0.05, 42, 420, 1589.65)", () => {
+    const buf = Buffer.from(descargaCsv, "utf-8");
+    const result = parseCsvStatement(buf, {});
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const signed = result.preview.transactions.map((t) => (t.direction === "debit" ? -t.amount : t.amount));
+    for (const expected of [-70, -388.8, -0.05, 42, 420, 1589.65]) {
+      expect(signed).toContain(expected);
+    }
+    // nenhum saldo (ex.: 11304.3, 11374.3) aparece como valor de movimento
+    expect(signed.every((v) => v !== 11304.3 && v !== 11374.3)).toBe(true);
+  });
+
+  it("reimportar o mesmo ficheiro não duplica nenhum dos 117 movimentos", () => {
+    const buf = Buffer.from(descargaCsv, "utf-8");
+    const first = parseCsvStatement(buf, {});
+    expect(first.ok).toBe(true);
+    if (!first.ok) return;
+    const existingFingerprints = new Set(first.preview.transactions.map((t) => t.fingerprint));
+
+    const second = parseCsvStatement(buf, { existingFingerprints });
+    expect(second.ok).toBe(true);
+    if (!second.ok) return;
+    expect(second.preview.transactions.length).toBe(0);
+    expect(second.preview.duplicateExistingCount).toBe(117);
+  });
+});
+
 describe("parseCsvStatement · 8 movimentos legítimos iguais não colidem", () => {
   it("ficam com 8 fingerprints distintos (nenhum falso duplicado)", () => {
     const lines = ["Data;Descrição;Valor"];

@@ -7,6 +7,7 @@ import { createBankTransactionFingerprint, detectInternalDuplicates, detectDatab
 
 export interface ParsedTransaction extends NormalizedTransaction {
   fingerprint: string;
+  index: number; // posição original da linha no ficheiro — usada para preservar a ordem do extrato após o commit
 }
 
 export type PreviewRowStatus = "valid" | "error" | "duplicate_internal" | "duplicate_existing";
@@ -104,7 +105,7 @@ export function buildImportPreview(
       amount: row.tx.amount,
       direction: row.tx.direction,
     });
-    if (status === "valid") transactions.push({ ...row.tx, fingerprint });
+    if (status === "valid") transactions.push({ ...row.tx, fingerprint, index: row.index });
   }
 
   for (const row of errorRows) {
