@@ -15,6 +15,7 @@ import { InterventionsSection } from "./_components/interventions-section";
 import { LocaisTable } from "../../locais/_components/table";
 import { LocalSheet } from "../../locais/_components/sheet";
 import type { ContratosTableRow } from "../../contratos/page";
+import { CONTRATO_SHEET_SELECT } from "@/lib/contrato-sheet-fields";
 
 const STATUS_STYLE: Record<string, { bg: string; text: string; label: string }> = {
   agendado:  { bg: "#F0FDF4", text: "#15803D", label: "Agendado" },
@@ -148,13 +149,7 @@ export default async function ClientDetailPage({
   const { data: contractsRaw } = locationIds.length
     ? await admin
       .from("contracts")
-      .select(`
-        id, name, frequency, interval_days, weekdays, schedule_days,
-        starts_on, ends_on, status, notes, created_at,
-        cleaning_type, payment_status, upholstery_type, upholstery_notes,
-        upholstery_units, upholstery_unit_price, num_people,
-        locations ( id, name, address, hourly_rate, clients ( id, name ) )
-      `)
+      .select(CONTRATO_SHEET_SELECT)
       .eq("company_id", me.company_id)
       .in("location_id", locationIds)
       .order("created_at", { ascending: false })

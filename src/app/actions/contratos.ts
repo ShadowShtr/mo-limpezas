@@ -4,6 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { maxReferenceNumber } from "@/lib/services/reference";
+import { auditLog } from "@/lib/audit";
 import type { ScheduleDay } from "@/types/database";
 
 export interface ContratoInput {
@@ -546,6 +547,15 @@ export async function updateContrato(id: string, input: Omit<ContratoInput, "com
     .eq("id", input.location_id)
     .eq("company_id", profile.company_id);
 
+  // Valor antigo, só para a auditoria (ver comentário abaixo) — nunca bloqueia
+  // o update se falhar.
+  const { data: before } = await admin
+    .from("contracts")
+    .select("fixed_price, fixed_monthly, apply_vat")
+    .eq("id", id)
+    .eq("company_id", profile.company_id)
+    .single();
+
   const { error } = await admin.from("contracts").update({
     location_id: input.location_id,
     name: input.name || null,
@@ -570,6 +580,29 @@ export async function updateContrato(id: string, input: Omit<ContratoInput, "com
   }).eq("id", id).eq("company_id", profile.company_id);
 
   if (error) return { ok: false as const, error: error.message };
+
+  // Auditoria do valor financeiro do contrato (avença/IVA) — só quando algo
+  // muda de facto. Sem isto não há como recuperar um valor apagado por engano
+  // (foi o que aconteceu quando a ficha do cliente carregava o contrato sem
+  // estas colunas — ver src/lib/contrato-sheet-fields.ts).
+  const after = { fixed_price: input.fixed_price ?? null, fixed_monthly: input.fixed_monthly ?? false, apply_vat: input.apply_vat ?? false };
+  if (
+    before &&
+    (before.fixed_price !== after.fixed_price ||
+      before.fixed_monthly !== after.fixed_monthly ||
+      before.apply_vat !== after.apply_vat)
+  ) {
+    await auditLog({
+      companyId: profile.company_id,
+      actorId: user.id,
+      action: "contrato_valor_alterado",
+      entityType: "contract",
+      entityId: id,
+      before,
+      after,
+      source: "dashboard",
+    }, admin);
+  }
 
   // Datas excluídas manualmente (apagadas do calendário): preservam-se e continuam
   // a ser saltadas na regeneração, para o dia apagado nunca voltar.

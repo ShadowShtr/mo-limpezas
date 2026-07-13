@@ -265,6 +265,16 @@ export function ContratoSheet({
   );
   // IVA do contrato (chavinha). Default desligado.
   const [applyVat, setApplyVat] = useState<boolean>(source?.apply_vat ?? false);
+  // Guarda de integridade: em edição, se a query que carregou este contrato
+  // não trouxe fixed_price/fixed_monthly/apply_vat (undefined — diferente de
+  // null, que é um valor legítimo de "sem avença"), bloqueia a gravação em
+  // vez de apagar silenciosamente o valor real do contrato. Foi exatamente
+  // isto que aconteceu quando a ficha do cliente esquecia estas colunas.
+  const missingFinancialFields = isEdit && source != null && (
+    source.fixed_price === undefined ||
+    source.fixed_monthly === undefined ||
+    source.apply_vat === undefined
+  );
   // Duração por serviço (horas) — definida logo no passo 1 para fazer a conta.
   // Em edição arranca com a duração do 1.º dia do padrão; senão 2h.
   const [baseHours, setBaseHours] = useState<string>(() => {
@@ -417,6 +427,9 @@ export function ContratoSheet({
     // chegar de facto ao passo final (e passado o cooldown de step2Ready —
     // ver comentário na declaração do estado).
     if (step !== 2 || !step2Ready) return;
+    // Reforço do guard visual (botão já vem disabled) — nunca gravar se os
+    // campos financeiros não vieram da query, para não apagar o valor real.
+    if (missingFinancialFields) return;
     setMessage(null);
     setSaved(false);
 
@@ -1024,6 +1037,14 @@ export function ContratoSheet({
             </>
           )}
 
+          {missingFinancialFields && (
+            <div className="text-sm px-3 py-2 rounded-lg bg-red-50 text-red-700 border border-red-100">
+              Não foi possível carregar o valor de avença/IVA deste contrato — gravar agora
+              apagaria esse valor. Feche e edite este contrato a partir da página Contratos,
+              ou contacte o suporte.
+            </div>
+          )}
+
           {message && (
             <div className={`text-sm px-3 py-2 rounded-lg ${message.type === "error"
               ? "bg-red-50 text-red-700 border border-red-100"
@@ -1073,7 +1094,7 @@ export function ContratoSheet({
               <button
                 form="contrato-form"
                 type="submit"
-                disabled={pending || !step2Ready}
+                disabled={pending || !step2Ready || missingFinancialFields}
                 className="ml-auto flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold transition-all disabled:opacity-50"
                 style={{
                   background: saved

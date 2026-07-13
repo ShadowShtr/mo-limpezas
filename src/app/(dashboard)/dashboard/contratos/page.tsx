@@ -4,6 +4,9 @@ import { Header } from "@/components/layout/header";
 import { ContratosTable } from "./_components/table";
 import { ContratoSheet } from "./_components/sheet";
 import { Plus } from "lucide-react";
+import { CONTRATO_SHEET_SELECT, type ContratosTableRow } from "@/lib/contrato-sheet-fields";
+
+export type { ContratosTableRow };
 
 export default async function ContratosPage() {
   const supabase = await createClient();
@@ -23,13 +26,7 @@ export default async function ContratosPage() {
     await Promise.all([
       supabase
         .from("contracts")
-        .select(`
-          id, name, frequency, interval_days, weekdays, schedule_days,
-          starts_on, ends_on, status, notes, created_at,
-          cleaning_type, payment_status, upholstery_type, upholstery_notes,
-          upholstery_units, upholstery_unit_price, fixed_price, fixed_monthly, apply_vat, num_people,
-          locations ( id, name, address, hourly_rate, clients ( id, name ) )
-        `)
+        .select(CONTRATO_SHEET_SELECT)
         .eq("company_id", companyId)
         .order("created_at", { ascending: false }),
       supabase
@@ -103,33 +100,3 @@ export default async function ContratosPage() {
   );
 }
 
-export type ContratosTableRow = {
-  id: string;
-  name: string | null;
-  frequency: string;
-  interval_days: number;
-  weekdays: number[] | null;
-  schedule_days: import("@/types/database").ScheduleDay[];
-  starts_on: string;
-  ends_on: string | null;
-  status: string;
-  notes: string | null;
-  cleaning_type: string | null;
-  payment_status: string | null;
-  upholstery_type: string | null;
-  upholstery_notes: string | null;
-  upholstery_units: number | null;
-  upholstery_unit_price: number | null;
-  fixed_price: number | null;
-  fixed_monthly: boolean;
-  apply_vat: boolean;
-  num_people: number | null;
-  created_at: string;
-  locations: {
-    id: string;
-    name: string;
-    address: string;
-    hourly_rate: number | null;
-    clients: { id: string; name: string } | null;
-  } | null;
-};
