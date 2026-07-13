@@ -4,6 +4,7 @@ import { Header } from "@/components/layout/header";
 import { ClientesTable } from "./_components/table";
 import { ClienteSheet } from "./_components/sheet";
 import { Plus } from "lucide-react";
+import { CLIENTE_SHEET_SELECT } from "@/lib/cliente-sheet-fields";
 
 export default async function ClientesPage() {
   const supabase = await createClient();
@@ -19,7 +20,7 @@ export default async function ClientesPage() {
 
   const { data: clientes } = await supabase
     .from("clients")
-    .select("id, name, email, phone, nif, status, vat_exempt, created_at")
+    .select(CLIENTE_SHEET_SELECT)
     .eq("company_id", me?.company_id ?? "")
     .order("name");
 

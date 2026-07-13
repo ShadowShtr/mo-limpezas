@@ -3,6 +3,7 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
+import { auditLog } from "@/lib/audit";
 
 interface LocationInput {
   name: string;
@@ -77,6 +78,15 @@ export async function updateLocation(id: string, input: Omit<LocationInput, "cli
     return { ok: false as const, error: "Sem permissão para editar locais." };
   }
 
+  // Valor antigo dos campos de preço/acesso, só para auditoria — nunca
+  // bloqueia o update se falhar.
+  const { data: before } = await admin
+    .from("locations")
+    .select("pricing_type, hourly_rate, fixed_price, access_code, has_key, key_label")
+    .eq("id", id)
+    .eq("company_id", me.company_id)
+    .single();
+
   const { error } = await admin
     .from("locations")
     .update({
@@ -97,6 +107,30 @@ export async function updateLocation(id: string, input: Omit<LocationInput, "cli
     .eq("company_id", me.company_id);
 
   if (error) return { ok: false as const, error: error.message };
+
+  // Auditoria de preço/acesso físico — sem isto uma alteração acidental de
+  // hourly_rate/fixed_price ou de código de acesso/chave não deixa rasto.
+  const after = {
+    pricing_type: input.pricing_type, hourly_rate: input.hourly_rate, fixed_price: input.fixed_price,
+    access_code: input.access_code, has_key: input.has_key, key_label: input.key_label,
+  };
+  if (
+    before &&
+    (before.pricing_type !== after.pricing_type || before.hourly_rate !== after.hourly_rate ||
+      before.fixed_price !== after.fixed_price || before.access_code !== after.access_code ||
+      before.has_key !== after.has_key || before.key_label !== after.key_label)
+  ) {
+    await auditLog({
+      companyId: me.company_id,
+      actorId: user.id,
+      action: "local_preco_acesso_alterado",
+      entityType: "location",
+      entityId: id,
+      before,
+      after,
+      source: "dashboard",
+    }, admin);
+  }
 
   revalidatePath("/dashboard/locais");
   revalidatePath("/dashboard/clientes");

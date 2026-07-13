@@ -40,9 +40,18 @@ export function ClienteSheet({ trigger, companyId, cliente }: Props) {
   const [vatExempt, setVatExempt] = useState(cliente?.vat_exempt ?? false);
 
   const isEdit = !!cliente;
+  // Guarda de integridade: em edição, se a query que carregou este cliente
+  // não trouxe type/notes (undefined — diferente de null, que é um valor
+  // legítimo de "sem notas"), bloqueia a gravação em vez de apagar
+  // silenciosamente os dados reais. Foi exatamente isto que aconteceu ao
+  // editar um cliente pela lista (que não busca type/notes).
+  const missingFields = isEdit && cliente != null && (
+    cliente.type === undefined || cliente.notes === undefined
+  );
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (missingFields) return;
     setMessage(null);
     startTransition(async () => {
       const input = {
@@ -158,6 +167,13 @@ export function ClienteSheet({ trigger, companyId, cliente }: Props) {
               <span className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-all ${vatExempt ? "translate-x-5" : "translate-x-0.5"}`} style={{ left: 0 }} />
             </button>
           </div>
+          {missingFields && (
+            <div className="text-sm px-3 py-2 rounded-lg bg-red-50 text-red-700 border border-red-100">
+              Não foi possível carregar o tipo/notas deste cliente — gravar agora apagaria
+              esses dados. Feche e edite este cliente a partir da ficha dele, ou contacte o suporte.
+            </div>
+          )}
+
           {message && (
             <div className={`text-sm px-3 py-2 rounded-lg ${message.type === "error" ? "bg-red-50 text-[var(--color-danger)] border border-red-100" : "bg-[var(--color-primary-light)] text-[var(--color-primary)] border border-[var(--color-primary-muted)]"}`}>
               {message.text}
@@ -166,7 +182,7 @@ export function ClienteSheet({ trigger, companyId, cliente }: Props) {
         </form>
 
         <div className="border-t border-[var(--color-border)] px-6 py-4">
-          <button form="cliente-form" type="submit" disabled={pending}
+          <button form="cliente-form" type="submit" disabled={pending || missingFields}
             className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-[var(--color-primary)] text-white text-sm font-medium hover:bg-[var(--color-primary-hover)] transition-colors disabled:opacity-50">
             {pending && <Loader2 className="w-4 h-4 animate-spin" />}
             {isEdit ? "Guardar alterações" : "Criar cliente"}

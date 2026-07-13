@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { checkCronAuth } from "@/lib/cron-auth";
+import { CONTRACT_FINANCIAL_FIELDS } from "@/lib/contrato-sheet-fields";
 import type { ScheduleDay } from "@/types/database";
 
 // Permite até 60s na Vercel Pro (TASK 14/16); mesmo assim corre em lotes.
@@ -220,7 +221,7 @@ export async function GET(req: NextRequest) {
   const { data: contracts, error: contractsError } = await supabase
     .from("contracts")
     .select(
-      "id, company_id, location_id, frequency, weekdays, interval_days, schedule_days, starts_on, ends_on, num_people, fixed_price, fixed_monthly, apply_vat, excluded_dates, locations(hourly_rate)",
+      `id, company_id, location_id, frequency, weekdays, interval_days, schedule_days, starts_on, ends_on, num_people, ${CONTRACT_FINANCIAL_FIELDS}, excluded_dates, locations(hourly_rate)`,
     )
     .eq("status", "ativo")
     .lte("starts_on", monthEndStr)

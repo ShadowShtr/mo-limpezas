@@ -16,6 +16,7 @@ import { LocaisTable } from "../../locais/_components/table";
 import { LocalSheet } from "../../locais/_components/sheet";
 import type { ContratosTableRow } from "../../contratos/page";
 import { CONTRATO_SHEET_SELECT } from "@/lib/contrato-sheet-fields";
+import { CLIENTE_SHEET_SELECT } from "@/lib/cliente-sheet-fields";
 
 const STATUS_STYLE: Record<string, { bg: string; text: string; label: string }> = {
   agendado:  { bg: "#F0FDF4", text: "#15803D", label: "Agendado" },
@@ -72,7 +73,7 @@ export default async function ClientDetailPage({
   ] = await Promise.all([
     admin
       .from("clients")
-      .select("id, name, email, phone, nif, type, notes, status, vat_exempt, created_at")
+      .select(CLIENTE_SHEET_SELECT)
       .eq("id", id)
       .eq("company_id", me.company_id)
       .single(),

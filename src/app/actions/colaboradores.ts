@@ -4,6 +4,7 @@ import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
+import { auditLog } from "@/lib/audit";
 
 export interface ColaboradorInput {
   full_name: string;
@@ -113,6 +114,15 @@ export async function updateColaborador(
     return { ok: false as const, error: "Sem permissão." };
   }
 
+  // Valor antigo dos campos sensíveis (privilégio, dados bancários), só para
+  // auditoria — nunca bloqueia o update se falhar.
+  const { data: before } = await admin
+    .from("profiles")
+    .select("role, iban, hourly_rate, nif")
+    .eq("id", id)
+    .eq("company_id", callerProfile.company_id)
+    .single();
+
   const { error } = await admin
     .from("profiles")
     .update({
@@ -133,6 +143,26 @@ export async function updateColaborador(
     .eq("company_id", callerProfile.company_id);
 
   if (error) return { ok: false as const, error: error.message };
+
+  // Auditoria dos campos sensíveis (privilégio/dados bancários) — sem isto
+  // uma escalada de privilégio (role) ou alteração de IBAN não deixa rasto.
+  const after = { role: input.role, iban: input.iban || null, hourly_rate: input.hourly_rate ?? null, nif: input.nif || null };
+  if (
+    before &&
+    (before.role !== after.role || before.iban !== after.iban ||
+      before.hourly_rate !== after.hourly_rate || before.nif !== after.nif)
+  ) {
+    await auditLog({
+      companyId: callerProfile.company_id,
+      actorId: user.id,
+      action: "colaborador_dados_sensiveis_alterados",
+      entityType: "profile",
+      entityId: id,
+      before,
+      after,
+      source: "dashboard",
+    }, admin);
+  }
 
   revalidatePath("/dashboard/colaboradores");
   return { ok: true as const };

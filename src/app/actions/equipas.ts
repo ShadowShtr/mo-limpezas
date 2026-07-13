@@ -3,6 +3,7 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
+import { auditLog } from "@/lib/audit";
 
 export async function saveEquipa(
   teamId: string | null,
@@ -31,6 +32,17 @@ export async function saveEquipa(
   }
 
   let savedTeamId = teamId;
+
+  // Estado antigo (líder + membros), só para auditoria — nunca bloqueia a
+  // operação se falhar.
+  let before: { leader_id: string | null; memberIds: string[] } | null = null;
+  if (teamId) {
+    const [{ data: oldTeam }, { data: oldMembers }] = await Promise.all([
+      admin.from("teams").select("leader_id").eq("id", teamId).single(),
+      admin.from("team_members").select("collaborator_id").eq("team_id", teamId),
+    ]);
+    before = { leader_id: oldTeam?.leader_id ?? null, memberIds: (oldMembers ?? []).map((m) => m.collaborator_id) };
+  }
 
   if (teamId) {
     const { error } = await admin
@@ -62,6 +74,24 @@ export async function saveEquipa(
       .from("team_members")
       .insert(memberIds.map((cid) => ({ team_id: savedTeamId!, collaborator_id: cid })));
     if (insError) return { ok: false, error: insError.message };
+  }
+
+  // Auditoria de líder/membros — a operação substitui a equipa toda
+  // (delete + reinsert); sem isto não há como ver quem foi removido.
+  const after = { leader_id: data.leader_id, memberIds };
+  if (!before || before.leader_id !== after.leader_id ||
+    before.memberIds.length !== after.memberIds.length ||
+    !before.memberIds.every((m) => after.memberIds.includes(m))) {
+    await auditLog({
+      companyId,
+      actorId: user.id,
+      action: "equipa_lider_membros_alterados",
+      entityType: "team",
+      entityId: savedTeamId!,
+      before: before ?? { leader_id: null, memberIds: [] },
+      after,
+      source: "dashboard",
+    }, admin);
   }
 
   revalidatePath("/dashboard/equipas");

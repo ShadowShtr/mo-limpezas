@@ -207,6 +207,15 @@ export async function updateCliente(id: string, input: Omit<ClienteInput, "compa
     return { ok: false as const, error: "Sem permissao." };
   }
 
+  // Valor antigo, só para a auditoria (ver comentário abaixo) — nunca bloqueia
+  // o update se falhar.
+  const { data: before } = await admin
+    .from("clients")
+    .select("type, notes")
+    .eq("id", id)
+    .eq("company_id", profile.company_id)
+    .single();
+
   const { error } = await admin.from("clients").update({
     name: input.name,
     email: input.email || null,
@@ -219,6 +228,23 @@ export async function updateCliente(id: string, input: Omit<ClienteInput, "compa
   }).eq("id", id).eq("company_id", profile.company_id);
 
   if (error) return { ok: false as const, error: error.message };
+
+  // Auditoria de type/notes — sem isto não há como recuperar um valor
+  // apagado por engano (foi o que aconteceu ao editar um cliente pela lista,
+  // que não busca estas 2 colunas — ver src/lib/cliente-sheet-fields.ts).
+  const after = { type: input.type || "empresa", notes: input.notes || null };
+  if (before && (before.type !== after.type || before.notes !== after.notes)) {
+    await auditLog({
+      companyId: profile.company_id,
+      actorId: user.id,
+      action: "client_type_notes_changed",
+      entityType: "client",
+      entityId: id,
+      before,
+      after,
+      source: "dashboard",
+    }, admin);
+  }
 
   await auditLog({
     companyId: profile.company_id,

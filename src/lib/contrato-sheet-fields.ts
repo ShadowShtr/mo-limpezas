@@ -9,11 +9,17 @@
 // contrato (e, em cascata, zerar o valor dos serviços futuros). Qualquer
 // query que alimente o ContratoSheet deve usar esta constante, nunca repetir
 // a lista de colunas à mão.
+// As 3 colunas de preço fixo/avença em si — extraídas à parte para que outras
+// queries de "contracts" que só precisam do valor (ex.: o cron de geração de
+// serviços) possam partilhar exatamente os mesmos nomes de coluna, em vez de
+// as repetir à mão e arriscar o mesmo tipo de drift.
+export const CONTRACT_FINANCIAL_FIELDS = "fixed_price, fixed_monthly, apply_vat";
+
 export const CONTRATO_SHEET_SELECT = `
   id, name, frequency, interval_days, weekdays, schedule_days,
   starts_on, ends_on, status, notes, created_at,
   cleaning_type, payment_status, upholstery_type, upholstery_notes,
-  upholstery_units, upholstery_unit_price, fixed_price, fixed_monthly, apply_vat, num_people,
+  upholstery_units, upholstery_unit_price, ${CONTRACT_FINANCIAL_FIELDS}, num_people,
   locations ( id, name, address, hourly_rate, clients ( id, name ) )
 `;
 
