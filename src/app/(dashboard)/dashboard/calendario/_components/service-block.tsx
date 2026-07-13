@@ -51,6 +51,10 @@ const STATUS_BG: Record<string, { bg: string; text: string; fallbackBorder: stri
   falta:     { bg: "#FEF2F2", text: "#B91C1C", fallbackBorder: "#DC2626" },
 };
 
+// Cor de texto fixa dos cards do calendário (todos os status) — verde bem
+// escuro para bom contraste, independente da cor de fundo por status.
+const CARD_TEXT_COLOR = "#14532D";
+
 export const STATUS_LABEL: Record<string, string> = {
   agendado:  "Agendado",
   em_curso:  "Em curso",
@@ -321,24 +325,24 @@ export function ServiceBlock({ service, slotHeight, startHour, teamId, onClick, 
             </button>
           )}
           {/* 1.º Nome do cliente — sempre visível */}
-          <span className="text-[11px] font-semibold leading-tight truncate pr-4" style={{ color: s.text }}>
+          <span className="text-[11px] font-semibold leading-tight truncate pr-4" style={{ color: CARD_TEXT_COLOR }}>
             {service.client_name}
           </span>
           {/* 2.º Zona/localidade */}
-          <span className="text-[10px] font-medium leading-tight truncate pr-4" style={{ color: s.text, opacity: 0.8 }}>
+          <span className="text-[10px] font-medium leading-tight truncate pr-4" style={{ color: CARD_TEXT_COLOR, opacity: 0.8 }}>
             {extractCity(service.location_address) || service.location_name}
           </span>
           {/* 3.º Horário */}
-          <span className="text-[10px] font-semibold leading-tight tabular-nums" style={{ color: s.text, opacity: 0.9 }}>
+          <span className="text-[10px] font-semibold leading-tight tabular-nums" style={{ color: CARD_TEXT_COLOR, opacity: 0.9 }}>
             {format(start, "HH:mm")}–{format(end, "HH:mm")}
           </span>
           {(isMedium || isLarge) && noteText && (
-            <span className="text-[10px] leading-tight truncate" style={{ color: s.text, opacity: 0.72 }}>
+            <span className="text-[10px] leading-tight truncate" style={{ color: CARD_TEXT_COLOR, opacity: 0.72 }}>
               Obs: {noteText}
             </span>
           )}
           {!isShort && (service.team_name || hasAccess) && (
-            <span className="text-[10px] leading-tight truncate" style={{ color: s.text, opacity: 0.6 }}>
+            <span className="text-[10px] leading-tight truncate" style={{ color: CARD_TEXT_COLOR, opacity: 0.6 }}>
               {service.team_name}
               {hasAccess && (
                 <span className="inline-flex items-center gap-0.5 ml-1 align-middle">
