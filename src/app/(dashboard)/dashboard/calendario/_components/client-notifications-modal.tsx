@@ -18,7 +18,7 @@ interface NotifRow {
   clientName: string;
   serviceDate: string;       // "YYYY-MM-DD"
   serviceTime: string;       // "HH:MM"
-  method: string;            // "sms" | "email" | "both"
+  method: string;            // "sms" | "email" | "none" (sem email nem telefone — não é possível notificar)
   contact: string;           // phone or email
   alreadySent: boolean;
 }
@@ -99,11 +99,14 @@ export function ClientNotificationsModal({
       const cl = clientMap.get(s.client_id);
       if (!cl) continue;
       const dt = parseISO(s.scheduled_start);
-      // Use email by default; add SMS row only if client has a phone number
+      // Uma linha por canal disponível (email e/ou SMS). Se o cliente não tem
+      // nenhum contacto registado, mostra uma linha "sem contacto" em vez de
+      // fingir um email inexistente — antes isso gerava uma linha "Email"
+      // com "—" que falhava sempre ao enviar (Zod rejeita "—" como email).
       const methods: string[] = [];
       if (cl.email) methods.push("email");
       if (cl.phone) methods.push("sms");
-      if (methods.length === 0) methods.push("email");
+      if (methods.length === 0) methods.push("none");
       for (const method of methods) {
         built.push({
           serviceId:   s.id,
@@ -112,7 +115,7 @@ export function ClientNotificationsModal({
           serviceDate: format(dt, "d MMM", { locale: pt }),
           serviceTime: format(dt, "HH:mm"),
           method,
-          contact:     method === "sms" ? (cl.phone ?? "—") : (cl.email ?? "—"),
+          contact:     method === "sms" ? (cl.phone ?? "—") : method === "email" ? (cl.email ?? "—") : "Sem email/telefone",
           alreadySent: sentIds.has(s.id),
         });
       }
@@ -126,7 +129,7 @@ export function ClientNotificationsModal({
 
   // ── Selecção ───────────────────────────────────────────────────────────────
 
-  const pendingRows = rows.filter((r) => !r.alreadySent);
+  const pendingRows = rows.filter((r) => !r.alreadySent && r.method !== "none");
 
   function toggleRow(key: string) {
     setSelected((prev) => {
@@ -275,11 +278,11 @@ export function ClientNotificationsModal({
                     return (
                       <tr
                         key={key}
-                        className={`hover:bg-[var(--color-background)] transition-colors ${r.alreadySent ? "opacity-60" : ""}`}
-                        onClick={() => { if (!r.alreadySent) toggleRow(key); }}
+                        className={`hover:bg-[var(--color-background)] transition-colors ${r.alreadySent || r.method === "none" ? "opacity-60" : ""}`}
+                        onClick={() => { if (!r.alreadySent && r.method !== "none") toggleRow(key); }}
                       >
                         <td className="px-4 py-2.5 w-10">
-                          {r.alreadySent ? (
+                          {r.alreadySent || r.method === "none" ? (
                             <span className="text-[var(--color-text-muted)]">—</span>
                           ) : (
                             <span className={isChecked ? "text-[var(--color-primary)]" : "text-[var(--color-text-muted)]"}>
@@ -291,9 +294,11 @@ export function ClientNotificationsModal({
                           <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-semibold ${
                             r.alreadySent
                               ? "bg-green-100 text-green-700"
+                              : r.method === "none"
+                              ? "bg-gray-100 text-gray-500"
                               : "bg-amber-100 text-amber-700"
                           }`}>
-                            {r.alreadySent ? "Enviado" : "Pendente"}
+                            {r.alreadySent ? "Enviado" : r.method === "none" ? "Sem contacto" : "Pendente"}
                           </span>
                         </td>
                         <td className="px-3 py-2.5 font-medium text-[var(--color-text-main)]">{r.clientName}</td>
@@ -304,9 +309,11 @@ export function ClientNotificationsModal({
                           <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-semibold ${
                             r.method === "sms"
                               ? "bg-blue-100 text-blue-700"
-                              : "bg-purple-100 text-purple-700"
+                              : r.method === "email"
+                              ? "bg-purple-100 text-purple-700"
+                              : "bg-gray-100 text-gray-500"
                           }`}>
-                            {r.method === "sms" ? "SMS" : "Email"}
+                            {r.method === "sms" ? "SMS" : r.method === "email" ? "Email" : "—"}
                           </span>
                         </td>
                         <td className="px-3 py-2.5 text-[var(--color-text-muted)] text-xs font-mono truncate max-w-[150px]">
