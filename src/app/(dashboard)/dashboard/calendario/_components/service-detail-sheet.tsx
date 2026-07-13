@@ -465,13 +465,16 @@ export function ServiceDetailSheet({ service, onClose, onChanged, initialEdit = 
     setActionMsg(null);
     try {
       const result = await sendBulkClientNotifications([{
-        serviceId:   svc.id,
-        clientId:    svc.client_id,
-        clientName:  svc.client_name,
-        serviceDate: format(parseISO(svc.scheduled_start), "d MMM", { locale: pt }),
-        serviceTime: format(parseISO(svc.scheduled_start), "HH:mm"),
-        method:      "email",
-        contact:     clientEmail,
+        clientId:   svc.client_id,
+        clientName: svc.client_name,
+        contact:    clientEmail,
+        services: [{
+          serviceId: svc.id,
+          date: format(parseISO(svc.scheduled_start), "d MMM", { locale: pt }),
+          time: format(parseISO(svc.scheduled_start), "HH:mm"),
+          address: svc.location_address,
+          value: svc.manual_value ?? svc.calculated_value ?? null,
+        }],
       }]);
       setShowNotify(false);
       if (result.sent > 0) {

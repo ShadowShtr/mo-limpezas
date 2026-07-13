@@ -3,24 +3,32 @@
 import { useState, useEffect, useMemo } from "react";
 import { format, addDays, parseISO } from "date-fns";
 import { pt } from "date-fns/locale";
-import { X, Loader2, CheckSquare, Square, Send, Bell } from "lucide-react";
+import { X, Loader2, CheckSquare, Square, Send, Bell, MessageCircle } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
-import { sendBulkClientNotifications } from "@/app/actions/email";
+import { sendBulkClientNotifications, getCompanyPhone } from "@/app/actions/email";
+import { clientReminderWhatsAppMessage } from "@/lib/email/templates";
 import { addDaysToDateString, toLisbonTimestamp } from "@/lib/lisbon-time";
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 
 type Tab = "hoje" | "amanha" | "proximos3";
+type Method = "email" | "whatsapp" | "none";
 
-interface NotifRow {
+interface ServiceItem {
   serviceId: string;
+  date: string;       // "8 jul"
+  time: string;        // "HH:MM"
+  address: string;
+  value: number | null;
+  alreadySent: boolean; // só relevante para email
+}
+
+interface ClientRow {
   clientId: string;
   clientName: string;
-  serviceDate: string;       // "YYYY-MM-DD"
-  serviceTime: string;       // "HH:MM"
-  method: string;            // "sms" | "email" | "none" (sem email nem telefone — não é possível notificar)
-  contact: string;           // phone or email
-  alreadySent: boolean;
+  method: Method;
+  contact: string;     // email ou telefone
+  services: ServiceItem[];
 }
 
 interface Props {
@@ -38,11 +46,14 @@ export function ClientNotificationsModal({
   const supabase = createClient();
 
   const [tab, setTab]       = useState<Tab>("hoje");
-  const [rows, setRows]     = useState<NotifRow[]>([]);
+  const [rows, setRows]     = useState<ClientRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [sending, setSending] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
+  const [companyPhone, setCompanyPhone] = useState("925 780 509");
+
+  useEffect(() => { getCompanyPhone().then(setCompanyPhone); }, []);
 
   // Datas por tab
   const tabDates = useMemo<Date[]>(() => {
@@ -61,11 +72,12 @@ export function ClientNotificationsModal({
     const startStr = format(tabDates[0], "yyyy-MM-dd");
     const endStr   = format(tabDates[tabDates.length - 1], "yyyy-MM-dd");
 
-    // Serviços no período, com info de cliente e notificações
+    // Serviços no período, já com email/telefone/valor do cliente (services_full
+    // traz tudo — não precisa de query separada a "clients").
     const [{ data: svcs }, { data: sentToday }] = await Promise.all([
       supabase
         .from("services_full")
-        .select("id, client_id, client_name, scheduled_start")
+        .select("id, client_id, client_name, scheduled_start, location_address, client_email, client_phone, manual_value, calculated_value")
         .eq("company_id", companyId)
         .gte("scheduled_start", toLisbonTimestamp(startStr, "00:00"))
         .lt("scheduled_start", toLisbonTimestamp(addDaysToDateString(endStr, 1), "00:00"))
@@ -76,50 +88,53 @@ export function ClientNotificationsModal({
         .from("client_notifications")
         .select("service_id")
         .eq("company_id", companyId)
+        .eq("method", "email")
         .gte("sent_at", toLisbonTimestamp(startStr, "00:00"))
         .lt("sent_at", toLisbonTimestamp(addDaysToDateString(endStr, 1), "00:00"))
         .eq("status", "enviado"),
     ]);
 
     const sentIds = new Set((sentToday ?? []).map((n) => n.service_id));
-    const clientIds = [...new Set((svcs ?? []).map((s) => s.client_id))];
 
-    if (clientIds.length === 0) { setRows([]); setLoading(false); return; }
-
-    // Clientes no período
-    const { data: clients } = await supabase
-      .from("clients")
-      .select("id, name, email, phone")
-      .in("id", clientIds);
-
-    const clientMap = new Map((clients ?? []).map((c) => [c.id, c]));
-
-    const built: NotifRow[] = [];
+    // Agrupa por cliente: cada cliente fica com UMA linha por canal disponível
+    // (email e/ou WhatsApp), listando TODOS os serviços do período nessa linha
+    // — em vez de um aviso fragmentado por serviço.
+    const byClient = new Map<string, { name: string; email: string | null; phone: string | null; items: ServiceItem[] }>();
     for (const s of svcs ?? []) {
-      const cl = clientMap.get(s.client_id);
-      if (!cl) continue;
       const dt = parseISO(s.scheduled_start);
-      // Uma linha por canal disponível (email e/ou SMS). Se o cliente não tem
-      // nenhum contacto registado, mostra uma linha "sem contacto" em vez de
-      // fingir um email inexistente — antes isso gerava uma linha "Email"
-      // com "—" que falhava sempre ao enviar (Zod rejeita "—" como email).
-      const methods: string[] = [];
-      if (cl.email) methods.push("email");
-      if (cl.phone) methods.push("sms");
+      const item: ServiceItem = {
+        serviceId: s.id,
+        date: format(dt, "d MMM", { locale: pt }),
+        time: format(dt, "HH:mm"),
+        address: s.location_address,
+        value: s.manual_value ?? s.calculated_value ?? null,
+        alreadySent: sentIds.has(s.id),
+      };
+      const existing = byClient.get(s.client_id);
+      if (existing) {
+        existing.items.push(item);
+      } else {
+        byClient.set(s.client_id, { name: s.client_name, email: s.client_email, phone: s.client_phone, items: [item] });
+      }
+    }
+
+    const built: ClientRow[] = [];
+    for (const [clientId, c] of byClient) {
+      const methods: Method[] = [];
+      if (c.email) methods.push("email");
+      if (c.phone) methods.push("whatsapp");
       if (methods.length === 0) methods.push("none");
       for (const method of methods) {
         built.push({
-          serviceId:   s.id,
-          clientId:    cl.id,
-          clientName:  s.client_name,
-          serviceDate: format(dt, "d MMM", { locale: pt }),
-          serviceTime: format(dt, "HH:mm"),
+          clientId,
+          clientName: c.name,
           method,
-          contact:     method === "sms" ? (cl.phone ?? "—") : method === "email" ? (cl.email ?? "—") : "Sem email/telefone",
-          alreadySent: sentIds.has(s.id),
+          contact: method === "whatsapp" ? (c.phone ?? "—") : method === "email" ? (c.email ?? "—") : "Sem email/telefone",
+          services: c.items,
         });
       }
     }
+    built.sort((a, b) => a.clientName.localeCompare(b.clientName));
 
     setRows(built);
     setLoading(false);
@@ -127,9 +142,13 @@ export function ClientNotificationsModal({
 
   useEffect(() => { if (open) fetchRows(); }, [open, tab, selectedDate]); // eslint-disable-line react-hooks/exhaustive-deps, react-hooks/set-state-in-effect
 
-  // ── Selecção ───────────────────────────────────────────────────────────────
+  // ── Selecção (só linhas de email — WhatsApp é sempre ação manual imediata) ──
 
-  const pendingRows = rows.filter((r) => !r.alreadySent && r.method !== "none");
+  function rowFullySent(r: ClientRow) {
+    return r.method === "email" && r.services.every((s) => s.alreadySent);
+  }
+
+  const pendingRows = rows.filter((r) => r.method === "email" && !rowFullySent(r));
 
   function toggleRow(key: string) {
     setSelected((prev) => {
@@ -148,9 +167,18 @@ export function ClientNotificationsModal({
     }
   }
 
-  function rowKey(r: NotifRow) { return `${r.serviceId}_${r.method}`; }
+  function rowKey(r: ClientRow) { return `${r.clientId}_${r.method}`; }
 
-  // ── Enviar ─────────────────────────────────────────────────────────────────
+  function whatsappUrl(r: ClientRow) {
+    const msg = clientReminderWhatsAppMessage({
+      clientName: r.clientName,
+      services: r.services.map((s) => ({ date: s.date, time: s.time, address: s.address, value: s.value })),
+      companyPhone,
+    });
+    return `https://wa.me/${r.contact.replace(/\D/g, "")}?text=${encodeURIComponent(msg)}`;
+  }
+
+  // ── Enviar (email) ────────────────────────────────────────────────────────
 
   async function handleSend() {
     const toSend = pendingRows.filter((r) => selected.has(rowKey(r)));
@@ -162,13 +190,12 @@ export function ClientNotificationsModal({
     try {
       const result = await sendBulkClientNotifications(
         toSend.map((r) => ({
-          serviceId:   r.serviceId,
-          clientId:    r.clientId,
-          clientName:  r.clientName,
-          serviceDate: r.serviceDate,
-          serviceTime: r.serviceTime,
-          method:      r.method as "sms" | "email",
-          contact:     r.contact,
+          clientId:   r.clientId,
+          clientName: r.clientName,
+          contact:    r.contact,
+          services: r.services.map((s) => ({
+            serviceId: s.serviceId, date: s.date, time: s.time, address: s.address, value: s.value,
+          })),
         })),
       );
 
@@ -205,7 +232,7 @@ export function ClientNotificationsModal({
     <>
       <div className="fixed inset-0 bg-black/40 z-40" onClick={onClose} />
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-        <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[85vh] flex flex-col">
+        <div className="bg-white rounded-xl shadow-2xl w-full max-w-3xl max-h-[85vh] flex flex-col">
 
           {/* Header */}
           <div className="flex items-center justify-between px-6 py-4 border-b border-[var(--color-border)] shrink-0">
@@ -266,7 +293,7 @@ export function ClientNotificationsModal({
                     </th>
                     <th className="px-3 py-2.5 text-left text-xs font-semibold text-[var(--color-text-muted)]">Estado</th>
                     <th className="px-3 py-2.5 text-left text-xs font-semibold text-[var(--color-text-muted)]">Cliente</th>
-                    <th className="px-3 py-2.5 text-left text-xs font-semibold text-[var(--color-text-muted)]">Data</th>
+                    <th className="px-3 py-2.5 text-left text-xs font-semibold text-[var(--color-text-muted)]">Datas</th>
                     <th className="px-3 py-2.5 text-left text-xs font-semibold text-[var(--color-text-muted)]">Método</th>
                     <th className="px-3 py-2.5 text-left text-xs font-semibold text-[var(--color-text-muted)]">Contacto</th>
                   </tr>
@@ -275,14 +302,26 @@ export function ClientNotificationsModal({
                   {rows.map((r) => {
                     const key = rowKey(r);
                     const isChecked = selected.has(key);
+                    const fullySent = rowFullySent(r);
+                    const datesLabel = r.services.map((s) => `${s.date} · ${s.time}`).join(", ");
                     return (
                       <tr
                         key={key}
-                        className={`hover:bg-[var(--color-background)] transition-colors ${r.alreadySent || r.method === "none" ? "opacity-60" : ""}`}
-                        onClick={() => { if (!r.alreadySent && r.method !== "none") toggleRow(key); }}
+                        className={`hover:bg-[var(--color-background)] transition-colors ${fullySent || r.method === "none" ? "opacity-60" : ""}`}
+                        onClick={() => { if (r.method === "email" && !fullySent) toggleRow(key); }}
                       >
-                        <td className="px-4 py-2.5 w-10">
-                          {r.alreadySent || r.method === "none" ? (
+                        <td className="px-4 py-2.5 w-10" onClick={(e) => r.method === "whatsapp" && e.stopPropagation()}>
+                          {r.method === "whatsapp" ? (
+                            <a
+                              href={whatsappUrl(r)}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              title="Abrir WhatsApp"
+                              className="inline-flex text-green-600 hover:text-green-700"
+                            >
+                              <MessageCircle className="w-4 h-4" />
+                            </a>
+                          ) : fullySent || r.method === "none" ? (
                             <span className="text-[var(--color-text-muted)]">—</span>
                           ) : (
                             <span className={isChecked ? "text-[var(--color-primary)]" : "text-[var(--color-text-muted)]"}>
@@ -292,28 +331,30 @@ export function ClientNotificationsModal({
                         </td>
                         <td className="px-3 py-2.5">
                           <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-semibold ${
-                            r.alreadySent
+                            fullySent
                               ? "bg-green-100 text-green-700"
                               : r.method === "none"
                               ? "bg-gray-100 text-gray-500"
+                              : r.method === "whatsapp"
+                              ? "bg-green-50 text-green-700"
                               : "bg-amber-100 text-amber-700"
                           }`}>
-                            {r.alreadySent ? "Enviado" : r.method === "none" ? "Sem contacto" : "Pendente"}
+                            {fullySent ? "Enviado" : r.method === "none" ? "Sem contacto" : r.method === "whatsapp" ? "Manual" : "Pendente"}
                           </span>
                         </td>
                         <td className="px-3 py-2.5 font-medium text-[var(--color-text-main)]">{r.clientName}</td>
-                        <td className="px-3 py-2.5 text-[var(--color-text-sub)] whitespace-nowrap">
-                          {r.serviceDate} · {r.serviceTime}
+                        <td className="px-3 py-2.5 text-[var(--color-text-sub)] whitespace-nowrap max-w-[220px] truncate" title={datesLabel}>
+                          {datesLabel}
                         </td>
                         <td className="px-3 py-2.5">
                           <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-semibold ${
-                            r.method === "sms"
+                            r.method === "whatsapp"
                               ? "bg-blue-100 text-blue-700"
                               : r.method === "email"
                               ? "bg-purple-100 text-purple-700"
                               : "bg-gray-100 text-gray-500"
                           }`}>
-                            {r.method === "sms" ? "SMS" : r.method === "email" ? "Email" : "—"}
+                            {r.method === "whatsapp" ? "WhatsApp" : r.method === "email" ? "Email" : "—"}
                           </span>
                         </td>
                         <td className="px-3 py-2.5 text-[var(--color-text-muted)] text-xs font-mono truncate max-w-[150px]">
@@ -330,7 +371,8 @@ export function ClientNotificationsModal({
           {/* Footer */}
           <div className="border-t border-[var(--color-border)] px-6 py-4 shrink-0">
             <p className="text-xs text-[var(--color-text-muted)] mb-3">
-              Só são mostrados clientes com notificações ativas. O envio é registado no histórico de cada cliente.
+              Só são mostrados clientes com notificações ativas. Email é enviado em lote por aqui;
+              WhatsApp abre uma mensagem pronta (ícone verde) para enviares manualmente.
             </p>
             {message && (
               <p className={`text-xs font-medium mb-2 ${message.ok ? "text-[var(--color-primary)]" : "text-red-600"}`}>

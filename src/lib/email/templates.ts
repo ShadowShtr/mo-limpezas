@@ -44,42 +44,56 @@ function layout(content: string): string {
 </html>`;
 }
 
-// ─── Lembrete de serviço ao cliente ──────────────────────────────────────────
+// ─── Lembrete de serviço(s) ao cliente ───────────────────────────────────────
+
+export interface ClientReminderService {
+  date: string;    // "segunda-feira, 9 de junho"
+  time: string;    // "09:00"
+  address: string;
+  value: number | null; // null = sem valor calculável, não mostra a linha
+}
 
 export interface ClientReminderData {
   clientName: string;
-  serviceDate: string;   // "segunda-feira, 9 de junho"
-  serviceTime: string;   // "09:00"
-  address: string;
+  services: ClientReminderService[];
   companyPhone: string;
 }
 
+function fmtEuro(v: number): string {
+  return v.toFixed(2).replace(".", ",") + " €";
+}
+
 export function clientReminderTemplate(d: ClientReminderData) {
-  const subject = `Lembrete — Limpeza amanhã às ${d.serviceTime} | Mó Limpezas`;
+  const n = d.services.length;
+  const subject = n === 1
+    ? `Lembrete — Limpeza ${d.services[0].date} às ${d.services[0].time} | Mó Limpezas`
+    : `Lembrete — ${n} serviços agendados | Mó Limpezas`;
+
+  const rows = d.services.map((s) => `
+    <tr>
+      <td style="padding:16px 20px;border-bottom:1px solid #bbf7d0;">
+        <p style="margin:0 0 8px;font-size:13px;color:#166534;">
+          📅 <strong>${escHtml(s.date)}</strong> &nbsp; 🕐 <strong>${escHtml(s.time)}</strong>
+        </p>
+        <p style="margin:0${s.value != null ? " 0 4px" : ""};font-size:13px;color:#166534;">
+          📍 ${escHtml(s.address)}
+        </p>
+        ${s.value != null ? `<p style="margin:0;font-size:13px;color:#166534;">💶 <strong>${escHtml(fmtEuro(s.value))}</strong></p>` : ""}
+      </td>
+    </tr>
+  `).join("");
 
   const html = layout(`
     <p style="margin:0 0 8px;font-size:16px;font-weight:600;color:#111827;">
       Olá, ${escHtml(d.clientName)}!
     </p>
     <p style="margin:0 0 24px;font-size:14px;color:#6b7280;line-height:1.6;">
-      A <strong style="color:#111827;">Mó Limpezas</strong> recorda-lhe o serviço agendado para amanhã:
+      A <strong style="color:#111827;">Mó Limpezas</strong> recorda-lhe ${n === 1 ? "o serviço agendado" : "os próximos serviços agendados"}:
     </p>
 
     <table width="100%" cellpadding="0" cellspacing="0"
-           style="background:#f0fdf4;border-radius:8px;border:1px solid #bbf7d0;padding:0;margin-bottom:24px;">
-      <tr>
-        <td style="padding:16px 20px;">
-          <p style="margin:0 0 8px;font-size:13px;color:#166534;">
-            📅 <strong>${escHtml(d.serviceDate)}</strong>
-          </p>
-          <p style="margin:0 0 8px;font-size:13px;color:#166534;">
-            🕐 <strong>${escHtml(d.serviceTime)}</strong>
-          </p>
-          <p style="margin:0;font-size:13px;color:#166534;">
-            📍 ${escHtml(d.address)}
-          </p>
-        </td>
-      </tr>
+           style="background:#f0fdf4;border-radius:8px;border:1px solid #bbf7d0;padding:0;margin-bottom:24px;overflow:hidden;">
+      ${rows}
     </table>
 
     <p style="margin:0 0 24px;font-size:14px;color:#6b7280;line-height:1.6;">
@@ -104,6 +118,21 @@ export function clientReminderTemplate(d: ClientReminderData) {
   `);
 
   return { subject, html };
+}
+
+// ─── Lembrete de serviço(s) ao cliente — WhatsApp (texto simples, com emojis) ─
+
+export function clientReminderWhatsAppMessage(d: ClientReminderData): string {
+  const lines = d.services.map((s) => {
+    const valuePart = s.value != null ? `\n💶 ${fmtEuro(s.value)}` : "";
+    return `📅 *${s.date}* às 🕐 *${s.time}*\n📍 ${s.address}${valuePart}`;
+  }).join("\n\n");
+
+  const intro = d.services.length === 1
+    ? "Aqui está o seu próximo serviço agendado pela *Mó Limpezas* 🧹✨:"
+    : "Aqui estão os seus próximos serviços agendados pela *Mó Limpezas* 🧹✨:";
+
+  return `Olá ${d.clientName}! 👋\n\n${intro}\n\n${lines}\n\nSe precisar de reagendar ou tiver alguma dúvida, é só responder por aqui 😊\n\nObrigado pela confiança! 🌿\n📞 ${d.companyPhone}`;
 }
 
 // ─── Convite de colaboradora ──────────────────────────────────────────────────
