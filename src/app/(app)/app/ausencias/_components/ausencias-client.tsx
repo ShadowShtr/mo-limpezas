@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Plus, X, Loader2, Stethoscope, CalendarDays, AlertCircle } from "lucide-react";
 import { createOwnAbsence } from "@/app/actions/vacation";
 import { todayInLisbon } from "@/lib/lisbon-time";
+import { isValidIsoDateString } from "@/lib/utils";
 
 interface AbsenceRow {
   id: string;
@@ -123,11 +124,11 @@ export function AusenciasClient({ absences }: Props) {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-medium text-[var(--color-text-sub)] mb-1.5">Início</label>
-                  <input type="date" value={start} onChange={(e) => setStart(e.target.value)} className={inputCls} required />
+                  <input type="date" value={start} onChange={(e) => { if (isValidIsoDateString(e.target.value)) setStart(e.target.value); }} className={inputCls} required />
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-[var(--color-text-sub)] mb-1.5">Fim</label>
-                  <input type="date" value={end} onChange={(e) => setEnd(e.target.value)} className={inputCls} required />
+                  <input type="date" value={end} onChange={(e) => { if (isValidIsoDateString(e.target.value)) setEnd(e.target.value); }} className={inputCls} required />
                 </div>
               </div>
 

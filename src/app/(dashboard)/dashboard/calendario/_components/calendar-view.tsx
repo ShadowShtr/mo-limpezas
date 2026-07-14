@@ -26,8 +26,10 @@ import { TeamAllocationModal } from "./team-allocation-modal";
 import { MonthDatePicker } from "./month-date-picker";
 import { CalendarListView } from "./calendar-list-view";
 import { ClientNotificationsModal } from "./client-notifications-modal";
+import { BuildingsColumn } from "./buildings-column";
 import { rescheduleService, type ConflictInfo } from "../_actions/reschedule";
-import type { Database } from "@/types/database";
+import type { BuildingCard } from "@/app/actions/building-cards";
+import type { Database, BuildingCardWeekday } from "@/types/database";
 
 // ─── Constantes ───────────────────────────────────────────────────────────────
 
@@ -40,6 +42,8 @@ const SLOT_MIN      = 60 / SLOTS_PER_HOUR; // minutos por slot
 const TOTAL_SLOTS   = TOTAL_HOURS * SLOTS_PER_HOUR;
 const GUTTER_W      = 56;
 const HEADER_H      = 44;
+const BUILDINGS_COL_ID = "__predios__";
+const WEEKDAY_KEYS: BuildingCardWeekday[] = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 
@@ -72,6 +76,7 @@ interface CalendarViewProps {
   companyId: string;
   clients: Client[];
   locations: Loc[];
+  buildingCards: BuildingCard[];
   isDemo?: boolean;
 }
 
@@ -242,7 +247,7 @@ function CurrentTimeLine({ top }: { top: number }) {
 
 export function CalendarView({
   services, teams, weekStartISO, selectedDateISO,
-  companyId, clients, locations, isDemo = false,
+  companyId, clients, locations, buildingCards, isDemo = false,
 }: CalendarViewProps) {
   const router     = useRouter();
   const weekStart  = parseISO(weekStartISO);
@@ -267,6 +272,7 @@ export function CalendarView({
   const [avisosOpen,     setAvisosOpen]     = useState(false);
   const [viewMode,       setViewMode]       = useState<"calendar" | "list">("calendar");
   const [localServices,  setLocalServices]  = useState<ServiceCalendar[]>(services);
+  const [localBuildingCards, setLocalBuildingCards] = useState<BuildingCard[]>(buildingCards);
   const [draggingBlock,  setDraggingBlock]  = useState<{ service: ServiceForBlock; teamId: string } | null>(null);
   const [conflictMsg,    setConflictMsg]    = useState<string | null>(null);
   const [pdfLoading,     setPdfLoading]     = useState(false);
@@ -309,6 +315,7 @@ export function CalendarView({
   }, [selectedDateISO]);
 
   useEffect(() => { setLocalServices(services); }, [services]);
+  useEffect(() => { setLocalBuildingCards(buildingCards); }, [buildingCards]);
   /* eslint-enable react-hooks/exhaustive-deps, react-hooks/set-state-in-effect */
 
   useEffect(() => {
@@ -369,11 +376,22 @@ export function CalendarView({
     return map;
   }, [dayServices, teams]);
 
-  // Todas as colunas (equipas + "sem equipa" se houver)
+  // Dia da semana da data selecionada (para a coluna Prédios, recorrente).
+  const selectedWeekday = WEEKDAY_KEYS[selectedDate.getDay()];
+
+  const dayBuildingCards = useMemo(
+    () => localBuildingCards
+      .filter((c) => c.weekday === selectedWeekday)
+      .sort((a, b) => a.sort_order - b.sort_order),
+    [localBuildingCards, selectedWeekday],
+  );
+
+  // Todas as colunas (equipas + "sem equipa" se houver + Prédios, sempre por último)
   const columns = useMemo<Array<Team & { key: string }>>(() => {
     const base = teams.map((t) => ({ ...t, key: t.id }));
     if (byTeam["__sem__"]?.length > 0)
       base.push({ id: "__sem__", name: "Sem equipa", color: "#94A3B8", key: "__sem__" });
+    base.push({ id: BUILDINGS_COL_ID, name: "Prédios", color: "#64748B", key: BUILDINGS_COL_ID });
     return base;
   }, [teams, byTeam]);
 
@@ -407,9 +425,11 @@ export function CalendarView({
     setPdfLoading(true);
     try {
       const { generateDayPdf } = await import("./day-pdf");
-      const routes: TeamRoute[] = visibleColumns.map((col) => ({
-        teamId: col.id, teamName: col.name, teamColor: col.color, services: byTeam[col.id] ?? [],
-      }));
+      const routes: TeamRoute[] = visibleColumns
+        .filter((col) => col.key !== BUILDINGS_COL_ID)
+        .map((col) => ({
+          teamId: col.id, teamName: col.name, teamColor: col.color, services: byTeam[col.id] ?? [],
+        }));
       await generateDayPdf(selectedDate, routes);
     } finally { setPdfLoading(false); }
   }
@@ -730,7 +750,7 @@ export function CalendarView({
                         <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: col.color }} />
                         <span className="text-xs font-semibold text-[var(--color-text-main)] truncate">{col.name}</span>
                         <span className="ml-auto text-[10px] font-semibold text-[var(--color-text-sub)] tabular-nums bg-[var(--color-background)] rounded-full px-1.5 py-0.5 shrink-0">
-                          {byTeam[col.id]?.length ?? 0}
+                          {col.key === BUILDINGS_COL_ID ? dayBuildingCards.length : byTeam[col.id]?.length ?? 0}
                         </span>
                       </div>
                     </div>
@@ -778,6 +798,17 @@ export function CalendarView({
 
                   {/* Colunas das equipas visíveis */}
                   {visibleColumns.length > 0 ? visibleColumns.map((col) => {
+                    if (col.key === BUILDINGS_COL_ID) {
+                      return (
+                        <BuildingsColumn
+                          key={col.key}
+                          weekday={selectedWeekday}
+                          cards={dayBuildingCards}
+                          teams={teams}
+                          onChanged={handleChanged}
+                        />
+                      );
+                    }
                     const colServices = byTeam[col.id] ?? [];
                     const laneMap = computeLanes(colServices);
                     return (

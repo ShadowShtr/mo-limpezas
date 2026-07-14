@@ -1,8 +1,51 @@
 import { clsx, type ClassValue } from "clsx"
 import { twMerge } from "tailwind-merge"
+import { format as dateFnsFormat, parseISO } from "date-fns"
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
+}
+
+/**
+ * Formata uma data (string ISO ou Date) com date-fns sem nunca lançar.
+ * date-fns `format()` lança RangeError para uma Invalid Date (ex.: um
+ * `starts_on` de contrato corrompido) — isso rebenta a página inteira em vez
+ * de mostrar só um "—". Usar em qualquer sítio onde a data venha de dados
+ * gravados por um utilizador (contratos, ausências), não de timestamps
+ * sempre gerados pelo servidor.
+ */
+/**
+ * Valida uma data "YYYY-MM-DD" (formato de <input type="date"> e das colunas
+ * DATE da BD): 4 dígitos de ano dentro de um intervalo plausível, mês/dia
+ * reais (rejeita "2026-02-30") e sem excesso de dígitos (rejeita
+ * "72026-01-01" — o bug de um contrato gravado com ano corrompido).
+ */
+export function isValidIsoDateString(
+  value: string,
+  { minYear = 1900, maxYear = 2100 }: { minYear?: number; maxYear?: number } = {},
+): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const year = Number(value.slice(0, 4));
+  if (year < minYear || year > maxYear) return false;
+  const date = parseISO(value);
+  if (Number.isNaN(date.getTime())) return false;
+  return dateFnsFormat(date, "yyyy-MM-dd") === value;
+}
+
+export function safeFormat(
+  value: string | Date | null | undefined,
+  pattern: string,
+  options?: Parameters<typeof dateFnsFormat>[2],
+  fallback = "—",
+): string {
+  if (!value) return fallback;
+  try {
+    const date = typeof value === "string" ? parseISO(value) : value;
+    if (Number.isNaN(date.getTime())) return fallback;
+    return dateFnsFormat(date, pattern, options);
+  } catch {
+    return fallback;
+  }
 }
 
 export function formatDistanceToNow(dateStr: string): string {

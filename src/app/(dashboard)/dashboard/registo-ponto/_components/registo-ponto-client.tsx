@@ -11,6 +11,7 @@ import {
   timesheetWorkedMinutes, hasOpenTimesheet, balanceMinutes, formatHM,
   type TimesheetLike,
 } from "@/lib/ponto-calc";
+import { isValidIsoDateString } from "@/lib/utils";
 
 export interface PontoRow {
   collaboratorId: string;
@@ -133,11 +134,11 @@ export function RegistoPontoClient({ rows, collaborators, companyId, from, to, c
         <div className="flex flex-wrap items-end gap-3">
           <div>
             <label className="block text-xs font-medium text-[var(--color-text-muted)] uppercase tracking-wide mb-1">De</label>
-            <input type="date" value={fFrom} onChange={(e) => setFFrom(e.target.value)} className={INPUT_CLS} />
+            <input type="date" value={fFrom} onChange={(e) => { if (isValidIsoDateString(e.target.value)) setFFrom(e.target.value); }} className={INPUT_CLS} />
           </div>
           <div>
             <label className="block text-xs font-medium text-[var(--color-text-muted)] uppercase tracking-wide mb-1">Até</label>
-            <input type="date" value={fTo} onChange={(e) => setFTo(e.target.value)} className={INPUT_CLS} />
+            <input type="date" value={fTo} onChange={(e) => { if (isValidIsoDateString(e.target.value)) setFTo(e.target.value); }} className={INPUT_CLS} />
           </div>
           <div className="min-w-[200px]">
             <label className="block text-xs font-medium text-[var(--color-text-muted)] uppercase tracking-wide mb-1">Colaboradores</label>

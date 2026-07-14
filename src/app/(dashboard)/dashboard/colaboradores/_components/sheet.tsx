@@ -6,6 +6,7 @@ import { createPortal } from "react-dom";
 import { X, Loader2, Plus, Trash2 } from "lucide-react";
 import { createColaborador, updateColaborador } from "@/app/actions/colaboradores";
 import { inviteCollaborator } from "@/app/actions/auth";
+import { isValidIsoDateString } from "@/lib/utils";
 
 type Colaborador = {
   id: string;
@@ -212,12 +213,12 @@ export function ColaboradorSheet({ trigger, companyId, colaborador }: Props) {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-sm font-medium text-[var(--color-text-main)] mb-1.5">Início contrato</label>
-                  <input type="date" value={contractStart} onChange={(e) => setContractStart(e.target.value)}
+                  <input type="date" value={contractStart} onChange={(e) => { if (!e.target.value || isValidIsoDateString(e.target.value)) setContractStart(e.target.value); }}
                     className={inputCls} />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-[var(--color-text-main)] mb-1.5">Fim contrato</label>
-                  <input type="date" value={contractEnd} onChange={(e) => setContractEnd(e.target.value)}
+                  <input type="date" value={contractEnd} onChange={(e) => { if (!e.target.value || isValidIsoDateString(e.target.value)) setContractEnd(e.target.value); }}
                     className={inputCls} />
                 </div>
               </div>

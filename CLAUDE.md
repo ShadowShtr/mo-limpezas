@@ -47,6 +47,77 @@ Lê este ficheiro no início de CADA sessão antes de fazer qualquer coisa.
 
 ## ⚡ PRÓXIMA TASK A EXECUTAR
 
+## 📍 PONTO DE PARAGEM — 2026-07-14 (coluna Prédios + 2 bugs críticos de produção)
+
+**Feature nova: coluna "Prédios" no calendário (✅ FEITO + EM PRODUÇÃO)**
+- Pedido do dono: coluna independente no calendário, sem horários, sempre a
+  última, com cards de prédios (nome+morada em texto livre, sem depender de
+  `clients`/`locations`) recorrentes por dia da semana, cada um com uma
+  equipa (só etiqueta — nunca gera `services`). Ordem global por dia
+  (`sort_order`) preserva a ordem relativa por equipa quando filtrada.
+- **Migration 051** (`building_cards`) — RLS: leitura company-wide, escrita
+  admin/gestor. **APLICADA em produção (SQL Editor, 2026-07-14)**.
+- `src/app/actions/building-cards.ts` (CRUD + reorder), `buildings-column.tsx`
+  (coluna no calendário, drag reorder com `@dnd-kit/sortable`, painel lateral
+  de detalhe — igual ao padrão dos serviços), `predios-table.tsx` +
+  `clientes-tabs.tsx` (aba "Prédios" em Clientes, mesma tabela), secção
+  "Prédios de hoje" em `/app` (app móvel, filtrada por equipa+dia da semana).
+- **Importados 146 prédios reais** dos 3 PDFs de rota (Equipa 11-Alenquer,
+  Equipa 12-Carregado, Equipa 13-Alverca) via `scripts/import-predios.mjs`
+  (idempotente, correr com `--apply`). Valores de avença ficaram por
+  preencher de propósito — a folha de valores tinha layout que não deu para
+  casar com 100% de confiança, não quis adivinhar em produção.
+- Faturação real (contratos/avença por prédio) ficou **fora de escopo** a
+  pedido do dono — se pedir depois, já validado que um contrato com
+  `schedule_days: []` fatura via `generateInvoices` sem nunca gerar
+  `services` nas colunas de horário das equipas.
+
+**🔴 BUG CRÍTICO — avença mensal duplicada nas Cobranças (✅ CORRIGIDO)**
+- Causa: `generateInvoices` criava uma linha de fatura por CADA contrato
+  `fixed_monthly=true` ativo, sem verificar se dois contratos apontavam para
+  o mesmo `location_id` — duplicava a linha (e o total) quando havia dois
+  contratos ativos sobrepostos para o mesmo local.
+- Fix: `src/lib/contract-overlap.ts` (`hasOverlappingMonthlyContract`) +
+  `src/lib/invoice-duplicates.ts` (`findDuplicateMonthlyContractsByLocation`).
+  `createContrato`/`updateContrato` agora bloqueiam gravar uma avença mensal
+  ativa sobreposta a outra do mesmo local. `generateInvoices` agora aborta
+  (sem criar nenhuma fatura no lote) e devolve erro nomeando cliente/local se
+  detetar duplicidade. Aviso proativo novo em `/dashboard/pendencias`
+  ("Avenças mensais duplicadas") — avisa antes de sequer tentar gerar.
+- **Dados de produção**: encontradas e apagadas 2 faturas rascunho já
+  duplicadas (Parque Norte F2026/008 e Zeglo-Predio Pos obra F2026/012).
+  Confirmado por varrimento completo: zero contratos duplicados e zero
+  faturas com linhas duplicadas em toda a base, em qualquer período.
+  `scripts/diagnose-duplicate-monthly-contracts.sql` fica para diagnóstico
+  futuro.
+
+**🔴 BUG CRÍTICO — crash "Esta secção não carregou" (✅ CORRIGIDO)**
+- Causa raiz: um `contract.starts_on` corrompido (`"72026-01-01"` — ano com
+  dígito a mais, provável quirk do input nativo `<input type="date">` a meio
+  de uma edição) fazia `date-fns` `format(parseISO(...))` lançar
+  `RangeError: Invalid time value` sem apanhar — rebentava a página ao abrir
+  a ficha do cliente (caso real: Paulo Parreira). Também travava a
+  regeneração de ocorrências do contrato (`getOccurrences` devolvia `[]`
+  para uma data de início ~70000 anos no futuro).
+- Fix: `safeFormat()`/`isValidIsoDateString()` novos em `src/lib/utils.ts`.
+  `interventions-section.tsx` (ponto de crash confirmado) usa `safeFormat`.
+  `createContrato`/`updateContrato` validam `starts_on`/`ends_on` antes de
+  gravar. **Todos os 16 inputs `type="date"` da aplicação** (contratos,
+  ausências, colaboradores, tarefas, e principalmente a parte financeira —
+  fluxo de caixa, pagamentos, contas, cobrança diária) agora ignoram valores
+  malformados no `onChange`, para a mesma corrupção nunca mais nascer em
+  lado nenhum. `error.tsx` do dashboard passou a logar a rota no erro.
+- **Dados de produção**: encontrados e corrigidos 2 contratos com
+  `starts_on` corrompido (Paulo Parreira e Liliana Ribeiro). Varrimento
+  completo confirmou zero datas corrompidas em `contracts`, `absences`,
+  `vacation_requests`, `cash_flow_entries`, `fixed_variable_payments`,
+  `invoices`, `daily_clocks`, `vehicle_allocations`.
+
+Verificação: 397 testes a passar (16 novos: `contract-overlap.test.ts`,
+`invoice-duplicates.test.ts`, + `utils.test.ts` para `safeFormat`/
+`isValidIsoDateString`) · `npm run lint` 0 erros · `npm run build` limpo ·
+tudo já em produção (`vercel --prod --force`).
+
 **✅ 2 bugs novos encontrados E CORRIGIDOS em runtime real (2026-07-06, ver
 AUDITORIA_COMPLETA.txt PARTE 12/12.7) — falta fazer commit + deploy:**
 1. **Folha de Pagamento rebentava a página** sempre que havia um perfil

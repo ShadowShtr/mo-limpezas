@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { formatDistanceToNow, formatTime, formatDate, cn } from "@/lib/utils";
+import { formatDistanceToNow, formatTime, formatDate, cn, safeFormat, isValidIsoDateString } from "@/lib/utils";
 
 afterEach(() => {
   vi.useRealTimers();
@@ -130,5 +130,71 @@ describe("formatDate", () => {
   it("same date gives same result on repeated calls (deterministic)", () => {
     const d = "2024-06-15T00:00:00Z";
     expect(formatDate(d)).toBe(formatDate(d));
+  });
+});
+
+// ─── safeFormat (regressão: crash "Esta secção não carregou" no cliente Paulo
+// Parreira, causado por date-fns format() a lançar RangeError com uma
+// Invalid Date vinda de um contract.starts_on corrompido) ────────────────────
+
+describe("safeFormat", () => {
+  it("formata uma data válida normalmente", () => {
+    expect(safeFormat("2026-07-10T00:00:00Z", "yyyy-MM-dd")).toBe("2026-07-10");
+  });
+
+  it("devolve o fallback para uma string de data inválida, sem lançar", () => {
+    expect(() => safeFormat("72026-01-01", "d MMM yyyy")).not.toThrow();
+    expect(safeFormat("72026-01-01", "d MMM yyyy")).toBe("—");
+  });
+
+  it("devolve o fallback para null/undefined/vazio", () => {
+    expect(safeFormat(null, "yyyy-MM-dd")).toBe("—");
+    expect(safeFormat(undefined, "yyyy-MM-dd")).toBe("—");
+    expect(safeFormat("", "yyyy-MM-dd")).toBe("—");
+  });
+
+  it("aceita um fallback customizado", () => {
+    expect(safeFormat("lixo", "yyyy-MM-dd", undefined, "sem data")).toBe("sem data");
+  });
+
+  it("aceita um objeto Date diretamente", () => {
+    expect(safeFormat(new Date("2026-01-01T00:00:00Z"), "yyyy-MM-dd")).toBe("2026-01-01");
+  });
+
+  it("devolve o fallback para um objeto Date inválido", () => {
+    expect(safeFormat(new Date("not a date"), "yyyy-MM-dd")).toBe("—");
+  });
+});
+
+// ─── isValidIsoDateString (bloqueia a gravação de starts_on/ends_on
+// corrompidos em createContrato/updateContrato) ───────────────────────────────
+
+describe("isValidIsoDateString", () => {
+  it("aceita uma data YYYY-MM-DD normal", () => {
+    expect(isValidIsoDateString("2026-07-10")).toBe(true);
+  });
+
+  it("rejeita um ano com dígitos a mais (o bug real: 72026-01-01)", () => {
+    expect(isValidIsoDateString("72026-01-01")).toBe(false);
+  });
+
+  it("rejeita mês/dia inexistentes (round-trip falha)", () => {
+    expect(isValidIsoDateString("2026-02-30")).toBe(false);
+    expect(isValidIsoDateString("2026-13-01")).toBe(false);
+  });
+
+  it("rejeita formatos que não sejam YYYY-MM-DD", () => {
+    expect(isValidIsoDateString("10/07/2026")).toBe(false);
+    expect(isValidIsoDateString("2026-7-10")).toBe(false);
+    expect(isValidIsoDateString("")).toBe(false);
+  });
+
+  it("rejeita anos fora do intervalo plausível por omissão", () => {
+    expect(isValidIsoDateString("1899-01-01")).toBe(false);
+    expect(isValidIsoDateString("2101-01-01")).toBe(false);
+  });
+
+  it("respeita minYear/maxYear customizados", () => {
+    expect(isValidIsoDateString("1950-01-01", { minYear: 1900, maxYear: 2100 })).toBe(true);
   });
 });

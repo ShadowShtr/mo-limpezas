@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { MapPin, Clock, ChevronRight, Sun, Moon, Coffee, Users, AlertTriangle } from "lucide-react";
+import { MapPin, Clock, ChevronRight, Sun, Moon, Coffee, Users, AlertTriangle, Building2 } from "lucide-react";
 import { formatTime, formatDate } from "@/lib/utils";
 import { StatusBadge } from "./_components/status-badge";
 import { getCurrentProfile } from "@/lib/auth/current-user";
@@ -82,6 +82,21 @@ export default async function AppHomePage() {
       todayTeam = { name: teamRow.name, vehicle: v ? `${v.model} · ${v.plate}` : null };
     }
   }
+
+  // ── Prédios de hoje (coluna independente do calendário, sem horário) ───────
+  const WEEKDAY_KEYS = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"] as const;
+  const todayWeekday = WEEKDAY_KEYS[new Date(`${todayDateKey}T12:00:00`).getDay()];
+
+  const { data: buildingCards } = effTeamId
+    ? await supabase
+        .from("building_cards")
+        .select("id, name, address, notes")
+        .eq("team_id", effTeamId)
+        .eq("weekday", todayWeekday)
+        .order("sort_order")
+    : { data: [] };
+
+  const todayBuildings = buildingCards ?? [];
 
   const hour = today.getHours();
   const greeting =
@@ -228,6 +243,36 @@ export default async function AppHomePage() {
           </div>
         )}
       </div>
+
+      {/* Prédios de hoje — sem horário, ordem fixa definida pela gestora */}
+      {todayBuildings.length > 0 && (
+        <div>
+          <h2 className="text-xs font-semibold text-[var(--color-text-muted)] uppercase tracking-wide mb-3">
+            Prédios de hoje
+          </h2>
+          <div className="flex flex-col gap-2">
+            {todayBuildings.map((b) => (
+              <div
+                key={b.id}
+                className="bg-white rounded-2xl border border-[var(--color-border)] p-3 flex gap-3 items-start"
+              >
+                <div className="w-8 h-8 rounded-lg bg-[var(--color-primary-light)] flex items-center justify-center shrink-0 mt-0.5">
+                  <Building2 className="w-4 h-4 text-[var(--color-primary)]" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-[var(--color-text-main)] truncate">{b.name}</p>
+                  {b.address && (
+                    <p className="text-xs text-[var(--color-text-sub)] mt-0.5 truncate">{b.address}</p>
+                  )}
+                  {b.notes && (
+                    <p className="text-[11px] text-[var(--color-text-muted)] mt-1 truncate">{b.notes}</p>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

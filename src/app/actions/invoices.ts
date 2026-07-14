@@ -4,6 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { requireProfile } from "@/lib/auth-guard";
 import { getMissingCashFlowReferenceIds, isValidCashFlowAmount } from "@/lib/cash-flow-integrity";
+import { findDuplicateMonthlyContractsByLocation } from "@/lib/invoice-duplicates";
 import { revalidatePath } from "next/cache";
 import { todayInLisbon, addDaysToDateString, toLisbonTimestamp } from "@/lib/lisbon-time";
 
@@ -158,6 +159,28 @@ export async function generateInvoices(
   const clientMap = Object.fromEntries(
     (clients ?? []).map((c) => [c.id, c]),
   );
+
+  // Detetar contratos de avença mensal duplicados: mais de um contrato ativo
+  // fixed_monthly para o mesmo local no período gera duas linhas idênticas na
+  // mesma fatura (valor duplicado). Em vez de escolher um e ignorar o outro
+  // silenciosamente, bloqueia toda a geração — os dados têm de ser corrigidos
+  // primeiro (ver diagnóstico em scripts/diagnose-duplicate-monthly-contracts.sql).
+  const duplicateGroups = findDuplicateMonthlyContractsByLocation(activeMonthlyContracts);
+
+  if (duplicateGroups.length > 0) {
+    const details = duplicateGroups.map(({ location_id }) => {
+      const loc = locationMap[location_id];
+      const client = loc?.client_id ? clientMap[loc.client_id] : null;
+      return `o local "${loc?.name ?? location_id}" do cliente "${client?.name ?? "desconhecido"}"`;
+    });
+    const list = details.length === 1
+      ? details[0]
+      : details.slice(0, -1).join(", ") + " e " + details[details.length - 1];
+    return {
+      ok: false,
+      error: `Existem contratos de avença mensal duplicados para ${list}. Corrija os contratos antes de gerar cobranças.`,
+    };
+  }
 
   // Verificar faturas já existentes para este período (não duplicar)
   const { data: existing } = await admin

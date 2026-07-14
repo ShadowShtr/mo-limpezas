@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import { usePathname } from "next/navigation";
 import { RefreshCw } from "lucide-react";
 
 // Barreira de erro do painel de gestão. Se uma página falhar, mostra um aviso
@@ -12,9 +13,13 @@ export default function DashboardError({
   error: Error & { digest?: string };
   reset: () => void;
 }) {
+  const pathname = usePathname();
+
   useEffect(() => {
-    console.error("[dashboard] erro de página:", error);
-  }, [error]);
+    // Rota + digest do erro ajudam a localizar a causa sem expor dados
+    // sensíveis (nomes de cliente, valores, etc. nunca entram neste log).
+    console.error(`[dashboard] erro de página em ${pathname} (digest: ${error.digest ?? "—"}):`, error);
+  }, [error, pathname]);
 
   return (
     <div className="min-h-[60vh] flex items-center justify-center p-6">

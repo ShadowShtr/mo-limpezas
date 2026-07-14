@@ -1,6 +1,8 @@
 "use server";
 
 import { requireProfile } from "@/lib/auth-guard";
+import { todayInLisbon } from "@/lib/lisbon-time";
+import { findDuplicateMonthlyContractsByLocation } from "@/lib/invoice-duplicates";
 
 // TASK 13 — Painel de pendências da gestora (exception-driven).
 // Agrega só o que saiu do normal: pontos manuais, fora do raio GPS,
@@ -21,6 +23,7 @@ export interface PendenciasResult {
   startedNoClockin: PendenciaItem[];
   photosPending: PendenciaItem[];
   photosFailed: PendenciaItem[];
+  duplicateMonthlyContracts: PendenciaItem[];
   totals: {
     manualClockins: number;
     gpsOutOfRange: number;
@@ -28,6 +31,7 @@ export interface PendenciasResult {
     startedNoClockin: number;
     photosPending: number;
     photosFailed: number;
+    duplicateMonthlyContracts: number;
     total: number;
   };
 }
@@ -204,6 +208,56 @@ export async function getPendencias(): Promise<
       };
     });
 
+  // 7. Contratos de avença mensal duplicados (mais de um contrato ativo
+  // fixed_monthly para o mesmo local) — a mesma causa da fatura duplicada do
+  // "Parque Norte". generateInvoices já bloqueia a geração quando isto
+  // acontece; este item avisa a gestora ANTES de sequer tentar gerar
+  // cobranças, para poder corrigir com calma.
+  const today = todayInLisbon();
+  const { data: activeMonthly } = await admin
+    .from("contracts")
+    .select("id, location_id, fixed_price")
+    .eq("company_id", companyId)
+    .eq("status", "ativo")
+    .eq("fixed_monthly", true)
+    .gt("fixed_price", 0)
+    .lte("starts_on", today)
+    .or(`ends_on.is.null,ends_on.gte.${today}`);
+
+  const duplicateGroups = findDuplicateMonthlyContractsByLocation(activeMonthly ?? []);
+  let duplicateMonthlyContracts: PendenciaItem[] = [];
+  if (duplicateGroups.length > 0) {
+    const locIds = duplicateGroups.map((g) => g.location_id);
+    const { data: dupLocations } = await admin
+      .from("locations")
+      .select("id, name, client_id")
+      .in("id", locIds);
+    const dupClientIds = [...new Set((dupLocations ?? []).map((l) => l.client_id).filter(Boolean))];
+    const { data: dupClients } = dupClientIds.length
+      ? await admin.from("clients").select("id, name").in("id", dupClientIds)
+      : { data: [] as { id: string; name: string }[] };
+    const dupLocMap = new Map((dupLocations ?? []).map((l) => [l.id, l]));
+    const dupClientMap = new Map((dupClients ?? []).map((c) => [c.id, c.name]));
+    const priceByContract = new Map((activeMonthly ?? []).map((c) => [c.id, c.fixed_price]));
+
+    duplicateMonthlyContracts = duplicateGroups.map((g) => {
+      const loc = dupLocMap.get(g.location_id);
+      const clientName = loc?.client_id ? dupClientMap.get(loc.client_id) : null;
+      const values = g.contract_ids
+        .map((id) => priceByContract.get(id))
+        .filter((v): v is number => v != null)
+        .map((v) => `${v.toFixed(2)}€`)
+        .join(", ");
+      return {
+        id: g.location_id,
+        service_id: null,
+        title: `${clientName ?? "Cliente"} — ${loc?.name ?? "Local"}`,
+        subtitle: `${g.contract_ids.length} contratos de avença mensal ativos: ${values}`,
+        at: null,
+      };
+    });
+  }
+
   const totals = {
     manualClockins: manualClockins.length,
     gpsOutOfRange: gpsOutOfRange.length,
@@ -211,18 +265,23 @@ export async function getPendencias(): Promise<
     startedNoClockin: startedNoClockin.length,
     photosPending: photosPending.length,
     photosFailed: photosFailed.length,
+    duplicateMonthlyContracts: duplicateMonthlyContracts.length,
     total:
       manualClockins.length +
       gpsOutOfRange.length +
       noCheckout.length +
       startedNoClockin.length +
       photosPending.length +
-      photosFailed.length,
+      photosFailed.length +
+      duplicateMonthlyContracts.length,
   };
 
   return {
     ok: true,
-    data: { manualClockins, gpsOutOfRange, noCheckout, startedNoClockin, photosPending, photosFailed, totals },
+    data: {
+      manualClockins, gpsOutOfRange, noCheckout, startedNoClockin,
+      photosPending, photosFailed, duplicateMonthlyContracts, totals,
+    },
   };
 }
 

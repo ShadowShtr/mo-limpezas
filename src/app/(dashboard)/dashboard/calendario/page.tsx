@@ -6,6 +6,7 @@ import { Header } from "@/components/layout/header";
 import { CalendarView } from "./_components/calendar-view";
 import type { ServiceCalendar } from "./_components/calendar-view";
 import { getDemoServices, DEMO_TEAMS } from "./_demo/mock-data";
+import { getBuildingCards } from "@/app/actions/building-cards";
 import type { Database } from "@/types/database";
 
 type ServiceFull = Database["public"]["Views"]["services_full"]["Row"];
@@ -43,6 +44,7 @@ export default async function CalendarioPage({
     { data: teams },
     { data: clients },
     { data: locations },
+    buildingCards,
   ] = await Promise.all([
     // Página só de gestores: lê via `admin` para garantir que TODOS os serviços
     // registados aparecem. A view services_full é security_invoker e o JOIN com
@@ -85,6 +87,7 @@ export default async function CalendarioPage({
       .eq("company_id", companyId)
       .eq("active", true)
       .order("name"),
+    getBuildingCards().catch(() => []),
   ]);
 
   // Modo de demonstração: usar dados de exemplo quando não há equipas configuradas
@@ -156,6 +159,7 @@ export default async function CalendarioPage({
         companyId={companyId}
         clients={clients ?? []}
         locations={locations ?? []}
+        buildingCards={buildingCards}
         isDemo={isDemo}
       />
     </div>

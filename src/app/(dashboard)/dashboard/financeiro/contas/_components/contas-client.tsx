@@ -13,6 +13,7 @@ import {
 } from "@/app/actions/cash-flow";
 import { usePagination, Pagination } from "@/components/ui/pagination";
 import { todayInLisbon } from "@/lib/lisbon-time";
+import { isValidIsoDateString } from "@/lib/utils";
 
 function fmtEur(v: number) {
   return v.toLocaleString("pt-PT", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " €";
@@ -430,7 +431,7 @@ export function ContasClient({ toReceive, toPay, expenses: initialExpenses, comp
                   <input
                     type="date"
                     value={date}
-                    onChange={(e) => setDate(e.target.value)}
+                    onChange={(e) => { if (isValidIsoDateString(e.target.value)) setDate(e.target.value); }}
                     className={inputCls}
                   />
                 </div>

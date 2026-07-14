@@ -13,6 +13,7 @@ import {
   type TaskInput,
   type TaskPriority,
 } from "@/app/actions/management-tasks";
+import { isValidIsoDateString } from "@/lib/utils";
 
 // ── Color palette ──────────────────────────────────────────────────────────────
 const COLOR_DOT: Record<string, string> = {
@@ -552,7 +553,7 @@ export function TasksClient({ initialTasks, initialColumns, companyId, members }
               </div>
               <div>
                 <label className="block text-xs font-medium text-[var(--color-text-sub)] mb-1">Data limite</label>
-                <input type="date" value={createDue} onChange={(e) => setCreateDue(e.target.value)}
+                <input type="date" value={createDue} onChange={(e) => { if (!e.target.value || isValidIsoDateString(e.target.value)) setCreateDue(e.target.value); }}
                   className="w-full px-3 py-2 border border-[var(--color-border)] rounded-lg text-sm outline-none focus:border-[var(--color-primary)]"
                 />
               </div>
@@ -640,7 +641,7 @@ export function TasksClient({ initialTasks, initialColumns, companyId, members }
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-[var(--color-text-sub)] mb-1">Data limite</label>
-                  <input type="date" value={editDue} onChange={(e) => setEditDue(e.target.value)}
+                  <input type="date" value={editDue} onChange={(e) => { if (!e.target.value || isValidIsoDateString(e.target.value)) setEditDue(e.target.value); }}
                     className="w-full px-3 py-2 border border-[var(--color-border)] rounded-lg text-sm outline-none focus:border-[var(--color-primary)]" />
                 </div>
                 {members.length > 0 && (

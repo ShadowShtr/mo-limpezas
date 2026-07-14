@@ -10,6 +10,7 @@ import { createClient } from "@/lib/supabase/client";
 import type { ConflictInfo } from "../_actions/reschedule";
 import { createClienteComLocal } from "@/app/actions/clientes";
 import { createContrato } from "@/app/actions/contratos";
+import { safeFormat, isValidIsoDateString } from "@/lib/utils";
 import type { ScheduleDay } from "@/types/database";
 import {
   CLEANING_TYPES,
@@ -837,8 +838,8 @@ export function ServiceCreateSheet({
             <Field label="Data *">
               <input
                 type="date"
-                value={format(serviceDate, "yyyy-MM-dd")}
-                onChange={(e) => { if (e.target.value) setServiceDate(parseISO(e.target.value)); }}
+                value={safeFormat(serviceDate, "yyyy-MM-dd")}
+                onChange={(e) => { if (isValidIsoDateString(e.target.value)) setServiceDate(parseISO(e.target.value)); }}
                 className={INPUT_CLS}
                 required
               />

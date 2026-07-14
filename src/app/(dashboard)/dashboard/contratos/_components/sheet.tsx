@@ -6,6 +6,7 @@ import { createPortal } from "react-dom";
 import { X, Loader2, Check, Users, ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
 import { createContrato, updateContrato } from "@/app/actions/contratos";
 import { todayInLisbon } from "@/lib/lisbon-time";
+import { isValidIsoDateString } from "@/lib/utils";
 import type { ScheduleDay } from "@/types/database";
 import type { ContratosTableRow } from "../page";
 import {
@@ -725,7 +726,10 @@ export function ContratoSheet({
                   <input
                     type="date"
                     value={startsOn}
-                    onChange={(e) => setStartsOn(e.target.value)}
+                    // Inputs de data nativos podem, ao editar o ano em curso de digitação,
+                    // reportar momentaneamente um valor com dígitos a mais (ex.: "72026-01-01").
+                    // Ignorar esses valores mantém o último válido em vez de gravar lixo.
+                    onChange={(e) => { if (isValidIsoDateString(e.target.value)) setStartsOn(e.target.value); }}
                     className={INPUT_CLS}
                   />
                 </Field>
@@ -734,7 +738,7 @@ export function ContratoSheet({
                     type="date"
                     value={endsOn}
                     min={startsOn}
-                    onChange={(e) => setEndsOn(e.target.value)}
+                    onChange={(e) => { if (!e.target.value || isValidIsoDateString(e.target.value)) setEndsOn(e.target.value); }}
                     className={INPUT_CLS}
                   />
                 </Field>

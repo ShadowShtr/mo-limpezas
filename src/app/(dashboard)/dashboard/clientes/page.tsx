@@ -1,10 +1,9 @@
 ﻿import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Header } from "@/components/layout/header";
-import { ClientesTable } from "./_components/table";
-import { ClienteSheet } from "./_components/sheet";
-import { Plus } from "lucide-react";
+import { ClientesTabs } from "./_components/clientes-tabs";
 import { CLIENTE_SHEET_SELECT } from "@/lib/cliente-sheet-fields";
+import { getBuildingCards } from "@/app/actions/building-cards";
 
 export default async function ClientesPage() {
   const supabase = await createClient();
@@ -18,33 +17,35 @@ export default async function ClientesPage() {
     .eq("id", user!.id)
     .single();
 
-  const { data: clientes } = await supabase
-    .from("clients")
-    .select(CLIENTE_SHEET_SELECT)
-    .eq("company_id", me?.company_id ?? "")
-    .order("name");
+  const companyId = me?.company_id ?? "";
+
+  const [{ data: clientes }, { data: teams }, buildingCards] = await Promise.all([
+    supabase
+      .from("clients")
+      .select(CLIENTE_SHEET_SELECT)
+      .eq("company_id", companyId)
+      .order("name"),
+    supabase
+      .from("teams")
+      .select("id, name, color")
+      .eq("company_id", companyId)
+      .eq("active", true)
+      .order("name"),
+    getBuildingCards().catch(() => []),
+  ]);
 
   return (
     <div>
       <Header
         title="Clientes"
         subtitle={`${clientes?.length ?? 0} clientes`}
-        actions={
-          <ClienteSheet
-            companyId={me?.company_id ?? ""}
-            trigger={
-              <button className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[var(--color-primary)] text-white text-sm font-medium hover:bg-[var(--color-primary-hover)] transition-colors">
-                <Plus className="w-4 h-4" />
-                Novo cliente
-              </button>
-            }
-          />
-        }
       />
       <div className="px-4 py-5 sm:p-6 lg:px-8 mx-auto max-w-[1400px]">
-        <ClientesTable
+        <ClientesTabs
           clientes={(clientes ?? []).map((c) => ({ ...c, vat_exempt: (c as { vat_exempt?: boolean }).vat_exempt ?? false }))}
-          companyId={me?.company_id ?? ""}
+          buildingCards={buildingCards}
+          teams={teams ?? []}
+          companyId={companyId}
         />
       </div>
     </div>

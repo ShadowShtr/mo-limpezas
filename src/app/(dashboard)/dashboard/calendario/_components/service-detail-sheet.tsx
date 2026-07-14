@@ -17,6 +17,7 @@ import { CANCEL_TYPE_LABELS, type CancelType } from "@/lib/cancel-types";
 import { sendBulkClientNotifications } from "@/app/actions/email";
 import { updateLocationAccess } from "@/app/actions/locations";
 import { ServicePhotosGallery } from "./service-photos-gallery";
+import { isValidIsoDateString } from "@/lib/utils";
 import {
   CLEANING_TYPE_LABELS,
   PAYMENT_STATUS_LABELS,
@@ -583,7 +584,7 @@ export function ServiceDetailSheet({ service, onClose, onChanged, initialEdit = 
                     <input
                       type="date"
                       value={dateValue}
-                      onChange={(e) => { setDateValue(e.target.value); setTimeConflict(null); }}
+                      onChange={(e) => { if (isValidIsoDateString(e.target.value)) { setDateValue(e.target.value); setTimeConflict(null); } }}
                       className={INPUT_CLS}
                     />
                     <div className="flex items-center gap-2">

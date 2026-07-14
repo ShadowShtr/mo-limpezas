@@ -10,6 +10,7 @@ import {
   type PaymentsData, type Payment, type PaymentKind,
 } from "@/app/actions/payments";
 import { todayInLisbon } from "@/lib/lisbon-time";
+import { isValidIsoDateString } from "@/lib/utils";
 
 function fmtEur(v: number | null) {
   if (v === null || v === undefined) return "—";
@@ -181,7 +182,7 @@ export function PaymentsClient({ initialData, error: initErr, mesParam, year, mo
                   <input inputMode="decimal" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} className={inputCls} placeholder="(opcional)" />
                 </Field>
                 <Field label="Data prevista">
-                  <input type="date" value={form.due_date} onChange={(e) => setForm({ ...form, due_date: e.target.value })} className={inputCls} />
+                  <input type="date" value={form.due_date} onChange={(e) => { if (!e.target.value || isValidIsoDateString(e.target.value)) setForm({ ...form, due_date: e.target.value }); }} className={inputCls} />
                 </Field>
               </div>
               <Field label="Débito direto">

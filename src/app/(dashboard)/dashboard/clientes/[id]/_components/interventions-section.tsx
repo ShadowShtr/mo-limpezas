@@ -3,9 +3,9 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { format, parseISO } from "date-fns";
 import { pt } from "date-fns/locale";
 import { CalendarClock, Copy, Edit2, Pause, Plus, Archive, CalendarPlus, Trash2 } from "lucide-react";
+import { safeFormat } from "@/lib/utils";
 import { ContratoSheet } from "../../../contratos/_components/sheet";
 import { ServiceCreateSheet } from "../../../calendario/_components/service-create-sheet";
 import { duplicatePointService, setContractInterventionStatus } from "@/app/actions/intervencoes";
@@ -197,7 +197,7 @@ export function InterventionsSection({
                       </div>
                       <p className="mt-0.5 text-xs text-[var(--color-text-muted)]">
                         {contract.locations?.name ?? "Local sem nome"} · {frequencyLabel(contract)} · desde{" "}
-                        {format(parseISO(contract.starts_on), "d MMM yyyy", { locale: pt })}
+                        {safeFormat(contract.starts_on, "d MMM yyyy", { locale: pt })}
                       </p>
                     </div>
                     <ContratoSheet
@@ -284,12 +284,12 @@ export function InterventionsSection({
                       </span>
                     </div>
                     <p className="mt-0.5 text-xs text-[var(--color-text-muted)]">
-                      #{service.reference_number} · {format(parseISO(service.scheduled_start), "d MMM yyyy HH:mm", { locale: pt })}
+                      #{service.reference_number} · {safeFormat(service.scheduled_start, "d MMM yyyy HH:mm", { locale: pt })}
                       {service.team_name ? ` · ${service.team_name}` : ""}
                     </p>
                   </div>
                   <Link
-                    href={`/dashboard/calendario?date=${format(parseISO(service.scheduled_start), "yyyy-MM-dd")}`}
+                    href={`/dashboard/calendario?date=${safeFormat(service.scheduled_start, "yyyy-MM-dd")}`}
                     title="Editar no calendário"
                     className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-[var(--color-border)] text-[var(--color-text-sub)] hover:bg-[var(--color-background)]"
                   >

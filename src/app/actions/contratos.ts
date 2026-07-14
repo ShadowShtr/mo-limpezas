@@ -5,6 +5,8 @@ import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { maxReferenceNumber } from "@/lib/services/reference";
 import { auditLog } from "@/lib/audit";
+import { hasOverlappingMonthlyContract } from "@/lib/contract-overlap";
+import { isValidIsoDateString } from "@/lib/utils";
 import type { ScheduleDay } from "@/types/database";
 
 export interface ContratoInput {
@@ -432,6 +434,13 @@ export async function createContrato(input: ContratoInput) {
     return { ok: false as const, error: "Sem permissao." };
   }
 
+  if (!isValidIsoDateString(input.starts_on)) {
+    return { ok: false as const, error: "Data de início inválida." };
+  }
+  if (input.ends_on && !isValidIsoDateString(input.ends_on)) {
+    return { ok: false as const, error: "Data de fim inválida." };
+  }
+
   const { data: location } = await admin
     .from("locations")
     .select("id, client_id")
@@ -439,6 +448,21 @@ export async function createContrato(input: ContratoInput) {
     .eq("company_id", profile.company_id)
     .single();
   if (!location) return { ok: false as const, error: "Local invalido." };
+
+  if (input.fixed_monthly && input.status === "ativo") {
+    const { overlapping } = await hasOverlappingMonthlyContract(admin, {
+      companyId: profile.company_id,
+      locationId: input.location_id,
+      startsOn: input.starts_on,
+      endsOn: input.ends_on || null,
+    });
+    if (overlapping) {
+      return {
+        ok: false as const,
+        error: "Já existe uma avença mensal ativa para este local neste período. Encerre ou cancele o contrato anterior antes de criar outro.",
+      };
+    }
+  }
 
   await admin
     .from("locations")
@@ -533,6 +557,13 @@ export async function updateContrato(id: string, input: Omit<ContratoInput, "com
     return { ok: false as const, error: "Sem permissao." };
   }
 
+  if (!isValidIsoDateString(input.starts_on)) {
+    return { ok: false as const, error: "Data de início inválida." };
+  }
+  if (input.ends_on && !isValidIsoDateString(input.ends_on)) {
+    return { ok: false as const, error: "Data de fim inválida." };
+  }
+
   const { data: location } = await admin
     .from("locations")
     .select("id, client_id")
@@ -540,6 +571,22 @@ export async function updateContrato(id: string, input: Omit<ContratoInput, "com
     .eq("company_id", profile.company_id)
     .single();
   if (!location) return { ok: false as const, error: "Local invalido." };
+
+  if (input.fixed_monthly && input.status === "ativo") {
+    const { overlapping } = await hasOverlappingMonthlyContract(admin, {
+      companyId: profile.company_id,
+      locationId: input.location_id,
+      startsOn: input.starts_on,
+      endsOn: input.ends_on || null,
+      excludeContractId: id,
+    });
+    if (overlapping) {
+      return {
+        ok: false as const,
+        error: "Já existe uma avença mensal ativa para este local neste período. Encerre ou cancele o contrato anterior antes de criar outro.",
+      };
+    }
+  }
 
   await admin
     .from("locations")

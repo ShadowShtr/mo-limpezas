@@ -3,7 +3,7 @@ import Link from "next/link";
 import { Header } from "@/components/layout/header";
 import { getPendencias, type PendenciaItem } from "@/app/actions/pendencias";
 import {
-  MapPinOff, MapPin, LogOut, UserX, ImageOff, ImageUp, CheckCircle2,
+  MapPinOff, MapPin, LogOut, UserX, ImageOff, ImageUp, CheckCircle2, Copy,
 } from "lucide-react";
 
 export const dynamic = "force-dynamic";
@@ -31,6 +31,15 @@ export default async function PendenciasPage() {
   const t = data.totals;
 
   const sections = [
+    {
+      key: "duplicateMonthlyContracts",
+      title: "Avenças mensais duplicadas",
+      desc: "Mais de um contrato ativo para o mesmo local — duplica a fatura",
+      icon: Copy,
+      color: "text-red-600 bg-red-50",
+      items: data.duplicateMonthlyContracts,
+      href: "/dashboard/contratos",
+    },
     {
       key: "noCheckout",
       title: "Serviços sem saída registada",
@@ -176,7 +185,7 @@ function PendenciaCard({
       {href && (
         <div className="px-5 py-3 border-t border-[var(--color-border)]">
           <Link href={href} className="text-xs font-medium text-[var(--color-primary)] hover:underline">
-            Resolver no {href.includes("registo-ponto") ? "Registo de Ponto" : "Calendário"} →
+            Resolver em {href.includes("registo-ponto") ? "Registo de Ponto" : href.includes("contratos") ? "Contratos" : "Calendário"} →
           </Link>
         </div>
       )}

@@ -16,6 +16,7 @@ import {
 } from "@/app/actions/cash-flow";
 import { usePagination, Pagination } from "@/components/ui/pagination";
 import { todayInLisbon } from "@/lib/lisbon-time";
+import { isValidIsoDateString } from "@/lib/utils";
 
 function fmtEur(v: number) {
   return v.toLocaleString("pt-PT", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " €";
@@ -382,7 +383,7 @@ export function CashFlowClient({ initialData, error: initErr, companyId, mesPara
 
               <div>
                 <label className="block text-sm font-medium text-[var(--color-text-main)] mb-1.5">Data</label>
-                <input type="date" required value={newDate} onChange={(e) => setNewDate(e.target.value)} className={inputCls} />
+                <input type="date" required value={newDate} onChange={(e) => { if (isValidIsoDateString(e.target.value)) setNewDate(e.target.value); }} className={inputCls} />
               </div>
 
               <div>

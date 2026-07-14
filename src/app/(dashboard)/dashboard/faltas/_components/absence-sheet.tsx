@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import { X, Loader2 } from "lucide-react";
 import { createAbsence, type AbsenceType } from "@/app/actions/absences";
 import { todayInLisbon } from "@/lib/lisbon-time";
+import { isValidIsoDateString } from "@/lib/utils";
 
 const ABSENCE_OPTIONS: { value: AbsenceType; label: string }[] = [
   { value: "doenca_com_baixa", label: "Doença com baixa médica" },
@@ -152,7 +153,11 @@ export function AbsenceSheet({ trigger, colaboradores, defaultCollaboratorId }: 
                 required
                 type="date"
                 value={startsOn}
-                onChange={(e) => { setStartsOn(e.target.value); if (e.target.value > endsOn) setEndsOn(e.target.value); }}
+                onChange={(e) => {
+                  if (!isValidIsoDateString(e.target.value)) return;
+                  setStartsOn(e.target.value);
+                  if (e.target.value > endsOn) setEndsOn(e.target.value);
+                }}
                 className={inputCls}
               />
             </div>
@@ -163,7 +168,7 @@ export function AbsenceSheet({ trigger, colaboradores, defaultCollaboratorId }: 
                 type="date"
                 value={endsOn}
                 min={startsOn}
-                onChange={(e) => setEndsOn(e.target.value)}
+                onChange={(e) => { if (isValidIsoDateString(e.target.value)) setEndsOn(e.target.value); }}
                 className={inputCls}
               />
             </div>

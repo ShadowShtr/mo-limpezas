@@ -13,6 +13,7 @@ import { pt } from "date-fns/locale";
 import { MapPin, X, Filter, Clock } from "lucide-react";
 import { getMapServices, type MapClockPoint, type MapService, type MapTeam } from "@/app/actions/map";
 import { createClient } from "@/lib/supabase/client";
+import { isValidIsoDateString } from "@/lib/utils";
 
 const MAP_STYLE = {
   version: 8 as const,
@@ -160,7 +161,7 @@ export function MapView({ initialServices, initialClockPoints, initialTeams, ini
             <input
               type="date"
               value={date}
-              onChange={(e) => { setDate(e.target.value); fetchServices(e.target.value); }}
+              onChange={(e) => { if (isValidIsoDateString(e.target.value)) { setDate(e.target.value); fetchServices(e.target.value); } }}
               className="w-full px-3 py-1.5 rounded-lg border border-[var(--color-border)] text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
             />
           </div>

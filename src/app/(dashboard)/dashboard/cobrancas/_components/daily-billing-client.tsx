@@ -8,6 +8,7 @@ import {
 import { format, parseISO } from "date-fns";
 import { pt } from "date-fns/locale";
 import { createClient } from "@/lib/supabase/client";
+import { safeFormat, isValidIsoDateString } from "@/lib/utils";
 import {
   getDailyBilling,
   setServicePayment,
@@ -143,7 +144,7 @@ export function DailyBillingClient({ initialDate, initialData, initialError, com
   const pendingTotal = pending.reduce((s, r) => s + Math.max(0, withVat(r) - receivedOf(r, vatRate)), 0);
 
   const isToday = date === todayStr();
-  const dayLabel = format(new Date(`${date}T12:00:00`), "EEEE, d 'de' MMMM", { locale: pt });
+  const dayLabel = safeFormat(new Date(`${date}T12:00:00`), "EEEE, d 'de' MMMM", { locale: pt });
 
   return (
     <div className="space-y-5">
@@ -160,7 +161,7 @@ export function DailyBillingClient({ initialDate, initialData, initialError, com
           <input
             type="date"
             value={date}
-            onChange={(e) => { if (e.target.value) changeDay(e.target.value); }}
+            onChange={(e) => { if (isValidIsoDateString(e.target.value)) changeDay(e.target.value); }}
             className="px-3 py-2 rounded-lg border border-[var(--color-border)] text-sm text-[var(--color-text-main)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
           />
           <button

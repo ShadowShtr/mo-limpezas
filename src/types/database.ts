@@ -11,6 +11,8 @@ export type ScheduleDay = {
   num_people?: number | null;
 };
 
+export type BuildingCardWeekday = "mon" | "tue" | "wed" | "thu" | "fri" | "sat" | "sun";
+
 export type Database = {
   public: {
     Tables: {
@@ -168,6 +170,12 @@ export type Database = {
         Row: { id: string; company_id: string; collaborator_id: string; team_id: string; date: string; assigned_by: string | null; created_at: string; updated_at: string };
         Insert: { company_id: string; collaborator_id: string; team_id: string; date: string; assigned_by?: string | null; id?: string };
         Update: { team_id?: string; assigned_by?: string | null };
+        Relationships: [];
+      };
+      building_cards: {
+        Row: { id: string; company_id: string; weekday: BuildingCardWeekday; name: string; address: string | null; team_id: string | null; sort_order: number; monthly_value: number | null; notes: string | null; created_by: string | null; created_at: string; updated_at: string };
+        Insert: { company_id: string; weekday: BuildingCardWeekday; name: string; address?: string | null; team_id?: string | null; sort_order?: number; monthly_value?: number | null; notes?: string | null; created_by?: string | null; id?: string };
+        Update: { weekday?: BuildingCardWeekday; name?: string; address?: string | null; team_id?: string | null; sort_order?: number; monthly_value?: number | null; notes?: string | null };
         Relationships: [];
       };
       cash_flow_entries: {
