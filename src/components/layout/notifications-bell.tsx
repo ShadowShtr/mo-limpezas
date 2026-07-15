@@ -5,6 +5,7 @@ import { Bell, CheckCheck, X, Trash2 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { formatDistanceToNow } from "@/lib/utils";
 import { deleteNotification, deleteAllReadNotifications } from "@/app/actions/notifications";
+import { useToast } from "@/components/ui/toast";
 
 interface Notification {
   id: string;
@@ -37,6 +38,7 @@ export function NotificationsBell() {
   const ref         = useRef<HTMLDivElement>(null);
   const [supabase]  = useState(() => createClient());
   const channelName = `notifications-${useId()}`;
+  const { toast }   = useToast();
 
   const load = useCallback(async () => {
     const { data } = await supabase
@@ -53,12 +55,20 @@ export function NotificationsBell() {
   useEffect(() => {
     const channel = supabase
       .channel(channelName)
-      .on("postgres_changes", { event: "*", schema: "public", table: "notifications" }, load)
+      // Notificação nova: além de recarregar o sino, mostra um aviso pop-up
+      // imediato — não é preciso abrir o sino para reparar que chegou algo.
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "notifications" }, (payload) => {
+        const row = payload.new as Notification;
+        toast(row.body ? `${row.title} — ${row.body}` : row.title, "info");
+        load();
+      })
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "notifications" }, load)
+      .on("postgres_changes", { event: "DELETE", schema: "public", table: "notifications" }, load)
       .subscribe();
     // eslint-disable-next-line react-hooks/set-state-in-effect
     load();
     return () => { supabase.removeChannel(channel); };
-  }, [channelName, load, supabase]);
+  }, [channelName, load, supabase, toast]);
 
   useEffect(() => {
     function outside(e: MouseEvent) {
