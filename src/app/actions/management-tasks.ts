@@ -1,6 +1,7 @@
 "use server";
 
 import { requireProfile } from "@/lib/auth-guard";
+import { notifyUser } from "@/lib/push-notify";
 import { revalidatePath } from "next/cache";
 
 export type TaskStatus = string; // free-form to support custom columns
@@ -132,6 +133,18 @@ export async function createManagementTask(
     createdByName = row.created_by ? (map[row.created_by] ?? null) : null;
   }
 
+  if (row.assigned_to && row.assigned_to !== user.id) {
+    await notifyUser(admin, {
+      companyId: guard.profile.company_id,
+      userId: row.assigned_to,
+      type: "task_assigned",
+      title: "📋 Nova tarefa atribuída",
+      body: `${createdByName ?? "Alguém"} atribuiu-te a tarefa "${row.title}".`,
+      data: { task_id: row.id },
+      url: "/dashboard/tarefas",
+    });
+  }
+
   const task: ManagementTask = {
     id: row.id,
     title: row.title,
@@ -159,12 +172,27 @@ export async function updateManagementTask(
   if (!guard.ok) return { ok: false, error: guard.error };
   const { admin, profile } = guard;
 
-  // completedAt: set when caller explicitly marks as complete, clear when status changes, leave untouched otherwise
+  // completedAt: set when caller explicitly marks as complete, clear when status changes, leave untouched onwards
   const completedAt = data.markCompleted
     ? new Date().toISOString()
     : data.status !== undefined
     ? null
     : undefined;
+
+  // Estado anterior — só para saber se a tarefa mudou de responsável (avisar
+  // a pessoa nova) e para a mensagem da notificação (título da tarefa).
+  let previousAssignedTo: string | null = null;
+  let previousTitle: string | null = null;
+  if (data.assigned_to !== undefined) {
+    const { data: before } = await admin
+      .from("management_tasks")
+      .select("assigned_to, title")
+      .eq("id", taskId)
+      .eq("company_id", profile.company_id)
+      .single();
+    previousAssignedTo = before?.assigned_to ?? null;
+    previousTitle = before?.title ?? null;
+  }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { error } = await (admin.from("management_tasks") as any).update({
@@ -177,6 +205,24 @@ export async function updateManagementTask(
     ...(data.due_date    !== undefined && { due_date:     data.due_date }),
   }).eq("id", taskId).eq("company_id", profile.company_id);
   if (error) return { ok: false, error: error.message };
+
+  if (
+    data.assigned_to !== undefined &&
+    data.assigned_to &&
+    data.assigned_to !== previousAssignedTo &&
+    data.assigned_to !== profile.id
+  ) {
+    const { data: assigner } = await admin.from("profiles").select("full_name").eq("id", profile.id).single();
+    await notifyUser(admin, {
+      companyId: profile.company_id,
+      userId: data.assigned_to,
+      type: "task_assigned",
+      title: "📋 Nova tarefa atribuída",
+      body: `${assigner?.full_name ?? "Alguém"} atribuiu-te a tarefa "${data.title ?? previousTitle ?? "sem título"}".`,
+      data: { task_id: taskId },
+      url: "/dashboard/tarefas",
+    });
+  }
 
   revalidatePath("/dashboard/tarefas");
   return { ok: true };

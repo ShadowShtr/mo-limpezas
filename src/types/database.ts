@@ -209,9 +209,9 @@ export type Database = {
         Relationships: [];
       };
       fixed_variable_payments: {
-        Row: { id: string; company_id: string; kind: "fixo" | "variavel"; description: string; amount: number | null; due_date: string | null; direct_debit: boolean | null; status: "pago" | "pendente"; recurring: boolean; period_year: number; period_month: number; paid_at: string | null; notes: string | null; sort_order: number; source_id: string | null; created_by: string | null; created_at: string; updated_at: string };
+        Row: { id: string; company_id: string; kind: "fixo" | "variavel"; description: string; amount: number | null; due_date: string | null; direct_debit: boolean | null; status: "pago" | "pendente"; recurring: boolean; period_year: number; period_month: number; paid_at: string | null; notes: string | null; sort_order: number; source_id: string | null; created_by: string | null; created_at: string; updated_at: string; attachment_url: string | null; attachment_name: string | null; attachment_size: number | null; attachment_mime: string | null };
         Insert: { company_id: string; kind: "fixo" | "variavel"; description: string; amount?: number | null; due_date?: string | null; direct_debit?: boolean | null; status?: "pago" | "pendente"; recurring?: boolean; period_year: number; period_month: number; paid_at?: string | null; notes?: string | null; sort_order?: number; source_id?: string | null; created_by?: string | null };
-        Update: { description?: string; amount?: number | null; due_date?: string | null; direct_debit?: boolean | null; status?: "pago" | "pendente"; recurring?: boolean; notes?: string | null; sort_order?: number; paid_at?: string | null; updated_at?: string };
+        Update: { description?: string; amount?: number | null; due_date?: string | null; direct_debit?: boolean | null; status?: "pago" | "pendente"; recurring?: boolean; notes?: string | null; sort_order?: number; paid_at?: string | null; updated_at?: string; attachment_url?: string | null; attachment_name?: string | null; attachment_size?: number | null; attachment_mime?: string | null };
         Relationships: [];
       };
       collaborator_documents: {

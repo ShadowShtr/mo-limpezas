@@ -4,6 +4,12 @@ import { requireProfile } from "@/lib/auth-guard";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { revalidatePath } from "next/cache";
 import { todayInLisbon } from "@/lib/lisbon-time";
+import {
+  PAYMENT_ATTACHMENTS_BUCKET,
+  MAX_PAYMENT_ATTACHMENT_BYTES,
+  buildPaymentAttachmentPath,
+  isPaymentAttachmentPathInCompany,
+} from "@/lib/payment-attachments";
 
 type AdminClient = ReturnType<typeof createAdminClient>;
 
@@ -26,6 +32,10 @@ export interface Payment {
   paid_at: string | null;
   notes: string | null;
   sort_order: number;
+  attachment_url: string | null;
+  attachment_name: string | null;
+  attachment_size: number | null;
+  attachment_mime: string | null;
 }
 
 export interface PaymentsData {
@@ -39,7 +49,7 @@ export interface PaymentsData {
   countOverdue: number;
 }
 
-const COLS = "id, kind, description, amount, due_date, direct_debit, status, recurring, period_year, period_month, paid_at, notes, sort_order";
+const COLS = "id, kind, description, amount, due_date, direct_debit, status, recurring, period_year, period_month, paid_at, notes, sort_order, attachment_url, attachment_name, attachment_size, attachment_mime";
 
 // Desloca uma data para o mês alvo, mantendo o dia (limitado ao último dia do mês).
 function shiftDate(due: string | null, year: number, month: number): string | null {
@@ -293,4 +303,135 @@ export async function deletePayment(id: string): Promise<{ ok: boolean; error?: 
   if (error) return { ok: false, error: error.message };
   revalidate();
   return { ok: true };
+}
+
+// ─── Anexo (fatura/recibo) ────────────────────────────────────────────────────
+
+async function ensureAttachmentsBucket(admin: AdminClient) {
+  const { error } = await admin.storage.getBucket(PAYMENT_ATTACHMENTS_BUCKET);
+  if (error) {
+    await admin.storage.createBucket(PAYMENT_ATTACHMENTS_BUCKET, {
+      public: false,
+      fileSizeLimit: MAX_PAYMENT_ATTACHMENT_BYTES,
+    });
+  }
+}
+
+export async function uploadPaymentAttachment(
+  paymentId: string,
+  formData: FormData,
+): Promise<{ ok: true; url: string; name: string } | { ok: false; error: string }> {
+  const guard = await requireProfile({ roles: ["admin", "gestor"] });
+  if (!guard.ok) return { ok: false, error: guard.error };
+  const { admin, profile } = guard;
+
+  const { data: payment } = await admin
+    .from("fixed_variable_payments")
+    .select("id, attachment_url")
+    .eq("id", paymentId)
+    .eq("company_id", profile.company_id)
+    .single();
+  if (!payment) return { ok: false, error: "Pagamento não encontrado." };
+
+  const file = formData.get("file") as File | null;
+  if (!file) return { ok: false, error: "Ficheiro em falta." };
+  if (file.size > MAX_PAYMENT_ATTACHMENT_BYTES) {
+    return { ok: false, error: "Ficheiro demasiado grande (máx 20 MB)." };
+  }
+
+  await ensureAttachmentsBucket(admin);
+
+  const path = buildPaymentAttachmentPath({ companyId: profile.company_id, paymentId, fileName: file.name });
+  const { error: uploadError } = await admin.storage
+    .from(PAYMENT_ATTACHMENTS_BUCKET)
+    .upload(path, file, { contentType: file.type, upsert: false });
+  if (uploadError) return { ok: false, error: uploadError.message };
+
+  // Substitui um anexo anterior — remove o ficheiro antigo do storage.
+  if (payment.attachment_url) {
+    const bucketPrefix = `/${PAYMENT_ATTACHMENTS_BUCKET}/`;
+    const oldPath = payment.attachment_url.includes(bucketPrefix)
+      ? decodeURIComponent(payment.attachment_url.split(bucketPrefix)[1])
+      : null;
+    if (oldPath && isPaymentAttachmentPathInCompany(oldPath, profile.company_id)) {
+      await admin.storage.from(PAYMENT_ATTACHMENTS_BUCKET).remove([oldPath]);
+    }
+  }
+
+  const { data: urlData } = admin.storage.from(PAYMENT_ATTACHMENTS_BUCKET).getPublicUrl(path);
+
+  const { error: dbError } = await admin
+    .from("fixed_variable_payments")
+    .update({
+      attachment_url: urlData.publicUrl,
+      attachment_name: file.name,
+      attachment_size: file.size,
+      attachment_mime: file.type,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", paymentId)
+    .eq("company_id", profile.company_id);
+  if (dbError) return { ok: false, error: dbError.message };
+
+  revalidate();
+  return { ok: true, url: urlData.publicUrl, name: file.name };
+}
+
+export async function deletePaymentAttachment(paymentId: string): Promise<{ ok: boolean; error?: string }> {
+  const guard = await requireProfile({ roles: ["admin", "gestor"] });
+  if (!guard.ok) return { ok: false, error: guard.error };
+  const { admin, profile } = guard;
+
+  const { data: payment } = await admin
+    .from("fixed_variable_payments")
+    .select("attachment_url")
+    .eq("id", paymentId)
+    .eq("company_id", profile.company_id)
+    .single();
+  if (!payment) return { ok: false, error: "Pagamento não encontrado." };
+
+  if (payment.attachment_url) {
+    const bucketPrefix = `/${PAYMENT_ATTACHMENTS_BUCKET}/`;
+    const path = payment.attachment_url.includes(bucketPrefix)
+      ? decodeURIComponent(payment.attachment_url.split(bucketPrefix)[1])
+      : null;
+    if (path && isPaymentAttachmentPathInCompany(path, profile.company_id)) {
+      await admin.storage.from(PAYMENT_ATTACHMENTS_BUCKET).remove([path]);
+    }
+  }
+
+  const { error } = await admin
+    .from("fixed_variable_payments")
+    .update({ attachment_url: null, attachment_name: null, attachment_size: null, attachment_mime: null, updated_at: new Date().toISOString() })
+    .eq("id", paymentId)
+    .eq("company_id", profile.company_id);
+  if (error) return { ok: false, error: error.message };
+
+  revalidate();
+  return { ok: true };
+}
+
+export async function getSignedPaymentAttachmentUrl(
+  fileUrl: string,
+): Promise<{ ok: true; url: string } | { ok: false; error: string }> {
+  if (!fileUrl) return { ok: false, error: "URL do ficheiro em falta." };
+  const guard = await requireProfile({ roles: ["admin", "gestor"] });
+  if (!guard.ok) return { ok: false, error: guard.error };
+  const { admin, profile } = guard;
+
+  const bucketPrefix = `/${PAYMENT_ATTACHMENTS_BUCKET}/`;
+  const storagePath = fileUrl.includes(bucketPrefix) ? fileUrl.split(bucketPrefix)[1] : null;
+  if (!storagePath) return { ok: true, url: fileUrl };
+
+  const decodedPath = decodeURIComponent(storagePath);
+  if (!isPaymentAttachmentPathInCompany(decodedPath, profile.company_id)) {
+    return { ok: false, error: "Sem permissão para aceder a este ficheiro." };
+  }
+
+  const { data, error } = await admin.storage
+    .from(PAYMENT_ATTACHMENTS_BUCKET)
+    .createSignedUrl(decodedPath, 60 * 5);
+  if (error || !data) return { ok: false, error: error?.message ?? "Erro ao gerar link." };
+
+  return { ok: true, url: data.signedUrl };
 }

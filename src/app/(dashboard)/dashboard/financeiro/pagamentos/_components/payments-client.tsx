@@ -3,10 +3,11 @@
 import { useState, useTransition } from "react";
 import {
   Plus, Trash2, Loader2, AlertCircle, X, Check, Clock, CheckCircle2,
-  Repeat, Calendar, Zap, Pencil,
+  Repeat, Calendar, Zap, Pencil, Paperclip, Upload,
 } from "lucide-react";
 import {
   getPayments, createPayment, updatePayment, setPaymentStatus, deletePayment,
+  uploadPaymentAttachment, deletePaymentAttachment, getSignedPaymentAttachmentUrl,
   type PaymentsData, type Payment, type PaymentKind,
 } from "@/app/actions/payments";
 import { todayInLisbon } from "@/lib/lisbon-time";
@@ -36,10 +37,13 @@ type FormState = {
   due_date: string;
   direct_debit: "" | "sim" | "nao";
   notes: string;
+  attachment_url: string | null;
+  attachment_name: string | null;
 };
 
 const emptyForm = (kind: PaymentKind): FormState => ({
   id: null, kind, description: "", amount: "", due_date: "", direct_debit: "", notes: "",
+  attachment_url: null, attachment_name: null,
 });
 
 export function PaymentsClient({ initialData, error: initErr, mesParam, year, month }: Props) {
@@ -48,6 +52,8 @@ export function PaymentsClient({ initialData, error: initErr, mesParam, year, mo
   const [isPending, startTransition] = useTransition();
   const [form, setForm] = useState<FormState | null>(null);
   const [formError, setFormError] = useState("");
+  const [attachUploading, setAttachUploading] = useState(false);
+  const [attachError, setAttachError] = useState("");
 
   function reload() {
     startTransition(async () => {
@@ -67,12 +73,15 @@ export function PaymentsClient({ initialData, error: initErr, mesParam, year, mo
   }
   function openEdit(p: Payment) {
     setFormError("");
+    setAttachError("");
     setForm({
       id: p.id, kind: p.kind, description: p.description,
       amount: p.amount === null ? "" : String(p.amount),
       due_date: p.due_date ?? "",
       direct_debit: p.direct_debit === null ? "" : p.direct_debit ? "sim" : "nao",
       notes: p.notes ?? "",
+      attachment_url: p.attachment_url,
+      attachment_name: p.attachment_name,
     });
   }
 
@@ -107,6 +116,40 @@ export function PaymentsClient({ initialData, error: initErr, mesParam, year, mo
     if (!confirm(`Eliminar "${p.description}"?`)) return;
     startTransition(async () => {
       await deletePayment(p.id);
+      reload();
+    });
+  }
+
+  function handleAttachmentChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file || !form?.id) return;
+    setAttachError("");
+    setAttachUploading(true);
+    const paymentId = form.id;
+    const fd = new FormData();
+    fd.append("file", file);
+    uploadPaymentAttachment(paymentId, fd).then((res) => {
+      setAttachUploading(false);
+      if (!res.ok) { setAttachError(res.error); return; }
+      setForm((f) => (f ? { ...f, attachment_url: res.url, attachment_name: res.name } : f));
+      reload();
+    });
+  }
+
+  async function handleAttachmentDownload() {
+    if (!form?.attachment_url) return;
+    const res = await getSignedPaymentAttachmentUrl(form.attachment_url);
+    window.open(res.ok ? res.url : form.attachment_url, "_blank");
+  }
+
+  function handleAttachmentRemove() {
+    if (!form?.id) return;
+    if (!confirm("Remover o anexo?")) return;
+    const paymentId = form.id;
+    deletePaymentAttachment(paymentId).then((res) => {
+      if (!res.ok) { setAttachError(res.error ?? "Erro ao remover."); return; }
+      setForm((f) => (f ? { ...f, attachment_url: null, attachment_name: null } : f));
       reload();
     });
   }
@@ -195,6 +238,28 @@ export function PaymentsClient({ initialData, error: initErr, mesParam, year, mo
               <Field label="Notas">
                 <textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} rows={2} className={inputCls + " resize-none"} />
               </Field>
+              {form.id && (
+                <Field label="Anexo (fatura/recibo)">
+                  {form.attachment_url ? (
+                    <div className="flex items-center gap-2 px-3 py-2 rounded-lg border border-[var(--color-border)] bg-white text-sm">
+                      <Paperclip className="w-4 h-4 text-[var(--color-text-muted)] shrink-0" />
+                      <button type="button" onClick={handleAttachmentDownload} className="flex-1 text-left truncate text-[var(--color-primary)] hover:underline">
+                        {form.attachment_name ?? "Ficheiro anexado"}
+                      </button>
+                      <button type="button" onClick={handleAttachmentRemove} title="Remover anexo" className="text-[var(--color-text-muted)] hover:text-red-600 shrink-0">
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ) : (
+                    <label className="flex items-center justify-center gap-2 px-3 py-2 rounded-lg border border-dashed border-[var(--color-border)] text-sm text-[var(--color-text-sub)] hover:bg-[var(--color-background)] cursor-pointer transition-colors">
+                      {attachUploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+                      {attachUploading ? "A carregar..." : "Anexar ficheiro (PDF ou imagem)"}
+                      <input type="file" accept=".pdf,image/jpeg,image/png,image/webp" className="hidden" onChange={handleAttachmentChange} disabled={attachUploading} />
+                    </label>
+                  )}
+                  {attachError && <p className="text-xs text-red-600 mt-1">{attachError}</p>}
+                </Field>
+              )}
               {formError && <p className="text-sm text-red-600">{formError}</p>}
               <div className="flex gap-3 pt-1">
                 <button type="button" onClick={() => setForm(null)} className="flex-1 py-2 rounded-lg border border-[var(--color-border)] text-sm text-[var(--color-text-sub)] hover:bg-[var(--color-background)]">Cancelar</button>

@@ -47,6 +47,32 @@ Lê este ficheiro no início de CADA sessão antes de fazer qualquer coisa.
 
 ## ⚡ PRÓXIMA TASK A EXECUTAR
 
+## 📍 PONTO DE PARAGEM — 2026-07-14 (anexo em Pagamentos + notificação de tarefa atribuída)
+
+**Anexo de fatura/recibo em Pagamentos Fixos/Variáveis (✅ FEITO + EM PRODUÇÃO)**
+- Pedido do dono: no modal "Editar pagamento", poder anexar a fatura correspondente.
+- **Migration 052** — `attachment_url/name/size/mime` em `fixed_variable_payments`.
+  **APLICADA em produção (SQL Editor, 2026-07-14)**.
+- Bucket privado novo `payment-attachments` (auto-criado no 1º upload, mesmo
+  padrão de `collaborator-documents`), path `${companyId}/${paymentId}/${timestamp}-${nome}`.
+  Download sempre via signed URL (5 min), nunca URL pública direta.
+- `src/lib/payment-attachments.ts` (helpers puros + teste), 3 actions novas em
+  `payments.ts` (`uploadPaymentAttachment`/`deletePaymentAttachment`/
+  `getSignedPaymentAttachmentUrl`). Substituir um anexo apaga o ficheiro antigo
+  do storage. UI só aparece a editar (não faz sentido antes do pagamento existir).
+
+**Notificação ao atribuir tarefa no Kanban (✅ FEITO + EM PRODUÇÃO)**
+- `src/lib/push-notify.ts` — `notifyUser()` genérico (in-app sempre + Web Push
+  se houver subscrição/VAPID), extraído do padrão já usado em `vehicles.ts`.
+- `createManagementTask`/`updateManagementTask` chamam `notifyUser` quando
+  `assigned_to` é definido/muda para alguém diferente do próprio ator.
+  `updateManagementTask` agora lê o `assigned_to` anterior antes de gravar,
+  só para saber se mudou (não bloqueia nada).
+
+Verificação: 404 testes a passar (7 novos), lint/build limpos, deploy feito.
+Testado em produção via script (upload real ao bucket, timing, e insert real
+de notificação) — ver o resultado que se segue nesta sessão.
+
 ## 📍 PONTO DE PARAGEM — 2026-07-14 (coluna Prédios + 2 bugs críticos de produção)
 
 **Feature nova: coluna "Prédios" no calendário (✅ FEITO + EM PRODUÇÃO)**
