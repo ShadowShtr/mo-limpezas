@@ -16,6 +16,7 @@ import { cancelService, deleteCalendarService } from "@/app/actions/cancellation
 import { CANCEL_TYPE_LABELS, type CancelType } from "@/lib/cancel-types";
 import { sendBulkClientNotifications } from "@/app/actions/email";
 import { updateLocationAccess } from "@/app/actions/locations";
+import { setServicePayment } from "@/app/actions/daily-billing";
 import { ServicePhotosGallery } from "./service-photos-gallery";
 import { isValidIsoDateString } from "@/lib/utils";
 import {
@@ -141,6 +142,9 @@ export function ServiceDetailSheet({ service, onClose, onChanged, initialEdit = 
   const [applyVat, setApplyVat] = useState(true);
   const [savingValue, setSavingValue] = useState(false);
   const [vatRate, setVatRate] = useState(23);
+
+  // Estado do pagamento — editável direto no painel (não informado / 50% / 100%)
+  const [savingPayment, setSavingPayment] = useState(false);
 
   // Taxa de IVA da empresa (para o total com IVA) — carrega uma vez.
   useEffect(() => {
@@ -426,6 +430,18 @@ export function ServiceDetailSheet({ service, onClose, onChanged, initialEdit = 
     setAccKeyLabel(keyLabel ?? "");
     setEditingAccess(false);
     setActionMsg({ type: "success", text: "Acesso ao local atualizado." });
+    onChanged();
+  }
+
+  async function savePayment(status: "nao_informado" | "sinal_50" | "pago_total") {
+    if (meta?.payment_status === status) return;
+    setSavingPayment(true);
+    setActionMsg(null);
+    const res = await setServicePayment(svc.id, status);
+    setSavingPayment(false);
+    if (!res.ok) { setActionMsg({ type: "error", text: res.error ?? "Erro ao registar pagamento." }); return; }
+    setMeta((prev) => (prev ? { ...prev, payment_status: status } : prev));
+    setActionMsg({ type: "success", text: "Estado do pagamento atualizado." });
     onChanged();
   }
 
@@ -757,11 +773,31 @@ export function ServiceDetailSheet({ service, onClose, onChanged, initialEdit = 
               </InfoRow>
             )}
 
-            {meta?.payment_status && (
-              <InfoRow icon={Euro} label="Estado do pagamento">
-                {PAYMENT_STATUS_LABELS[meta.payment_status] ?? meta.payment_status}
-              </InfoRow>
-            )}
+            <InfoRow icon={Euro} label="Estado do pagamento">
+              <div className="flex items-center gap-1.5">
+                {(["nao_informado", "sinal_50", "pago_total"] as const).map((st) => {
+                  const active = (meta?.payment_status ?? "nao_informado") === st;
+                  const color = st === "nao_informado" ? "#4B5563" : st === "sinal_50" ? "#D97706" : "#16A34A";
+                  return (
+                    <button
+                      key={st}
+                      type="button"
+                      disabled={savingPayment}
+                      onClick={() => savePayment(st)}
+                      className="text-xs font-semibold px-2.5 py-1 rounded-md transition-colors disabled:opacity-50"
+                      style={{
+                        backgroundColor: active ? color : "transparent",
+                        color: active ? "#fff" : color,
+                        border: `1px solid ${color}`,
+                      }}
+                    >
+                      {PAYMENT_STATUS_LABELS[st]}
+                    </button>
+                  );
+                })}
+                {savingPayment && <Loader2 className="w-3.5 h-3.5 animate-spin text-[var(--color-text-muted)]" />}
+              </div>
+            </InfoRow>
 
             {meta?.upholstery_type && (
               <InfoRow icon={FileText} label="Estofado">

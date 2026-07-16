@@ -30,11 +30,12 @@ export type ServiceForBlock = {
   canSeeFinancials: boolean;
 };
 
-export const PAYMENT_QUICK_OPTS = [
-  { value: "nao_informado", label: "N/I",  color: "#4B5563" },
-  { value: "sinal_50",      label: "50%",  color: "#D97706" },
-  { value: "pago_total",    label: "100%", color: "#16A34A" },
-] as const;
+// Só mostra selo no card quando já há pagamento registado — "não informado"
+// fica visualmente igual a um card sem estado de pagamento nenhum.
+const PAYMENT_BADGE: Partial<Record<string, { label: string; color: string }>> = {
+  sinal_50:   { label: "50%",  color: "#D97706" },
+  pago_total: { label: "100%", color: "#16A34A" },
+};
 
 // ─── Extrai cidade do endereço (padrão PT: XXXX-XXX Cidade) ─────────────────
 
@@ -213,11 +214,9 @@ interface ServiceBlockProps {
   lane?: number;
   /** Total de sub-colunas no grupo sobreposto. */
   lanes?: number;
-  /** Botões rápidos de estado de pagamento (N/I · 50% · 100%) diretamente no card. */
-  onPaymentChange?: (service: ServiceForBlock, status: (typeof PAYMENT_QUICK_OPTS)[number]["value"]) => void;
 }
 
-export function ServiceBlock({ service, slotHeight, startHour, teamId, onClick, onEdit, isOverlay = false, stopIndex, lane = 0, lanes = 1, onPaymentChange }: ServiceBlockProps) {
+export function ServiceBlock({ service, slotHeight, startHour, teamId, onClick, onEdit, isOverlay = false, stopIndex, lane = 0, lanes = 1 }: ServiceBlockProps) {
   const [tooltip, setTooltip] = useState<TooltipState | null>(null);
   const [hovered, setHovered] = useState(false);
 
@@ -333,9 +332,22 @@ export function ServiceBlock({ service, slotHeight, startHour, teamId, onClick, 
               <Pencil className="w-2.5 h-2.5" />
             </button>
           )}
-          {/* 1.º Nome do cliente — sempre visível */}
-          <span className="text-[11px] font-semibold leading-tight truncate pr-4" style={{ color: CARD_TEXT_COLOR }}>
-            {service.client_name}
+          {/* 1.º Nome do cliente — sempre visível; selo de pagamento só se 50%/100% */}
+          <span className="flex items-center gap-1 pr-4 min-w-0">
+            {PAYMENT_BADGE[service.payment_status ?? ""] && (
+              <span
+                className="text-[8px] font-bold leading-none px-1 py-[1px] rounded shrink-0"
+                style={{
+                  backgroundColor: PAYMENT_BADGE[service.payment_status ?? ""]!.color,
+                  color: "#fff",
+                }}
+              >
+                {PAYMENT_BADGE[service.payment_status ?? ""]!.label}
+              </span>
+            )}
+            <span className="text-[11px] font-semibold leading-tight truncate" style={{ color: CARD_TEXT_COLOR }}>
+              {service.client_name}
+            </span>
           </span>
           {/* 2.º Zona/localidade */}
           <span className="text-[10px] font-medium leading-tight truncate pr-4" style={{ color: CARD_TEXT_COLOR, opacity: 0.8 }}>
@@ -363,32 +375,6 @@ export function ServiceBlock({ service, slotHeight, startHour, teamId, onClick, 
                 <span className="ml-1">{STATUS_LABEL[service.status] ?? service.status}</span>
               )}
             </span>
-          )}
-          {!isShort && onPaymentChange && (
-            <div
-              className="flex items-center gap-0.5 mt-0.5 pr-4"
-              onPointerDown={(e) => e.stopPropagation()}
-            >
-              {PAYMENT_QUICK_OPTS.map((opt) => {
-                const active = (service.payment_status ?? "nao_informado") === opt.value;
-                return (
-                  <button
-                    key={opt.value}
-                    type="button"
-                    title={`Pagamento: ${opt.label}`}
-                    onClick={(e) => { e.stopPropagation(); onPaymentChange(service, opt.value); }}
-                    className="flex-1 text-[8px] font-bold leading-none py-0.5 rounded transition-colors"
-                    style={{
-                      backgroundColor: active ? opt.color : "#FFFFFFB3",
-                      color: active ? "#fff" : opt.color,
-                      border: `1px solid ${opt.color}66`,
-                    }}
-                  >
-                    {opt.label}
-                  </button>
-                );
-              })}
-            </div>
           )}
         </div>
       </div>
