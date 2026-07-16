@@ -388,5 +388,6 @@ async function _setServicePayment(
 
   revalidatePath("/dashboard/cobrancas");
   revalidatePath("/dashboard/financeiro");
+  revalidatePath("/dashboard/calendario");
   return { ok: true };
 }

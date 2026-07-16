@@ -68,6 +68,7 @@ function svc(
     team_id: team.id,
     team_name: team.name,
     team_color: team.color,
+    payment_status: null,
   };
 }
 

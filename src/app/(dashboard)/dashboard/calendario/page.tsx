@@ -60,7 +60,7 @@ export default async function CalendarioPage({
         "location_lat", "location_lng", "location_has_key", "location_key_label",
         "location_access_code",
         "client_id", "client_name",
-        "team_id", "team_name", "team_color",
+        "team_id", "team_name", "team_color", "payment_status",
       ].join(", "))
       .eq("company_id", companyId)
       .gte("scheduled_start", weekStart.toISOString())

@@ -25,9 +25,16 @@ export type ServiceForBlock = {
   notes: string | null;
   team_color: string | null;
   team_name: string | null;
+  payment_status: string | null;
   /** Gestores/admin veem valor financeiro; colaboradoras não */
   canSeeFinancials: boolean;
 };
+
+export const PAYMENT_QUICK_OPTS = [
+  { value: "nao_informado", label: "N/I",  color: "#4B5563" },
+  { value: "sinal_50",      label: "50%",  color: "#D97706" },
+  { value: "pago_total",    label: "100%", color: "#16A34A" },
+] as const;
 
 // ─── Extrai cidade do endereço (padrão PT: XXXX-XXX Cidade) ─────────────────
 
@@ -206,9 +213,11 @@ interface ServiceBlockProps {
   lane?: number;
   /** Total de sub-colunas no grupo sobreposto. */
   lanes?: number;
+  /** Botões rápidos de estado de pagamento (N/I · 50% · 100%) diretamente no card. */
+  onPaymentChange?: (service: ServiceForBlock, status: (typeof PAYMENT_QUICK_OPTS)[number]["value"]) => void;
 }
 
-export function ServiceBlock({ service, slotHeight, startHour, teamId, onClick, onEdit, isOverlay = false, stopIndex, lane = 0, lanes = 1 }: ServiceBlockProps) {
+export function ServiceBlock({ service, slotHeight, startHour, teamId, onClick, onEdit, isOverlay = false, stopIndex, lane = 0, lanes = 1, onPaymentChange }: ServiceBlockProps) {
   const [tooltip, setTooltip] = useState<TooltipState | null>(null);
   const [hovered, setHovered] = useState(false);
 
@@ -354,6 +363,32 @@ export function ServiceBlock({ service, slotHeight, startHour, teamId, onClick, 
                 <span className="ml-1">{STATUS_LABEL[service.status] ?? service.status}</span>
               )}
             </span>
+          )}
+          {!isShort && onPaymentChange && (
+            <div
+              className="flex items-center gap-0.5 mt-0.5 pr-4"
+              onPointerDown={(e) => e.stopPropagation()}
+            >
+              {PAYMENT_QUICK_OPTS.map((opt) => {
+                const active = (service.payment_status ?? "nao_informado") === opt.value;
+                return (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    title={`Pagamento: ${opt.label}`}
+                    onClick={(e) => { e.stopPropagation(); onPaymentChange(service, opt.value); }}
+                    className="flex-1 text-[8px] font-bold leading-none py-0.5 rounded transition-colors"
+                    style={{
+                      backgroundColor: active ? opt.color : "#FFFFFFB3",
+                      color: active ? "#fff" : opt.color,
+                      border: `1px solid ${opt.color}66`,
+                    }}
+                  >
+                    {opt.label}
+                  </button>
+                );
+              })}
+            </div>
           )}
         </div>
       </div>

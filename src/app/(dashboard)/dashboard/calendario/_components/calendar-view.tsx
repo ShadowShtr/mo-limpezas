@@ -28,6 +28,7 @@ import { CalendarListView } from "./calendar-list-view";
 import { ClientNotificationsModal } from "./client-notifications-modal";
 import { BuildingsColumn } from "./buildings-column";
 import { rescheduleService, type ConflictInfo } from "../_actions/reschedule";
+import { setServicePayment } from "@/app/actions/daily-billing";
 import type { BuildingCard } from "@/app/actions/building-cards";
 import type { Database, BuildingCardWeekday } from "@/types/database";
 
@@ -113,6 +114,7 @@ function toBlock(s: ServiceCalendar): ServiceForBlock {
     notes: s.notes,
     team_color: s.team_color ?? null,
     team_name: s.team_name ?? null,
+    payment_status: s.payment_status ?? null,
     canSeeFinancials: true, // calendário é manager-only
   };
 }
@@ -420,6 +422,20 @@ export function CalendarView({
   }
 
   function handleChanged() { router.refresh(); }
+
+  async function handlePaymentChange(
+    svc: ServiceForBlock,
+    status: "nao_informado" | "sinal_50" | "pago_total",
+  ) {
+    if (svc.payment_status === status) return;
+    const previous = localServices;
+    setLocalServices((curr) => curr.map((s) => (s.id === svc.id ? { ...s, payment_status: status } : s)));
+    const res = await setServicePayment(svc.id, status);
+    if (!res.ok) {
+      setLocalServices(previous);
+      setConflictMsg(res.error);
+    }
+  }
 
   async function handlePdf() {
     setPdfLoading(true);
@@ -849,6 +865,7 @@ export function CalendarView({
                               lanes={lanes}
                               onClick={(b) => { setDetailEdit(false); setDetailSvc(localServices.find((s) => s.id === b.id) ?? null); }}
                               onEdit={(b) => { setDetailEdit(true); setDetailSvc(localServices.find((s) => s.id === b.id) ?? null); }}
+                              onPaymentChange={handlePaymentChange}
                             />
                             {showTravel && gapPx > 20 && (
                               <div
