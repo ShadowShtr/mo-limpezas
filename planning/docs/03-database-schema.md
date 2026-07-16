@@ -154,10 +154,10 @@ CREATE TABLE recurrence_rules (
   
   -- Padrão
   frequency       TEXT NOT NULL
-                    CHECK (frequency IN ('daily', 'weekly', 'biweekly', 'monthly', 'custom')),
+                    CHECK (frequency IN ('daily', 'weekly', 'biweekly', 'triweekly', 'monthly', 'custom')),
   interval_days   INTEGER DEFAULT 1,         -- para custom: a cada N dias
   
-  -- Para weekly/biweekly: dias da semana (0=dom, 1=seg, ..., 6=sab)
+  -- Para weekly/biweekly/triweekly: dias da semana (0=dom, 1=seg, ..., 6=sab)
   weekdays        INTEGER[] DEFAULT '{}',
   
   -- Para monthly: qual dia do mês, ou qual semana+dia

@@ -12,11 +12,13 @@ import {
 } from "@/lib/cleaning-types";
 import type { ContratosTableRow } from "../page";
 import type { ScheduleDay } from "@/types/database";
+import { shiftToNextBusinessDay } from "@/lib/contract-occurrences";
 
 const FREQUENCY_LABEL: Record<string, string> = {
   daily: "Diário",
   weekly: "Semanal",
   biweekly: "Quinzenal",
+  triweekly: "3/3 semanas",
   monthly: "Mensal",
   custom: "Personalizado",
 };
@@ -45,10 +47,10 @@ function nextOccurrence(contrato: ContratosTableRow): string {
     return base.toLocaleDateString("pt-PT", { day: "2-digit", month: "short" });
   }
 
-  if (contrato.frequency === "weekly" || contrato.frequency === "biweekly") {
+  if (contrato.frequency === "weekly" || contrato.frequency === "biweekly" || contrato.frequency === "triweekly") {
     const weekdays = contrato.weekdays ?? [];
     if (weekdays.length === 0) return "—";
-    for (let i = 0; i < 14; i++) {
+    for (let i = 0; i < 21; i++) {
       const d = new Date(base);
       d.setDate(base.getDate() + i);
       if (weekdays.includes(d.getDay())) {
@@ -59,7 +61,7 @@ function nextOccurrence(contrato: ContratosTableRow): string {
   }
 
   if (contrato.frequency === "monthly") {
-    return base.toLocaleDateString("pt-PT", { day: "2-digit", month: "short" });
+    return shiftToNextBusinessDay(base).toLocaleDateString("pt-PT", { day: "2-digit", month: "short" });
   }
 
   return "—";
@@ -144,6 +146,7 @@ export function ContratosTable({ contratos, companyId, userId, clientes, locais,
           <option value="daily">Diário</option>
           <option value="weekly">Semanal</option>
           <option value="biweekly">Quinzenal</option>
+          <option value="triweekly">3/3 semanas</option>
           <option value="monthly">Mensal</option>
           <option value="custom">Personalizado</option>
         </select>
@@ -195,7 +198,7 @@ export function ContratosTable({ contratos, companyId, userId, clientes, locais,
                           </p>
                         </div>
                         {/* Dias da semana para semanal */}
-                        {(c.frequency === "weekly" || c.frequency === "biweekly") && (c.weekdays ?? []).length > 0 && (
+                        {(c.frequency === "weekly" || c.frequency === "biweekly" || c.frequency === "triweekly") && (c.weekdays ?? []).length > 0 && (
                           <div className="flex gap-1 mt-1">
                             {(c.weekdays ?? []).sort().map((d) => (
                               <span key={d} className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-[var(--color-background)] text-[var(--color-text-sub)]">

@@ -7,6 +7,7 @@ import { X, Loader2, Check, Users, ChevronDown, ChevronLeft, ChevronRight } from
 import { createContrato, updateContrato } from "@/app/actions/contratos";
 import { todayInLisbon } from "@/lib/lisbon-time";
 import { isValidIsoDateString } from "@/lib/utils";
+import { shiftToNextBusinessDay } from "@/lib/contract-occurrences";
 import type { ScheduleDay } from "@/types/database";
 import type { ContratosTableRow } from "../page";
 import {
@@ -38,11 +39,12 @@ type CfgDay = { start_time: string; duration_min: number; team_id: string; num_p
 const DEFAULT_CFG: CfgDay = { start_time: "09:00", duration_min: 120, team_id: "", num_people: 1 };
 
 const FREQUENCY_OPTS = [
-  { value: "weekly",   label: "Semanal — mesmos dias todas as semanas" },
-  { value: "biweekly", label: "Quinzenal — mesmos dias, semana sim semana não" },
-  { value: "daily",    label: "Diário — todos os dias úteis" },
-  { value: "monthly",  label: "Mensal — uma vez por mês" },
-  { value: "custom",   label: "Personalizado — a cada N dias" },
+  { value: "weekly",    label: "Semanal — mesmos dias todas as semanas" },
+  { value: "biweekly",  label: "Quinzenal — mesmos dias, semana sim semana não" },
+  { value: "triweekly", label: "3 em 3 semanas — mesmos dias, a cada 3 semanas" },
+  { value: "daily",     label: "Diário — todos os dias úteis" },
+  { value: "monthly",   label: "Mensal — uma vez por mês (fim de semana passa para a 2ª feira)" },
+  { value: "custom",    label: "Personalizado — a cada N dias (fim de semana passa para a 2ª feira)" },
 ];
 
 // ─── Preview de ocorrências ──────────────────────────────────────────────────
@@ -72,15 +74,16 @@ function calcOccurrences(
     return results;
   }
 
-  if (frequency === "weekly" || frequency === "biweekly") {
+  const CADENCE_WEEKS: Record<string, number> = { weekly: 1, biweekly: 2, triweekly: 3 };
+  if (Object.hasOwn(CADENCE_WEEKS, frequency)) {
     if (weekdays.length === 0) return [];
-    // Para biweekly: calcular a semana de referência (paridade da semana ISO desde starts_on)
+    const cadence = CADENCE_WEEKS[frequency];
     const startWeek = Math.floor((start.getTime()) / (7 * 24 * 3600 * 1000));
     while (results.length < count && iter < 400) {
       iter++;
       const dow = cursor.getDay();
       const thisWeek = Math.floor((cursor.getTime()) / (7 * 24 * 3600 * 1000));
-      const isCorrectWeek = frequency === "weekly" || (thisWeek - startWeek) % 2 === 0;
+      const isCorrectWeek = cadence === 1 || (thisWeek - startWeek) % cadence === 0;
       if (isCorrectWeek && weekdays.includes(dow)) {
         results.push(new Date(cursor));
       }
@@ -93,7 +96,7 @@ function calcOccurrences(
     const d = new Date(cursor);
     while (results.length < count && iter < 36) {
       iter++;
-      results.push(new Date(d));
+      results.push(shiftToNextBusinessDay(d));
       d.setMonth(d.getMonth() + 1);
     }
     return results;
@@ -101,9 +104,14 @@ function calcOccurrences(
 
   if (frequency === "custom") {
     const step = Math.max(1, intervalDays);
+    const used = new Set<string>();
     while (results.length < count && iter < 400) {
       iter++;
-      if (cursor >= start) results.push(new Date(cursor));
+      if (cursor >= start) {
+        const shifted = shiftToNextBusinessDay(cursor);
+        const key = shifted.toDateString();
+        if (!used.has(key)) { used.add(key); results.push(shifted); }
+      }
       cursor.setDate(cursor.getDate() + step);
     }
     return results;
@@ -346,7 +354,7 @@ export function ContratoSheet({
 
   // Quais dias precisam de config
   const daysToConfig = useMemo<Array<{ num: number; key: ScheduleDay["day"]; label: string }>>(() => {
-    if (frequency === "weekly" || frequency === "biweekly") {
+    if (frequency === "weekly" || frequency === "biweekly" || frequency === "triweekly") {
       return selectedWeekdays.map((d) => {
         const found = WEEKDAYS.find((w) => w.value === d)!;
         return { num: d, key: DAY_KEY[d], label: found?.label ?? String(d) };
@@ -438,7 +446,7 @@ export function ContratoSheet({
     if (!localId) {
       setMessage({ type: "error", text: "Aviso: nenhum local selecionado." });
     }
-    if ((frequency === "weekly" || frequency === "biweekly") && selectedWeekdays.length === 0) {
+    if ((frequency === "weekly" || frequency === "biweekly" || frequency === "triweekly") && selectedWeekdays.length === 0) {
       setMessage({ type: "error", text: "Aviso: nenhum dia da semana selecionado." });
     }
     if (parsedHourlyRate != null && (!Number.isFinite(parsedHourlyRate) || parsedHourlyRate < 0)) {
@@ -464,7 +472,7 @@ export function ContratoSheet({
         num_people: null,
         frequency,
         interval_days: frequency === "custom" ? intervalDays : 1,
-        weekdays: (frequency === "weekly" || frequency === "biweekly") ? selectedWeekdays : null,
+        weekdays: (frequency === "weekly" || frequency === "biweekly" || frequency === "triweekly") ? selectedWeekdays : null,
         schedule_days: buildScheduleDays(),
         starts_on: startsOn,
         ends_on: endsOn || undefined,
@@ -686,7 +694,7 @@ export function ContratoSheet({
               </Field>
 
               {/* Dias da semana (se weekly / biweekly) */}
-              {(frequency === "weekly" || frequency === "biweekly") && (
+              {(frequency === "weekly" || frequency === "biweekly" || frequency === "triweekly") && (
                 <Field label="Dias da semana *">
                   <div className="flex flex-wrap gap-2">
                     {WEEKDAYS.map((w) => (

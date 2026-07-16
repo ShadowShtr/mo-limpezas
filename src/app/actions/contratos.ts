@@ -7,6 +7,7 @@ import { maxReferenceNumber } from "@/lib/services/reference";
 import { auditLog } from "@/lib/audit";
 import { hasOverlappingMonthlyContract } from "@/lib/contract-overlap";
 import { isValidIsoDateString, isValidFiniteNumber } from "@/lib/utils";
+import { getOccurrences, DOW_TO_KEY } from "@/lib/contract-occurrences";
 import type { ScheduleDay } from "@/types/database";
 
 export interface ContratoInput {
@@ -60,71 +61,6 @@ function validateContratoNumbers(input: Pick<ContratoInput,
     return "Número de pessoas inválido.";
   }
   return null;
-}
-
-// ─── Geração de ocorrências (mesma lógica do cron) ───────────────────────────
-
-const DOW_TO_KEY: Record<number, ScheduleDay["day"]> = {
-  0: "sun", 1: "mon", 2: "tue", 3: "wed", 4: "thu", 5: "fri", 6: "sat",
-};
-
-function getOccurrences(
-  contract: { frequency: string; weekdays: number[] | null; interval_days: number; schedule_days: ScheduleDay[]; starts_on: string; ends_on: string | null; excluded_dates?: string[] | null },
-  monthStart: Date,
-  monthEnd: Date,
-): Array<{ date: Date; schedule: ScheduleDay }> {
-  const results: Array<{ date: Date; schedule: ScheduleDay }> = [];
-  const defaultSchedule = contract.schedule_days?.[0];
-  if (!defaultSchedule) return [];
-
-  const contractStart = new Date(contract.starts_on + "T00:00:00");
-  const contractEnd = contract.ends_on ? new Date(contract.ends_on + "T23:59:59") : null;
-  // Datas excluídas manualmente (apagadas do calendário) — nunca são recriadas.
-  const excluded = new Set(contract.excluded_dates ?? []);
-
-  function inRange(d: Date) {
-    return d >= monthStart && d <= monthEnd && d >= contractStart
-      && (!contractEnd || d <= contractEnd) && !excluded.has(toLocalDateStr(d));
-  }
-
-  if (contract.frequency === "daily") {
-    const cursor = new Date(monthStart);
-    while (cursor <= monthEnd) {
-      if (inRange(cursor)) results.push({ date: new Date(cursor), schedule: defaultSchedule });
-      cursor.setDate(cursor.getDate() + 1);
-    }
-  } else if (contract.frequency === "weekly" || contract.frequency === "biweekly") {
-    const weekdays = contract.weekdays ?? [];
-    const startWeekNum = Math.floor(contractStart.getTime() / (7 * 24 * 3600 * 1000));
-    const cursor = new Date(monthStart);
-    while (cursor <= monthEnd) {
-      const dow = cursor.getDay();
-      if (weekdays.includes(dow)) {
-        if (contract.frequency === "biweekly") {
-          const thisWeekNum = Math.floor(cursor.getTime() / (7 * 24 * 3600 * 1000));
-          if ((thisWeekNum - startWeekNum) % 2 !== 0) { cursor.setDate(cursor.getDate() + 1); continue; }
-        }
-        if (inRange(cursor)) {
-          const dayKey = DOW_TO_KEY[dow];
-          const schedule = contract.schedule_days.find((s) => s.day === dayKey) ?? defaultSchedule;
-          results.push({ date: new Date(cursor), schedule });
-        }
-      }
-      cursor.setDate(cursor.getDate() + 1);
-    }
-  } else if (contract.frequency === "monthly") {
-    const dayOfMonth = contractStart.getDate();
-    const target = new Date(monthStart.getFullYear(), monthStart.getMonth(), dayOfMonth);
-    if (inRange(target)) results.push({ date: target, schedule: defaultSchedule });
-  } else if (contract.frequency === "custom") {
-    const step = Math.max(1, contract.interval_days ?? 1);
-    const cursor = new Date(contractStart);
-    while (cursor <= monthEnd) {
-      if (inRange(cursor)) results.push({ date: new Date(cursor), schedule: defaultSchedule });
-      cursor.setDate(cursor.getDate() + step);
-    }
-  }
-  return results;
 }
 
 /**

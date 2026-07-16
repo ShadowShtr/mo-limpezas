@@ -67,6 +67,7 @@ function frequencyLabel(contract: ContratosTableRow) {
   if (contract.frequency === "daily") return "Diária";
   if (contract.frequency === "weekly") return "Semanal";
   if (contract.frequency === "biweekly") return "Quinzenal";
+  if (contract.frequency === "triweekly") return "3 em 3 semanas";
   if (contract.frequency === "monthly") return "Mensal";
   if (contract.frequency === "custom") return `A cada ${contract.interval_days ?? 1} dias`;
   return contract.frequency;
