@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { formatDistanceToNow, formatTime, formatDate, cn, safeFormat, isValidIsoDateString } from "@/lib/utils";
+import { formatDistanceToNow, formatTime, formatDate, cn, safeFormat, isValidIsoDateString, isValidFiniteNumber } from "@/lib/utils";
 
 afterEach(() => {
   vi.useRealTimers();
@@ -196,5 +196,40 @@ describe("isValidIsoDateString", () => {
 
   it("respeita minYear/maxYear customizados", () => {
     expect(isValidIsoDateString("1950-01-01", { minYear: 1900, maxYear: 2100 })).toBe(true);
+  });
+});
+
+// ─── isValidFiniteNumber (bloqueia NaN/negativo/absurdo em campos
+// financeiros de server actions, ex: ajuste manual de folha salarial) ────────
+
+describe("isValidFiniteNumber", () => {
+  it("aceita null/undefined (campo opcional)", () => {
+    expect(isValidFiniteNumber(null)).toBe(true);
+    expect(isValidFiniteNumber(undefined)).toBe(true);
+  });
+
+  it("aceita números finitos não-negativos dentro do limite", () => {
+    expect(isValidFiniteNumber(0)).toBe(true);
+    expect(isValidFiniteNumber(42.5)).toBe(true);
+  });
+
+  it("rejeita NaN e Infinity", () => {
+    expect(isValidFiniteNumber(NaN)).toBe(false);
+    expect(isValidFiniteNumber(Infinity)).toBe(false);
+    expect(isValidFiniteNumber(-Infinity)).toBe(false);
+  });
+
+  it("rejeita negativos", () => {
+    expect(isValidFiniteNumber(-1)).toBe(false);
+  });
+
+  it("rejeita valores acima do máximo (omissão: 1_000_000)", () => {
+    expect(isValidFiniteNumber(1_000_001)).toBe(false);
+    expect(isValidFiniteNumber(1_000_000)).toBe(true);
+  });
+
+  it("respeita um max customizado", () => {
+    expect(isValidFiniteNumber(50_001, { max: 50_000 })).toBe(false);
+    expect(isValidFiniteNumber(50_000, { max: 50_000 })).toBe(true);
   });
 });

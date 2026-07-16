@@ -6,7 +6,7 @@ import { revalidatePath } from "next/cache";
 import { maxReferenceNumber } from "@/lib/services/reference";
 import { auditLog } from "@/lib/audit";
 import { hasOverlappingMonthlyContract } from "@/lib/contract-overlap";
-import { isValidIsoDateString } from "@/lib/utils";
+import { isValidIsoDateString, isValidFiniteNumber } from "@/lib/utils";
 import type { ScheduleDay } from "@/types/database";
 
 export interface ContratoInput {
@@ -39,6 +39,27 @@ export interface ContratoInput {
   num_people?: number | null;
   company_id: string;
   created_by: string;
+}
+
+// Valida os campos numéricos financeiros/quantidade de um contrato antes de
+// gravar — evita que um valor NaN/negativo/absurdo (chamada direta ao action,
+// fora do formulário) corrompa o cálculo de faturação/serviços gerados.
+function validateContratoNumbers(input: Pick<ContratoInput,
+  "hourly_rate" | "interval_days" | "upholstery_units" | "upholstery_unit_price" |
+  "unit_value" | "fixed_price" | "num_people"
+>): string | null {
+  if (!isValidFiniteNumber(input.hourly_rate)) return "Valor/hora inválido.";
+  if (!Number.isFinite(input.interval_days) || input.interval_days < 1 || input.interval_days > 365) {
+    return "Intervalo de dias inválido.";
+  }
+  if (!isValidFiniteNumber(input.upholstery_units)) return "Unidades de estofo inválidas.";
+  if (!isValidFiniteNumber(input.upholstery_unit_price)) return "Preço por unidade de estofo inválido.";
+  if (!isValidFiniteNumber(input.unit_value)) return "Valor por unidade inválido.";
+  if (!isValidFiniteNumber(input.fixed_price)) return "Valor fixo inválido.";
+  if (input.num_people != null && (!Number.isFinite(input.num_people) || input.num_people < 1 || input.num_people > 50)) {
+    return "Número de pessoas inválido.";
+  }
+  return null;
 }
 
 // ─── Geração de ocorrências (mesma lógica do cron) ───────────────────────────
@@ -440,6 +461,8 @@ export async function createContrato(input: ContratoInput) {
   if (input.ends_on && !isValidIsoDateString(input.ends_on)) {
     return { ok: false as const, error: "Data de fim inválida." };
   }
+  const numbersError = validateContratoNumbers(input);
+  if (numbersError) return { ok: false as const, error: numbersError };
 
   const { data: location } = await admin
     .from("locations")
@@ -563,6 +586,8 @@ export async function updateContrato(id: string, input: Omit<ContratoInput, "com
   if (input.ends_on && !isValidIsoDateString(input.ends_on)) {
     return { ok: false as const, error: "Data de fim inválida." };
   }
+  const numbersError = validateContratoNumbers(input);
+  if (numbersError) return { ok: false as const, error: numbersError };
 
   const { data: location } = await admin
     .from("locations")

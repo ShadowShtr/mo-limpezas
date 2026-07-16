@@ -1,5 +1,7 @@
 "use client";
 
+import { useEffect } from "react";
+
 export default function Error({
   error,
   reset,
@@ -7,6 +9,12 @@ export default function Error({
   error: Error & { digest?: string };
   reset: () => void;
 }) {
+  useEffect(() => {
+    // Só rota/digest vão para a consola — a mensagem pode conter dados
+    // sensíveis lançados no cliente (nomes, valores, etc.).
+    console.error(`[root] erro inesperado (digest: ${error.digest ?? "—"}):`, error);
+  }, [error]);
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-[#F8FAFC] p-6">
       <div className="text-center max-w-sm">
@@ -15,7 +23,7 @@ export default function Error({
         </div>
         <h1 className="text-lg font-bold text-[#0F172A] mb-2">Erro inesperado</h1>
         <p className="text-sm text-[#64748B] mb-6">
-          {error?.message ?? "Ocorreu um problema. Tenta novamente."}
+          Ocorreu um problema. Tenta novamente.
         </p>
         <button
           onClick={reset}

@@ -6,6 +6,7 @@ import { requireProfile } from "@/lib/auth-guard";
 import { monthRange, calcCollaboratorPayroll } from "@/lib/payroll-calc";
 import { auditLog } from "@/lib/audit";
 import { getMissingCashFlowReferenceIds, isValidCashFlowAmount } from "@/lib/cash-flow-integrity";
+import { isValidFiniteNumber } from "@/lib/utils";
 import { revalidatePath } from "next/cache";
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
@@ -286,6 +287,16 @@ export async function adjustPayrollRecord(
   id: string,
   adjust: PayrollAdjust,
 ): Promise<{ ok: boolean; error?: string }> {
+  // Ajuste manual de folha salarial — cada valor entra diretamente na
+  // conta do net_salary pago à colaboradora, por isso é validado à entrada
+  // (um NaN/negativo/absurdo aqui corrompe o salário real, não só a UI).
+  for (const [field, value] of Object.entries(adjust)) {
+    if (field === "notes") continue;
+    if (!isValidFiniteNumber(value as number | undefined, { max: 100_000 })) {
+      return { ok: false, error: `Valor inválido em "${field}".` };
+    }
+  }
+
   const supabase = await createClient();
   const admin    = createAdminClient();
 

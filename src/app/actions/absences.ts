@@ -4,6 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { addDaysToDateString, toLisbonTimestamp } from "@/lib/lisbon-time";
+import { isValidIsoDateString } from "@/lib/utils";
 
 export type AbsenceType =
   | "doenca_com_baixa"
@@ -47,6 +48,16 @@ export async function createAbsence(input: CreateAbsenceInput) {
 
   const { data: actor } = await admin.from("profiles").select("role, company_id").eq("id", user.id).single();
   if (!actor || !["admin", "gestor"].includes(actor.role)) return { ok: false as const, error: "Sem permissão." };
+
+  if (!isValidIsoDateString(input.starts_on)) {
+    return { ok: false as const, error: "Data de início inválida." };
+  }
+  if (!isValidIsoDateString(input.ends_on)) {
+    return { ok: false as const, error: "Data de fim inválida." };
+  }
+  if (input.ends_on < input.starts_on) {
+    return { ok: false as const, error: "Data de fim anterior à data de início." };
+  }
 
   const { error } = await admin.from("absences").insert({
     company_id: actor.company_id,

@@ -53,9 +53,10 @@ export async function createColaborador(input: ColaboradorInput) {
   if (!callerProfile || !["admin", "gestor"].includes(callerProfile.role)) {
     return { ok: false as const, error: "Sem permissão." };
   }
-  if (callerProfile.company_id !== parsed.data.company_id) {
-    return { ok: false as const, error: "Acesso negado." };
-  }
+  // company_id vem sempre da sessão do chamador, nunca do payload do
+  // cliente — o valor recebido em `input.company_id` é ignorado a partir
+  // daqui (só serviu para passar na validação de forma do schema).
+  const companyId = callerProfile.company_id;
 
   // Gera email placeholder se não fornecido (formato válido obrigatório pelo GoTrue)
   const email =
@@ -66,7 +67,7 @@ export async function createColaborador(input: ColaboradorInput) {
     email,
     email_confirm: true,
     user_metadata: {
-      company_id: parsed.data.company_id,
+      company_id: companyId,
       role: parsed.data.role,
       full_name: parsed.data.full_name,
     },
@@ -79,7 +80,7 @@ export async function createColaborador(input: ColaboradorInput) {
     .from("profiles")
     .upsert({
       id: authData.user.id,
-      company_id: parsed.data.company_id,
+      company_id: companyId,
       role: parsed.data.role,
       full_name: parsed.data.full_name,
       email: parsed.data.email?.trim() || null,

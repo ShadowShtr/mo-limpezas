@@ -32,6 +32,20 @@ export function isValidIsoDateString(
   return dateFnsFormat(date, "yyyy-MM-dd") === value;
 }
 
+/**
+ * Valida um número financeiro/quantidade vindo de um server action (hora,
+ * preço, unidades, etc.): finito, não-negativo e sem excesso de magnitude.
+ * `null`/`undefined` passam (campo opcional) — quem chama decide se o campo
+ * é obrigatório antes de validar o valor.
+ */
+export function isValidFiniteNumber(
+  value: number | null | undefined,
+  { max = 1_000_000 }: { max?: number } = {},
+): boolean {
+  if (value === null || value === undefined) return true;
+  return Number.isFinite(value) && value >= 0 && value <= max;
+}
+
 export function safeFormat(
   value: string | Date | null | undefined,
   pattern: string,
