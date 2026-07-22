@@ -601,7 +601,7 @@ export async function updateContrato(id: string, input: Omit<ContratoInput, "com
     .eq("company_id", profile.company_id)
     .single();
 
-  const { error } = await admin.from("contracts").update({
+  const { data: saved, error } = await admin.from("contracts").update({
     location_id: input.location_id,
     name: input.name || null,
     frequency: input.frequency,
@@ -622,9 +622,34 @@ export async function updateContrato(id: string, input: Omit<ContratoInput, "com
     fixed_monthly: input.fixed_monthly ?? false,
     apply_vat: input.apply_vat ?? false,
     num_people: input.num_people ?? null,
-  }).eq("id", id).eq("company_id", profile.company_id);
+  }).eq("id", id).eq("company_id", profile.company_id)
+    .select("id, fixed_price, fixed_monthly, apply_vat")
+    .single();
 
   if (error) return { ok: false as const, error: error.message };
+  if (!saved) {
+    return { ok: false as const, error: "Nada foi gravado (contrato não encontrado ou sem permissão). Atualize a página e tente novamente." };
+  }
+
+  // Read-after-write dos campos financeiros: o update devolve a linha gravada;
+  // se o que persistiu não for o que foi enviado (trigger/constraint a intervir,
+  // corrida com outra sessão), o utilizador fica a saber em vez de ver "sucesso"
+  // com um valor diferente na base.
+  const intendedFin = {
+    fixed_price: input.fixed_price ?? null,
+    fixed_monthly: input.fixed_monthly ?? false,
+    apply_vat: input.apply_vat ?? false,
+  };
+  const finMismatch =
+    Number(saved.fixed_price ?? -1) !== Number(intendedFin.fixed_price ?? -1) ||
+    saved.fixed_monthly !== intendedFin.fixed_monthly ||
+    saved.apply_vat !== intendedFin.apply_vat;
+  if (finMismatch) {
+    return {
+      ok: false as const,
+      error: "A alteração não foi confirmada na base de dados (os valores financeiros gravados divergem dos enviados). Nada foi considerado gravado — atualize a página e tente novamente.",
+    };
+  }
 
   // Auditoria do valor financeiro do contrato (avença/IVA) — só quando algo
   // muda de facto. Sem isto não há como recuperar um valor apagado por engano

@@ -148,6 +148,45 @@ describe("rede de segurança na base de dados (059_rede_seguranca.sql)", () => {
   });
 });
 
+// ── 3c. Guardas adicionais (migração 060) + painel de recuperação.
+describe("guardas adicionais (060_guardas_adicionais.sql) e painel de recuperação", () => {
+  const sql = readFileSync(join(ROOT, "supabase", "migrations", "060_guardas_adicionais.sql"), "utf8");
+
+  it("avença mensal ativa não pode ficar sem valor (trigger no banco)", () => {
+    expect(sql).toContain("trg_guard_contract_fixed_price");
+    expect(sql).toContain("RAISE EXCEPTION");
+  });
+
+  it("avença duplicada é impossível ao nível do Postgres (EXCLUDE constraint)", () => {
+    expect(sql).toContain("contracts_no_duplicate_monthly");
+    expect(sql).toContain("EXCLUDE USING gist");
+    expect(sql).toContain("btree_gist");
+  });
+
+  it("histórico regista company_id e changed_fields", () => {
+    expect(sql).toContain("changed_fields");
+    expect(sql).toMatch(/ADD COLUMN IF NOT EXISTS company_id/);
+  });
+
+  it("painel de recuperação existe com restauro via server action segura", () => {
+    const page = readFileSync(
+      join(SRC, "app", "(dashboard)", "dashboard", "sistema", "auditoria", "page.tsx"), "utf8");
+    expect(page).toContain("restoreHistoryEntry");
+
+    const action = readFileSync(join(SRC, "app", "actions", "data-history.ts"), "utf8");
+    expect(action).toContain('"use server"');
+    expect(action).toContain("requireProfile");
+    expect(action, "restauro tem de confirmar linhas afetadas").toContain('.select("id")');
+    expect(action, "restauro exige motivo").toContain("reason");
+    expect(action, "restauro fica auditado").toContain("auditLog");
+  });
+
+  it("updateContrato confirma pós-gravação os campos financeiros (read-after-write)", () => {
+    const contratos = readFileSync(join(SRC, "app", "actions", "contratos.ts"), "utf8");
+    expect(contratos).toContain("não foi confirmada na base de dados");
+  });
+});
+
 // ── 4. Rastreabilidade: /api/health tem de expor a versão em produção.
 describe("versão do deploy rastreável", () => {
   it("/api/health devolve o commit (VERCEL_GIT_COMMIT_SHA)", () => {
