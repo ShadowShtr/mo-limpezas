@@ -14,7 +14,7 @@ export default async function TarefasPage() {
   const { data: profile } = await admin.from("profiles").select("company_id").eq("id", user.id).single();
   if (!profile?.company_id) redirect("/login");
 
-  const [tasksRes, columnsRes, { data: members }] = await Promise.all([
+  const [tasksRes, columnsRes, { data: members }, { data: clients }] = await Promise.all([
     getManagementTasks(profile.company_id),
     getKanbanColumns(profile.company_id),
     admin
@@ -23,6 +23,12 @@ export default async function TarefasPage() {
       .eq("company_id", profile.company_id)
       .eq("status", "ativo")
       .order("full_name"),
+    admin
+      .from("clients")
+      .select("id, name")
+      .eq("company_id", profile.company_id)
+      .eq("status", "ativo")
+      .order("name"),
   ]);
 
   return (
@@ -34,6 +40,7 @@ export default async function TarefasPage() {
           initialColumns={columnsRes}
           companyId={profile.company_id}
           members={(members ?? []).map((m) => ({ id: m.id, full_name: m.full_name }))}
+          clients={(clients ?? []).map((c) => ({ id: c.id, name: c.name }))}
         />
       </div>
     </div>

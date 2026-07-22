@@ -2,13 +2,14 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Clock, AlertTriangle } from "lucide-react";
+import { Clock, AlertTriangle, Plane } from "lucide-react";
 
-// Faltas vivem dentro do Registo de Ponto (saíram do menu lateral):
-// estas tabs ligam as duas páginas como se fossem uma só secção.
+// Faltas e Férias vivem dentro do Registo de Ponto (saíram do menu lateral):
+// estas tabs ligam as três páginas como se fossem uma só secção.
 const TABS = [
   { href: "/dashboard/registo-ponto", label: "Registos de ponto", icon: Clock },
   { href: "/dashboard/faltas",        label: "Faltas e férias",   icon: AlertTriangle },
+  { href: "/dashboard/ferias",        label: "Férias",            icon: Plane },
 ];
 
 export function PontoTabs() {

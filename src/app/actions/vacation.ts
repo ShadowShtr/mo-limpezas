@@ -3,6 +3,7 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
+import { calcVacationEntitlement } from "@/lib/vacation-entitlement";
 
 export interface VacationRequest {
   id: string;
@@ -264,4 +265,80 @@ export async function reviewVacationRequest(
   revalidatePath("/dashboard/faltas");
   revalidatePath("/app/ausencias");
   return { ok: true };
+}
+
+// ── Gestor: visão geral das férias de todos os colaboradores (aba "Férias") ────
+export interface EmployeeVacationOverview {
+  id: string;
+  full_name: string;
+  contract_start: string | null;
+  vacation_balance: number;
+  /** Dias a que tem direito nesse ano civil, calculado pelo modelo legal PT a partir de contract_start. Null se não há data de início de contrato definida. */
+  entitlement_days: number | null;
+  used_days_year: number;
+  /** entitlement_days - used_days_year (nunca negativo). Null se entitlement_days for null. */
+  available_days: number | null;
+  periods: { starts_on: string; ends_on: string; days: number }[];
+  pending_requests: number;
+}
+
+export async function getAllVacationsOverview(year: number): Promise<EmployeeVacationOverview[]> {
+  const supabase = await createClient();
+  const admin = createAdminClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return [];
+
+  const { data: me } = await admin
+    .from("profiles").select("company_id, role").eq("id", user.id).single();
+  if (!me || !["admin", "gestor"].includes(me.role)) return [];
+
+  const yearStart = `${year}-01-01`;
+  const yearEnd = `${year}-12-31`;
+
+  const [{ data: employees }, { data: absences }, { data: pending }] = await Promise.all([
+    admin.from("profiles")
+      .select("id, full_name, vacation_balance, contract_start")
+      .eq("company_id", me.company_id)
+      .eq("status", "ativo")
+      .in("role", ["colaborador", "gestor"])
+      .order("full_name"),
+    admin.from("absences")
+      .select("collaborator_id, starts_on, ends_on")
+      .eq("company_id", me.company_id)
+      .eq("absence_type", "ferias")
+      .lte("starts_on", yearEnd)
+      .gte("ends_on", yearStart),
+    admin.from("vacation_requests")
+      .select("collaborator_id")
+      .eq("company_id", me.company_id)
+      .eq("status", "pendente"),
+  ]);
+
+  const pendingCount: Record<string, number> = {};
+  for (const p of pending ?? []) pendingCount[p.collaborator_id] = (pendingCount[p.collaborator_id] ?? 0) + 1;
+
+  const periodsByEmployee: Record<string, { starts_on: string; ends_on: string; days: number }[]> = {};
+  for (const a of absences ?? []) {
+    const clampedStart = a.starts_on < yearStart ? yearStart : a.starts_on;
+    const clampedEnd = a.ends_on > yearEnd ? yearEnd : a.ends_on;
+    const days = countWeekdays(clampedStart, clampedEnd);
+    (periodsByEmployee[a.collaborator_id] ??= []).push({ starts_on: a.starts_on, ends_on: a.ends_on, days });
+  }
+
+  return (employees ?? []).map((e) => {
+    const periods = (periodsByEmployee[e.id] ?? []).sort((a, b) => a.starts_on.localeCompare(b.starts_on));
+    const usedDaysYear = periods.reduce((sum, p) => sum + p.days, 0);
+    const entitlementDays = e.contract_start ? calcVacationEntitlement(e.contract_start, year) : null;
+    return {
+      id: e.id,
+      full_name: e.full_name,
+      contract_start: e.contract_start,
+      vacation_balance: e.vacation_balance ?? 0,
+      entitlement_days: entitlementDays,
+      used_days_year: usedDaysYear,
+      available_days: entitlementDays != null ? Math.max(0, entitlementDays - usedDaysYear) : null,
+      periods,
+      pending_requests: pendingCount[e.id] ?? 0,
+    };
+  });
 }

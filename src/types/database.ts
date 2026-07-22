@@ -259,9 +259,9 @@ export type Database = {
         Relationships: [];
       };
       management_tasks: {
-        Row: { id: string; company_id: string; title: string; body: string | null; status: "pendente" | "em_curso" | "concluido"; priority: "normal" | "urgente"; assigned_to: string | null; created_by: string | null; due_date: string | null; completed_at: string | null; created_at: string; updated_at: string };
-        Insert: { company_id: string; title: string; body?: string | null; status?: "pendente" | "em_curso" | "concluido"; priority?: "normal" | "urgente"; assigned_to?: string | null; created_by?: string | null; due_date?: string | null };
-        Update: { title?: string; body?: string | null; status?: "pendente" | "em_curso" | "concluido"; priority?: "normal" | "urgente"; assigned_to?: string | null; due_date?: string | null; completed_at?: string | null; updated_at?: string };
+        Row: { id: string; company_id: string; title: string; body: string | null; status: "pendente" | "em_curso" | "concluido"; priority: "normal" | "urgente"; category: string | null; client_id: string | null; assigned_to: string | null; created_by: string | null; due_date: string | null; completed_at: string | null; attachment_url: string | null; attachment_name: string | null; attachment_size: number | null; attachment_mime: string | null; created_at: string; updated_at: string };
+        Insert: { company_id: string; title: string; body?: string | null; status?: "pendente" | "em_curso" | "concluido"; priority?: "normal" | "urgente"; category?: string | null; client_id?: string | null; assigned_to?: string | null; created_by?: string | null; due_date?: string | null };
+        Update: { title?: string; body?: string | null; status?: "pendente" | "em_curso" | "concluido"; priority?: "normal" | "urgente"; category?: string | null; client_id?: string | null; assigned_to?: string | null; due_date?: string | null; completed_at?: string | null; attachment_url?: string | null; attachment_name?: string | null; attachment_size?: number | null; attachment_mime?: string | null; updated_at?: string };
         Relationships: [];
       };
       service_price_audit: {

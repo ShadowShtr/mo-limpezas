@@ -2,18 +2,25 @@
 
 import { useEffect, useRef, useState, useTransition } from "react";
 import { createPortal } from "react-dom";
-import { AlertTriangle, Calendar, Loader2, Plus, Trash2, User, X } from "lucide-react";
+import {
+  AlertTriangle, Building2, Calendar, ChevronDown, FolderKanban,
+  Loader2, Paperclip, Plus, Search, Trash2, Upload, User, Users, X,
+} from "lucide-react";
 import {
   createManagementTask,
   deleteManagementTask,
+  deleteTaskAttachment,
+  getSignedTaskAttachmentUrl,
   saveKanbanColumns,
   updateManagementTask,
+  uploadTaskAttachment,
   type KanbanColumn,
   type ManagementTask,
   type TaskInput,
   type TaskPriority,
 } from "@/app/actions/management-tasks";
 import { isValidIsoDateString } from "@/lib/utils";
+import { TASK_CATEGORIES, type TaskCategory } from "@/lib/task-categories";
 
 // ── Color palette ──────────────────────────────────────────────────────────────
 const COLOR_DOT: Record<string, string> = {
@@ -35,12 +42,14 @@ const PALETTE = Object.keys(COLOR_DOT);
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 interface Assignee { id: string; full_name: string; }
+interface TaskClient { id: string; name: string; }
 
 interface Props {
   initialTasks: ManagementTask[];
   initialColumns: KanbanColumn[];
   companyId: string;
   members: Assignee[];
+  clients: TaskClient[];
 }
 
 type DragState = {
@@ -54,6 +63,131 @@ function fmtDate(s: string | null) {
   const d = new Date(s + "T00:00:00");
   const today = new Date(); today.setHours(0, 0, 0, 0);
   return { label: d.toLocaleDateString("pt-PT"), overdue: d < today };
+}
+
+// ── Category picker (ícone + descrição, dropdown custom) ────────────────────────
+function CategoryPicker({ value, onChange }: { value: TaskCategory | ""; onChange: (v: TaskCategory | "") => void }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    function onClickOutside(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener("mousedown", onClickOutside);
+    return () => document.removeEventListener("mousedown", onClickOutside);
+  }, []);
+  const selected = TASK_CATEGORIES.find((c) => c.value === value);
+  return (
+    <div className="relative" ref={ref}>
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className="w-full flex items-center justify-between gap-2 px-3 py-2 border border-[var(--color-border)] rounded-lg text-sm outline-none focus:border-[var(--color-primary)]"
+      >
+        {selected ? (
+          <span className="flex items-center gap-2 text-[var(--color-text-main)]">
+            <selected.icon className="w-4 h-4 text-[var(--color-primary)]" />
+            {selected.label}
+          </span>
+        ) : (
+          <span className="text-[var(--color-text-muted)]">Selecionar categoria...</span>
+        )}
+        <ChevronDown className="w-4 h-4 text-[var(--color-text-muted)] shrink-0" />
+      </button>
+      {open && (
+        <div className="absolute z-10 mt-1 w-full rounded-lg border border-[var(--color-border)] bg-white shadow-lg overflow-hidden">
+          {TASK_CATEGORIES.map((c) => (
+            <button
+              key={c.value}
+              type="button"
+              onClick={() => { onChange(c.value); setOpen(false); }}
+              className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-left hover:bg-[var(--color-background)] border-b border-[var(--color-border)] last:border-0"
+            >
+              <c.icon className="w-4 h-4 text-[var(--color-primary)] shrink-0" />
+              <span className="text-[var(--color-text-main)]">{c.label}</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Client picker (pesquisa + seleção, mesmo padrão do calendário) ──────────────
+function ClientPicker({ clients, value, onChange }: { clients: TaskClient[]; value: string; onChange: (id: string) => void }) {
+  const [search, setSearch] = useState("");
+  const selected = clients.find((c) => c.id === value);
+
+  if (selected) {
+    return (
+      <div className="flex items-center justify-between gap-2 rounded-lg border border-[var(--color-border)] px-3 py-2">
+        <span className="text-sm font-medium text-[var(--color-text-main)] truncate">{selected.name}</span>
+        <button type="button" onClick={() => onChange("")} className="text-xs font-medium text-[var(--color-primary)] hover:underline shrink-0">
+          Mudar
+        </button>
+      </div>
+    );
+  }
+
+  const q = search.trim().toLowerCase();
+  const matches = (q ? clients.filter((c) => c.name.toLowerCase().includes(q)) : clients).slice(0, 6);
+  return (
+    <div>
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--color-text-muted)] pointer-events-none" />
+        <input
+          type="text"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Pesquisar cliente pelo nome..."
+          className="w-full pl-9 pr-3 py-2 border border-[var(--color-border)] rounded-lg text-sm outline-none focus:border-[var(--color-primary)]"
+        />
+      </div>
+      {matches.length > 0 && (
+        <div className="mt-1.5 rounded-lg border border-[var(--color-border)] overflow-hidden">
+          {matches.map((c) => (
+            <button
+              key={c.id}
+              type="button"
+              onClick={() => onChange(c.id)}
+              className="w-full text-left px-3 py-2 text-sm text-[var(--color-text-main)] hover:bg-[var(--color-background)] border-b border-[var(--color-border)] last:border-0"
+            >
+              {c.name}
+            </button>
+          ))}
+        </div>
+      )}
+      {q && matches.length === 0 && <p className="mt-1.5 text-xs text-[var(--color-text-muted)]">Nenhum cliente encontrado.</p>}
+    </div>
+  );
+}
+
+// ── Abas locais do modal (Detalhes / Cliente e Responsável) ─────────────────────
+type ModalTab = "detalhes" | "cliente";
+function ModalTabs({ tab, onChange }: { tab: ModalTab; onChange: (t: ModalTab) => void }) {
+  const TABS: { key: ModalTab; label: string; icon: React.ElementType }[] = [
+    { key: "detalhes", label: "Detalhes",              icon: FolderKanban },
+    { key: "cliente",  label: "Cliente e Responsável",  icon: Users },
+  ];
+  return (
+    <div className="flex gap-1 bg-[var(--color-background)] rounded-xl p-1 w-fit">
+      {TABS.map(({ key, label, icon: Icon }) => (
+        <button
+          key={key}
+          type="button"
+          onClick={() => onChange(key)}
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+            tab === key
+              ? "bg-white text-[var(--color-primary)] shadow-sm border border-[var(--color-border)]"
+              : "text-[var(--color-text-sub)] hover:text-[var(--color-text-main)]"
+          }`}
+        >
+          <Icon className="w-3.5 h-3.5" />
+          {label}
+        </button>
+      ))}
+    </div>
+  );
 }
 
 // ── Card ───────────────────────────────────────────────────────────────────────
@@ -87,6 +221,20 @@ function TaskCard({ task, column, deleting, dragging, onDelete, onPointerDown, o
       </div>
       {task.body && <p className="text-xs text-[var(--color-text-sub)] line-clamp-2 leading-relaxed">{task.body}</p>}
       <div className="flex flex-wrap gap-1.5">
+        {task.category && (() => {
+          const cat = TASK_CATEGORIES.find((c) => c.value === task.category);
+          if (!cat) return null;
+          return (
+            <span className="flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 font-medium">
+              <cat.icon className="w-3 h-3" />{cat.label}
+            </span>
+          );
+        })()}
+        {task.client_name && (
+          <span className="flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 font-medium">
+            <Building2 className="w-3 h-3" />{task.client_name}
+          </span>
+        )}
         {task.priority === "urgente" && (
           <span className="flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-red-100 text-red-700 font-medium">
             <AlertTriangle className="w-3 h-3" />Urgente
@@ -102,13 +250,18 @@ function TaskCard({ task, column, deleting, dragging, onDelete, onPointerDown, o
             <User className="w-3 h-3" />{task.assigned_to_name}
           </span>
         )}
+        {task.attachment_url && (
+          <span className="flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-600 font-medium" title={task.attachment_name ?? "Anexo"}>
+            <Paperclip className="w-3 h-3" />Anexo
+          </span>
+        )}
       </div>
     </div>
   );
 }
 
 // ── Main ───────────────────────────────────────────────────────────────────────
-export function TasksClient({ initialTasks, initialColumns, companyId, members }: Props) {
+export function TasksClient({ initialTasks, initialColumns, companyId, members, clients }: Props) {
   const [tasks, setTasks] = useState(initialTasks);
   const [columns, setColumns] = useState(initialColumns);
 
@@ -119,9 +272,12 @@ export function TasksClient({ initialTasks, initialColumns, companyId, members }
 
   // ── "Nova tarefa" modal (top-level, com seletor de coluna) ──
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [createTab, setCreateTab] = useState<ModalTab>("detalhes");
   const [createColId, setCreateColId] = useState("");
   const [createTitle, setCreateTitle] = useState("");
   const [createBody, setCreateBody] = useState("");
+  const [createCategory, setCreateCategory] = useState<TaskCategory | "">("");
+  const [createClientId, setCreateClientId] = useState("");
   const [createPriority, setCreatePriority] = useState<TaskPriority>("normal");
   const [createAssigned, setCreateAssigned] = useState("");
   const [createDue, setCreateDue] = useState("");
@@ -134,13 +290,18 @@ export function TasksClient({ initialTasks, initialColumns, companyId, members }
 
   // ── Detail popup ──
   const [openTask, setOpenTask] = useState<ManagementTask | null>(null);
+  const [editTab, setEditTab] = useState<ModalTab>("detalhes");
   const [editTitle, setEditTitle] = useState("");
   const [editBody, setEditBody] = useState("");
+  const [editCategory, setEditCategory] = useState<TaskCategory | "">("");
+  const [editClientId, setEditClientId] = useState("");
   const [editPriority, setEditPriority] = useState<TaskPriority>("normal");
   const [editAssigned, setEditAssigned] = useState("");
   const [editDue, setEditDue] = useState("");
   const [editStatus, setEditStatus] = useState("");
   const [savingDetail, startSaveDetail] = useTransition();
+  const [attachUploading, setAttachUploading] = useState(false);
+  const [attachError, setAttachError] = useState<string | null>(null);
 
   // ── Nova coluna ──
   const [addingColumn, setAddingColumn] = useState(false);
@@ -228,8 +389,44 @@ export function TasksClient({ initialTasks, initialColumns, companyId, members }
   function handleCardClick(task: ManagementTask) {
     if (wasDraggingRef.current) { wasDraggingRef.current = false; return; }
     setOpenTask(task); setEditTitle(task.title); setEditBody(task.body ?? "");
+    setEditCategory(task.category ?? ""); setEditClientId(task.client_id ?? "");
     setEditPriority(task.priority as TaskPriority); setEditAssigned(task.assigned_to ?? "");
-    setEditDue(task.due_date ?? ""); setEditStatus(task.status);
+    setEditDue(task.due_date ?? ""); setEditStatus(task.status); setEditTab("detalhes");
+    setAttachError(null); setAttachUploading(false);
+  }
+
+  function handleAttachmentChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file || !openTask) return;
+    setAttachError(null);
+    setAttachUploading(true);
+    const taskId = openTask.id;
+    const fd = new FormData();
+    fd.append("file", file);
+    uploadTaskAttachment(taskId, fd).then((res) => {
+      setAttachUploading(false);
+      if (!res.ok) { setAttachError(res.error); return; }
+      setOpenTask((t) => (t ? { ...t, attachment_url: res.url, attachment_name: res.name } : t));
+      setTasks((prev) => prev.map((t) => t.id === taskId ? { ...t, attachment_url: res.url, attachment_name: res.name } : t));
+    });
+  }
+
+  async function handleAttachmentDownload() {
+    if (!openTask?.attachment_url) return;
+    const res = await getSignedTaskAttachmentUrl(openTask.attachment_url);
+    window.open(res.ok ? res.url : openTask.attachment_url, "_blank");
+  }
+
+  function handleAttachmentRemove() {
+    if (!openTask) return;
+    if (!confirm("Remover o anexo?")) return;
+    const taskId = openTask.id;
+    deleteTaskAttachment(taskId).then((res) => {
+      if (!res.ok) { setAttachError(res.error ?? "Erro ao remover."); return; }
+      setOpenTask((t) => (t ? { ...t, attachment_url: null, attachment_name: null } : t));
+      setTasks((prev) => prev.map((t) => t.id === taskId ? { ...t, attachment_url: null, attachment_name: null } : t));
+    });
   }
 
   function saveDetail() {
@@ -237,6 +434,7 @@ export function TasksClient({ initialTasks, initialColumns, companyId, members }
     startSaveDetail(async () => {
       const update: Partial<TaskInput> = {
         title: editTitle.trim() || openTask.title, body: editBody.trim() || null,
+        category: editCategory || null, client_id: editClientId || null,
         priority: editPriority, assigned_to: editAssigned || null,
         due_date: editDue || null, status: editStatus,
         markCompleted: editStatus === "concluido" && openTask.status !== "concluido",
@@ -247,6 +445,7 @@ export function TasksClient({ initialTasks, initialColumns, companyId, members }
       setTasks((prev) => prev.map((t) => t.id === openTask.id ? {
         ...t, ...taskFields,
         assigned_to_name: members.find((m) => m.id === editAssigned)?.full_name ?? null,
+        client_name: clients.find((c) => c.id === editClientId)?.name ?? null,
       } : t));
       setOpenTask(null);
     });
@@ -266,6 +465,7 @@ export function TasksClient({ initialTasks, initialColumns, companyId, members }
     setCreateError(null);
     const input: TaskInput = {
       title: createTitle.trim(), body: createBody.trim() || null,
+      category: createCategory || null, client_id: createClientId || null,
       priority: createPriority, assigned_to: createAssigned || null,
       due_date: createDue || null, status: createColId,
     };
@@ -274,7 +474,8 @@ export function TasksClient({ initialTasks, initialColumns, companyId, members }
       if (!res.ok) { setCreateError(res.error ?? "Erro ao criar tarefa"); return; }
       setTasks((prev) => [res.task, ...prev]);
       setShowCreateModal(false);
-      setCreateTitle(""); setCreateBody(""); setCreatePriority("normal"); setCreateAssigned(""); setCreateDue(""); setCreateColId("");
+      setCreateTitle(""); setCreateBody(""); setCreateCategory(""); setCreateClientId("");
+      setCreatePriority("normal"); setCreateAssigned(""); setCreateDue(""); setCreateColId(""); setCreateTab("detalhes");
     });
   }
 
@@ -339,7 +540,8 @@ export function TasksClient({ initialTasks, initialColumns, companyId, members }
         <button
           onClick={() => {
             setCreateColId(columns[0]?.id ?? "");
-            setCreateTitle(""); setCreateBody(""); setCreatePriority("normal"); setCreateAssigned(""); setCreateDue(""); setCreateError(null);
+            setCreateTitle(""); setCreateBody(""); setCreateCategory(""); setCreateClientId("");
+            setCreatePriority("normal"); setCreateAssigned(""); setCreateDue(""); setCreateError(null); setCreateTab("detalhes");
             setShowCreateModal(true);
           }}
           className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[var(--color-primary)] text-white text-sm font-medium hover:opacity-90 transition-opacity"
@@ -521,52 +723,69 @@ export function TasksClient({ initialTasks, initialColumns, companyId, members }
                 <X className="w-4 h-4 text-[var(--color-text-muted)]" />
               </button>
             </div>
-            <div>
-              <label className="block text-xs font-medium text-[var(--color-text-sub)] mb-1">Coluna *</label>
-              <select value={createColId} onChange={(e) => setCreateColId(e.target.value)}
-                className="w-full px-3 py-2 border border-[var(--color-border)] rounded-lg text-sm outline-none focus:border-[var(--color-primary)]">
-                {columns.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-[var(--color-text-sub)] mb-1">Título *</label>
-              <input value={createTitle} onChange={(e) => setCreateTitle(e.target.value)}
-                placeholder="Descrever a tarefa..."
-                className="w-full px-3 py-2 border border-[var(--color-border)] rounded-lg text-sm outline-none focus:border-[var(--color-primary)]"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-[var(--color-text-sub)] mb-1">Descrição</label>
-              <textarea value={createBody} onChange={(e) => setCreateBody(e.target.value)}
-                rows={3} placeholder="Detalhes adicionais..."
-                className="w-full px-3 py-2 border border-[var(--color-border)] rounded-lg text-sm outline-none focus:border-[var(--color-primary)] resize-none"
-              />
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs font-medium text-[var(--color-text-sub)] mb-1">Prioridade</label>
-                <select value={createPriority} onChange={(e) => setCreatePriority(e.target.value as TaskPriority)}
-                  className="w-full px-3 py-2 border border-[var(--color-border)] rounded-lg text-sm outline-none focus:border-[var(--color-primary)]">
-                  <option value="normal">Normal</option>
-                  <option value="urgente">Urgente</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-[var(--color-text-sub)] mb-1">Data limite</label>
-                <input type="date" value={createDue} onChange={(e) => { if (!e.target.value || isValidIsoDateString(e.target.value)) setCreateDue(e.target.value); }}
-                  className="w-full px-3 py-2 border border-[var(--color-border)] rounded-lg text-sm outline-none focus:border-[var(--color-primary)]"
-                />
-              </div>
-            </div>
-            {members.length > 0 && (
-              <div>
-                <label className="block text-xs font-medium text-[var(--color-text-sub)] mb-1">Atribuir a</label>
-                <select value={createAssigned} onChange={(e) => setCreateAssigned(e.target.value)}
-                  className="w-full px-3 py-2 border border-[var(--color-border)] rounded-lg text-sm outline-none focus:border-[var(--color-primary)]">
-                  <option value="">— Ninguém —</option>
-                  {members.map((m) => <option key={m.id} value={m.id}>{m.full_name}</option>)}
-                </select>
-              </div>
+            <ModalTabs tab={createTab} onChange={setCreateTab} />
+
+            {createTab === "detalhes" ? (
+              <>
+                <div>
+                  <label className="block text-xs font-medium text-[var(--color-text-sub)] mb-1">Coluna *</label>
+                  <select value={createColId} onChange={(e) => setCreateColId(e.target.value)}
+                    className="w-full px-3 py-2 border border-[var(--color-border)] rounded-lg text-sm outline-none focus:border-[var(--color-primary)]">
+                    {columns.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-[var(--color-text-sub)] mb-1">Título *</label>
+                  <input value={createTitle} onChange={(e) => setCreateTitle(e.target.value)}
+                    placeholder="Descrever a tarefa..."
+                    className="w-full px-3 py-2 border border-[var(--color-border)] rounded-lg text-sm outline-none focus:border-[var(--color-primary)]"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-[var(--color-text-sub)] mb-1">Categoria</label>
+                  <CategoryPicker value={createCategory} onChange={setCreateCategory} />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-[var(--color-text-sub)] mb-1">Descrição</label>
+                  <textarea value={createBody} onChange={(e) => setCreateBody(e.target.value)}
+                    rows={3} placeholder="Detalhes adicionais..."
+                    className="w-full px-3 py-2 border border-[var(--color-border)] rounded-lg text-sm outline-none focus:border-[var(--color-primary)] resize-none"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-medium text-[var(--color-text-sub)] mb-1">Prioridade</label>
+                    <select value={createPriority} onChange={(e) => setCreatePriority(e.target.value as TaskPriority)}
+                      className="w-full px-3 py-2 border border-[var(--color-border)] rounded-lg text-sm outline-none focus:border-[var(--color-primary)]">
+                      <option value="normal">Normal</option>
+                      <option value="urgente">Urgente</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-[var(--color-text-sub)] mb-1">Data limite</label>
+                    <input type="date" value={createDue} onChange={(e) => { if (!e.target.value || isValidIsoDateString(e.target.value)) setCreateDue(e.target.value); }}
+                      className="w-full px-3 py-2 border border-[var(--color-border)] rounded-lg text-sm outline-none focus:border-[var(--color-primary)]"
+                    />
+                  </div>
+                </div>
+              </>
+            ) : (
+              <>
+                <div>
+                  <label className="block text-xs font-medium text-[var(--color-text-sub)] mb-1">Cliente</label>
+                  <ClientPicker clients={clients} value={createClientId} onChange={setCreateClientId} />
+                </div>
+                {members.length > 0 && (
+                  <div>
+                    <label className="block text-xs font-medium text-[var(--color-text-sub)] mb-1">Responsável</label>
+                    <select value={createAssigned} onChange={(e) => setCreateAssigned(e.target.value)}
+                      className="w-full px-3 py-2 border border-[var(--color-border)] rounded-lg text-sm outline-none focus:border-[var(--color-primary)]">
+                      <option value="">— Ninguém —</option>
+                      {members.map((m) => <option key={m.id} value={m.id}>{m.full_name}</option>)}
+                    </select>
+                  </div>
+                )}
+              </>
             )}
             {createError && <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{createError}</p>}
             <div className="flex gap-2 pt-1">
@@ -611,42 +830,78 @@ export function TasksClient({ initialTasks, initialColumns, companyId, members }
               </p>
             )}
 
-            <div className="space-y-3">
-              <div>
-                <label className="block text-xs font-medium text-[var(--color-text-sub)] mb-1">Título</label>
-                <input value={editTitle} onChange={(e) => setEditTitle(e.target.value)}
-                  className="w-full px-3 py-2 border border-[var(--color-border)] rounded-lg text-sm outline-none focus:border-[var(--color-primary)]" />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-[var(--color-text-sub)] mb-1">Descrição</label>
-                <textarea value={editBody} onChange={(e) => setEditBody(e.target.value)}
-                  rows={3} placeholder="Detalhes adicionais..."
-                  className="w-full px-3 py-2 border border-[var(--color-border)] rounded-lg text-sm outline-none focus:border-[var(--color-primary)] resize-none" />
-              </div>
-              <div className="grid grid-cols-2 gap-3">
+            <ModalTabs tab={editTab} onChange={setEditTab} />
+
+            {editTab === "detalhes" ? (
+              <div className="space-y-3">
                 <div>
-                  <label className="block text-xs font-medium text-[var(--color-text-sub)] mb-1">Coluna</label>
-                  <select value={editStatus} onChange={(e) => setEditStatus(e.target.value)}
-                    className="w-full px-3 py-2 border border-[var(--color-border)] rounded-lg text-sm outline-none focus:border-[var(--color-primary)]">
-                    {columns.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-[var(--color-text-sub)] mb-1">Prioridade</label>
-                  <select value={editPriority} onChange={(e) => setEditPriority(e.target.value as TaskPriority)}
-                    className="w-full px-3 py-2 border border-[var(--color-border)] rounded-lg text-sm outline-none focus:border-[var(--color-primary)]">
-                    <option value="normal">Normal</option>
-                    <option value="urgente">Urgente</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-[var(--color-text-sub)] mb-1">Data limite</label>
-                  <input type="date" value={editDue} onChange={(e) => { if (!e.target.value || isValidIsoDateString(e.target.value)) setEditDue(e.target.value); }}
+                  <label className="block text-xs font-medium text-[var(--color-text-sub)] mb-1">Título</label>
+                  <input value={editTitle} onChange={(e) => setEditTitle(e.target.value)}
                     className="w-full px-3 py-2 border border-[var(--color-border)] rounded-lg text-sm outline-none focus:border-[var(--color-primary)]" />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-[var(--color-text-sub)] mb-1">Categoria</label>
+                  <CategoryPicker value={editCategory} onChange={setEditCategory} />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-[var(--color-text-sub)] mb-1">Descrição</label>
+                  <textarea value={editBody} onChange={(e) => setEditBody(e.target.value)}
+                    rows={3} placeholder="Detalhes adicionais..."
+                    className="w-full px-3 py-2 border border-[var(--color-border)] rounded-lg text-sm outline-none focus:border-[var(--color-primary)] resize-none" />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-medium text-[var(--color-text-sub)] mb-1">Coluna</label>
+                    <select value={editStatus} onChange={(e) => setEditStatus(e.target.value)}
+                      className="w-full px-3 py-2 border border-[var(--color-border)] rounded-lg text-sm outline-none focus:border-[var(--color-primary)]">
+                      {columns.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-[var(--color-text-sub)] mb-1">Prioridade</label>
+                    <select value={editPriority} onChange={(e) => setEditPriority(e.target.value as TaskPriority)}
+                      className="w-full px-3 py-2 border border-[var(--color-border)] rounded-lg text-sm outline-none focus:border-[var(--color-primary)]">
+                      <option value="normal">Normal</option>
+                      <option value="urgente">Urgente</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-[var(--color-text-sub)] mb-1">Data limite</label>
+                    <input type="date" value={editDue} onChange={(e) => { if (!e.target.value || isValidIsoDateString(e.target.value)) setEditDue(e.target.value); }}
+                      className="w-full px-3 py-2 border border-[var(--color-border)] rounded-lg text-sm outline-none focus:border-[var(--color-primary)]" />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-[var(--color-text-sub)] mb-1">Anexo</label>
+                  {openTask.attachment_url ? (
+                    <div className="flex items-center gap-2 px-3 py-2 rounded-lg border border-[var(--color-border)] bg-white text-sm">
+                      <Paperclip className="w-4 h-4 text-[var(--color-text-muted)] shrink-0" />
+                      <button type="button" onClick={handleAttachmentDownload} className="flex-1 text-left truncate text-[var(--color-primary)] hover:underline">
+                        {openTask.attachment_name ?? "Ficheiro anexado"}
+                      </button>
+                      <button type="button" onClick={handleAttachmentRemove} title="Remover anexo" className="text-[var(--color-text-muted)] hover:text-red-600 shrink-0">
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ) : (
+                    <label className="flex items-center justify-center gap-2 px-3 py-2 rounded-lg border border-dashed border-[var(--color-border)] text-sm text-[var(--color-text-sub)] hover:bg-[var(--color-background)] cursor-pointer transition-colors">
+                      {attachUploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+                      {attachUploading ? "A carregar..." : "Anexar ficheiro"}
+                      <input type="file" className="hidden" onChange={handleAttachmentChange} disabled={attachUploading} />
+                    </label>
+                  )}
+                  {attachError && <p className="text-xs text-red-600 mt-1">{attachError}</p>}
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-xs font-medium text-[var(--color-text-sub)] mb-1">Cliente</label>
+                  <ClientPicker clients={clients} value={editClientId} onChange={setEditClientId} />
                 </div>
                 {members.length > 0 && (
                   <div>
-                    <label className="block text-xs font-medium text-[var(--color-text-sub)] mb-1">Atribuir a</label>
+                    <label className="block text-xs font-medium text-[var(--color-text-sub)] mb-1">Responsável</label>
                     <select value={editAssigned} onChange={(e) => setEditAssigned(e.target.value)}
                       className="w-full px-3 py-2 border border-[var(--color-border)] rounded-lg text-sm outline-none focus:border-[var(--color-primary)]">
                       <option value="">— Ninguém —</option>
@@ -655,7 +910,7 @@ export function TasksClient({ initialTasks, initialColumns, companyId, members }
                   </div>
                 )}
               </div>
-            </div>
+            )}
             <button onClick={saveDetail} disabled={savingDetail}
               className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-[var(--color-primary)] text-white text-sm font-medium hover:opacity-90 disabled:opacity-50">
               {savingDetail ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
