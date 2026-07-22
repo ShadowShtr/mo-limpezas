@@ -288,7 +288,7 @@ export default async function ClientDetailPage({
                 <p className="text-xs text-[var(--color-text-muted)] uppercase tracking-wide mt-1">Concluídos</p>
               </div>
               <div className="bg-white rounded-xl border border-[var(--color-border)] p-4 text-center">
-                <p className="text-2xl font-bold text-[var(--color-text-main)]">€{totalBilled.toFixed(0)}</p>
+                <p className="text-2xl font-bold text-[var(--color-text-main)]">€{totalBilled.toFixed(2)}</p>
                 <p className="text-xs text-[var(--color-text-muted)] uppercase tracking-wide mt-1">Faturado</p>
               </div>
             </div>
@@ -349,7 +349,7 @@ export default async function ClientDetailPage({
                           </p>
                         </div>
                         <span className="text-xs font-semibold text-[var(--color-text-sub)] flex items-center gap-1 shrink-0">
-                          <BadgeEuro className="w-3.5 h-3.5" />{serviceValue(s).toFixed(0)}
+                          <BadgeEuro className="w-3.5 h-3.5" />{serviceValue(s).toFixed(2)}
                         </span>
                         <span className="text-xs font-semibold px-2 py-0.5 rounded-full shrink-0" style={{ background: st.bg, color: st.text }}>
                           {st.label}
@@ -384,7 +384,7 @@ export default async function ClientDetailPage({
                         </span>
                         <span className="flex-1 min-w-0 truncate text-[var(--color-text-main)]">{s.location_name ?? "—"}</span>
                         <span className="text-xs text-[var(--color-text-sub)] flex items-center gap-1 shrink-0">
-                          <BadgeEuro className="w-3.5 h-3.5" />{serviceValue(s).toFixed(0)}
+                          <BadgeEuro className="w-3.5 h-3.5" />{serviceValue(s).toFixed(2)}
                         </span>
                         <span className="text-xs font-semibold px-2 py-0.5 rounded-full shrink-0" style={{ background: st.bg, color: st.text }}>
                           {st.label}
