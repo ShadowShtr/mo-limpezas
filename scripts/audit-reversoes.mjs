@@ -528,8 +528,14 @@ function auditServiceWorker() {
     // heuristic only
   }
   if (/message.*SKIP_WAITING/s.test(sw)) {
-    report("warn", "O novo service worker fica em 'waiting' até a pessoa tocar em 'Atualizar'. Colaboradoras que nunca tocam continuam a correr a APP ANTIGA — 'a alteração não aparece' no telemóvel delas. É uma decisão consciente (não recarregar a meio do ponto), mas explica parte das queixas.",
-      "Manter, mas garantir que o aviso 'Nova versão disponível' é bem visível; ou forçar update quando a app está idle.");
+    const pwaRegPath = join(ROOT, "src", "app", "(app)", "app", "_components", "pwa-register.tsx");
+    const pwaReg = existsSync(pwaRegPath) ? readFileSync(pwaRegPath, "utf8") : "";
+    if (/critical-action-tracker/.test(pwaReg)) {
+      report("ok", "Atualização do PWA é automática em segundo plano (bloqueada durante ações críticas via critical-action-tracker), além do botão 'Atualizar' — telemóveis já não ficam presos em versões antigas.");
+    } else {
+      report("warn", "O novo service worker fica em 'waiting' até a pessoa tocar em 'Atualizar'. Colaboradoras que nunca tocam continuam a correr a APP ANTIGA — 'a alteração não aparece' no telemóvel delas. É uma decisão consciente (não recarregar a meio do ponto), mas explica parte das queixas.",
+        "Manter, mas garantir que o aviso 'Nova versão disponível' é bem visível; ou forçar update quando a app está idle.");
+    }
   }
   if (/Páginas HTML — sempre da rede/.test(sw)) {
     report("ok", "HTML nunca é servido da cache (sempre rede) — deploys novos aparecem ao recarregar.");
