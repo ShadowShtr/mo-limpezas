@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { auditLog } from "@/lib/audit";
 import { ensureLisbonOffset, addDaysToDateString, toLisbonTimestamp } from "@/lib/lisbon-time";
 import { getTeamSize } from "@/lib/services/reference";
+import { calculateServiceValue } from "@/lib/service-value";
 
 export type ConflictInfo = {
   id: string;
@@ -47,7 +48,7 @@ export async function rescheduleService(
 
   const { data: service } = await admin
     .from("services")
-    .select("id, company_id, team_id, status, scheduled_start, scheduled_end, hourly_rate, num_people, manual_value, upholstery_unit_price")
+    .select("id, company_id, team_id, status, scheduled_start, scheduled_end, hourly_rate, num_people, manual_value, upholstery_unit_price, contract_id")
     .eq("id", serviceId)
     .eq("company_id", profile.company_id)
     .single();
@@ -85,8 +86,12 @@ export async function rescheduleService(
   // Valor manual, estofos por unidade e avença/valor fixo (hourly_rate null) ficam intactos.
   const update: {
     scheduled_start: string; scheduled_end: string; team_id: string | null;
-    calculated_value?: number; num_people?: number;
+    calculated_value?: number; num_people?: number; is_exception?: boolean;
   } = { scheduled_start: newStart, scheduled_end: newEnd, team_id: newTeamId };
+
+  // Serviço de contrato movido à mão = exceção: a reescrita automática
+  // (updateFutureServiceValuesForContract) nunca mais o pode reverter.
+  if (service.contract_id != null) update.is_exception = true;
 
   const durationMin = (new Date(newEnd).getTime() - new Date(newStart).getTime()) / 60000;
   if (
@@ -98,7 +103,17 @@ export async function rescheduleService(
     const ppl = newTeamId
       ? await getTeamSize(admin, newTeamId)
       : (service.num_people != null && service.num_people >= 1 ? service.num_people : 1);
-    update.calculated_value = Math.round((durationMin / 60) * service.hourly_rate * ppl * 100) / 100;
+    const value = calculateServiceValue({
+      durationMin,
+      hourlyRate: service.hourly_rate,
+      numPeople: ppl,
+      manualValue: null,
+      fixedMonthly: false,
+      contractFixedPrice: null,
+      upholsteryUnits: null,
+      upholsteryUnitPrice: null,
+    });
+    if (value != null) update.calculated_value = value;
     update.num_people = ppl;
   }
 

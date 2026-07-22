@@ -17,6 +17,7 @@ import { CANCEL_TYPE_LABELS, type CancelType } from "@/lib/cancel-types";
 import { sendBulkClientNotifications } from "@/app/actions/email";
 import { updateLocationAccess } from "@/app/actions/locations";
 import { setServicePayment } from "@/app/actions/daily-billing";
+import { updateServiceTime, updateServiceValue, updateServiceNotes, markServiceAbsence } from "../_actions/update-service";
 import { ServicePhotosGallery } from "./service-photos-gallery";
 import { isValidIsoDateString } from "@/lib/utils";
 import {
@@ -254,9 +255,8 @@ export function ServiceDetailSheet({ service, onClose, onChanged, initialEdit = 
     setActionMsg(null);
 
     if (action === "falta") {
-      const { error } = await supabase
-        .from("services").update({ status: "falta" }).eq("id", svc.id);
-      if (error) setActionMsg({ type: "error", text: error.message });
+      const res = await markServiceAbsence(svc.id);
+      if (!res.ok) setActionMsg({ type: "error", text: res.error });
       else { setActionMsg({ type: "success", text: "Marcado como falta." }); onChanged(); }
 
     } else if (action === "fixClockOut") {
@@ -306,65 +306,25 @@ export function ServiceDetailSheet({ service, onClose, onChanged, initialEdit = 
     setSavingTime(true);
     setActionMsg(null);
 
-    // Deteção de conflito: mesma equipa, horários sobrepostos (exceto este serviço).
-    // Avisa mas permite manter (force).
-    if (!force && svc.team_id) {
-      const { data: clashes } = await supabase
-        .from("services")
-        .select("reference_number, scheduled_start, scheduled_end")
-        .eq("team_id", svc.team_id)
-        .neq("id", svc.id)
-        .in("status", ["agendado", "em_curso"])
-        .lt("scheduled_start", endISO)
-        .gt("scheduled_end", startISO);
-      if (clashes && clashes.length > 0) {
-        setTimeConflict(clashes as { reference_number: string; scheduled_start: string; scheduled_end: string }[]);
-        setSavingTime(false);
-        return;
-      }
-    }
-
-    // Recalcula o valor pela nova duração (só serviços faturados por hora).
-    // Não mexe em valor manual, estofos por unidade, nem avença/valor fixo
-    // (esses têm hourly_rate a null → ficam como estão).
-    const update: { scheduled_start: string; scheduled_end: string; calculated_value?: number } = {
-      scheduled_start: startISO,
-      scheduled_end: endISO,
-    };
-    let recalculated: number | null = null;
-    const { data: svcRow } = await supabase
-      .from("services")
-      .select("hourly_rate, num_people, manual_value, upholstery_unit_price")
-      .eq("id", svc.id)
-      .single();
-    const durationMin = (new Date(endISO).getTime() - new Date(startISO).getTime()) / 60000;
-    if (
-      svcRow?.hourly_rate != null &&
-      svcRow.manual_value == null &&
-      svcRow.upholstery_unit_price == null &&
-      durationMin > 0
-    ) {
-      const ppl = svcRow.num_people != null && svcRow.num_people >= 1 ? svcRow.num_people : 1;
-      recalculated = Math.round((durationMin / 60) * svcRow.hourly_rate * ppl * 100) / 100;
-      update.calculated_value = recalculated;
-    }
-
-    const { error } = await supabase
-      .from("services")
-      .update(update)
-      .eq("id", svc.id);
+    const res = await updateServiceTime(svc.id, { startISO, endISO, force });
     setSavingTime(false);
-    if (error) { setActionMsg({ type: "error", text: error.message }); return; }
+
+    if (!res.ok) {
+      if (res.conflicts) { setTimeConflict(res.conflicts); return; }
+      setActionMsg({ type: "error", text: res.error });
+      return;
+    }
+
     setCurrentStart(startISO);
     setCurrentEnd(endISO);
-    if (recalculated != null) setCurrentValue(recalculated);
+    if (res.recalculatedValue != null) setCurrentValue(res.recalculatedValue);
     setEditingTime(false);
     setTimeConflict(null);
     setActionMsg({
       type: "success",
-      text: recalculated != null
-        ? `Horário atualizado. Valor recalculado: €${recalculated.toFixed(2)}.`
-        : (force && (timeConflict?.length ?? 0) > 0 ? "Horário atualizado (conflito mantido)." : "Horário atualizado."),
+      text: res.recalculatedValue != null
+        ? `Horário atualizado. Valor recalculado: €${res.recalculatedValue.toFixed(2)}.`
+        : (force ? "Horário atualizado (conflito mantido)." : "Horário atualizado."),
     });
     onChanged();
   }
@@ -380,13 +340,10 @@ export function ServiceDetailSheet({ service, onClose, onChanged, initialEdit = 
     }
     setSavingValue(true);
     setActionMsg(null);
-    const { error } = await supabase
-      .from("services")
-      .update({ manual_value: parsed, apply_vat: applyVat })
-      .eq("id", svc.id);
+    const res = await updateServiceValue(svc.id, { manualValue: parsed, applyVat });
     setSavingValue(false);
-    if (error) { setActionMsg({ type: "error", text: error.message }); return; }
-    setCurrentValue(parsed ?? svc.calculated_value ?? null);
+    if (!res.ok) { setActionMsg({ type: "error", text: res.error }); return; }
+    setCurrentValue(res.appliedValue);
     setMeta((prev) => (prev ? { ...prev, apply_vat: applyVat } : prev));
     setEditingValue(false);
     setActionMsg({ type: "success", text: "Valor atualizado — aplica-se só a este dia, o contrato mantém-se." });
@@ -397,12 +354,9 @@ export function ServiceDetailSheet({ service, onClose, onChanged, initialEdit = 
     setSavingNotes(true);
     setActionMsg(null);
     const trimmed = notesValue.trim();
-    const { error } = await supabase
-      .from("services")
-      .update({ notes: trimmed || null })
-      .eq("id", svc.id);
+    const res = await updateServiceNotes(svc.id, { notes: trimmed || null });
     setSavingNotes(false);
-    if (error) { setActionMsg({ type: "error", text: error.message }); return; }
+    if (!res.ok) { setActionMsg({ type: "error", text: res.error }); return; }
     setCurrentNotes(trimmed || null);
     setEditingNotes(false);
     setActionMsg({ type: "success", text: "Observação guardada." });

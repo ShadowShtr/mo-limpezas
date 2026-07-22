@@ -2,12 +2,14 @@
 
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
-import { revalidatePath } from "next/cache";
 import { maxReferenceNumber } from "@/lib/services/reference";
 import { auditLog } from "@/lib/audit";
 import { hasOverlappingMonthlyContract } from "@/lib/contract-overlap";
 import { isValidIsoDateString, isValidFiniteNumber } from "@/lib/utils";
 import { getOccurrences, DOW_TO_KEY } from "@/lib/contract-occurrences";
+import { assertCriticalFieldsLoaded, CRITICAL_FIELDS_BLOCKED_MESSAGE } from "@/lib/critical-fields";
+import { calculateServiceValue } from "@/lib/service-value";
+import { revalidateBusinessPaths } from "@/lib/revalidate-business";
 import type { ScheduleDay } from "@/types/database";
 
 export interface ContratoInput {
@@ -302,14 +304,16 @@ async function updateFutureServiceValuesForContract(
 
     const endTime = addMins(schedule.start_time, schedule.duration_min);
     const people = resolvePeople(schedule, teamSizes);
-    const calculatedValue =
-      fixedMonthly
-        ? 0
-        : fixed != null
-        ? fixed
-        : hourlyRate != null
-        ? parseFloat(((schedule.duration_min / 60) * hourlyRate * people).toFixed(2))
-        : null;
+    const calculatedValue = calculateServiceValue({
+      durationMin: schedule.duration_min,
+      hourlyRate,
+      numPeople: people,
+      manualValue: null,
+      fixedMonthly,
+      contractFixedPrice: fixed,
+      upholsteryUnits: null,
+      upholsteryUnitPrice: null,
+    });
 
     await admin
       .from("services")
@@ -423,11 +427,19 @@ export async function createContrato(input: ContratoInput) {
     }
   }
 
-  await admin
-    .from("locations")
-    .update({ hourly_rate: input.hourly_rate ?? null })
-    .eq("id", input.location_id)
-    .eq("company_id", profile.company_id);
+  // Só toca no valor/hora do local quando o contrato é faturado por hora E o
+  // formulário enviou o campo. Avença/valor fixo/estofos nunca apagam o valor
+  // do local (foi assim que locais ficaram a calcular 0€ — ver auditoria de
+  // reversões, Causa 7: contratos não-por-hora nem sempre enviam hourly_rate,
+  // e "?? null" convertia essa ausência em apagar o valor real do local).
+  const isHourlyCreate = !input.fixed_monthly && !(input.fixed_price != null && input.fixed_price > 0);
+  if (isHourlyCreate && input.hourly_rate !== undefined && input.hourly_rate !== null) {
+    await admin
+      .from("locations")
+      .update({ hourly_rate: input.hourly_rate })
+      .eq("id", input.location_id)
+      .eq("company_id", profile.company_id);
+  }
 
   const { data: contract, error } = await admin
     .from("contracts")
@@ -495,9 +507,10 @@ export async function createContrato(input: ContratoInput) {
     );
   }
 
-  revalidatePath("/dashboard/contratos");
-  revalidatePath("/dashboard/calendario");
-  revalidatePath(`/dashboard/clientes/${location.client_id}`);
+  revalidateBusinessPaths({
+    clientId: location.client_id,
+    scopes: ["contratos", "calendario", "clientes", "cobrancas"],
+  });
   return { ok: true as const };
 }
 
@@ -514,6 +527,11 @@ export async function updateContrato(id: string, input: Omit<ContratoInput, "com
     .single();
   if (!profile || !["admin", "gestor"].includes(profile.role)) {
     return { ok: false as const, error: "Sem permissao." };
+  }
+
+  const criticalCheck = assertCriticalFieldsLoaded("contracts", input);
+  if (!criticalCheck.ok) {
+    return { ok: false as const, error: CRITICAL_FIELDS_BLOCKED_MESSAGE };
   }
 
   if (!isValidIsoDateString(input.starts_on)) {
@@ -549,11 +567,16 @@ export async function updateContrato(id: string, input: Omit<ContratoInput, "com
     }
   }
 
-  await admin
-    .from("locations")
-    .update({ hourly_rate: input.hourly_rate ?? null })
-    .eq("id", input.location_id)
-    .eq("company_id", profile.company_id);
+  // Só toca no valor/hora do local quando o contrato é faturado por hora E o
+  // formulário enviou o campo — ver o mesmo guard em createContrato (Causa 7).
+  const isHourlyUpdate = !input.fixed_monthly && !(input.fixed_price != null && input.fixed_price > 0);
+  if (isHourlyUpdate && input.hourly_rate !== undefined && input.hourly_rate !== null) {
+    await admin
+      .from("locations")
+      .update({ hourly_rate: input.hourly_rate })
+      .eq("id", input.location_id)
+      .eq("company_id", profile.company_id);
+  }
 
   // Valor antigo, só para a auditoria (ver comentário abaixo) — nunca bloqueia
   // o update se falhar.
@@ -681,9 +704,10 @@ export async function updateContrato(id: string, input: Omit<ContratoInput, "com
     );
   }
 
-  revalidatePath("/dashboard/contratos");
-  revalidatePath("/dashboard/calendario");
-  revalidatePath(`/dashboard/clientes/${location.client_id}`);
+  revalidateBusinessPaths({
+    clientId: location.client_id,
+    scopes: ["contratos", "calendario", "clientes", "cobrancas"],
+  });
   return { ok: true as const };
 }
 
@@ -729,8 +753,9 @@ export async function deleteContrato(id: string) {
   if (error) return { ok: false as const, error: error.message };
 
   const clientId = (contract.locations as { client_id?: string | null } | null)?.client_id ?? null;
-  revalidatePath("/dashboard/contratos");
-  revalidatePath("/dashboard/calendario");
-  if (clientId) revalidatePath(`/dashboard/clientes/${clientId}`);
+  revalidateBusinessPaths({
+    clientId,
+    scopes: ["contratos", "calendario", "clientes", "cobrancas"],
+  });
   return { ok: true as const };
 }

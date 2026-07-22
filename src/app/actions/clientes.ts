@@ -4,6 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { auditLog } from "@/lib/audit";
+import { assertCriticalFieldsLoaded, CRITICAL_FIELDS_BLOCKED_MESSAGE } from "@/lib/critical-fields";
 
 export interface ClienteInput {
   name: string;
@@ -205,6 +206,11 @@ export async function updateCliente(id: string, input: Omit<ClienteInput, "compa
     .single();
   if (!profile || !["admin", "gestor"].includes(profile.role)) {
     return { ok: false as const, error: "Sem permissao." };
+  }
+
+  const criticalCheck = assertCriticalFieldsLoaded("clients", input);
+  if (!criticalCheck.ok) {
+    return { ok: false as const, error: CRITICAL_FIELDS_BLOCKED_MESSAGE };
   }
 
   // Valor antigo, só para a auditoria (ver comentário abaixo) — nunca bloqueia

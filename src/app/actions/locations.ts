@@ -4,6 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { auditLog } from "@/lib/audit";
+import { assertCriticalFieldsLoaded, CRITICAL_FIELDS_BLOCKED_MESSAGE } from "@/lib/critical-fields";
 
 interface LocationInput {
   name: string;
@@ -76,6 +77,11 @@ export async function updateLocation(id: string, input: Omit<LocationInput, "cli
 
   if (!me || !["admin", "gestor"].includes(me.role)) {
     return { ok: false as const, error: "Sem permissão para editar locais." };
+  }
+
+  const criticalCheck = assertCriticalFieldsLoaded("locations", input);
+  if (!criticalCheck.ok) {
+    return { ok: false as const, error: CRITICAL_FIELDS_BLOCKED_MESSAGE };
   }
 
   // Valor antigo dos campos de preço/acesso, só para auditoria — nunca
