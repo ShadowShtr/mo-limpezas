@@ -410,8 +410,14 @@ export function CalendarView({
   }, [selectedDate, router]);
 
   function handleSelectDay(day: Date) {
+    // Atualiza o estado local já (resposta instantânea) e também o URL — sem
+    // isto, o dia selecionado dentro da mesma semana só existia no estado do
+    // React; qualquer router.refresh() (ex.: depois de gravar algo no painel
+    // do serviço) recarregava a página a partir do URL, que nunca tinha saído
+    // do dia de hoje, e a seleção "voltava" para hoje sozinha.
     setSelectedDate(day);
     setCurrentTop(computeTimeTop(day, slotH));
+    router.push(`/dashboard/calendario?date=${format(day, "yyyy-MM-dd")}`);
   }
 
   function handleColumnClick(teamId: string, e: React.MouseEvent<HTMLDivElement>) {
