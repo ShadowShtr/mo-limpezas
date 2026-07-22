@@ -111,6 +111,43 @@ describe("service worker (public/sw.js)", () => {
   });
 });
 
+// ── 3b. Rede de segurança (migração 059): histórico universal, exceções
+//        automáticas e guarda do valor/hora têm de existir e manter-se.
+describe("rede de segurança na base de dados (059_rede_seguranca.sql)", () => {
+  const sql = readFileSync(join(ROOT, "supabase", "migrations", "059_rede_seguranca.sql"), "utf8");
+
+  it("histórico universal cobre todas as tabelas críticas", () => {
+    expect(sql).toContain("CREATE TABLE IF NOT EXISTS public.data_history");
+    for (const t of ["clients", "locations", "contracts", "services", "invoices", "invoice_items"]) {
+      expect(sql, `trigger de histórico em falta para ${t}`).toMatch(
+        new RegExp(`CREATE TRIGGER trg_history AFTER UPDATE OR DELETE ON public\\.${t}`),
+      );
+    }
+  });
+
+  it("edições manuais de serviços de contrato viram exceção na própria base", () => {
+    expect(sql).toContain("trg_services_mark_exception");
+    expect(sql).toContain("contract_synced_at");
+    expect(sql).toContain("NEW.is_exception := true");
+  });
+
+  it("a base recusa apagar hourly_rate de local com contrato por hora ativo", () => {
+    expect(sql).toContain("trg_guard_location_rate");
+    expect(sql).toContain("RAISE EXCEPTION");
+  });
+
+  it("a sincronização de contratos declara-se ao trigger (contract_synced_at)", () => {
+    const contratos = readFileSync(join(SRC, "app", "actions", "contratos.ts"), "utf8");
+    expect(contratos, "updateFutureServiceValuesForContract tem de enviar contract_synced_at, senão o trigger marca a sync como edição manual e as sincronizações futuras param").toContain("contract_synced_at");
+  });
+
+  it("a ferramenta de restauro existe e não tem credenciais hardcoded", () => {
+    const restore = readFileSync(join(ROOT, "scripts", "restore-from-history.mjs"), "utf8");
+    expect(restore).toContain("SUPABASE_DB_URL");
+    expect(/password:\s*["'][^"']+["']/.test(restore)).toBe(false);
+  });
+});
+
 // ── 4. Rastreabilidade: /api/health tem de expor a versão em produção.
 describe("versão do deploy rastreável", () => {
   it("/api/health devolve o commit (VERCEL_GIT_COMMIT_SHA)", () => {

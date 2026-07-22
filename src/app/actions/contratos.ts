@@ -315,19 +315,33 @@ async function updateFutureServiceValuesForContract(
       upholsteryUnitPrice: null,
     });
 
-    await admin
+    const syncUpdate = {
+      team_id: schedule.team_id || null,
+      scheduled_start: toLisbonTimestamp(dateStr, schedule.start_time),
+      scheduled_end: toLisbonTimestamp(dateStr, endTime),
+      hourly_rate: fixedMonthly || fixed != null ? null : hourlyRate,
+      calculated_value: calculatedValue,
+      apply_vat: applyVat,
+      num_people: people,
+    };
+
+    // contract_synced_at declara ao trigger trg_services_mark_exception (migração
+    // 059) que este update é a sincronização legítima do contrato — sem ele, o
+    // trigger marcaria a ocorrência como exceção manual e as próximas sincronizações
+    // deixariam de a atualizar. Fallback sem a coluna enquanto a 059 não estiver
+    // aplicada (PGRST204/42703 = coluna desconhecida).
+    const { error: syncErr } = await admin
       .from("services")
-      .update({
-        team_id: schedule.team_id || null,
-        scheduled_start: toLisbonTimestamp(dateStr, schedule.start_time),
-        scheduled_end: toLisbonTimestamp(dateStr, endTime),
-        hourly_rate: fixedMonthly || fixed != null ? null : hourlyRate,
-        calculated_value: calculatedValue,
-        apply_vat: applyVat,
-        num_people: people,
-      })
+      .update({ ...syncUpdate, contract_synced_at: new Date().toISOString() })
       .eq("id", service.id)
       .eq("company_id", companyId);
+    if (syncErr && (syncErr.code === "PGRST204" || syncErr.code === "42703")) {
+      await admin
+        .from("services")
+        .update(syncUpdate)
+        .eq("id", service.id)
+        .eq("company_id", companyId);
+    }
   }
 }
 
