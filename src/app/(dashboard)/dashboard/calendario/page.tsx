@@ -42,8 +42,6 @@ export default async function CalendarioPage({
   const [
     { data: services },
     { data: teams },
-    { data: clients },
-    { data: locations },
     buildingCards,
   ] = await Promise.all([
     // Página só de gestores: lê via `admin` para garantir que TODOS os serviços
@@ -72,18 +70,6 @@ export default async function CalendarioPage({
     admin
       .from("teams_with_members")
       .select("id, name, color, members")
-      .eq("company_id", companyId)
-      .eq("active", true)
-      .order("name"),
-    supabase
-      .from("clients")
-      .select("id, name")
-      .eq("company_id", companyId)
-      .eq("status", "ativo")
-      .order("name"),
-    supabase
-      .from("locations")
-      .select("id, client_id, name, address, hourly_rate")
       .eq("company_id", companyId)
       .eq("active", true)
       .order("name"),
@@ -157,8 +143,6 @@ export default async function CalendarioPage({
         weekStartISO={weekStart.toISOString()}
         selectedDateISO={baseDate.toISOString()}
         companyId={companyId}
-        clients={clients ?? []}
-        locations={locations ?? []}
         buildingCards={buildingCards}
         isDemo={isDemo}
       />

@@ -27,6 +27,7 @@ import { MonthDatePicker } from "./month-date-picker";
 import { CalendarListView } from "./calendar-list-view";
 import { ClientNotificationsModal } from "./client-notifications-modal";
 import { BuildingsColumn } from "./buildings-column";
+import { useCalendarStaticData } from "./calendar-static-data-context";
 import { rescheduleService, type ConflictInfo } from "../_actions/reschedule";
 import type { BuildingCard } from "@/app/actions/building-cards";
 import type { Database, BuildingCardWeekday } from "@/types/database";
@@ -49,8 +50,6 @@ const WEEKDAY_KEYS: BuildingCardWeekday[] = ["sun", "mon", "tue", "wed", "thu", 
 
 type ServiceFull = Database["public"]["Views"]["services_full"]["Row"];
 type Team   = { id: string; name: string; color: string; member_count?: number };
-type Client = { id: string; name: string };
-type Loc    = { id: string; client_id: string; name: string; address: string; hourly_rate: number | null };
 
 /** Versão segura de ServiceFull para o payload do calendário.
  *  Campos sensíveis (código de acesso, instruções, contactos do cliente) são
@@ -74,8 +73,6 @@ interface CalendarViewProps {
   weekStartISO: string;
   selectedDateISO: string;
   companyId: string;
-  clients: Client[];
-  locations: Loc[];
   buildingCards: BuildingCard[];
   isDemo?: boolean;
 }
@@ -248,9 +245,10 @@ function CurrentTimeLine({ top }: { top: number }) {
 
 export function CalendarView({
   services, teams, weekStartISO, selectedDateISO,
-  companyId, clients, locations, buildingCards, isDemo = false,
+  companyId, buildingCards, isDemo = false,
 }: CalendarViewProps) {
   const router     = useRouter();
+  const { clients, locations } = useCalendarStaticData();
   const weekStart  = parseISO(weekStartISO);
   const scrollRef  = useRef<HTMLDivElement>(null);
   const reasonRef  = useRef<HTMLInputElement>(null);
