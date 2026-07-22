@@ -22,6 +22,7 @@
 // ============================================================================
 
 import pg from "pg";
+import { createHash } from "crypto";
 import { readFileSync, readdirSync, existsSync } from "fs";
 import { join, dirname } from "path";
 import { fileURLToPath } from "url";
@@ -53,17 +54,39 @@ if (!DB_URL) {
 
 const client = new pg.Client({ connectionString: DB_URL, ssl: { rejectUnauthorized: false } });
 
+const checksumOf = (sql) => createHash("sha256").update(sql).digest("hex");
+
 async function ensureTracking() {
   await client.query(`
     CREATE TABLE IF NOT EXISTS public._migrations (
       name text PRIMARY KEY,
+      checksum text,
       applied_at timestamptz NOT NULL DEFAULT now()
     )`);
+  // Bases que criaram a tabela antes do checksum existir.
+  await client.query("ALTER TABLE public._migrations ADD COLUMN IF NOT EXISTS checksum text");
 }
 
-async function appliedSet() {
-  const { rows } = await client.query("SELECT name FROM public._migrations");
-  return new Set(rows.map((r) => r.name));
+async function appliedMap() {
+  const { rows } = await client.query("SELECT name, checksum FROM public._migrations");
+  return new Map(rows.map((r) => [r.name, r.checksum]));
+}
+
+/**
+ * Uma migração já aplicada NUNCA pode mudar de conteúdo — se o ficheiro local
+ * divergir do checksum registado, ou alguém editou um .sql histórico (e a base
+ * ficou diferente do que o repo diz) ou o histórico foi reescrito. Em ambos os
+ * casos é preciso intervenção humana, não silêncio.
+ */
+function verifyChecksums(applied, files) {
+  const divergent = [];
+  for (const file of files) {
+    const stored = applied.get(file);
+    if (stored == null) continue; // pendente ou registada sem checksum (pré-upgrade)
+    const current = checksumOf(readFileSync(join(MIGRATIONS_DIR, file), "utf8"));
+    if (stored !== current) divergent.push(file);
+  }
+  return divergent;
 }
 
 async function dbHasData() {
@@ -81,7 +104,18 @@ async function main() {
   await ensureTracking();
 
   const files = readdirSync(MIGRATIONS_DIR).filter((f) => f.endsWith(".sql")).sort();
-  const applied = await appliedSet();
+  const applied = await appliedMap();
+
+  // Migração já aplicada cujo ficheiro mudou → parar SEMPRE (nada de silêncio).
+  const divergent = verifyChecksums(applied, files);
+  if (divergent.length > 0) {
+    console.error("❌ CHECKSUM DIVERGENTE — estes ficheiros de migração foram ALTERADOS depois de aplicados:");
+    for (const f of divergent) console.error(`   - ${f}`);
+    console.error("   A base pode não corresponder ao que o repo diz. Reverte a alteração ao ficheiro,");
+    console.error("   ou cria uma migração NOVA com a correção (nunca editar migrações históricas).");
+    await client.end();
+    process.exit(1);
+  }
 
   // Guarda: base com schema mas sem histórico de migrações → exigir baseline.
   if (!BASELINE && applied.size === 0 && (await dbHasData())) {
@@ -95,11 +129,15 @@ async function main() {
   if (BASELINE) {
     for (const f of files) {
       if (!applied.has(f)) {
-        await client.query("INSERT INTO public._migrations (name) VALUES ($1) ON CONFLICT DO NOTHING", [f]);
+        const sum = checksumOf(readFileSync(join(MIGRATIONS_DIR, f), "utf8"));
+        await client.query(
+          "INSERT INTO public._migrations (name, checksum) VALUES ($1, $2) ON CONFLICT (name) DO UPDATE SET checksum = EXCLUDED.checksum",
+          [f, sum],
+        );
         console.log(`📌 baseline: ${f}`);
       }
     }
-    console.log("✅ Baseline concluído — nada foi executado, tudo marcado como aplicado.");
+    console.log("✅ Baseline concluído — nada foi executado, tudo marcado como aplicado (com checksum).");
     await client.end();
     return;
   }
@@ -115,7 +153,7 @@ async function main() {
     try {
       await client.query("BEGIN");
       await client.query(sql);
-      await client.query("INSERT INTO public._migrations (name) VALUES ($1)", [file]);
+      await client.query("INSERT INTO public._migrations (name, checksum) VALUES ($1, $2)", [file, checksumOf(sql)]);
       await client.query("COMMIT");
       console.log("   ✅ OK");
     } catch (err) {

@@ -79,7 +79,7 @@ export async function updateLocation(id: string, input: Omit<LocationInput, "cli
     return { ok: false as const, error: "Sem permissão para editar locais." };
   }
 
-  const criticalCheck = assertCriticalFieldsLoaded("locations", input);
+  const criticalCheck = assertCriticalFieldsLoaded("locations", input as unknown as Record<string, unknown>, { requireAll: true });
   if (!criticalCheck.ok) {
     return { ok: false as const, error: CRITICAL_FIELDS_BLOCKED_MESSAGE };
   }

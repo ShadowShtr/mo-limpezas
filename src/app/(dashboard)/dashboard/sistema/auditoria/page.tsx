@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { Header } from "@/components/layout/header";
@@ -57,10 +58,11 @@ export default async function AuditoriaPage({
   const admin = createAdminClient();
 
   const { data: { user } } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
   const { data: profile } = await admin
     .from("profiles")
     .select("company_id, role")
-    .eq("id", user!.id)
+    .eq("id", user.id)
     .single();
 
   const canView = profile && ["admin", "gestor"].includes(profile.role);

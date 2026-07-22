@@ -32,7 +32,7 @@ export async function cancelService(
   // Buscar dados do serviço
   const { data: svc, error: svcErr } = await admin
     .from("services")
-    .select("id, company_id, status, scheduled_start, team_id, location_id")
+    .select("id, company_id, status, scheduled_start, team_id, location_id, contract_id, is_exception")
     .eq("id", serviceId)
     .single();
 
@@ -44,18 +44,32 @@ export async function cancelService(
   const hoursUntilService = (new Date(svc.scheduled_start).getTime() - Date.now()) / 3_600_000;
   const isLate = hoursUntilService < 24 && hoursUntilService > -24;
 
-  const { error: updateErr } = await admin.from("services")
-    .update({
-      status:         "cancelado",
-      cancel_type:    cancelType,
-      cancel_reason:  cancelReason.trim() || null,
-      cancelled_at:   new Date().toISOString(),
-      cancelled_by:   user.id,
-      is_late_cancel: isLate,
-    })
-    .eq("id", serviceId);
+  // Cancelamento manual de serviço de contrato também é exceção — nenhum
+  // automatismo pode "descancelar" o que a gestora cancelou à mão.
+  const cancelUpdate: {
+    status: string; cancel_type: CancelType; cancel_reason: string | null;
+    cancelled_at: string; cancelled_by: string; is_late_cancel: boolean;
+    is_exception?: boolean;
+  } = {
+    status:         "cancelado",
+    cancel_type:    cancelType,
+    cancel_reason:  cancelReason.trim() || null,
+    cancelled_at:   new Date().toISOString(),
+    cancelled_by:   user.id,
+    is_late_cancel: isLate,
+  };
+  if (svc.contract_id != null) cancelUpdate.is_exception = true;
+
+  const { data: cancelled, error: updateErr } = await admin.from("services")
+    .update(cancelUpdate)
+    .eq("id", serviceId)
+    .eq("company_id", profile.company_id)
+    .select("id");
 
   if (updateErr) return { ok: false, error: updateErr.message };
+  if (!cancelled || cancelled.length === 0) {
+    return { ok: false, error: "Nada foi cancelado (o serviço já não existe ou não pertence à empresa). Atualize a página." };
+  }
 
   await auditLog({
     companyId: profile.company_id,
@@ -63,11 +77,20 @@ export async function cancelService(
     action: "service_cancelled",
     entityType: "service",
     entityId: serviceId,
-    before: { status: svc.status },
-    after: { status: "cancelado", cancel_type: cancelType, is_late_cancel: isLate },
+    before: { status: svc.status, is_exception: svc.is_exception },
+    after: { status: "cancelado", cancel_type: cancelType, is_late_cancel: isLate, is_exception: cancelUpdate.is_exception ?? svc.is_exception },
     meta: { reason: cancelReason.trim() || null },
     source: "dashboard",
   }, admin);
+
+  // Revalidar SEMPRE antes de qualquer return dos caminhos de notificação —
+  // sem isto, "cancelei e o calendário/ficha do cliente não mostram".
+  const { data: cancelLoc } = await admin
+    .from("locations").select("client_id").eq("id", svc.location_id).maybeSingle();
+  revalidatePath("/dashboard/calendario");
+  revalidatePath("/dashboard");
+  revalidatePath("/dashboard/cobrancas");
+  if (cancelLoc?.client_id) revalidatePath(`/dashboard/clientes/${cancelLoc.client_id}`);
 
   if (!notifyTeamMembers || !svc.team_id) {
     return { ok: true, isLate, sent: 0 };
@@ -172,25 +195,39 @@ export async function deleteCalendarService(
 
   if (scope === "all" && svc.contract_id) {
     // Apaga TODAS as ocorrências da intervenção e arquiva a recorrência.
-    const { data: del } = await admin
+    const { data: del, error: delErr } = await admin
       .from("services").delete()
       .eq("company_id", profile.company_id)
       .eq("contract_id", svc.contract_id)
       .select("id");
+    if (delErr) return { ok: false, error: delErr.message };
     deleted = del?.length ?? 0;
-    await admin.from("contracts")
+    if (deleted === 0) {
+      return { ok: false, error: "Nada foi eliminado (as ocorrências já não existem). Atualize a página." };
+    }
+    // Arquivar a recorrência TEM de ser confirmado — sem isto o cron mensal
+    // regenerava as ocorrências e a intervenção "voltava sozinha".
+    const { data: archived, error: archErr } = await admin.from("contracts")
       .update({ status: "cancelado" })
-      .eq("id", svc.contract_id).eq("company_id", profile.company_id);
+      .eq("id", svc.contract_id).eq("company_id", profile.company_id)
+      .select("id");
+    if (archErr || !archived || archived.length === 0) {
+      return { ok: false, error: `As ocorrências foram eliminadas mas o arquivo da recorrência FALHOU (${archErr?.message ?? "0 linhas"}) — sem isto o cron pode recriá-las. Tente cancelar o contrato manualmente.` };
+    }
   } else {
     // Só esta ocorrência: apaga a linha e, se for recorrente, regista a data como
     // exceção PERMANENTE no contrato (excluded_dates). Assim a geração (cron mensal
     // e ao editar o contrato) nunca recria este dia.
-    const { data: del } = await admin
+    const { data: del, error: delErr } = await admin
       .from("services").delete()
       .eq("id", serviceId)
       .eq("company_id", profile.company_id)
       .select("id");
+    if (delErr) return { ok: false, error: delErr.message };
     deleted = del?.length ?? 0;
+    if (deleted === 0) {
+      return { ok: false, error: "Nada foi eliminado (o serviço já não existe). Atualize a página." };
+    }
 
     if (svc.contract_id) {
       const svcDate = (svc.scheduled_start as string).slice(0, 10); // YYYY-MM-DD
@@ -202,9 +239,14 @@ export async function deleteCalendarService(
         .single();
       const current = (contract?.excluded_dates as string[] | null) ?? [];
       if (!current.includes(svcDate)) {
-        await admin.from("contracts")
+        // Confirmado: sem esta gravação o cron recria o dia apagado.
+        const { data: exclUpd, error: exclErr } = await admin.from("contracts")
           .update({ excluded_dates: [...current, svcDate] })
-          .eq("id", svc.contract_id).eq("company_id", profile.company_id);
+          .eq("id", svc.contract_id).eq("company_id", profile.company_id)
+          .select("id");
+        if (exclErr || !exclUpd || exclUpd.length === 0) {
+          return { ok: false, error: `O serviço foi eliminado mas a data NÃO ficou registada como exceção no contrato (${exclErr?.message ?? "0 linhas"}) — o cron mensal pode recriar este dia. Tente novamente ou registe a exceção no contrato.` };
+        }
       }
     }
   }
@@ -223,6 +265,7 @@ export async function deleteCalendarService(
     .from("locations").select("client_id").eq("id", svc.location_id).maybeSingle();
   revalidatePath("/dashboard/calendario");
   revalidatePath("/dashboard");
+  revalidatePath("/dashboard/cobrancas");
   if (loc?.client_id) revalidatePath(`/dashboard/clientes/${loc.client_id}`);
 
   return { ok: true, deleted, recurring };

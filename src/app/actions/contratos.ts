@@ -543,7 +543,7 @@ export async function updateContrato(id: string, input: Omit<ContratoInput, "com
     return { ok: false as const, error: "Sem permissao." };
   }
 
-  const criticalCheck = assertCriticalFieldsLoaded("contracts", input);
+  const criticalCheck = assertCriticalFieldsLoaded("contracts", input as unknown as Record<string, unknown>, { requireAll: true });
   if (!criticalCheck.ok) {
     return { ok: false as const, error: CRITICAL_FIELDS_BLOCKED_MESSAGE };
   }

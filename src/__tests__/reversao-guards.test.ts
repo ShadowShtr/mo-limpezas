@@ -187,6 +187,85 @@ describe("guardas adicionais (060_guardas_adicionais.sql) e painel de recuperaç
   });
 });
 
+// ── 3d. Correções da auditoria E (pós-implementação).
+describe("auditoria E — buracos residuais fechados", () => {
+  it("requireAll: campo crítico AUSENTE bloqueia updates completos (não só undefined)", async () => {
+    const { assertCriticalFieldsLoaded } = await import("@/lib/critical-fields");
+    // contrato sem fixed_price/fixed_monthly/apply_vat → bloqueado
+    const semFinanceiros = assertCriticalFieldsLoaded("contracts", {
+      schedule_days: [], starts_on: "2026-01-01", ends_on: null, status: "ativo",
+      num_people: null, upholstery_units: null, upholstery_unit_price: null,
+    }, { requireAll: true });
+    expect(semFinanceiros.ok).toBe(false);
+    if (!semFinanceiros.ok) expect(semFinanceiros.missing).toEqual(
+      expect.arrayContaining(["fixed_price", "fixed_monthly", "apply_vat"]));
+
+    // cliente sem type/notes/vat_exempt → bloqueado
+    const semTipo = assertCriticalFieldsLoaded("clients", { status: "ativo" }, { requireAll: true });
+    expect(semTipo.ok).toBe(false);
+
+    // payload completo (null é intencional e permitido) → passa
+    const completo = assertCriticalFieldsLoaded("clients",
+      { type: "empresa", notes: null, vat_exempt: false, status: "ativo" }, { requireAll: true });
+    expect(completo.ok).toBe(true);
+
+    // patch update (sem requireAll) continua a aceitar payloads parciais
+    const patch = assertCriticalFieldsLoaded("services", { manual_value: 10, apply_vat: true });
+    expect(patch.ok).toBe(true);
+  });
+
+  it("as 3 actions de update completo usam requireAll", () => {
+    for (const f of ["clientes.ts", "contratos.ts", "locations.ts"]) {
+      const src = readFileSync(join(SRC, "app", "actions", f), "utf8");
+      expect(src, `${f} sem requireAll`).toContain("requireAll: true");
+    }
+  });
+
+  it("cancelService confirma linha afetada, filtra por company_id e marca is_exception", () => {
+    const src = readFileSync(join(SRC, "app", "actions", "cancellations.ts"), "utf8");
+    const cancelBody = src.slice(src.indexOf("export async function cancelService"), src.indexOf("deleteCalendarService"));
+    expect(cancelBody, "update do cancelamento sem .select(\"id\")").toContain('.select("id")');
+    expect(cancelBody, "cancelamento de serviço de contrato tem de virar exceção").toContain("is_exception");
+    expect(cancelBody, "cancelService tem de revalidar antes dos returns de notificação").toContain("revalidatePath");
+  });
+
+  it("deleteCalendarService recusa 0 eliminados e confirma updates ao contrato", () => {
+    const src = readFileSync(join(SRC, "app", "actions", "cancellations.ts"), "utf8");
+    const delBody = src.slice(src.indexOf("export async function deleteCalendarService"));
+    expect(delBody).toContain("Nada foi eliminado");
+    expect(delBody, "arquivo da recorrência sem confirmação").toMatch(/status: "cancelado" \}\)[\s\S]{0,200}\.select\("id"\)/);
+    expect(delBody, "excluded_dates sem confirmação").toMatch(/excluded_dates[\s\S]{0,220}\.select\("id"\)/);
+    expect(delBody).toContain("/dashboard/cobrancas");
+  });
+
+  it("markServiceAbsence marca is_exception em serviços de contrato", () => {
+    const src = readFileSync(join(SRC, "app", "(dashboard)", "dashboard", "calendario", "_actions", "update-service.ts"), "utf8");
+    const body = src.slice(src.indexOf("markServiceAbsence"));
+    expect(body).toContain("contract_id");
+    expect(body).toContain("is_exception");
+  });
+
+  it("runner de migrações valida checksum e bloqueia divergências", () => {
+    const src = readFileSync(join(ROOT, "scripts", "run-migrations.mjs"), "utf8");
+    expect(src).toContain("checksum");
+    expect(src).toContain("sha256");
+    expect(src).toContain("CHECKSUM DIVERGENTE");
+  });
+
+  it("migração 061 guarda schedule_days de contrato ativo e pricing do local", () => {
+    const sql = readFileSync(join(ROOT, "supabase", "migrations", "061_guardas_campos_criticos.sql"), "utf8");
+    expect(sql).toContain("trg_guard_contract_schedule");
+    expect(sql).toContain("trg_guard_location_pricing");
+    expect(sql).toContain("app.allow_unsafe");
+  });
+
+  it("página de auditoria não usa user! (redireciona sem sessão)", () => {
+    const page = readFileSync(join(SRC, "app", "(dashboard)", "dashboard", "sistema", "auditoria", "page.tsx"), "utf8");
+    expect(page).not.toContain("user!.id");
+    expect(page).toContain('redirect("/login")');
+  });
+});
+
 // ── 4. Rastreabilidade: /api/health tem de expor a versão em produção.
 describe("versão do deploy rastreável", () => {
   it("/api/health devolve o commit (VERCEL_GIT_COMMIT_SHA)", () => {

@@ -259,15 +259,20 @@ export async function markServiceAbsence(serviceId: string): Promise<MarkService
 
   const { data: service } = await admin
     .from("services")
-    .select("id, location_id, status")
+    .select("id, location_id, status, contract_id, is_exception")
     .eq("id", serviceId)
     .eq("company_id", auth.companyId)
     .single();
   if (!service) return { ok: false, error: "Serviço não encontrado." };
 
+  // Regra de segurança: qualquer alteração manual num serviço de contrato vira
+  // exceção — a falta marcada à mão nunca pode ser "desfeita" por automatismos.
+  const update: { status: string; is_exception?: boolean } = { status: "falta" };
+  if (service.contract_id != null) update.is_exception = true;
+
   const { data: updated, error } = await admin
     .from("services")
-    .update({ status: "falta" })
+    .update(update)
     .eq("id", serviceId)
     .eq("company_id", auth.companyId)
     .select("id");
@@ -280,8 +285,8 @@ export async function markServiceAbsence(serviceId: string): Promise<MarkService
     action: "service_marked_absence",
     entityType: "service",
     entityId: serviceId,
-    before: { status: service.status },
-    after: { status: "falta" },
+    before: { status: service.status, is_exception: service.is_exception },
+    after: { status: "falta", is_exception: update.is_exception ?? service.is_exception },
     source: "dashboard",
   }, admin);
 

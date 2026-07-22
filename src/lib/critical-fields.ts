@@ -34,15 +34,29 @@ export const CRITICAL_FIELDS_BLOCKED_MESSAGE =
   "Não foi possível carregar todos os dados necessários. Guardar agora poderia apagar informações. Atualize a página e tente novamente.";
 
 /**
- * Lança se algum campo crítico presente no payload vier undefined.
+ * Bloqueia gravações que poderiam apagar campos críticos.
+ *
+ * - Sem `requireAll` (patch updates, ex.: actions do painel do serviço que só
+ *   gravam os campos que leram): bloqueia campos PRESENTES com `undefined`.
+ * - Com `requireAll: true` (updates COMPLETOS: updateCliente/updateContrato/
+ *   updateLocation, que gravam a linha inteira): além disso, TODOS os campos
+ *   críticos têm de EXISTIR no payload. Um campo totalmente ausente num update
+ *   completo significa "formulário não carregou esta coluna" — e o
+ *   `campo: input.campo ?? null` a jusante apagaria o valor real (foi assim
+ *   que se perderam type/notes de clientes e o valor da avença).
+ *
  * undefined = "não carregado" (bloquear); null = "apagado de propósito" (ok).
  */
 export function assertCriticalFieldsLoaded(
   table: CriticalFieldsTable,
   payload: Record<string, unknown>,
+  opts?: { requireAll?: boolean },
 ): { ok: true } | { ok: false; missing: string[] } {
-  const missing = (CRITICAL_FIELDS[table] as readonly string[]).filter(
-    (f) => f in payload && payload[f] === undefined,
+  const fields = CRITICAL_FIELDS[table] as readonly string[];
+  const missing = fields.filter((f) =>
+    opts?.requireAll
+      ? !(f in payload) || payload[f] === undefined
+      : f in payload && payload[f] === undefined,
   );
   return missing.length ? { ok: false, missing } : { ok: true };
 }
