@@ -2,7 +2,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { redirect, notFound } from "next/navigation";
 import Link from "next/link";
-import { parseISO, isToday, isTomorrow } from "date-fns";
+import { parseISO, isToday, isTomorrow, format } from "date-fns";
 import { fmtLisbon } from "@/lib/lisbon-time";
 import {
   ArrowLeft, Plus, Edit2, Mail, Phone, Hash, Building2, User,
@@ -328,8 +328,10 @@ export default async function ClientDetailPage({
                           <span className="text-xs font-semibold text-[var(--color-text-main)] capitalize leading-tight">
                             {fmtLisbon(s.scheduled_start, { day: "numeric", month: "short" })}
                           </span>
-                          <span className="text-[11px] text-[var(--color-text-muted)]">
+                          <span className="text-[11px] text-[var(--color-text-muted)] whitespace-nowrap">
                             {fmtLisbon(s.scheduled_start, { hour: "2-digit", minute: "2-digit", hour12: false })}
+                            –
+                            {fmtLisbon(s.scheduled_end, { hour: "2-digit", minute: "2-digit", hour12: false })}
                           </span>
                         </div>
                         <div className="flex-1 min-w-0">
@@ -346,9 +348,19 @@ export default async function ClientDetailPage({
                             )}
                           </p>
                         </div>
+                        <span className="text-xs font-semibold text-[var(--color-text-sub)] flex items-center gap-1 shrink-0">
+                          <BadgeEuro className="w-3.5 h-3.5" />{serviceValue(s).toFixed(0)}
+                        </span>
                         <span className="text-xs font-semibold px-2 py-0.5 rounded-full shrink-0" style={{ background: st.bg, color: st.text }}>
                           {st.label}
                         </span>
+                        <Link
+                          href={`/dashboard/calendario?date=${format(parseISO(s.scheduled_start), "yyyy-MM-dd")}`}
+                          title="Editar no calendário"
+                          className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-[var(--color-border)] text-[var(--color-text-sub)] hover:bg-[var(--color-background)] shrink-0"
+                        >
+                          <Edit2 className="w-4 h-4" />
+                        </Link>
                       </div>
                     );
                   })}
