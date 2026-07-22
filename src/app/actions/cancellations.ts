@@ -193,62 +193,78 @@ export async function deleteCalendarService(
   let deleted = 0;
   const recurring = !!svc.contract_id;
 
-  if (scope === "all" && svc.contract_id) {
-    // Apaga TODAS as ocorrências da intervenção e arquiva a recorrência.
-    const { data: del, error: delErr } = await admin
-      .from("services").delete()
-      .eq("company_id", profile.company_id)
-      .eq("contract_id", svc.contract_id)
-      .select("id");
-    if (delErr) return { ok: false, error: delErr.message };
-    deleted = del?.length ?? 0;
-    if (deleted === 0) {
-      return { ok: false, error: "Nada foi eliminado (as ocorrências já não existem). Atualize a página." };
-    }
-    // Arquivar a recorrência TEM de ser confirmado — sem isto o cron mensal
-    // regenerava as ocorrências e a intervenção "voltava sozinha".
-    const { data: archived, error: archErr } = await admin.from("contracts")
-      .update({ status: "cancelado" })
-      .eq("id", svc.contract_id).eq("company_id", profile.company_id)
-      .select("id");
-    if (archErr || !archived || archived.length === 0) {
-      return { ok: false, error: `As ocorrências foram eliminadas mas o arquivo da recorrência FALHOU (${archErr?.message ?? "0 linhas"}) — sem isto o cron pode recriá-las. Tente cancelar o contrato manualmente.` };
-    }
-  } else {
-    // Só esta ocorrência: apaga a linha e, se for recorrente, regista a data como
-    // exceção PERMANENTE no contrato (excluded_dates). Assim a geração (cron mensal
-    // e ao editar o contrato) nunca recria este dia.
-    const { data: del, error: delErr } = await admin
-      .from("services").delete()
-      .eq("id", serviceId)
-      .eq("company_id", profile.company_id)
-      .select("id");
-    if (delErr) return { ok: false, error: delErr.message };
-    deleted = del?.length ?? 0;
-    if (deleted === 0) {
-      return { ok: false, error: "Nada foi eliminado (o serviço já não existe). Atualize a página." };
-    }
+  // Caminho preferido: RPC ATÓMICA (migração 062) — bookkeeping + delete numa
+  // única transação; qualquer falha = rollback total, nunca estado meio-aplicado.
+  // Também regista o ator (app.actor_id) nas entradas do data_history.
+  const { data: rpcResult, error: rpcErr } = await admin.rpc("delete_calendar_service_safe", {
+    p_service_id: serviceId,
+    p_scope: scope === "all" && svc.contract_id ? "all" : "single",
+    p_company_id: profile.company_id,
+    p_actor: user.id,
+  });
 
-    if (svc.contract_id) {
-      const svcDate = (svc.scheduled_start as string).slice(0, 10); // YYYY-MM-DD
-      const { data: contract } = await admin
-        .from("contracts")
-        .select("excluded_dates")
-        .eq("id", svc.contract_id)
+  if (!rpcErr) {
+    deleted = (rpcResult as { deleted?: number } | null)?.deleted ?? 0;
+    if (deleted === 0) {
+      return { ok: false, error: "Nada foi eliminado. Atualize a página." };
+    }
+  } else if (rpcErr.code === "PGRST202" || /delete_calendar_service_safe/.test(rpcErr.message)) {
+    // Fallback enquanto a migração 062 não estiver aplicada: mesma lógica SEM
+    // transação, mas em ORDEM FAIL-SAFE — o bookkeeping vem PRIMEIRO, o delete
+    // depois. Assim, qualquer estado parcial é inofensivo e re-tentável:
+    // contrato arquivado/data excluída sem delete → repetir o delete resolve,
+    // e nada pode ser recriado pelo cron no intervalo.
+    if (scope === "all" && svc.contract_id) {
+      const { data: archived, error: archErr } = await admin.from("contracts")
+        .update({ status: "cancelado" })
+        .eq("id", svc.contract_id).eq("company_id", profile.company_id)
+        .select("id");
+      if (archErr || !archived || archived.length === 0) {
+        return { ok: false, error: `Não foi possível arquivar a recorrência (${archErr?.message ?? "0 linhas"}) — nada foi eliminado.` };
+      }
+      const { data: del, error: delErr } = await admin
+        .from("services").delete()
         .eq("company_id", profile.company_id)
-        .single();
-      const current = (contract?.excluded_dates as string[] | null) ?? [];
-      if (!current.includes(svcDate)) {
-        // Confirmado: sem esta gravação o cron recria o dia apagado.
-        const { data: exclUpd, error: exclErr } = await admin.from("contracts")
-          .update({ excluded_dates: [...current, svcDate] })
-          .eq("id", svc.contract_id).eq("company_id", profile.company_id)
-          .select("id");
-        if (exclErr || !exclUpd || exclUpd.length === 0) {
-          return { ok: false, error: `O serviço foi eliminado mas a data NÃO ficou registada como exceção no contrato (${exclErr?.message ?? "0 linhas"}) — o cron mensal pode recriar este dia. Tente novamente ou registe a exceção no contrato.` };
+        .eq("contract_id", svc.contract_id)
+        .select("id");
+      if (delErr) return { ok: false, error: `A recorrência foi arquivada mas a eliminação falhou (${delErr.message}) — tente de novo (o cron NÃO vai recriar).` };
+      deleted = del?.length ?? 0;
+      if (deleted === 0) {
+        return { ok: false, error: "Nada foi eliminado (as ocorrências já não existiam); a recorrência ficou arquivada." };
+      }
+    } else {
+      if (svc.contract_id) {
+        const svcDate = (svc.scheduled_start as string).slice(0, 10); // YYYY-MM-DD
+        const { data: contract } = await admin
+          .from("contracts")
+          .select("excluded_dates")
+          .eq("id", svc.contract_id)
+          .eq("company_id", profile.company_id)
+          .single();
+        const current = (contract?.excluded_dates as string[] | null) ?? [];
+        if (!current.includes(svcDate)) {
+          const { data: exclUpd, error: exclErr } = await admin.from("contracts")
+            .update({ excluded_dates: [...current, svcDate] })
+            .eq("id", svc.contract_id).eq("company_id", profile.company_id)
+            .select("id");
+          if (exclErr || !exclUpd || exclUpd.length === 0) {
+            return { ok: false, error: `Não foi possível registar a exceção no contrato (${exclErr?.message ?? "0 linhas"}) — nada foi eliminado.` };
+          }
         }
       }
+      const { data: del, error: delErr } = await admin
+        .from("services").delete()
+        .eq("id", serviceId)
+        .eq("company_id", profile.company_id)
+        .select("id");
+      if (delErr) return { ok: false, error: `A exceção ficou registada mas a eliminação falhou (${delErr.message}) — tente de novo (o cron NÃO vai recriar este dia).` };
+      deleted = del?.length ?? 0;
+      if (deleted === 0) {
+        return { ok: false, error: "Nada foi eliminado (o serviço já não existe). Atualize a página." };
+      }
     }
+  } else {
+    return { ok: false, error: rpcErr.message };
   }
 
   await auditLog({

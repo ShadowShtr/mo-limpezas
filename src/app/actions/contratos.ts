@@ -623,7 +623,7 @@ export async function updateContrato(id: string, input: Omit<ContratoInput, "com
     apply_vat: input.apply_vat ?? false,
     num_people: input.num_people ?? null,
   }).eq("id", id).eq("company_id", profile.company_id)
-    .select("id, fixed_price, fixed_monthly, apply_vat")
+    .select("id, fixed_price, fixed_monthly, apply_vat, cleaning_type, payment_status, upholstery_type, upholstery_notes, upholstery_units, upholstery_unit_price, num_people, status, schedule_days")
     .single();
 
   if (error) return { ok: false as const, error: error.message };
@@ -631,23 +631,44 @@ export async function updateContrato(id: string, input: Omit<ContratoInput, "com
     return { ok: false as const, error: "Nada foi gravado (contrato não encontrado ou sem permissão). Atualize a página e tente novamente." };
   }
 
-  // Read-after-write dos campos financeiros: o update devolve a linha gravada;
-  // se o que persistiu não for o que foi enviado (trigger/constraint a intervir,
-  // corrida com outra sessão), o utilizador fica a saber em vez de ver "sucesso"
-  // com um valor diferente na base.
-  const intendedFin = {
-    fixed_price: input.fixed_price ?? null,
+  // Read-after-write COMPLETO: o update devolve a linha gravada; se qualquer
+  // campo persistido divergir do enviado (trigger/constraint a intervir,
+  // corrida com outra sessão), o utilizador fica a saber em vez de ver
+  // "sucesso" com um valor diferente na base. (Auditoria F, Falha 5.)
+  const num = (v: unknown) => (v == null ? null : Number(v));
+  const intended: Record<string, unknown> = {
+    fixed_price: num(input.fixed_price ?? null),
     fixed_monthly: input.fixed_monthly ?? false,
     apply_vat: input.apply_vat ?? false,
+    cleaning_type: input.cleaning_type ?? null,
+    payment_status: input.payment_status ?? null,
+    upholstery_type: input.upholstery_type ?? null,
+    upholstery_notes: input.upholstery_notes ?? null,
+    upholstery_units: num(input.upholstery_units ?? null),
+    upholstery_unit_price: num(input.upholstery_unit_price ?? null),
+    num_people: num(input.num_people ?? null),
+    status: input.status,
+    schedule_days: JSON.stringify(input.schedule_days ?? null),
   };
-  const finMismatch =
-    Number(saved.fixed_price ?? -1) !== Number(intendedFin.fixed_price ?? -1) ||
-    saved.fixed_monthly !== intendedFin.fixed_monthly ||
-    saved.apply_vat !== intendedFin.apply_vat;
-  if (finMismatch) {
+  const persisted: Record<string, unknown> = {
+    fixed_price: num(saved.fixed_price),
+    fixed_monthly: saved.fixed_monthly,
+    apply_vat: saved.apply_vat,
+    cleaning_type: saved.cleaning_type ?? null,
+    payment_status: saved.payment_status ?? null,
+    upholstery_type: saved.upholstery_type ?? null,
+    upholstery_notes: saved.upholstery_notes ?? null,
+    upholstery_units: num(saved.upholstery_units),
+    upholstery_unit_price: num(saved.upholstery_unit_price),
+    num_people: num(saved.num_people),
+    status: saved.status,
+    schedule_days: JSON.stringify(saved.schedule_days ?? null),
+  };
+  const divergentes = Object.keys(intended).filter((k) => intended[k] !== persisted[k]);
+  if (divergentes.length > 0) {
     return {
       ok: false as const,
-      error: "A alteração não foi confirmada na base de dados (os valores financeiros gravados divergem dos enviados). Nada foi considerado gravado — atualize a página e tente novamente.",
+      error: `A alteração não foi confirmada na base de dados (campos divergentes: ${divergentes.join(", ")}). Nada foi considerado gravado — atualize a página e tente novamente.`,
     };
   }
 

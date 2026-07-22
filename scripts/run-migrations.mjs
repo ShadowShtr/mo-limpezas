@@ -106,6 +106,21 @@ async function main() {
   const files = readdirSync(MIGRATIONS_DIR).filter((f) => f.endsWith(".sql")).sort();
   const applied = await appliedMap();
 
+  // Backfill: registos criados antes do checksum existir recebem o checksum do
+  // ficheiro atual (mesma assunção do --baseline: o ficheiro não mudou desde a
+  // aplicação). A partir daí qualquer edição futura é detetada.
+  for (const [name, sum] of applied) {
+    if (sum == null && files.includes(name)) {
+      const cs = checksumOf(readFileSync(join(MIGRATIONS_DIR, name), "utf8"));
+      await client.query(
+        "UPDATE public._migrations SET checksum = $1 WHERE name = $2 AND checksum IS NULL",
+        [cs, name],
+      );
+      applied.set(name, cs);
+      console.log(`🔏 checksum backfill: ${name}`);
+    }
+  }
+
   // Migração já aplicada cujo ficheiro mudou → parar SEMPRE (nada de silêncio).
   const divergent = verifyChecksums(applied, files);
   if (divergent.length > 0) {

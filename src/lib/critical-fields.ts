@@ -16,6 +16,12 @@ export const CRITICAL_FIELDS = {
     "fixed_price", "fixed_monthly", "apply_vat", "schedule_days",
     "starts_on", "ends_on", "status", "num_people",
     "upholstery_units", "upholstery_unit_price",
+    // Campos operacionais que o update grava com `?? null` — sem eles no
+    // payload, uma tela que não os carregasse apagá-los-ia (auditoria F).
+    "cleaning_type", "payment_status", "upholstery_type", "upholstery_notes",
+    // Não é coluna de contracts, mas alimenta o valor dos serviços gerados —
+    // ausente mudaria valores em silêncio.
+    "unit_value",
   ],
   locations: [
     "hourly_rate", "fixed_price", "pricing_type", "access_code",

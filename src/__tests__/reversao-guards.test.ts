@@ -266,6 +266,67 @@ describe("auditoria E — buracos residuais fechados", () => {
   });
 });
 
+// ── 3e. Correções da auditoria F.
+describe("auditoria F — campos operacionais, delete atómico e actor", () => {
+  it("CRITICAL_FIELDS.contracts inclui os campos operacionais (cleaning/payment/estofos)", async () => {
+    const { assertCriticalFieldsLoaded, CRITICAL_FIELDS } = await import("@/lib/critical-fields");
+    for (const f of ["cleaning_type", "payment_status", "upholstery_type", "upholstery_notes", "unit_value"]) {
+      expect(CRITICAL_FIELDS.contracts as readonly string[], `campo em falta: ${f}`).toContain(f);
+    }
+    // updateContrato sem cleaning_type/payment_status → bloqueado
+    const semOperacionais = assertCriticalFieldsLoaded("contracts", {
+      fixed_price: null, fixed_monthly: false, apply_vat: false,
+      schedule_days: [], starts_on: "2026-01-01", ends_on: null, status: "ativo",
+      num_people: null, upholstery_units: null, upholstery_unit_price: null,
+      upholstery_type: null, upholstery_notes: null, unit_value: null,
+    }, { requireAll: true });
+    expect(semOperacionais.ok).toBe(false);
+    if (!semOperacionais.ok) expect(semOperacionais.missing).toEqual(
+      expect.arrayContaining(["cleaning_type", "payment_status"]));
+  });
+
+  it("migração 062: RPC atómica de delete + actor no histórico", () => {
+    const sql = readFileSync(join(ROOT, "supabase", "migrations", "062_delete_atomico_e_actor.sql"), "utf8");
+    expect(sql).toContain("delete_calendar_service_safe");
+    expect(sql).toContain("app.actor_id");
+    expect(sql, "RPC nunca pode ser chamável pelo browser").toContain("REVOKE");
+    expect(sql, "bookkeeping ANTES do delete dentro da transação").toMatch(/excluded_dates[\s\S]+DELETE FROM public\.services/);
+  });
+
+  it("deleteCalendarService usa a RPC atómica com fallback em ordem fail-safe", () => {
+    const src = readFileSync(join(SRC, "app", "actions", "cancellations.ts"), "utf8");
+    expect(src).toContain('rpc("delete_calendar_service_safe"');
+    const fallback = src.slice(src.indexOf("Fallback enquanto a migração 062"));
+    // no fallback, o arquivo/exceção vem ANTES do delete
+    const idxArchive = fallback.indexOf('status: "cancelado"');
+    const idxDeleteAll = fallback.indexOf('.eq("contract_id", svc.contract_id)');
+    expect(idxArchive).toBeGreaterThan(-1);
+    expect(idxArchive, "fallback all: arquivar tem de vir antes do delete").toBeLessThan(idxDeleteAll);
+    const idxExcl = fallback.indexOf("excluded_dates");
+    const idxDelSingle = fallback.lastIndexOf('.from("services").delete()');
+    expect(idxExcl, "fallback single: excluded_dates antes do delete").toBeLessThan(idxDelSingle);
+  });
+
+  it("fn_capture_history usa app.actor_id com fallback auth.uid()", () => {
+    const sql = readFileSync(join(ROOT, "supabase", "migrations", "062_delete_atomico_e_actor.sql"), "utf8");
+    expect(sql).toMatch(/COALESCE\(\s*NULLIF\(current_setting\('app\.actor_id', true\), ''\)::uuid,\s*auth\.uid\(\)\s*\)/);
+  });
+
+  it("read-after-write do contrato cobre os campos operacionais", () => {
+    const src = readFileSync(join(SRC, "app", "actions", "contratos.ts"), "utf8");
+    expect(src).toContain("campos divergentes");
+    for (const f of ["cleaning_type", "payment_status", "upholstery_notes", "schedule_days", "num_people"]) {
+      const rawSection = src.slice(src.indexOf("Read-after-write COMPLETO"));
+      expect(rawSection, `read-after-write sem ${f}`).toContain(f);
+    }
+  });
+
+  it("runner faz backfill de checksums antigos", () => {
+    const src = readFileSync(join(ROOT, "scripts", "run-migrations.mjs"), "utf8");
+    expect(src).toContain("checksum backfill");
+  });
+});
+
 // ── 4. Rastreabilidade: /api/health tem de expor a versão em produção.
 describe("versão do deploy rastreável", () => {
   it("/api/health devolve o commit (VERCEL_GIT_COMMIT_SHA)", () => {
