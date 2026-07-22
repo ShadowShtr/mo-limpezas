@@ -279,7 +279,7 @@ export type Database = {
     };
     Views: {
       services_full: {
-        Row: { id: string; company_id: string; reference_number: string; scheduled_start: string; scheduled_end: string; actual_start: string | null; actual_end: string | null; status: string; notes: string | null; calculated_value: number | null; manual_value: number | null; contract_id: string | null; is_exception: boolean; location_id: string; location_name: string; location_address: string; location_lat: number | null; location_lng: number | null; location_access_code: string | null; location_instructions: string | null; location_has_key: boolean; location_key_label: string | null; client_id: string; client_name: string; client_email: string | null; client_phone: string | null; team_id: string | null; team_name: string | null; team_color: string | null; payment_status: string | null };
+        Row: { id: string; company_id: string; reference_number: string; scheduled_start: string; scheduled_end: string; actual_start: string | null; actual_end: string | null; status: string; notes: string | null; calculated_value: number | null; manual_value: number | null; contract_id: string | null; is_exception: boolean; location_id: string; location_name: string; location_address: string; location_lat: number | null; location_lng: number | null; location_access_code: string | null; location_instructions: string | null; location_has_key: boolean; location_key_label: string | null; client_id: string; client_name: string; client_email: string | null; client_phone: string | null; team_id: string | null; team_name: string | null; team_color: string | null; payment_status: string | null; apply_vat: boolean };
         Relationships: [];
       };
       monthly_hours_summary: {

@@ -27,8 +27,16 @@ const STATUS_STYLE: Record<string, { bg: string; text: string; label: string }> 
   sem_cobertura: { bg: "#FEF2F2", text: "#B91C1C", label: "Sem cobertura" },
 };
 
-function serviceValue(s: { calculated_value: number | null; manual_value: number | null }) {
-  return s.manual_value ?? s.calculated_value ?? 0;
+// O valor base (manual ou calculado) não inclui IVA — quando o serviço tem
+// apply_vat, soma-o, tal como o painel de detalhe do serviço já faz. Sem
+// isto, o valor mostrado na ficha do cliente divergia do valor real cobrado
+// sempre que o IVA era ativado/desativado pelo card no calendário.
+function serviceValue(
+  s: { calculated_value: number | null; manual_value: number | null; apply_vat?: boolean | null },
+  vatRatePct: number,
+) {
+  const base = s.manual_value ?? s.calculated_value ?? 0;
+  return s.apply_vat ? base * (1 + vatRatePct / 100) : base;
 }
 
 function dayLabel(iso: string) {
@@ -70,6 +78,7 @@ export default async function ClientDetailPage({
     { data: doneRaw },
     { data: pointServicesRaw },
     { data: teamsRaw },
+    { data: companySettings },
   ] = await Promise.all([
     admin
       .from("clients")
@@ -96,7 +105,7 @@ export default async function ClientDetailPage({
     // Próximas intervenções
     admin
       .from("services_full")
-      .select("id, reference_number, scheduled_start, scheduled_end, status, location_name, team_name, team_color, calculated_value, manual_value")
+      .select("id, reference_number, scheduled_start, scheduled_end, status, location_name, team_name, team_color, calculated_value, manual_value, apply_vat")
       .eq("client_id", id)
       .eq("company_id", me.company_id)
       .gte("scheduled_start", nowIso)
@@ -107,7 +116,7 @@ export default async function ClientDetailPage({
     // Histórico recente
     admin
       .from("services_full")
-      .select("id, reference_number, scheduled_start, status, location_name, team_name, team_color, calculated_value, manual_value")
+      .select("id, reference_number, scheduled_start, status, location_name, team_name, team_color, calculated_value, manual_value, apply_vat")
       .eq("client_id", id)
       .eq("company_id", me.company_id)
       .lt("scheduled_start", nowIso)
@@ -117,7 +126,7 @@ export default async function ClientDetailPage({
     // Concluídos (para KPI de faturação)
     admin
       .from("services_full")
-      .select("calculated_value, manual_value")
+      .select("calculated_value, manual_value, apply_vat")
       .eq("client_id", id)
       .eq("company_id", me.company_id)
       .eq("status", "concluido")
@@ -138,6 +147,12 @@ export default async function ClientDetailPage({
       .eq("company_id", me.company_id)
       .eq("active", true)
       .order("name"),
+
+    admin
+      .from("company_settings")
+      .select("vat_rate")
+      .eq("company_id", me.company_id)
+      .single(),
   ]);
 
   if (!client) notFound();
@@ -168,7 +183,8 @@ export default async function ClientDetailPage({
     color: t.color,
     member_count: Array.isArray(t.members) ? t.members.length : 0,
   }));
-  const totalBilled = done.reduce((acc, s) => acc + serviceValue(s), 0);
+  const vatRate = companySettings?.vat_rate ?? 23;
+  const totalBilled = done.reduce((acc, s) => acc + serviceValue(s, vatRate), 0);
   const nextService = upcoming[0] ?? null;
 
   const initials = client.name.split(" ").slice(0, 2).map((w) => w[0]).join("").toUpperCase();
@@ -349,7 +365,7 @@ export default async function ClientDetailPage({
                           </p>
                         </div>
                         <span className="text-xs font-semibold text-[var(--color-text-sub)] flex items-center gap-1 shrink-0">
-                          <BadgeEuro className="w-3.5 h-3.5" />{serviceValue(s).toFixed(2)}
+                          <BadgeEuro className="w-3.5 h-3.5" />{serviceValue(s, vatRate).toFixed(2)}
                         </span>
                         <span className="text-xs font-semibold px-2 py-0.5 rounded-full shrink-0" style={{ background: st.bg, color: st.text }}>
                           {st.label}
@@ -384,7 +400,7 @@ export default async function ClientDetailPage({
                         </span>
                         <span className="flex-1 min-w-0 truncate text-[var(--color-text-main)]">{s.location_name ?? "—"}</span>
                         <span className="text-xs text-[var(--color-text-sub)] flex items-center gap-1 shrink-0">
-                          <BadgeEuro className="w-3.5 h-3.5" />{serviceValue(s).toFixed(2)}
+                          <BadgeEuro className="w-3.5 h-3.5" />{serviceValue(s, vatRate).toFixed(2)}
                         </span>
                         <span className="text-xs font-semibold px-2 py-0.5 rounded-full shrink-0" style={{ background: st.bg, color: st.text }}>
                           {st.label}
