@@ -18,6 +18,7 @@ import { sendBulkClientNotifications } from "@/app/actions/email";
 import { updateLocationAccess } from "@/app/actions/locations";
 import { setServicePayment } from "@/app/actions/daily-billing";
 import { updateServiceTime, updateServiceValue, updateServiceNotes, markServiceAbsence } from "../_actions/update-service";
+import { withVat } from "@/lib/service-value";
 import { ServicePhotosGallery } from "./service-photos-gallery";
 import { isValidIsoDateString } from "@/lib/utils";
 import {
@@ -676,7 +677,7 @@ export function ServiceDetailSheet({ service, onClose, onChanged, initialEdit = 
                     {valueInput.trim() !== "" && Number.isFinite(Number(valueInput.replace(",", "."))) && (
                       <p className="text-xs text-[var(--color-text-muted)]">
                         Total {applyVat ? "com IVA" : "sem IVA"}: <strong className="text-[var(--color-text-main)]">
-                          €{(Number(valueInput.replace(",", ".")) * (applyVat ? 1 + vatRate / 100 : 1)).toFixed(2)}
+                          €{withVat(Number(valueInput.replace(",", ".")), applyVat, vatRate).toFixed(2)}
                         </strong>
                       </p>
                     )}
@@ -703,7 +704,7 @@ export function ServiceDetailSheet({ service, onClose, onChanged, initialEdit = 
                 ) : currentValue != null ? (
                   <div className="text-sm text-[var(--color-text-main)]">
                     <span className="font-semibold">
-                      €{(currentValue * (applyVat ? 1 + vatRate / 100 : 1)).toFixed(2)}
+                      €{withVat(currentValue, applyVat, vatRate).toFixed(2)}
                     </span>
                     <span className="text-xs text-[var(--color-text-muted)] ml-1.5">
                       {applyVat ? `(com IVA ${vatRate}% · base €${currentValue.toFixed(2)})` : "(sem IVA)"}

@@ -41,3 +41,15 @@ export function calculateServiceValue(i: ServiceValueInput): number | null {
   }
   return null;
 }
+
+/**
+ * Aplica IVA a um valor base (fonte única — ver Causa "IVA divergente entre
+ * painel do serviço e ficha do cliente", 2026-07-22). O mesmo serviço chegou
+ * a mostrar valores diferentes em sítios diferentes porque cada um fazia a
+ * sua própria conta `valor * (1 + taxa/100)` — bastava um deles esquecer o
+ * apply_vat, ou usar uma taxa desatualizada, para divergir. Qualquer local
+ * que mostre o valor de um serviço com IVA usa este helper.
+ */
+export function withVat(baseValue: number, applyVat: boolean, vatRatePct: number): number {
+  return applyVat ? Math.round(baseValue * (1 + vatRatePct / 100) * 100) / 100 : baseValue;
+}

@@ -29,6 +29,7 @@ import { ClientNotificationsModal } from "./client-notifications-modal";
 import { BuildingsColumn } from "./buildings-column";
 import { useCalendarStaticData } from "./calendar-static-data-context";
 import { rescheduleService, type ConflictInfo } from "../_actions/reschedule";
+import { getCompanySettings } from "@/app/actions/settings";
 import type { BuildingCard } from "@/app/actions/building-cards";
 import type { Database, BuildingCardWeekday } from "@/types/database";
 
@@ -107,6 +108,7 @@ function toBlock(s: ServiceCalendar): ServiceForBlock {
     client_name: s.client_name,
     calculated_value: s.calculated_value,
     manual_value: s.manual_value,
+    apply_vat: s.apply_vat,
     notes: s.notes,
     team_color: s.team_color ?? null,
     team_name: s.team_name ?? null,
@@ -276,6 +278,10 @@ export function CalendarView({
   const [conflictMsg,    setConflictMsg]    = useState<string | null>(null);
   const [pdfLoading,     setPdfLoading]     = useState(false);
   const [pendingForce,   setPendingForce]   = useState<PendingForce | null>(null);
+  // Taxa de IVA da empresa — para o tooltip do card mostrar o valor COM IVA,
+  // igual ao painel de detalhe (evita o mesmo serviço mostrar valores
+  // diferentes em sítios diferentes do calendário).
+  const [vatRate, setVatRate] = useState<number>(23);
 
   // Equipas ocultas persistidas em localStorage por empresa
   const [hiddenTeamIds, setHiddenTeamIds] = useState<Set<string>>(() => {
@@ -316,6 +322,14 @@ export function CalendarView({
   useEffect(() => { setLocalServices(services); }, [services]);
   useEffect(() => { setLocalBuildingCards(buildingCards); }, [buildingCards]);
   /* eslint-enable react-hooks/exhaustive-deps, react-hooks/set-state-in-effect */
+
+  useEffect(() => {
+    let cancelled = false;
+    getCompanySettings()
+      .then((s) => { if (!cancelled && s?.vat_rate != null) setVatRate(s.vat_rate); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
 
   useEffect(() => {
     const id = setInterval(() => setCurrentTop(computeTimeTop(selectedDate, slotH)), 60_000);
@@ -852,6 +866,7 @@ export function CalendarView({
                               stopIndex={arr.length > 1 ? idx + 1 : undefined}
                               lane={lane}
                               lanes={lanes}
+                              vatRate={vatRate}
                               onClick={(b) => { setDetailEdit(false); setDetailSvc(localServices.find((s) => s.id === b.id) ?? null); }}
                               onEdit={(b) => { setDetailEdit(true); setDetailSvc(localServices.find((s) => s.id === b.id) ?? null); }}
                             />

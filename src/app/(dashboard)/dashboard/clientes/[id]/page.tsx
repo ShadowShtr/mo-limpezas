@@ -17,6 +17,7 @@ import { LocalSheet } from "../../locais/_components/sheet";
 import type { ContratosTableRow } from "../../contratos/page";
 import { CONTRATO_SHEET_SELECT } from "@/lib/contrato-sheet-fields";
 import { CLIENTE_SHEET_SELECT } from "@/lib/cliente-sheet-fields";
+import { withVat } from "@/lib/service-value";
 
 const STATUS_STYLE: Record<string, { bg: string; text: string; label: string }> = {
   agendado:  { bg: "#F0FDF4", text: "#15803D", label: "Agendado" },
@@ -36,7 +37,7 @@ function serviceValue(
   vatRatePct: number,
 ) {
   const base = s.manual_value ?? s.calculated_value ?? 0;
-  return s.apply_vat ? base * (1 + vatRatePct / 100) : base;
+  return withVat(base, !!s.apply_vat, vatRatePct);
 }
 
 function dayLabel(iso: string) {

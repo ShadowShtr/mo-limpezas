@@ -5,6 +5,7 @@ import { parseISO, format, differenceInMinutes } from "date-fns";
 import { MapPin, Clock, Euro, FileText, Lock, Key, Users, Pencil } from "lucide-react";
 import { useDraggable } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
+import { withVat } from "@/lib/service-value";
 
 export type ServiceForBlock = {
   id: string;
@@ -22,6 +23,7 @@ export type ServiceForBlock = {
   client_name: string;
   calculated_value: number | null;
   manual_value: number | null;
+  apply_vat: boolean;
   notes: string | null;
   team_color: string | null;
   team_name: string | null;
@@ -75,12 +77,13 @@ export const STATUS_LABEL: Record<string, string> = {
 
 interface TooltipState { x: number; y: number }
 
-function ServiceTooltip({ service, pos }: { service: ServiceForBlock; pos: TooltipState }) {
+function ServiceTooltip({ service, pos, vatRate }: { service: ServiceForBlock; pos: TooltipState; vatRate: number }) {
   const start = parseISO(service.scheduled_start);
   const end   = parseISO(service.scheduled_end);
   const mins  = differenceInMinutes(end, start);
   const dur   = `${Math.floor(mins / 60)}h${mins % 60 > 0 ? `${mins % 60}min` : ""}`;
-  const value = service.manual_value ?? service.calculated_value;
+  const baseValue = service.manual_value ?? service.calculated_value;
+  const value = baseValue != null ? withVat(baseValue, service.apply_vat, vatRate) : null;
 
   const viewportW = typeof window === "undefined" ? 1024 : window.innerWidth;
   const viewportH = typeof window === "undefined" ? 768 : window.innerHeight;
@@ -214,9 +217,11 @@ interface ServiceBlockProps {
   lane?: number;
   /** Total de sub-colunas no grupo sobreposto. */
   lanes?: number;
+  /** Taxa de IVA da empresa (%), para o tooltip mostrar o valor COM IVA — igual ao painel de detalhe. */
+  vatRate?: number;
 }
 
-export function ServiceBlock({ service, slotHeight, startHour, teamId, onClick, onEdit, isOverlay = false, stopIndex, lane = 0, lanes = 1 }: ServiceBlockProps) {
+export function ServiceBlock({ service, slotHeight, startHour, teamId, onClick, onEdit, isOverlay = false, stopIndex, lane = 0, lanes = 1, vatRate = 23 }: ServiceBlockProps) {
   const [tooltip, setTooltip] = useState<TooltipState | null>(null);
   const [hovered, setHovered] = useState(false);
 
@@ -379,7 +384,7 @@ export function ServiceBlock({ service, slotHeight, startHour, teamId, onClick, 
         </div>
       </div>
 
-      {!isOverlay && tooltip && !isDragging && <ServiceTooltip service={service} pos={tooltip} />}
+      {!isOverlay && tooltip && !isDragging && <ServiceTooltip service={service} pos={tooltip} vatRate={vatRate} />}
     </>
   );
 }
