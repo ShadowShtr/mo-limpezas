@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { RefreshCw } from "lucide-react";
 import { initOfflineSync } from "@/lib/offline-sync";
+import { hasCriticalActionInFlight } from "@/lib/critical-action-tracker";
 
 export function PwaRegister() {
   const [waiting, setWaiting] = useState<ServiceWorker | null>(null);
@@ -15,12 +16,13 @@ export function PwaRegister() {
     if (typeof window === "undefined" || !("serviceWorker" in navigator)) return;
 
     // Só recarregar por troca de controlador se já havia um controlador antes
-    // (evita reload no primeiro registo) e só após a colaboradora confirmar.
+    // (evita reload no primeiro registo) e só depois de ativar a atualização
+    // (pelo botão OU automaticamente, ver mais abaixo).
     const hadController = !!navigator.serviceWorker.controller;
-    let userTriggered = false;
+    let reloadAllowed = false;
 
     function onControllerChange() {
-      if (hadController && userTriggered) window.location.reload();
+      if (hadController && reloadAllowed) window.location.reload();
     }
     navigator.serviceWorker.addEventListener("controllerchange", onControllerChange);
 
@@ -44,15 +46,25 @@ export function PwaRegister() {
           });
         });
 
-        // Expor o gatilho de ativação para o botão "Atualizar".
-        (window as unknown as { __activateUpdate?: () => void }).__activateUpdate = () => {
-          userTriggered = true;
+        function activate() {
+          reloadAllowed = true;
           reg.waiting?.postMessage("SKIP_WAITING");
-        };
+        }
 
-        // Verificar atualização ao voltar à app.
+        // Expor o gatilho de ativação para o botão "Atualizar".
+        (window as unknown as { __activateUpdate?: () => void }).__activateUpdate = activate;
+
+        // Verificar atualização ao voltar à app; e aplicá-la sozinha quando a
+        // app vai para segundo plano (ecrã bloqueado, troca de app) — momento
+        // invisível para quem usa, nunca a meio de um registo de ponto em
+        // curso (hasCriticalActionInFlight). O botão "Atualizar" continua a
+        // aparecer para quem quiser aplicar de imediato sem esperar por isto.
         document.addEventListener("visibilitychange", () => {
-          if (document.visibilityState === "visible") reg.update().catch(() => {});
+          if (document.visibilityState === "visible") {
+            reg.update().catch(() => {});
+          } else if (reg.waiting && !hasCriticalActionInFlight()) {
+            activate();
+          }
         });
 
         // ── Push (best-effort, inalterado) ──────────────────────────────

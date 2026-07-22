@@ -4,6 +4,7 @@ import { useState } from "react";
 import { LogIn, LogOut, MapPin, AlertTriangle, Loader2, CheckCircle, CloudOff, MapPinOff } from "lucide-react";
 import { queueTimesheet } from "@/lib/offline-sync";
 import { useSingleFlight } from "@/lib/hooks/use-single-flight";
+import { beginCriticalAction, endCriticalAction } from "@/lib/critical-action-tracker";
 
 function uuid() {
   if (typeof crypto !== "undefined" && crypto.randomUUID) return crypto.randomUUID();
@@ -87,6 +88,7 @@ export function ClockButton({ serviceId, initialTimesheet }: Props) {
 
   async function doClockIn(manual = false) {
     setLoading(true);
+    beginCriticalAction();
     setError(null);
     setDistanceWarning(null);
     setNeedsManual(null);
@@ -96,6 +98,7 @@ export function ClockButton({ serviceId, initialTimesheet }: Props) {
     if (coords.gpsError && !manual) {
       setNeedsManual("in");
       setLoading(false);
+      endCriticalAction();
       return;
     }
 
@@ -112,6 +115,7 @@ export function ClockButton({ serviceId, initialTimesheet }: Props) {
         setError("Sem rede e não foi possível guardar offline. Não feche a aplicação e tente quando houver ligação.");
       }
       setLoading(false);
+      endCriticalAction();
       return;
     }
 
@@ -123,6 +127,7 @@ export function ClockButton({ serviceId, initialTimesheet }: Props) {
       });
       const json = await res.json();
       setLoading(false);
+      endCriticalAction();
       if (!res.ok) {
         if (json.needsManualConfirm) { setNeedsManual("in"); return; }
         setError(json.error ?? "Erro ao registar entrada");
@@ -139,11 +144,13 @@ export function ClockButton({ serviceId, initialTimesheet }: Props) {
         setError("Sem rede e não foi possível guardar offline. Não feche a aplicação e tente quando houver ligação.");
       }
       setLoading(false);
+      endCriticalAction();
     }
   }
 
   async function doClockOut(manual = false) {
     setLoading(true);
+    beginCriticalAction();
     setError(null);
     setNeedsManual(null);
 
@@ -152,6 +159,7 @@ export function ClockButton({ serviceId, initialTimesheet }: Props) {
     if (coords.gpsError && !manual) {
       setNeedsManual("out");
       setLoading(false);
+      endCriticalAction();
       return;
     }
 
@@ -168,6 +176,7 @@ export function ClockButton({ serviceId, initialTimesheet }: Props) {
         setError("Sem rede e não foi possível guardar offline. Não feche a aplicação e tente quando houver ligação.");
       }
       setLoading(false);
+      endCriticalAction();
       return;
     }
 
@@ -179,6 +188,7 @@ export function ClockButton({ serviceId, initialTimesheet }: Props) {
       });
       const json = await res.json();
       setLoading(false);
+      endCriticalAction();
       if (!res.ok) {
         if (json.needsManualConfirm) { setNeedsManual("out"); return; }
         setError(json.error ?? "Erro ao registar saída");
@@ -194,6 +204,7 @@ export function ClockButton({ serviceId, initialTimesheet }: Props) {
         setError("Sem rede e não foi possível guardar offline. Não feche a aplicação e tente quando houver ligação.");
       }
       setLoading(false);
+      endCriticalAction();
     }
   }
 
