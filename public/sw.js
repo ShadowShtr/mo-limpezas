@@ -80,6 +80,24 @@ self.addEventListener("push", (e) => {
   let data = {};
   try { data = e.data.json(); } catch { data = { title: "Mó Limpezas", body: e.data.text() }; }
 
+  // Push de controlo (gestora → "forçar atualização"): nunca mostra
+  // notificação visível. Só pede à própria base para verificar se há uma
+  // versão nova (self.registration.update() dispara 'updatefound' no
+  // registration partilhado com a página, mesmo vindo daqui) e avisa
+  // qualquer janela aberta para reagir já, em vez de esperar pelo próximo
+  // ciclo de segundo plano.
+  if (data.type === "force_update") {
+    e.waitUntil(
+      Promise.all([
+        self.registration.update().catch(() => {}),
+        clients.matchAll({ type: "window", includeUncontrolled: true }).then((list) =>
+          list.forEach((c) => c.postMessage({ type: "CHECK_FOR_UPDATE" }))
+        ),
+      ])
+    );
+    return;
+  }
+
   e.waitUntil(
     self.registration.showNotification(data.title || "Mó Limpezas", {
       body: data.body || "",

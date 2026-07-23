@@ -241,6 +241,58 @@ export async function resetColaboradorPassword(id: string) {
   return { ok: true as const, password, name: target.full_name as string };
 }
 
+/**
+ * Manda um push de controlo à colaboradora a pedir para verificar/aplicar
+ * já uma atualização pendente da app — para quando ela fica presa numa
+ * versão antiga e nunca chega a fechar/reabrir a app (ver sendForceUpdatePush).
+ * Não garante nada: depende de o telemóvel entregar o push com a app fechada.
+ */
+export async function forceAppUpdate(id: string) {
+  const supabase = await createClient();
+  const admin = createAdminClient();
+
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { ok: false as const, error: "Não autenticado." };
+
+  const { data: callerProfile } = await admin
+    .from("profiles")
+    .select("company_id, role")
+    .eq("id", user.id)
+    .single();
+  if (!callerProfile || !["admin", "gestor"].includes(callerProfile.role)) {
+    return { ok: false as const, error: "Sem permissão." };
+  }
+
+  const { data: target } = await admin
+    .from("profiles")
+    .select("company_id, full_name")
+    .eq("id", id)
+    .single();
+  if (!target) return { ok: false as const, error: "Colaboradora não encontrada." };
+  if (target.company_id !== callerProfile.company_id) {
+    return { ok: false as const, error: "Acesso negado." };
+  }
+
+  const { sendForceUpdatePush } = await import("@/lib/push-notify");
+  const { sent } = await sendForceUpdatePush(admin, { companyId: callerProfile.company_id, userId: id });
+
+  if (sent === 0) {
+    return { ok: false as const, error: "Não foi possível enviar — a colaboradora pode não ter notificações ativas neste telemóvel." };
+  }
+
+  await auditLog({
+    companyId: callerProfile.company_id,
+    actorId: user.id,
+    action: "force_app_update_sent",
+    entityType: "profile",
+    entityId: id,
+    meta: { target_name: target.full_name },
+    source: "dashboard",
+  }, admin);
+
+  return { ok: true as const, sent };
+}
+
 export async function deleteColaborador(id: string, companyId: string) {
   const supabase = await createClient();
   const admin = createAdminClient();

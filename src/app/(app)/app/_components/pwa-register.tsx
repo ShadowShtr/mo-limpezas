@@ -67,6 +67,18 @@ export function PwaRegister() {
           }
         });
 
+        // Push de controlo "força atualização" (enviado pela gestora a partir
+        // da ficha da colaboradora, ver forceAppUpdatePush): o sw.js já correu
+        // self.registration.update() antes de mandar isto — se encontrou versão
+        // nova, ela já deve estar "waiting" agora. Aplica já se for seguro
+        // (nunca a meio de um clock-in/out); senão fica para o próximo
+        // momento seguro (segundo plano) como seria de qualquer forma.
+        navigator.serviceWorker.addEventListener("message", (event) => {
+          if (event.data?.type === "CHECK_FOR_UPDATE" && reg.waiting && !hasCriticalActionInFlight()) {
+            activate();
+          }
+        });
+
         // ── Push (best-effort, inalterado) ──────────────────────────────
         const publicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
         if (!publicKey || !("PushManager" in window)) return;

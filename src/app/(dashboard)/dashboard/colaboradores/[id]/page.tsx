@@ -7,6 +7,7 @@ import { ColaboradorAbsences } from "./_components/colaborador-absences";
 import { PresencaHistory } from "./_components/presenca-history";
 import { DocumentsSection } from "./_components/documents-section";
 import { ResetPasswordButton } from "./_components/reset-password-button";
+import { ForceAppUpdateButton } from "./_components/force-app-update-button";
 import { VacationBalanceForm } from "./_components/vacation-balance-form";
 import { getCollaboratorDocuments } from "@/app/actions/collaborator-documents";
 import {
@@ -202,6 +203,9 @@ export default async function ColaboradorDetailPage({ params }: Props) {
 
             {/* Acesso / redefinir password */}
             <ResetPasswordButton colaboradorId={id} />
+
+            {/* Forçar atualização da app (colaboradora presa em versão antiga) */}
+            <ForceAppUpdateButton colaboradorId={id} />
           </div>
 
           {/* Coluna direita — estatísticas + histórico */}
