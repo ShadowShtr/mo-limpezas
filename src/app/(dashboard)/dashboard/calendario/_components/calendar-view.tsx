@@ -43,10 +43,12 @@ const SLOTS_PER_HOUR = 4;   // divisões de 15 em 15 minutos
 const SLOT_MIN      = 60 / SLOTS_PER_HOUR; // minutos por slot
 const TOTAL_SLOTS   = TOTAL_HOURS * SLOTS_PER_HOUR;
 const GUTTER_W      = 56;
-// Largura fixa de cada coluna de equipa — antes as colunas esticavam para
-// preencher toda a largura (ficavam enormes com poucas equipas). Agora têm
-// largura fixa e o calendário rola na horizontal quando não cabem todas.
-const COLUMN_W      = 128;
+// Largura MÍNIMA de cada coluna de equipa. As colunas esticam/encolhem para
+// preencher exatamente o espaço visível (sem scroll horizontal) enquanto
+// couberem todas com pelo menos esta largura; só quando não há espaço para
+// todas ao mesmo tamanho mínimo é que aparece scroll horizontal — os cards
+// nunca ficam mais estreitos do que isto, ilegíveis.
+const COLUMN_MIN_W  = 128;
 const HEADER_H      = 44;
 const BUILDINGS_COL_ID = "__predios__";
 const WEEKDAY_KEYS: BuildingCardWeekday[] = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
@@ -755,7 +757,7 @@ export function CalendarView({
         {/* ── Grid do calendário ─────────────────────────────────────────── */}
         {viewMode === "calendar" && (
           <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
-            {/* Colunas com largura fixa (COLUMN_W) — rola na horizontal quando não cabem todas */}
+            {/* Colunas esticam/encolhem para caber sem scroll; scroll horizontal só como reserva (COLUMN_MIN_W) */}
             <div ref={scrollRef} className="flex-1 overflow-auto calendar-scroll">
               <div style={{ minHeight: `${HEADER_H + TOTAL_SLOTS * slotH}px` }}>
 
@@ -767,8 +769,8 @@ export function CalendarView({
 
                   {visibleColumns.length > 0 ? visibleColumns.map((col) => (
                     <div key={col.key}
-                      className="shrink-0 relative px-2 flex items-center border-l border-[var(--color-border)] bg-white overflow-hidden"
-                      style={{ width: `${COLUMN_W}px` }}>
+                      className="flex-1 relative px-2 flex items-center border-l border-[var(--color-border)] bg-white overflow-hidden"
+                      style={{ minWidth: `${COLUMN_MIN_W}px` }}>
                       <div className="absolute top-0 left-0 right-0 h-[3px]" style={{ backgroundColor: col.color }} />
                       <div className="flex items-center gap-1.5 w-full min-w-0">
                         <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: col.color }} />
@@ -830,7 +832,7 @@ export function CalendarView({
                           cards={dayBuildingCards}
                           teams={teams}
                           onChanged={handleChanged}
-                          width={COLUMN_W}
+                          minWidth={COLUMN_MIN_W}
                         />
                       );
                     }
@@ -840,8 +842,8 @@ export function CalendarView({
                     <DroppableColumn
                       key={col.key}
                       id={col.key}
-                      className="shrink-0 relative border-l border-[var(--color-border)] cursor-crosshair"
-                      style={{ height: `${TOTAL_SLOTS * slotH}px`, width: `${COLUMN_W}px` }}
+                      className="flex-1 relative border-l border-[var(--color-border)] cursor-crosshair"
+                      style={{ height: `${TOTAL_SLOTS * slotH}px`, minWidth: `${COLUMN_MIN_W}px` }}
                       onClick={(e) => handleColumnClick(col.key, e)}
                     >
                       <GridLines totalHours={TOTAL_HOURS} slotsPerHour={SLOTS_PER_HOUR} slotHeight={slotH} />
