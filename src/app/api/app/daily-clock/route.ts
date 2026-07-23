@@ -1,8 +1,10 @@
+import { z } from "zod";
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { rateLimit, rateLimitKey } from "@/lib/rate-limit";
 import { auditLog } from "@/lib/audit";
+import { parseJsonBody } from "@/lib/payload-guard";
 
 // Ponto GERAL do dia: entrada e saída únicas. É isto que conta para a folha.
 type Action = "clock_in" | "clock_out";
@@ -10,6 +12,12 @@ const FIELD: Record<Action, "clock_in_at" | "clock_out_at"> = {
   clock_in: "clock_in_at",
   clock_out: "clock_out_at",
 };
+
+const dailyClockSchema = z.object({
+  action: z.enum(["clock_in", "clock_out"]),
+  lat: z.union([z.number(), z.string()]).nullable().optional(),
+  lng: z.union([z.number(), z.string()]).nullable().optional(),
+});
 
 function parseCoord(v: unknown) {
   const n = Number(v);
@@ -33,12 +41,12 @@ export async function POST(req: NextRequest) {
   const limited = await rateLimit(rateLimitKey("daily-clock", user.id), 12, 60_000);
   if (limited) return limited;
 
-  const body = await req.json();
-  const action = body.action as Action;
-  if (!FIELD[action]) return NextResponse.json({ error: "Ação inválida." }, { status: 400 });
+  const parsed = await parseJsonBody(req, dailyClockSchema);
+  if (!parsed.ok) return parsed.response;
+  const { action, lat: rawLat, lng: rawLng } = parsed.data;
 
-  const lat = parseCoord(body.lat);
-  const lng = parseCoord(body.lng);
+  const lat = parseCoord(rawLat);
+  const lng = parseCoord(rawLng);
   const nowIso = new Date().toISOString();
 
   const admin = createAdminClient();

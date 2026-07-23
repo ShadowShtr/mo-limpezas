@@ -1,9 +1,18 @@
+import { z } from "zod";
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { rateLimit, rateLimitKey } from "@/lib/rate-limit";
 import { withRouteMetrics } from "@/lib/observability/route-metrics";
 import { auditLog } from "@/lib/audit";
+import { parseJsonBody } from "@/lib/payload-guard";
+
+const confirmSchema = z.object({
+  client_event_id: z.string().min(1).max(100),
+  status: z.enum(["uploaded", "failed"]).optional(),
+  compressed_size_bytes: z.number().finite().nonnegative().max(500_000_000).optional(),
+  failure_reason: z.string().max(500).optional(),
+});
 
 /**
  * TASK 01/04 — Confirma que a foto chegou ao Storage e atualiza a metadata.
@@ -18,22 +27,10 @@ async function handle(req: NextRequest) {
   const limited = await rateLimit(rateLimitKey("upload-confirm", user.id), 40, 60_000);
   if (limited) return limited;
 
-  let body: Record<string, unknown>;
-  try {
-    body = await req.json();
-  } catch {
-    return NextResponse.json({ error: "Pedido inválido." }, { status: 400 });
-  }
-
-  const client_event_id = body.client_event_id as string | undefined;
-  const status = (body.status as string | undefined) ?? "uploaded";
-  const compressed_size_bytes = body.compressed_size_bytes as number | undefined;
-  const failure_reason = body.failure_reason as string | undefined;
-
-  if (!client_event_id) return NextResponse.json({ error: "client_event_id required" }, { status: 400 });
-  if (!["uploaded", "failed"].includes(status)) {
-    return NextResponse.json({ error: "status inválido" }, { status: 400 });
-  }
+  const parsed = await parseJsonBody(req, confirmSchema);
+  if (!parsed.ok) return parsed.response;
+  const { client_event_id, compressed_size_bytes, failure_reason } = parsed.data;
+  const status = parsed.data.status ?? "uploaded";
 
   const admin = createAdminClient();
   const { data: profile } = await admin

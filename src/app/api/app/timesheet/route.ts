@@ -1,3 +1,4 @@
+import { z } from "zod";
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -6,9 +7,36 @@ import { rateLimit, rateLimitKey } from "@/lib/rate-limit";
 import { haversineDistanceM } from "@/lib/calculations";
 import { withRouteMetrics } from "@/lib/observability/route-metrics";
 import { auditLog } from "@/lib/audit";
+import { parseJsonBody } from "@/lib/payload-guard";
 
 // Pontos offline aceites até 48h no passado; mais antigos vão para revisão automática
 const MAX_OFFLINE_AGE_MS = 48 * 60 * 60 * 1000;
+
+// Coordenadas chegam como number ou string ("41.123"); parseCoord normaliza.
+// client_event_id NÃO é sempre um UUID — o fallback offline (sem
+// crypto.randomUUID) gera "<timestamp>-<random>", por isso só limitamos o
+// tamanho, não o formato.
+const coordSchema = z.union([z.number(), z.string()]).nullable().optional();
+const gpsAccuracySchema = z.number().finite().nonnegative().max(1_000_000).nullable().optional();
+
+const clockInSchema = z.object({
+  service_id: z.string().uuid("service_id inválido."),
+  lat: coordSchema,
+  lng: coordSchema,
+  clock_in_at: z.string().max(40).optional(),
+  manual: z.boolean().optional(),
+  gps_accuracy: gpsAccuracySchema,
+  client_event_id: z.string().max(100).optional(),
+});
+
+const clockOutSchema = z.object({
+  service_id: z.string().uuid("service_id inválido."),
+  lat: coordSchema,
+  lng: coordSchema,
+  clock_out_at: z.string().max(40).optional(),
+  manual: z.boolean().optional(),
+  gps_accuracy: gpsAccuracySchema,
+});
 
 function parseCoord(value: unknown) {
   const n = Number(value);
@@ -52,6 +80,8 @@ async function postHandler(req: NextRequest) {
   const limited = await rateLimit(rateLimitKey("timesheet-in", user.id), 6, 60_000);
   if (limited) return limited;
 
+  const parsed = await parseJsonBody(req, clockInSchema);
+  if (!parsed.ok) return parsed.response;
   const {
     service_id,
     lat: rawLat, lng: rawLng,
@@ -59,13 +89,11 @@ async function postHandler(req: NextRequest) {
     manual,
     gps_accuracy,
     client_event_id,
-  } = await req.json();
+  } = parsed.data;
 
   const lat = parseCoord(rawLat);
   const lng = parseCoord(rawLng);
 
-  if (!service_id)
-    return NextResponse.json({ error: "service_id required" }, { status: 400 });
   if ((lat == null || lng == null) && !manual) {
     return NextResponse.json(
       { error: "Ative a localização/GPS para registar o ponto.", needsManualConfirm: true },
@@ -204,19 +232,19 @@ async function patchHandler(req: NextRequest) {
   const limited = await rateLimit(rateLimitKey("timesheet-out", user.id), 6, 60_000);
   if (limited) return limited;
 
+  const parsed = await parseJsonBody(req, clockOutSchema);
+  if (!parsed.ok) return parsed.response;
   const {
     service_id,
     lat: rawLat, lng: rawLng,
     clock_out_at: rawClockOut,
     manual,
     gps_accuracy,
-  } = await req.json();
+  } = parsed.data;
 
   const lat = parseCoord(rawLat);
   const lng = parseCoord(rawLng);
 
-  if (!service_id)
-    return NextResponse.json({ error: "service_id required" }, { status: 400 });
   if ((lat == null || lng == null) && !manual) {
     return NextResponse.json(
       { error: "Ative a localização/GPS para registar o ponto.", needsManualConfirm: true },

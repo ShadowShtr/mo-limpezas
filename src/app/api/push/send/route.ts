@@ -1,8 +1,17 @@
+import { z } from "zod";
 import { NextRequest, NextResponse } from "next/server";
 import webpush from "web-push";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { rateLimit, rateLimitKey } from "@/lib/rate-limit";
+import { parseJsonBody } from "@/lib/payload-guard";
+
+const sendSchema = z.object({
+  user_id: z.string().uuid("user_id inválido."),
+  title: z.string().min(1).max(200),
+  body: z.string().min(1).max(1000),
+  url: z.string().max(500).optional(),
+});
 
 export async function POST(req: NextRequest) {
   webpush.setVapidDetails(
@@ -17,7 +26,9 @@ export async function POST(req: NextRequest) {
   } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { user_id, title, body, url } = await req.json();
+  const parsed = await parseJsonBody(req, sendSchema);
+  if (!parsed.ok) return parsed.response;
+  const { user_id, title, body, url } = parsed.data;
 
   const admin = createAdminClient();
 
