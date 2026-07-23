@@ -24,6 +24,8 @@ interface BuildingsColumnProps {
   cards: BuildingCard[];
   teams: Team[];
   onChanged: () => void;
+  /** Largura fixa da coluna — igual às colunas de equipa (ver COLUMN_W em calendar-view.tsx). */
+  width: number;
 }
 
 const INPUT_CLS =
@@ -310,7 +312,7 @@ function BuildingDetailSheet({
   );
 }
 
-export function BuildingsColumn({ weekday, cards, teams, onChanged }: BuildingsColumnProps) {
+export function BuildingsColumn({ weekday, cards, teams, onChanged, width }: BuildingsColumnProps) {
   const [localCards, setLocalCards] = useState(cards);
   const [sheetState, setSheetState] = useState<{ card: BuildingCard | null; edit: boolean } | null>(null);
 
@@ -345,7 +347,7 @@ export function BuildingsColumn({ weekday, cards, teams, onChanged }: BuildingsC
   }
 
   return (
-    <div className="flex-1 min-w-0 flex flex-col h-full border-l border-[var(--color-border)] bg-[var(--color-background)]/40">
+    <div className="shrink-0 flex flex-col h-full border-l border-[var(--color-border)] bg-[var(--color-background)]/40" style={{ width: `${width}px` }}>
       <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden p-2">
         {localCards.length === 0 && (
           <div className="flex flex-col items-center justify-center gap-2 py-8 text-center">
