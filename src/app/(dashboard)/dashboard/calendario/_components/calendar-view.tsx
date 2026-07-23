@@ -46,7 +46,7 @@ const GUTTER_W      = 56;
 // Largura fixa de cada coluna de equipa — antes as colunas esticavam para
 // preencher toda a largura (ficavam enormes com poucas equipas). Agora têm
 // largura fixa e o calendário rola na horizontal quando não cabem todas.
-const COLUMN_W      = 160;
+const COLUMN_W      = 128;
 const HEADER_H      = 44;
 const BUILDINGS_COL_ID = "__predios__";
 const WEEKDAY_KEYS: BuildingCardWeekday[] = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
