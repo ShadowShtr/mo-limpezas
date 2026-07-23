@@ -49,6 +49,11 @@ const GUTTER_W      = 56;
 // todas ao mesmo tamanho mínimo é que aparece scroll horizontal — os cards
 // nunca ficam mais estreitos do que isto, ilegíveis.
 const COLUMN_MIN_W  = 128;
+// A coluna Prédios precisa de mais espaço do que uma coluna de equipa: cada
+// card tem ícone de arrastar + botões de editar/apagar + badge de equipa com
+// texto mais longo ("Equipa 13 - Prédios Alverca") — a 128px o texto fica a
+// cortar/partir a meio da palavra.
+const PREDIOS_COLUMN_MIN_W = 190;
 const HEADER_H      = 44;
 const BUILDINGS_COL_ID = "__predios__";
 const WEEKDAY_KEYS: BuildingCardWeekday[] = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
@@ -770,7 +775,7 @@ export function CalendarView({
                   {visibleColumns.length > 0 ? visibleColumns.map((col) => (
                     <div key={col.key}
                       className="flex-1 relative px-2 flex items-center border-l border-[var(--color-border)] bg-white overflow-hidden"
-                      style={{ minWidth: `${COLUMN_MIN_W}px` }}>
+                      style={{ minWidth: `${col.key === BUILDINGS_COL_ID ? PREDIOS_COLUMN_MIN_W : COLUMN_MIN_W}px` }}>
                       <div className="absolute top-0 left-0 right-0 h-[3px]" style={{ backgroundColor: col.color }} />
                       <div className="flex items-center gap-1.5 w-full min-w-0">
                         <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: col.color }} />
@@ -832,7 +837,7 @@ export function CalendarView({
                           cards={dayBuildingCards}
                           teams={teams}
                           onChanged={handleChanged}
-                          minWidth={COLUMN_MIN_W}
+                          minWidth={PREDIOS_COLUMN_MIN_W}
                         />
                       );
                     }
