@@ -12,6 +12,7 @@ import { Header } from "@/components/layout/header";
 import { ClienteSheet } from "../_components/sheet";
 import { CommunicationTab } from "./_components/communication-tab";
 import { InterventionsSection } from "./_components/interventions-section";
+import { CancelServiceButton } from "./_components/cancel-service-button";
 import { LocaisTable } from "../../locais/_components/table";
 import { LocalSheet } from "../../locais/_components/sheet";
 import type { ContratosTableRow } from "../../contratos/page";
@@ -106,7 +107,7 @@ export default async function ClientDetailPage({
     // Próximas intervenções
     admin
       .from("services_full")
-      .select("id, reference_number, scheduled_start, scheduled_end, status, location_name, team_name, team_color, calculated_value, manual_value, apply_vat")
+      .select("id, reference_number, scheduled_start, scheduled_end, status, location_name, team_id, team_name, team_color, calculated_value, manual_value, apply_vat")
       .eq("client_id", id)
       .eq("company_id", me.company_id)
       .gte("scheduled_start", nowIso)
@@ -378,6 +379,11 @@ export default async function ClientDetailPage({
                         >
                           <Edit2 className="w-4 h-4" />
                         </Link>
+                        <CancelServiceButton
+                          serviceId={s.id}
+                          teamId={s.team_id}
+                          scheduledStart={s.scheduled_start}
+                        />
                       </div>
                     );
                   })}
