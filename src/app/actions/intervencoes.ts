@@ -5,6 +5,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { auditLog } from "@/lib/audit";
 import { maxReferenceNumber } from "@/lib/services/reference";
+import { removeFutureScheduledServices } from "./contratos";
 
 type ActionResult = { ok: true } | { ok: false; error: string };
 
@@ -60,6 +61,17 @@ export async function setContractInterventionStatus(
 
   if (error) return { ok: false, error: error.message };
 
+  // Pausar/arquivar para a série inteira — sem isto, as visitas futuras já
+  // geradas pelo cron mensal ficavam órfãs no calendário como "Agendado"
+  // indefinidamente, mesmo com o contrato já pausado/arquivado na ficha do
+  // cliente (o padrão de recorrência não muda, por isso nada as marcava como
+  // inválidas). Reativar volta a gerar a partir do próximo ciclo do cron ou
+  // ao guardar o formulário de edição.
+  let removedCount = 0;
+  if (status !== "ativo") {
+    removedCount = await removeFutureScheduledServices(admin, contractId, companyId);
+  }
+
   const clientId = (contract.locations as { client_id?: string | null } | null)?.client_id ?? null;
   await auditLog({
     companyId,
@@ -67,7 +79,7 @@ export async function setContractInterventionStatus(
     action: "intervention.contract_status_changed",
     entityType: "contract",
     entityId: contractId,
-    meta: { from: contract.status, to: status },
+    meta: { from: contract.status, to: status, removed_future_services: removedCount },
   }, admin);
   revalidateClient(clientId);
   return { ok: true };

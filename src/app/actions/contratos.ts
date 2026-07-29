@@ -346,17 +346,54 @@ async function updateFutureServiceValuesForContract(
 }
 
 /**
+ * Apaga TODOS os serviços futuros ainda `agendado` deste contrato, sem exceção
+ * (incl. ocorrências movidas à mão). Usado quando o contrato deixa de estar
+ * ativo (pausado/cancelado/excluído) — nesse ponto a série inteira pára, não
+ * faz sentido preservar uma exceção pontual de uma recorrência que já não existe.
+ * Nunca toca em ocorrências passadas, em curso, concluídas, faltas ou canceladas.
+ * Devolve quantos serviços foram removidos (para auditoria/mensagem ao utilizador).
+ */
+export async function removeFutureScheduledServices(
+  admin: ReturnType<typeof createAdminClient>,
+  contractId: string,
+  companyId: string,
+): Promise<number> {
+  const { data: deleted, error } = await admin
+    .from("services")
+    .delete()
+    .eq("company_id", companyId)
+    .eq("contract_id", contractId)
+    .eq("status", "agendado")
+    .gte("scheduled_start", new Date().toISOString())
+    .select("id");
+  if (error) return 0;
+  return deleted?.length ?? 0;
+}
+
+/**
  * Apaga serviços FUTUROS ainda `agendado` deste contrato que já não correspondem
  * ao padrão atual (início mudou para mais tarde, fim antecipado, dia da semana
  * alterado, frequência alterada). Nunca toca em ocorrências passadas, em curso,
  * concluídas, faltas, canceladas, nem em exceções movidas à mão (is_exception).
+ *
+ * Quando o contrato deixa de estar "ativo" (pausado/cancelado), a comparação
+ * por padrão deixa de fazer sentido — sem isto, um contrato arquivado com o
+ * mesmo horário de sempre não tinha NENHUMA data "inválida" e as visitas
+ * futuras já geradas ficavam órfãs no calendário como "Agendado" para sempre.
+ * Nesse caso remove tudo o que ainda está por acontecer, sem exceção.
  */
 async function reconcileFutureServicesForContract(
   admin: ReturnType<typeof createAdminClient>,
   contractId: string,
   companyId: string,
   contract: Parameters<typeof getOccurrences>[0],
+  status: string,
 ) {
+  if (status !== "ativo") {
+    await removeFutureScheduledServices(admin, contractId, companyId);
+    return;
+  }
+
   const now = new Date();
   const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   // Janela ampla (6 meses) para cobrir o que o cron mensal possa ter gerado.
@@ -716,6 +753,7 @@ export async function updateContrato(id: string, input: Omit<ContratoInput, "com
       ends_on: input.ends_on || null,
       excluded_dates: excludedDates,
     },
+    input.status,
   );
 
   await updateFutureServiceValuesForContract(
@@ -797,13 +835,7 @@ export async function deleteContrato(id: string) {
   // Apaga os serviços futuros agendados gerados por este contrato. Os passados
   // (concluídos/em curso) ficam com contract_id a NULL (FK SET NULL) — preserva
   // o histórico e a faturação.
-  await admin
-    .from("services")
-    .delete()
-    .eq("contract_id", id)
-    .eq("company_id", profile.company_id)
-    .eq("status", "agendado")
-    .gte("scheduled_start", new Date().toISOString());
+  await removeFutureScheduledServices(admin, id, profile.company_id);
 
   const { error } = await admin
     .from("contracts")
