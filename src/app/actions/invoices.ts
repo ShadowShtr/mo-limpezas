@@ -3,7 +3,6 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { requireProfile } from "@/lib/auth-guard";
-import { getMissingCashFlowReferenceIds, isValidCashFlowAmount } from "@/lib/cash-flow-integrity";
 import { findDuplicateMonthlyContractsByLocation } from "@/lib/invoice-duplicates";
 import { revalidatePath } from "next/cache";
 import { todayInLisbon, addDaysToDateString, toLisbonTimestamp } from "@/lib/lisbon-time";
@@ -419,63 +418,26 @@ export async function updateInvoiceStatus(
 
   const { data: inv } = await admin
     .from("invoices")
-    .select("company_id, total, invoice_number, client_id, status, paid_at")
+    .select("company_id, revision")
     .eq("id", id)
     .eq("company_id", profile.company_id)
     .single();
 
   if (!inv) return { ok: false, error: "Fatura nao encontrada." };
 
-  const update: { status: string; paid_at?: string | null; payment_method?: string | null } = { status };
-  if (status === "pago") {
-    update.paid_at = inv.paid_at ?? new Date().toISOString();
-    update.payment_method = paymentMethod ?? null;
-  } else {
-    update.paid_at = null;
-    update.payment_method = null;
-  }
-
-  const { error } = await admin
-    .from("invoices")
-    .update(update)
-    .eq("id", id)
-    .eq("company_id", profile.company_id);
+  const { data: mutationResult, error } = await admin.rpc("set_invoice_status_atomic", {
+    p_invoice_id: id,
+    p_company_id: profile.company_id,
+    p_actor: user.id,
+    p_status: status,
+    p_payment_method: paymentMethod ?? null,
+    p_mutation_id: crypto.randomUUID(),
+    p_expected_revision: inv.revision,
+  });
 
   if (error) return { ok: false, error: error.message };
-
-  if (status === "pago" && isValidCashFlowAmount(inv.total)) {
-    const { data: existingRefs } = await admin
-      .from("cash_flow_entries")
-      .select("reference_id")
-      .eq("company_id", profile.company_id)
-      .eq("reference_type", "invoice")
-      .eq("reference_id", id);
-
-    const missingIds = getMissingCashFlowReferenceIds([id], (existingRefs ?? []).map((r) => r.reference_id));
-    if (missingIds.length > 0) {
-      const { data: clientData } = await admin.from("clients").select("name").eq("id", inv.client_id).single();
-      const { error: cashErr } = await admin.from("cash_flow_entries").insert({
-        company_id: inv.company_id,
-        type: "entrada",
-        amount: inv.total,
-        description: `Fatura ${inv.invoice_number} - ${(clientData as { name?: string })?.name ?? "Cliente"}`,
-        category: "faturacao",
-        date: todayInLisbon(),
-        reference_id: id,
-        reference_type: "invoice",
-        status: "confirmado",
-      });
-      if (cashErr) return { ok: false, error: cashErr.message };
-    }
-  }
-
-  if (status !== "pago") {
-    await admin
-      .from("cash_flow_entries")
-      .delete()
-      .eq("company_id", profile.company_id)
-      .eq("reference_type", "invoice")
-      .eq("reference_id", id);
+  if (!(mutationResult as { ok?: boolean } | null)?.ok) {
+    return { ok: false, error: "A alteração não foi confirmada pela base de dados." };
   }
 
   revalidatePath("/dashboard/cobrancas");

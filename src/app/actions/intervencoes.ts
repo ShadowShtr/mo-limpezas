@@ -69,7 +69,11 @@ export async function setContractInterventionStatus(
   // ao guardar o formulário de edição.
   let removedCount = 0;
   if (status !== "ativo") {
-    removedCount = await removeFutureScheduledServices(admin, contractId, companyId);
+    try {
+      removedCount = await removeFutureScheduledServices(admin, contractId, companyId);
+    } catch (e) {
+      return { ok: false, error: e instanceof Error ? e.message : "Falha ao remover serviços futuros." };
+    }
   }
 
   const clientId = (contract.locations as { client_id?: string | null } | null)?.client_id ?? null;

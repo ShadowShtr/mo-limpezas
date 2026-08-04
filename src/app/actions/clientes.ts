@@ -18,6 +18,47 @@ export interface ClienteInput {
   company_id: string;
 }
 
+type ClientMutationErrorCode =
+  | "INVALID_INPUT"
+  | "FORBIDDEN_ACTOR"
+  | "NOT_FOUND"
+  | "REVISION_CONFLICT"
+  | "MUTATION_REUSE_CONFLICT"
+  | "INTERNAL_ERROR";
+
+type ArchiveClientResult =
+  | { ok: true; code: "OK"; client_id: string; sequence: number }
+  | { ok: false; code: "REVISION_CONFLICT"; current_revision: number; expected_revision: number }
+  | { ok: false; code: ClientMutationErrorCode };
+
+type DeleteEmptyClientResult =
+  | { ok: true; code: "OK"; client_id: string; sequence: number }
+  | {
+      ok: false;
+      code: "CLIENT_HAS_HISTORY";
+      client_id: string;
+      revision: number;
+      history: {
+        contracts: number;
+        services: number;
+        timesheets: number;
+        invoices: number;
+        cash_flow_entries: number;
+      };
+    }
+  | { ok: false; code: "REVISION_CONFLICT"; current_revision: number; expected_revision: number }
+  | { ok: false; code: ClientMutationErrorCode };
+
+function mutationErrorMessage(result: Exclude<ArchiveClientResult | DeleteEmptyClientResult, { ok: true }>) {
+  if (result.code === "REVISION_CONFLICT") return "Este registo foi alterado por outro utilizador. Atualize a página e tente novamente.";
+  if (result.code === "CLIENT_HAS_HISTORY") return "Este cliente tem histórico (contratos, serviços, faturas ou pagamentos) e não pode ser eliminado.";
+  if (result.code === "FORBIDDEN_ACTOR") return "Sem permissao.";
+  if (result.code === "NOT_FOUND") return "Cliente invalido.";
+  if (result.code === "MUTATION_REUSE_CONFLICT") return "Esta operação já foi usada com outros dados. Tente novamente.";
+  if (result.code === "INVALID_INPUT") return "Dados inválidos.";
+  return "Erro interno.";
+}
+
 export async function createCliente(input: ClienteInput) {
   const supabase = await createClient();
   const admin = createAdminClient();
@@ -126,13 +167,16 @@ export async function createClienteComLocal(companyId: string, input: ClienteCom
 
 /**
  * Arquiva (soft-delete) um cliente.
- * Bloqueia se houver serviços futuros associados ao cliente ou aos seus locais.
  */
-export async function archiveCliente(id: string) {
+export async function archiveCliente(id: string, expectedRevision: number, mutationId = crypto.randomUUID()) {
   const supabase = await createClient();
   const admin = createAdminClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { ok: false as const, error: "Nao autenticado." };
+
+  if (!Number.isInteger(expectedRevision) || expectedRevision < 1) {
+    return { ok: false as const, error: "Revisão inválida." };
+  }
 
   const { data: profile } = await admin
     .from("profiles")
@@ -143,41 +187,17 @@ export async function archiveCliente(id: string) {
     return { ok: false as const, error: "Sem permissao." };
   }
 
-  // Verificar se existem serviços futuros ligados aos locais deste cliente
-  const now = new Date().toISOString();
-  const { data: locations } = await admin
-    .from("locations")
-    .select("id")
-    .eq("client_id", id)
-    .eq("company_id", profile.company_id);
-
-  const locationIds = (locations ?? []).map((l) => l.id);
-  let futureCount = 0;
-
-  if (locationIds.length > 0) {
-    const { count } = await admin
-      .from("services")
-      .select("id", { count: "exact", head: true })
-      .in("location_id", locationIds)
-      .gt("scheduled_start", now)
-      .not("status", "in", '("cancelado","concluido")');
-    futureCount = count ?? 0;
-  }
-
-  if (futureCount > 0) {
-    return {
-      ok: false as const,
-      error: `Não é possível arquivar: este cliente tem ${futureCount} serviço(s) futuros agendados. Cancele-os primeiro.`,
-    };
-  }
-
-  const { error } = await admin
-    .from("clients")
-    .update({ status: "inativo" })
-    .eq("id", id)
-    .eq("company_id", profile.company_id);
-
+  const { data: mutationResult, error } = await admin.rpc("archive_client_atomic", {
+    p_client_id: id,
+    p_company_id: profile.company_id,
+    p_actor: user.id,
+    p_mutation_id: mutationId,
+    p_expected_revision: expectedRevision,
+  });
   if (error) return { ok: false as const, error: error.message };
+
+  const result = mutationResult;
+  if (!result?.ok) return { ok: false as const, error: mutationErrorMessage(result ?? { ok: false, code: "INTERNAL_ERROR" }) };
 
   await auditLog({
     companyId: profile.company_id,
@@ -190,6 +210,8 @@ export async function archiveCliente(id: string) {
   }, admin);
 
   revalidatePath("/dashboard/clientes");
+  revalidatePath(`/dashboard/clientes/${id}`);
+  revalidatePath("/dashboard/calendario");
   return { ok: true as const };
 }
 
@@ -267,11 +289,15 @@ export async function updateCliente(id: string, input: Omit<ClienteInput, "compa
   return { ok: true as const };
 }
 
-export async function deleteCliente(id: string) {
+export async function deleteCliente(id: string, expectedRevision: number, mutationId = crypto.randomUUID()) {
   const supabase = await createClient();
   const admin = createAdminClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { ok: false as const, error: "Nao autenticado." };
+
+  if (!Number.isInteger(expectedRevision) || expectedRevision < 1) {
+    return { ok: false as const, error: "Revisão inválida." };
+  }
 
   const { data: profile } = await admin
     .from("profiles")
@@ -282,39 +308,25 @@ export async function deleteCliente(id: string) {
     return { ok: false as const, error: "Sem permissao." };
   }
 
-  const { data: client } = await admin
-    .from("clients")
-    .select("id, name")
-    .eq("id", id)
-    .eq("company_id", profile.company_id)
-    .single();
-  if (!client) return { ok: false as const, error: "Cliente invalido." };
-
-  // Locais do cliente (services/contracts têm FK RESTRICT para locations).
-  const { data: locations } = await admin
-    .from("locations")
-    .select("id")
-    .eq("client_id", id)
-    .eq("company_id", profile.company_id);
-  const locationIds = (locations ?? []).map((l) => l.id);
-
-  // 1) Serviços (cascade: timesheets, fotos, reforços, auditoria de preço).
-  if (locationIds.length > 0) {
-    await admin.from("services").delete()
-      .eq("company_id", profile.company_id).in("location_id", locationIds);
-    // 2) Contratos desses locais.
-    await admin.from("contracts").delete()
-      .eq("company_id", profile.company_id).in("location_id", locationIds);
-  }
-
-  // 3) Faturas do cliente (invoice_items fazem cascade do invoice).
-  await admin.from("invoices").delete()
-    .eq("company_id", profile.company_id).eq("client_id", id);
-
-  // 4) Cliente → cascade de locais + notificações do cliente.
-  const { error } = await admin.from("clients").delete()
-    .eq("id", id).eq("company_id", profile.company_id);
+  const { data: mutationResult, error } = await admin.rpc("delete_empty_client_atomic", {
+    p_client_id: id,
+    p_company_id: profile.company_id,
+    p_actor: user.id,
+    p_mutation_id: mutationId,
+    p_expected_revision: expectedRevision,
+  });
   if (error) return { ok: false as const, error: error.message };
+
+  const result = mutationResult;
+  if (result?.code === "CLIENT_HAS_HISTORY") {
+    return {
+      ok: false as const,
+      code: "CLIENT_HAS_HISTORY" as const,
+      error: mutationErrorMessage(result),
+      history: result.history,
+    };
+  }
+  if (!result?.ok) return { ok: false as const, error: mutationErrorMessage(result ?? { ok: false, code: "INTERNAL_ERROR" }) };
 
   await auditLog({
     companyId: profile.company_id,
@@ -322,7 +334,6 @@ export async function deleteCliente(id: string) {
     action: "client_deleted",
     entityType: "client",
     entityId: id,
-    before: { name: client.name },
     source: "dashboard",
   }, admin);
 

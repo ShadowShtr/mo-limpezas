@@ -15,6 +15,7 @@ type Cliente = {
   nif: string | null;
   status: string;
   vat_exempt: boolean;
+  revision: number;
   created_at: string;
 };
 type Team = { id: string; name: string; color: string };

@@ -16,6 +16,7 @@ type Cliente = {
   nif: string | null;
   status: string;
   vat_exempt: boolean;
+  revision: number;
   created_at: string;
 };
 
@@ -35,8 +36,15 @@ export function ClientesTable({ clientes, companyId }: Props) {
       `Excluir o cliente "${c.name}"?\n\nIsto apaga os locais, intervenções, serviços futuros e faturas deste cliente. Esta ação não pode ser desfeita.`,
     )) return;
     startDelete(async () => {
-      const res = await deleteCliente(c.id);
-      if (!res.ok) { window.alert(res.error); return; }
+      const res = await deleteCliente(c.id, c.revision);
+      if (!res.ok) {
+        if ("code" in res && res.code === "CLIENT_HAS_HISTORY") {
+          window.alert(res.error);
+          return;
+        }
+        window.alert(res.error);
+        return;
+      }
       router.refresh();
     });
   }

@@ -8,7 +8,7 @@
 // vazios e, ao gravar (editar pelo ícone "..." da lista), apagar o valor
 // real do cliente. Qualquer query que alimente o ClienteSheet deve usar
 // esta constante, nunca repetir a lista de colunas à mão.
-export const CLIENTE_SHEET_SELECT = "id, name, email, phone, nif, type, notes, status, vat_exempt, created_at";
+export const CLIENTE_SHEET_SELECT = "id, name, email, phone, nif, type, notes, status, vat_exempt, revision, created_at";
 
 export interface ClienteSheetRow {
   id: string;
@@ -20,5 +20,6 @@ export interface ClienteSheetRow {
   notes: string | null;
   status: string;
   vat_exempt: boolean;
+  revision: number;
   created_at: string;
 }

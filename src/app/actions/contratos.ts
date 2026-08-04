@@ -253,7 +253,12 @@ async function generateServicesForContract(
         .from("services")
         .insert({ ...baseRow, reference_number: String(counter).padStart(4, "0") });
       if (!insErr) break;
-      if (insErr.code !== "23505") break; // erro diferente de duplicado → desiste desta ocorrência
+      if (insErr.code !== "23505") {
+        throw new Error(`Falha ao gerar ocorrência de ${dateStr}: ${insErr.message}`);
+      }
+      if (attempt === 5) {
+        throw new Error(`Não foi possível gerar referência única para a ocorrência de ${dateStr}.`);
+      }
     }
   }
 }
@@ -276,13 +281,14 @@ async function updateFutureServiceValuesForContract(
   applyVat = false,
 ) {
   const fixed = fixedPrice != null && fixedPrice > 0 ? parseFloat(fixedPrice.toFixed(2)) : null;
-  const { data: services } = await admin
+  const { data: services, error: servicesErr } = await admin
     .from("services")
     .select("id, scheduled_start, team_id, is_exception")
     .eq("company_id", companyId)
     .eq("contract_id", contractId)
     .eq("status", "agendado")
     .gte("scheduled_start", new Date().toISOString());
+  if (servicesErr) throw new Error(`Falha ao listar serviços futuros: ${servicesErr.message}`);
 
   const defaultSchedule = scheduleDays?.[0];
   if (!defaultSchedule) return;
@@ -336,11 +342,14 @@ async function updateFutureServiceValuesForContract(
       .eq("id", service.id)
       .eq("company_id", companyId);
     if (syncErr && (syncErr.code === "PGRST204" || syncErr.code === "42703")) {
-      await admin
+      const { error: fallbackErr } = await admin
         .from("services")
         .update(syncUpdate)
         .eq("id", service.id)
         .eq("company_id", companyId);
+      if (fallbackErr) throw new Error(`Falha ao sincronizar serviço ${service.id}: ${fallbackErr.message}`);
+    } else if (syncErr) {
+      throw new Error(`Falha ao sincronizar serviço ${service.id}: ${syncErr.message}`);
     }
   }
 }
@@ -366,7 +375,7 @@ export async function removeFutureScheduledServices(
     .eq("status", "agendado")
     .gte("scheduled_start", new Date().toISOString())
     .select("id");
-  if (error) return 0;
+  if (error) throw new Error(`Falha ao remover serviços futuros: ${error.message}`);
   return deleted?.length ?? 0;
 }
 
@@ -406,13 +415,14 @@ async function reconcileFutureServicesForContract(
     ),
   );
 
-  const { data: future } = await admin
+  const { data: future, error: futureErr } = await admin
     .from("services")
     .select("id, scheduled_start, is_exception")
     .eq("company_id", companyId)
     .eq("contract_id", contractId)
     .eq("status", "agendado")
     .gte("scheduled_start", todayStart.toISOString());
+  if (futureErr) throw new Error(`Falha ao reconciliar serviços futuros: ${futureErr.message}`);
 
   const toDelete = (future ?? [])
     .filter((s) => !s.is_exception)
@@ -420,12 +430,13 @@ async function reconcileFutureServicesForContract(
     .map((s) => s.id);
 
   if (toDelete.length > 0) {
-    await admin
+    const { error: deleteErr } = await admin
       .from("services")
       .delete()
       .eq("company_id", companyId)
       .eq("contract_id", contractId)
       .in("id", toDelete);
+    if (deleteErr) throw new Error(`Falha ao apagar ocorrências inválidas: ${deleteErr.message}`);
   }
 }
 
@@ -527,35 +538,44 @@ export async function createContrato(input: ContratoInput) {
   if (input.status === "ativo") {
     const hourlyRate = input.hourly_rate ?? null;
 
-    await generateServicesForContract(
-      admin,
-      contract.id,
-      profile.company_id,
-      input.location_id,
-      hourlyRate,
-      {
-        frequency: input.frequency,
-        weekdays: input.weekdays,
-        interval_days: input.interval_days,
-        schedule_days: input.schedule_days,
-        starts_on: input.starts_on,
-        ends_on: input.ends_on || null,
-        excluded_dates: [],
-      },
-      {
-        cleaning_type: input.cleaning_type ?? null,
-        payment_status: input.payment_status ?? null,
-        upholstery_type: input.upholstery_type ?? null,
-        upholstery_notes: input.upholstery_notes ?? null,
-        upholstery_units: input.upholstery_units ?? null,
-        upholstery_unit_price: input.upholstery_unit_price ?? null,
-        unit_value: input.unit_value ?? null,
-        fixed_price: input.fixed_price ?? null,
-        fixed_monthly: input.fixed_monthly ?? false,
-        apply_vat: input.apply_vat ?? false,
-        num_people: input.num_people ?? null,
-      },
-    );
+    try {
+      await generateServicesForContract(
+        admin,
+        contract.id,
+        profile.company_id,
+        input.location_id,
+        hourlyRate,
+        {
+          frequency: input.frequency,
+          weekdays: input.weekdays,
+          interval_days: input.interval_days,
+          schedule_days: input.schedule_days,
+          starts_on: input.starts_on,
+          ends_on: input.ends_on || null,
+          excluded_dates: [],
+        },
+        {
+          cleaning_type: input.cleaning_type ?? null,
+          payment_status: input.payment_status ?? null,
+          upholstery_type: input.upholstery_type ?? null,
+          upholstery_notes: input.upholstery_notes ?? null,
+          upholstery_units: input.upholstery_units ?? null,
+          upholstery_unit_price: input.upholstery_unit_price ?? null,
+          unit_value: input.unit_value ?? null,
+          fixed_price: input.fixed_price ?? null,
+          fixed_monthly: input.fixed_monthly ?? false,
+          apply_vat: input.apply_vat ?? false,
+          num_people: input.num_people ?? null,
+        },
+      );
+    } catch (e) {
+      await admin
+        .from("contracts")
+        .delete()
+        .eq("id", contract.id)
+        .eq("company_id", profile.company_id);
+      return { ok: false as const, error: e instanceof Error ? e.message : "Falha ao gerar serviços do contrato." };
+    }
   }
 
   revalidateBusinessPaths({
@@ -740,43 +760,11 @@ export async function updateContrato(id: string, input: Omit<ContratoInput, "com
 
   // Remove ocorrências futuras que deixaram de encaixar no padrão (ex.: data de
   // início mudou para mais tarde → apaga as visitas anteriores já geradas).
-  await reconcileFutureServicesForContract(
-    admin,
-    id,
-    profile.company_id,
-    {
-      frequency: input.frequency,
-      weekdays: input.weekdays,
-      interval_days: input.interval_days,
-      schedule_days: input.schedule_days,
-      starts_on: input.starts_on,
-      ends_on: input.ends_on || null,
-      excluded_dates: excludedDates,
-    },
-    input.status,
-  );
-
-  await updateFutureServiceValuesForContract(
-    admin,
-    id,
-    profile.company_id,
-    input.hourly_rate ?? null,
-    input.schedule_days,
-    input.fixed_price ?? null,
-    input.fixed_monthly ?? false,
-    input.apply_vat ?? false,
-  );
-
-  // Preenche ocorrências em falta dentro da janela (6 meses). É aditivo:
-  // a verificação de duplicados garante que nunca reescreve nem duplica
-  // ocorrências já existentes (incl. concluídas/em curso).
-  if (input.status === "ativo") {
-    await generateServicesForContract(
+  try {
+    await reconcileFutureServicesForContract(
       admin,
       id,
       profile.company_id,
-      input.location_id,
-      input.hourly_rate ?? null,
       {
         frequency: input.frequency,
         weekdays: input.weekdays,
@@ -786,20 +774,60 @@ export async function updateContrato(id: string, input: Omit<ContratoInput, "com
         ends_on: input.ends_on || null,
         excluded_dates: excludedDates,
       },
-      {
-        cleaning_type: input.cleaning_type ?? null,
-        payment_status: input.payment_status ?? null,
-        upholstery_type: input.upholstery_type ?? null,
-        upholstery_notes: input.upholstery_notes ?? null,
-        upholstery_units: input.upholstery_units ?? null,
-        upholstery_unit_price: input.upholstery_unit_price ?? null,
-        unit_value: input.unit_value ?? null,
-        fixed_price: input.fixed_price ?? null,
-        fixed_monthly: input.fixed_monthly ?? false,
-        apply_vat: input.apply_vat ?? false,
-        num_people: input.num_people ?? null,
-      },
+      input.status,
     );
+
+    await updateFutureServiceValuesForContract(
+      admin,
+      id,
+      profile.company_id,
+      input.hourly_rate ?? null,
+      input.schedule_days,
+      input.fixed_price ?? null,
+      input.fixed_monthly ?? false,
+      input.apply_vat ?? false,
+    );
+  } catch (e) {
+    return { ok: false as const, error: e instanceof Error ? e.message : "Falha ao propagar alteração do contrato." };
+  }
+
+  // Preenche ocorrências em falta dentro da janela (6 meses). É aditivo:
+  // a verificação de duplicados garante que nunca reescreve nem duplica
+  // ocorrências já existentes (incl. concluídas/em curso).
+  if (input.status === "ativo") {
+    try {
+      await generateServicesForContract(
+        admin,
+        id,
+        profile.company_id,
+        input.location_id,
+        input.hourly_rate ?? null,
+        {
+          frequency: input.frequency,
+          weekdays: input.weekdays,
+          interval_days: input.interval_days,
+          schedule_days: input.schedule_days,
+          starts_on: input.starts_on,
+          ends_on: input.ends_on || null,
+          excluded_dates: excludedDates,
+        },
+        {
+          cleaning_type: input.cleaning_type ?? null,
+          payment_status: input.payment_status ?? null,
+          upholstery_type: input.upholstery_type ?? null,
+          upholstery_notes: input.upholstery_notes ?? null,
+          upholstery_units: input.upholstery_units ?? null,
+          upholstery_unit_price: input.upholstery_unit_price ?? null,
+          unit_value: input.unit_value ?? null,
+          fixed_price: input.fixed_price ?? null,
+          fixed_monthly: input.fixed_monthly ?? false,
+          apply_vat: input.apply_vat ?? false,
+          num_people: input.num_people ?? null,
+        },
+      );
+    } catch (e) {
+      return { ok: false as const, error: e instanceof Error ? e.message : "Falha ao gerar ocorrências em falta." };
+    }
   }
 
   revalidateBusinessPaths({
@@ -835,7 +863,11 @@ export async function deleteContrato(id: string) {
   // Apaga os serviços futuros agendados gerados por este contrato. Os passados
   // (concluídos/em curso) ficam com contract_id a NULL (FK SET NULL) — preserva
   // o histórico e a faturação.
-  await removeFutureScheduledServices(admin, id, profile.company_id);
+  try {
+    await removeFutureScheduledServices(admin, id, profile.company_id);
+  } catch (e) {
+    return { ok: false as const, error: e instanceof Error ? e.message : "Falha ao remover serviços futuros." };
+  }
 
   const { error } = await admin
     .from("contracts")
