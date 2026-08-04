@@ -28,7 +28,7 @@ const TABLES = [
   "bank_reconciliation_matches", "cash_flow_entries",
   "fixed_variable_payments", "payroll_records", "invoices", "invoice_items",
   "client_notifications", "notifications", "push_subscriptions",
-  "audit_logs", "background_jobs",
+  "audit_logs", "background_jobs", "building_cards", "data_history",
 ];
 
 function csvCell(v) {

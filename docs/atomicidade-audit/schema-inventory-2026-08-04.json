@@ -1,0 +1,5883 @@
+{
+  "generatedAt": "2026-08-04T16:10:01.377Z",
+  "dbHost": "aws-1-eu-central-2.pooler.supabase.com",
+  "migrationsLedger": [
+    {
+      "name": "001_companies.sql",
+      "checksum": "1327a0cf37f95acad08604eba3faed34020e3edc7a717132978ea869397e3901",
+      "applied_at": "2026-07-23T10:14:10.229Z"
+    },
+    {
+      "name": "002_profiles.sql",
+      "checksum": "56ddec368e1848a3ec87b4b33d0a54bfb83c197b80ff4be4291fa3db637682ab",
+      "applied_at": "2026-07-23T10:14:10.276Z"
+    },
+    {
+      "name": "003_clients_locations.sql",
+      "checksum": "bf8c04b5300b6433f5c400a9d8f795c164d465d492905f4645078ce447825be3",
+      "applied_at": "2026-07-23T10:14:10.323Z"
+    },
+    {
+      "name": "004_teams.sql",
+      "checksum": "65d61185df00b85585010db9cf54347770c27d261a6791aca1d626c70ed75a90",
+      "applied_at": "2026-07-23T10:14:10.369Z"
+    },
+    {
+      "name": "005_contracts.sql",
+      "checksum": "3cde109bf35958edcf78069ec5adbc2b179e37635c1d33c374370d5d09c61fd4",
+      "applied_at": "2026-07-23T10:14:10.415Z"
+    },
+    {
+      "name": "006_services.sql",
+      "checksum": "26b51d11211bf101eb1560b9b6b0b392c169ba9dcefa0662638ec3ca2f64c721",
+      "applied_at": "2026-07-23T10:14:10.461Z"
+    },
+    {
+      "name": "007_timesheets_absences.sql",
+      "checksum": "d4ac43949f3e83e858156a462bf6bcea9d14d622f50cb439a918b6062f334f46",
+      "applied_at": "2026-07-23T10:14:10.507Z"
+    },
+    {
+      "name": "008_financial.sql",
+      "checksum": "df4108037c3cd00e29e3856d2450e6095affdae9bec10323ebf139ceefe915cf",
+      "applied_at": "2026-07-23T10:14:10.553Z"
+    },
+    {
+      "name": "009_notifications.sql",
+      "checksum": "b911886aed231d22e8777b8ac7c85f28108b7a97fa57db7525b54ba99dac571f",
+      "applied_at": "2026-07-23T10:14:10.597Z"
+    },
+    {
+      "name": "010_views.sql",
+      "checksum": "47466e22c7186f228b1c522557d3c2c118d9b5dd1049c904b5bbacedb70c2082",
+      "applied_at": "2026-07-23T10:14:10.643Z"
+    },
+    {
+      "name": "011_conflict_detection.sql",
+      "checksum": "730081f4302559fb65514df6bc49a03ca974cc44e36adf20831f55aeded029a0",
+      "applied_at": "2026-07-23T10:14:10.686Z"
+    },
+    {
+      "name": "012_teams_vehicle.sql",
+      "checksum": "43785a3573f923a5543fcc0ad0c64fcc5a8ba2a3017da601786cfc00e31a822d",
+      "applied_at": "2026-07-23T10:14:10.729Z"
+    },
+    {
+      "name": "013_client_notifications.sql",
+      "checksum": "b64b69c094dea55d8b6c8bd826d1893cf68c651b5d46b5492c1a790162762a78",
+      "applied_at": "2026-07-23T10:14:10.773Z"
+    },
+    {
+      "name": "014_fix_rls_recursion.sql",
+      "checksum": "a34e8fa3e6e9dd2e071f023690b2be30344b18efd3e358e76ccc487f21eceeb4",
+      "applied_at": "2026-07-23T10:14:10.818Z"
+    },
+    {
+      "name": "015_fix_trigger_resilient.sql",
+      "checksum": "63c580badb8ae3bfcced99b5b8ff17d5dcda75e99b8e46857a3c4423a582c38c",
+      "applied_at": "2026-07-23T10:14:10.864Z"
+    },
+    {
+      "name": "016_vehicles.sql",
+      "checksum": "50fee2a5a97de38319e3f082749299abdad262cde65debf181139ecb6edf73b6",
+      "applied_at": "2026-07-23T10:14:10.910Z"
+    },
+    {
+      "name": "017_fix_contracts_rls.sql",
+      "checksum": "6d33c39323e6725bdf080ed2ad08843a038545ef89ab4445928e934f6d9d445c",
+      "applied_at": "2026-07-23T10:14:10.957Z"
+    },
+    {
+      "name": "018_fix_services_rls_recursion.sql",
+      "checksum": "36ed92e01f2b0f843f479a2a6c163cf69b7129405e332e92e55eb6aa5e9ff7d2",
+      "applied_at": "2026-07-23T10:14:11.002Z"
+    },
+    {
+      "name": "019_cancellation_fields.sql",
+      "checksum": "ca51216eb1eb0ec78add8009023c9702a7eb18f3163b2a18917bc6a19bceeb0c",
+      "applied_at": "2026-07-23T10:14:11.047Z"
+    },
+    {
+      "name": "020_services_full_client_phone.sql",
+      "checksum": "5557fe9b6e64554e7419e6ab8ba5edcf22d2bbc5ec8c3b7b993ab891a385888d",
+      "applied_at": "2026-07-23T10:14:11.090Z"
+    },
+    {
+      "name": "021_documents_enhanced.sql",
+      "checksum": "828e92d507f3e5dfc1538f2d6fa8d136e662d23cc8dd4651ea4a821fd88b42da",
+      "applied_at": "2026-07-23T10:14:11.135Z"
+    },
+    {
+      "name": "022_storage_bucket_collaborator_documents.sql",
+      "checksum": "63f34214405a7ae2f5423d4c903e07993eac02eb4117a2aef7328c7bbf7ad5e1",
+      "applied_at": "2026-07-23T10:14:11.179Z"
+    },
+    {
+      "name": "023_fix_collaborator_documents_upload.sql",
+      "checksum": "e4881a669b801c5f3b670be7ecf445e3839c533a63064717050d7b31590a43af",
+      "applied_at": "2026-07-23T10:14:11.222Z"
+    },
+    {
+      "name": "024_cash_flow_reference_integrity.sql",
+      "checksum": "43ae916aff6630df2cd1875cf0a409cf0a095dca7236f082bf379251842c29b2",
+      "applied_at": "2026-07-23T10:14:11.264Z"
+    },
+    {
+      "name": "025_timesheet_hardening.sql",
+      "checksum": "6fbdf487c37e73fb4a26be9e4d30a0d47219c1a89caadc6dd69e439ca6962924",
+      "applied_at": "2026-07-23T10:14:11.309Z"
+    },
+    {
+      "name": "026_location_key_fields.sql",
+      "checksum": "38bbe0fa4f2ae3360a8012f81f6459fbdf5be066b994fc4eadd1b3af40c344be",
+      "applied_at": "2026-07-23T10:14:11.351Z"
+    },
+    {
+      "name": "027_service_photos.sql",
+      "checksum": "c409484eaac29d917a06dee52d06af477f25c23ca30161e735df37c175b0ae9b",
+      "applied_at": "2026-07-23T10:14:11.395Z"
+    },
+    {
+      "name": "028_growth_indexes.sql",
+      "checksum": "65f6abe5924c65646ea90b56d0cb0dd10717ac7cbc0569d74a601bd53d76ac72",
+      "applied_at": "2026-07-23T10:14:11.439Z"
+    },
+    {
+      "name": "029_background_jobs.sql",
+      "checksum": "c2ac9f24a0469298e6708e7ba2630301a9e2db4242aae819900010a6a9baf651",
+      "applied_at": "2026-07-23T10:14:11.482Z"
+    },
+    {
+      "name": "030_rls_tighten.sql",
+      "checksum": "04fd0256b38427375838af0145294efe5474208e64bf25c1b8093cc859d66fca",
+      "applied_at": "2026-07-23T10:14:11.529Z"
+    },
+    {
+      "name": "031_reference_number_unique.sql",
+      "checksum": "8a12f4843b75b140b55a089cbb4adb741eed344eeb85ad583e0a9bac86a3df3f",
+      "applied_at": "2026-07-23T10:14:11.571Z"
+    },
+    {
+      "name": "032_manual_checkout_fields.sql",
+      "checksum": "a22491d92a18431e70789bfbc1fc00755b0dbfaaf5462028fc81bea46af4f64a",
+      "applied_at": "2026-07-23T10:14:11.614Z"
+    },
+    {
+      "name": "033_rls_blindagem.sql",
+      "checksum": "bbb4c8f32402c92f1cc562657ab52413153b2f2070a1e8e17966c302d5637a40",
+      "applied_at": "2026-07-23T10:14:11.660Z"
+    },
+    {
+      "name": "034_rls_servicos_clientes_locais.sql",
+      "checksum": "439313eba1b708db48689037ea6dc34f47cbe292fba8f6404afe5b262fd8bc22",
+      "applied_at": "2026-07-23T10:14:11.705Z"
+    },
+    {
+      "name": "035_split_views.sql",
+      "checksum": "a031862c35d632138369598cace09368d678c54995ac5c3cae28c4e13f976613",
+      "applied_at": "2026-07-23T10:14:11.749Z"
+    },
+    {
+      "name": "036_background_jobs_lock.sql",
+      "checksum": "8f9fbd17786ca823b78a12a2667f55637d65680df20c5a3b7fa5f6b413d9ac80",
+      "applied_at": "2026-07-23T10:14:11.792Z"
+    },
+    {
+      "name": "037_fixed_variable_payments.sql",
+      "checksum": "7f8278dbd8db38a0847d29c08776742032c06fd6cde9ded3a9e9d674cc3471ee",
+      "applied_at": "2026-07-23T10:14:11.837Z"
+    },
+    {
+      "name": "038_service_contract_fields.sql",
+      "checksum": "1b8986175c89c6a428d70fd07ff8db2846f0f2b0685959472599f3b61b614697",
+      "applied_at": "2026-07-23T10:14:11.882Z"
+    },
+    {
+      "name": "039_upholstery_units.sql",
+      "checksum": "d25ab2da2e268e48a8d0706133815d62468c4b3686f36cba0a1773628b6fcebb",
+      "applied_at": "2026-07-23T10:14:11.927Z"
+    },
+    {
+      "name": "040_collaborator_day_team.sql",
+      "checksum": "23fc02b989dc49a8aaa0e7cab7c6273f66ffbfd6f61f558fdbd3d3d8ab14b88c",
+      "applied_at": "2026-07-23T10:14:11.970Z"
+    },
+    {
+      "name": "041_num_people.sql",
+      "checksum": "4adcfc29b40fa6fc37ff2587e4dfa1f443d2b6d6a62aa4988e1ae19d4621dab2",
+      "applied_at": "2026-07-23T10:14:12.012Z"
+    },
+    {
+      "name": "042_daily_clocks.sql",
+      "checksum": "b4d45cc1cd11876b909805d263a3aad847a1da8c18c78034dcf4163e18877fe6",
+      "applied_at": "2026-07-23T10:14:12.057Z"
+    },
+    {
+      "name": "043_bank_reconciliation.sql",
+      "checksum": "1e14937403eb0a78a1c07f7d42650b5d10912a9c78595a322652fe80f5de88fd",
+      "applied_at": "2026-07-23T10:14:12.101Z"
+    },
+    {
+      "name": "044_contract_fixed_price.sql",
+      "checksum": "e9404b5cd07cd87ee19ff89dd621d37c6a923d371e9240d835f22b187d19cce8",
+      "applied_at": "2026-07-23T10:14:12.143Z"
+    },
+    {
+      "name": "045_service_apply_vat.sql",
+      "checksum": "71042494bd833924a055a473c6eccfd470cfb3dea1a955c6585ded604fc75b5a",
+      "applied_at": "2026-07-23T10:14:12.188Z"
+    },
+    {
+      "name": "046_contract_vat_monthly.sql",
+      "checksum": "47298a04ed0dca38e34e82632f2eb6171e24d8900f62f9910bbad13fe6eec8e4",
+      "applied_at": "2026-07-23T10:14:12.231Z"
+    },
+    {
+      "name": "047_contract_excluded_dates.sql",
+      "checksum": "c5d90c40f7b70f9df8a0ffe47d98e71eaeef53885efcea9aac71d19595d7a74e",
+      "applied_at": "2026-07-23T10:14:12.274Z"
+    },
+    {
+      "name": "048_service_payment_tracking.sql",
+      "checksum": "dbe905dab39e4141582263a77f7a4010f63940018e562bccb113ae9516385a02",
+      "applied_at": "2026-07-23T10:14:12.319Z"
+    },
+    {
+      "name": "049_cash_flow_service_payment_reference.sql",
+      "checksum": "e22c1eaf80e06abe9ef46ff3d9d4e164aaa10a5146350d219badc3a7f137ddd4",
+      "applied_at": "2026-07-23T10:14:12.364Z"
+    },
+    {
+      "name": "050_bank_tx_source_order_and_dedup.sql",
+      "checksum": "fb2941b9ca0ae0298034d1f54f76a413eed20b24101bef7b4bbc832ecd123a33",
+      "applied_at": "2026-07-23T10:14:12.409Z"
+    },
+    {
+      "name": "051_building_cards.sql",
+      "checksum": "ff694f760ef7eabe3074d1bcdddf3cc3b66898f4d3de7f8d289b042b26de9cb9",
+      "applied_at": "2026-07-23T10:14:12.453Z"
+    },
+    {
+      "name": "052_payment_attachments.sql",
+      "checksum": "534a28eb9f909ecf4decda14e9e12bc62f30e9c99b0af1cfeb4a8013da9b9ce2",
+      "applied_at": "2026-07-23T10:14:12.498Z"
+    },
+    {
+      "name": "053_enable_realtime_notifications.sql",
+      "checksum": "3b5adb5dd91eabda5717907b1c5b68968dbe7108b0d8c8bdf6378b92fb625bb0",
+      "applied_at": "2026-07-23T10:14:12.543Z"
+    },
+    {
+      "name": "054_harden_service_only_policies.sql",
+      "checksum": "81e6fc6a8fb06a46d31dcaac695c2feec2d5179f926a1a063a56b0e1a824c7a4",
+      "applied_at": "2026-07-23T10:14:12.586Z"
+    },
+    {
+      "name": "055_triweekly_frequency.sql",
+      "checksum": "35299253d7f4f76750101f7a547f2a3fda955e6c83a652ace0b781275883cd4c",
+      "applied_at": "2026-07-23T10:14:12.629Z"
+    },
+    {
+      "name": "056_services_full_payment_status.sql",
+      "checksum": "174527666c29658e80ed0e5d1983e6492c5a75a796d9aef7b24a6c3058820751",
+      "applied_at": "2026-07-23T10:14:12.672Z"
+    },
+    {
+      "name": "057_task_category_client.sql",
+      "checksum": "27aafb530d57ac6c4e5a8453a10e52c93ba389d1e6df179b253921442f6a3d04",
+      "applied_at": "2026-07-23T10:14:12.715Z"
+    },
+    {
+      "name": "058_task_attachment.sql",
+      "checksum": "b82f971b33217a867df7f41773844b1fea0b78d5c4db4b6372b342bea4088590",
+      "applied_at": "2026-07-23T10:14:12.761Z"
+    },
+    {
+      "name": "059_rede_seguranca.sql",
+      "checksum": "95c48a5acf045f7592dfa254db9ddbb21182497f9c4e3d85becf4546f28d5748",
+      "applied_at": "2026-07-23T10:14:12.807Z"
+    },
+    {
+      "name": "060_guardas_adicionais.sql",
+      "checksum": "a73eea6545d3798032df7b063d7f7da54daf03e3cd73f74c25b3016c76cca207",
+      "applied_at": "2026-07-23T10:14:12.853Z"
+    },
+    {
+      "name": "061_guardas_campos_criticos.sql",
+      "checksum": "a906d574ec4d95ff7b25ceb14e0f8a45d5d39e398da4ba1c379f18e35f388875",
+      "applied_at": "2026-07-23T10:14:12.897Z"
+    },
+    {
+      "name": "062_delete_atomico_e_actor.sql",
+      "checksum": "b865c2ffbfb3368142fc1284a30cecce5a39d5891a3e5f2798c4ca8f56d23474",
+      "applied_at": "2026-07-23T10:14:12.942Z"
+    },
+    {
+      "name": "063_services_full_apply_vat.sql",
+      "checksum": "4c08f5c6a8e23eeb619a5b48a35c97d0818379954411b9392e780fa63a793a4d",
+      "applied_at": "2026-07-23T10:14:12.985Z"
+    },
+    {
+      "name": "20260608_new_features.sql",
+      "checksum": "29d8df71b3f83ed4f45bb8b9f29fe92e01aab3fea857cc9361c30db5b4f8143c",
+      "applied_at": "2026-07-23T10:14:13.027Z"
+    },
+    {
+      "name": "20260609_kanban_columns.sql",
+      "checksum": "c56eed65561199047a3b3935e06c338d43dc7dd44d0faf5166aeed225012277f",
+      "applied_at": "2026-07-23T10:14:13.070Z"
+    },
+    {
+      "name": "20260609_profiles_hourly_rate.sql",
+      "checksum": "b1c5a699b6aebcaefe59b94d46391d1e6b6e837a51ac48c4cfa428e0ba273f39",
+      "applied_at": "2026-07-23T10:14:13.112Z"
+    },
+    {
+      "name": "20260609_timesheet_limits.sql",
+      "checksum": "cf4171dd5ff7dd61c60bc54b8dac3203b3557629fee3691623f3f25b446a19bf",
+      "applied_at": "2026-07-23T10:14:13.155Z"
+    }
+  ],
+  "revisionColumns": [
+    {
+      "table_name": "clients",
+      "column_name": "revision",
+      "data_type": "integer",
+      "is_nullable": "NO",
+      "column_default": "1"
+    },
+    {
+      "table_name": "contracts",
+      "column_name": "revision",
+      "data_type": "integer",
+      "is_nullable": "NO",
+      "column_default": "1"
+    },
+    {
+      "table_name": "invoice_items",
+      "column_name": "revision",
+      "data_type": "integer",
+      "is_nullable": "NO",
+      "column_default": "1"
+    },
+    {
+      "table_name": "invoices",
+      "column_name": "revision",
+      "data_type": "integer",
+      "is_nullable": "NO",
+      "column_default": "1"
+    },
+    {
+      "table_name": "locations",
+      "column_name": "revision",
+      "data_type": "integer",
+      "is_nullable": "NO",
+      "column_default": "1"
+    },
+    {
+      "table_name": "services",
+      "column_name": "revision",
+      "data_type": "integer",
+      "is_nullable": "NO",
+      "column_default": "1"
+    },
+    {
+      "table_name": "team_members",
+      "column_name": "revision",
+      "data_type": "integer",
+      "is_nullable": "NO",
+      "column_default": "1"
+    },
+    {
+      "table_name": "teams",
+      "column_name": "revision",
+      "data_type": "integer",
+      "is_nullable": "NO",
+      "column_default": "1"
+    }
+  ],
+  "revisionTriggers": [
+    {
+      "table_name": "building_cards",
+      "trigger_name": "building_cards_updated_at",
+      "function_name": "update_updated_at_column"
+    },
+    {
+      "table_name": "clients",
+      "trigger_name": "clients_updated_at",
+      "function_name": "update_updated_at"
+    },
+    {
+      "table_name": "clients",
+      "trigger_name": "trg_clients_revision",
+      "function_name": "fn_increment_revision"
+    },
+    {
+      "table_name": "clients",
+      "trigger_name": "trg_history",
+      "function_name": "fn_capture_history"
+    },
+    {
+      "table_name": "collaborator_ride_assignments",
+      "trigger_name": "collaborator_ride_assignments_updated_at",
+      "function_name": "update_updated_at_column"
+    },
+    {
+      "table_name": "companies",
+      "trigger_name": "companies_updated_at",
+      "function_name": "update_updated_at"
+    },
+    {
+      "table_name": "company_settings",
+      "trigger_name": "company_settings_updated_at",
+      "function_name": "update_updated_at"
+    },
+    {
+      "table_name": "contracts",
+      "trigger_name": "contracts_updated_at",
+      "function_name": "update_updated_at"
+    },
+    {
+      "table_name": "contracts",
+      "trigger_name": "trg_contracts_revision",
+      "function_name": "fn_increment_revision"
+    },
+    {
+      "table_name": "contracts",
+      "trigger_name": "trg_guard_contract_fixed_price",
+      "function_name": "fn_guard_contract_fixed_price"
+    },
+    {
+      "table_name": "contracts",
+      "trigger_name": "trg_guard_contract_schedule",
+      "function_name": "fn_guard_contract_schedule"
+    },
+    {
+      "table_name": "contracts",
+      "trigger_name": "trg_history",
+      "function_name": "fn_capture_history"
+    },
+    {
+      "table_name": "invoice_items",
+      "trigger_name": "trg_history",
+      "function_name": "fn_capture_history"
+    },
+    {
+      "table_name": "invoice_items",
+      "trigger_name": "trg_invoice_items_revision",
+      "function_name": "fn_increment_revision"
+    },
+    {
+      "table_name": "invoices",
+      "trigger_name": "invoices_updated_at",
+      "function_name": "update_updated_at"
+    },
+    {
+      "table_name": "invoices",
+      "trigger_name": "trg_history",
+      "function_name": "fn_capture_history"
+    },
+    {
+      "table_name": "invoices",
+      "trigger_name": "trg_invoices_revision",
+      "function_name": "fn_increment_revision"
+    },
+    {
+      "table_name": "locations",
+      "trigger_name": "locations_updated_at",
+      "function_name": "update_updated_at"
+    },
+    {
+      "table_name": "locations",
+      "trigger_name": "trg_guard_location_pricing",
+      "function_name": "fn_guard_location_pricing"
+    },
+    {
+      "table_name": "locations",
+      "trigger_name": "trg_guard_location_rate",
+      "function_name": "fn_guard_location_rate"
+    },
+    {
+      "table_name": "locations",
+      "trigger_name": "trg_history",
+      "function_name": "fn_capture_history"
+    },
+    {
+      "table_name": "locations",
+      "trigger_name": "trg_locations_revision",
+      "function_name": "fn_increment_revision"
+    },
+    {
+      "table_name": "payroll_records",
+      "trigger_name": "payroll_updated_at",
+      "function_name": "update_updated_at"
+    },
+    {
+      "table_name": "profiles",
+      "trigger_name": "profiles_updated_at",
+      "function_name": "update_updated_at"
+    },
+    {
+      "table_name": "services",
+      "trigger_name": "services_updated_at",
+      "function_name": "update_updated_at"
+    },
+    {
+      "table_name": "services",
+      "trigger_name": "trg_history",
+      "function_name": "fn_capture_history"
+    },
+    {
+      "table_name": "services",
+      "trigger_name": "trg_services_mark_exception",
+      "function_name": "fn_services_mark_exception"
+    },
+    {
+      "table_name": "services",
+      "trigger_name": "trg_services_revision",
+      "function_name": "fn_increment_revision"
+    },
+    {
+      "table_name": "team_members",
+      "trigger_name": "trg_team_members_revision",
+      "function_name": "fn_increment_revision"
+    },
+    {
+      "table_name": "teams",
+      "trigger_name": "teams_updated_at",
+      "function_name": "update_updated_at"
+    },
+    {
+      "table_name": "teams",
+      "trigger_name": "trg_teams_revision",
+      "function_name": "fn_increment_revision"
+    },
+    {
+      "table_name": "timesheets",
+      "trigger_name": "timesheets_updated_at",
+      "function_name": "update_updated_at"
+    },
+    {
+      "table_name": "vehicle_allocations",
+      "trigger_name": "vehicle_allocations_updated_at",
+      "function_name": "update_updated_at_column"
+    },
+    {
+      "table_name": "vehicles",
+      "trigger_name": "vehicles_updated_at",
+      "function_name": "update_updated_at_column"
+    }
+  ],
+  "securityDefinerFunctions": [
+    {
+      "proname": "archive_expired_documents",
+      "args": "p_company_id uuid",
+      "security_definer": true,
+      "proconfig": null
+    },
+    {
+      "proname": "can_access_service",
+      "args": "p_service_id uuid",
+      "security_definer": true,
+      "proconfig": null
+    },
+    {
+      "proname": "delete_calendar_service_safe",
+      "args": "p_service_id uuid, p_scope text, p_company_id uuid, p_actor uuid",
+      "security_definer": true,
+      "proconfig": [
+        "search_path=public"
+      ]
+    },
+    {
+      "proname": "delete_client_atomic",
+      "args": "p_client_id uuid, p_company_id uuid, p_actor uuid, p_mutation_id uuid, p_expected_revision integer",
+      "security_definer": true,
+      "proconfig": [
+        "search_path=public"
+      ]
+    },
+    {
+      "proname": "detect_schedule_conflicts",
+      "args": "p_start date, p_end date",
+      "security_definer": true,
+      "proconfig": null
+    },
+    {
+      "proname": "fn_capture_history",
+      "args": "",
+      "security_definer": true,
+      "proconfig": [
+        "search_path=public"
+      ]
+    },
+    {
+      "proname": "fn_guard_location_rate",
+      "args": "",
+      "security_definer": true,
+      "proconfig": [
+        "search_path=public"
+      ]
+    },
+    {
+      "proname": "get_documents_to_archive",
+      "args": "p_company_id uuid",
+      "security_definer": true,
+      "proconfig": null
+    },
+    {
+      "proname": "get_my_company_id",
+      "args": "",
+      "security_definer": true,
+      "proconfig": [
+        "search_path=public"
+      ]
+    },
+    {
+      "proname": "get_my_role",
+      "args": "",
+      "security_definer": true,
+      "proconfig": [
+        "search_path=public"
+      ]
+    },
+    {
+      "proname": "get_service_company_id",
+      "args": "p_service_id uuid",
+      "security_definer": true,
+      "proconfig": [
+        "search_path=public"
+      ]
+    },
+    {
+      "proname": "handle_new_user",
+      "args": "",
+      "security_definer": true,
+      "proconfig": [
+        "search_path=public"
+      ]
+    },
+    {
+      "proname": "record_company_change_event",
+      "args": "p_company_id uuid, p_mutation_id uuid, p_domain text, p_event_type text, p_entity_ids uuid[], p_scopes text[], p_affected_range tstzrange, p_payload jsonb",
+      "security_definer": true,
+      "proconfig": [
+        "search_path=public"
+      ]
+    },
+    {
+      "proname": "set_invoice_status_atomic",
+      "args": "p_invoice_id uuid, p_company_id uuid, p_actor uuid, p_status text, p_payment_method text, p_mutation_id uuid, p_expected_revision integer",
+      "security_definer": true,
+      "proconfig": [
+        "search_path=public"
+      ]
+    }
+  ],
+  "functionGrants": [
+    {
+      "routine_name": "archive_expired_documents",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "archive_expired_documents",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "archive_expired_documents",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "archive_expired_documents",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "can_access_service",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "can_access_service",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "can_access_service",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "can_access_service",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "cash_dist",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "cash_dist",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "cash_dist",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "cash_dist",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "date_dist",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "date_dist",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "date_dist",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "date_dist",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "delete_calendar_service_safe",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "delete_client_atomic",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "detect_schedule_conflicts",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "detect_schedule_conflicts",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "detect_schedule_conflicts",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "detect_schedule_conflicts",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "float4_dist",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "float4_dist",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "float4_dist",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "float4_dist",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "float8_dist",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "float8_dist",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "float8_dist",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "float8_dist",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "fn_capture_history",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "fn_capture_history",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "fn_capture_history",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "fn_capture_history",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "fn_guard_contract_fixed_price",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "fn_guard_contract_fixed_price",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "fn_guard_contract_fixed_price",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "fn_guard_contract_fixed_price",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "fn_guard_contract_schedule",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "fn_guard_contract_schedule",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "fn_guard_contract_schedule",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "fn_guard_contract_schedule",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "fn_guard_location_pricing",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "fn_guard_location_pricing",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "fn_guard_location_pricing",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "fn_guard_location_pricing",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "fn_guard_location_rate",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "fn_guard_location_rate",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "fn_guard_location_rate",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "fn_guard_location_rate",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "fn_increment_revision",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "fn_increment_revision",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "fn_increment_revision",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "fn_increment_revision",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "fn_services_mark_exception",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "fn_services_mark_exception",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "fn_services_mark_exception",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "fn_services_mark_exception",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_bit_compress",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_bit_compress",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_bit_compress",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_bit_compress",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_bit_consistent",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_bit_consistent",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_bit_consistent",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_bit_consistent",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_bit_penalty",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_bit_penalty",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_bit_penalty",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_bit_penalty",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_bit_picksplit",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_bit_picksplit",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_bit_picksplit",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_bit_picksplit",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_bit_same",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_bit_same",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_bit_same",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_bit_same",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_bit_union",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_bit_union",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_bit_union",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_bit_union",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_bool_compress",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_bool_compress",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_bool_compress",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_bool_compress",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_bool_consistent",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_bool_consistent",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_bool_consistent",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_bool_consistent",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_bool_fetch",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_bool_fetch",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_bool_fetch",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_bool_fetch",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_bool_penalty",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_bool_penalty",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_bool_penalty",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_bool_penalty",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_bool_picksplit",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_bool_picksplit",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_bool_picksplit",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_bool_picksplit",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_bool_same",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_bool_same",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_bool_same",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_bool_same",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_bool_union",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_bool_union",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_bool_union",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_bool_union",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_bpchar_compress",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_bpchar_compress",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_bpchar_compress",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_bpchar_compress",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_bpchar_consistent",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_bpchar_consistent",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_bpchar_consistent",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_bpchar_consistent",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_bytea_compress",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_bytea_compress",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_bytea_compress",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_bytea_compress",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_bytea_consistent",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_bytea_consistent",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_bytea_consistent",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_bytea_consistent",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_bytea_penalty",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_bytea_penalty",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_bytea_penalty",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_bytea_penalty",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_bytea_picksplit",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_bytea_picksplit",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_bytea_picksplit",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_bytea_picksplit",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_bytea_same",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_bytea_same",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_bytea_same",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_bytea_same",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_bytea_union",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_bytea_union",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_bytea_union",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_bytea_union",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_cash_compress",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_cash_compress",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_cash_compress",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_cash_compress",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_cash_consistent",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_cash_consistent",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_cash_consistent",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_cash_consistent",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_cash_distance",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_cash_distance",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_cash_distance",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_cash_distance",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_cash_fetch",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_cash_fetch",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_cash_fetch",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_cash_fetch",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_cash_penalty",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_cash_penalty",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_cash_penalty",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_cash_penalty",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_cash_picksplit",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_cash_picksplit",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_cash_picksplit",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_cash_picksplit",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_cash_same",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_cash_same",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_cash_same",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_cash_same",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_cash_union",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_cash_union",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_cash_union",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_cash_union",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_date_compress",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_date_compress",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_date_compress",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_date_compress",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_date_consistent",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_date_consistent",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_date_consistent",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_date_consistent",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_date_distance",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_date_distance",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_date_distance",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_date_distance",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_date_fetch",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_date_fetch",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_date_fetch",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_date_fetch",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_date_penalty",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_date_penalty",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_date_penalty",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_date_penalty",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_date_picksplit",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_date_picksplit",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_date_picksplit",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_date_picksplit",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_date_same",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_date_same",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_date_same",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_date_same",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_date_union",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_date_union",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_date_union",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_date_union",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_decompress",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_decompress",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_decompress",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_decompress",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_enum_compress",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_enum_compress",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_enum_compress",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_enum_compress",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_enum_consistent",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_enum_consistent",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_enum_consistent",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_enum_consistent",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_enum_fetch",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_enum_fetch",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_enum_fetch",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_enum_fetch",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_enum_penalty",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_enum_penalty",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_enum_penalty",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_enum_penalty",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_enum_picksplit",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_enum_picksplit",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_enum_picksplit",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_enum_picksplit",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_enum_same",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_enum_same",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_enum_same",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_enum_same",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_enum_union",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_enum_union",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_enum_union",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_enum_union",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_float4_compress",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_float4_compress",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_float4_compress",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_float4_compress",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_float4_consistent",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_float4_consistent",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_float4_consistent",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_float4_consistent",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_float4_distance",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_float4_distance",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_float4_distance",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_float4_distance",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_float4_fetch",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_float4_fetch",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_float4_fetch",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_float4_fetch",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_float4_penalty",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_float4_penalty",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_float4_penalty",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_float4_penalty",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_float4_picksplit",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_float4_picksplit",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_float4_picksplit",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_float4_picksplit",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_float4_same",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_float4_same",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_float4_same",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_float4_same",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_float4_union",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_float4_union",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_float4_union",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_float4_union",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_float8_compress",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_float8_compress",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_float8_compress",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_float8_compress",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_float8_consistent",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_float8_consistent",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_float8_consistent",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_float8_consistent",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_float8_distance",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_float8_distance",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_float8_distance",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_float8_distance",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_float8_fetch",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_float8_fetch",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_float8_fetch",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_float8_fetch",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_float8_penalty",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_float8_penalty",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_float8_penalty",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_float8_penalty",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_float8_picksplit",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_float8_picksplit",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_float8_picksplit",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_float8_picksplit",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_float8_same",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_float8_same",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_float8_same",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_float8_same",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_float8_union",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_float8_union",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_float8_union",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_float8_union",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_inet_compress",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_inet_compress",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_inet_compress",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_inet_compress",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_inet_consistent",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_inet_consistent",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_inet_consistent",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_inet_consistent",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_inet_penalty",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_inet_penalty",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_inet_penalty",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_inet_penalty",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_inet_picksplit",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_inet_picksplit",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_inet_picksplit",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_inet_picksplit",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_inet_same",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_inet_same",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_inet_same",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_inet_same",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_inet_union",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_inet_union",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_inet_union",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_inet_union",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_int2_compress",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_int2_compress",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_int2_compress",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_int2_compress",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_int2_consistent",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_int2_consistent",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_int2_consistent",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_int2_consistent",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_int2_distance",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_int2_distance",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_int2_distance",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_int2_distance",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_int2_fetch",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_int2_fetch",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_int2_fetch",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_int2_fetch",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_int2_penalty",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_int2_penalty",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_int2_penalty",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_int2_penalty",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_int2_picksplit",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_int2_picksplit",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_int2_picksplit",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_int2_picksplit",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_int2_same",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_int2_same",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_int2_same",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_int2_same",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_int2_union",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_int2_union",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_int2_union",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_int2_union",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_int4_compress",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_int4_compress",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_int4_compress",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_int4_compress",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_int4_consistent",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_int4_consistent",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_int4_consistent",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_int4_consistent",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_int4_distance",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_int4_distance",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_int4_distance",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_int4_distance",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_int4_fetch",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_int4_fetch",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_int4_fetch",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_int4_fetch",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_int4_penalty",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_int4_penalty",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_int4_penalty",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_int4_penalty",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_int4_picksplit",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_int4_picksplit",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_int4_picksplit",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_int4_picksplit",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_int4_same",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_int4_same",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_int4_same",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_int4_same",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_int4_union",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_int4_union",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_int4_union",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_int4_union",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_int8_compress",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_int8_compress",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_int8_compress",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_int8_compress",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_int8_consistent",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_int8_consistent",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_int8_consistent",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_int8_consistent",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_int8_distance",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_int8_distance",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_int8_distance",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_int8_distance",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_int8_fetch",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_int8_fetch",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_int8_fetch",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_int8_fetch",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_int8_penalty",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_int8_penalty",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_int8_penalty",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_int8_penalty",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_int8_picksplit",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_int8_picksplit",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_int8_picksplit",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_int8_picksplit",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_int8_same",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_int8_same",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_int8_same",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_int8_same",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_int8_union",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_int8_union",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_int8_union",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_int8_union",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_intv_compress",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_intv_compress",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_intv_compress",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_intv_compress",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_intv_consistent",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_intv_consistent",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_intv_consistent",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_intv_consistent",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_intv_decompress",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_intv_decompress",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_intv_decompress",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_intv_decompress",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_intv_distance",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_intv_distance",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_intv_distance",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_intv_distance",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_intv_fetch",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_intv_fetch",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_intv_fetch",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_intv_fetch",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_intv_penalty",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_intv_penalty",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_intv_penalty",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_intv_penalty",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_intv_picksplit",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_intv_picksplit",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_intv_picksplit",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_intv_picksplit",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_intv_same",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_intv_same",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_intv_same",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_intv_same",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_intv_union",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_intv_union",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_intv_union",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_intv_union",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_macad8_compress",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_macad8_compress",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_macad8_compress",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_macad8_compress",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_macad8_consistent",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_macad8_consistent",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_macad8_consistent",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_macad8_consistent",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_macad8_fetch",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_macad8_fetch",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_macad8_fetch",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_macad8_fetch",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_macad8_penalty",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_macad8_penalty",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_macad8_penalty",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_macad8_penalty",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_macad8_picksplit",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_macad8_picksplit",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_macad8_picksplit",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_macad8_picksplit",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_macad8_same",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_macad8_same",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_macad8_same",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_macad8_same",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_macad8_union",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_macad8_union",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_macad8_union",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_macad8_union",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_macad_compress",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_macad_compress",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_macad_compress",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_macad_compress",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_macad_consistent",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_macad_consistent",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_macad_consistent",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_macad_consistent",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_macad_fetch",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_macad_fetch",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_macad_fetch",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_macad_fetch",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_macad_penalty",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_macad_penalty",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_macad_penalty",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_macad_penalty",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_macad_picksplit",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_macad_picksplit",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_macad_picksplit",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_macad_picksplit",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_macad_same",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_macad_same",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_macad_same",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_macad_same",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_macad_union",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_macad_union",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_macad_union",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_macad_union",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_numeric_compress",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_numeric_compress",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_numeric_compress",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_numeric_compress",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_numeric_consistent",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_numeric_consistent",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_numeric_consistent",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_numeric_consistent",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_numeric_penalty",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_numeric_penalty",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_numeric_penalty",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_numeric_penalty",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_numeric_picksplit",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_numeric_picksplit",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_numeric_picksplit",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_numeric_picksplit",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_numeric_same",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_numeric_same",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_numeric_same",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_numeric_same",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_numeric_union",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_numeric_union",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_numeric_union",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_numeric_union",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_oid_compress",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_oid_compress",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_oid_compress",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_oid_compress",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_oid_consistent",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_oid_consistent",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_oid_consistent",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_oid_consistent",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_oid_distance",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_oid_distance",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_oid_distance",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_oid_distance",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_oid_fetch",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_oid_fetch",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_oid_fetch",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_oid_fetch",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_oid_penalty",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_oid_penalty",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_oid_penalty",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_oid_penalty",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_oid_picksplit",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_oid_picksplit",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_oid_picksplit",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_oid_picksplit",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_oid_same",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_oid_same",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_oid_same",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_oid_same",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_oid_union",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_oid_union",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_oid_union",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_oid_union",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_text_compress",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_text_compress",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_text_compress",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_text_compress",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_text_consistent",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_text_consistent",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_text_consistent",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_text_consistent",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_text_penalty",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_text_penalty",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_text_penalty",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_text_penalty",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_text_picksplit",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_text_picksplit",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_text_picksplit",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_text_picksplit",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_text_same",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_text_same",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_text_same",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_text_same",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_text_union",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_text_union",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_text_union",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_text_union",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_time_compress",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_time_compress",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_time_compress",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_time_compress",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_time_consistent",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_time_consistent",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_time_consistent",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_time_consistent",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_time_distance",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_time_distance",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_time_distance",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_time_distance",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_time_fetch",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_time_fetch",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_time_fetch",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_time_fetch",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_time_penalty",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_time_penalty",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_time_penalty",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_time_penalty",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_time_picksplit",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_time_picksplit",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_time_picksplit",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_time_picksplit",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_time_same",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_time_same",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_time_same",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_time_same",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_time_union",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_time_union",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_time_union",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_time_union",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_timetz_compress",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_timetz_compress",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_timetz_compress",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_timetz_compress",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_timetz_consistent",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_timetz_consistent",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_timetz_consistent",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_timetz_consistent",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_ts_compress",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_ts_compress",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_ts_compress",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_ts_compress",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_ts_consistent",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_ts_consistent",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_ts_consistent",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_ts_consistent",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_ts_distance",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_ts_distance",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_ts_distance",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_ts_distance",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_ts_fetch",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_ts_fetch",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_ts_fetch",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_ts_fetch",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_ts_penalty",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_ts_penalty",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_ts_penalty",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_ts_penalty",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_ts_picksplit",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_ts_picksplit",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_ts_picksplit",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_ts_picksplit",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_ts_same",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_ts_same",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_ts_same",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_ts_same",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_ts_union",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_ts_union",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_ts_union",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_ts_union",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_tstz_compress",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_tstz_compress",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_tstz_compress",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_tstz_compress",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_tstz_consistent",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_tstz_consistent",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_tstz_consistent",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_tstz_consistent",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_tstz_distance",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_tstz_distance",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_tstz_distance",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_tstz_distance",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_uuid_compress",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_uuid_compress",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_uuid_compress",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_uuid_compress",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_uuid_consistent",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_uuid_consistent",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_uuid_consistent",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_uuid_consistent",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_uuid_fetch",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_uuid_fetch",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_uuid_fetch",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_uuid_fetch",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_uuid_penalty",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_uuid_penalty",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_uuid_penalty",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_uuid_penalty",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_uuid_picksplit",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_uuid_picksplit",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_uuid_picksplit",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_uuid_picksplit",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_uuid_same",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_uuid_same",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_uuid_same",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_uuid_same",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_uuid_union",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_uuid_union",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_uuid_union",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_uuid_union",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_var_decompress",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_var_decompress",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_var_decompress",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_var_decompress",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_var_fetch",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_var_fetch",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_var_fetch",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbt_var_fetch",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbtreekey16_in",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbtreekey16_in",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbtreekey16_in",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbtreekey16_in",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbtreekey16_out",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbtreekey16_out",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbtreekey16_out",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbtreekey16_out",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbtreekey2_in",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbtreekey2_in",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbtreekey2_in",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbtreekey2_in",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbtreekey2_out",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbtreekey2_out",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbtreekey2_out",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbtreekey2_out",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbtreekey32_in",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbtreekey32_in",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbtreekey32_in",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbtreekey32_in",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbtreekey32_out",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbtreekey32_out",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbtreekey32_out",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbtreekey32_out",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbtreekey4_in",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbtreekey4_in",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbtreekey4_in",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbtreekey4_in",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbtreekey4_out",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbtreekey4_out",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbtreekey4_out",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbtreekey4_out",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbtreekey8_in",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbtreekey8_in",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbtreekey8_in",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbtreekey8_in",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbtreekey8_out",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbtreekey8_out",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbtreekey8_out",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbtreekey8_out",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbtreekey_var_in",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbtreekey_var_in",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbtreekey_var_in",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbtreekey_var_in",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbtreekey_var_out",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbtreekey_var_out",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbtreekey_var_out",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "gbtreekey_var_out",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "generate_reference_number",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "generate_reference_number",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "generate_reference_number",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "generate_reference_number",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "get_documents_to_archive",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "get_documents_to_archive",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "get_documents_to_archive",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "get_documents_to_archive",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "get_my_company_id",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "get_my_company_id",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "get_my_company_id",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "get_my_company_id",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "get_my_role",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "get_my_role",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "get_my_role",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "get_my_role",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "get_service_company_id",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "get_service_company_id",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "get_service_company_id",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "get_service_company_id",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "handle_new_user",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "handle_new_user",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "handle_new_user",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "handle_new_user",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "int2_dist",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "int2_dist",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "int2_dist",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "int2_dist",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "int4_dist",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "int4_dist",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "int4_dist",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "int4_dist",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "int8_dist",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "int8_dist",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "int8_dist",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "int8_dist",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "interval_dist",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "interval_dist",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "interval_dist",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "interval_dist",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "oid_dist",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "oid_dist",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "oid_dist",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "oid_dist",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "record_company_change_event",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "record_company_change_event",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "record_company_change_event",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "set_invoice_status_atomic",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "time_dist",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "time_dist",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "time_dist",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "time_dist",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "ts_dist",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "ts_dist",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "ts_dist",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "ts_dist",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "tstz_dist",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "tstz_dist",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "tstz_dist",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "tstz_dist",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "update_updated_at",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "update_updated_at",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "update_updated_at",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "update_updated_at",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "update_updated_at_column",
+      "grantee": "PUBLIC",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "update_updated_at_column",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "update_updated_at_column",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "update_updated_at_column",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    }
+  ],
+  "rlsStatus": [
+    {
+      "table_name": "_migrations",
+      "rls_enabled": false,
+      "rls_forced": false
+    },
+    {
+      "table_name": "absences",
+      "rls_enabled": true,
+      "rls_forced": false
+    },
+    {
+      "table_name": "audit_logs",
+      "rls_enabled": true,
+      "rls_forced": false
+    },
+    {
+      "table_name": "background_jobs",
+      "rls_enabled": true,
+      "rls_forced": false
+    },
+    {
+      "table_name": "bank_accounts",
+      "rls_enabled": true,
+      "rls_forced": false
+    },
+    {
+      "table_name": "bank_reconciliation_matches",
+      "rls_enabled": true,
+      "rls_forced": false
+    },
+    {
+      "table_name": "bank_statement_imports",
+      "rls_enabled": true,
+      "rls_forced": false
+    },
+    {
+      "table_name": "bank_transactions",
+      "rls_enabled": true,
+      "rls_forced": false
+    },
+    {
+      "table_name": "building_cards",
+      "rls_enabled": true,
+      "rls_forced": false
+    },
+    {
+      "table_name": "cash_flow_entries",
+      "rls_enabled": true,
+      "rls_forced": false
+    },
+    {
+      "table_name": "client_notifications",
+      "rls_enabled": true,
+      "rls_forced": false
+    },
+    {
+      "table_name": "clients",
+      "rls_enabled": true,
+      "rls_forced": false
+    },
+    {
+      "table_name": "collaborator_documents",
+      "rls_enabled": true,
+      "rls_forced": false
+    },
+    {
+      "table_name": "collaborator_ride_assignments",
+      "rls_enabled": true,
+      "rls_forced": false
+    },
+    {
+      "table_name": "companies",
+      "rls_enabled": true,
+      "rls_forced": false
+    },
+    {
+      "table_name": "company_change_events",
+      "rls_enabled": true,
+      "rls_forced": false
+    },
+    {
+      "table_name": "company_settings",
+      "rls_enabled": true,
+      "rls_forced": false
+    },
+    {
+      "table_name": "contracts",
+      "rls_enabled": true,
+      "rls_forced": false
+    },
+    {
+      "table_name": "daily_clocks",
+      "rls_enabled": true,
+      "rls_forced": false
+    },
+    {
+      "table_name": "data_history",
+      "rls_enabled": true,
+      "rls_forced": false
+    },
+    {
+      "table_name": "domain_mutations",
+      "rls_enabled": true,
+      "rls_forced": false
+    },
+    {
+      "table_name": "fixed_variable_payments",
+      "rls_enabled": true,
+      "rls_forced": false
+    },
+    {
+      "table_name": "invoice_items",
+      "rls_enabled": true,
+      "rls_forced": false
+    },
+    {
+      "table_name": "invoices",
+      "rls_enabled": true,
+      "rls_forced": false
+    },
+    {
+      "table_name": "locations",
+      "rls_enabled": true,
+      "rls_forced": false
+    },
+    {
+      "table_name": "management_tasks",
+      "rls_enabled": true,
+      "rls_forced": false
+    },
+    {
+      "table_name": "notifications",
+      "rls_enabled": true,
+      "rls_forced": false
+    },
+    {
+      "table_name": "payroll_records",
+      "rls_enabled": true,
+      "rls_forced": false
+    },
+    {
+      "table_name": "profiles",
+      "rls_enabled": true,
+      "rls_forced": false
+    },
+    {
+      "table_name": "push_subscriptions",
+      "rls_enabled": true,
+      "rls_forced": false
+    },
+    {
+      "table_name": "service_photos",
+      "rls_enabled": true,
+      "rls_forced": false
+    },
+    {
+      "table_name": "service_price_audit",
+      "rls_enabled": true,
+      "rls_forced": false
+    },
+    {
+      "table_name": "service_reinforcements",
+      "rls_enabled": true,
+      "rls_forced": false
+    },
+    {
+      "table_name": "services",
+      "rls_enabled": true,
+      "rls_forced": false
+    },
+    {
+      "table_name": "team_members",
+      "rls_enabled": true,
+      "rls_forced": false
+    },
+    {
+      "table_name": "teams",
+      "rls_enabled": true,
+      "rls_forced": false
+    },
+    {
+      "table_name": "timesheets",
+      "rls_enabled": true,
+      "rls_forced": false
+    },
+    {
+      "table_name": "vacation_requests",
+      "rls_enabled": true,
+      "rls_forced": false
+    },
+    {
+      "table_name": "vehicle_allocations",
+      "rls_enabled": true,
+      "rls_forced": false
+    },
+    {
+      "table_name": "vehicles",
+      "rls_enabled": true,
+      "rls_forced": false
+    }
+  ],
+  "policies": [
+    {
+      "schemaname": "public",
+      "tablename": "absences",
+      "policyname": "absences_manage",
+      "roles": "{public}",
+      "cmd": "ALL",
+      "qual": "((company_id = get_my_company_id()) AND (get_my_role() = ANY (ARRAY['admin'::text, 'gestor'::text])))",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "absences",
+      "policyname": "absences_manager_select",
+      "roles": "{public}",
+      "cmd": "SELECT",
+      "qual": "((company_id = get_my_company_id()) AND (( SELECT profiles.role\n   FROM profiles\n  WHERE (profiles.id = auth.uid())) = ANY (ARRAY['admin'::text, 'gestor'::text])))",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "absences",
+      "policyname": "absences_own_select",
+      "roles": "{public}",
+      "cmd": "SELECT",
+      "qual": "(collaborator_id = auth.uid())",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "audit_logs",
+      "policyname": "audit_logs_admin_read",
+      "roles": "{public}",
+      "cmd": "SELECT",
+      "qual": "((company_id = ( SELECT profiles.company_id\n   FROM profiles\n  WHERE (profiles.id = auth.uid()))) AND (( SELECT profiles.role\n   FROM profiles\n  WHERE (profiles.id = auth.uid())) = ANY (ARRAY['admin'::text, 'gestor'::text])))",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "audit_logs",
+      "policyname": "audit_logs_service_insert",
+      "roles": "{service_role}",
+      "cmd": "INSERT",
+      "qual": null,
+      "with_check": "true"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "background_jobs",
+      "policyname": "background_jobs_admin_read",
+      "roles": "{public}",
+      "cmd": "SELECT",
+      "qual": "((( SELECT profiles.role\n   FROM profiles\n  WHERE (profiles.id = auth.uid())) = ANY (ARRAY['admin'::text, 'gestor'::text])) AND ((company_id IS NULL) OR (company_id = ( SELECT profiles.company_id\n   FROM profiles\n  WHERE (profiles.id = auth.uid())))))",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "background_jobs",
+      "policyname": "background_jobs_service_write",
+      "roles": "{service_role}",
+      "cmd": "ALL",
+      "qual": "true",
+      "with_check": "true"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "bank_accounts",
+      "policyname": "bank_accounts_admin",
+      "roles": "{public}",
+      "cmd": "ALL",
+      "qual": "((company_id = get_my_company_id()) AND (( SELECT profiles.role\n   FROM profiles\n  WHERE (profiles.id = auth.uid())) = ANY (ARRAY['admin'::text, 'gestor'::text])))",
+      "with_check": "((company_id = get_my_company_id()) AND (( SELECT profiles.role\n   FROM profiles\n  WHERE (profiles.id = auth.uid())) = ANY (ARRAY['admin'::text, 'gestor'::text])))"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "bank_reconciliation_matches",
+      "policyname": "bank_reconciliation_matches_admin",
+      "roles": "{public}",
+      "cmd": "ALL",
+      "qual": "((company_id = get_my_company_id()) AND (( SELECT profiles.role\n   FROM profiles\n  WHERE (profiles.id = auth.uid())) = ANY (ARRAY['admin'::text, 'gestor'::text])))",
+      "with_check": "((company_id = get_my_company_id()) AND (( SELECT profiles.role\n   FROM profiles\n  WHERE (profiles.id = auth.uid())) = ANY (ARRAY['admin'::text, 'gestor'::text])))"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "bank_statement_imports",
+      "policyname": "bank_statement_imports_admin",
+      "roles": "{public}",
+      "cmd": "ALL",
+      "qual": "((company_id = get_my_company_id()) AND (( SELECT profiles.role\n   FROM profiles\n  WHERE (profiles.id = auth.uid())) = ANY (ARRAY['admin'::text, 'gestor'::text])))",
+      "with_check": "((company_id = get_my_company_id()) AND (( SELECT profiles.role\n   FROM profiles\n  WHERE (profiles.id = auth.uid())) = ANY (ARRAY['admin'::text, 'gestor'::text])))"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "bank_transactions",
+      "policyname": "bank_transactions_admin",
+      "roles": "{public}",
+      "cmd": "ALL",
+      "qual": "((company_id = get_my_company_id()) AND (( SELECT profiles.role\n   FROM profiles\n  WHERE (profiles.id = auth.uid())) = ANY (ARRAY['admin'::text, 'gestor'::text])))",
+      "with_check": "((company_id = get_my_company_id()) AND (( SELECT profiles.role\n   FROM profiles\n  WHERE (profiles.id = auth.uid())) = ANY (ARRAY['admin'::text, 'gestor'::text])))"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "building_cards",
+      "policyname": "building_cards_company_isolation",
+      "roles": "{public}",
+      "cmd": "ALL",
+      "qual": "(company_id IN ( SELECT profiles.company_id\n   FROM profiles\n  WHERE (profiles.id = auth.uid())))",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "building_cards",
+      "policyname": "building_cards_delete",
+      "roles": "{public}",
+      "cmd": "DELETE",
+      "qual": "(company_id IN ( SELECT profiles.company_id\n   FROM profiles\n  WHERE ((profiles.id = auth.uid()) AND (profiles.role = ANY (ARRAY['admin'::text, 'gestor'::text])))))",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "building_cards",
+      "policyname": "building_cards_insert",
+      "roles": "{public}",
+      "cmd": "INSERT",
+      "qual": null,
+      "with_check": "(company_id IN ( SELECT profiles.company_id\n   FROM profiles\n  WHERE ((profiles.id = auth.uid()) AND (profiles.role = ANY (ARRAY['admin'::text, 'gestor'::text])))))"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "building_cards",
+      "policyname": "building_cards_update",
+      "roles": "{public}",
+      "cmd": "UPDATE",
+      "qual": "(company_id IN ( SELECT profiles.company_id\n   FROM profiles\n  WHERE ((profiles.id = auth.uid()) AND (profiles.role = ANY (ARRAY['admin'::text, 'gestor'::text])))))",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "cash_flow_entries",
+      "policyname": "cash_flow_admin",
+      "roles": "{public}",
+      "cmd": "ALL",
+      "qual": "((company_id = get_my_company_id()) AND (( SELECT profiles.role\n   FROM profiles\n  WHERE (profiles.id = auth.uid())) = ANY (ARRAY['admin'::text, 'gestor'::text])))",
+      "with_check": "((company_id = get_my_company_id()) AND (( SELECT profiles.role\n   FROM profiles\n  WHERE (profiles.id = auth.uid())) = ANY (ARRAY['admin'::text, 'gestor'::text])))"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "client_notifications",
+      "policyname": "managers manage client notifications",
+      "roles": "{public}",
+      "cmd": "ALL",
+      "qual": "((company_id = ( SELECT profiles.company_id\n   FROM profiles\n  WHERE (profiles.id = auth.uid()))) AND (( SELECT profiles.role\n   FROM profiles\n  WHERE (profiles.id = auth.uid())) = ANY (ARRAY['admin'::text, 'gestor'::text])))",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "clients",
+      "policyname": "clients_collaborator_select",
+      "roles": "{public}",
+      "cmd": "SELECT",
+      "qual": "((company_id = get_my_company_id()) AND (( SELECT profiles.role\n   FROM profiles\n  WHERE (profiles.id = auth.uid())) <> ALL (ARRAY['admin'::text, 'gestor'::text])) AND (EXISTS ( SELECT 1\n   FROM (locations l\n     JOIN services s ON ((s.location_id = l.id)))\n  WHERE ((l.client_id = clients.id) AND can_access_service(s.id)))))",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "clients",
+      "policyname": "clients_manage",
+      "roles": "{public}",
+      "cmd": "ALL",
+      "qual": "((company_id = get_my_company_id()) AND (get_my_role() = ANY (ARRAY['admin'::text, 'gestor'::text])))",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "collaborator_documents",
+      "policyname": "colaboradoras submetem relatórios de avaria",
+      "roles": "{public}",
+      "cmd": "INSERT",
+      "qual": null,
+      "with_check": "((collaborator_id = auth.uid()) AND (category = 'avaria'::text) AND (visible_to_collaborator = true) AND (uploaded_by_role = 'colaboradora'::text))"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "collaborator_documents",
+      "policyname": "colaboradoras veem os seus docs visíveis",
+      "roles": "{public}",
+      "cmd": "SELECT",
+      "qual": "((collaborator_id = auth.uid()) AND (visible_to_collaborator = true))",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "collaborator_documents",
+      "policyname": "gestores gerem documentos da empresa",
+      "roles": "{public}",
+      "cmd": "ALL",
+      "qual": "(company_id IN ( SELECT profiles.company_id\n   FROM profiles\n  WHERE ((profiles.id = auth.uid()) AND (profiles.role = ANY (ARRAY['gestor'::text, 'admin'::text])))))",
+      "with_check": "(company_id IN ( SELECT profiles.company_id\n   FROM profiles\n  WHERE ((profiles.id = auth.uid()) AND (profiles.role = ANY (ARRAY['gestor'::text, 'admin'::text])))))"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "collaborator_ride_assignments",
+      "policyname": "collaborator_ride_company_isolation",
+      "roles": "{public}",
+      "cmd": "ALL",
+      "qual": "(company_id IN ( SELECT profiles.company_id\n   FROM profiles\n  WHERE (profiles.id = auth.uid())))",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "collaborator_ride_assignments",
+      "policyname": "collaborator_ride_delete",
+      "roles": "{public}",
+      "cmd": "DELETE",
+      "qual": "(company_id IN ( SELECT profiles.company_id\n   FROM profiles\n  WHERE ((profiles.id = auth.uid()) AND (profiles.role = ANY (ARRAY['admin'::text, 'gestor'::text])))))",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "collaborator_ride_assignments",
+      "policyname": "collaborator_ride_insert",
+      "roles": "{public}",
+      "cmd": "INSERT",
+      "qual": null,
+      "with_check": "(company_id IN ( SELECT profiles.company_id\n   FROM profiles\n  WHERE ((profiles.id = auth.uid()) AND (profiles.role = ANY (ARRAY['admin'::text, 'gestor'::text])))))"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "collaborator_ride_assignments",
+      "policyname": "collaborator_ride_update",
+      "roles": "{public}",
+      "cmd": "UPDATE",
+      "qual": "(company_id IN ( SELECT profiles.company_id\n   FROM profiles\n  WHERE ((profiles.id = auth.uid()) AND (profiles.role = ANY (ARRAY['admin'::text, 'gestor'::text])))))",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "companies",
+      "policyname": "users see own company",
+      "roles": "{public}",
+      "cmd": "SELECT",
+      "qual": "(id = ( SELECT profiles.company_id\n   FROM profiles\n  WHERE (profiles.id = auth.uid())))",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "company_change_events",
+      "policyname": "managers see company change events",
+      "roles": "{public}",
+      "cmd": "SELECT",
+      "qual": "((company_id = ( SELECT profiles.company_id\n   FROM profiles\n  WHERE (profiles.id = auth.uid()))) AND (( SELECT profiles.role\n   FROM profiles\n  WHERE (profiles.id = auth.uid())) = ANY (ARRAY['admin'::text, 'gestor'::text])))",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "company_settings",
+      "policyname": "company_settings_manage",
+      "roles": "{public}",
+      "cmd": "ALL",
+      "qual": "((company_id = get_my_company_id()) AND (get_my_role() = 'admin'::text))",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "company_settings",
+      "policyname": "company_settings_select",
+      "roles": "{public}",
+      "cmd": "SELECT",
+      "qual": "(company_id = get_my_company_id())",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "contracts",
+      "policyname": "contracts_manage",
+      "roles": "{public}",
+      "cmd": "ALL",
+      "qual": "((company_id = get_my_company_id()) AND (get_my_role() = ANY (ARRAY['admin'::text, 'gestor'::text])))",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "contracts",
+      "policyname": "contracts_manager_select",
+      "roles": "{public}",
+      "cmd": "SELECT",
+      "qual": "((company_id = get_my_company_id()) AND (( SELECT profiles.role\n   FROM profiles\n  WHERE (profiles.id = auth.uid())) = ANY (ARRAY['admin'::text, 'gestor'::text])))",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "daily_clocks",
+      "policyname": "daily_clocks_manager_select",
+      "roles": "{public}",
+      "cmd": "SELECT",
+      "qual": "((company_id = get_my_company_id()) AND (get_my_role() = ANY (ARRAY['admin'::text, 'gestor'::text])))",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "daily_clocks",
+      "policyname": "daily_clocks_own",
+      "roles": "{public}",
+      "cmd": "ALL",
+      "qual": "(collaborator_id = auth.uid())",
+      "with_check": "(collaborator_id = auth.uid())"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "domain_mutations",
+      "policyname": "service role domain mutations",
+      "roles": "{public}",
+      "cmd": "ALL",
+      "qual": "false",
+      "with_check": "false"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "fixed_variable_payments",
+      "policyname": "company members manage fixed variable payments",
+      "roles": "{public}",
+      "cmd": "ALL",
+      "qual": "(company_id IN ( SELECT profiles.company_id\n   FROM profiles\n  WHERE (profiles.id = auth.uid())))",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "invoice_items",
+      "policyname": "managers manage invoice items",
+      "roles": "{public}",
+      "cmd": "ALL",
+      "qual": "((( SELECT invoices.company_id\n   FROM invoices\n  WHERE (invoices.id = invoice_items.invoice_id)) = ( SELECT profiles.company_id\n   FROM profiles\n  WHERE (profiles.id = auth.uid()))) AND (( SELECT profiles.role\n   FROM profiles\n  WHERE (profiles.id = auth.uid())) = ANY (ARRAY['admin'::text, 'gestor'::text])))",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "invoices",
+      "policyname": "managers manage invoices",
+      "roles": "{public}",
+      "cmd": "ALL",
+      "qual": "((company_id = ( SELECT profiles.company_id\n   FROM profiles\n  WHERE (profiles.id = auth.uid()))) AND (( SELECT profiles.role\n   FROM profiles\n  WHERE (profiles.id = auth.uid())) = ANY (ARRAY['admin'::text, 'gestor'::text])))",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "locations",
+      "policyname": "locations_collaborator_select",
+      "roles": "{public}",
+      "cmd": "SELECT",
+      "qual": "((company_id = get_my_company_id()) AND (( SELECT profiles.role\n   FROM profiles\n  WHERE (profiles.id = auth.uid())) <> ALL (ARRAY['admin'::text, 'gestor'::text])) AND (EXISTS ( SELECT 1\n   FROM services s\n  WHERE ((s.location_id = locations.id) AND can_access_service(s.id)))))",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "locations",
+      "policyname": "locations_manage",
+      "roles": "{public}",
+      "cmd": "ALL",
+      "qual": "((company_id = get_my_company_id()) AND (get_my_role() = ANY (ARRAY['admin'::text, 'gestor'::text])))",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "management_tasks",
+      "policyname": "management_tasks_admin",
+      "roles": "{public}",
+      "cmd": "ALL",
+      "qual": "((company_id = get_my_company_id()) AND (( SELECT profiles.role\n   FROM profiles\n  WHERE (profiles.id = auth.uid())) = ANY (ARRAY['admin'::text, 'gestor'::text])))",
+      "with_check": "((company_id = get_my_company_id()) AND (( SELECT profiles.role\n   FROM profiles\n  WHERE (profiles.id = auth.uid())) = ANY (ARRAY['admin'::text, 'gestor'::text])))"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "notifications",
+      "policyname": "managers create notifications",
+      "roles": "{public}",
+      "cmd": "INSERT",
+      "qual": null,
+      "with_check": "(company_id = ( SELECT profiles.company_id\n   FROM profiles\n  WHERE (profiles.id = auth.uid())))"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "notifications",
+      "policyname": "users see own notifications",
+      "roles": "{public}",
+      "cmd": "ALL",
+      "qual": "(user_id = auth.uid())",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "payroll_records",
+      "policyname": "collaborators see own payroll",
+      "roles": "{public}",
+      "cmd": "SELECT",
+      "qual": "(collaborator_id = auth.uid())",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "payroll_records",
+      "policyname": "managers manage payroll",
+      "roles": "{public}",
+      "cmd": "ALL",
+      "qual": "((company_id = ( SELECT profiles.company_id\n   FROM profiles\n  WHERE (profiles.id = auth.uid()))) AND (( SELECT profiles.role\n   FROM profiles\n  WHERE (profiles.id = auth.uid())) = ANY (ARRAY['admin'::text, 'gestor'::text])))",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "profiles",
+      "policyname": "profiles_insert_admin",
+      "roles": "{public}",
+      "cmd": "INSERT",
+      "qual": null,
+      "with_check": "((id = auth.uid()) OR ((company_id = get_my_company_id()) AND (get_my_role() = ANY (ARRAY['admin'::text, 'gestor'::text]))))"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "profiles",
+      "policyname": "profiles_manage_company",
+      "roles": "{public}",
+      "cmd": "ALL",
+      "qual": "((company_id = get_my_company_id()) AND (get_my_role() = ANY (ARRAY['admin'::text, 'gestor'::text])))",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "profiles",
+      "policyname": "profiles_select",
+      "roles": "{public}",
+      "cmd": "SELECT",
+      "qual": "((id = auth.uid()) OR (company_id = get_my_company_id()))",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "profiles",
+      "policyname": "profiles_update_own",
+      "roles": "{public}",
+      "cmd": "UPDATE",
+      "qual": "(id = auth.uid())",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "profiles",
+      "policyname": "users see company profiles",
+      "roles": "{public}",
+      "cmd": "SELECT",
+      "qual": "(company_id = get_my_company_id())",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "profiles",
+      "policyname": "users see own profile",
+      "roles": "{public}",
+      "cmd": "SELECT",
+      "qual": "(id = auth.uid())",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "push_subscriptions",
+      "policyname": "users manage own push subs",
+      "roles": "{public}",
+      "cmd": "ALL",
+      "qual": "(user_id = auth.uid())",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "service_photos",
+      "policyname": "service_photos_manager_read",
+      "roles": "{public}",
+      "cmd": "SELECT",
+      "qual": "((company_id = ( SELECT profiles.company_id\n   FROM profiles\n  WHERE (profiles.id = auth.uid()))) AND (( SELECT profiles.role\n   FROM profiles\n  WHERE (profiles.id = auth.uid())) = ANY (ARRAY['admin'::text, 'gestor'::text])))",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "service_photos",
+      "policyname": "service_photos_own_read",
+      "roles": "{public}",
+      "cmd": "SELECT",
+      "qual": "(collaborator_id = auth.uid())",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "service_price_audit",
+      "policyname": "price_audit_manage",
+      "roles": "{public}",
+      "cmd": "ALL",
+      "qual": "((get_service_company_id(service_id) = get_my_company_id()) AND (get_my_role() = ANY (ARRAY['admin'::text, 'gestor'::text])))",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "service_reinforcements",
+      "policyname": "reinforcements_manage",
+      "roles": "{public}",
+      "cmd": "ALL",
+      "qual": "((get_service_company_id(service_id) = get_my_company_id()) AND (get_my_role() = ANY (ARRAY['admin'::text, 'gestor'::text])))",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "service_reinforcements",
+      "policyname": "reinforcements_select",
+      "roles": "{public}",
+      "cmd": "SELECT",
+      "qual": "((collaborator_id = auth.uid()) OR (get_service_company_id(service_id) = get_my_company_id()))",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "services",
+      "policyname": "services_collaborator_select",
+      "roles": "{public}",
+      "cmd": "SELECT",
+      "qual": "can_access_service(id)",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "services",
+      "policyname": "services_manage",
+      "roles": "{public}",
+      "cmd": "ALL",
+      "qual": "((company_id = get_my_company_id()) AND (get_my_role() = ANY (ARRAY['admin'::text, 'gestor'::text])))",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "team_members",
+      "policyname": "company team members",
+      "roles": "{public}",
+      "cmd": "ALL",
+      "qual": "(( SELECT teams.company_id\n   FROM teams\n  WHERE (teams.id = team_members.team_id)) = ( SELECT profiles.company_id\n   FROM profiles\n  WHERE (profiles.id = auth.uid())))",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "team_members",
+      "policyname": "team_members_manage",
+      "roles": "{public}",
+      "cmd": "ALL",
+      "qual": "((team_id IN ( SELECT teams.id\n   FROM teams\n  WHERE (teams.company_id = get_my_company_id()))) AND (get_my_role() = ANY (ARRAY['admin'::text, 'gestor'::text])))",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "team_members",
+      "policyname": "team_members_select",
+      "roles": "{public}",
+      "cmd": "SELECT",
+      "qual": "(team_id IN ( SELECT teams.id\n   FROM teams\n  WHERE (teams.company_id = get_my_company_id())))",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "teams",
+      "policyname": "company teams",
+      "roles": "{public}",
+      "cmd": "ALL",
+      "qual": "(company_id = ( SELECT profiles.company_id\n   FROM profiles\n  WHERE (profiles.id = auth.uid())))",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "teams",
+      "policyname": "teams_manage",
+      "roles": "{public}",
+      "cmd": "ALL",
+      "qual": "((company_id = get_my_company_id()) AND (get_my_role() = ANY (ARRAY['admin'::text, 'gestor'::text])))",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "teams",
+      "policyname": "teams_select",
+      "roles": "{public}",
+      "cmd": "SELECT",
+      "qual": "(company_id = get_my_company_id())",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "timesheets",
+      "policyname": "collaborators create own timesheets",
+      "roles": "{public}",
+      "cmd": "INSERT",
+      "qual": null,
+      "with_check": "(collaborator_id = auth.uid())"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "timesheets",
+      "policyname": "collaborators see own timesheets",
+      "roles": "{public}",
+      "cmd": "SELECT",
+      "qual": "(collaborator_id = auth.uid())",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "timesheets",
+      "policyname": "managers see company timesheets",
+      "roles": "{public}",
+      "cmd": "ALL",
+      "qual": "((company_id = ( SELECT profiles.company_id\n   FROM profiles\n  WHERE (profiles.id = auth.uid()))) AND (( SELECT profiles.role\n   FROM profiles\n  WHERE (profiles.id = auth.uid())) = ANY (ARRAY['admin'::text, 'gestor'::text])))",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "timesheets",
+      "policyname": "timesheets_collaborator_insert",
+      "roles": "{public}",
+      "cmd": "INSERT",
+      "qual": null,
+      "with_check": "(collaborator_id = auth.uid())"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "timesheets",
+      "policyname": "timesheets_collaborator_update",
+      "roles": "{public}",
+      "cmd": "UPDATE",
+      "qual": "(collaborator_id = auth.uid())",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "timesheets",
+      "policyname": "timesheets_manager_manage",
+      "roles": "{public}",
+      "cmd": "ALL",
+      "qual": "((company_id = get_my_company_id()) AND (get_my_role() = ANY (ARRAY['admin'::text, 'gestor'::text])))",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "timesheets",
+      "policyname": "timesheets_manager_select",
+      "roles": "{public}",
+      "cmd": "SELECT",
+      "qual": "((company_id = get_my_company_id()) AND (( SELECT profiles.role\n   FROM profiles\n  WHERE (profiles.id = auth.uid())) = ANY (ARRAY['admin'::text, 'gestor'::text])))",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "timesheets",
+      "policyname": "timesheets_own_select",
+      "roles": "{public}",
+      "cmd": "SELECT",
+      "qual": "(collaborator_id = auth.uid())",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "vacation_requests",
+      "policyname": "vacation_requests_insert",
+      "roles": "{public}",
+      "cmd": "INSERT",
+      "qual": null,
+      "with_check": "((collaborator_id = auth.uid()) AND (company_id = get_my_company_id()))"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "vacation_requests",
+      "policyname": "vacation_requests_manage",
+      "roles": "{public}",
+      "cmd": "ALL",
+      "qual": "((company_id = get_my_company_id()) AND (get_my_role() = ANY (ARRAY['admin'::text, 'gestor'::text])))",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "vacation_requests",
+      "policyname": "vacation_requests_select",
+      "roles": "{public}",
+      "cmd": "SELECT",
+      "qual": "((collaborator_id = auth.uid()) OR ((company_id = get_my_company_id()) AND (get_my_role() = ANY (ARRAY['admin'::text, 'gestor'::text]))))",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "vehicle_allocations",
+      "policyname": "vehicle_allocations_company_isolation",
+      "roles": "{public}",
+      "cmd": "ALL",
+      "qual": "(company_id IN ( SELECT profiles.company_id\n   FROM profiles\n  WHERE (profiles.id = auth.uid())))",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "vehicle_allocations",
+      "policyname": "vehicle_allocations_delete",
+      "roles": "{public}",
+      "cmd": "DELETE",
+      "qual": "(company_id IN ( SELECT profiles.company_id\n   FROM profiles\n  WHERE ((profiles.id = auth.uid()) AND (profiles.role = ANY (ARRAY['admin'::text, 'gestor'::text])))))",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "vehicle_allocations",
+      "policyname": "vehicle_allocations_insert",
+      "roles": "{public}",
+      "cmd": "INSERT",
+      "qual": null,
+      "with_check": "(company_id IN ( SELECT profiles.company_id\n   FROM profiles\n  WHERE ((profiles.id = auth.uid()) AND (profiles.role = ANY (ARRAY['admin'::text, 'gestor'::text])))))"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "vehicle_allocations",
+      "policyname": "vehicle_allocations_update",
+      "roles": "{public}",
+      "cmd": "UPDATE",
+      "qual": "(company_id IN ( SELECT profiles.company_id\n   FROM profiles\n  WHERE ((profiles.id = auth.uid()) AND (profiles.role = ANY (ARRAY['admin'::text, 'gestor'::text])))))",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "vehicles",
+      "policyname": "vehicles_company_isolation",
+      "roles": "{public}",
+      "cmd": "ALL",
+      "qual": "(company_id IN ( SELECT profiles.company_id\n   FROM profiles\n  WHERE (profiles.id = auth.uid())))",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "vehicles",
+      "policyname": "vehicles_delete",
+      "roles": "{public}",
+      "cmd": "DELETE",
+      "qual": "(company_id IN ( SELECT profiles.company_id\n   FROM profiles\n  WHERE ((profiles.id = auth.uid()) AND (profiles.role = ANY (ARRAY['admin'::text, 'gestor'::text])))))",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "vehicles",
+      "policyname": "vehicles_insert",
+      "roles": "{public}",
+      "cmd": "INSERT",
+      "qual": null,
+      "with_check": "(company_id IN ( SELECT profiles.company_id\n   FROM profiles\n  WHERE ((profiles.id = auth.uid()) AND (profiles.role = ANY (ARRAY['admin'::text, 'gestor'::text])))))"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "vehicles",
+      "policyname": "vehicles_update",
+      "roles": "{public}",
+      "cmd": "UPDATE",
+      "qual": "(company_id IN ( SELECT profiles.company_id\n   FROM profiles\n  WHERE ((profiles.id = auth.uid()) AND (profiles.role = ANY (ARRAY['admin'::text, 'gestor'::text])))))",
+      "with_check": null
+    }
+  ],
+  "extensions": [
+    {
+      "extname": "btree_gist",
+      "extversion": "1.7"
+    },
+    {
+      "extname": "pg_stat_statements",
+      "extversion": "1.11"
+    },
+    {
+      "extname": "pgcrypto",
+      "extversion": "1.3"
+    },
+    {
+      "extname": "plpgsql",
+      "extversion": "1.0"
+    },
+    {
+      "extname": "supabase_vault",
+      "extversion": "0.3.1"
+    },
+    {
+      "extname": "uuid-ossp",
+      "extversion": "1.1"
+    }
+  ],
+  "realtimePublication": [
+    {
+      "schemaname": "public",
+      "tablename": "notifications"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "services"
+    }
+  ],
+  "tableCounts": {
+    "companies": 1,
+    "company_settings": 1,
+    "profiles": 30,
+    "clients": 940,
+    "locations": 939,
+    "teams": 16,
+    "team_members": 31,
+    "vehicles": 0,
+    "vehicle_allocations": 0,
+    "collaborator_ride_assignments": 1,
+    "contracts": 145,
+    "services": 1508,
+    "service_reinforcements": 0,
+    "service_price_audit": 0,
+    "service_photos": 0,
+    "timesheets": 0,
+    "daily_clocks": 0,
+    "absences": 0,
+    "vacation_requests": 0,
+    "management_tasks": 3,
+    "collaborator_documents": 0,
+    "bank_accounts": 0,
+    "bank_transactions": 336,
+    "bank_statement_imports": 1,
+    "bank_reconciliation_matches": 11,
+    "cash_flow_entries": 440,
+    "fixed_variable_payments": 93,
+    "payroll_records": 60,
+    "invoices": 11,
+    "invoice_items": 11,
+    "client_notifications": 0,
+    "notifications": 38,
+    "push_subscriptions": 2,
+    "audit_logs": 1321,
+    "background_jobs": 5,
+    "building_cards": 146,
+    "data_history": 490
+  },
+  "authUsersCount": 30,
+  "storageBuckets": [
+    {
+      "id": "collaborator-documents",
+      "name": "collaborator-documents",
+      "public": false
+    },
+    {
+      "id": "payment-attachments",
+      "name": "payment-attachments",
+      "public": false
+    },
+    {
+      "id": "service-photos",
+      "name": "service-photos",
+      "public": false
+    }
+  ],
+  "foreignKeyCount": 94
+}
