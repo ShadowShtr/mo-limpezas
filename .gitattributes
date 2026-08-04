@@ -1,0 +1,8 @@
+# Sem isto, core.autocrlf=true (comum em Windows) converte LF -> CRLF em
+# cada checkout, sem aparecer no `git status`. Isso já quebrou localmente
+# (nunca chegou a produção) comparações de checksum byte-a-byte entre
+# ficheiros de migration e o ledger de produção / migration-policy.json —
+# ver docs/atomicidade-audit/T03-backup-manifesto-2026-08-04.md e
+# docs/HANDOFF-2026-08-04.md. Fixar LF nos ficheiros SQL garante que um
+# clone novo (nesta ou noutra máquina) reproduz sempre os mesmos bytes.
+*.sql text eol=lf
