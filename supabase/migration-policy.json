@@ -68,7 +68,8 @@
     "20260608_new_features.sql",
     "20260609_kanban_columns.sql",
     "20260609_profiles_hourly_rate.sql",
-    "20260609_timesheet_limits.sql"
+    "20260609_timesheet_limits.sql",
+    "064_revoke_public_grants_atomic_functions.sql"
   ],
   "frozenDrafts": [
     {

@@ -72,3 +72,48 @@ O diagnóstico deve apresentar:
 6. publicar código compatível;
 7. executar testes com contas e empresa de teste no ambiente existente;
 8. só depois remover compatibilidade antiga e reparar dados aprovados.
+
+## T03 concluído (2026-08-04)
+
+- Projeto Supabase confirmado como plano **Free** — sem PITR nem backup
+  automático garantido. O backup manual (`scripts/backup-all.mjs`) e a
+  cadeia de migrations em `supabase/migrations/` passam a ser a única rede
+  de segurança real deste projeto. Decisão do dono: continuar mesmo assim,
+  sem upgrade de plano nem projeto Supabase adicional para ensaio — todo o
+  ensaio de migration passa a ser feito por `BEGIN...ROLLBACK` diretamente
+  na base real, nunca aplicação direta sem ensaio primeiro.
+- Fingerprint completo capturado por leitura direta (`scripts/schema-inventory.mjs`):
+  67 migrations no ledger (bate com a política), 8 tabelas com `revision`,
+  34 triggers de `revision` (mais que 1 por tabela nalgumas — duplicação
+  real, ainda por corrigir), 14 funções `SECURITY DEFINER`, 84 policies,
+  RLS ativo em tudo exceto `_migrations`, `company_change_events` fora da
+  publicação Realtime, 30 utilizadores Auth, 3 buckets Storage privados.
+  Ver `docs/atomicidade-audit/T03-backup-manifesto-2026-08-04.md`.
+- Lacuna corrigida: `scripts/backup-all.mjs` não incluía `building_cards`
+  nem `data_history` — corrigido, backup novo já cobre as duas.
+
+## Migration 064 (nova) — ensaiada, ainda não aplicada
+
+`supabase/migrations/064_revoke_public_grants_atomic_functions.sql` — só
+`REVOKE EXECUTE` de `anon`/`authenticated`/`PUBLIC` em
+`record_company_change_event`, `delete_client_atomic` e
+`set_invoice_status_atomic` (achado do T03: estavam concedidas em
+produção). Confirmado por leitura do código que nenhum destes é chamado
+fora de `service_role`, portanto não muda comportamento observável da
+aplicação.
+
+Ensaiada com `node scripts/rehearse-migration.mjs` (`BEGIN` → aplica →
+verifica 0 grants residuais → `ROLLBACK`) diretamente na base real:
+sucesso, fingerprint idêntico antes/depois. **Ainda não aplicada de
+verdade** — falta autorização explícita para `node scripts/run-migrations.mjs --apply`.
+
+Já adicionada a `activeMigrations` em `supabase/migration-policy.json`
+(68 migrations ativas agora) — o diagnóstico (`/dashboard/sistema/diagnostico`)
+passa a reportar corretamente esta migration como pendente até ser
+aplicada de facto.
+
+## Pendente — só o dono pode confirmar
+
+- Painel Supabase → Backups e Settings da organização → Billing: plano
+  exato e o que inclui (já confirmado visualmente como Free; falta
+  confirmar se há alguma retenção de backup mesmo assim).
