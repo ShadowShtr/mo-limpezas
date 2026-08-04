@@ -2,6 +2,10 @@
 
 Última consolidação local: 4 de agosto de 2026.
 
+> Para retomar este trabalho noutro computador, ler primeiro
+> `docs/HANDOFF-2026-08-04.md` — tem SHA exato, comandos, variáveis de
+> ambiente necessárias (só nomes) e a ordem exata dos próximos passos.
+
 ## Git e publicação
 
 - Base publicada conhecida: `origin/master` no commit `5581784`.

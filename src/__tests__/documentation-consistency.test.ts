@@ -61,11 +61,14 @@ describe("documentação e migrations têm uma única fonte de verdade", () => {
       ...filesUnder("docs", [".md", ".txt"]),
       ...filesUnder("planning", [".md", ".txt"]),
     ];
+    // TEST_DATABASE_URL/"Supabase descartável" foram banidos numa fase em
+    // que só significavam "Postgres local via Docker". O dono reintroduziu
+    // TEST_DATABASE_URL em 2026-08-04 com um significado diferente e
+    // legítimo (projeto Supabase de staging real, para ensaiar concorrência
+    // e Realtime antes de aplicar migrations em produção — ver
+    // docs/HANDOFF-2026-08-04.md). Docker continua banido.
     const forbidden = [
       /Docker/i,
-      /TEST_DATABASE_URL/i,
-      /Supabase descart[aá]vel/i,
-      /banco descart[aá]vel/i,
       /APPLY_ALL/i,
       /node scripts\/run-migrations\.mjs --baseline/i,
       /node scripts\/run-migrations\.mjs --seed/i,

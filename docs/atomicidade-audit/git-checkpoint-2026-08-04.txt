@@ -1,0 +1,75 @@
+=== git status --short ===
+ M src/__tests__/documentation-consistency.test.ts
+?? docs/HANDOFF-2026-08-04.md
+?? docs/atomicidade-audit/git-checkpoint-2026-08-04.txt
+
+=== HEAD ===
+8b52f6be938b2e46454f4270bdbbdf1df5641803
+
+=== git log --oneline (esta fase, 5581784..HEAD) ===
+8b52f6b feat(migration 066): protege public._migrations; renumera fundação do outbox para 067
+41dab02 fix(migration 066): record_company_change_event adquire lock antes de verificar idempotência (corrida com mesmo mutation_id)
+e72439f docs: portão de autorização da 066 — reversão testada, incidente investigado, achado maior de grants
+3b7c0cf feat(migration 066): fundação do outbox — sequência por empresa, domain_mutations idempotente, eventos imutáveis
+ae1322f docs: regista aplicação real da migration 065 em produção
+7e93e80 feat(migration 065): revoga privilégios de anon/authenticated (incl. TRUNCATE) em domain_mutations/company_change_events
+fee2a88 fix(T03): corrige contagem errada de "34 triggers de revision"
+fe62685 docs: fecha pendência do T03 — confirmado pelo dono que todos os projetos Supabase são Free
+4771329 docs: regista aplicação real da migration 064 em produção
+a67baaf feat(migration 064): revoga grants públicos de 3 RPCs SECURITY DEFINER, ensaiada com BEGIN...ROLLBACK
+fe1d612 chore(T03): fingerprint read-only do Supabase existente + corrige lacuna no backup
+58e418b chore(consistencia): consolida documentos e bloqueia migrations congeladas
+6e19d29 feat(T01): prova inequívoca de ambiente/versão em /api/health, /api/health/deep e página de diagnóstico
+0b65aa2 docs(atomicidade): regista investigação 064/065, auditoria de schema e revisão do motor de recorrência
+13cf63d fix(recorrencia): motor canónico único; corrige contrato mensal a só gerar 1 ocorrência em janelas de vários meses
+ffde844 feat(atomicidade): clientes/faturas passam a exigir revisão e RPC; contratos propagam erro em vez de engolir
+6de5fe7 chore(migrations): adiciona 064/065 (atomicidade/outbox) como artefactos locais, não aplicadas
+
+=== ficheiros novos/alterados por esta fase (docs/scripts/supabase), git diff --name-status ===
+A	docs/ATOMICIDADE-IMPLEMENTACAO.md
+A	docs/ESTADO-ATUAL.md
+M	docs/MIGRACAO_DADOS_REAIS.md
+A	docs/MIGRATIONS-RUNBOOK.md
+A	docs/README.md
+A	docs/atomicidade-audit/065-errata-explorabilidade-truncate.md
+A	docs/atomicidade-audit/065-static-review.md
+A	docs/atomicidade-audit/067-outbox-foundation-review.md
+A	docs/atomicidade-audit/067-rollback.sql
+A	docs/atomicidade-audit/T03-backup-manifesto-2026-08-04.md
+A	docs/atomicidade-audit/backup-file-hashes-t03-2026-08-04.sha256
+A	docs/atomicidade-audit/backup-file-hashes.sha256
+A	docs/atomicidade-audit/backup-restore-readiness.json
+A	docs/atomicidade-audit/frozen/064_domain_atomicity_outbox.sql
+A	docs/atomicidade-audit/frozen/065_fix_domain_atomicity_outbox.sql
+A	docs/atomicidade-audit/incidente-truncate-2026-08-04.md
+A	docs/atomicidade-audit/recurrence-engine-review.md
+A	docs/atomicidade-audit/schema-audit.json
+A	docs/atomicidade-audit/schema-inventory-2026-08-04.json
+A	docs/atomicidade-audit/schema-readonly-065-check.json
+M	docs/auditoria-tecnica-senior-2026-06-20.md
+M	docs/riscos-operacionais.md
+M	scripts/audit-reversoes.mjs
+M	scripts/backup-all.mjs
+D	scripts/build-combined-sql.mjs
+A	scripts/rehearse-066-secure-migrations-ledger.mjs
+A	scripts/rehearse-067-outbox-foundation.mjs
+A	scripts/rehearse-migration.mjs
+M	scripts/run-migrations.mjs
+A	scripts/schema-inventory.mjs
+A	src/__tests__/atomicity-065-static.test.ts
+A	src/__tests__/deploy-info.test.ts
+A	src/__tests__/documentation-consistency.test.ts
+A	src/__tests__/recurrence-engine.test.ts
+M	src/__tests__/reversao-guards.test.ts
+A	supabase/migration-policy.json
+A	supabase/migrations/064_revoke_public_grants_atomic_functions.sql
+A	supabase/migrations/065_revoke_public_grants_outbox_tables.sql
+A	supabase/migrations/066_secure_migrations_ledger.sql
+A	supabase/migrations/067_outbox_foundation.sql
+D	supabase/seed.sql
+
+=== checksums das migrations novas (064-067) ===
+b4dfdecfe9ca19ac545a276b61c4070cecfa59a6fe65fcbfcfe4c12d68e0390b *supabase/migrations/064_revoke_public_grants_atomic_functions.sql
+6c462ffefc5aed904cdc60d52247f7559984cc669fea15ea85199166b7ad4fed *supabase/migrations/065_revoke_public_grants_outbox_tables.sql
+9ee8da4f5068e0b13e11116125aba8cc6809f27940cadb992fb430db2308eca9 *supabase/migrations/066_secure_migrations_ledger.sql
+198951a96c7b9e441487b7a6f6734f42d3de20075c9176c8f4ab4560bfa7e303 *supabase/migrations/067_outbox_foundation.sql
