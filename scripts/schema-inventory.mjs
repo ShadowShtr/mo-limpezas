@@ -71,7 +71,23 @@ async function main() {
     ORDER BY table_name
   `)).rows;
 
+  // Nota: filtrado por p.proname = 'fn_increment_revision' — uma consulta
+  // anterior sem este filtro já contou TODOS os triggers das tabelas com
+  // `revision` (updated_at, histórico, guardas de campo) como se fossem
+  // triggers de revisão, o que produziu uma contagem errada (34 em vez de
+  // 8, uma por tabela).
   report.revisionTriggers = (await client.query(`
+    SELECT c.relname AS table_name, t.tgname AS trigger_name, p.proname AS function_name
+    FROM pg_trigger t
+    JOIN pg_class c ON c.oid = t.tgrelid
+    JOIN pg_namespace n ON n.oid = c.relnamespace
+    JOIN pg_proc p ON p.oid = t.tgfoid
+    WHERE n.nspname = 'public' AND NOT t.tgisinternal
+      AND p.proname = 'fn_increment_revision'
+    ORDER BY c.relname, t.tgname
+  `)).rows;
+
+  report.allTriggers = (await client.query(`
     SELECT c.relname AS table_name, t.tgname AS trigger_name, p.proname AS function_name
     FROM pg_trigger t
     JOIN pg_class c ON c.oid = t.tgrelid

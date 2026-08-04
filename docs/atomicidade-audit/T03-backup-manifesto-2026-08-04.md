@@ -43,9 +43,14 @@ executado nesta etapa.
   `supabase/migration-policy.json.activeMigrations`.
 - **Colunas `revision`**: `clients`, `contracts`, `invoice_items`, `invoices`,
   `locations`, `services`, `team_members`, `teams` (8 tabelas).
-- **Triggers de `revision`**: 34 (mais que 1 por tabela nalguns casos — a
-  auditoria anterior já tinha detetado isto; a 065 congelada endereça a
-  normalização para 1 trigger canónico por tabela, mas não está aplicada).
+- **Triggers de `revision`**: **correção a este documento** — a leitura
+  original contou 34 porque a query somava TODOS os triggers das 8
+  tabelas (`updated_at`, captura de histórico, guardas de campo), não só
+  os de `revision`. Reconfirmado por leitura direta filtrando pelo nome
+  da função: exatamente **1** trigger `trg_<tabela>_revision →
+  fn_increment_revision` por tabela, sem duplicação. Não há bug de
+  incremento múltiplo por update — a normalização de triggers proposta
+  na 065 congelada não é necessária no estado atual.
 - **Funções `SECURITY DEFINER`**: 14. Três delas estão concedidas a
   `anon`/`authenticated`/`PUBLIC` **em produção, agora**:
   `record_company_change_event`, `delete_client_atomic`,

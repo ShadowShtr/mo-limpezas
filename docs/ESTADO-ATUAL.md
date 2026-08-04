@@ -84,11 +84,19 @@ O diagnóstico deve apresentar:
   na base real, nunca aplicação direta sem ensaio primeiro.
 - Fingerprint completo capturado por leitura direta (`scripts/schema-inventory.mjs`):
   67 migrations no ledger (bate com a política), 8 tabelas com `revision`,
-  34 triggers de `revision` (mais que 1 por tabela nalgumas — duplicação
-  real, ainda por corrigir), 14 funções `SECURITY DEFINER`, 84 policies,
-  RLS ativo em tudo exceto `_migrations`, `company_change_events` fora da
-  publicação Realtime, 30 utilizadores Auth, 3 buckets Storage privados.
-  Ver `docs/atomicidade-audit/T03-backup-manifesto-2026-08-04.md`.
+  14 funções `SECURITY DEFINER`, 84 policies, RLS ativo em tudo exceto
+  `_migrations`, `company_change_events` fora da publicação Realtime,
+  30 utilizadores Auth, 3 buckets Storage privados. Ver
+  `docs/atomicidade-audit/T03-backup-manifesto-2026-08-04.md`.
+- **Correção a um achado anterior desta mesma etapa:** a contagem de "34
+  triggers de revision" reportada inicialmente estava errada — a query
+  contava TODOS os triggers dessas 8 tabelas (`updated_at`, captura de
+  histórico, guardas de campo), não só os de `revision`. Reconfirmado por
+  leitura direta e filtrado pelo nome da função: cada uma das 8 tabelas
+  tem exatamente **1** trigger `trg_<tabela>_revision → fn_increment_revision`,
+  sem duplicação. Não há bug de revisão a incrementar mais que 1 por
+  update — a normalização de triggers proposta na 065 congelada não é
+  necessária no estado atual.
 - Lacuna corrigida: `scripts/backup-all.mjs` não incluía `building_cards`
   nem `data_history` — corrigido, backup novo já cobre as duas.
 
