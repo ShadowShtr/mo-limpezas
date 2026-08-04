@@ -1,5 +1,5 @@
 {
-  "name": "escala-temp",
+  "name": "mo-limpezas",
   "version": "0.1.0",
   "private": true,
   "scripts": {
@@ -9,7 +9,6 @@
     "start": "next start",
     "lint": "eslint",
     "test": "vitest run",
-    "test:065": "node scripts/test-065-domain-atomicity.mjs",
     "test:watch": "vitest"
   },
   "dependencies": {

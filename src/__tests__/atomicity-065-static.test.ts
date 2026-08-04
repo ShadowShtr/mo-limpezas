@@ -3,7 +3,7 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 const root = process.cwd();
-const migration065 = fs.readFileSync(path.join(root, "supabase/migrations/065_fix_domain_atomicity_outbox.sql"), "utf8");
+const migration065 = fs.readFileSync(path.join(root, "docs/atomicidade-audit/frozen/065_fix_domain_atomicity_outbox.sql"), "utf8");
 const clientesAction = fs.readFileSync(path.join(root, "src/app/actions/clientes.ts"), "utf8");
 const clientesTable = fs.readFileSync(
   path.join(root, "src/app/(dashboard)/dashboard/clientes/_components/table.tsx"),

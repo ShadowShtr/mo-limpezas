@@ -1,5 +1,7 @@
 # Migração de Dados Reais — Mó Limpezas
 
+> **HISTÓRICO DE DADOS:** descreve uma importação já realizada. Não repetir limpeza, `--wipe`, criação de utilizadores ou importação sem um plano novo e autorização específica.
+
 > Última revisão: 2026-06-18.
 > Substituição dos dados fictícios (seed/demo) pelos dados reais da empresa, exportados da app anterior.
 

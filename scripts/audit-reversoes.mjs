@@ -78,16 +78,32 @@ function auditGit() {
   try { sh("git fetch origin --quiet"); } catch { report("warn", "git fetch falhou (sem rede?) — comparação com origin pode estar desatualizada."); }
 
   const branch = sh("git rev-parse --abbrev-ref HEAD");
-  const counts = sh(`git rev-list --left-right --count ${branch}...origin/${branch}`).split(/\s+/);
-  const ahead = Number(counts[0] ?? 0);
-  const behind = Number(counts[1] ?? 0);
+  let remoteRef = `origin/${branch}`;
+  try {
+    sh(`git rev-parse --verify ${remoteRef}`);
+  } catch {
+    remoteRef = "origin/master";
+    try {
+      sh(`git rev-parse --verify ${remoteRef}`);
+      report("warn", `A branch ${branch} não tem upstream homónimo; comparação feita com ${remoteRef}.`);
+    } catch {
+      report("warn", "Nenhuma referência remota utilizável; comparação de commits saltada.");
+      remoteRef = "";
+    }
+  }
+
+  const counts = remoteRef
+    ? sh(`git rev-list --left-right --count ${remoteRef}...HEAD`).split(/\s+/)
+    : ["0", "0"];
+  const behind = Number(counts[0] ?? 0);
+  const ahead = Number(counts[1] ?? 0);
 
   if (ahead > 0) {
-    const list = sh(`git log --oneline origin/${branch}..${branch}`).split("\n").slice(0, 10).join("\n      ");
+    const list = sh(`git log --oneline ${remoteRef}..HEAD`).split("\n").slice(0, 10).join("\n      ");
     report("fail",
       `O branch local está ${ahead} commit(s) À FRENTE do GitHub. Estes fixes NÃO estão em produção:\n      ${list}`,
-      "git push origin " + branch + " (depois de rever) — enquanto não fizeres push, produção continua com os bugs 'já corrigidos'.");
-  } else {
+      "Rever e aprovar a compatibilidade antes de publicar; não fazer push enquanto docs/ESTADO-ATUAL.md indicar bloqueio.");
+  } else if (remoteRef) {
     report("ok", "Local e origin sincronizados (0 commits por publicar).");
   }
   if (behind > 0) {
@@ -499,11 +515,18 @@ function auditMigrationRunner() {
     report("ok", "Runner usa tabela de controlo _migrations (só aplica pendentes).");
   }
 
-  if (/seed\.sql/.test(src) && !/--seed/.test(src)) {
-    report("fail", "O runner aplica seed.sql automaticamente — o próprio seed diz 'NÃO executar em produção'.",
-      "Seed apenas com flag explícita --seed e bloqueado se a base já tiver dados.");
-  } else if (/--seed/.test(src)) {
-    report("ok", "Seed só corre com flag explícita e com guarda de produção.");
+  if (/seed\.sql|--seed/.test(src)) {
+    report("fail", "O runner ainda conhece dados de demonstração.",
+      "Remover totalmente dados de demonstração do pipeline de migrations.");
+  } else {
+    report("ok", "Runner não executa dados de demonstração.");
+  }
+
+  if (!/migration-policy\.json/.test(src)) {
+    report("fail", "O runner não usa a política que separa migrations ativas de rascunhos congelados.",
+      "Carregar supabase/migration-policy.json e rejeitar SQL não classificado.");
+  } else {
+    report("ok", "Runner aplica somente migrations classificadas como ativas.");
   }
 }
 
@@ -549,11 +572,19 @@ async function main() {
   console.log("AUDITORIA DE REVERSÕES — Mó Limpezas");
   console.log(`Executada em ${new Date().toISOString()} | ${SKIP_DB ? "modo local (--skip-db)" : "modo completo"}`);
 
-  auditGit();
-  await auditDeployedVersion();
-  auditMigrationRunner();
-  auditServiceWorker();
-  auditClientSideWrites();
+  const run = async (name, fn) => {
+    try {
+      await fn();
+    } catch (error) {
+      report("fail", `${name} falhou sem concluir: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  };
+
+  await run("Git/deploy", auditGit);
+  await run("Versão publicada", auditDeployedVersion);
+  await run("Runner de migrations", auditMigrationRunner);
+  await run("Service Worker", auditServiceWorker);
+  await run("Escritas client-side", auditClientSideWrites);
 
   if (!SKIP_DB) {
     const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -562,11 +593,11 @@ async function main() {
       report("fail", "NEXT_PUBLIC_SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY em falta no .env.local — secções de base de dados saltadas.");
     } else {
       const admin = createClient(url, key, { auth: { persistSession: false } });
-      await auditSchema(admin);
-      await auditSeedContamination(admin);
-      await auditClientes(admin);
-      await auditContratos(admin);
-      await auditCalendario(admin);
+      await run("Schema", () => auditSchema(admin));
+      await run("Contaminação histórica", () => auditSeedContamination(admin));
+      await run("Clientes", () => auditClientes(admin));
+      await run("Contratos", () => auditContratos(admin));
+      await run("Calendário", () => auditCalendario(admin));
     }
   }
 

@@ -76,16 +76,31 @@ describe("run-migrations.mjs seguro", () => {
 
   it("usa tabela de controlo _migrations (só aplica pendentes)", () => {
     expect(src).toContain("_migrations");
-    expect(src).toContain("--baseline");
+    expect(src).toContain("migration-policy.json");
+    expect(src).not.toContain('process.argv.includes("--baseline")');
   });
 
-  it("seed só com flag explícita e guarda contra base com dados", () => {
-    expect(src).toContain("--seed");
-    expect(src).toMatch(/dbHasData/);
+  it("exige modo e confirmação explícitos para aplicar", () => {
+    expect(src).toContain("--dry-run");
+    expect(src).toContain("--apply");
+    expect(src).toContain("MIGRATION_CONFIRM_PROJECT_REF");
+    expect(src).toContain("Escolhe exatamente um modo");
+  });
+
+  it("nunca executa seed nem faz baseline automático", () => {
+    expect(src).not.toContain('process.argv.includes("--seed")');
+    expect(src).not.toContain("seed.sql");
+    expect(src).not.toContain("ON CONFLICT (name) DO UPDATE SET checksum");
   });
 
   it("não engole erros de migração (sem 'already exists' ignorado)", () => {
     expect(src).not.toContain("already exists");
+  });
+
+  it("recusa schema existente sem ledger", () => {
+    expect(src).toContain("Schema existente sem public._migrations");
+    expect(src).toContain("Ledger vazio num schema existente");
+    expect(src).toContain("to_regclass('public.companies')");
   });
 });
 
@@ -321,9 +336,10 @@ describe("auditoria F — campos operacionais, delete atómico e actor", () => {
     }
   });
 
-  it("runner faz backfill de checksums antigos", () => {
+  it("runner bloqueia ledger sem checksum em vez de o alterar silenciosamente", () => {
     const src = readFileSync(join(ROOT, "scripts", "run-migrations.mjs"), "utf8");
-    expect(src).toContain("checksum backfill");
+    expect(src).toContain("Ledger sem checksum");
+    expect(src).not.toContain("checksum backfill");
   });
 });
 

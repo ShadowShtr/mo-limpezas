@@ -1,5 +1,7 @@
 # Roadmap de Desenvolvimento
 
+> **ARQUIVO HISTÓRICO:** não usar como backlog vigente.
+
 ## Estratégia Geral
 
 Desenvolvimento em fases incrementais — cada fase entrega valor utilizável, mesmo antes de o projeto estar completo.

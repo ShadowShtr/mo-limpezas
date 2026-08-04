@@ -1,5 +1,7 @@
 # Mó Limpezas — Plataforma de Gestão Operacional
 
+> **ARQUIVO HISTÓRICO:** este diretório preserva a especificação anterior ao desenvolvimento. Afirmações como “nenhum código foi escrito”, schema, custos e roadmap não representam o sistema atual.
+
 > **Este repositório contém apenas o planeamento.** Nenhum código foi escrito ainda.  
 > Cada vez que voltar a discutir a ideia, leia este repositório para retomar de onde parou.
 

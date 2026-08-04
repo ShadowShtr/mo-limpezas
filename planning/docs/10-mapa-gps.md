@@ -1,5 +1,7 @@
 # Mapa e GPS operacional
 
+> **ARQUIVO HISTÓRICO:** valide regras e permissões na implementação atual.
+
 ## Objetivo
 
 O dashboard `/dashboard/mapa` mostra:

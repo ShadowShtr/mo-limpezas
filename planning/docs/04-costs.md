@@ -1,5 +1,7 @@
 # Custos — Setup e Mensais
 
+> **ARQUIVO HISTÓRICO:** valores e planos não foram revalidados.
+
 ## Resumo Executivo
 
 | Fase | Custo Setup | Custo Mensal |

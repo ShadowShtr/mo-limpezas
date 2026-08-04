@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { CURRENT_MIGRATION_VERSION, deployBranch, deployCommit, deployEnv, supabaseProjectRef } from "@/lib/deploy-info";
+import { CURRENT_SCHEMA_BASELINE, deployBranch, deployCommit, deployEnv, supabaseProjectRef } from "@/lib/deploy-info";
 
 export const runtime = "edge";
 
@@ -20,7 +20,7 @@ export function GET() {
     branch: deployBranch(),
     commitMessage: process.env.VERCEL_GIT_COMMIT_MESSAGE ?? null,
     env: deployEnv(),
-    migrationVersion: CURRENT_MIGRATION_VERSION,
+    migrationBaseline: CURRENT_SCHEMA_BASELINE,
     supabaseProjectRef: supabaseProjectRef(),
   });
 }

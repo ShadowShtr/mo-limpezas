@@ -1,5 +1,7 @@
 # AUDITORIA SÉNIOR — "Alterações que revertem / não aparecem"
 
+> **HISTÓRICO:** fotografia de 22 de julho de 2026. Não executar os comandos ou próximos passos deste ficheiro; use os documentos vigentes em `docs/README.md`.
+
 **Repositório:** ShadowShtr/mo-limpezas
 **Data:** 2026-07-22
 **Método:** revisão de código linha a linha (server actions, calendário, sheets, migrações, service worker, pipeline de deploy) + execução de diagnóstico read-only contra a base de PRODUÇÃO.
@@ -80,7 +82,7 @@ commit estava no ar quando alguém reportava uma reversão.
 O `scripts/run-migrations.mjs` original:
 
 ```js
-password: "@vitortmf36978",            // password de produção HARDCODED no repo
+password: "[REDACTED]",                // segredo removido deste documento
 ...
 for (const file of files) {            // re-executa TODAS as migrações, sempre
   try { await client.query(sql); }
@@ -250,9 +252,8 @@ scripts/run-migrations.mjs           REESCRITO: exige SUPABASE_DB_URL do env
                                      (sem password no código); tabela de
                                      controlo _migrations (só aplica pendentes,
                                      em transação, pára ao 1º erro); primeiro
-                                     uso numa base com dados exige --baseline;
-                                     seed só com --seed e recusado se a base
-                                     tiver dados.
+                                     política atual substituída; consultar
+                                     docs/MIGRATIONS-RUNBOOK.md.
 
 src/app/api/health/route.ts          Passa a devolver version (commit) e branch
                                      — prova em segundos que versão está no ar.
@@ -273,11 +274,8 @@ src/__tests__/reversao-guards.test.ts  12 testes-guarda (todos a passar):
 ================================================================================
 FASE 0 — SEGURANÇA (fazer JÁ, antes de tudo)
 ================================================================================
-1. RODAR a password do Postgres no dashboard do Supabase.
-   A antiga (@vitortmf36978) está no histórico do git no GitHub.
-2. Adicionar ao .env.local:
-   SUPABASE_DB_URL=postgres://...   (connection string nova)
-   AUDIT_APP_URL=https://<dominio-de-producao>
+1. Confirmar que qualquer credencial histórica exposta foi revogada.
+2. Validar variáveis pelo processo vigente, sem as copiar para documentação.
 
 ================================================================================
 FASE 1 — PARAR A ALTERNÂNCIA DE VERSÕES
@@ -286,8 +284,7 @@ FASE 1 — PARAR A ALTERNÂNCIA DE VERSÕES
    commit que o código que as usa.
 4. git push origin master  → publica finalmente os 8 fixes.
 5. NUNCA MAIS `vercel --prod` manual. Um canal só: deploy automático via push.
-6. Uma vez: node scripts/run-migrations.mjs --baseline
-   (marca as 62 migrações como aplicadas sem re-executar nada)
+6. Procedimento antigo removido. Usar exclusivamente `docs/MIGRATIONS-RUNBOOK.md`.
 
 ================================================================================
 FASE 2 — FECHAR OS MECANISMOS DE REVERSÃO NO CÓDIGO

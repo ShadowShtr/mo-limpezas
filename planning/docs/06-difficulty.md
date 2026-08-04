@@ -1,5 +1,7 @@
 # Dificuldade — O que Claude faz vs O que o User faz
 
+> **ARQUIVO HISTÓRICO:** divisão inicial de trabalho, sem autoridade operacional atual.
+
 ## Nível Global do Projeto: 8/10
 
 Este é um projeto ambicioso mas completamente realizável. A complexidade vem da profundidade das regras de negócio (não da tecnologia em si).

@@ -5,20 +5,18 @@
 //   - tinha a password do Postgres hardcoded (agora vem de SUPABASE_DB_URL);
 //   - re-executava TODAS as migrações em cada run (migrações com UPDATE/DELETE
 //     re-aplicavam-se e revertiam dados alterados entretanto);
-//   - aplicava seed.sql (dados fictícios) contra a base de PRODUÇÃO.
+//   - misturava dados de demonstração com alterações de schema.
 //
 // Regras:
 //   - Tabela public._migrations regista o que já foi aplicado; só corre pendentes.
 //   - Cada migração corre numa transação; ao 1º erro PÁRA (nada de engolir erros).
-//   - Primeira utilização numa base já existente: `--baseline` marca tudo como
-//     aplicado SEM executar (obrigatório antes do primeiro run normal).
-//   - seed.sql só com `--seed`, e recusa se a base já tiver dados.
+//   - A política em supabase/migration-policy.json decide explicitamente quais
+//     ficheiros estão ativos e quais são rascunhos congelados.
+//   - Não existe baseline automático nem execução de seed neste runner.
 //
 // Uso:
-//   SUPABASE_DB_URL=postgres://... node scripts/run-migrations.mjs --baseline
-//   node scripts/run-migrations.mjs              # aplica pendentes
 //   node scripts/run-migrations.mjs --dry-run    # mostra o que aplicaria
-//   node scripts/run-migrations.mjs --seed       # (só em base vazia/dev)
+//   node scripts/run-migrations.mjs --apply      # aplica pendentes aprovadas
 // ============================================================================
 
 import pg from "pg";
@@ -30,10 +28,23 @@ import { fileURLToPath } from "url";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, "..");
 const MIGRATIONS_DIR = join(ROOT, "supabase", "migrations");
+const POLICY_FILE = join(ROOT, "supabase", "migration-policy.json");
 
-const BASELINE = process.argv.includes("--baseline");
 const DRY_RUN = process.argv.includes("--dry-run");
-const SEED = process.argv.includes("--seed");
+const APPLY = process.argv.includes("--apply");
+const unknownArgs = process.argv.slice(2).filter((arg) => !["--dry-run", "--apply"].includes(arg));
+if (unknownArgs.length > 0) {
+  console.error(`Argumentos não suportados: ${unknownArgs.join(", ")}`);
+  process.exit(1);
+}
+if (DRY_RUN === APPLY) {
+  console.error("Escolhe exatamente um modo: --dry-run ou --apply");
+  process.exit(1);
+}
+
+const policy = JSON.parse(readFileSync(POLICY_FILE, "utf8"));
+const frozenDrafts = new Map(policy.frozenDrafts.map((draft) => [draft.ledgerName, draft]));
+const activeMigrations = new Set(policy.activeMigrations);
 
 // .env.local (sem dependências externas)
 for (const f of [".env.local", ".env"]) {
@@ -50,6 +61,22 @@ if (!DB_URL) {
   console.error("❌ Define SUPABASE_DB_URL no .env.local (connection string do Postgres, ver Supabase → Settings → Database).");
   console.error("   A password NUNCA deve voltar a estar escrita neste ficheiro.");
   process.exit(1);
+}
+
+if (APPLY) {
+  const confirmation = process.env.MIGRATION_CONFIRM_PROJECT_REF;
+  const appRef = process.env.NEXT_PUBLIC_SUPABASE_URL?.match(/^https?:\/\/([a-z0-9-]+)\.supabase\.co/i)?.[1];
+  if (!confirmation || !appRef || confirmation !== appRef) {
+    console.error("MIGRATION_CONFIRM_PROJECT_REF deve coincidir com NEXT_PUBLIC_SUPABASE_URL antes de --apply.");
+    process.exit(1);
+  }
+
+  const parsedDbUrl = new URL(DB_URL);
+  const dbIdentity = `${parsedDbUrl.hostname} ${decodeURIComponent(parsedDbUrl.username)}`;
+  if (!dbIdentity.includes(confirmation)) {
+    console.error("A connection string não corresponde ao projeto confirmado.");
+    process.exit(1);
+  }
 }
 
 const client = new pg.Client({ connectionString: DB_URL, ssl: { rejectUnauthorized: false } });
@@ -89,36 +116,71 @@ function verifyChecksums(applied, files) {
   return divergent;
 }
 
-async function dbHasData() {
-  try {
-    const { rows } = await client.query("SELECT count(*)::int AS n FROM public.companies");
-    return rows[0].n > 0;
-  } catch {
-    return false; // tabela nem existe → base vazia
+function classifyFiles(files) {
+  const unknown = files.filter((file) => !activeMigrations.has(file));
+  const missing = policy.activeMigrations.filter((file) => !files.includes(file));
+
+  if (unknown.length > 0 || missing.length > 0) {
+    throw new Error([
+      unknown.length > 0 ? `SQL sem classificação: ${unknown.join(", ")}` : null,
+      missing.length > 0 ? `migrations ativas em falta: ${missing.join(", ")}` : null,
+    ].filter(Boolean).join("; "));
   }
+
+  return policy.activeMigrations;
 }
 
 async function main() {
+  const allFiles = readdirSync(MIGRATIONS_DIR).filter((f) => f.endsWith(".sql"));
+  const files = classifyFiles(allFiles);
+
+  for (const [ledgerName, draft] of frozenDrafts) {
+    const currentHash = checksumOf(readFileSync(join(ROOT, draft.path), "utf8"));
+    if (currentHash !== draft.sha256) {
+      throw new Error(`Rascunho congelado alterado: ${ledgerName}`);
+    }
+  }
+
   console.log("🔌 A conectar (SUPABASE_DB_URL)...");
   await client.connect();
-  await ensureTracking();
-
-  const files = readdirSync(MIGRATIONS_DIR).filter((f) => f.endsWith(".sql")).sort();
+  const { rows: trackingRows } = await client.query("SELECT to_regclass('public._migrations') AS table_name");
+  const trackingExists = Boolean(trackingRows[0]?.table_name);
+  if (DRY_RUN) {
+    if (!trackingExists) throw new Error("public._migrations não existe; dry-run não altera o banco");
+  } else {
+    if (!trackingExists) {
+      const { rows: schemaRows } = await client.query("SELECT to_regclass('public.companies') AS table_name");
+      if (schemaRows[0]?.table_name) {
+        throw new Error("Schema existente sem public._migrations; reconciliação manual obrigatória, nenhuma migration foi executada");
+      }
+    }
+    await ensureTracking();
+  }
   const applied = await appliedMap();
 
-  // Backfill: registos criados antes do checksum existir recebem o checksum do
-  // ficheiro atual (mesma assunção do --baseline: o ficheiro não mudou desde a
-  // aplicação). A partir daí qualquer edição futura é detetada.
-  for (const [name, sum] of applied) {
-    if (sum == null && files.includes(name)) {
-      const cs = checksumOf(readFileSync(join(MIGRATIONS_DIR, name), "utf8"));
-      await client.query(
-        "UPDATE public._migrations SET checksum = $1 WHERE name = $2 AND checksum IS NULL",
-        [cs, name],
-      );
-      applied.set(name, cs);
-      console.log(`🔏 checksum backfill: ${name}`);
+  if (applied.size === 0) {
+    const { rows: schemaRows } = await client.query("SELECT to_regclass('public.companies') AS table_name");
+    if (schemaRows[0]?.table_name) {
+      throw new Error("Ledger vazio num schema existente; reconciliação manual obrigatória, nenhuma migration foi executada");
     }
+  }
+
+  const appliedFrozen = [...frozenDrafts.keys()].filter((file) => applied.has(file));
+  if (appliedFrozen.length > 0) {
+    throw new Error(`Rascunhos congelados aparecem no ledger: ${appliedFrozen.join(", ")}`);
+  }
+
+  const classified = new Set([...files, ...frozenDrafts.keys()]);
+  const unknownApplied = [...applied.keys()].filter((file) => !classified.has(file));
+  if (unknownApplied.length > 0) {
+    throw new Error(`Ledger contém migrations desconhecidas: ${unknownApplied.join(", ")}`);
+  }
+
+  const withoutChecksum = [...applied.entries()]
+    .filter(([name, sum]) => files.includes(name) && sum == null)
+    .map(([name]) => name);
+  if (withoutChecksum.length > 0) {
+    throw new Error(`Ledger sem checksum; requer reconciliação manual revista: ${withoutChecksum.join(", ")}`);
   }
 
   // Migração já aplicada cujo ficheiro mudou → parar SEMPRE (nada de silêncio).
@@ -130,31 +192,6 @@ async function main() {
     console.error("   ou cria uma migração NOVA com a correção (nunca editar migrações históricas).");
     await client.end();
     process.exit(1);
-  }
-
-  // Guarda: base com schema mas sem histórico de migrações → exigir baseline.
-  if (!BASELINE && applied.size === 0 && (await dbHasData())) {
-    console.error("❌ Esta base já tem dados mas a tabela _migrations está vazia.");
-    console.error("   Corre primeiro:  node scripts/run-migrations.mjs --baseline");
-    console.error("   (marca as migrações existentes como aplicadas SEM as re-executar — evita re-aplicar UPDATEs/DELETEs sobre dados reais)");
-    await client.end();
-    process.exit(1);
-  }
-
-  if (BASELINE) {
-    for (const f of files) {
-      if (!applied.has(f)) {
-        const sum = checksumOf(readFileSync(join(MIGRATIONS_DIR, f), "utf8"));
-        await client.query(
-          "INSERT INTO public._migrations (name, checksum) VALUES ($1, $2) ON CONFLICT (name) DO UPDATE SET checksum = EXCLUDED.checksum",
-          [f, sum],
-        );
-        console.log(`📌 baseline: ${f}`);
-      }
-    }
-    console.log("✅ Baseline concluído — nada foi executado, tudo marcado como aplicado (com checksum).");
-    await client.end();
-    return;
   }
 
   const pending = files.filter((f) => !applied.has(f));
@@ -177,19 +214,6 @@ async function main() {
       console.error("   Migração revertida (transação). Corrige o .sql e volta a correr — nada ficou a meio.");
       await client.end();
       process.exit(1);
-    }
-  }
-
-  if (SEED) {
-    if (await dbHasData()) {
-      console.error("❌ --seed recusado: a base já tem dados (companies > 0). O seed é APENAS para bases de desenvolvimento vazias.");
-      await client.end();
-      process.exit(1);
-    }
-    if (!DRY_RUN) {
-      console.log("🌱 seed.sql (base vazia confirmada)...");
-      await client.query(readFileSync(join(ROOT, "supabase", "seed.sql"), "utf8"));
-      console.log("✅ Seed aplicado.");
     }
   }
 

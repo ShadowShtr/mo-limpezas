@@ -1,3 +1,4 @@
+HISTÓRICO: fotografia de 2026-07-06. Não contém instruções vigentes. Consulte docs/ESTADO-ATUAL.md.
 ================================================================================
   AUDITORIA COMPLETA — PLATAFORMA "ESCALA" (Mó Limpezas)
   Repositório: github.com/ShadowShtr/mo-limpezas

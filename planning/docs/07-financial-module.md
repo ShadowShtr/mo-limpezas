@@ -1,5 +1,7 @@
 # Módulo Financeiro — Especificação
 
+> **ARQUIVO HISTÓRICO:** compare com a implementação atual antes de tomar decisões.
+
 > ⚠️ **RASCUNHO** — Este documento está incompleto. Aguarda respostas do user sobre as regras de negócio específicas.
 
 ---

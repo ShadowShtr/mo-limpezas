@@ -1,5 +1,7 @@
 # Auditoria Técnica Sénior — Mó Limpezas
 
+> **HISTÓRICO:** estado observado em 20 de junho de 2026. Não representa o código ou banco atuais. Consulte `docs/ESTADO-ATUAL.md`.
+
 **Repositório:** `ShadowShtr/mo-limpezas`  
 **Data:** 20/06/2026  
 **Escopo:** checkup técnico, segurança, RLS, banco, APIs, crons, storage, backup e prontidão para produção.  

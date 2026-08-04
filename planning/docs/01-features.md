@@ -1,5 +1,7 @@
 # Funcionalidades — Especificação Completa
 
+> **ARQUIVO HISTÓRICO:** requisitos iniciais; confirme o comportamento atual no código e em `docs/ESTADO-ATUAL.md`.
+
 ## Módulos do Sistema
 
 ### 1. Autenticação e Perfis

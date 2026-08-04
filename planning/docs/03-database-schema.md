@@ -1,5 +1,7 @@
 # Esquema da Base de Dados
 
+> **ARQUIVO HISTÓRICO:** não usar como schema atual; consulte tipos, migrations ativas e a inspeção read-only mais recente.
+
 > PostgreSQL via Supabase. Todas as tabelas têm `created_at` e `updated_at` por padrão.
 
 ---

@@ -1,5 +1,7 @@
 # AUDITORIA CONSOLIDADA — "Alterações que revertem / não aparecem"
 
+> **HISTÓRICO:** fotografia de 22 de julho de 2026. Contagens e próximos passos foram substituídos por `docs/ESTADO-ATUAL.md` e `docs/MIGRATIONS-RUNBOOK.md`.
+
 **Repositório:** ShadowShtr/mo-limpezas
 **Data:** 2026-07-22
 **Fontes fundidas:**
@@ -90,7 +92,7 @@ posterior repõe a versão do GitHub (sem fixes) → **o site anda para trás**.
 Versão original do `scripts/run-migrations.mjs`:
 
 ```js
-password: "@vitortmf36978",     // password de produção HARDCODED (no histórico git!)
+password: "[REDACTED]",         // segredo removido deste documento
 // re-executa TODAS as migrações em cada run, engolindo "already exists"
 // e aplica SEMPRE o seed.sql — que diz "NÃO executar em produção"
 ```
@@ -199,8 +201,8 @@ scripts/audit-reversoes.mjs            Diagnóstico read-only, 9 secções, exit
                                        deploy e sempre que "algo voltou atrás".
 scripts/run-migrations.mjs             REESCRITO: SUPABASE_DB_URL do env, tabela
                                        _migrations (só pendentes, em transação,
-                                       pára ao 1º erro), --baseline para bases
-                                       existentes, seed só com --seed em base vazia.
+                                       pára ao 1º erro). Processo posterior
+                                       substituído pelo runbook vigente.
 src/app/api/health/route.ts            Devolve version (commit) + branch.
 src/__tests__/reversao-guards.test.ts  12 testes-guarda (todos verdes): fontes
                                        únicas dos sheets, runner seguro, SW nunca
@@ -215,11 +217,8 @@ src/__tests__/reversao-guards.test.ts  12 testes-guarda (todos verdes): fontes
 ================================================================================
 FASE 0 — SEGURANÇA (fazer JÁ)
 ================================================================================
-1. RODAR a password do Postgres no dashboard do Supabase
-   (a antiga @vitortmf36978 está no histórico do GitHub).
-2. .env.local:
-   SUPABASE_DB_URL=postgres://...        (connection string nova)
-   AUDIT_APP_URL=https://<dominio-producao>
+1. Confirmar que qualquer credencial histórica exposta foi revogada.
+2. Validar variáveis sem as copiar para documentação.
 
 ================================================================================
 FASE 1 — PARAR A ALTERNÂNCIA DE VERSÕES (Camada 1)
@@ -228,7 +227,7 @@ FASE 1 — PARAR A ALTERNÂNCIA DE VERSÕES (Camada 1)
 4. git push origin master → publica os 8 fixes (fecha na prática as causas
    6-parcial e 7 em produção).
 5. NUNCA MAIS `vercel --prod` manual — canal único: deploy automático via push.
-6. Uma vez: node scripts/run-migrations.mjs --baseline
+6. Procedimento antigo removido. Usar exclusivamente `docs/MIGRATIONS-RUNBOOK.md`.
 
 ================================================================================
 FASE 2 — FECHAR OS MECANISMOS DE REVERSÃO NA APLICAÇÃO (Camada 2)

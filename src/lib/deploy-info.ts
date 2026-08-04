@@ -3,12 +3,7 @@
 // ambiente e versão) — usado por /api/health, /api/health/deep e pela página
 // de diagnóstico em /dashboard/sistema/diagnostico.
 //
-// CURRENT_MIGRATION_VERSION deve ser atualizado sempre que uma nova migration
-// numerada for adicionada a supabase/migrations/ — src/__tests__/deploy-info.test.ts
-// falha em CI se este valor divergir do ficheiro de maior número realmente
-// presente no repositório, para nunca ficar esquecido.
-export const CURRENT_MIGRATION_VERSION = "065";
-export const CURRENT_MIGRATION_FILE = "065_fix_domain_atomicity_outbox.sql";
+export { CURRENT_SCHEMA_BASELINE } from "@/lib/migration-policy";
 
 /**
  * Extrai só o identificador do projeto Supabase (o subdomínio) a partir de

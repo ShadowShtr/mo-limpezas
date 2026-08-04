@@ -1,5 +1,7 @@
 # Registo de Decisões — Sessão de Discussão
 
+> **ARQUIVO HISTÓRICO:** decisões posteriores podem tê-lo substituído.
+
 > Decisões tomadas na sessão de planeamento detalhado. Estas complementam e refinam os docs anteriores.
 
 ---

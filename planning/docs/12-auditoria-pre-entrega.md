@@ -1,5 +1,7 @@
 # Auditoria pre-entrega - 2026-06-16
 
+> **ARQUIVO HISTÓRICO:** comandos e estado de migrations desta data não são instruções atuais.
+
 ## Escopo
 
 Revisao geral antes de entregar o sistema para operacao com cerca de 40 colaboradores e 3 gestores.
@@ -33,4 +35,3 @@ Revisao geral antes de entregar o sistema para operacao com cerca de 40 colabora
 - `scripts/run-migrations.mjs`: variavel nao usada.
 - Tres avisos de `<img>` do Next.
 - Tres variaveis nao usadas em tarefas/demo.
-

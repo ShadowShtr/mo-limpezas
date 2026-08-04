@@ -1,5 +1,7 @@
 # Sistema de Design — Plataforma Escala
 
+> **ARQUIVO HISTÓRICO:** consulte os componentes e estilos atuais.
+
 > Duas referências visuais aprovadas:
 > - **Posnik** — layout limpo e moderno para páginas operacionais (calendário, CRUD, app mobile)
 > - **Analytics Dashboard** — layout denso com múltiplos gráficos para relatórios e dashboard financeiro

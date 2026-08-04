@@ -1,5 +1,7 @@
 # Incidentes de Producao
 
+> **REGISTO HISTÓRICO:** preserva incidentes e correções da época; não define o estado atual.
+
 ## 2026-06-16 - Relatorios de avaria nao eram enviados
 
 ### Sintoma

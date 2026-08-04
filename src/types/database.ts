@@ -189,8 +189,8 @@ export type Database = {
         Relationships: [];
       };
       company_change_events: {
-        Row: { id: string; company_id: string; sequence: number; mutation_id: string; domain: string; event_type: string; entity_ids: string[]; scopes: string[]; affected_from: string | null; affected_to: string | null; payload: Record<string, unknown>; created_at: string };
-        Insert: { company_id: string; mutation_id: string; domain: string; event_type: string; entity_ids?: string[]; scopes?: string[]; affected_from?: string | null; affected_to?: string | null; payload?: Record<string, unknown> };
+        Row: { id: string; company_id: string; sequence: number; mutation_id: string; domain: string; event_type: string; entity_ids: string[]; scopes: string[]; affected_range: string | null; payload: Record<string, unknown>; delivered_at: string | null; created_at: string };
+        Insert: { company_id: string; mutation_id: string; domain: string; event_type: string; entity_ids?: string[]; scopes?: string[]; affected_range?: string | null; payload?: Record<string, unknown>; delivered_at?: string | null };
         Update: Record<string, never>;
         Relationships: [];
       };

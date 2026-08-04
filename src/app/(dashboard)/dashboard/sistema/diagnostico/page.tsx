@@ -29,6 +29,7 @@ function CheckRow({ name, check }: { name: string; check: HealthCheck }) {
       <div>
         <p className="text-sm font-medium text-[var(--color-text-main)]">{CHECK_LABELS[name] ?? name}</p>
         {check.error && <p className="text-xs text-red-700 mt-0.5">{check.error}</p>}
+        {check.warning && <p className="text-xs text-amber-700 mt-0.5">{check.warning}</p>}
       </div>
       <div className="flex items-center gap-2 shrink-0">
         {typeof check.latencyMs === "number" && (
@@ -102,8 +103,10 @@ async function DiagnosticoBody() {
           <dd className="text-[var(--color-text-main)] font-mono">{report.deploy.branch ?? "—"}</dd>
           <dt className="text-[var(--color-text-muted)]">Ambiente</dt>
           <dd className="text-[var(--color-text-main)]">{report.deploy.env}</dd>
-          <dt className="text-[var(--color-text-muted)]">Migration esperada pelo código</dt>
-          <dd className="text-[var(--color-text-main)] font-mono">{report.deploy.migrationVersion}</dd>
+          <dt className="text-[var(--color-text-muted)]">Baseline aplicado esperado</dt>
+          <dd className="text-[var(--color-text-main)] font-mono">
+            {report.deploy.migrationBaseline} ({report.deploy.expectedAppliedMigrations} registos)
+          </dd>
           <dt className="text-[var(--color-text-muted)]">Projeto Supabase (ref)</dt>
           <dd className="text-[var(--color-text-main)] font-mono">{report.deploy.supabaseProjectRef ?? "—"}</dd>
         </dl>

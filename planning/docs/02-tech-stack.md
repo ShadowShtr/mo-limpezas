@@ -1,5 +1,7 @@
 # Stack Tecnológica — Decisões e Justificações
 
+> **ARQUIVO HISTÓRICO:** decisões iniciais; versões e serviços podem ter mudado.
+
 ## Visão Geral
 
 ```

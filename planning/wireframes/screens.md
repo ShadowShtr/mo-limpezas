@@ -1,5 +1,7 @@
 # Wireframes — Descrição dos Ecrãs Principais
 
+> **ARQUIVO HISTÓRICO:** descreve a proposta inicial, não necessariamente a interface atual.
+
 > Descrições textuais detalhadas dos ecrãs. Design visual será definido durante o desenvolvimento.
 > Paleta de cores: a definir com o user (sugestão: laranja/vermelho como ServiSync, ou cor da Mó Limpezas).
 

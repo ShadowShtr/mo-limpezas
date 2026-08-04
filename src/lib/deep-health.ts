@@ -1,10 +1,16 @@
 import { createAdminClient } from "@/lib/supabase/admin";
-import { CURRENT_MIGRATION_FILE, CURRENT_MIGRATION_VERSION, deployBranch, deployCommit, deployEnv, supabaseProjectRef } from "@/lib/deploy-info";
+import { deployBranch, deployCommit, deployEnv, supabaseProjectRef } from "@/lib/deploy-info";
+import {
+  CURRENT_SCHEMA_BASELINE,
+  EXPECTED_APPLIED_MIGRATION_COUNT,
+  evaluateMigrationLedger,
+} from "@/lib/migration-policy";
 
 export interface HealthCheck {
   ok: boolean;
   latencyMs?: number;
   error?: string;
+  warning?: string;
 }
 
 export interface DeepHealthReport {
@@ -14,7 +20,8 @@ export interface DeepHealthReport {
     commit: string;
     branch: string | null;
     env: string;
-    migrationVersion: string;
+    migrationBaseline: string;
+    expectedAppliedMigrations: number;
     supabaseProjectRef: string | null;
   };
   ts: string;
@@ -52,22 +59,21 @@ export async function getDeepHealthReport(): Promise<DeepHealthReport> {
   try {
     const { data, error } = await admin
       .from("_migrations")
-      .select("name")
-      .order("name", { ascending: false })
-      .limit(1)
-      .maybeSingle();
+      .select("name");
     if (error) {
       checks.migration = { ok: false, latencyMs: Date.now() - migStart, error: error.message };
     } else {
-      const appliedName = (data as { name?: string } | null)?.name ?? null;
-      const appliedVersion = appliedName?.slice(0, 3) ?? null;
-      const upToDate = appliedVersion === CURRENT_MIGRATION_VERSION;
+      const appliedNames = ((data ?? []) as Array<{ name: string }>).map((row) => row.name);
+      const ledger = evaluateMigrationLedger(appliedNames);
+      const details = [
+        ledger.missing.length > 0 ? `migrations em falta: ${ledger.missing.join(", ")}` : null,
+        ledger.appliedFrozenDrafts.length > 0 ? `rascunhos congelados registados: ${ledger.appliedFrozenDrafts.join(", ")}` : null,
+        ledger.unexpected.length > 0 ? `migrations desconhecidas: ${ledger.unexpected.join(", ")}` : null,
+      ].filter(Boolean);
       checks.migration = {
-        ok: upToDate,
+        ok: ledger.ok,
         latencyMs: Date.now() - migStart,
-        error: upToDate
-          ? undefined
-          : `Ledger real: ${appliedName ?? "nenhuma migration registada"} · código espera: ${CURRENT_MIGRATION_FILE}`,
+        error: ledger.ok ? undefined : details.join("; "),
       };
     }
   } catch (e) {
@@ -78,7 +84,14 @@ export async function getDeepHealthReport(): Promise<DeepHealthReport> {
   const outboxStart = Date.now();
   try {
     const { error } = await admin.from("company_change_events").select("id").limit(1);
-    checks.outbox = { ok: !error, latencyMs: Date.now() - outboxStart, error: error?.message };
+    checks.outbox = {
+      ok: !error,
+      latencyMs: Date.now() - outboxStart,
+      error: error?.message,
+      warning: error
+        ? undefined
+        : "Estrutura parcial presente; sincronização por outbox permanece desativada até reconciliação formal.",
+    };
   } catch (e) {
     checks.outbox = { ok: false, error: String(e) };
   }
@@ -117,7 +130,8 @@ export async function getDeepHealthReport(): Promise<DeepHealthReport> {
       commit: deployCommit(),
       branch: deployBranch(),
       env: deployEnv(),
-      migrationVersion: CURRENT_MIGRATION_VERSION,
+      migrationBaseline: CURRENT_SCHEMA_BASELINE,
+      expectedAppliedMigrations: EXPECTED_APPLIED_MIGRATION_COUNT,
       supabaseProjectRef: supabaseProjectRef(),
     },
     ts: new Date().toISOString(),
