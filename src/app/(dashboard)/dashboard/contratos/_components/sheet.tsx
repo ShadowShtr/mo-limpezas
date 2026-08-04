@@ -7,7 +7,7 @@ import { X, Loader2, Check, Users, ChevronDown, ChevronLeft, ChevronRight } from
 import { createContrato, updateContrato } from "@/app/actions/contratos";
 import { todayInLisbon } from "@/lib/lisbon-time";
 import { isValidIsoDateString } from "@/lib/utils";
-import { shiftToNextBusinessDay } from "@/lib/contract-occurrences";
+import { occurrencesFrom, type RecurrenceContract } from "@/domain/scheduling/recurrence-engine";
 import type { ScheduleDay } from "@/types/database";
 import type { ContratosTableRow } from "../page";
 import {
@@ -49,6 +49,11 @@ const FREQUENCY_OPTS = [
 
 // ─── Preview de ocorrências ──────────────────────────────────────────────────
 
+// Adaptador fino sobre o motor canónico (src/domain/scheduling) — só monta o
+// contrato mínimo que o motor precisa e devolve as datas para a etiqueta de
+// preview. Nenhuma regra de recorrência vive aqui (ver AGENTS.md regra 8).
+const PREVIEW_SCHEDULE: ScheduleDay[] = [{ day: "all", start_time: "00:00", duration_min: 0, team_id: null }];
+
 function calcOccurrences(
   frequency: string,
   weekdays: number[],
@@ -56,68 +61,23 @@ function calcOccurrences(
   intervalDays: number,
   count = 12,
 ): Date[] {
-  if (!startsOn) return [];
-  const results: Date[] = [];
+  if (!startsOn || !isValidIsoDateString(startsOn)) return [];
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   const start = new Date(startsOn + "T00:00:00");
-  const cursor = start >= today ? new Date(start) : new Date(today);
+  const from = start >= today ? start : today;
 
-  let iter = 0;
-  if (frequency === "daily") {
-    while (results.length < count && iter < 400) {
-      iter++;
-      const dow = cursor.getDay();
-      if (dow !== 0 && dow !== 6) results.push(new Date(cursor));
-      cursor.setDate(cursor.getDate() + 1);
-    }
-    return results;
-  }
+  const contract: RecurrenceContract = {
+    frequency,
+    weekdays: weekdays.length > 0 ? weekdays : null,
+    interval_days: intervalDays,
+    schedule_days: PREVIEW_SCHEDULE,
+    starts_on: startsOn,
+    ends_on: null,
+    excluded_dates: [],
+  };
 
-  const CADENCE_WEEKS: Record<string, number> = { weekly: 1, biweekly: 2, triweekly: 3 };
-  if (Object.hasOwn(CADENCE_WEEKS, frequency)) {
-    if (weekdays.length === 0) return [];
-    const cadence = CADENCE_WEEKS[frequency];
-    const startWeek = Math.floor((start.getTime()) / (7 * 24 * 3600 * 1000));
-    while (results.length < count && iter < 400) {
-      iter++;
-      const dow = cursor.getDay();
-      const thisWeek = Math.floor((cursor.getTime()) / (7 * 24 * 3600 * 1000));
-      const isCorrectWeek = cadence === 1 || (thisWeek - startWeek) % cadence === 0;
-      if (isCorrectWeek && weekdays.includes(dow)) {
-        results.push(new Date(cursor));
-      }
-      cursor.setDate(cursor.getDate() + 1);
-    }
-    return results;
-  }
-
-  if (frequency === "monthly") {
-    const d = new Date(cursor);
-    while (results.length < count && iter < 36) {
-      iter++;
-      results.push(shiftToNextBusinessDay(d));
-      d.setMonth(d.getMonth() + 1);
-    }
-    return results;
-  }
-
-  if (frequency === "custom") {
-    const step = Math.max(1, intervalDays);
-    const used = new Set<string>();
-    while (results.length < count && iter < 400) {
-      iter++;
-      if (cursor >= start) {
-        const shifted = shiftToNextBusinessDay(cursor);
-        const key = shifted.toDateString();
-        if (!used.has(key)) { used.add(key); results.push(shifted); }
-      }
-      cursor.setDate(cursor.getDate() + step);
-    }
-    return results;
-  }
-
-  return results;
+  return occurrencesFrom(contract, from, count).map((o) => o.date);
 }
 
 function OccurrencePreview({
