@@ -131,7 +131,7 @@ migration (68 migrations ativas) — o diagnóstico
 (`/dashboard/sistema/diagnostico`) passa a reportar o ledger como
 alinhado com o código outra vez.
 
-## Migration 065 (nova) — ensaiada, ainda não aplicada
+## Migration 065 (nova) — APLICADA em produção (2026-08-04 16:47 UTC)
 
 `supabase/migrations/065_revoke_public_grants_outbox_tables.sql` — fecha
 o achado grave descrito acima: `REVOKE ALL` de `anon`/`authenticated` em
@@ -145,9 +145,13 @@ Ensaiada com `node scripts/rehearse-migration.mjs` (generalizado nesta
 etapa para também capturar grants de tabela, não só de função) —
 sucesso, dentro da transação `authenticated` fica só com `SELECT` em
 `company_change_events` e nada em `domain_mutations`, `ROLLBACK`
-confirmado eficaz, fingerprint idêntico antes/depois. Já adicionada a
-`activeMigrations` (69 migrations ativas). **Falta autorização explícita
-para `--apply`.**
+confirmado eficaz, fingerprint idêntico antes/depois. Com autorização
+explícita do dono, aplicada de verdade via `--apply`. Verificado por
+leitura direta pós-aplicação: `authenticated` tem exatamente `SELECT`
+em `company_change_events`, nada em `domain_mutations`, `anon` sem
+nenhum privilégio em nenhuma das duas — o `TRUNCATE` aberto está
+fechado. `activeMigrations` já tinha esta migration (69 migrations
+ativas).
 
 ## PITR/backup — confirmado pelo dono (2026-08-04)
 
