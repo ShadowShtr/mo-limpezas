@@ -92,7 +92,7 @@ O diagnóstico deve apresentar:
 - Lacuna corrigida: `scripts/backup-all.mjs` não incluía `building_cards`
   nem `data_history` — corrigido, backup novo já cobre as duas.
 
-## Migration 064 (nova) — ensaiada, ainda não aplicada
+## Migration 064 (nova) — APLICADA em produção (2026-08-04 16:33 UTC)
 
 `supabase/migrations/064_revoke_public_grants_atomic_functions.sql` — só
 `REVOKE EXECUTE` de `anon`/`authenticated`/`PUBLIC` em
@@ -104,13 +104,17 @@ aplicação.
 
 Ensaiada com `node scripts/rehearse-migration.mjs` (`BEGIN` → aplica →
 verifica 0 grants residuais → `ROLLBACK`) diretamente na base real:
-sucesso, fingerprint idêntico antes/depois. **Ainda não aplicada de
-verdade** — falta autorização explícita para `node scripts/run-migrations.mjs --apply`.
+sucesso, fingerprint idêntico antes/depois. Com autorização explícita do
+dono, aplicada de verdade via `node scripts/run-migrations.mjs --apply`
+(`MIGRATION_CONFIRM_PROJECT_REF` confirmado contra o projeto). Verificado
+por leitura direta pós-aplicação: 0 grants residuais a
+anon/authenticated/PUBLIC nas 3 funções, registo correto em
+`public._migrations` com checksum.
 
-Já adicionada a `activeMigrations` em `supabase/migration-policy.json`
-(68 migrations ativas agora) — o diagnóstico (`/dashboard/sistema/diagnostico`)
-passa a reportar corretamente esta migration como pendente até ser
-aplicada de facto.
+`activeMigrations` em `supabase/migration-policy.json` já tinha esta
+migration (68 migrations ativas) — o diagnóstico
+(`/dashboard/sistema/diagnostico`) passa a reportar o ledger como
+alinhado com o código outra vez.
 
 ## Pendente — só o dono pode confirmar
 
