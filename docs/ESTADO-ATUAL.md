@@ -153,6 +153,37 @@ nenhum privilégio em nenhuma das duas — o `TRUNCATE` aberto está
 fechado. `activeMigrations` já tinha esta migration (69 migrations
 ativas).
 
+## Migration 066 (nova) — ensaiada com sucesso total (20/20), ainda não aplicada
+
+`supabase/migrations/066_outbox_foundation.sql` — fundação do outbox:
+`company_sync_state` (sequência atómica por empresa via `SELECT ... FOR
+UPDATE`), `domain_mutations` idempotente (`operation`/`entity_id`/
+`request_hash`/`completed_at`, `find_or_conflict_domain_mutation`,
+`complete_domain_mutation`, `lock_domain_mutation`), `company_change_events`
+sem `IDENTITY` global (sequência por empresa), `affected_from`/`affected_to`
+com CHECK de coerência, `record_company_change_event` reescrita para nunca
+atualizar um evento existente (append-only), e publicação Realtime só
+adicionada depois de tudo o resto. Não toca em nenhuma RPC de negócio.
+
+Ensaiada com `node scripts/rehearse-066-outbox-foundation.mjs` (novo,
+específico desta migration) — **20/20 verificações**, incluindo um teste
+EMPÍRICO de isolamento (não só leitura da policy): cria 2 empresas e 2
+utilizadores sintéticos dentro da própria transação, assume a role
+`authenticated` com `request.jwt.claim.sub` de cada um (exatamente como o
+PostgREST faz), e confirma que o utilizador da empresa A nunca vê o
+evento da empresa B e vice-versa; confirma que `anon` recebe permission
+denied; confirma que `authenticated` nem consegue `SELECT` em
+`domain_mutations`. Tudo dentro de `BEGIN...ROLLBACK` — nada persistido,
+fingerprint idêntico antes/depois.
+
+Detalhe completo, riscos e limitação assumida (concorrência entre duas
+ligações reais não pôde ser testada pré-aplicação, só a correção lógica
+do `SELECT...FOR UPDATE`) em
+`docs/atomicidade-audit/066-outbox-foundation-review.md`.
+
+**Ainda não aplicada — falta autorização explícita para `--apply`.**
+`activeMigrations` já tem esta migration (70 migrations ativas).
+
 ## PITR/backup — confirmado pelo dono (2026-08-04)
 
 Todos os projetos Supabase desta conta estão no plano **Free**: sem PITR,
