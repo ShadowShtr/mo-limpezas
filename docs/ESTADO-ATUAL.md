@@ -184,6 +184,46 @@ do `SELECT...FOR UPDATE`) em
 **Ainda não aplicada — falta autorização explícita para `--apply`.**
 `activeMigrations` já tem esta migration (70 migrations ativas).
 
+## Portão de autorização da 066 — condições do dono (2026-08-04)
+
+Autorização de aplicação em produção **negada por agora**. Condições
+antes de reconsiderar:
+
+1. ✅ Branch publicada em `origin/fix/atomic-contract-calendar-sync` para
+   revisão independente do commit exato.
+2. ✅ `next_company_sequence` reexaminada — já usa o padrão seguro pedido
+   (`INSERT ... ON CONFLICT DO NOTHING` antes do `SELECT ... FOR UPDATE`),
+   não a versão racy. Falta prova empírica com 2 ligações reais
+   simultâneas (só possível com staging — DDL não confirmado não é
+   visível entre ligações diferentes).
+3. ✅ Investigação do incidente do `TRUNCATE` concluída — sem evidência de
+   exploração passada; achado muito maior encontrado (grants perigosos em
+   quase todo o schema público, não só as 2 tabelas do outbox). Ver
+   `docs/atomicidade-audit/incidente-truncate-2026-08-04.md`.
+4. ✅ SQL de reversão da 066 escrito e **testado** (aplicar 066 → aplicar
+   rollback → fingerprint idêntico ao original, dentro do mesmo tipo de
+   ensaio). Ver `docs/atomicidade-audit/066-rollback.sql`.
+5. ⏳ **Bloqueado — precisa de projeto Supabase de staging/descartável**
+   (não consigo criar um sozinho, sem acesso ao painel/API de gestão):
+   teste de concorrência real (2 ligações simultâneas, incl. empresa sem
+   linha em `company_sync_state`), teste de Realtime real (2 clientes
+   autenticados, reconexão, perda/duplicação de eventos).
+6. ⏳ Snapshot/backup imediatamente antes da aplicação — por fazer no
+   momento da aplicação real, não antes.
+
+## Achado adicional — grants perigosos em quase todo o schema público
+
+Fora do escopo da 066: **528 grants** de `TRUNCATE`/`DELETE`/`INSERT`/
+`UPDATE`/`TRIGGER`/`REFERENCES` a `anon`/`authenticated` em praticamente
+todas as tabelas e views do schema `public` (não só as 2 do outbox).
+Mitigado na prática porque `anon`/`authenticated` não têm `LOGIN` e a API
+pública não expõe `TRUNCATE` — mas é uma violação real do princípio de
+menor privilégio, sistémica, não um erro isolado desta ronda de
+migrations. Recomendado como próxima entrega própria e separada (matriz
+RLS completa + revogação geral de grants), depois de resolvida a decisão
+sobre a 066. Detalhe completo em
+`docs/atomicidade-audit/incidente-truncate-2026-08-04.md`.
+
 ## PITR/backup — confirmado pelo dono (2026-08-04)
 
 Todos os projetos Supabase desta conta estão no plano **Free**: sem PITR,
