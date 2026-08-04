@@ -1,0 +1,184 @@
+{
+  "manifest_total": 5820,
+  "errors": {},
+  "files": {
+    "companies": {
+      "expected": 1,
+      "count": 1,
+      "ok": true
+    },
+    "company_settings": {
+      "expected": 1,
+      "count": 1,
+      "ok": true
+    },
+    "profiles": {
+      "expected": 30,
+      "count": 30,
+      "ok": true
+    },
+    "clients": {
+      "expected": 937,
+      "count": 937,
+      "ok": true
+    },
+    "locations": {
+      "expected": 936,
+      "count": 936,
+      "ok": true
+    },
+    "teams": {
+      "expected": 16,
+      "count": 16,
+      "ok": true
+    },
+    "team_members": {
+      "expected": 31,
+      "count": 31,
+      "ok": true
+    },
+    "vehicles": {
+      "expected": 0,
+      "count": 0,
+      "ok": true
+    },
+    "vehicle_allocations": {
+      "expected": 0,
+      "count": 0,
+      "ok": true
+    },
+    "collaborator_ride_assignments": {
+      "expected": 1,
+      "count": 1,
+      "ok": true
+    },
+    "contracts": {
+      "expected": 145,
+      "count": 145,
+      "ok": true
+    },
+    "services": {
+      "expected": 1509,
+      "count": 1509,
+      "ok": true
+    },
+    "service_reinforcements": {
+      "expected": 0,
+      "count": 0,
+      "ok": true
+    },
+    "service_price_audit": {
+      "expected": 0,
+      "count": 0,
+      "ok": true
+    },
+    "service_photos": {
+      "expected": 0,
+      "count": 0,
+      "ok": true
+    },
+    "timesheets": {
+      "expected": 0,
+      "count": 0,
+      "ok": true
+    },
+    "daily_clocks": {
+      "expected": 0,
+      "count": 0,
+      "ok": true
+    },
+    "absences": {
+      "expected": 0,
+      "count": 0,
+      "ok": true
+    },
+    "vacation_requests": {
+      "expected": 0,
+      "count": 0,
+      "ok": true
+    },
+    "management_tasks": {
+      "expected": 3,
+      "count": 3,
+      "ok": true
+    },
+    "collaborator_documents": {
+      "expected": 0,
+      "count": 0,
+      "ok": true
+    },
+    "bank_accounts": {
+      "expected": 0,
+      "count": 0,
+      "ok": true
+    },
+    "bank_transactions": {
+      "expected": 336,
+      "count": 336,
+      "ok": true
+    },
+    "bank_statement_imports": {
+      "expected": 1,
+      "count": 1,
+      "ok": true
+    },
+    "bank_reconciliation_matches": {
+      "expected": 11,
+      "count": 11,
+      "ok": true
+    },
+    "cash_flow_entries": {
+      "expected": 440,
+      "count": 440,
+      "ok": true
+    },
+    "fixed_variable_payments": {
+      "expected": 93,
+      "count": 93,
+      "ok": true
+    },
+    "payroll_records": {
+      "expected": 60,
+      "count": 60,
+      "ok": true
+    },
+    "invoices": {
+      "expected": 11,
+      "count": 11,
+      "ok": true
+    },
+    "invoice_items": {
+      "expected": 11,
+      "count": 11,
+      "ok": true
+    },
+    "client_notifications": {
+      "expected": 0,
+      "count": 0,
+      "ok": true
+    },
+    "notifications": {
+      "expected": 38,
+      "count": 38,
+      "ok": true
+    },
+    "push_subscriptions": {
+      "expected": 2,
+      "count": 2,
+      "ok": true
+    },
+    "audit_logs": {
+      "expected": 1202,
+      "count": 1202,
+      "ok": true
+    },
+    "background_jobs": {
+      "expected": 5,
+      "count": 5,
+      "ok": true
+    }
+  },
+  "parse_errors": [],
+  "parsed_total": 5820,
+  "counts_match": true
+}

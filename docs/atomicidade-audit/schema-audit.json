@@ -1,0 +1,1065 @@
+{
+  "columns_revision_override": [
+    {
+      "table_name": "clients",
+      "column_name": "revision",
+      "data_type": "integer",
+      "is_nullable": "NO",
+      "column_default": "1"
+    },
+    {
+      "table_name": "contracts",
+      "column_name": "revision",
+      "data_type": "integer",
+      "is_nullable": "NO",
+      "column_default": "1"
+    },
+    {
+      "table_name": "invoice_items",
+      "column_name": "revision",
+      "data_type": "integer",
+      "is_nullable": "NO",
+      "column_default": "1"
+    },
+    {
+      "table_name": "invoices",
+      "column_name": "revision",
+      "data_type": "integer",
+      "is_nullable": "NO",
+      "column_default": "1"
+    },
+    {
+      "table_name": "locations",
+      "column_name": "revision",
+      "data_type": "integer",
+      "is_nullable": "NO",
+      "column_default": "1"
+    },
+    {
+      "table_name": "services",
+      "column_name": "override_fields",
+      "data_type": "ARRAY",
+      "is_nullable": "NO",
+      "column_default": "'{}'::text[]"
+    },
+    {
+      "table_name": "services",
+      "column_name": "revision",
+      "data_type": "integer",
+      "is_nullable": "NO",
+      "column_default": "1"
+    },
+    {
+      "table_name": "team_members",
+      "column_name": "revision",
+      "data_type": "integer",
+      "is_nullable": "NO",
+      "column_default": "1"
+    },
+    {
+      "table_name": "teams",
+      "column_name": "revision",
+      "data_type": "integer",
+      "is_nullable": "NO",
+      "column_default": "1"
+    }
+  ],
+  "revision_triggers": [
+    {
+      "event_object_table": "clients",
+      "trigger_name": "trg_clients_revision",
+      "action_timing": "BEFORE",
+      "event_manipulation": "UPDATE",
+      "action_statement": "EXECUTE FUNCTION fn_increment_revision()"
+    },
+    {
+      "event_object_table": "contracts",
+      "trigger_name": "trg_contracts_revision",
+      "action_timing": "BEFORE",
+      "event_manipulation": "UPDATE",
+      "action_statement": "EXECUTE FUNCTION fn_increment_revision()"
+    },
+    {
+      "event_object_table": "invoice_items",
+      "trigger_name": "trg_invoice_items_revision",
+      "action_timing": "BEFORE",
+      "event_manipulation": "UPDATE",
+      "action_statement": "EXECUTE FUNCTION fn_increment_revision()"
+    },
+    {
+      "event_object_table": "invoices",
+      "trigger_name": "trg_invoices_revision",
+      "action_timing": "BEFORE",
+      "event_manipulation": "UPDATE",
+      "action_statement": "EXECUTE FUNCTION fn_increment_revision()"
+    },
+    {
+      "event_object_table": "locations",
+      "trigger_name": "trg_locations_revision",
+      "action_timing": "BEFORE",
+      "event_manipulation": "UPDATE",
+      "action_statement": "EXECUTE FUNCTION fn_increment_revision()"
+    },
+    {
+      "event_object_table": "services",
+      "trigger_name": "trg_services_revision",
+      "action_timing": "BEFORE",
+      "event_manipulation": "UPDATE",
+      "action_statement": "EXECUTE FUNCTION fn_increment_revision()"
+    },
+    {
+      "event_object_table": "team_members",
+      "trigger_name": "trg_team_members_revision",
+      "action_timing": "BEFORE",
+      "event_manipulation": "UPDATE",
+      "action_statement": "EXECUTE FUNCTION fn_increment_revision()"
+    },
+    {
+      "event_object_table": "teams",
+      "trigger_name": "trg_teams_revision",
+      "action_timing": "BEFORE",
+      "event_manipulation": "UPDATE",
+      "action_statement": "EXECUTE FUNCTION fn_increment_revision()"
+    }
+  ],
+  "outbox_schema": [
+    {
+      "table_name": "company_change_events",
+      "column_name": "id",
+      "data_type": "uuid",
+      "is_nullable": "NO",
+      "column_default": "gen_random_uuid()"
+    },
+    {
+      "table_name": "company_change_events",
+      "column_name": "company_id",
+      "data_type": "uuid",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "company_change_events",
+      "column_name": "sequence",
+      "data_type": "bigint",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "company_change_events",
+      "column_name": "mutation_id",
+      "data_type": "uuid",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "company_change_events",
+      "column_name": "domain",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "company_change_events",
+      "column_name": "event_type",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "company_change_events",
+      "column_name": "entity_ids",
+      "data_type": "ARRAY",
+      "is_nullable": "NO",
+      "column_default": "'{}'::uuid[]"
+    },
+    {
+      "table_name": "company_change_events",
+      "column_name": "scopes",
+      "data_type": "ARRAY",
+      "is_nullable": "NO",
+      "column_default": "'{}'::text[]"
+    },
+    {
+      "table_name": "company_change_events",
+      "column_name": "affected_range",
+      "data_type": "tstzrange",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "company_change_events",
+      "column_name": "payload",
+      "data_type": "jsonb",
+      "is_nullable": "NO",
+      "column_default": "'{}'::jsonb"
+    },
+    {
+      "table_name": "company_change_events",
+      "column_name": "delivered_at",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "company_change_events",
+      "column_name": "created_at",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "NO",
+      "column_default": "now()"
+    },
+    {
+      "table_name": "domain_mutations",
+      "column_name": "id",
+      "data_type": "uuid",
+      "is_nullable": "NO",
+      "column_default": "gen_random_uuid()"
+    },
+    {
+      "table_name": "domain_mutations",
+      "column_name": "company_id",
+      "data_type": "uuid",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "domain_mutations",
+      "column_name": "mutation_id",
+      "data_type": "uuid",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "domain_mutations",
+      "column_name": "domain",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "domain_mutations",
+      "column_name": "status",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "domain_mutations",
+      "column_name": "result",
+      "data_type": "jsonb",
+      "is_nullable": "NO",
+      "column_default": "'{}'::jsonb"
+    },
+    {
+      "table_name": "domain_mutations",
+      "column_name": "created_at",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "NO",
+      "column_default": "now()"
+    }
+  ],
+  "indexes": [
+    {
+      "tablename": "cash_flow_entries",
+      "indexname": "cash_flow_entries_pkey",
+      "indexdef": "CREATE UNIQUE INDEX cash_flow_entries_pkey ON public.cash_flow_entries USING btree (id)"
+    },
+    {
+      "tablename": "cash_flow_entries",
+      "indexname": "cash_flow_entries_reference_unique",
+      "indexdef": "CREATE UNIQUE INDEX cash_flow_entries_reference_unique ON public.cash_flow_entries USING btree (company_id, reference_type, reference_id) WHERE ((reference_type IS NOT NULL) AND (reference_id IS NOT NULL))"
+    },
+    {
+      "tablename": "cash_flow_entries",
+      "indexname": "idx_cash_flow_company_date",
+      "indexdef": "CREATE INDEX idx_cash_flow_company_date ON public.cash_flow_entries USING btree (company_id, date DESC)"
+    },
+    {
+      "tablename": "company_change_events",
+      "indexname": "company_change_events_company_id_mutation_id_domain_event_t_key",
+      "indexdef": "CREATE UNIQUE INDEX company_change_events_company_id_mutation_id_domain_event_t_key ON public.company_change_events USING btree (company_id, mutation_id, domain, event_type)"
+    },
+    {
+      "tablename": "company_change_events",
+      "indexname": "company_change_events_company_id_sequence_key",
+      "indexdef": "CREATE UNIQUE INDEX company_change_events_company_id_sequence_key ON public.company_change_events USING btree (company_id, sequence)"
+    },
+    {
+      "tablename": "company_change_events",
+      "indexname": "company_change_events_pkey",
+      "indexdef": "CREATE UNIQUE INDEX company_change_events_pkey ON public.company_change_events USING btree (id)"
+    },
+    {
+      "tablename": "company_change_events",
+      "indexname": "idx_company_change_events_pending",
+      "indexdef": "CREATE INDEX idx_company_change_events_pending ON public.company_change_events USING btree (company_id, sequence) WHERE (delivered_at IS NULL)"
+    },
+    {
+      "tablename": "domain_mutations",
+      "indexname": "domain_mutations_company_id_mutation_id_key",
+      "indexdef": "CREATE UNIQUE INDEX domain_mutations_company_id_mutation_id_key ON public.domain_mutations USING btree (company_id, mutation_id)"
+    },
+    {
+      "tablename": "domain_mutations",
+      "indexname": "domain_mutations_pkey",
+      "indexdef": "CREATE UNIQUE INDEX domain_mutations_pkey ON public.domain_mutations USING btree (id)"
+    },
+    {
+      "tablename": "services",
+      "indexname": "idx_services_company_date",
+      "indexdef": "CREATE INDEX idx_services_company_date ON public.services USING btree (company_id, scheduled_start)"
+    },
+    {
+      "tablename": "services",
+      "indexname": "idx_services_company_scheduled",
+      "indexdef": "CREATE INDEX idx_services_company_scheduled ON public.services USING btree (company_id, scheduled_start) WHERE (status <> ALL (ARRAY['cancelado'::text, 'concluido'::text]))"
+    },
+    {
+      "tablename": "services",
+      "indexname": "idx_services_company_status_scheduled",
+      "indexdef": "CREATE INDEX idx_services_company_status_scheduled ON public.services USING btree (company_id, status, scheduled_start)"
+    },
+    {
+      "tablename": "services",
+      "indexname": "idx_services_company_team_scheduled",
+      "indexdef": "CREATE INDEX idx_services_company_team_scheduled ON public.services USING btree (company_id, team_id, scheduled_start)"
+    },
+    {
+      "tablename": "services",
+      "indexname": "idx_services_contract",
+      "indexdef": "CREATE INDEX idx_services_contract ON public.services USING btree (contract_id)"
+    },
+    {
+      "tablename": "services",
+      "indexname": "idx_services_location",
+      "indexdef": "CREATE INDEX idx_services_location ON public.services USING btree (location_id)"
+    },
+    {
+      "tablename": "services",
+      "indexname": "idx_services_payment_pending",
+      "indexdef": "CREATE INDEX idx_services_payment_pending ON public.services USING btree (company_id, payment_status, scheduled_start)"
+    },
+    {
+      "tablename": "services",
+      "indexname": "idx_services_status",
+      "indexdef": "CREATE INDEX idx_services_status ON public.services USING btree (company_id, status)"
+    },
+    {
+      "tablename": "services",
+      "indexname": "idx_services_team",
+      "indexdef": "CREATE INDEX idx_services_team ON public.services USING btree (team_id)"
+    },
+    {
+      "tablename": "services",
+      "indexname": "services_company_ref_unique",
+      "indexdef": "CREATE UNIQUE INDEX services_company_ref_unique ON public.services USING btree (company_id, reference_number)"
+    },
+    {
+      "tablename": "services",
+      "indexname": "services_pkey",
+      "indexdef": "CREATE UNIQUE INDEX services_pkey ON public.services USING btree (id)"
+    }
+  ],
+  "functions_meta": [
+    {
+      "proname": "delete_client_atomic",
+      "arguments": "p_client_id uuid, p_company_id uuid, p_actor uuid, p_mutation_id uuid, p_expected_revision integer",
+      "security_definer": true,
+      "proconfig": [
+        "search_path=public"
+      ],
+      "owner": "postgres"
+    },
+    {
+      "proname": "fn_increment_revision",
+      "arguments": "",
+      "security_definer": false,
+      "proconfig": null,
+      "owner": "postgres"
+    },
+    {
+      "proname": "record_company_change_event",
+      "arguments": "p_company_id uuid, p_mutation_id uuid, p_domain text, p_event_type text, p_entity_ids uuid[], p_scopes text[], p_affected_range tstzrange, p_payload jsonb",
+      "security_definer": true,
+      "proconfig": [
+        "search_path=public"
+      ],
+      "owner": "postgres"
+    },
+    {
+      "proname": "set_invoice_status_atomic",
+      "arguments": "p_invoice_id uuid, p_company_id uuid, p_actor uuid, p_status text, p_payment_method text, p_mutation_id uuid, p_expected_revision integer",
+      "security_definer": true,
+      "proconfig": [
+        "search_path=public"
+      ],
+      "owner": "postgres"
+    }
+  ],
+  "grants": [
+    {
+      "routine_name": "delete_client_atomic",
+      "grantee": "postgres",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "delete_client_atomic",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "record_company_change_event",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "record_company_change_event",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "record_company_change_event",
+      "grantee": "postgres",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "record_company_change_event",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "set_invoice_status_atomic",
+      "grantee": "postgres",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "set_invoice_status_atomic",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    }
+  ],
+  "policies": [
+    {
+      "schemaname": "public",
+      "tablename": "company_change_events",
+      "policyname": "managers see company change events",
+      "roles": "{public}",
+      "cmd": "SELECT",
+      "qual": "((company_id = ( SELECT profiles.company_id\n   FROM profiles\n  WHERE (profiles.id = auth.uid()))) AND (( SELECT profiles.role\n   FROM profiles\n  WHERE (profiles.id = auth.uid())) = ANY (ARRAY['admin'::text, 'gestor'::text])))",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "domain_mutations",
+      "policyname": "service role domain mutations",
+      "roles": "{public}",
+      "cmd": "ALL",
+      "qual": "false",
+      "with_check": "false"
+    }
+  ],
+  "realtime_publication": [
+    {
+      "pubname": "supabase_realtime",
+      "schemaname": "public",
+      "tablename": "services"
+    }
+  ],
+  "outbox_count": [
+    {
+      "count": 0
+    }
+  ],
+  "mutations_count": [
+    {
+      "count": 0
+    }
+  ],
+  "outbox_sample_safe": [],
+  "schema_migrations": [],
+  "local_migrations": [
+    {
+      "name": "001_companies.sql",
+      "checksum": "1327a0cf37f95acad08604eba3faed34020e3edc7a717132978ea869397e3901",
+      "applied_at": "2026-07-23T10:14:10.229Z"
+    },
+    {
+      "name": "002_profiles.sql",
+      "checksum": "56ddec368e1848a3ec87b4b33d0a54bfb83c197b80ff4be4291fa3db637682ab",
+      "applied_at": "2026-07-23T10:14:10.276Z"
+    },
+    {
+      "name": "003_clients_locations.sql",
+      "checksum": "bf8c04b5300b6433f5c400a9d8f795c164d465d492905f4645078ce447825be3",
+      "applied_at": "2026-07-23T10:14:10.323Z"
+    },
+    {
+      "name": "004_teams.sql",
+      "checksum": "65d61185df00b85585010db9cf54347770c27d261a6791aca1d626c70ed75a90",
+      "applied_at": "2026-07-23T10:14:10.369Z"
+    },
+    {
+      "name": "005_contracts.sql",
+      "checksum": "3cde109bf35958edcf78069ec5adbc2b179e37635c1d33c374370d5d09c61fd4",
+      "applied_at": "2026-07-23T10:14:10.415Z"
+    },
+    {
+      "name": "006_services.sql",
+      "checksum": "26b51d11211bf101eb1560b9b6b0b392c169ba9dcefa0662638ec3ca2f64c721",
+      "applied_at": "2026-07-23T10:14:10.461Z"
+    },
+    {
+      "name": "007_timesheets_absences.sql",
+      "checksum": "d4ac43949f3e83e858156a462bf6bcea9d14d622f50cb439a918b6062f334f46",
+      "applied_at": "2026-07-23T10:14:10.507Z"
+    },
+    {
+      "name": "008_financial.sql",
+      "checksum": "df4108037c3cd00e29e3856d2450e6095affdae9bec10323ebf139ceefe915cf",
+      "applied_at": "2026-07-23T10:14:10.553Z"
+    },
+    {
+      "name": "009_notifications.sql",
+      "checksum": "b911886aed231d22e8777b8ac7c85f28108b7a97fa57db7525b54ba99dac571f",
+      "applied_at": "2026-07-23T10:14:10.597Z"
+    },
+    {
+      "name": "010_views.sql",
+      "checksum": "47466e22c7186f228b1c522557d3c2c118d9b5dd1049c904b5bbacedb70c2082",
+      "applied_at": "2026-07-23T10:14:10.643Z"
+    },
+    {
+      "name": "011_conflict_detection.sql",
+      "checksum": "730081f4302559fb65514df6bc49a03ca974cc44e36adf20831f55aeded029a0",
+      "applied_at": "2026-07-23T10:14:10.686Z"
+    },
+    {
+      "name": "012_teams_vehicle.sql",
+      "checksum": "43785a3573f923a5543fcc0ad0c64fcc5a8ba2a3017da601786cfc00e31a822d",
+      "applied_at": "2026-07-23T10:14:10.729Z"
+    },
+    {
+      "name": "013_client_notifications.sql",
+      "checksum": "b64b69c094dea55d8b6c8bd826d1893cf68c651b5d46b5492c1a790162762a78",
+      "applied_at": "2026-07-23T10:14:10.773Z"
+    },
+    {
+      "name": "014_fix_rls_recursion.sql",
+      "checksum": "a34e8fa3e6e9dd2e071f023690b2be30344b18efd3e358e76ccc487f21eceeb4",
+      "applied_at": "2026-07-23T10:14:10.818Z"
+    },
+    {
+      "name": "015_fix_trigger_resilient.sql",
+      "checksum": "63c580badb8ae3bfcced99b5b8ff17d5dcda75e99b8e46857a3c4423a582c38c",
+      "applied_at": "2026-07-23T10:14:10.864Z"
+    },
+    {
+      "name": "016_vehicles.sql",
+      "checksum": "50fee2a5a97de38319e3f082749299abdad262cde65debf181139ecb6edf73b6",
+      "applied_at": "2026-07-23T10:14:10.910Z"
+    },
+    {
+      "name": "017_fix_contracts_rls.sql",
+      "checksum": "6d33c39323e6725bdf080ed2ad08843a038545ef89ab4445928e934f6d9d445c",
+      "applied_at": "2026-07-23T10:14:10.957Z"
+    },
+    {
+      "name": "018_fix_services_rls_recursion.sql",
+      "checksum": "36ed92e01f2b0f843f479a2a6c163cf69b7129405e332e92e55eb6aa5e9ff7d2",
+      "applied_at": "2026-07-23T10:14:11.002Z"
+    },
+    {
+      "name": "019_cancellation_fields.sql",
+      "checksum": "ca51216eb1eb0ec78add8009023c9702a7eb18f3163b2a18917bc6a19bceeb0c",
+      "applied_at": "2026-07-23T10:14:11.047Z"
+    },
+    {
+      "name": "020_services_full_client_phone.sql",
+      "checksum": "5557fe9b6e64554e7419e6ab8ba5edcf22d2bbc5ec8c3b7b993ab891a385888d",
+      "applied_at": "2026-07-23T10:14:11.090Z"
+    },
+    {
+      "name": "021_documents_enhanced.sql",
+      "checksum": "828e92d507f3e5dfc1538f2d6fa8d136e662d23cc8dd4651ea4a821fd88b42da",
+      "applied_at": "2026-07-23T10:14:11.135Z"
+    },
+    {
+      "name": "022_storage_bucket_collaborator_documents.sql",
+      "checksum": "63f34214405a7ae2f5423d4c903e07993eac02eb4117a2aef7328c7bbf7ad5e1",
+      "applied_at": "2026-07-23T10:14:11.179Z"
+    },
+    {
+      "name": "023_fix_collaborator_documents_upload.sql",
+      "checksum": "e4881a669b801c5f3b670be7ecf445e3839c533a63064717050d7b31590a43af",
+      "applied_at": "2026-07-23T10:14:11.222Z"
+    },
+    {
+      "name": "024_cash_flow_reference_integrity.sql",
+      "checksum": "43ae916aff6630df2cd1875cf0a409cf0a095dca7236f082bf379251842c29b2",
+      "applied_at": "2026-07-23T10:14:11.264Z"
+    },
+    {
+      "name": "025_timesheet_hardening.sql",
+      "checksum": "6fbdf487c37e73fb4a26be9e4d30a0d47219c1a89caadc6dd69e439ca6962924",
+      "applied_at": "2026-07-23T10:14:11.309Z"
+    },
+    {
+      "name": "026_location_key_fields.sql",
+      "checksum": "38bbe0fa4f2ae3360a8012f81f6459fbdf5be066b994fc4eadd1b3af40c344be",
+      "applied_at": "2026-07-23T10:14:11.351Z"
+    },
+    {
+      "name": "027_service_photos.sql",
+      "checksum": "c409484eaac29d917a06dee52d06af477f25c23ca30161e735df37c175b0ae9b",
+      "applied_at": "2026-07-23T10:14:11.395Z"
+    },
+    {
+      "name": "028_growth_indexes.sql",
+      "checksum": "65f6abe5924c65646ea90b56d0cb0dd10717ac7cbc0569d74a601bd53d76ac72",
+      "applied_at": "2026-07-23T10:14:11.439Z"
+    },
+    {
+      "name": "029_background_jobs.sql",
+      "checksum": "c2ac9f24a0469298e6708e7ba2630301a9e2db4242aae819900010a6a9baf651",
+      "applied_at": "2026-07-23T10:14:11.482Z"
+    },
+    {
+      "name": "030_rls_tighten.sql",
+      "checksum": "04fd0256b38427375838af0145294efe5474208e64bf25c1b8093cc859d66fca",
+      "applied_at": "2026-07-23T10:14:11.529Z"
+    },
+    {
+      "name": "031_reference_number_unique.sql",
+      "checksum": "8a12f4843b75b140b55a089cbb4adb741eed344eeb85ad583e0a9bac86a3df3f",
+      "applied_at": "2026-07-23T10:14:11.571Z"
+    },
+    {
+      "name": "032_manual_checkout_fields.sql",
+      "checksum": "a22491d92a18431e70789bfbc1fc00755b0dbfaaf5462028fc81bea46af4f64a",
+      "applied_at": "2026-07-23T10:14:11.614Z"
+    },
+    {
+      "name": "033_rls_blindagem.sql",
+      "checksum": "bbb4c8f32402c92f1cc562657ab52413153b2f2070a1e8e17966c302d5637a40",
+      "applied_at": "2026-07-23T10:14:11.660Z"
+    },
+    {
+      "name": "034_rls_servicos_clientes_locais.sql",
+      "checksum": "439313eba1b708db48689037ea6dc34f47cbe292fba8f6404afe5b262fd8bc22",
+      "applied_at": "2026-07-23T10:14:11.705Z"
+    },
+    {
+      "name": "035_split_views.sql",
+      "checksum": "a031862c35d632138369598cace09368d678c54995ac5c3cae28c4e13f976613",
+      "applied_at": "2026-07-23T10:14:11.749Z"
+    },
+    {
+      "name": "036_background_jobs_lock.sql",
+      "checksum": "8f9fbd17786ca823b78a12a2667f55637d65680df20c5a3b7fa5f6b413d9ac80",
+      "applied_at": "2026-07-23T10:14:11.792Z"
+    },
+    {
+      "name": "037_fixed_variable_payments.sql",
+      "checksum": "7f8278dbd8db38a0847d29c08776742032c06fd6cde9ded3a9e9d674cc3471ee",
+      "applied_at": "2026-07-23T10:14:11.837Z"
+    },
+    {
+      "name": "038_service_contract_fields.sql",
+      "checksum": "1b8986175c89c6a428d70fd07ff8db2846f0f2b0685959472599f3b61b614697",
+      "applied_at": "2026-07-23T10:14:11.882Z"
+    },
+    {
+      "name": "039_upholstery_units.sql",
+      "checksum": "d25ab2da2e268e48a8d0706133815d62468c4b3686f36cba0a1773628b6fcebb",
+      "applied_at": "2026-07-23T10:14:11.927Z"
+    },
+    {
+      "name": "040_collaborator_day_team.sql",
+      "checksum": "23fc02b989dc49a8aaa0e7cab7c6273f66ffbfd6f61f558fdbd3d3d8ab14b88c",
+      "applied_at": "2026-07-23T10:14:11.970Z"
+    },
+    {
+      "name": "041_num_people.sql",
+      "checksum": "4adcfc29b40fa6fc37ff2587e4dfa1f443d2b6d6a62aa4988e1ae19d4621dab2",
+      "applied_at": "2026-07-23T10:14:12.012Z"
+    },
+    {
+      "name": "042_daily_clocks.sql",
+      "checksum": "b4d45cc1cd11876b909805d263a3aad847a1da8c18c78034dcf4163e18877fe6",
+      "applied_at": "2026-07-23T10:14:12.057Z"
+    },
+    {
+      "name": "043_bank_reconciliation.sql",
+      "checksum": "1e14937403eb0a78a1c07f7d42650b5d10912a9c78595a322652fe80f5de88fd",
+      "applied_at": "2026-07-23T10:14:12.101Z"
+    },
+    {
+      "name": "044_contract_fixed_price.sql",
+      "checksum": "e9404b5cd07cd87ee19ff89dd621d37c6a923d371e9240d835f22b187d19cce8",
+      "applied_at": "2026-07-23T10:14:12.143Z"
+    },
+    {
+      "name": "045_service_apply_vat.sql",
+      "checksum": "71042494bd833924a055a473c6eccfd470cfb3dea1a955c6585ded604fc75b5a",
+      "applied_at": "2026-07-23T10:14:12.188Z"
+    },
+    {
+      "name": "046_contract_vat_monthly.sql",
+      "checksum": "47298a04ed0dca38e34e82632f2eb6171e24d8900f62f9910bbad13fe6eec8e4",
+      "applied_at": "2026-07-23T10:14:12.231Z"
+    },
+    {
+      "name": "047_contract_excluded_dates.sql",
+      "checksum": "c5d90c40f7b70f9df8a0ffe47d98e71eaeef53885efcea9aac71d19595d7a74e",
+      "applied_at": "2026-07-23T10:14:12.274Z"
+    },
+    {
+      "name": "048_service_payment_tracking.sql",
+      "checksum": "dbe905dab39e4141582263a77f7a4010f63940018e562bccb113ae9516385a02",
+      "applied_at": "2026-07-23T10:14:12.319Z"
+    },
+    {
+      "name": "049_cash_flow_service_payment_reference.sql",
+      "checksum": "e22c1eaf80e06abe9ef46ff3d9d4e164aaa10a5146350d219badc3a7f137ddd4",
+      "applied_at": "2026-07-23T10:14:12.364Z"
+    },
+    {
+      "name": "050_bank_tx_source_order_and_dedup.sql",
+      "checksum": "fb2941b9ca0ae0298034d1f54f76a413eed20b24101bef7b4bbc832ecd123a33",
+      "applied_at": "2026-07-23T10:14:12.409Z"
+    },
+    {
+      "name": "051_building_cards.sql",
+      "checksum": "ff694f760ef7eabe3074d1bcdddf3cc3b66898f4d3de7f8d289b042b26de9cb9",
+      "applied_at": "2026-07-23T10:14:12.453Z"
+    },
+    {
+      "name": "052_payment_attachments.sql",
+      "checksum": "534a28eb9f909ecf4decda14e9e12bc62f30e9c99b0af1cfeb4a8013da9b9ce2",
+      "applied_at": "2026-07-23T10:14:12.498Z"
+    },
+    {
+      "name": "053_enable_realtime_notifications.sql",
+      "checksum": "3b5adb5dd91eabda5717907b1c5b68968dbe7108b0d8c8bdf6378b92fb625bb0",
+      "applied_at": "2026-07-23T10:14:12.543Z"
+    },
+    {
+      "name": "054_harden_service_only_policies.sql",
+      "checksum": "81e6fc6a8fb06a46d31dcaac695c2feec2d5179f926a1a063a56b0e1a824c7a4",
+      "applied_at": "2026-07-23T10:14:12.586Z"
+    },
+    {
+      "name": "055_triweekly_frequency.sql",
+      "checksum": "35299253d7f4f76750101f7a547f2a3fda955e6c83a652ace0b781275883cd4c",
+      "applied_at": "2026-07-23T10:14:12.629Z"
+    },
+    {
+      "name": "056_services_full_payment_status.sql",
+      "checksum": "174527666c29658e80ed0e5d1983e6492c5a75a796d9aef7b24a6c3058820751",
+      "applied_at": "2026-07-23T10:14:12.672Z"
+    },
+    {
+      "name": "057_task_category_client.sql",
+      "checksum": "27aafb530d57ac6c4e5a8453a10e52c93ba389d1e6df179b253921442f6a3d04",
+      "applied_at": "2026-07-23T10:14:12.715Z"
+    },
+    {
+      "name": "058_task_attachment.sql",
+      "checksum": "b82f971b33217a867df7f41773844b1fea0b78d5c4db4b6372b342bea4088590",
+      "applied_at": "2026-07-23T10:14:12.761Z"
+    },
+    {
+      "name": "059_rede_seguranca.sql",
+      "checksum": "95c48a5acf045f7592dfa254db9ddbb21182497f9c4e3d85becf4546f28d5748",
+      "applied_at": "2026-07-23T10:14:12.807Z"
+    },
+    {
+      "name": "060_guardas_adicionais.sql",
+      "checksum": "a73eea6545d3798032df7b063d7f7da54daf03e3cd73f74c25b3016c76cca207",
+      "applied_at": "2026-07-23T10:14:12.853Z"
+    },
+    {
+      "name": "061_guardas_campos_criticos.sql",
+      "checksum": "a906d574ec4d95ff7b25ceb14e0f8a45d5d39e398da4ba1c379f18e35f388875",
+      "applied_at": "2026-07-23T10:14:12.897Z"
+    },
+    {
+      "name": "062_delete_atomico_e_actor.sql",
+      "checksum": "b865c2ffbfb3368142fc1284a30cecce5a39d5891a3e5f2798c4ca8f56d23474",
+      "applied_at": "2026-07-23T10:14:12.942Z"
+    },
+    {
+      "name": "063_services_full_apply_vat.sql",
+      "checksum": "4c08f5c6a8e23eeb619a5b48a35c97d0818379954411b9392e780fa63a793a4d",
+      "applied_at": "2026-07-23T10:14:12.985Z"
+    },
+    {
+      "name": "20260608_new_features.sql",
+      "checksum": "29d8df71b3f83ed4f45bb8b9f29fe92e01aab3fea857cc9361c30db5b4f8143c",
+      "applied_at": "2026-07-23T10:14:13.027Z"
+    },
+    {
+      "name": "20260609_kanban_columns.sql",
+      "checksum": "c56eed65561199047a3b3935e06c338d43dc7dd44d0faf5166aeed225012277f",
+      "applied_at": "2026-07-23T10:14:13.070Z"
+    },
+    {
+      "name": "20260609_profiles_hourly_rate.sql",
+      "checksum": "b1c5a699b6aebcaefe59b94d46391d1e6b6e837a51ac48c4cfa428e0ba273f39",
+      "applied_at": "2026-07-23T10:14:13.112Z"
+    },
+    {
+      "name": "20260609_timesheet_limits.sql",
+      "checksum": "cf4171dd5ff7dd61c60bc54b8dac3203b3557629fee3691623f3f25b446a19bf",
+      "applied_at": "2026-07-23T10:14:13.155Z"
+    }
+  ],
+  "cash_indexes": [
+    {
+      "indexname": "cash_flow_entries_pkey",
+      "indexdef": "CREATE UNIQUE INDEX cash_flow_entries_pkey ON public.cash_flow_entries USING btree (id)"
+    },
+    {
+      "indexname": "cash_flow_entries_reference_unique",
+      "indexdef": "CREATE UNIQUE INDEX cash_flow_entries_reference_unique ON public.cash_flow_entries USING btree (company_id, reference_type, reference_id) WHERE ((reference_type IS NOT NULL) AND (reference_id IS NOT NULL))"
+    },
+    {
+      "indexname": "idx_cash_flow_company_date",
+      "indexdef": "CREATE INDEX idx_cash_flow_company_date ON public.cash_flow_entries USING btree (company_id, date DESC)"
+    }
+  ],
+  "service_duplicate_occurrences": [],
+  "function_defs": {
+    "fn_increment_revision": [
+      {
+        "signature": "fn_increment_revision()",
+        "def": "CREATE OR REPLACE FUNCTION public.fn_increment_revision()\n RETURNS trigger\n LANGUAGE plpgsql\nAS $function$\r\nBEGIN\r\n  NEW.revision := COALESCE(OLD.revision, 0) + 1;\r\n  RETURN NEW;\r\nEND;\r\n$function$\n"
+      }
+    ],
+    "record_company_change_event": [
+      {
+        "signature": "record_company_change_event(uuid,uuid,text,text,uuid[],text[],tstzrange,jsonb)",
+        "def": "CREATE OR REPLACE FUNCTION public.record_company_change_event(p_company_id uuid, p_mutation_id uuid, p_domain text, p_event_type text, p_entity_ids uuid[], p_scopes text[], p_affected_range tstzrange DEFAULT NULL::tstzrange, p_payload jsonb DEFAULT '{}'::jsonb)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\r\nDECLARE\r\n  v_event public.company_change_events;\r\nBEGIN\r\n  INSERT INTO public.company_change_events (\r\n    company_id, mutation_id, domain, event_type, entity_ids, scopes, affected_range, payload\r\n  )\r\n  VALUES (\r\n    p_company_id,\r\n    p_mutation_id,\r\n    p_domain,\r\n    p_event_type,\r\n    COALESCE(p_entity_ids, '{}'),\r\n    COALESCE(p_scopes, '{}'),\r\n    p_affected_range,\r\n    COALESCE(p_payload, '{}'::jsonb)\r\n  )\r\n  ON CONFLICT (company_id, mutation_id, domain, event_type)\r\n  DO UPDATE SET payload = EXCLUDED.payload\r\n  RETURNING * INTO v_event;\r\n\r\n  RETURN jsonb_build_object(\r\n    'event_id', v_event.id,\r\n    'sequence', v_event.sequence\r\n  );\r\nEND;\r\n$function$\n"
+      }
+    ],
+    "set_invoice_status_atomic": [
+      {
+        "signature": "set_invoice_status_atomic(uuid,uuid,uuid,text,text,uuid,integer)",
+        "def": "CREATE OR REPLACE FUNCTION public.set_invoice_status_atomic(p_invoice_id uuid, p_company_id uuid, p_actor uuid, p_status text, p_payment_method text DEFAULT NULL::text, p_mutation_id uuid DEFAULT gen_random_uuid(), p_expected_revision integer DEFAULT NULL::integer)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\r\nDECLARE\r\n  v_existing jsonb;\r\n  v_inv record;\r\n  v_client_name text;\r\n  v_cash_id uuid;\r\n  v_event jsonb;\r\n  v_result jsonb;\r\nBEGIN\r\n  SELECT result INTO v_existing\r\n  FROM public.domain_mutations\r\n  WHERE company_id = p_company_id AND mutation_id = p_mutation_id;\r\n  IF FOUND THEN\r\n    RETURN v_existing;\r\n  END IF;\r\n\r\n  IF p_status NOT IN ('rascunho', 'pendente', 'pago', 'vencido', 'cancelado') THEN\r\n    RAISE EXCEPTION 'Estado de fatura invalido: %', p_status;\r\n  END IF;\r\n\r\n  IF p_actor IS NOT NULL THEN\r\n    PERFORM set_config('app.actor_id', p_actor::text, true);\r\n  END IF;\r\n\r\n  SELECT id, company_id, client_id, invoice_number, total, status, paid_at, revision\r\n    INTO v_inv\r\n  FROM public.invoices\r\n  WHERE id = p_invoice_id AND company_id = p_company_id\r\n  FOR UPDATE;\r\n\r\n  IF NOT FOUND THEN\r\n    RAISE EXCEPTION 'Fatura nao encontrada.';\r\n  END IF;\r\n\r\n  IF p_expected_revision IS NOT NULL AND v_inv.revision <> p_expected_revision THEN\r\n    RAISE EXCEPTION 'Conflito de revisao. Atual: %, esperado: %', v_inv.revision, p_expected_revision;\r\n  END IF;\r\n\r\n  UPDATE public.invoices\r\n     SET status = p_status,\r\n         paid_at = CASE WHEN p_status = 'pago' THEN COALESCE(v_inv.paid_at, now()) ELSE NULL END,\r\n         payment_method = CASE WHEN p_status = 'pago' THEN p_payment_method ELSE NULL END\r\n   WHERE id = p_invoice_id AND company_id = p_company_id\r\n   RETURNING revision INTO v_inv.revision;\r\n\r\n  IF NOT FOUND THEN\r\n    RAISE EXCEPTION 'Nada foi gravado na fatura.';\r\n  END IF;\r\n\r\n  IF p_status = 'pago' AND COALESCE(v_inv.total, 0) > 0 THEN\r\n    SELECT name INTO v_client_name FROM public.clients WHERE id = v_inv.client_id;\r\n    INSERT INTO public.cash_flow_entries (\r\n      company_id, type, amount, description, category, date, reference_id, reference_type, status\r\n    )\r\n    VALUES (\r\n      p_company_id,\r\n      'entrada',\r\n      v_inv.total,\r\n      'Fatura ' || v_inv.invoice_number || ' - ' || COALESCE(v_client_name, 'Cliente'),\r\n      'faturacao',\r\n      (now() AT TIME ZONE 'Europe/Lisbon')::date,\r\n      p_invoice_id,\r\n      'invoice',\r\n      'confirmado'\r\n    )\r\n    ON CONFLICT (company_id, reference_type, reference_id)\r\n    WHERE reference_type IS NOT NULL AND reference_id IS NOT NULL\r\n    DO UPDATE SET\r\n      amount = EXCLUDED.amount,\r\n      description = EXCLUDED.description,\r\n      date = EXCLUDED.date,\r\n      status = EXCLUDED.status\r\n    RETURNING id INTO v_cash_id;\r\n  ELSE\r\n    DELETE FROM public.cash_flow_entries\r\n     WHERE company_id = p_company_id\r\n       AND reference_type = 'invoice'\r\n       AND reference_id = p_invoice_id\r\n     RETURNING id INTO v_cash_id;\r\n  END IF;\r\n\r\n  v_event := public.record_company_change_event(\r\n    p_company_id,\r\n    p_mutation_id,\r\n    'billing',\r\n    'invoice_status_changed',\r\n    ARRAY[p_invoice_id],\r\n    ARRAY['cobrancas', 'financeiro'],\r\n    NULL,\r\n    jsonb_build_object('invoice_id', p_invoice_id, 'status', p_status, 'cash_flow_entry_id', v_cash_id)\r\n  );\r\n\r\n  v_result := jsonb_build_object(\r\n    'ok', true,\r\n    'invoice_id', p_invoice_id,\r\n    'status', p_status,\r\n    'revision', v_inv.revision,\r\n    'cash_flow_entry_id', v_cash_id,\r\n    'event', v_event\r\n  );\r\n\r\n  INSERT INTO public.domain_mutations(company_id, mutation_id, domain, status, result)\r\n  VALUES (p_company_id, p_mutation_id, 'billing', 'completed', v_result);\r\n\r\n  RETURN v_result;\r\nEND;\r\n$function$\n"
+      }
+    ],
+    "delete_client_atomic": [
+      {
+        "signature": "delete_client_atomic(uuid,uuid,uuid,uuid,integer)",
+        "def": "CREATE OR REPLACE FUNCTION public.delete_client_atomic(p_client_id uuid, p_company_id uuid, p_actor uuid, p_mutation_id uuid DEFAULT gen_random_uuid(), p_expected_revision integer DEFAULT NULL::integer)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\r\nDECLARE\r\n  v_existing jsonb;\r\n  v_client record;\r\n  v_location_ids uuid[];\r\n  v_deleted_services integer := 0;\r\n  v_deleted_contracts integer := 0;\r\n  v_deleted_invoices integer := 0;\r\n  v_event jsonb;\r\n  v_result jsonb;\r\nBEGIN\r\n  SELECT result INTO v_existing\r\n  FROM public.domain_mutations\r\n  WHERE company_id = p_company_id AND mutation_id = p_mutation_id;\r\n  IF FOUND THEN\r\n    RETURN v_existing;\r\n  END IF;\r\n\r\n  IF p_actor IS NOT NULL THEN\r\n    PERFORM set_config('app.actor_id', p_actor::text, true);\r\n  END IF;\r\n\r\n  SELECT id, name, revision INTO v_client\r\n  FROM public.clients\r\n  WHERE id = p_client_id AND company_id = p_company_id\r\n  FOR UPDATE;\r\n\r\n  IF NOT FOUND THEN\r\n    RAISE EXCEPTION 'Cliente invalido.';\r\n  END IF;\r\n\r\n  IF p_expected_revision IS NOT NULL AND v_client.revision <> p_expected_revision THEN\r\n    RAISE EXCEPTION 'Conflito de revisao. Atual: %, esperado: %', v_client.revision, p_expected_revision;\r\n  END IF;\r\n\r\n  PERFORM 1\r\n  FROM public.locations\r\n  WHERE client_id = p_client_id AND company_id = p_company_id\r\n  FOR UPDATE;\r\n\r\n  SELECT COALESCE(array_agg(id), '{}') INTO v_location_ids\r\n  FROM public.locations\r\n  WHERE client_id = p_client_id AND company_id = p_company_id;\r\n\r\n  IF array_length(v_location_ids, 1) IS NOT NULL THEN\r\n    DELETE FROM public.services\r\n     WHERE company_id = p_company_id AND location_id = ANY(v_location_ids);\r\n    GET DIAGNOSTICS v_deleted_services = ROW_COUNT;\r\n\r\n    DELETE FROM public.contracts\r\n     WHERE company_id = p_company_id AND location_id = ANY(v_location_ids);\r\n    GET DIAGNOSTICS v_deleted_contracts = ROW_COUNT;\r\n  END IF;\r\n\r\n  DELETE FROM public.cash_flow_entries cf\r\n   USING public.invoices i\r\n   WHERE i.id = cf.reference_id\r\n     AND cf.reference_type = 'invoice'\r\n     AND i.company_id = p_company_id\r\n     AND i.client_id = p_client_id;\r\n\r\n  DELETE FROM public.invoices\r\n   WHERE company_id = p_company_id AND client_id = p_client_id;\r\n  GET DIAGNOSTICS v_deleted_invoices = ROW_COUNT;\r\n\r\n  DELETE FROM public.clients\r\n   WHERE id = p_client_id AND company_id = p_company_id;\r\n  IF NOT FOUND THEN\r\n    RAISE EXCEPTION 'Nada foi eliminado.';\r\n  END IF;\r\n\r\n  v_event := public.record_company_change_event(\r\n    p_company_id,\r\n    p_mutation_id,\r\n    'clients',\r\n    'client_deleted',\r\n    ARRAY[p_client_id],\r\n    ARRAY['clientes', 'calendario', 'contratos', 'cobrancas'],\r\n    NULL,\r\n    jsonb_build_object(\r\n      'client_id', p_client_id,\r\n      'deleted_services', v_deleted_services,\r\n      'deleted_contracts', v_deleted_contracts,\r\n      'deleted_invoices', v_deleted_invoices\r\n    )\r\n  );\r\n\r\n  v_result := jsonb_build_object(\r\n    'ok', true,\r\n    'client_id', p_client_id,\r\n    'deleted_services', v_deleted_services,\r\n    'deleted_contracts', v_deleted_contracts,\r\n    'deleted_invoices', v_deleted_invoices,\r\n    'event', v_event\r\n  );\r\n\r\n  INSERT INTO public.domain_mutations(company_id, mutation_id, domain, status, result)\r\n  VALUES (p_company_id, p_mutation_id, 'clients', 'completed', v_result);\r\n\r\n  RETURN v_result;\r\nEND;\r\n$function$\n"
+      }
+    ]
+  },
+  "more": {
+    "outbox_identity": [
+      {
+        "table_name": "company_change_events",
+        "column_name": "sequence",
+        "is_identity": "YES",
+        "identity_generation": "BY DEFAULT",
+        "column_default": null
+      }
+    ],
+    "constraints": [
+      {
+        "table_name": "cash_flow_entries",
+        "conname": "cash_flow_entries_category_check",
+        "contype": "c",
+        "definition": "CHECK ((category = ANY (ARRAY['faturacao'::text, 'salario'::text, 'despesa'::text, 'fornecedor'::text, 'outro'::text])))"
+      },
+      {
+        "table_name": "cash_flow_entries",
+        "conname": "cash_flow_entries_company_id_fkey",
+        "contype": "f",
+        "definition": "FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE"
+      },
+      {
+        "table_name": "cash_flow_entries",
+        "conname": "cash_flow_entries_created_by_fkey",
+        "contype": "f",
+        "definition": "FOREIGN KEY (created_by) REFERENCES profiles(id)"
+      },
+      {
+        "table_name": "cash_flow_entries",
+        "conname": "cash_flow_entries_pkey",
+        "contype": "p",
+        "definition": "PRIMARY KEY (id)"
+      },
+      {
+        "table_name": "cash_flow_entries",
+        "conname": "cash_flow_entries_reference_type_check",
+        "contype": "c",
+        "definition": "CHECK ((reference_type = ANY (ARRAY['invoice'::text, 'payroll'::text, 'service_payment'::text])))"
+      },
+      {
+        "table_name": "cash_flow_entries",
+        "conname": "cash_flow_entries_status_check",
+        "contype": "c",
+        "definition": "CHECK ((status = ANY (ARRAY['pendente'::text, 'confirmado'::text])))"
+      },
+      {
+        "table_name": "cash_flow_entries",
+        "conname": "cash_flow_entries_type_check",
+        "contype": "c",
+        "definition": "CHECK ((type = ANY (ARRAY['entrada'::text, 'saida'::text])))"
+      },
+      {
+        "table_name": "company_change_events",
+        "conname": "company_change_events_company_id_fkey",
+        "contype": "f",
+        "definition": "FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE"
+      },
+      {
+        "table_name": "company_change_events",
+        "conname": "company_change_events_company_id_mutation_id_domain_event_t_key",
+        "contype": "u",
+        "definition": "UNIQUE (company_id, mutation_id, domain, event_type)"
+      },
+      {
+        "table_name": "company_change_events",
+        "conname": "company_change_events_company_id_sequence_key",
+        "contype": "u",
+        "definition": "UNIQUE (company_id, sequence)"
+      },
+      {
+        "table_name": "company_change_events",
+        "conname": "company_change_events_pkey",
+        "contype": "p",
+        "definition": "PRIMARY KEY (id)"
+      },
+      {
+        "table_name": "domain_mutations",
+        "conname": "domain_mutations_company_id_fkey",
+        "contype": "f",
+        "definition": "FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE"
+      },
+      {
+        "table_name": "domain_mutations",
+        "conname": "domain_mutations_company_id_mutation_id_key",
+        "contype": "u",
+        "definition": "UNIQUE (company_id, mutation_id)"
+      },
+      {
+        "table_name": "domain_mutations",
+        "conname": "domain_mutations_pkey",
+        "contype": "p",
+        "definition": "PRIMARY KEY (id)"
+      },
+      {
+        "table_name": "domain_mutations",
+        "conname": "domain_mutations_status_check",
+        "contype": "c",
+        "definition": "CHECK ((status = 'completed'::text))"
+      },
+      {
+        "table_name": "services",
+        "conname": "services_cancel_type_check",
+        "contype": "c",
+        "definition": "CHECK ((cancel_type = ANY (ARRAY['client_request'::text, 'weather'::text, 'operational'::text, 'equipment'::text, 'other'::text])))"
+      },
+      {
+        "table_name": "services",
+        "conname": "services_cancelled_by_fkey",
+        "contype": "f",
+        "definition": "FOREIGN KEY (cancelled_by) REFERENCES profiles(id)"
+      },
+      {
+        "table_name": "services",
+        "conname": "services_cleaning_type_chk",
+        "contype": "c",
+        "definition": "CHECK (((cleaning_type IS NULL) OR (cleaning_type = ANY (ARRAY['manutencao'::text, 'manutencao_lisboa'::text, 'pos_obra'::text, 'pos_obra_lisboa'::text, 'geral'::text, 'geral_lisboa'::text, 'estofos'::text]))))"
+      },
+      {
+        "table_name": "services",
+        "conname": "services_company_id_fkey",
+        "contype": "f",
+        "definition": "FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE"
+      },
+      {
+        "table_name": "services",
+        "conname": "services_contract_id_fkey",
+        "contype": "f",
+        "definition": "FOREIGN KEY (contract_id) REFERENCES contracts(id) ON DELETE SET NULL"
+      },
+      {
+        "table_name": "services",
+        "conname": "services_created_by_fkey",
+        "contype": "f",
+        "definition": "FOREIGN KEY (created_by) REFERENCES profiles(id)"
+      },
+      {
+        "table_name": "services",
+        "conname": "services_location_id_fkey",
+        "contype": "f",
+        "definition": "FOREIGN KEY (location_id) REFERENCES locations(id) ON DELETE RESTRICT"
+      },
+      {
+        "table_name": "services",
+        "conname": "services_num_people_chk",
+        "contype": "c",
+        "definition": "CHECK ((num_people >= 1))"
+      },
+      {
+        "table_name": "services",
+        "conname": "services_payment_status_chk",
+        "contype": "c",
+        "definition": "CHECK (((payment_status IS NULL) OR (payment_status = ANY (ARRAY['nao_informado'::text, 'sinal_50'::text, 'pago_total'::text]))))"
+      },
+      {
+        "table_name": "services",
+        "conname": "services_pkey",
+        "contype": "p",
+        "definition": "PRIMARY KEY (id)"
+      },
+      {
+        "table_name": "services",
+        "conname": "services_status_check",
+        "contype": "c",
+        "definition": "CHECK ((status = ANY (ARRAY['agendado'::text, 'em_curso'::text, 'concluido'::text, 'cancelado'::text, 'falta'::text, 'sem_cobertura'::text])))"
+      },
+      {
+        "table_name": "services",
+        "conname": "services_team_id_fkey",
+        "contype": "f",
+        "definition": "FOREIGN KEY (team_id) REFERENCES teams(id) ON DELETE SET NULL"
+      },
+      {
+        "table_name": "services",
+        "conname": "services_upholstery_type_chk",
+        "contype": "c",
+        "definition": "CHECK (((upholstery_type IS NULL) OR (upholstery_type = ANY (ARRAY['sofa'::text, 'poltrona'::text, 'cadeira'::text, 'tapete'::text, 'colchao'::text, 'unidade'::text, 'outro'::text]))))"
+      }
+    ],
+    "rls_enabled": [
+      {
+        "relname": "company_change_events",
+        "relrowsecurity": true,
+        "relforcerowsecurity": false
+      },
+      {
+        "relname": "domain_mutations",
+        "relrowsecurity": true,
+        "relforcerowsecurity": false
+      }
+    ],
+    "exact_table_sizes": [
+      {
+        "table_name": "domain_mutations",
+        "count": 0
+      },
+      {
+        "table_name": "company_change_events",
+        "count": 0
+      }
+    ],
+    "current_branch_marker": [
+      {
+        "audited_at": "2026-08-04T10:37:08.401Z"
+      }
+    ]
+  }
+}

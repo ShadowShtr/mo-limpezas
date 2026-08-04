@@ -1,0 +1,2202 @@
+{
+  "generated_at": "2026-08-04T11:12:08.627Z",
+  "columns": [
+    {
+      "table_name": "audit_logs",
+      "column_name": "id",
+      "data_type": "uuid",
+      "is_nullable": "NO",
+      "column_default": "gen_random_uuid()",
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "audit_logs",
+      "column_name": "company_id",
+      "data_type": "uuid",
+      "is_nullable": "NO",
+      "column_default": null,
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "audit_logs",
+      "column_name": "actor_id",
+      "data_type": "uuid",
+      "is_nullable": "NO",
+      "column_default": null,
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "audit_logs",
+      "column_name": "action",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "column_default": null,
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "audit_logs",
+      "column_name": "entity_type",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "column_default": "'timesheet'::text",
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "audit_logs",
+      "column_name": "entity_id",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "column_default": null,
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "audit_logs",
+      "column_name": "meta",
+      "data_type": "jsonb",
+      "is_nullable": "NO",
+      "column_default": "'{}'::jsonb",
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "audit_logs",
+      "column_name": "created_at",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "NO",
+      "column_default": "now()",
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "cash_flow_entries",
+      "column_name": "id",
+      "data_type": "uuid",
+      "is_nullable": "NO",
+      "column_default": "gen_random_uuid()",
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "cash_flow_entries",
+      "column_name": "company_id",
+      "data_type": "uuid",
+      "is_nullable": "NO",
+      "column_default": null,
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "cash_flow_entries",
+      "column_name": "type",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "column_default": null,
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "cash_flow_entries",
+      "column_name": "amount",
+      "data_type": "numeric",
+      "is_nullable": "NO",
+      "column_default": null,
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "cash_flow_entries",
+      "column_name": "description",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "column_default": null,
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "cash_flow_entries",
+      "column_name": "category",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "column_default": "'outro'::text",
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "cash_flow_entries",
+      "column_name": "date",
+      "data_type": "date",
+      "is_nullable": "NO",
+      "column_default": null,
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "cash_flow_entries",
+      "column_name": "reference_id",
+      "data_type": "uuid",
+      "is_nullable": "YES",
+      "column_default": null,
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "cash_flow_entries",
+      "column_name": "reference_type",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "column_default": null,
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "cash_flow_entries",
+      "column_name": "status",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "column_default": "'confirmado'::text",
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "cash_flow_entries",
+      "column_name": "notes",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "column_default": null,
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "cash_flow_entries",
+      "column_name": "created_by",
+      "data_type": "uuid",
+      "is_nullable": "YES",
+      "column_default": null,
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "cash_flow_entries",
+      "column_name": "created_at",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "YES",
+      "column_default": "now()",
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "clients",
+      "column_name": "id",
+      "data_type": "uuid",
+      "is_nullable": "NO",
+      "column_default": "gen_random_uuid()",
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "clients",
+      "column_name": "company_id",
+      "data_type": "uuid",
+      "is_nullable": "NO",
+      "column_default": null,
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "clients",
+      "column_name": "name",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "column_default": null,
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "clients",
+      "column_name": "nif",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "column_default": null,
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "clients",
+      "column_name": "email",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "column_default": null,
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "clients",
+      "column_name": "phone",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "column_default": null,
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "clients",
+      "column_name": "address",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "column_default": null,
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "clients",
+      "column_name": "type",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "column_default": "'empresa'::text",
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "clients",
+      "column_name": "notes",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "column_default": null,
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "clients",
+      "column_name": "status",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "column_default": "'ativo'::text",
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "clients",
+      "column_name": "created_at",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "YES",
+      "column_default": "now()",
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "clients",
+      "column_name": "updated_at",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "YES",
+      "column_default": "now()",
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "clients",
+      "column_name": "notification_enabled",
+      "data_type": "boolean",
+      "is_nullable": "YES",
+      "column_default": "false",
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "clients",
+      "column_name": "notification_method",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "column_default": "'email'::text",
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "clients",
+      "column_name": "notification_phone",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "column_default": null,
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "clients",
+      "column_name": "notification_email",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "column_default": null,
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "clients",
+      "column_name": "vat_exempt",
+      "data_type": "boolean",
+      "is_nullable": "NO",
+      "column_default": "false",
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "clients",
+      "column_name": "revision",
+      "data_type": "integer",
+      "is_nullable": "NO",
+      "column_default": "1",
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "company_change_events",
+      "column_name": "id",
+      "data_type": "uuid",
+      "is_nullable": "NO",
+      "column_default": "gen_random_uuid()",
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "company_change_events",
+      "column_name": "company_id",
+      "data_type": "uuid",
+      "is_nullable": "NO",
+      "column_default": null,
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "company_change_events",
+      "column_name": "sequence",
+      "data_type": "bigint",
+      "is_nullable": "NO",
+      "column_default": null,
+      "is_identity": "YES",
+      "identity_generation": "BY DEFAULT"
+    },
+    {
+      "table_name": "company_change_events",
+      "column_name": "mutation_id",
+      "data_type": "uuid",
+      "is_nullable": "NO",
+      "column_default": null,
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "company_change_events",
+      "column_name": "domain",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "column_default": null,
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "company_change_events",
+      "column_name": "event_type",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "column_default": null,
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "company_change_events",
+      "column_name": "entity_ids",
+      "data_type": "ARRAY",
+      "is_nullable": "NO",
+      "column_default": "'{}'::uuid[]",
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "company_change_events",
+      "column_name": "scopes",
+      "data_type": "ARRAY",
+      "is_nullable": "NO",
+      "column_default": "'{}'::text[]",
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "company_change_events",
+      "column_name": "affected_range",
+      "data_type": "tstzrange",
+      "is_nullable": "YES",
+      "column_default": null,
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "company_change_events",
+      "column_name": "payload",
+      "data_type": "jsonb",
+      "is_nullable": "NO",
+      "column_default": "'{}'::jsonb",
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "company_change_events",
+      "column_name": "delivered_at",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "YES",
+      "column_default": null,
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "company_change_events",
+      "column_name": "created_at",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "NO",
+      "column_default": "now()",
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "contracts",
+      "column_name": "id",
+      "data_type": "uuid",
+      "is_nullable": "NO",
+      "column_default": "gen_random_uuid()",
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "contracts",
+      "column_name": "company_id",
+      "data_type": "uuid",
+      "is_nullable": "NO",
+      "column_default": null,
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "contracts",
+      "column_name": "location_id",
+      "data_type": "uuid",
+      "is_nullable": "NO",
+      "column_default": null,
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "contracts",
+      "column_name": "name",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "column_default": null,
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "contracts",
+      "column_name": "frequency",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "column_default": null,
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "contracts",
+      "column_name": "interval_days",
+      "data_type": "integer",
+      "is_nullable": "YES",
+      "column_default": "1",
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "contracts",
+      "column_name": "weekdays",
+      "data_type": "ARRAY",
+      "is_nullable": "YES",
+      "column_default": null,
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "contracts",
+      "column_name": "month_day",
+      "data_type": "integer",
+      "is_nullable": "YES",
+      "column_default": null,
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "contracts",
+      "column_name": "month_week",
+      "data_type": "integer",
+      "is_nullable": "YES",
+      "column_default": null,
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "contracts",
+      "column_name": "month_weekday",
+      "data_type": "integer",
+      "is_nullable": "YES",
+      "column_default": null,
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "contracts",
+      "column_name": "schedule_days",
+      "data_type": "jsonb",
+      "is_nullable": "NO",
+      "column_default": "'[]'::jsonb",
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "contracts",
+      "column_name": "starts_on",
+      "data_type": "date",
+      "is_nullable": "NO",
+      "column_default": null,
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "contracts",
+      "column_name": "ends_on",
+      "data_type": "date",
+      "is_nullable": "YES",
+      "column_default": null,
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "contracts",
+      "column_name": "status",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "column_default": "'ativo'::text",
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "contracts",
+      "column_name": "notes",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "column_default": null,
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "contracts",
+      "column_name": "created_by",
+      "data_type": "uuid",
+      "is_nullable": "YES",
+      "column_default": null,
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "contracts",
+      "column_name": "created_at",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "YES",
+      "column_default": "now()",
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "contracts",
+      "column_name": "updated_at",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "YES",
+      "column_default": "now()",
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "contracts",
+      "column_name": "cleaning_type",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "column_default": null,
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "contracts",
+      "column_name": "payment_status",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "column_default": null,
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "contracts",
+      "column_name": "upholstery_type",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "column_default": null,
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "contracts",
+      "column_name": "upholstery_notes",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "column_default": null,
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "contracts",
+      "column_name": "upholstery_units",
+      "data_type": "integer",
+      "is_nullable": "YES",
+      "column_default": null,
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "contracts",
+      "column_name": "upholstery_unit_price",
+      "data_type": "numeric",
+      "is_nullable": "YES",
+      "column_default": null,
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "contracts",
+      "column_name": "num_people",
+      "data_type": "integer",
+      "is_nullable": "YES",
+      "column_default": null,
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "contracts",
+      "column_name": "fixed_price",
+      "data_type": "numeric",
+      "is_nullable": "YES",
+      "column_default": null,
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "contracts",
+      "column_name": "apply_vat",
+      "data_type": "boolean",
+      "is_nullable": "NO",
+      "column_default": "false",
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "contracts",
+      "column_name": "fixed_monthly",
+      "data_type": "boolean",
+      "is_nullable": "NO",
+      "column_default": "false",
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "contracts",
+      "column_name": "excluded_dates",
+      "data_type": "ARRAY",
+      "is_nullable": "NO",
+      "column_default": "'{}'::date[]",
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "contracts",
+      "column_name": "revision",
+      "data_type": "integer",
+      "is_nullable": "NO",
+      "column_default": "1",
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "domain_mutations",
+      "column_name": "id",
+      "data_type": "uuid",
+      "is_nullable": "NO",
+      "column_default": "gen_random_uuid()",
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "domain_mutations",
+      "column_name": "company_id",
+      "data_type": "uuid",
+      "is_nullable": "NO",
+      "column_default": null,
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "domain_mutations",
+      "column_name": "mutation_id",
+      "data_type": "uuid",
+      "is_nullable": "NO",
+      "column_default": null,
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "domain_mutations",
+      "column_name": "domain",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "column_default": null,
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "domain_mutations",
+      "column_name": "status",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "column_default": null,
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "domain_mutations",
+      "column_name": "result",
+      "data_type": "jsonb",
+      "is_nullable": "NO",
+      "column_default": "'{}'::jsonb",
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "domain_mutations",
+      "column_name": "created_at",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "NO",
+      "column_default": "now()",
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "invoice_items",
+      "column_name": "id",
+      "data_type": "uuid",
+      "is_nullable": "NO",
+      "column_default": "gen_random_uuid()",
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "invoice_items",
+      "column_name": "invoice_id",
+      "data_type": "uuid",
+      "is_nullable": "NO",
+      "column_default": null,
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "invoice_items",
+      "column_name": "service_id",
+      "data_type": "uuid",
+      "is_nullable": "YES",
+      "column_default": null,
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "invoice_items",
+      "column_name": "description",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "column_default": null,
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "invoice_items",
+      "column_name": "quantity",
+      "data_type": "numeric",
+      "is_nullable": "NO",
+      "column_default": "1",
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "invoice_items",
+      "column_name": "unit_price",
+      "data_type": "numeric",
+      "is_nullable": "NO",
+      "column_default": "0",
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "invoice_items",
+      "column_name": "total",
+      "data_type": "numeric",
+      "is_nullable": "NO",
+      "column_default": "0",
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "invoice_items",
+      "column_name": "sort_order",
+      "data_type": "integer",
+      "is_nullable": "YES",
+      "column_default": "0",
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "invoice_items",
+      "column_name": "revision",
+      "data_type": "integer",
+      "is_nullable": "NO",
+      "column_default": "1",
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "invoices",
+      "column_name": "id",
+      "data_type": "uuid",
+      "is_nullable": "NO",
+      "column_default": "gen_random_uuid()",
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "invoices",
+      "column_name": "company_id",
+      "data_type": "uuid",
+      "is_nullable": "NO",
+      "column_default": null,
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "invoices",
+      "column_name": "client_id",
+      "data_type": "uuid",
+      "is_nullable": "NO",
+      "column_default": null,
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "invoices",
+      "column_name": "invoice_number",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "column_default": null,
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "invoices",
+      "column_name": "invoice_date",
+      "data_type": "date",
+      "is_nullable": "NO",
+      "column_default": "CURRENT_DATE",
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "invoices",
+      "column_name": "due_date",
+      "data_type": "date",
+      "is_nullable": "YES",
+      "column_default": null,
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "invoices",
+      "column_name": "period_start",
+      "data_type": "date",
+      "is_nullable": "YES",
+      "column_default": null,
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "invoices",
+      "column_name": "period_end",
+      "data_type": "date",
+      "is_nullable": "YES",
+      "column_default": null,
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "invoices",
+      "column_name": "subtotal",
+      "data_type": "numeric",
+      "is_nullable": "NO",
+      "column_default": "0",
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "invoices",
+      "column_name": "vat_rate",
+      "data_type": "numeric",
+      "is_nullable": "YES",
+      "column_default": "23",
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "invoices",
+      "column_name": "vat_amount",
+      "data_type": "numeric",
+      "is_nullable": "YES",
+      "column_default": "0",
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "invoices",
+      "column_name": "total",
+      "data_type": "numeric",
+      "is_nullable": "NO",
+      "column_default": "0",
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "invoices",
+      "column_name": "status",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "column_default": "'rascunho'::text",
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "invoices",
+      "column_name": "paid_at",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "YES",
+      "column_default": null,
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "invoices",
+      "column_name": "notes",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "column_default": null,
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "invoices",
+      "column_name": "created_by",
+      "data_type": "uuid",
+      "is_nullable": "YES",
+      "column_default": null,
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "invoices",
+      "column_name": "created_at",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "YES",
+      "column_default": "now()",
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "invoices",
+      "column_name": "updated_at",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "YES",
+      "column_default": "now()",
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "invoices",
+      "column_name": "payment_method",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "column_default": null,
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "invoices",
+      "column_name": "revision",
+      "data_type": "integer",
+      "is_nullable": "NO",
+      "column_default": "1",
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "locations",
+      "column_name": "id",
+      "data_type": "uuid",
+      "is_nullable": "NO",
+      "column_default": "gen_random_uuid()",
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "locations",
+      "column_name": "company_id",
+      "data_type": "uuid",
+      "is_nullable": "NO",
+      "column_default": null,
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "locations",
+      "column_name": "client_id",
+      "data_type": "uuid",
+      "is_nullable": "NO",
+      "column_default": null,
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "locations",
+      "column_name": "name",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "column_default": null,
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "locations",
+      "column_name": "address",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "column_default": null,
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "locations",
+      "column_name": "lat",
+      "data_type": "numeric",
+      "is_nullable": "YES",
+      "column_default": null,
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "locations",
+      "column_name": "lng",
+      "data_type": "numeric",
+      "is_nullable": "YES",
+      "column_default": null,
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "locations",
+      "column_name": "access_code",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "column_default": null,
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "locations",
+      "column_name": "instructions",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "column_default": null,
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "locations",
+      "column_name": "service_type",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "column_default": "'limpeza_regular'::text",
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "locations",
+      "column_name": "area_sqm",
+      "data_type": "numeric",
+      "is_nullable": "YES",
+      "column_default": null,
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "locations",
+      "column_name": "hourly_rate",
+      "data_type": "numeric",
+      "is_nullable": "YES",
+      "column_default": null,
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "locations",
+      "column_name": "gps_radius_m",
+      "data_type": "integer",
+      "is_nullable": "YES",
+      "column_default": "200",
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "locations",
+      "column_name": "active",
+      "data_type": "boolean",
+      "is_nullable": "YES",
+      "column_default": "true",
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "locations",
+      "column_name": "created_at",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "YES",
+      "column_default": "now()",
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "locations",
+      "column_name": "updated_at",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "YES",
+      "column_default": "now()",
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "locations",
+      "column_name": "fixed_price",
+      "data_type": "numeric",
+      "is_nullable": "YES",
+      "column_default": null,
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "locations",
+      "column_name": "pricing_type",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "column_default": "'hourly'::text",
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "locations",
+      "column_name": "has_key",
+      "data_type": "boolean",
+      "is_nullable": "NO",
+      "column_default": "false",
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "locations",
+      "column_name": "key_label",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "column_default": null,
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "locations",
+      "column_name": "revision",
+      "data_type": "integer",
+      "is_nullable": "NO",
+      "column_default": "1",
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "services",
+      "column_name": "id",
+      "data_type": "uuid",
+      "is_nullable": "NO",
+      "column_default": "gen_random_uuid()",
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "services",
+      "column_name": "company_id",
+      "data_type": "uuid",
+      "is_nullable": "NO",
+      "column_default": null,
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "services",
+      "column_name": "location_id",
+      "data_type": "uuid",
+      "is_nullable": "NO",
+      "column_default": null,
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "services",
+      "column_name": "team_id",
+      "data_type": "uuid",
+      "is_nullable": "YES",
+      "column_default": null,
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "services",
+      "column_name": "contract_id",
+      "data_type": "uuid",
+      "is_nullable": "YES",
+      "column_default": null,
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "services",
+      "column_name": "reference_number",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "column_default": null,
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "services",
+      "column_name": "scheduled_start",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "NO",
+      "column_default": null,
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "services",
+      "column_name": "scheduled_end",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "NO",
+      "column_default": null,
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "services",
+      "column_name": "hourly_rate",
+      "data_type": "numeric",
+      "is_nullable": "YES",
+      "column_default": null,
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "services",
+      "column_name": "calculated_value",
+      "data_type": "numeric",
+      "is_nullable": "YES",
+      "column_default": null,
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "services",
+      "column_name": "manual_value",
+      "data_type": "numeric",
+      "is_nullable": "YES",
+      "column_default": null,
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "services",
+      "column_name": "discount_pct",
+      "data_type": "numeric",
+      "is_nullable": "YES",
+      "column_default": "0",
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "services",
+      "column_name": "status",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "column_default": "'agendado'::text",
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "services",
+      "column_name": "actual_start",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "YES",
+      "column_default": null,
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "services",
+      "column_name": "actual_end",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "YES",
+      "column_default": null,
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "services",
+      "column_name": "is_exception",
+      "data_type": "boolean",
+      "is_nullable": "YES",
+      "column_default": "false",
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "services",
+      "column_name": "original_date",
+      "data_type": "date",
+      "is_nullable": "YES",
+      "column_default": null,
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "services",
+      "column_name": "notes",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "column_default": null,
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "services",
+      "column_name": "created_by",
+      "data_type": "uuid",
+      "is_nullable": "YES",
+      "column_default": null,
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "services",
+      "column_name": "created_at",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "YES",
+      "column_default": "now()",
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "services",
+      "column_name": "updated_at",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "YES",
+      "column_default": "now()",
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "services",
+      "column_name": "cancel_type",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "column_default": null,
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "services",
+      "column_name": "cancel_reason",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "column_default": null,
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "services",
+      "column_name": "cancelled_at",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "YES",
+      "column_default": null,
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "services",
+      "column_name": "cancelled_by",
+      "data_type": "uuid",
+      "is_nullable": "YES",
+      "column_default": null,
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "services",
+      "column_name": "is_late_cancel",
+      "data_type": "boolean",
+      "is_nullable": "YES",
+      "column_default": "false",
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "services",
+      "column_name": "cleaning_type",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "column_default": null,
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "services",
+      "column_name": "payment_status",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "column_default": null,
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "services",
+      "column_name": "upholstery_type",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "column_default": null,
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "services",
+      "column_name": "upholstery_notes",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "column_default": null,
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "services",
+      "column_name": "upholstery_units",
+      "data_type": "integer",
+      "is_nullable": "YES",
+      "column_default": null,
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "services",
+      "column_name": "upholstery_unit_price",
+      "data_type": "numeric",
+      "is_nullable": "YES",
+      "column_default": null,
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "services",
+      "column_name": "num_people",
+      "data_type": "integer",
+      "is_nullable": "NO",
+      "column_default": "1",
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "services",
+      "column_name": "apply_vat",
+      "data_type": "boolean",
+      "is_nullable": "NO",
+      "column_default": "true",
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "services",
+      "column_name": "paid_amount",
+      "data_type": "numeric",
+      "is_nullable": "YES",
+      "column_default": null,
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "services",
+      "column_name": "paid_at",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "YES",
+      "column_default": null,
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "services",
+      "column_name": "contract_synced_at",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "YES",
+      "column_default": null,
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "services",
+      "column_name": "revision",
+      "data_type": "integer",
+      "is_nullable": "NO",
+      "column_default": "1",
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "services",
+      "column_name": "override_fields",
+      "data_type": "ARRAY",
+      "is_nullable": "NO",
+      "column_default": "'{}'::text[]",
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "team_members",
+      "column_name": "id",
+      "data_type": "uuid",
+      "is_nullable": "NO",
+      "column_default": "gen_random_uuid()",
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "team_members",
+      "column_name": "team_id",
+      "data_type": "uuid",
+      "is_nullable": "NO",
+      "column_default": null,
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "team_members",
+      "column_name": "collaborator_id",
+      "data_type": "uuid",
+      "is_nullable": "NO",
+      "column_default": null,
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "team_members",
+      "column_name": "joined_at",
+      "data_type": "date",
+      "is_nullable": "YES",
+      "column_default": "CURRENT_DATE",
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "team_members",
+      "column_name": "left_at",
+      "data_type": "date",
+      "is_nullable": "YES",
+      "column_default": null,
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "team_members",
+      "column_name": "revision",
+      "data_type": "integer",
+      "is_nullable": "NO",
+      "column_default": "1",
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "teams",
+      "column_name": "id",
+      "data_type": "uuid",
+      "is_nullable": "NO",
+      "column_default": "gen_random_uuid()",
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "teams",
+      "column_name": "company_id",
+      "data_type": "uuid",
+      "is_nullable": "NO",
+      "column_default": null,
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "teams",
+      "column_name": "name",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "column_default": null,
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "teams",
+      "column_name": "color",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "column_default": "'#16A34A'::text",
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "teams",
+      "column_name": "leader_id",
+      "data_type": "uuid",
+      "is_nullable": "YES",
+      "column_default": null,
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "teams",
+      "column_name": "active",
+      "data_type": "boolean",
+      "is_nullable": "YES",
+      "column_default": "true",
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "teams",
+      "column_name": "created_at",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "YES",
+      "column_default": "now()",
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "teams",
+      "column_name": "updated_at",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "YES",
+      "column_default": "now()",
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "teams",
+      "column_name": "vehicle",
+      "data_type": "character varying",
+      "is_nullable": "YES",
+      "column_default": null,
+      "is_identity": "NO",
+      "identity_generation": null
+    },
+    {
+      "table_name": "teams",
+      "column_name": "revision",
+      "data_type": "integer",
+      "is_nullable": "NO",
+      "column_default": "1",
+      "is_identity": "NO",
+      "identity_generation": null
+    }
+  ],
+  "functions": [
+    {
+      "proname": "delete_client_atomic",
+      "arguments": "p_client_id uuid, p_company_id uuid, p_actor uuid, p_mutation_id uuid, p_expected_revision integer",
+      "security_definer": true,
+      "proconfig": [
+        "search_path=public"
+      ],
+      "owner": "postgres"
+    },
+    {
+      "proname": "fn_increment_revision",
+      "arguments": "",
+      "security_definer": false,
+      "proconfig": null,
+      "owner": "postgres"
+    },
+    {
+      "proname": "record_company_change_event",
+      "arguments": "p_company_id uuid, p_mutation_id uuid, p_domain text, p_event_type text, p_entity_ids uuid[], p_scopes text[], p_affected_range tstzrange, p_payload jsonb",
+      "security_definer": true,
+      "proconfig": [
+        "search_path=public"
+      ],
+      "owner": "postgres"
+    },
+    {
+      "proname": "set_invoice_status_atomic",
+      "arguments": "p_invoice_id uuid, p_company_id uuid, p_actor uuid, p_status text, p_payment_method text, p_mutation_id uuid, p_expected_revision integer",
+      "security_definer": true,
+      "proconfig": [
+        "search_path=public"
+      ],
+      "owner": "postgres"
+    }
+  ],
+  "triggers": [
+    {
+      "event_object_table": "clients",
+      "trigger_name": "trg_clients_revision",
+      "action_timing": "BEFORE",
+      "event_manipulation": "UPDATE",
+      "action_statement": "EXECUTE FUNCTION fn_increment_revision()"
+    },
+    {
+      "event_object_table": "contracts",
+      "trigger_name": "trg_contracts_revision",
+      "action_timing": "BEFORE",
+      "event_manipulation": "UPDATE",
+      "action_statement": "EXECUTE FUNCTION fn_increment_revision()"
+    },
+    {
+      "event_object_table": "invoice_items",
+      "trigger_name": "trg_invoice_items_revision",
+      "action_timing": "BEFORE",
+      "event_manipulation": "UPDATE",
+      "action_statement": "EXECUTE FUNCTION fn_increment_revision()"
+    },
+    {
+      "event_object_table": "invoices",
+      "trigger_name": "trg_invoices_revision",
+      "action_timing": "BEFORE",
+      "event_manipulation": "UPDATE",
+      "action_statement": "EXECUTE FUNCTION fn_increment_revision()"
+    },
+    {
+      "event_object_table": "locations",
+      "trigger_name": "trg_locations_revision",
+      "action_timing": "BEFORE",
+      "event_manipulation": "UPDATE",
+      "action_statement": "EXECUTE FUNCTION fn_increment_revision()"
+    },
+    {
+      "event_object_table": "services",
+      "trigger_name": "trg_services_revision",
+      "action_timing": "BEFORE",
+      "event_manipulation": "UPDATE",
+      "action_statement": "EXECUTE FUNCTION fn_increment_revision()"
+    },
+    {
+      "event_object_table": "team_members",
+      "trigger_name": "trg_team_members_revision",
+      "action_timing": "BEFORE",
+      "event_manipulation": "UPDATE",
+      "action_statement": "EXECUTE FUNCTION fn_increment_revision()"
+    },
+    {
+      "event_object_table": "teams",
+      "trigger_name": "trg_teams_revision",
+      "action_timing": "BEFORE",
+      "event_manipulation": "UPDATE",
+      "action_statement": "EXECUTE FUNCTION fn_increment_revision()"
+    }
+  ],
+  "indexes": [
+    {
+      "tablename": "cash_flow_entries",
+      "indexname": "cash_flow_entries_pkey",
+      "indexdef": "CREATE UNIQUE INDEX cash_flow_entries_pkey ON public.cash_flow_entries USING btree (id)"
+    },
+    {
+      "tablename": "cash_flow_entries",
+      "indexname": "cash_flow_entries_reference_unique",
+      "indexdef": "CREATE UNIQUE INDEX cash_flow_entries_reference_unique ON public.cash_flow_entries USING btree (company_id, reference_type, reference_id) WHERE ((reference_type IS NOT NULL) AND (reference_id IS NOT NULL))"
+    },
+    {
+      "tablename": "cash_flow_entries",
+      "indexname": "idx_cash_flow_company_date",
+      "indexdef": "CREATE INDEX idx_cash_flow_company_date ON public.cash_flow_entries USING btree (company_id, date DESC)"
+    },
+    {
+      "tablename": "company_change_events",
+      "indexname": "company_change_events_company_id_mutation_id_domain_event_t_key",
+      "indexdef": "CREATE UNIQUE INDEX company_change_events_company_id_mutation_id_domain_event_t_key ON public.company_change_events USING btree (company_id, mutation_id, domain, event_type)"
+    },
+    {
+      "tablename": "company_change_events",
+      "indexname": "company_change_events_company_id_sequence_key",
+      "indexdef": "CREATE UNIQUE INDEX company_change_events_company_id_sequence_key ON public.company_change_events USING btree (company_id, sequence)"
+    },
+    {
+      "tablename": "company_change_events",
+      "indexname": "company_change_events_pkey",
+      "indexdef": "CREATE UNIQUE INDEX company_change_events_pkey ON public.company_change_events USING btree (id)"
+    },
+    {
+      "tablename": "company_change_events",
+      "indexname": "idx_company_change_events_pending",
+      "indexdef": "CREATE INDEX idx_company_change_events_pending ON public.company_change_events USING btree (company_id, sequence) WHERE (delivered_at IS NULL)"
+    },
+    {
+      "tablename": "domain_mutations",
+      "indexname": "domain_mutations_company_id_mutation_id_key",
+      "indexdef": "CREATE UNIQUE INDEX domain_mutations_company_id_mutation_id_key ON public.domain_mutations USING btree (company_id, mutation_id)"
+    },
+    {
+      "tablename": "domain_mutations",
+      "indexname": "domain_mutations_pkey",
+      "indexdef": "CREATE UNIQUE INDEX domain_mutations_pkey ON public.domain_mutations USING btree (id)"
+    },
+    {
+      "tablename": "services",
+      "indexname": "idx_services_company_date",
+      "indexdef": "CREATE INDEX idx_services_company_date ON public.services USING btree (company_id, scheduled_start)"
+    },
+    {
+      "tablename": "services",
+      "indexname": "idx_services_company_scheduled",
+      "indexdef": "CREATE INDEX idx_services_company_scheduled ON public.services USING btree (company_id, scheduled_start) WHERE (status <> ALL (ARRAY['cancelado'::text, 'concluido'::text]))"
+    },
+    {
+      "tablename": "services",
+      "indexname": "idx_services_company_status_scheduled",
+      "indexdef": "CREATE INDEX idx_services_company_status_scheduled ON public.services USING btree (company_id, status, scheduled_start)"
+    },
+    {
+      "tablename": "services",
+      "indexname": "idx_services_company_team_scheduled",
+      "indexdef": "CREATE INDEX idx_services_company_team_scheduled ON public.services USING btree (company_id, team_id, scheduled_start)"
+    },
+    {
+      "tablename": "services",
+      "indexname": "idx_services_contract",
+      "indexdef": "CREATE INDEX idx_services_contract ON public.services USING btree (contract_id)"
+    },
+    {
+      "tablename": "services",
+      "indexname": "idx_services_location",
+      "indexdef": "CREATE INDEX idx_services_location ON public.services USING btree (location_id)"
+    },
+    {
+      "tablename": "services",
+      "indexname": "idx_services_payment_pending",
+      "indexdef": "CREATE INDEX idx_services_payment_pending ON public.services USING btree (company_id, payment_status, scheduled_start)"
+    },
+    {
+      "tablename": "services",
+      "indexname": "idx_services_status",
+      "indexdef": "CREATE INDEX idx_services_status ON public.services USING btree (company_id, status)"
+    },
+    {
+      "tablename": "services",
+      "indexname": "idx_services_team",
+      "indexdef": "CREATE INDEX idx_services_team ON public.services USING btree (team_id)"
+    },
+    {
+      "tablename": "services",
+      "indexname": "services_company_ref_unique",
+      "indexdef": "CREATE UNIQUE INDEX services_company_ref_unique ON public.services USING btree (company_id, reference_number)"
+    },
+    {
+      "tablename": "services",
+      "indexname": "services_pkey",
+      "indexdef": "CREATE UNIQUE INDEX services_pkey ON public.services USING btree (id)"
+    }
+  ],
+  "constraints": [
+    {
+      "table_name": "cash_flow_entries",
+      "conname": "cash_flow_entries_category_check",
+      "contype": "c",
+      "definition": "CHECK ((category = ANY (ARRAY['faturacao'::text, 'salario'::text, 'despesa'::text, 'fornecedor'::text, 'outro'::text])))"
+    },
+    {
+      "table_name": "cash_flow_entries",
+      "conname": "cash_flow_entries_company_id_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE"
+    },
+    {
+      "table_name": "cash_flow_entries",
+      "conname": "cash_flow_entries_created_by_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (created_by) REFERENCES profiles(id)"
+    },
+    {
+      "table_name": "cash_flow_entries",
+      "conname": "cash_flow_entries_pkey",
+      "contype": "p",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "table_name": "cash_flow_entries",
+      "conname": "cash_flow_entries_reference_type_check",
+      "contype": "c",
+      "definition": "CHECK ((reference_type = ANY (ARRAY['invoice'::text, 'payroll'::text, 'service_payment'::text])))"
+    },
+    {
+      "table_name": "cash_flow_entries",
+      "conname": "cash_flow_entries_status_check",
+      "contype": "c",
+      "definition": "CHECK ((status = ANY (ARRAY['pendente'::text, 'confirmado'::text])))"
+    },
+    {
+      "table_name": "cash_flow_entries",
+      "conname": "cash_flow_entries_type_check",
+      "contype": "c",
+      "definition": "CHECK ((type = ANY (ARRAY['entrada'::text, 'saida'::text])))"
+    },
+    {
+      "table_name": "company_change_events",
+      "conname": "company_change_events_company_id_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE"
+    },
+    {
+      "table_name": "company_change_events",
+      "conname": "company_change_events_company_id_mutation_id_domain_event_t_key",
+      "contype": "u",
+      "definition": "UNIQUE (company_id, mutation_id, domain, event_type)"
+    },
+    {
+      "table_name": "company_change_events",
+      "conname": "company_change_events_company_id_sequence_key",
+      "contype": "u",
+      "definition": "UNIQUE (company_id, sequence)"
+    },
+    {
+      "table_name": "company_change_events",
+      "conname": "company_change_events_pkey",
+      "contype": "p",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "table_name": "domain_mutations",
+      "conname": "domain_mutations_company_id_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE"
+    },
+    {
+      "table_name": "domain_mutations",
+      "conname": "domain_mutations_company_id_mutation_id_key",
+      "contype": "u",
+      "definition": "UNIQUE (company_id, mutation_id)"
+    },
+    {
+      "table_name": "domain_mutations",
+      "conname": "domain_mutations_pkey",
+      "contype": "p",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "table_name": "domain_mutations",
+      "conname": "domain_mutations_status_check",
+      "contype": "c",
+      "definition": "CHECK ((status = 'completed'::text))"
+    },
+    {
+      "table_name": "services",
+      "conname": "services_cancel_type_check",
+      "contype": "c",
+      "definition": "CHECK ((cancel_type = ANY (ARRAY['client_request'::text, 'weather'::text, 'operational'::text, 'equipment'::text, 'other'::text])))"
+    },
+    {
+      "table_name": "services",
+      "conname": "services_cancelled_by_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (cancelled_by) REFERENCES profiles(id)"
+    },
+    {
+      "table_name": "services",
+      "conname": "services_cleaning_type_chk",
+      "contype": "c",
+      "definition": "CHECK (((cleaning_type IS NULL) OR (cleaning_type = ANY (ARRAY['manutencao'::text, 'manutencao_lisboa'::text, 'pos_obra'::text, 'pos_obra_lisboa'::text, 'geral'::text, 'geral_lisboa'::text, 'estofos'::text]))))"
+    },
+    {
+      "table_name": "services",
+      "conname": "services_company_id_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE"
+    },
+    {
+      "table_name": "services",
+      "conname": "services_contract_id_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (contract_id) REFERENCES contracts(id) ON DELETE SET NULL"
+    },
+    {
+      "table_name": "services",
+      "conname": "services_created_by_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (created_by) REFERENCES profiles(id)"
+    },
+    {
+      "table_name": "services",
+      "conname": "services_location_id_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (location_id) REFERENCES locations(id) ON DELETE RESTRICT"
+    },
+    {
+      "table_name": "services",
+      "conname": "services_num_people_chk",
+      "contype": "c",
+      "definition": "CHECK ((num_people >= 1))"
+    },
+    {
+      "table_name": "services",
+      "conname": "services_payment_status_chk",
+      "contype": "c",
+      "definition": "CHECK (((payment_status IS NULL) OR (payment_status = ANY (ARRAY['nao_informado'::text, 'sinal_50'::text, 'pago_total'::text]))))"
+    },
+    {
+      "table_name": "services",
+      "conname": "services_pkey",
+      "contype": "p",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "table_name": "services",
+      "conname": "services_status_check",
+      "contype": "c",
+      "definition": "CHECK ((status = ANY (ARRAY['agendado'::text, 'em_curso'::text, 'concluido'::text, 'cancelado'::text, 'falta'::text, 'sem_cobertura'::text])))"
+    },
+    {
+      "table_name": "services",
+      "conname": "services_team_id_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (team_id) REFERENCES teams(id) ON DELETE SET NULL"
+    },
+    {
+      "table_name": "services",
+      "conname": "services_upholstery_type_chk",
+      "contype": "c",
+      "definition": "CHECK (((upholstery_type IS NULL) OR (upholstery_type = ANY (ARRAY['sofa'::text, 'poltrona'::text, 'cadeira'::text, 'tapete'::text, 'colchao'::text, 'unidade'::text, 'outro'::text]))))"
+    }
+  ],
+  "policies": [
+    {
+      "schemaname": "public",
+      "tablename": "company_change_events",
+      "policyname": "managers see company change events",
+      "roles": "{public}",
+      "cmd": "SELECT",
+      "qual": "((company_id = ( SELECT profiles.company_id\n   FROM profiles\n  WHERE (profiles.id = auth.uid()))) AND (( SELECT profiles.role\n   FROM profiles\n  WHERE (profiles.id = auth.uid())) = ANY (ARRAY['admin'::text, 'gestor'::text])))",
+      "with_check": null
+    },
+    {
+      "schemaname": "public",
+      "tablename": "domain_mutations",
+      "policyname": "service role domain mutations",
+      "roles": "{public}",
+      "cmd": "ALL",
+      "qual": "false",
+      "with_check": "false"
+    }
+  ],
+  "grants": [
+    {
+      "routine_name": "delete_client_atomic",
+      "grantee": "postgres",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "delete_client_atomic",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "record_company_change_event",
+      "grantee": "anon",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "record_company_change_event",
+      "grantee": "authenticated",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "record_company_change_event",
+      "grantee": "postgres",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "record_company_change_event",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "set_invoice_status_atomic",
+      "grantee": "postgres",
+      "privilege_type": "EXECUTE"
+    },
+    {
+      "routine_name": "set_invoice_status_atomic",
+      "grantee": "service_role",
+      "privilege_type": "EXECUTE"
+    }
+  ],
+  "realtime": [
+    {
+      "pubname": "supabase_realtime",
+      "schemaname": "public",
+      "tablename": "notifications"
+    },
+    {
+      "pubname": "supabase_realtime",
+      "schemaname": "public",
+      "tablename": "services"
+    }
+  ],
+  "counts": [
+    {
+      "table_name": "domain_mutations",
+      "count": 0
+    },
+    {
+      "table_name": "company_change_events",
+      "count": 0
+    }
+  ],
+  "migrations": [
+    {
+      "source": "supabase_migrations.schema_migrations",
+      "count": 0
+    },
+    {
+      "source": "public._migrations",
+      "count": 67
+    }
+  ]
+}
