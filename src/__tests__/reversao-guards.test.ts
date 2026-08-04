@@ -330,7 +330,12 @@ describe("auditoria F — campos operacionais, delete atómico e actor", () => {
 // ── 4. Rastreabilidade: /api/health tem de expor a versão em produção.
 describe("versão do deploy rastreável", () => {
   it("/api/health devolve o commit (VERCEL_GIT_COMMIT_SHA)", () => {
-    const src = readFileSync(join(SRC, "app", "api", "health", "route.ts"), "utf8");
-    expect(src).toContain("VERCEL_GIT_COMMIT_SHA");
+    // A leitura de VERCEL_GIT_COMMIT_SHA vive em src/lib/deploy-info.ts
+    // (fonte única, também usada por /api/health/deep e pela página de
+    // diagnóstico) — route.ts só chama deployCommit().
+    const route = readFileSync(join(SRC, "app", "api", "health", "route.ts"), "utf8");
+    const deployInfo = readFileSync(join(SRC, "lib", "deploy-info.ts"), "utf8");
+    expect(route).toContain("deployCommit");
+    expect(deployInfo).toContain("VERCEL_GIT_COMMIT_SHA");
   });
 });

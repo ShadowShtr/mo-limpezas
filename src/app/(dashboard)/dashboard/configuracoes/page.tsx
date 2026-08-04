@@ -35,6 +35,13 @@ export default async function ConfiguracoesPage() {
             Histórico de tudo o que mudou (clientes, contratos, serviços, valores) com botão para restaurar valores anteriores.
           </span>
         </a>
+        <a href="/dashboard/sistema/diagnostico"
+          className="block rounded-xl border border-[var(--color-border)] bg-white px-4 py-3 hover:bg-[var(--color-background)] transition-colors">
+          <span className="text-sm font-semibold text-[var(--color-text-main)]">Diagnóstico do Sistema →</span>
+          <span className="block text-xs text-[var(--color-text-muted)] mt-0.5">
+            Confirma que este dispositivo fala com o commit, ambiente e projeto Supabase corretos, e se o banco tem a migration que o código espera.
+          </span>
+        </a>
         <BackupSection />
         <SettingsForm initial={settings} />
         <CsvImport />

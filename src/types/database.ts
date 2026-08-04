@@ -175,6 +175,25 @@ export type Database = {
         Update: Record<string, never>;
         Relationships: [];
       };
+      // _migrations e company_change_events já existem no projeto Supabase
+      // ligado (confirmado por auditoria read-only, ver
+      // docs/atomicidade-audit/schema-audit.json), mas ainda não fazem parte
+      // de nenhuma migration registada neste repositório nesta forma — só
+      // tipados aqui para permitir consultas server-side type-safe (usado por
+      // src/lib/deep-health.ts). Nunca escrever nestas tabelas a partir do
+      // browser.
+      _migrations: {
+        Row: { name: string; checksum: string | null; applied_at: string };
+        Insert: { name: string; checksum?: string | null; applied_at?: string };
+        Update: Record<string, never>;
+        Relationships: [];
+      };
+      company_change_events: {
+        Row: { id: string; company_id: string; sequence: number; mutation_id: string; domain: string; event_type: string; entity_ids: string[]; scopes: string[]; affected_from: string | null; affected_to: string | null; payload: Record<string, unknown>; created_at: string };
+        Insert: { company_id: string; mutation_id: string; domain: string; event_type: string; entity_ids?: string[]; scopes?: string[]; affected_from?: string | null; affected_to?: string | null; payload?: Record<string, unknown> };
+        Update: Record<string, never>;
+        Relationships: [];
+      };
       background_jobs: {
         Row: { id: string; type: string; status: string; company_id: string | null; cursor: number; total: number; processed: number; failed: number; last_error: string | null; meta: Record<string, unknown>; job_key: string | null; started_at: string; finished_at: string | null; updated_at: string };
         Insert: { type: string; status?: string; company_id?: string | null; cursor?: number; total?: number; processed?: number; failed?: number; last_error?: string | null; meta?: Record<string, unknown>; job_key?: string | null; id?: string; started_at?: string; finished_at?: string | null; updated_at?: string };
