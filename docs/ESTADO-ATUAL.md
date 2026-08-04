@@ -116,8 +116,22 @@ migration (68 migrations ativas) — o diagnóstico
 (`/dashboard/sistema/diagnostico`) passa a reportar o ledger como
 alinhado com o código outra vez.
 
-## Pendente — só o dono pode confirmar
+## PITR/backup — confirmado pelo dono (2026-08-04)
 
-- Painel Supabase → Backups e Settings da organização → Billing: plano
-  exato e o que inclui (já confirmado visualmente como Free; falta
-  confirmar se há alguma retenção de backup mesmo assim).
+Todos os projetos Supabase desta conta estão no plano **Free**: sem PITR,
+sem backup automático/gerido pela Supabase. Confirmado diretamente pelo
+dono (painel Backups + Billing da organização), não é suposição. Decisão
+explícita: continuar em produção assim mesmo, sem upgrade de plano nem
+projeto adicional. Consequência operacional permanente enquanto isto não
+mudar:
+
+- o backup manual (`node scripts/backup-all.mjs`) é a única cópia de
+  dados recuperável — deve ser corrido antes de qualquer migration que
+  toque em dados, não só em schema;
+- não há rede de segurança da Supabase para desfazer uma migration mal
+  aplicada — por isso o ensaio `BEGIN...ROLLBACK`
+  (`scripts/rehearse-migration.mjs`) antes de `--apply` deixa de ser
+  "boa prática" e passa a ser obrigatório, sem exceção, para qualquer
+  migration que altere estrutura ou dados;
+- migrations destrutivas (`DROP COLUMN`, `DELETE`, etc.) exigem backup
+  manual fresco imediatamente antes, sempre.
