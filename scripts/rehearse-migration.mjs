@@ -55,14 +55,22 @@ if (!existsSync(migrationPath)) {
 const sql = readFileSync(migrationPath, "utf8");
 
 async function grantSnapshot(client) {
-  const { rows } = await client.query(`
+  const functionGrants = (await client.query(`
     SELECT routine_name, grantee, privilege_type
     FROM information_schema.routine_privileges
     WHERE routine_schema = 'public'
       AND routine_name IN ('record_company_change_event', 'delete_client_atomic', 'set_invoice_status_atomic')
     ORDER BY routine_name, grantee
-  `);
-  return JSON.stringify(rows);
+  `)).rows;
+  const tableGrants = (await client.query(`
+    SELECT table_name, grantee, privilege_type
+    FROM information_schema.role_table_grants
+    WHERE table_schema = 'public'
+      AND table_name IN ('domain_mutations', 'company_change_events', 'company_sync_state')
+      AND grantee IN ('anon', 'authenticated', 'PUBLIC')
+    ORDER BY table_name, grantee, privilege_type
+  `)).rows;
+  return JSON.stringify({ functionGrants, tableGrants });
 }
 
 async function main() {
@@ -70,7 +78,7 @@ async function main() {
   await preClient.connect();
   const before = await grantSnapshot(preClient);
   await preClient.end();
-  console.log("📸 Fingerprint (grants das 3 funções) ANTES do ensaio capturado.");
+  console.log("📸 Fingerprint (grants de funções + tabelas do outbox) ANTES do ensaio capturado.");
 
   const client = new pg.Client({ connectionString: DB_URL, ssl: { rejectUnauthorized: false } });
   await client.connect();
@@ -81,15 +89,9 @@ async function main() {
     await client.query(sql);
     console.log("✅ Migration executou sem erro dentro da transação.");
 
-    const { rows } = await client.query(`
-      SELECT routine_name, grantee, privilege_type
-      FROM information_schema.routine_privileges
-      WHERE routine_schema = 'public'
-        AND routine_name IN ('record_company_change_event', 'delete_client_atomic', 'set_invoice_status_atomic')
-        AND grantee IN ('anon', 'authenticated', 'PUBLIC')
-    `);
-    console.log(`🔍 Verificação dentro da transação: ${rows.length} grant(s) residual(is) a anon/authenticated/PUBLIC (esperado: 0).`);
-    if (rows.length > 0) console.log(rows);
+    const snapshotInTx = JSON.parse(await grantSnapshot(client));
+    console.log(`🔍 Estado dentro da transação — grants de função: ${snapshotInTx.functionGrants.length}, grants de tabela (anon/authenticated/PUBLIC): ${snapshotInTx.tableGrants.length}.`);
+    console.log(snapshotInTx);
 
     if (verifyFile) {
       const verifyPath = join(MIGRATIONS_DIR, verifyFile);

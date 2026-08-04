@@ -99,6 +99,13 @@ O diagnóstico deve apresentar:
   necessária no estado atual.
 - Lacuna corrigida: `scripts/backup-all.mjs` não incluía `building_cards`
   nem `data_history` — corrigido, backup novo já cobre as duas.
+- **Achado grave, ainda não corrigido em produção**: `anon` e
+  `authenticated` tinham (antes da migration 065 nova, ver abaixo)
+  privilégios completos — incluindo `TRUNCATE` — em `domain_mutations` e
+  `company_change_events`. RLS não cobre `TRUNCATE` no Postgres (limitação
+  do motor, não erro de policy) — qualquer cliente com a chave `anon`
+  podia apagar as duas tabelas por completo. Impacto real até agora: zero
+  (tabelas vazias). Corrigido pela migration 065 nova (ver abaixo).
 
 ## Migration 064 (nova) — APLICADA em produção (2026-08-04 16:33 UTC)
 
@@ -123,6 +130,24 @@ anon/authenticated/PUBLIC nas 3 funções, registo correto em
 migration (68 migrations ativas) — o diagnóstico
 (`/dashboard/sistema/diagnostico`) passa a reportar o ledger como
 alinhado com o código outra vez.
+
+## Migration 065 (nova) — ensaiada, ainda não aplicada
+
+`supabase/migrations/065_revoke_public_grants_outbox_tables.sql` — fecha
+o achado grave descrito acima: `REVOKE ALL` de `anon`/`authenticated` em
+`domain_mutations` e `company_change_events` (incluindo `TRUNCATE`,
+`INSERT`, `UPDATE`, `DELETE` — não só `EXECUTE` de função como a 064),
+com `GRANT SELECT` de volta só em `company_change_events` para
+`authenticated` (caminho de leitura pretendido para gestores, já
+protegido por RLS).
+
+Ensaiada com `node scripts/rehearse-migration.mjs` (generalizado nesta
+etapa para também capturar grants de tabela, não só de função) —
+sucesso, dentro da transação `authenticated` fica só com `SELECT` em
+`company_change_events` e nada em `domain_mutations`, `ROLLBACK`
+confirmado eficaz, fingerprint idêntico antes/depois. Já adicionada a
+`activeMigrations` (69 migrations ativas). **Falta autorização explícita
+para `--apply`.**
 
 ## PITR/backup — confirmado pelo dono (2026-08-04)
 
