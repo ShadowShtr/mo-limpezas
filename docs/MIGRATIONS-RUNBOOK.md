@@ -19,6 +19,11 @@ Este é o único procedimento vigente para migrations da Mó Limpezas.
 6. Não aplicar alteração destrutiva junto da primeira versão do código que depende dela.
 7. Não executar migration se o fingerprint real divergir das pré-condições aprovadas.
 8. Não usar o runner para reconciliar manualmente 064/065.
+9. Se um comentário ou explicação numa migration já registada estiver
+   errado ou excessivo (ex.: precedente de 2026-08-04,
+   `docs/atomicidade-audit/065-errata-explorabilidade-truncate.md`), a
+   correção fica sempre numa **errata separada** — nunca editando o
+   ficheiro aplicado, mesmo que seja só um comentário.
 
 ## Validação local obrigatória
 

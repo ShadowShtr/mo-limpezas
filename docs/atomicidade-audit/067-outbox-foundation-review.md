@@ -1,4 +1,4 @@
-# Migration 066 — fundação do outbox — revisão completa
+# Migration 067 — fundação do outbox — revisão completa
 
 Data: 2026-08-04. Escrita, revista e ensaiada com `BEGIN...ROLLBACK`
 diretamente na base real. **Não aplicada.** Escopo estritamente limitado à
@@ -13,15 +13,15 @@ duas chamadas concorrentes com o **mesmo** `mutation_id` podiam ambas passar
 o `SELECT` sem encontrar nada (nenhuma tinha ainda cometido o `INSERT`),
 ambas tentar `INSERT`, e a segunda falhar com violação de unicidade em vez
 de devolver o evento idempotente da primeira — exatamente o cenário que
-`lock_domain_mutation` (já existente na 066, mas sem chamador) foi desenhada
+`lock_domain_mutation` (já existente na 067, mas sem chamador) foi desenhada
 para prevenir. Corrigido: `record_company_change_event` agora chama
 `PERFORM public.lock_domain_mutation(p_company_id, p_mutation_id)` **antes**
 do `SELECT`, serializando chamadas com o mesmo `mutation_id`.
 
 Revalidado: ensaio completo repetido (21/21, incluindo novo check estrutural
 que confirma o lock vem antes do SELECT no corpo da função) e o rollback
-(`066-rollback.sql`) re-testado com a versão corrigida — fingerprint
-idêntico ao pré-066.
+(`067-rollback.sql`) re-testado com a versão corrigida — fingerprint
+idêntico ao pré-067.
 
 Ainda por fazer (só possível em staging, ver secção 4): prova empírica com
 duas ligações reais simultâneas chamando `record_company_change_event` com
@@ -29,7 +29,7 @@ o mesmo `mutation_id`.
 
 ## 1. SQL final
 
-`supabase/migrations/066_outbox_foundation.sql` (íntegro, committed). Resumo
+`supabase/migrations/067_outbox_foundation.sql` (íntegro, committed). Resumo
 por secção:
 
 1. `company_sync_state` — nova tabela, RLS `FOR ALL USING (false)`, sem
@@ -79,7 +79,7 @@ por secção:
 
 ## 3. Resultados das verificações — 21/21 (ronda 2, com o fix do lock)
 
-Script: `scripts/rehearse-066-outbox-foundation.mjs`. Tudo dentro de uma
+Script: `scripts/rehearse-067-outbox-foundation.mjs`. Tudo dentro de uma
 única transação `BEGIN...ROLLBACK` na base real; nada persistido.
 
 | # | Verificação | Resultado |

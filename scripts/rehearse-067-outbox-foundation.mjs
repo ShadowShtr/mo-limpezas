@@ -1,5 +1,5 @@
 // ============================================================================
-// ENSAIO PROFUNDO — 066_outbox_foundation.sql
+// ENSAIO PROFUNDO — 067_outbox_foundation.sql
 // ============================================================================
 // Tudo dentro de UMA transação (BEGIN...ROLLBACK), incluindo:
 //   - aplicar a migration;
@@ -38,7 +38,7 @@ for (const f of [".env.local", ".env"]) {
 const DB_URL = process.env.SUPABASE_DB_URL || process.env.DATABASE_URL;
 if (!DB_URL) { console.error("Define SUPABASE_DB_URL."); process.exit(1); }
 
-const MIGRATION_FILE = "066_outbox_foundation.sql";
+const MIGRATION_FILE = "067_outbox_foundation.sql";
 const sql = readFileSync(join(MIGRATIONS_DIR, MIGRATION_FILE), "utf8");
 
 const results = [];

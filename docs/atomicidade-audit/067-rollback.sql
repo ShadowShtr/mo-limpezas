@@ -1,17 +1,17 @@
 -- ============================================================================
--- ROLLBACK MANUAL da 066_outbox_foundation.sql
+-- ROLLBACK MANUAL da 067_outbox_foundation.sql
 -- ============================================================================
 -- NAO faz parte da cadeia de migrations (nao correr via run-migrations.mjs).
--- So para usar manualmente se a 066 for aplicada e precisar de ser revertida.
+-- So para usar manualmente se a 067 for aplicada e precisar de ser revertida.
 -- Como domain_mutations/company_change_events estavam vazias antes e depois
 -- do ensaio, esta reversao e puramente estrutural - sem perda de dados de
 -- negocio em nenhum dos dois sentidos, DESDE QUE ainda estejam vazias no
 -- momento da reversao (confirmar com as queries no fim antes de gravar).
 --
 -- TESTADO em 2026-08-04: dentro de uma unica transacao de ensaio na base
--- real, aplicou-se 066 e de seguida este rollback, e comparou-se o
+-- real, aplicou-se 067 e de seguida este rollback, e comparou-se o
 -- fingerprint (colunas, constraints, grants, IDENTITY, funcoes,
--- company_sync_state) com o estado imediatamente antes da 066. Resultado:
+-- company_sync_state) com o estado imediatamente antes da 067. Resultado:
 -- identico em tudo, exceto a ORDEM FISICA de 3 colunas em
 -- company_change_events (affected_range/delivered_at/created_at) - ADD
 -- COLUMN recoloca sempre no fim, sem nenhum efeito funcional (ninguem no
@@ -45,7 +45,7 @@ END;
 $$;
 
 -- 2. record_company_change_event: volta a assinatura antiga (tstzrange) com
---    ON CONFLICT DO UPDATE (comportamento pre-066)
+--    ON CONFLICT DO UPDATE (comportamento pre-067)
 DROP FUNCTION IF EXISTS public.record_company_change_event(uuid, uuid, text, text, uuid[], text[], date, date, jsonb);
 
 CREATE OR REPLACE FUNCTION public.record_company_change_event(
@@ -107,7 +107,7 @@ CREATE INDEX IF NOT EXISTS idx_company_change_events_pending
   ON public.company_change_events(company_id, sequence) WHERE (delivered_at IS NULL);
 
 -- Grants: repõe o estado pos-065 (so SELECT para authenticated, nada anon) -
--- a 066 nao alterou isto, mas garantir explicitamente
+-- a 067 nao alterou isto, mas garantir explicitamente
 REVOKE ALL ON public.company_change_events FROM PUBLIC, anon, authenticated;
 GRANT SELECT ON public.company_change_events TO authenticated;
 

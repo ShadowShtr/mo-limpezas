@@ -80,10 +80,47 @@ Sequências com `USAGE` concedido a `anon`/`authenticated`:
 
 Isto é um padrão consistente com o comportamento por omissão do Postgres/
 Supabase ao criar tabelas sem revogar explicitamente os privilégios
-concedidos por omissão — **não é um erro isolado das migrations 064/065/066,
-é sistémico em todo o histórico do projeto.**
+concedidos por omissão — **não é um erro isolado das migrations
+064/065/067 (fundação do outbox), é sistémico em todo o histórico do
+projeto.**
 
-### Risco real
+### Classificação (revisão externa, 2026-08-04) — não são 528 vulnerabilidades
+
+O número 528 é um inventário de privilégios amplos, não a contagem final
+de falhas reais. Classificação por categoria:
+
+1. **Revogar quase certamente**: `TRUNCATE`, `TRIGGER`, `REFERENCES` em
+   `anon`/`authenticated` — 44 tabelas/views. Salvo necessidade
+   explicitamente comprovada, sem motivo para existirem.
+2. **`_migrations` — exploração prática confirmada, prioridade imediata**:
+   RLS **desligada** + grants completos. Ao contrário do `TRUNCATE`
+   (secção 2), `INSERT`/`UPDATE`/`DELETE` **são** expostos pelo PostgREST
+   normal — com RLS desligada, isto era mesmo explorável via API pública
+   para adulterar o ledger de migrations. **Corrigido como migration `066`
+   isolada** (`066_secure_migrations_ledger.sql`), separada da fundação
+   do outbox — ver `docs/ESTADO-ATUAL.md`.
+3. **6 views com grant de escrita direto** (`services_full`,
+   `teams_with_members`, `monthly_hours_summary`,
+   `services_calendar_summary`, `services_mobile_collaborator`,
+   `services_financial_private`): não devem ser classificadas como
+   exploráveis só pela leitura dos grants — uma view sem
+   `security_invoker=true` não implica automaticamente que uma escrita
+   ignore RLS; depende de ser realmente updatable
+   (`information_schema.views.is_insertable_into`), ter regras/triggers
+   `INSTEAD OF`, e do dono real. Precisa de investigação dedicada por
+   view antes de qualquer correção — fica fora desta entrega.
+4. **`companies`/`audit_logs`**: têm grant de escrita mas RLS ligada sem
+   policy correspondente — **seguro na prática** (RLS nega por omissão
+   sem policy), só grants redundantes, sem urgência.
+5. **Resto (`INSERT`/`UPDATE`/`DELETE` nas restantes tabelas, `USAGE` em
+   sequências)**: precisa de auditoria tabela a tabela — `SELECT`/
+   `INSERT`/`UPDATE`/`DELETE` concedidos às roles da API fazem parte do
+   modelo normal do PostgREST (é a RLS que decide quais linhas são
+   acedidas, não o grant em si); uma revogação global cega pode fechar
+   isto e simultaneamente quebrar funcionalidade legítima da aplicação.
+   **Não fazer um `REVOKE` geral sem testar cada policy primeiro.**
+
+### `TRUNCATE`: risco real, mas não a via de exploração mais provável
 
 - `SELECT`/`INSERT`/`UPDATE`/`DELETE`: mitigado por RLS **onde as policies
   estiverem corretas e completas** — não verificado tabela a tabela nesta
@@ -97,13 +134,13 @@ concedidos por omissão — **não é um erro isolado das migrations 064/065/066
   ser corrigida — não é um problema "menor" só porque não encontrámos
   exploração.
 
-### Isto está fora do escopo desta entrega (migration 066)
+### Fora do escopo desta entrega (as views e o resto das tabelas)
 
-Corrigir isto exige uma auditoria e uma migration à parte, dedicada,
-cobrindo todo o schema — não algo para misturar com a fundação do outbox.
-Recomendo tratar como o próximo passo depois de resolvida a decisão sobre a
-066, no mesmo padrão (escrever, rever, ensaiar com `BEGIN...ROLLBACK`,
-autorização explícita antes de aplicar), mas como peça própria.
+Corrigir as 6 views e auditar o resto das tabelas exige investigação
+dedicada, tabela a tabela / view a view — não misturar com a fundação do
+outbox nem aplicar de forma cega. Fica como próxima entrega própria e
+separada, no mesmo padrão (escrever, rever, ensaiar com
+`BEGIN...ROLLBACK`, autorização explícita antes de aplicar).
 
 ## 4. Chave `anon` pública
 
@@ -121,8 +158,8 @@ deve ser considerada nessa altura, não agora.
   mais nenhuma tabela.
 - O vetor de exploração direto pela chave `anon` pública era pouco provável
   (sem `LOGIN`, sem verbo TRUNCATE na API pública).
-- Mas o problema é muito maior do que as 2 tabelas corrigidas: praticamente
-  todo o schema público tem os mesmos grants em excesso.
-- Recomendação: tratar como item de segurança de prioridade alta, mas como
-  entrega própria e separada — não misturar com a decisão sobre aplicar a
-  066.
+- Mas o problema é muito maior do que as 2 tabelas do outbox: praticamente
+  todo o schema público tem os mesmos grants em excesso. `_migrations` —
+  a única com exploração prática confirmada — já está corrigida (migration
+  `066`, isolada). As 6 views e o resto das tabelas ficam para entrega
+  própria e separada, não misturada com a decisão sobre aplicar 066/067.

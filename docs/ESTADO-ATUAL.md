@@ -153,38 +153,86 @@ nenhum privilégio em nenhuma das duas — o `TRUNCATE` aberto está
 fechado. `activeMigrations` já tinha esta migration (69 migrations
 ativas).
 
-## Migration 066 (nova) — ensaiada com sucesso total (20/20), ainda não aplicada
+## Renumeração (2026-08-04, ronda 2 de revisão)
 
-`supabase/migrations/066_outbox_foundation.sql` — fundação do outbox:
-`company_sync_state` (sequência atómica por empresa via `SELECT ... FOR
-UPDATE`), `domain_mutations` idempotente (`operation`/`entity_id`/
-`request_hash`/`completed_at`, `find_or_conflict_domain_mutation`,
-`complete_domain_mutation`, `lock_domain_mutation`), `company_change_events`
-sem `IDENTITY` global (sequência por empresa), `affected_from`/`affected_to`
-com CHECK de coerência, `record_company_change_event` reescrita para nunca
-atualizar um evento existente (append-only), e publicação Realtime só
-adicionada depois de tudo o resto. Não toca em nenhuma RPC de negócio.
+A fundação do outbox passou de `066` para `067`. A vaga aberta pela
+classificação dos grants (secção seguinte) revelou que `_migrations`
+também precisa de uma correção urgente e isolada — como a antiga 066
+(outbox) ainda não estava aplicada, coube-lhe o número seguinte livre
+(`067`) e a nova correção de `_migrations` ocupa o `066`, para o runner
+aplicar primeiro a proteção do próprio ledger. Ficheiros, scripts,
+documentação e `migration-policy.json` todos atualizados em conjunto
+(commit único, sem referências partidas).
 
-Ensaiada com `node scripts/rehearse-066-outbox-foundation.mjs` (novo,
-específico desta migration) — **20/20 verificações**, incluindo um teste
-EMPÍRICO de isolamento (não só leitura da policy): cria 2 empresas e 2
-utilizadores sintéticos dentro da própria transação, assume a role
-`authenticated` com `request.jwt.claim.sub` de cada um (exatamente como o
-PostgREST faz), e confirma que o utilizador da empresa A nunca vê o
-evento da empresa B e vice-versa; confirma que `anon` recebe permission
-denied; confirma que `authenticated` nem consegue `SELECT` em
-`domain_mutations`. Tudo dentro de `BEGIN...ROLLBACK` — nada persistido,
-fingerprint idêntico antes/depois.
+## Migration 066 (nova) — protege `_migrations`, ensaiada, ainda não aplicada
+
+`supabase/migrations/066_secure_migrations_ledger.sql` — achado da
+classificação de grants: `_migrations` tinha RLS **desligada** e grants
+completos (`SELECT`/`INSERT`/`UPDATE`/`DELETE`/`TRUNCATE`/`TRIGGER`/
+`REFERENCES`) para `anon`/`authenticated`. Ao contrário do `TRUNCATE`, o
+PostgREST **expõe** `INSERT`/`UPDATE`/`DELETE` normalmente — com RLS
+desligada isto era explorável de facto via API pública para adulterar o
+ledger de migrations. `REVOKE ALL` de `PUBLIC`/`anon`/`authenticated`,
+RLS ativa com policy bloqueada (`FOR ALL USING (false)`). Não toca em
+`service_role` (mantém os seus grants) nem no dono da tabela (`postgres`,
+usado pelo runner — donos ignoram RLS por omissão).
+
+Ensaiada com `node scripts/rehearse-066-secure-migrations-ledger.mjs`
+(novo): confirma `anon`/`authenticated`/`PUBLIC` com zero privilégios,
+RLS ativa, só a policy bloqueada, fora da publicação Realtime, o runner
+(`postgres`, dono) continua a conseguir ler e inserir depois da proteção,
+`service_role` mantém os seus grants, e acesso real como `anon`/
+`authenticated` (via `SET LOCAL ROLE` + verificação de `permission
+denied`) bloqueado tanto para leitura como escrita. Tudo dentro de
+`BEGIN...ROLLBACK`, fingerprint idêntico antes/depois.
+
+Escopo estritamente limitado a `_migrations` — as 6 views sinalizadas
+(`services_full`, `teams_with_members`, `monthly_hours_summary`,
+`services_calendar_summary`, `services_mobile_collaborator`,
+`services_financial_private`) ficam para investigação dedicada (ver
+secção seguinte), não tocadas aqui.
+
+**Ainda não aplicada — falta autorização explícita para `--apply`.**
+
+## Migration 067 (fundação do outbox) — ensaiada, ainda não aplicada
+
+`supabase/migrations/067_outbox_foundation.sql` (renumerada de 066) —
+fundação do outbox: `company_sync_state` (sequência atómica por empresa
+via `SELECT ... FOR UPDATE`), `domain_mutations` idempotente
+(`operation`/`entity_id`/`request_hash`/`completed_at`,
+`find_or_conflict_domain_mutation`, `complete_domain_mutation`,
+`lock_domain_mutation`), `company_change_events` sem `IDENTITY` global
+(sequência por empresa), `affected_from`/`affected_to` com CHECK de
+coerência, `record_company_change_event` reescrita para nunca atualizar
+um evento existente (append-only) **e agora com `lock_domain_mutation`
+antes do `SELECT`** — corrigido numa segunda ronda de revisão (ver
+`docs/atomicidade-audit/067-outbox-foundation-review.md`, secção 0):
+sem o lock, duas chamadas concorrentes com o mesmo `mutation_id` podiam
+ambas passar o `SELECT` sem encontrar nada e a segunda falhar com
+violação de unicidade em vez de devolver o evento idempotente. Publicação
+Realtime só adicionada depois de tudo o resto. Não toca em nenhuma RPC de
+negócio.
+
+Ensaiada com `node scripts/rehearse-067-outbox-foundation.mjs`
+(renumerado) — **21/21 verificações**, incluindo um teste EMPÍRICO de
+isolamento (não só leitura da policy): cria 2 empresas e 2 utilizadores
+sintéticos dentro da própria transação, assume a role `authenticated`
+com `request.jwt.claim.sub` de cada um (exatamente como o PostgREST
+faz), e confirma que o utilizador da empresa A nunca vê o evento da
+empresa B e vice-versa; confirma que `anon` recebe permission denied;
+confirma que `authenticated` nem consegue `SELECT` em `domain_mutations`.
+Tudo dentro de `BEGIN...ROLLBACK` — nada persistido, fingerprint idêntico
+antes/depois.
 
 Detalhe completo, riscos e limitação assumida (concorrência entre duas
 ligações reais não pôde ser testada pré-aplicação, só a correção lógica
-do `SELECT...FOR UPDATE`) em
-`docs/atomicidade-audit/066-outbox-foundation-review.md`.
+do `SELECT...FOR UPDATE`/lock) em
+`docs/atomicidade-audit/067-outbox-foundation-review.md`.
 
 **Ainda não aplicada — falta autorização explícita para `--apply`.**
-`activeMigrations` já tem esta migration (70 migrations ativas).
+`activeMigrations` já tem as duas migrations (71 migrations ativas).
 
-## Portão de autorização da 066 — condições do dono (2026-08-04)
+## Portão de autorização das 066/067 — condições do dono (2026-08-04)
 
 Autorização de aplicação em produção **negada por agora**. Condições
 antes de reconsiderar:
@@ -193,36 +241,83 @@ antes de reconsiderar:
    revisão independente do commit exato.
 2. ✅ `next_company_sequence` reexaminada — já usa o padrão seguro pedido
    (`INSERT ... ON CONFLICT DO NOTHING` antes do `SELECT ... FOR UPDATE`),
-   não a versão racy. Falta prova empírica com 2 ligações reais
-   simultâneas (só possível com staging — DDL não confirmado não é
-   visível entre ligações diferentes).
-3. ✅ Investigação do incidente do `TRUNCATE` concluída — sem evidência de
-   exploração passada; achado muito maior encontrado (grants perigosos em
-   quase todo o schema público, não só as 2 tabelas do outbox). Ver
+   não a versão racy.
+3. ✅ Corrida em `record_company_change_event` corrigida (`lock_domain_mutation`
+   antes do `SELECT`) numa segunda ronda de revisão. Falta prova empírica
+   com ligações reais simultâneas (só possível com staging).
+4. ✅ Investigação do incidente do `TRUNCATE` concluída — sem evidência de
+   exploração passada; achado maior encontrado e agora **classificado**
+   (não tratado como 528 falhas). Ver
    `docs/atomicidade-audit/incidente-truncate-2026-08-04.md`.
-4. ✅ SQL de reversão da 066 escrito e **testado** (aplicar 066 → aplicar
-   rollback → fingerprint idêntico ao original, dentro do mesmo tipo de
-   ensaio). Ver `docs/atomicidade-audit/066-rollback.sql`.
-5. ⏳ **Bloqueado — precisa de projeto Supabase de staging/descartável**
-   (não consigo criar um sozinho, sem acesso ao painel/API de gestão):
-   teste de concorrência real (2 ligações simultâneas, incl. empresa sem
-   linha em `company_sync_state`), teste de Realtime real (2 clientes
-   autenticados, reconexão, perda/duplicação de eventos).
-6. ⏳ Snapshot/backup imediatamente antes da aplicação — por fazer no
+5. ✅ `_migrations` (achado com exploração prática confirmada, ao
+   contrário do TRUNCATE) corrigido como migration 066 própria, isolada,
+   ensaiada.
+6. ✅ Errata documental da 065 registada sem editar a migration já
+   aplicada — ver `docs/atomicidade-audit/065-errata-explorabilidade-truncate.md`.
+7. ✅ SQL de reversão da 067 escrito e **testado** (aplicar → rollback →
+   fingerprint idêntico ao original, dentro do mesmo tipo de ensaio). Ver
+   `docs/atomicidade-audit/067-rollback.sql`.
+8. ⏳ **Bloqueado — precisa de projeto Supabase de staging/descartável**,
+   criado pelo dono (sem acesso ao painel/API de gestão); credenciais
+   ficam só num `.env.staging.local` local, nunca em chat/docs/commits:
+   teste de concorrência real (matriz completa — empresa nova com 2
+   ligações, empresa existente com 20, empresas diferentes sem bloqueio
+   cruzado, rollback sem estado órfão, mesmo `mutation_id` concorrente,
+   `mutation_id` diferentes, falha a meio reverte tudo), teste de
+   Realtime real (2 clientes autenticados, isolamento, reconexão,
+   duplicação/perda de eventos, `anon` bloqueado).
+9. ⏳ Snapshot/backup imediatamente antes da aplicação — por fazer no
    momento da aplicação real, não antes.
+10. ⏳ Cadeia canónica de migrations (064/065 na branch principal, não só
+    nesta branch) — por resolver, ver secção própria abaixo.
 
-## Achado adicional — grants perigosos em quase todo o schema público
+## Achado adicional — grants perigosos, agora classificados (não são 528 falhas)
 
-Fora do escopo da 066: **528 grants** de `TRUNCATE`/`DELETE`/`INSERT`/
-`UPDATE`/`TRIGGER`/`REFERENCES` a `anon`/`authenticated` em praticamente
-todas as tabelas e views do schema `public` (não só as 2 do outbox).
-Mitigado na prática porque `anon`/`authenticated` não têm `LOGIN` e a API
-pública não expõe `TRUNCATE` — mas é uma violação real do princípio de
-menor privilégio, sistémica, não um erro isolado desta ronda de
-migrations. Recomendado como próxima entrega própria e separada (matriz
-RLS completa + revogação geral de grants), depois de resolvida a decisão
-sobre a 066. Detalhe completo em
+Fora do escopo das 066/067: **528 grants** de `TRUNCATE`/`DELETE`/
+`INSERT`/`UPDATE`/`TRIGGER`/`REFERENCES` a `anon`/`authenticated` em
+praticamente todas as tabelas e views do schema `public`. Classificação
+real (não um `REVOKE` cego):
+
+- **44 tabelas/views com `TRUNCATE`/`TRIGGER`/`REFERENCES`** — categoria
+  "revogar quase certamente" (mitigado na prática por `anon`/
+  `authenticated` não terem `LOGIN` e a API pública não expor
+  `TRUNCATE`, mas viola menor privilégio de qualquer forma).
+- **`_migrations`**: RLS desligada + grants completos — única com
+  exploração prática confirmada (PostgREST expõe INSERT/UPDATE/DELETE).
+  **Corrigida como migration 066** (ver secção acima).
+- **6 views com escrita direta** (`services_full`, `teams_with_members`,
+  `monthly_hours_summary`, `services_calendar_summary`,
+  `services_mobile_collaborator`, `services_financial_private`) — sem
+  `security_invoker=true` conhecido (achado histórico anterior a esta
+  sessão); precisa de investigação dedicada por view
+  (`is_insertable_into`, triggers `INSTEAD OF`, dono, `security_invoker`)
+  antes de qualquer correção — não deve ser classificada como explorável
+  só pela leitura dos grants.
+- **`companies`/`audit_logs`**: grants de escrita mas RLS ligada sem
+  policy para esses comandos — seguro na prática (RLS nega por omissão
+  sem policy), só grants redundantes.
+- Resto: precisa de auditoria tabela a tabela (`INSERT`/`UPDATE`/`DELETE`)
+  e de sequências (`USAGE`), nunca um `REVOKE` global — pode quebrar
+  funcionalidade legítima da aplicação.
+
+Recomendado como entrega própria e separada (matriz RLS completa),
+depois de resolvida a decisão sobre 066/067. Detalhe completo em
 `docs/atomicidade-audit/incidente-truncate-2026-08-04.md`.
+
+## Cadeia canónica de migrations — 064/065 só nesta branch
+
+Risco operacional identificado: 064 e 065 já foram **aplicadas em
+produção**, mas os ficheiros só existem em
+`fix/atomic-contract-calendar-sync`, não na branch principal
+(`master`/`origin/master`). Antes de aplicar 066/067, a cadeia oficial
+precisa ficar consistente: 064/065 presentes na branch canónica, com os
+mesmos checksums do que foi realmente aplicado, registo correto em
+`_migrations`, sem `--baseline` para mascarar diferenças, e aplicação da
+066/067 separada do deploy do resto do código desta branch (que tem
+muitas outras alterações — recorrência, atomicidade de clientes/faturas
+— não relacionadas a migrations). Decisão de como fazer isto
+(entrega de migrations isolada vs. integração controlada) — por definir
+com o dono.
 
 ## PITR/backup — confirmado pelo dono (2026-08-04)
 

@@ -138,3 +138,16 @@ O simples facto de `company_change_events` existir não significa que Realtime e
 - contratos/serviços transacionais;
 - jobs idempotentes;
 - nenhuma instrução histórica concorrente.
+
+---
+
+## Errata (2026-08-04)
+
+`docs/atomicidade-audit/065-errata-explorabilidade-truncate.md` corrige uma
+afirmação excessiva no comentário da migration 065 já aplicada (dizia que
+"qualquer cliente com a chave anon podia apagar as duas tabelas" — a
+investigação posterior confirmou que `anon`/`authenticated` não têm `LOGIN`
+e a API pública não expõe `TRUNCATE`, logo não há via prática de exploração
+conhecida). O ficheiro `065_revoke_public_grants_outbox_tables.sql`
+**não foi editado** (já aplicado, com checksum no ledger) — a correção
+fica só na errata.

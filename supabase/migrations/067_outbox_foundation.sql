@@ -1,5 +1,5 @@
 -- ============================================================================
--- 066 - Fundacao do outbox: sequencia atomica por empresa,
+-- 067 - Fundacao do outbox: sequencia atomica por empresa,
 --        domain_mutations idempotente, company_change_events imutavel
 -- ============================================================================
 -- Escopo desta migration: SO a fundacao do outbox e as permissoes
