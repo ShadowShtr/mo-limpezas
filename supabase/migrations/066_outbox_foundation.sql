@@ -283,6 +283,15 @@ DECLARE
   v_event public.company_change_events;
   v_sequence bigint;
 BEGIN
+  -- Sem isto, duas chamadas concorrentes com o MESMO mutation_id podem
+  -- ambas passar pelo SELECT sem encontrar nada, ambas tentar INSERT, e a
+  -- segunda falhar com violacao de unicidade em vez de devolver o evento
+  -- idempotente da primeira. O advisory lock por (company_id, mutation_id)
+  -- serializa as duas chamadas: a segunda so continua depois da primeira
+  -- terminar (commit ou rollback), e nessa altura o SELECT abaixo encontra
+  -- o evento ja gravado pela primeira.
+  PERFORM public.lock_domain_mutation(p_company_id, p_mutation_id);
+
   SELECT * INTO v_event
   FROM public.company_change_events
   WHERE company_id = p_company_id AND mutation_id = p_mutation_id;

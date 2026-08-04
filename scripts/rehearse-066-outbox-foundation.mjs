@@ -157,6 +157,23 @@ async function main() {
       VALUES ($1, $2, 'Rehearsal A', 'gestor'), ($3, $4, 'Rehearsal B', 'gestor')
     `, [userA, companyA, userB, companyB]);
 
+    // ── 6b. record_company_change_event adquire o lock ANTES do SELECT ────
+    // (corrida encontrada em revisão: sem isto, duas chamadas concorrentes
+    // com o mesmo mutation_id podiam ambas passar o SELECT sem encontrar
+    // nada e uma delas falhar com violação de unicidade em vez de devolver
+    // o evento idempotente).
+    {
+      const { rows: fnDef } = await client.query(`
+        SELECT prosrc FROM pg_proc WHERE proname = 'record_company_change_event' AND pronamespace = 'public'::regnamespace
+      `);
+      const src = fnDef[0]?.prosrc ?? "";
+      const lockPos = src.indexOf("lock_domain_mutation");
+      const selectPos = src.search(/SELECT \* INTO v_event/i);
+      check("record_company_change_event chama lock_domain_mutation ANTES do SELECT que verifica idempotência",
+        lockPos >= 0 && selectPos >= 0 && lockPos < selectPos,
+        `lockPos=${lockPos} selectPos=${selectPos}`);
+    }
+
     // ── 7. record_company_change_event é append-only ──────────────────────
     const ev1 = await client.query(
       `SELECT public.record_company_change_event($1,$2,'test','rehearsal_event',ARRAY[]::uuid[],ARRAY['teste']::text[],NULL,NULL,'{"n":1}'::jsonb) AS r`,

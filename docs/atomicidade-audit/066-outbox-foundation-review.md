@@ -6,6 +6,27 @@ fundação do outbox e às permissões relacionadas — nenhuma RPC de negócio
 (`set_invoice_status_atomic`, `archive_client_atomic`,
 `delete_empty_client_atomic`, `delete_client_atomic`) foi tocada.
 
+## 0. Correção pós-revisão (2026-08-04, ronda 2)
+
+Revisão externa encontrou uma corrida real em `record_company_change_event`:
+duas chamadas concorrentes com o **mesmo** `mutation_id` podiam ambas passar
+o `SELECT` sem encontrar nada (nenhuma tinha ainda cometido o `INSERT`),
+ambas tentar `INSERT`, e a segunda falhar com violação de unicidade em vez
+de devolver o evento idempotente da primeira — exatamente o cenário que
+`lock_domain_mutation` (já existente na 066, mas sem chamador) foi desenhada
+para prevenir. Corrigido: `record_company_change_event` agora chama
+`PERFORM public.lock_domain_mutation(p_company_id, p_mutation_id)` **antes**
+do `SELECT`, serializando chamadas com o mesmo `mutation_id`.
+
+Revalidado: ensaio completo repetido (21/21, incluindo novo check estrutural
+que confirma o lock vem antes do SELECT no corpo da função) e o rollback
+(`066-rollback.sql`) re-testado com a versão corrigida — fingerprint
+idêntico ao pré-066.
+
+Ainda por fazer (só possível em staging, ver secção 4): prova empírica com
+duas ligações reais simultâneas chamando `record_company_change_event` com
+o mesmo `mutation_id`.
+
 ## 1. SQL final
 
 `supabase/migrations/066_outbox_foundation.sql` (íntegro, committed). Resumo
@@ -56,7 +77,7 @@ por secção:
 | Publicação Realtime | só `notifications`, `services` | `+ company_change_events` |
 | Funções novas | — | `lock_domain_mutation`, `find_or_conflict_domain_mutation`, `complete_domain_mutation` (nenhuma chamada ainda) |
 
-## 3. Resultados das verificações — 20/20
+## 3. Resultados das verificações — 21/21 (ronda 2, com o fix do lock)
 
 Script: `scripts/rehearse-066-outbox-foundation.mjs`. Tudo dentro de uma
 única transação `BEGIN...ROLLBACK` na base real; nada persistido.
@@ -70,6 +91,7 @@ Script: `scripts/rehearse-066-outbox-foundation.mjs`. Tudo dentro de uma
 | 5 | `next_company_sequence` devolve 1,2,3 em chamadas sucessivas | ✅ |
 | 6 | `next_company_sequence` usa `SELECT ... FOR UPDATE` | ✅ |
 | 7 | `UNIQUE (company_id, sequence)` existe | ✅ |
+| 7b | `record_company_change_event` chama `lock_domain_mutation` ANTES do `SELECT` de idempotência | ✅ (novo, ronda 2) |
 | 8 | Replay do mesmo `mutation_id` devolve o evento ORIGINAL sem alterar payload | ✅ |
 | 9 | Replay não cria segunda linha | ✅ |
 | 10 | `find_or_conflict_domain_mutation` devolve `NULL` na 1ª vez | ✅ |
@@ -96,17 +118,20 @@ definição da policy; é a policy a ser exercida a sério.
 ## 4. Riscos e limitações — honestos, não maquiados
 
 - **Concorrência real entre duas ligações não foi testada
-  empiricamente.** Duas transações verdadeiramente simultâneas só
-  conseguem ver o novo `next_company_sequence` depois de a migration
-  estar committed — dentro de uma transação de ensaio (`BEGIN...ROLLBACK`),
-  uma segunda ligação não vê o DDL ainda não confirmado. Testei a
-  correção *sequencial* (3 chamadas seguidas devolvem 1,2,3) e confirmei
-  que a função usa `SELECT ... FOR UPDATE` — o padrão correto e
-  documentado do Postgres para isto —, mas não uma corrida real de duas
-  ligações. Se quiseres essa prova extra, é possível fazer um smoke test
-  pequeno **depois** de aplicar (duas chamadas concorrentes reais a
-  `next_company_sequence` para a mesma empresa, via `Promise.all` com duas
-  ligações), sem tocar em dados de negócio.
+  empiricamente — exige staging.** Duas transações verdadeiramente
+  simultâneas só conseguem ver o novo `next_company_sequence`/
+  `record_company_change_event` depois de a migration estar committed —
+  dentro de uma transação de ensaio (`BEGIN...ROLLBACK`), uma segunda
+  ligação não vê o DDL ainda não confirmado. Testei a correção
+  *sequencial* (3 chamadas seguidas devolvem 1,2,3) e confirmei
+  estruturalmente `SELECT ... FOR UPDATE` e a ordem do
+  `lock_domain_mutation` — mas não uma corrida real de duas ligações.
+  Matriz de teste concreta (empresa nova com 2 ligações simultâneas,
+  empresa existente com 20, empresas diferentes sem bloqueio cruzado,
+  rollback não deixa estado órfão, mesmo `mutation_id` concorrente,
+  `mutation_id` diferentes concorrentes, falha a meio reverte tudo) fica
+  para o staging — ver `docs/ESTADO-ATUAL.md`, secção do portão de
+  autorização.
 - **A publicação Realtime só foi confirmada ao nível da base de dados.**
   Confirmei RLS + grants corretos e que `company_change_events` está na
   publicação `pg_publication_tables`. Não consegui confirmar o
