@@ -1,8 +1,22 @@
-# Sem isto, core.autocrlf=true (comum em Windows) converte LF -> CRLF em
-# cada checkout, sem aparecer no `git status`. Isso já quebrou localmente
-# (nunca chegou a produção) comparações de checksum byte-a-byte entre
-# ficheiros de migration e o ledger de produção / migration-policy.json —
-# ver docs/atomicidade-audit/T03-backup-manifesto-2026-08-04.md e
-# docs/HANDOFF-2026-08-04.md. Fixar LF nos ficheiros SQL garante que um
-# clone novo (nesta ou noutra máquina) reproduz sempre os mesmos bytes.
-*.sql text eol=lf
+# NÃO usar uma regra genérica "*.sql eol=lf" aqui — foi tentado em
+# 2026-08-04 e partiu o dry-run do runner: os checksums em
+# public._migrations para as migrations 001-063 + legadas foram todos
+# calculados sobre o checkout NORMAL desta máquina (Windows,
+# core.autocrlf=true, sem .gitattributes) — ou seja, sobre CRLF. Forçar
+# LF globalmente fazia 21 migrations já aplicadas (014-043 e as duas
+# datadas) aparecerem como "alteradas" no --dry-run, quando na verdade
+# nunca mudaram — só o checkout local é que passou a ser diferente do
+# baseline histórico.
+#
+# 064 e 065 são a exceção: foram escritas e aplicadas na mesma sessão,
+# sem nunca passar por um checkout de git no meio — o checksum registado
+# no ledger é sobre LF puro. Por isso, e só para estes dois ficheiros,
+# força-se LF explicitamente. Qualquer migration nova a partir da 066
+# deve ser aplicada com o checkout NORMAL desta máquina (CRLF, sem
+# entradas aqui) para o checksum ficar consistente com o que
+# `node scripts/run-migrations.mjs --apply` vai gravar.
+#
+# Ver docs/atomicidade-audit/T03-backup-manifesto-2026-08-04.md e
+# docs/HANDOFF-2026-08-04.md para o histórico completo desta descoberta.
+supabase/migrations/064_revoke_public_grants_atomic_functions.sql text eol=lf
+supabase/migrations/065_revoke_public_grants_outbox_tables.sql text eol=lf
