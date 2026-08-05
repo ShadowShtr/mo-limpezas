@@ -5,20 +5,32 @@
 //   - tinha a password do Postgres hardcoded (agora vem de SUPABASE_DB_URL);
 //   - re-executava TODAS as migrações em cada run (migrações com UPDATE/DELETE
 //     re-aplicavam-se e revertiam dados alterados entretanto);
-//   - aplicava seed.sql (dados fictícios) contra a base de PRODUÇÃO.
+//   - aplicava seed.sql (dados fictícios) contra a base de PRODUÇÃO;
+//   - **aplicava migrações por omissão, sem nenhuma flag** (corrigido
+//     2026-08-05, ver AGENTS.md REGRA ZERO secção 9 e
+//     docs/PRODUCTION-RUNBOOK.md secção 8 — nenhum script de escrita pode
+//     ter produção como comportamento por omissão).
 //
 // Regras:
+//   - SEM ARGUMENTOS = dry-run. Sempre. Esquecer uma flag nunca escreve.
+//   - Escrever (aplicar pendentes, --baseline, --seed) exige --apply.
+//   - --apply exige também --confirm-production <ref> com o project ref
+//     exato de NEXT_PUBLIC_SUPABASE_URL — confirma visualmente que sabes
+//     em que projeto estás a escrever antes de o fazeres.
+//   - Flags desconhecidas e combinações contraditórias (--dry-run+--apply,
+//     --baseline+--seed) são rejeitadas antes de ligar à base.
 //   - Tabela public._migrations regista o que já foi aplicado; só corre pendentes.
 //   - Cada migração corre numa transação; ao 1º erro PÁRA (nada de engolir erros).
-//   - Primeira utilização numa base já existente: `--baseline` marca tudo como
-//     aplicado SEM executar (obrigatório antes do primeiro run normal).
-//   - seed.sql só com `--seed`, e recusa se a base já tiver dados.
 //
 // Uso:
-//   SUPABASE_DB_URL=postgres://... node scripts/run-migrations.mjs --baseline
-//   node scripts/run-migrations.mjs              # aplica pendentes
-//   node scripts/run-migrations.mjs --dry-run    # mostra o que aplicaria
-//   node scripts/run-migrations.mjs --seed       # (só em base vazia/dev)
+//   node scripts/run-migrations.mjs
+//     → dry-run (nenhuma flag = seguro por omissão)
+//   node scripts/run-migrations.mjs --apply --confirm-production <ref>
+//     → aplica migrações pendentes
+//   node scripts/run-migrations.mjs --baseline --apply --confirm-production <ref>
+//     → marca tudo como aplicado SEM executar (1ª utilização numa base já existente)
+//   node scripts/run-migrations.mjs --seed --apply --confirm-production <ref>
+//     → seed.sql (só em base vazia/dev; recusa se companies > 0)
 // ============================================================================
 
 import pg from "pg";
@@ -32,15 +44,29 @@ import {
   findKnownException,
   knownExceptionMatches,
 } from "./lib/migration-checksum.mjs";
+import {
+  parseArgs,
+  validateArgCombination,
+  resolveProjectRef,
+  dbIdentityFromUrl,
+  validateProductionConfirmation,
+} from "./lib/migration-runner-guards.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, "..");
 const MIGRATIONS_DIR = join(ROOT, "supabase", "migrations");
 const POLICY_FILE = join(ROOT, "supabase", "migration-policy.json");
 
-const BASELINE = process.argv.includes("--baseline");
-const DRY_RUN = process.argv.includes("--dry-run");
-const SEED = process.argv.includes("--seed");
+const parsedArgs = parseArgs(process.argv.slice(2));
+const combinationCheck = validateArgCombination(parsedArgs);
+if (!combinationCheck.ok) {
+  console.error(`❌ ${combinationCheck.error}`);
+  process.exit(1);
+}
+
+const { apply: APPLY, baseline: BASELINE, seed: SEED, confirmProductionValue: CONFIRM_PRODUCTION_VALUE } = parsedArgs;
+// Sem --apply é SEMPRE dry-run — mesmo sem --dry-run explícito na linha de comandos.
+const DRY_RUN = !APPLY;
 
 // supabase/migration-policy.json é opcional aqui (só knownChecksumExceptions
 // — este runner não tem o conceito de activeMigrations/frozenDrafts).
@@ -62,6 +88,22 @@ const DB_URL = process.env.SUPABASE_DB_URL || process.env.DATABASE_URL;
 if (!DB_URL) {
   console.error("❌ Define SUPABASE_DB_URL no .env.local (connection string do Postgres, ver Supabase → Settings → Database).");
   console.error("   A password NUNCA deve voltar a estar escrita neste ficheiro.");
+  process.exit(1);
+}
+
+const DB_HOST = new URL(DB_URL).hostname;
+const DB_IDENTITY = dbIdentityFromUrl(DB_URL);
+const PROJECT_REF = resolveProjectRef(process.env.NEXT_PUBLIC_SUPABASE_URL);
+console.log(`📍 Projeto: ${PROJECT_REF ?? "(desconhecido — NEXT_PUBLIC_SUPABASE_URL não definida)"}  |  Host: ${DB_HOST}  |  Modo: ${APPLY ? "APPLY (escreve)" : "dry-run"}`);
+
+const productionConfirmation = validateProductionConfirmation({
+  apply: APPLY,
+  confirmProductionValue: CONFIRM_PRODUCTION_VALUE,
+  projectRef: PROJECT_REF,
+  dbIdentity: DB_IDENTITY,
+});
+if (!productionConfirmation.ok) {
+  console.error(`❌ ${productionConfirmation.error}`);
   process.exit(1);
 }
 
@@ -182,6 +224,8 @@ async function main() {
   }
 
   if (BASELINE) {
+    const toBaseline = files.filter((f) => !applied.has(f));
+    console.log(`📋 ${toBaseline.length} migração(ões) a marcar como aplicada(s) (baseline, sem executar): ${toBaseline.join(", ") || "(nenhuma)"}`);
     for (const f of files) {
       if (!applied.has(f)) {
         const sum = checksumForNewMigration(readFileSync(join(MIGRATIONS_DIR, f), "utf8"));
@@ -198,6 +242,7 @@ async function main() {
   }
 
   const pending = files.filter((f) => !applied.has(f));
+  console.log(`📋 ${pending.length} migração(ões) pendente(s)${pending.length > 0 ? ": " + pending.join(", ") : ""}`);
   if (pending.length === 0) {
     console.log("✅ Nenhuma migração pendente.");
   }
