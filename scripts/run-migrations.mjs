@@ -20,10 +20,16 @@
 // ============================================================================
 
 import pg from "pg";
-import { createHash } from "crypto";
 import { readFileSync, readdirSync, existsSync } from "fs";
 import { join, dirname } from "path";
 import { fileURLToPath } from "url";
+import {
+  historicalChecksumMatches,
+  checksumForNewMigration,
+  assertNoDuplicateExceptions,
+  findKnownException,
+  knownExceptionMatches,
+} from "./lib/migration-checksum.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, "..");
@@ -45,6 +51,8 @@ if (DRY_RUN === APPLY) {
 const policy = JSON.parse(readFileSync(POLICY_FILE, "utf8"));
 const frozenDrafts = new Map(policy.frozenDrafts.map((draft) => [draft.ledgerName, draft]));
 const activeMigrations = new Set(policy.activeMigrations);
+const knownChecksumExceptions = policy.knownChecksumExceptions ?? [];
+assertNoDuplicateExceptions(knownChecksumExceptions);
 
 // .env.local (sem dependências externas)
 for (const f of [".env.local", ".env"]) {
@@ -81,8 +89,6 @@ if (APPLY) {
 
 const client = new pg.Client({ connectionString: DB_URL, ssl: { rejectUnauthorized: false } });
 
-const checksumOf = (sql) => createHash("sha256").update(sql).digest("hex");
-
 async function ensureTracking() {
   await client.query(`
     CREATE TABLE IF NOT EXISTS public._migrations (
@@ -104,16 +110,42 @@ async function appliedMap() {
  * divergir do checksum registado, ou alguém editou um .sql histórico (e a base
  * ficou diferente do que o repo diz) ou o histórico foi reescrito. Em ambos os
  * casos é preciso intervenção humana, não silêncio.
+ *
+ * O ledger mistura checksums calculados sobre LF e sobre CRLF, ficheiro a
+ * ficheiro (checkouts em máquinas/OS diferentes ao longo dos anos, antes de
+ * existir .gitattributes — ver
+ * docs/atomicidade-audit/migration-checksum-map-2026-08-05.md). Por isso uma
+ * migração histórica é aceite se o checksum guardado bater com o RAW, o
+ * LF-normalizado ou o CRLF-normalizado do ficheiro atual; só uma alteração
+ * real de conteúdo (nenhuma das três) continua a falhar.
+ *
+ * Um número muito pequeno de migrações (hoje: só a 022) foi editado depois
+ * de aplicado sem que o conteúdo real batesse com nenhuma representação de
+ * EOL — não recuperável do histórico Git (ver
+ * docs/atomicidade-audit/migration-checksum-map-2026-08-05.md). Para essas,
+ * e só essas, supabase/migration-policy.json pode declarar uma exceção
+ * nomeada e pinada (nome exato + checksum do ledger exato + checksum
+ * LF-normalizado do ficheiro atual exato); qualquer divergência num desses
+ * três valores, ou uma segunda exceção para o mesmo ficheiro, invalida a
+ * exceção e a migração volta a falhar como divergência normal.
  */
 function verifyChecksums(applied, files) {
   const divergent = [];
+  const accepted = [];
   for (const file of files) {
     const stored = applied.get(file);
     if (stored == null) continue; // pendente ou registada sem checksum (pré-upgrade)
-    const current = checksumOf(readFileSync(join(MIGRATIONS_DIR, file), "utf8"));
-    if (stored !== current) divergent.push(file);
+    const current = readFileSync(join(MIGRATIONS_DIR, file), "utf8");
+    if (historicalChecksumMatches(stored, current)) continue;
+
+    const exception = findKnownException(knownChecksumExceptions, file);
+    if (knownExceptionMatches(exception, stored, current)) {
+      accepted.push({ file, reason: exception.reason });
+      continue;
+    }
+    divergent.push(file);
   }
-  return divergent;
+  return { divergent, accepted };
 }
 
 function classifyFiles(files) {
@@ -135,8 +167,11 @@ async function main() {
   const files = classifyFiles(allFiles);
 
   for (const [ledgerName, draft] of frozenDrafts) {
-    const currentHash = checksumOf(readFileSync(join(ROOT, draft.path), "utf8"));
-    if (currentHash !== draft.sha256) {
+    const draftContent = readFileSync(join(ROOT, draft.path), "utf8");
+    // Mesma flexibilidade de EOL do ledger (ver migration-checksum.mjs):
+    // um checkout novo pode normalizar este ficheiro para CRLF ou LF sem
+    // que o conteúdo tenha mudado.
+    if (!historicalChecksumMatches(draft.sha256, draftContent)) {
       throw new Error(`Rascunho congelado alterado: ${ledgerName}`);
     }
   }
@@ -184,7 +219,12 @@ async function main() {
   }
 
   // Migração já aplicada cujo ficheiro mudou → parar SEMPRE (nada de silêncio).
-  const divergent = verifyChecksums(applied, files);
+  const { divergent, accepted } = verifyChecksums(applied, files);
+  for (const { file, reason } of accepted) {
+    console.warn("⚠ CHECKSUM EXCEPTION ACEITE:");
+    console.warn(`   ${file}`);
+    console.warn(`   Motivo: ${reason}`);
+  }
   if (divergent.length > 0) {
     console.error("❌ CHECKSUM DIVERGENTE — estes ficheiros de migração foram ALTERADOS depois de aplicados:");
     for (const f of divergent) console.error(`   - ${f}`);
@@ -205,7 +245,7 @@ async function main() {
     try {
       await client.query("BEGIN");
       await client.query(sql);
-      await client.query("INSERT INTO public._migrations (name, checksum) VALUES ($1, $2)", [file, checksumOf(sql)]);
+      await client.query("INSERT INTO public._migrations (name, checksum) VALUES ($1, $2)", [file, checksumForNewMigration(sql)]);
       await client.query("COMMIT");
       console.log("   ✅ OK");
     } catch (err) {

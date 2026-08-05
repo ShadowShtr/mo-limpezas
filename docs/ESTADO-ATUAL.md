@@ -23,6 +23,7 @@
 - Os checkpoints 064/065 foram retirados de `supabase/migrations` e preservados em `docs/atomicidade-audit/frozen/`.
 - `supabase/migration-policy.json` é a classificação executável: 001-063 e legadas estão ativas; 064/065 estão congeladas.
 - `scripts/run-migrations.mjs` não aplica nem registra os checkpoints congelados, não faz baseline automático e não executa dados de demonstração.
+- **2026-08-05**: o ledger `public._migrations` mistura checksums calculados sobre LF e CRLF, ficheiro a ficheiro, sem padrão por intervalo (mapeamento completo em `docs/atomicidade-audit/migration-checksum-map-2026-08-05.md`). `scripts/lib/migration-checksum.mjs` faz o runner aceitar uma migração histórica quando o checksum do ledger bate com o ficheiro em RAW, LF-normalizado ou CRLF-normalizado; migrações novas gravam sempre o checksum sobre LF normalizado. A PR #27 (`.gitattributes` restrito a 064/065) ficou substituída por esta correção, não foi mesclada. `022_storage_bucket_collaborator_documents.sql` — nenhuma versão em git bate com o checksum do ledger; investigado e não corrigido às cegas (produção correta via `023`). Tratado como exceção formal, estreita e verificável em `supabase/migration-policy.json` → `knownChecksumExceptions` (nome + checksum do ledger + checksum LF do ficheiro atual pinados; qualquer divergência num dos três volta a falhar o `--dry-run`). `--dry-run` limpo (001-065 reconhecidas, `022` como exceção aceite com aviso explícito, `066`/`067` pendentes) idêntico no working directory e num worktree limpo.
 
 ## Estado funcional
 

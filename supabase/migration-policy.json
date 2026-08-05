@@ -74,6 +74,15 @@
     "066_secure_migrations_ledger.sql",
     "067_outbox_foundation.sql"
   ],
+  "knownChecksumExceptions": [
+    {
+      "migration": "022_storage_bucket_collaborator_documents.sql",
+      "ledgerChecksum": "63f34214405a7ae2f5423d4c903e07993eac02eb4117a2aef7328c7bbf7ad5e1",
+      "acceptedNormalizedLfChecksum": "444dd49eb07ec2beef6aeb775b6cc57d05799dc0781815306644f3e90685b4a0",
+      "reason": "divergência histórica documentada; estado final garantido pela 023.",
+      "evidence": "docs/atomicidade-audit/migration-checksum-map-2026-08-05.md"
+    }
+  ],
   "frozenDrafts": [
     {
       "ledgerName": "064_domain_atomicity_outbox.sql",
