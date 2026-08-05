@@ -2,6 +2,16 @@
 
 Lê este ficheiro no início de CADA sessão antes de fazer qualquer coisa.
 
+## 🔴 Ver primeiro: AGENTS.md — REGRA ZERO
+
+Antes de qualquer outra coisa neste ficheiro, ler a **REGRA ZERO** em
+`AGENTS.md`. `vercel --prod`, `vercel --force`, push direto para `master`,
+migrations e alterações de variáveis de produção exigem autorização
+explícita na conversa atual — nunca por iniciativa própria, nunca por
+analogia com um registo antigo abaixo. Qualquer menção a `vercel --prod`
+neste ficheiro daqui para baixo é **registo histórico do que já aconteceu**,
+não instrução a repetir.
+
 ---
 
 ## O Projeto
@@ -46,6 +56,49 @@ Lê este ficheiro no início de CADA sessão antes de fazer qualquer coisa.
 ---
 
 ## ⚡ PRÓXIMA TASK A EXECUTAR
+
+## 📍 PONTO DE PARAGEM — 2026-08-05 (incidente de produção — deploy indevido + loop de login)
+
+**Resumo do incidente (produção, `molimpezas.pt`, sistema em uso real por pessoas):**
+
+1. Um push para a branch ampla `fix/atomic-contract-calendar-sync` foi
+   implantado manualmente como Production no Vercel (`vercel --prod`, a
+   partir de um checkout que não era o `master`) e tomou o domínio. Essa
+   branch tem meses de trabalho não testado em produção (recorrência,
+   contratos, migrations `066`/`067` que a base real não tinha).
+2. Revertido via `vercel promote` para o último deployment bom do `master`
+   (autorizado explicitamente antes de executar).
+3. Sintoma seguinte: `ERR_TOO_MANY_REDIRECTS` em `/login ↔ /dashboard`,
+   confirmado real nos logs (não era cache/cookie). Causa: `DashboardLayout`
+   usa `createAdminClient()` (chave administrativa) para ler o profile com
+   `.single()` e, em erro, redirecionava para `/login` sem terminar a
+   sessão; `src/proxy.ts` mandava de volta para `/dashboard` usando
+   `user_metadata.role` como prova de perfil (não é — é controlável pelo
+   próprio utilizador).
+4. Hotfix (PR #30, `fix/dashboard-login-redirect-loop` → `master`, mesclado
+   com autorização, deploy automático via GitHub — não `vercel --prod`):
+   `proxy.ts` só redireciona quando `profileRole` vem confirmado de
+   `public.profiles`; `DashboardLayout` usa `.maybeSingle()`, regista o erro
+   real e faz `signOut()` antes de redirecionar. Isto revelou o erro real
+   nos logs: `Unregistered API key`.
+5. Causa raiz: `SUPABASE_SERVICE_ROLE_KEY` de produção estava inválida
+   (chave antiga/revogada). Corrigido gerando uma chave nova no Supabase e
+   atualizando a variável em Production na Vercel, seguido de um redeploy
+   pelo próprio dashboard da Vercel (não `vercel --prod` manual — redeploy
+   do mesmo commit `master` já publicado, para aplicar a variável nova).
+   Confirmado por logs reais: dashboard completo a carregar sem erros.
+
+**Prevenção aplicada nesta mesma sessão:** `AGENTS.md` ganhou a **REGRA
+ZERO** (ler antes de tudo), `docs/PRODUCTION-RUNBOOK.md` documenta o
+processo correto de deploy/rollback/rotação de chaves/resposta a
+incidentes, e `src/__tests__/production-safety.test.ts` falha se
+reaparecerem `vercel --prod`/`--force` em scripts ou `package.json`.
+
+**Estado**: produção estável, validada ao vivo. A branch
+`fix/atomic-contract-calendar-sync` está **congelada** — não pode ser
+mesclada nem implantada como um todo; o trabalho dela será extraído em PRs
+pequenos a partir do `master` atual (068/069 já aplicadas; 066/067 ainda
+só na branch ampla, pendentes de extração e revisão isolada).
 
 ## 📍 PONTO DE PARAGEM — 2026-07-14 (anexo em Pagamentos + notificação de tarefa atribuída)
 
@@ -142,7 +195,9 @@ de notificação) — ver o resultado que se segue nesta sessão.
 Verificação: 397 testes a passar (16 novos: `contract-overlap.test.ts`,
 `invoice-duplicates.test.ts`, + `utils.test.ts` para `safeFormat`/
 `isValidIsoDateString`) · `npm run lint` 0 erros · `npm run build` limpo ·
-tudo já em produção (`vercel --prod --force`).
+tudo já em produção (`vercel --prod --force` — **registo histórico do que
+foi feito nesta sessão de 2026-07-14; desde 2026-08-05 este comando está
+proibido por iniciativa própria, ver REGRA ZERO em `AGENTS.md`**).
 
 **✅ 2 bugs novos encontrados E CORRIGIDOS em runtime real (2026-07-06, ver
 AUDITORIA_COMPLETA.txt PARTE 12/12.7) — falta fazer commit + deploy:**
@@ -287,7 +342,10 @@ audit-security.ts sem problemas.
 
 **Feature nova: Conciliação Bancária no módulo Financeiro (✅ FEITO + EM PRODUÇÃO)**
 Branch `feature/bank-statement-reconciliation` → merge `master` → deploy
-`vercel --prod --force` (dpl_ubEFcqfcHGPQkEt4vosMN4kohnus). Commits `9d140f0`
+`vercel --prod --force` (dpl_ubEFcqfcHGPQkEt4vosMN4kohnus — **registo
+histórico do que foi feito nesta sessão de 2026-06-29; desde 2026-08-05 este
+comando está proibido por iniciativa própria, ver REGRA ZERO em
+`AGENTS.md`**). Commits `9d140f0`
 (trabalho antigo: ponto diário/equipa por dia/nº pessoas) e `50cc14e` (conciliação).
 
 - **Migration 043** — 4 tabelas + RLS (só admin/gestor da própria company_id;
