@@ -1,0 +1,647 @@
+{
+  "generated_at": "2026-08-05T08:41:27.968Z",
+  "commit": "19eef399334d59fe67a1797e83126453e4faa80e",
+  "total_ledger_entries": 69,
+  "results": [
+    {
+      "name": "001_companies.sql",
+      "ledger_checksum": "1327a0cf37f95acad08604eba3faed34020e3edc7a717132978ea869397e3901",
+      "applied_at": "2026-07-23T10:14:10.229Z",
+      "raw_match": true,
+      "lf_match": true,
+      "crlf_match": false,
+      "classification": "LF_MATCH"
+    },
+    {
+      "name": "002_profiles.sql",
+      "ledger_checksum": "56ddec368e1848a3ec87b4b33d0a54bfb83c197b80ff4be4291fa3db637682ab",
+      "applied_at": "2026-07-23T10:14:10.276Z",
+      "raw_match": true,
+      "lf_match": true,
+      "crlf_match": false,
+      "classification": "LF_MATCH"
+    },
+    {
+      "name": "003_clients_locations.sql",
+      "ledger_checksum": "bf8c04b5300b6433f5c400a9d8f795c164d465d492905f4645078ce447825be3",
+      "applied_at": "2026-07-23T10:14:10.323Z",
+      "raw_match": true,
+      "lf_match": true,
+      "crlf_match": false,
+      "classification": "LF_MATCH"
+    },
+    {
+      "name": "004_teams.sql",
+      "ledger_checksum": "65d61185df00b85585010db9cf54347770c27d261a6791aca1d626c70ed75a90",
+      "applied_at": "2026-07-23T10:14:10.369Z",
+      "raw_match": true,
+      "lf_match": true,
+      "crlf_match": false,
+      "classification": "LF_MATCH"
+    },
+    {
+      "name": "005_contracts.sql",
+      "ledger_checksum": "3cde109bf35958edcf78069ec5adbc2b179e37635c1d33c374370d5d09c61fd4",
+      "applied_at": "2026-07-23T10:14:10.415Z",
+      "raw_match": true,
+      "lf_match": true,
+      "crlf_match": false,
+      "classification": "LF_MATCH"
+    },
+    {
+      "name": "006_services.sql",
+      "ledger_checksum": "26b51d11211bf101eb1560b9b6b0b392c169ba9dcefa0662638ec3ca2f64c721",
+      "applied_at": "2026-07-23T10:14:10.461Z",
+      "raw_match": true,
+      "lf_match": true,
+      "crlf_match": false,
+      "classification": "LF_MATCH"
+    },
+    {
+      "name": "007_timesheets_absences.sql",
+      "ledger_checksum": "d4ac43949f3e83e858156a462bf6bcea9d14d622f50cb439a918b6062f334f46",
+      "applied_at": "2026-07-23T10:14:10.507Z",
+      "raw_match": true,
+      "lf_match": true,
+      "crlf_match": false,
+      "classification": "LF_MATCH"
+    },
+    {
+      "name": "008_financial.sql",
+      "ledger_checksum": "df4108037c3cd00e29e3856d2450e6095affdae9bec10323ebf139ceefe915cf",
+      "applied_at": "2026-07-23T10:14:10.553Z",
+      "raw_match": true,
+      "lf_match": true,
+      "crlf_match": false,
+      "classification": "LF_MATCH"
+    },
+    {
+      "name": "009_notifications.sql",
+      "ledger_checksum": "b911886aed231d22e8777b8ac7c85f28108b7a97fa57db7525b54ba99dac571f",
+      "applied_at": "2026-07-23T10:14:10.597Z",
+      "raw_match": true,
+      "lf_match": true,
+      "crlf_match": false,
+      "classification": "LF_MATCH"
+    },
+    {
+      "name": "010_views.sql",
+      "ledger_checksum": "47466e22c7186f228b1c522557d3c2c118d9b5dd1049c904b5bbacedb70c2082",
+      "applied_at": "2026-07-23T10:14:10.643Z",
+      "raw_match": true,
+      "lf_match": true,
+      "crlf_match": false,
+      "classification": "LF_MATCH"
+    },
+    {
+      "name": "011_conflict_detection.sql",
+      "ledger_checksum": "730081f4302559fb65514df6bc49a03ca974cc44e36adf20831f55aeded029a0",
+      "applied_at": "2026-07-23T10:14:10.686Z",
+      "raw_match": true,
+      "lf_match": true,
+      "crlf_match": false,
+      "classification": "LF_MATCH"
+    },
+    {
+      "name": "012_teams_vehicle.sql",
+      "ledger_checksum": "43785a3573f923a5543fcc0ad0c64fcc5a8ba2a3017da601786cfc00e31a822d",
+      "applied_at": "2026-07-23T10:14:10.729Z",
+      "raw_match": true,
+      "lf_match": true,
+      "crlf_match": false,
+      "classification": "LF_MATCH"
+    },
+    {
+      "name": "013_client_notifications.sql",
+      "ledger_checksum": "b64b69c094dea55d8b6c8bd826d1893cf68c651b5d46b5492c1a790162762a78",
+      "applied_at": "2026-07-23T10:14:10.773Z",
+      "raw_match": true,
+      "lf_match": true,
+      "crlf_match": false,
+      "classification": "LF_MATCH"
+    },
+    {
+      "name": "014_fix_rls_recursion.sql",
+      "ledger_checksum": "a34e8fa3e6e9dd2e071f023690b2be30344b18efd3e358e76ccc487f21eceeb4",
+      "applied_at": "2026-07-23T10:14:10.818Z",
+      "raw_match": true,
+      "lf_match": false,
+      "crlf_match": true,
+      "classification": "CRLF_MATCH"
+    },
+    {
+      "name": "015_fix_trigger_resilient.sql",
+      "ledger_checksum": "63c580badb8ae3bfcced99b5b8ff17d5dcda75e99b8e46857a3c4423a582c38c",
+      "applied_at": "2026-07-23T10:14:10.864Z",
+      "raw_match": true,
+      "lf_match": false,
+      "crlf_match": true,
+      "classification": "CRLF_MATCH"
+    },
+    {
+      "name": "016_vehicles.sql",
+      "ledger_checksum": "50fee2a5a97de38319e3f082749299abdad262cde65debf181139ecb6edf73b6",
+      "applied_at": "2026-07-23T10:14:10.910Z",
+      "raw_match": true,
+      "lf_match": false,
+      "crlf_match": true,
+      "classification": "CRLF_MATCH"
+    },
+    {
+      "name": "017_fix_contracts_rls.sql",
+      "ledger_checksum": "6d33c39323e6725bdf080ed2ad08843a038545ef89ab4445928e934f6d9d445c",
+      "applied_at": "2026-07-23T10:14:10.957Z",
+      "raw_match": true,
+      "lf_match": false,
+      "crlf_match": true,
+      "classification": "CRLF_MATCH"
+    },
+    {
+      "name": "018_fix_services_rls_recursion.sql",
+      "ledger_checksum": "36ed92e01f2b0f843f479a2a6c163cf69b7129405e332e92e55eb6aa5e9ff7d2",
+      "applied_at": "2026-07-23T10:14:11.002Z",
+      "raw_match": true,
+      "lf_match": true,
+      "crlf_match": false,
+      "classification": "LF_MATCH"
+    },
+    {
+      "name": "019_cancellation_fields.sql",
+      "ledger_checksum": "ca51216eb1eb0ec78add8009023c9702a7eb18f3163b2a18917bc6a19bceeb0c",
+      "applied_at": "2026-07-23T10:14:11.047Z",
+      "raw_match": true,
+      "lf_match": true,
+      "crlf_match": false,
+      "classification": "LF_MATCH"
+    },
+    {
+      "name": "020_services_full_client_phone.sql",
+      "ledger_checksum": "5557fe9b6e64554e7419e6ab8ba5edcf22d2bbc5ec8c3b7b993ab891a385888d",
+      "applied_at": "2026-07-23T10:14:11.090Z",
+      "raw_match": true,
+      "lf_match": true,
+      "crlf_match": false,
+      "classification": "LF_MATCH"
+    },
+    {
+      "name": "021_documents_enhanced.sql",
+      "ledger_checksum": "828e92d507f3e5dfc1538f2d6fa8d136e662d23cc8dd4651ea4a821fd88b42da",
+      "applied_at": "2026-07-23T10:14:11.135Z",
+      "raw_match": true,
+      "lf_match": true,
+      "crlf_match": false,
+      "classification": "LF_MATCH"
+    },
+    {
+      "name": "022_storage_bucket_collaborator_documents.sql",
+      "ledger_checksum": "63f34214405a7ae2f5423d4c903e07993eac02eb4117a2aef7328c7bbf7ad5e1",
+      "applied_at": "2026-07-23T10:14:11.179Z",
+      "raw_match": false,
+      "lf_match": false,
+      "crlf_match": false,
+      "classification": "NO_MATCH"
+    },
+    {
+      "name": "023_fix_collaborator_documents_upload.sql",
+      "ledger_checksum": "e4881a669b801c5f3b670be7ecf445e3839c533a63064717050d7b31590a43af",
+      "applied_at": "2026-07-23T10:14:11.222Z",
+      "raw_match": true,
+      "lf_match": true,
+      "crlf_match": false,
+      "classification": "LF_MATCH"
+    },
+    {
+      "name": "024_cash_flow_reference_integrity.sql",
+      "ledger_checksum": "43ae916aff6630df2cd1875cf0a409cf0a095dca7236f082bf379251842c29b2",
+      "applied_at": "2026-07-23T10:14:11.264Z",
+      "raw_match": true,
+      "lf_match": true,
+      "crlf_match": false,
+      "classification": "LF_MATCH"
+    },
+    {
+      "name": "025_timesheet_hardening.sql",
+      "ledger_checksum": "6fbdf487c37e73fb4a26be9e4d30a0d47219c1a89caadc6dd69e439ca6962924",
+      "applied_at": "2026-07-23T10:14:11.309Z",
+      "raw_match": true,
+      "lf_match": true,
+      "crlf_match": false,
+      "classification": "LF_MATCH"
+    },
+    {
+      "name": "026_location_key_fields.sql",
+      "ledger_checksum": "38bbe0fa4f2ae3360a8012f81f6459fbdf5be066b994fc4eadd1b3af40c344be",
+      "applied_at": "2026-07-23T10:14:11.351Z",
+      "raw_match": true,
+      "lf_match": false,
+      "crlf_match": true,
+      "classification": "CRLF_MATCH"
+    },
+    {
+      "name": "027_service_photos.sql",
+      "ledger_checksum": "c409484eaac29d917a06dee52d06af477f25c23ca30161e735df37c175b0ae9b",
+      "applied_at": "2026-07-23T10:14:11.395Z",
+      "raw_match": true,
+      "lf_match": false,
+      "crlf_match": true,
+      "classification": "CRLF_MATCH"
+    },
+    {
+      "name": "028_growth_indexes.sql",
+      "ledger_checksum": "65f6abe5924c65646ea90b56d0cb0dd10717ac7cbc0569d74a601bd53d76ac72",
+      "applied_at": "2026-07-23T10:14:11.439Z",
+      "raw_match": true,
+      "lf_match": false,
+      "crlf_match": true,
+      "classification": "CRLF_MATCH"
+    },
+    {
+      "name": "029_background_jobs.sql",
+      "ledger_checksum": "c2ac9f24a0469298e6708e7ba2630301a9e2db4242aae819900010a6a9baf651",
+      "applied_at": "2026-07-23T10:14:11.482Z",
+      "raw_match": true,
+      "lf_match": false,
+      "crlf_match": true,
+      "classification": "CRLF_MATCH"
+    },
+    {
+      "name": "030_rls_tighten.sql",
+      "ledger_checksum": "04fd0256b38427375838af0145294efe5474208e64bf25c1b8093cc859d66fca",
+      "applied_at": "2026-07-23T10:14:11.529Z",
+      "raw_match": true,
+      "lf_match": false,
+      "crlf_match": true,
+      "classification": "CRLF_MATCH"
+    },
+    {
+      "name": "031_reference_number_unique.sql",
+      "ledger_checksum": "8a12f4843b75b140b55a089cbb4adb741eed344eeb85ad583e0a9bac86a3df3f",
+      "applied_at": "2026-07-23T10:14:11.571Z",
+      "raw_match": true,
+      "lf_match": false,
+      "crlf_match": true,
+      "classification": "CRLF_MATCH"
+    },
+    {
+      "name": "032_manual_checkout_fields.sql",
+      "ledger_checksum": "a22491d92a18431e70789bfbc1fc00755b0dbfaaf5462028fc81bea46af4f64a",
+      "applied_at": "2026-07-23T10:14:11.614Z",
+      "raw_match": true,
+      "lf_match": true,
+      "crlf_match": false,
+      "classification": "LF_MATCH"
+    },
+    {
+      "name": "033_rls_blindagem.sql",
+      "ledger_checksum": "bbb4c8f32402c92f1cc562657ab52413153b2f2070a1e8e17966c302d5637a40",
+      "applied_at": "2026-07-23T10:14:11.660Z",
+      "raw_match": true,
+      "lf_match": false,
+      "crlf_match": true,
+      "classification": "CRLF_MATCH"
+    },
+    {
+      "name": "034_rls_servicos_clientes_locais.sql",
+      "ledger_checksum": "439313eba1b708db48689037ea6dc34f47cbe292fba8f6404afe5b262fd8bc22",
+      "applied_at": "2026-07-23T10:14:11.705Z",
+      "raw_match": true,
+      "lf_match": false,
+      "crlf_match": true,
+      "classification": "CRLF_MATCH"
+    },
+    {
+      "name": "035_split_views.sql",
+      "ledger_checksum": "a031862c35d632138369598cace09368d678c54995ac5c3cae28c4e13f976613",
+      "applied_at": "2026-07-23T10:14:11.749Z",
+      "raw_match": true,
+      "lf_match": true,
+      "crlf_match": false,
+      "classification": "LF_MATCH"
+    },
+    {
+      "name": "036_background_jobs_lock.sql",
+      "ledger_checksum": "8f9fbd17786ca823b78a12a2667f55637d65680df20c5a3b7fa5f6b413d9ac80",
+      "applied_at": "2026-07-23T10:14:11.792Z",
+      "raw_match": true,
+      "lf_match": true,
+      "crlf_match": false,
+      "classification": "LF_MATCH"
+    },
+    {
+      "name": "037_fixed_variable_payments.sql",
+      "ledger_checksum": "7f8278dbd8db38a0847d29c08776742032c06fd6cde9ded3a9e9d674cc3471ee",
+      "applied_at": "2026-07-23T10:14:11.837Z",
+      "raw_match": true,
+      "lf_match": true,
+      "crlf_match": false,
+      "classification": "LF_MATCH"
+    },
+    {
+      "name": "038_service_contract_fields.sql",
+      "ledger_checksum": "1b8986175c89c6a428d70fd07ff8db2846f0f2b0685959472599f3b61b614697",
+      "applied_at": "2026-07-23T10:14:11.882Z",
+      "raw_match": true,
+      "lf_match": false,
+      "crlf_match": true,
+      "classification": "CRLF_MATCH"
+    },
+    {
+      "name": "039_upholstery_units.sql",
+      "ledger_checksum": "d25ab2da2e268e48a8d0706133815d62468c4b3686f36cba0a1773628b6fcebb",
+      "applied_at": "2026-07-23T10:14:11.927Z",
+      "raw_match": true,
+      "lf_match": false,
+      "crlf_match": true,
+      "classification": "CRLF_MATCH"
+    },
+    {
+      "name": "040_collaborator_day_team.sql",
+      "ledger_checksum": "23fc02b989dc49a8aaa0e7cab7c6273f66ffbfd6f61f558fdbd3d3d8ab14b88c",
+      "applied_at": "2026-07-23T10:14:11.970Z",
+      "raw_match": true,
+      "lf_match": false,
+      "crlf_match": true,
+      "classification": "CRLF_MATCH"
+    },
+    {
+      "name": "041_num_people.sql",
+      "ledger_checksum": "4adcfc29b40fa6fc37ff2587e4dfa1f443d2b6d6a62aa4988e1ae19d4621dab2",
+      "applied_at": "2026-07-23T10:14:12.012Z",
+      "raw_match": true,
+      "lf_match": false,
+      "crlf_match": true,
+      "classification": "CRLF_MATCH"
+    },
+    {
+      "name": "042_daily_clocks.sql",
+      "ledger_checksum": "b4d45cc1cd11876b909805d263a3aad847a1da8c18c78034dcf4163e18877fe6",
+      "applied_at": "2026-07-23T10:14:12.057Z",
+      "raw_match": true,
+      "lf_match": false,
+      "crlf_match": true,
+      "classification": "CRLF_MATCH"
+    },
+    {
+      "name": "043_bank_reconciliation.sql",
+      "ledger_checksum": "1e14937403eb0a78a1c07f7d42650b5d10912a9c78595a322652fe80f5de88fd",
+      "applied_at": "2026-07-23T10:14:12.101Z",
+      "raw_match": true,
+      "lf_match": false,
+      "crlf_match": true,
+      "classification": "CRLF_MATCH"
+    },
+    {
+      "name": "044_contract_fixed_price.sql",
+      "ledger_checksum": "e9404b5cd07cd87ee19ff89dd621d37c6a923d371e9240d835f22b187d19cce8",
+      "applied_at": "2026-07-23T10:14:12.143Z",
+      "raw_match": true,
+      "lf_match": true,
+      "crlf_match": false,
+      "classification": "LF_MATCH"
+    },
+    {
+      "name": "045_service_apply_vat.sql",
+      "ledger_checksum": "71042494bd833924a055a473c6eccfd470cfb3dea1a955c6585ded604fc75b5a",
+      "applied_at": "2026-07-23T10:14:12.188Z",
+      "raw_match": true,
+      "lf_match": true,
+      "crlf_match": false,
+      "classification": "LF_MATCH"
+    },
+    {
+      "name": "046_contract_vat_monthly.sql",
+      "ledger_checksum": "47298a04ed0dca38e34e82632f2eb6171e24d8900f62f9910bbad13fe6eec8e4",
+      "applied_at": "2026-07-23T10:14:12.231Z",
+      "raw_match": true,
+      "lf_match": true,
+      "crlf_match": false,
+      "classification": "LF_MATCH"
+    },
+    {
+      "name": "047_contract_excluded_dates.sql",
+      "ledger_checksum": "c5d90c40f7b70f9df8a0ffe47d98e71eaeef53885efcea9aac71d19595d7a74e",
+      "applied_at": "2026-07-23T10:14:12.274Z",
+      "raw_match": true,
+      "lf_match": true,
+      "crlf_match": false,
+      "classification": "LF_MATCH"
+    },
+    {
+      "name": "048_service_payment_tracking.sql",
+      "ledger_checksum": "dbe905dab39e4141582263a77f7a4010f63940018e562bccb113ae9516385a02",
+      "applied_at": "2026-07-23T10:14:12.319Z",
+      "raw_match": true,
+      "lf_match": true,
+      "crlf_match": false,
+      "classification": "LF_MATCH"
+    },
+    {
+      "name": "049_cash_flow_service_payment_reference.sql",
+      "ledger_checksum": "e22c1eaf80e06abe9ef46ff3d9d4e164aaa10a5146350d219badc3a7f137ddd4",
+      "applied_at": "2026-07-23T10:14:12.364Z",
+      "raw_match": true,
+      "lf_match": true,
+      "crlf_match": false,
+      "classification": "LF_MATCH"
+    },
+    {
+      "name": "050_bank_tx_source_order_and_dedup.sql",
+      "ledger_checksum": "fb2941b9ca0ae0298034d1f54f76a413eed20b24101bef7b4bbc832ecd123a33",
+      "applied_at": "2026-07-23T10:14:12.409Z",
+      "raw_match": true,
+      "lf_match": true,
+      "crlf_match": false,
+      "classification": "LF_MATCH"
+    },
+    {
+      "name": "051_building_cards.sql",
+      "ledger_checksum": "ff694f760ef7eabe3074d1bcdddf3cc3b66898f4d3de7f8d289b042b26de9cb9",
+      "applied_at": "2026-07-23T10:14:12.453Z",
+      "raw_match": true,
+      "lf_match": true,
+      "crlf_match": false,
+      "classification": "LF_MATCH"
+    },
+    {
+      "name": "052_payment_attachments.sql",
+      "ledger_checksum": "534a28eb9f909ecf4decda14e9e12bc62f30e9c99b0af1cfeb4a8013da9b9ce2",
+      "applied_at": "2026-07-23T10:14:12.498Z",
+      "raw_match": true,
+      "lf_match": true,
+      "crlf_match": false,
+      "classification": "LF_MATCH"
+    },
+    {
+      "name": "053_enable_realtime_notifications.sql",
+      "ledger_checksum": "3b5adb5dd91eabda5717907b1c5b68968dbe7108b0d8c8bdf6378b92fb625bb0",
+      "applied_at": "2026-07-23T10:14:12.543Z",
+      "raw_match": true,
+      "lf_match": true,
+      "crlf_match": false,
+      "classification": "LF_MATCH"
+    },
+    {
+      "name": "054_harden_service_only_policies.sql",
+      "ledger_checksum": "81e6fc6a8fb06a46d31dcaac695c2feec2d5179f926a1a063a56b0e1a824c7a4",
+      "applied_at": "2026-07-23T10:14:12.586Z",
+      "raw_match": true,
+      "lf_match": true,
+      "crlf_match": false,
+      "classification": "LF_MATCH"
+    },
+    {
+      "name": "055_triweekly_frequency.sql",
+      "ledger_checksum": "35299253d7f4f76750101f7a547f2a3fda955e6c83a652ace0b781275883cd4c",
+      "applied_at": "2026-07-23T10:14:12.629Z",
+      "raw_match": true,
+      "lf_match": true,
+      "crlf_match": false,
+      "classification": "LF_MATCH"
+    },
+    {
+      "name": "056_services_full_payment_status.sql",
+      "ledger_checksum": "174527666c29658e80ed0e5d1983e6492c5a75a796d9aef7b24a6c3058820751",
+      "applied_at": "2026-07-23T10:14:12.672Z",
+      "raw_match": true,
+      "lf_match": true,
+      "crlf_match": false,
+      "classification": "LF_MATCH"
+    },
+    {
+      "name": "057_task_category_client.sql",
+      "ledger_checksum": "27aafb530d57ac6c4e5a8453a10e52c93ba389d1e6df179b253921442f6a3d04",
+      "applied_at": "2026-07-23T10:14:12.715Z",
+      "raw_match": true,
+      "lf_match": true,
+      "crlf_match": false,
+      "classification": "LF_MATCH"
+    },
+    {
+      "name": "058_task_attachment.sql",
+      "ledger_checksum": "b82f971b33217a867df7f41773844b1fea0b78d5c4db4b6372b342bea4088590",
+      "applied_at": "2026-07-23T10:14:12.761Z",
+      "raw_match": true,
+      "lf_match": true,
+      "crlf_match": false,
+      "classification": "LF_MATCH"
+    },
+    {
+      "name": "059_rede_seguranca.sql",
+      "ledger_checksum": "95c48a5acf045f7592dfa254db9ddbb21182497f9c4e3d85becf4546f28d5748",
+      "applied_at": "2026-07-23T10:14:12.807Z",
+      "raw_match": true,
+      "lf_match": true,
+      "crlf_match": false,
+      "classification": "LF_MATCH"
+    },
+    {
+      "name": "060_guardas_adicionais.sql",
+      "ledger_checksum": "a73eea6545d3798032df7b063d7f7da54daf03e3cd73f74c25b3016c76cca207",
+      "applied_at": "2026-07-23T10:14:12.853Z",
+      "raw_match": true,
+      "lf_match": true,
+      "crlf_match": false,
+      "classification": "LF_MATCH"
+    },
+    {
+      "name": "061_guardas_campos_criticos.sql",
+      "ledger_checksum": "a906d574ec4d95ff7b25ceb14e0f8a45d5d39e398da4ba1c379f18e35f388875",
+      "applied_at": "2026-07-23T10:14:12.897Z",
+      "raw_match": true,
+      "lf_match": true,
+      "crlf_match": false,
+      "classification": "LF_MATCH"
+    },
+    {
+      "name": "062_delete_atomico_e_actor.sql",
+      "ledger_checksum": "b865c2ffbfb3368142fc1284a30cecce5a39d5891a3e5f2798c4ca8f56d23474",
+      "applied_at": "2026-07-23T10:14:12.942Z",
+      "raw_match": true,
+      "lf_match": true,
+      "crlf_match": false,
+      "classification": "LF_MATCH"
+    },
+    {
+      "name": "063_services_full_apply_vat.sql",
+      "ledger_checksum": "4c08f5c6a8e23eeb619a5b48a35c97d0818379954411b9392e780fa63a793a4d",
+      "applied_at": "2026-07-23T10:14:12.985Z",
+      "raw_match": true,
+      "lf_match": true,
+      "crlf_match": false,
+      "classification": "LF_MATCH"
+    },
+    {
+      "name": "064_revoke_public_grants_atomic_functions.sql",
+      "ledger_checksum": "b4dfdecfe9ca19ac545a276b61c4070cecfa59a6fe65fcbfcfe4c12d68e0390b",
+      "applied_at": "2026-08-04T16:33:17.194Z",
+      "raw_match": true,
+      "lf_match": true,
+      "crlf_match": false,
+      "classification": "LF_MATCH"
+    },
+    {
+      "name": "065_revoke_public_grants_outbox_tables.sql",
+      "ledger_checksum": "6c462ffefc5aed904cdc60d52247f7559984cc669fea15ea85199166b7ad4fed",
+      "applied_at": "2026-08-04T16:47:12.535Z",
+      "raw_match": true,
+      "lf_match": true,
+      "crlf_match": false,
+      "classification": "LF_MATCH"
+    },
+    {
+      "name": "20260608_new_features.sql",
+      "ledger_checksum": "29d8df71b3f83ed4f45bb8b9f29fe92e01aab3fea857cc9361c30db5b4f8143c",
+      "applied_at": "2026-07-23T10:14:13.027Z",
+      "raw_match": true,
+      "lf_match": false,
+      "crlf_match": true,
+      "classification": "CRLF_MATCH"
+    },
+    {
+      "name": "20260609_kanban_columns.sql",
+      "ledger_checksum": "c56eed65561199047a3b3935e06c338d43dc7dd44d0faf5166aeed225012277f",
+      "applied_at": "2026-07-23T10:14:13.070Z",
+      "raw_match": true,
+      "lf_match": true,
+      "crlf_match": false,
+      "classification": "LF_MATCH"
+    },
+    {
+      "name": "20260609_profiles_hourly_rate.sql",
+      "ledger_checksum": "b1c5a699b6aebcaefe59b94d46391d1e6b6e837a51ac48c4cfa428e0ba273f39",
+      "applied_at": "2026-07-23T10:14:13.112Z",
+      "raw_match": true,
+      "lf_match": true,
+      "crlf_match": false,
+      "classification": "LF_MATCH"
+    },
+    {
+      "name": "20260609_timesheet_limits.sql",
+      "ledger_checksum": "cf4171dd5ff7dd61c60bc54b8dac3203b3557629fee3691623f3f25b446a19bf",
+      "applied_at": "2026-07-23T10:14:13.155Z",
+      "raw_match": true,
+      "lf_match": false,
+      "crlf_match": true,
+      "classification": "CRLF_MATCH"
+    }
+  ],
+  "summary": {
+    "LF_MATCH": 48,
+    "CRLF_MATCH": 20,
+    "NO_MATCH": 1
+  },
+  "pending_files": [
+    "066_secure_migrations_ledger.sql",
+    "067_outbox_foundation.sql"
+  ],
+  "note": "Classificação canónica (LF_MATCH/CRLF_MATCH) é independente do checkout: confirmada idêntica no working directory local e num git worktree limpo apontando ao mesmo commit. A coluna raw_match reflete apenas o estado de bytes no working directory local (autocrlf desativado neste working dir para 001-063+datadas: já LF em disco) — não é usada na classificação final.",
+  "resolution": {
+    "18": {
+      "status": "formal_exception",
+      "policyPath": "supabase/migration-policy.json#knownChecksumExceptions",
+      "ledgerChecksum": "63f34214405a7ae2f5423d4c903e07993eac02eb4117a2aef7328c7bbf7ad5e1",
+      "acceptedNormalizedLfChecksum": "444dd49eb07ec2beef6aeb775b6cc57d05799dc0781815306644f3e90685b4a0",
+      "note": "Nenhuma versão em git bate com o checksum do ledger (testados os 3 commits históricos, 8 combinações de campos, variantes de EOL e newline final). Produção correta via 023. Exceção pinada, não investigação adicional."
+    }
+  }
+}

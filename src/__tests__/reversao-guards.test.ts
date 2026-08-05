@@ -247,8 +247,14 @@ describe("auditoria E — buracos residuais fechados", () => {
 
   it("runner de migrações valida checksum e bloqueia divergências", () => {
     const src = readFileSync(join(ROOT, "scripts", "run-migrations.mjs"), "utf8");
+    // sha256 em si vive em scripts/lib/migration-checksum.mjs desde a correção
+    // de portabilidade de EOL (docs/atomicidade-audit/migration-checksum-map-2026-08-05.md);
+    // o runner continua a validar checksum e a bloquear divergências, só que
+    // via esse módulo importado.
+    const checksumLib = readFileSync(join(ROOT, "scripts", "lib", "migration-checksum.mjs"), "utf8");
     expect(src).toContain("checksum");
-    expect(src).toContain("sha256");
+    expect(src).toContain("historicalChecksumMatches");
+    expect(checksumLib).toContain("sha256");
     expect(src).toContain("CHECKSUM DIVERGENTE");
   });
 
