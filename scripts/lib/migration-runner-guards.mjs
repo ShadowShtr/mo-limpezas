@@ -60,6 +60,11 @@ export function parseArgs(argv) {
  *   - --baseline e --seed juntos: contraditório, rejeitado;
  *   - --baseline ou --seed sem --apply: rejeitado (escrevem no ledger/dados,
  *     não fazem sentido como "dry-run implícito");
+ *   - --confirm-production sem --apply: rejeitado — não é um erro de
+ *     segurança (dry-run não escreve de qualquer forma), mas é quase
+ *     sempre um engano de quem chama (esqueceu --apply, ou achou que
+ *     --confirm-production por si só faz algo). Falhar alto e claro em
+ *     vez de silenciosamente correr um dry-run que não foi o pedido;
  *   - sem nenhuma flag: comportamento válido — dry-run (decidido por quem
  *     chama, este validador só confirma que não há flags contraditórias).
  */
@@ -77,6 +82,12 @@ export function validateArgCombination(parsed) {
     return {
       ok: false,
       error: "--baseline e --seed exigem --apply explícito (escrevem no ledger/dados, não há dry-run implícito para eles).",
+    };
+  }
+  if (parsed.confirmProductionValue !== null && !parsed.apply) {
+    return {
+      ok: false,
+      error: "--confirm-production sem --apply não faz sentido — falta --apply, ou --confirm-production está a mais.",
     };
   }
   return { ok: true };

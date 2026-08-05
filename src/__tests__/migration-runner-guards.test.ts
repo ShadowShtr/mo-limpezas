@@ -99,6 +99,17 @@ describe("validateArgCombination", () => {
     expect(validateArgCombination(parseArgs(["--baseline", "--apply"])).ok).toBe(true);
     expect(validateArgCombination(parseArgs(["--seed", "--apply"])).ok).toBe(true);
   });
+
+  it("rejeita --confirm-production sem --apply — não é erro de segurança (dry-run não escreve), mas é sempre um engano do chamador", () => {
+    const r = validateArgCombination(parseArgs(["--confirm-production", "algum-ref"]));
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/--apply/);
+  });
+
+  it("--confirm-production com --apply: não é rejeitado por esta regra (a validação de valor correto é separada)", () => {
+    const r = validateArgCombination(parseArgs(["--apply", "--confirm-production", "algum-ref"]));
+    expect(r.ok).toBe(true);
+  });
 });
 
 describe("effectiveMode", () => {
@@ -181,6 +192,20 @@ describe("validateProductionConfirmation", () => {
   it("--apply com --confirm-production errado (projeto diferente): rejeitado", () => {
     const r = validateProductionConfirmation({ apply: true, confirmProductionValue: "outro-projeto", projectRef: REF, dbIdentity: IDENTITY_POOLER });
     expect(r.ok).toBe(false);
+  });
+
+  it("--apply com --confirm-production vazio: rejeitado (não é 'null' passa livre')", () => {
+    const r = validateProductionConfirmation({ apply: true, confirmProductionValue: "", projectRef: REF, dbIdentity: IDENTITY_POOLER });
+    expect(r.ok).toBe(false);
+  });
+
+  it("--confirm-production que CONTÉM o ref mas não é exatamente igual: rejeitado — a comparação nunca é por substring", () => {
+    const r1 = validateProductionConfirmation({ apply: true, confirmProductionValue: `${REF}-extra`, projectRef: REF, dbIdentity: IDENTITY_POOLER });
+    const r2 = validateProductionConfirmation({ apply: true, confirmProductionValue: REF.slice(0, -1), projectRef: REF, dbIdentity: IDENTITY_POOLER });
+    const r3 = validateProductionConfirmation({ apply: true, confirmProductionValue: `prefixo-${REF}`, projectRef: REF, dbIdentity: IDENTITY_POOLER });
+    expect(r1.ok).toBe(false);
+    expect(r2.ok).toBe(false);
+    expect(r3.ok).toBe(false);
   });
 
   it("--apply com tudo correto via pooler (ref só no username): aceite", () => {
