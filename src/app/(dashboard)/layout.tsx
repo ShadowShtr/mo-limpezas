@@ -11,13 +11,24 @@ export default async function DashboardLayout({ children }: { children: React.Re
   if (!user) redirect("/login");
 
   const admin = createAdminClient();
-  const { data: profile } = await admin
+  const { data: profile, error: profileError } = await admin
     .from("profiles")
     .select("full_name, role, avatar_url")
     .eq("id", user.id)
-    .single();
+    .maybeSingle();
 
-  if (!profile) redirect("/login");
+  if (profileError || !profile) {
+    // Nunca silenciar isto: sem log, um profile em falta (ou uma chave
+    // administrativa inválida a montante) fica indistinguível de um erro
+    // transitório, e sem signOut() o proxy via loop com /login (ver
+    // src/proxy.ts) — o utilizador autenticado nunca sai daqui.
+    console.error("[dashboard] perfil indisponível", {
+      userId: user.id,
+      error: profileError?.message,
+    });
+    await supabase.auth.signOut();
+    redirect("/login?error=profile");
+  }
   if (profile.role === "colaborador") redirect("/app");
 
   return (
