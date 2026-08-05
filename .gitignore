@@ -33,6 +33,11 @@ yarn-error.log*
 # env files (can opt-in for committing if needed)
 .env*
 !.env.example
+!.env.test-tenants.example
+
+# estado local (não secreto, mas específico de cada execução) dos scripts
+# de tenants de teste — nunca deve ir para o Git
+scripts/test-tenants/.state/
 
 # vercel
 .vercel
