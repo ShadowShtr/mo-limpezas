@@ -37,10 +37,16 @@ export async function proxy(request: NextRequest) {
     return redirectWithCookies(url, supabaseResponse);
   }
 
-  if (user && isPublic) {
-    const role = profileRole ?? (user.user_metadata?.role as string | undefined);
+  // Só redireciona para dentro da app quando o profile foi mesmo confirmado
+  // (profileRole veio de public.profiles, não de user_metadata — esse é
+  // controlável pelo próprio utilizador e não prova que o profile existe).
+  // Sem isso: um utilizador autenticado cujo profile não foi encontrado
+  // (ex.: chave administrativa inválida a montante) ficava preso entre
+  // /login (aqui) e /dashboard (guard que também não encontra o profile),
+  // em loop — ver DashboardLayout.
+  if (user && isPublic && profileRole) {
     const url = request.nextUrl.clone();
-    url.pathname = role === "colaborador" ? "/app" : "/dashboard";
+    url.pathname = profileRole === "colaborador" ? "/app" : "/dashboard";
     return redirectWithCookies(url, supabaseResponse);
   }
 
