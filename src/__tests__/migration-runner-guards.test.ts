@@ -5,7 +5,9 @@
 // Cobre a política de scripts/run-migrations.mjs (REGRA ZERO secção 9,
 // docs/PRODUCTION-RUNBOOK.md secção 8): dry-run por padrão, --apply
 // obrigatório para escrever, --confirm-production obrigatório em --apply,
-// flags desconhecidas rejeitadas, combinações contraditórias bloqueadas.
+// flags desconhecidas rejeitadas, combinações contraditórias bloqueadas,
+// e (2026-08-05, revisão pós-incidente PR #32) extração ESTRUTURADA e
+// comparação EXATA do project ref — nunca por substring.
 //
 // Nenhum destes testes liga a uma base real — nenhuma migration corre
 // durante o desenvolvimento/validação desta guarda.
@@ -17,7 +19,7 @@ import {
   validateArgCombination,
   effectiveMode,
   resolveProjectRef,
-  dbIdentityFromUrl,
+  extractDbProjectRef,
   validateProductionConfirmation,
   KNOWN_FLAGS,
 } from "../../scripts/lib/migration-runner-guards.mjs";
@@ -134,87 +136,161 @@ describe("resolveProjectRef", () => {
     expect(resolveProjectRef("not-a-url")).toBeNull();
     expect(resolveProjectRef("https://example.com")).toBeNull();
   });
+
+  // 2026-08-05 (terceira revisão pós-incidente): a versão anterior usava uma
+  // regex não ancorada ao fim do hostname — "https://abc123.supabase.co.evil.com"
+  // batia no início e devolvia "abc123" indevidamente. Agora exige que o
+  // hostname INTEIRO seja "<ref>.supabase.co", via parsing estrutural com URL.
+  it("REJEITA hostname com sufixo depois de .supabase.co — domínio falso não passa", () => {
+    expect(resolveProjectRef("https://abc123.supabase.co.evil.com")).toBeNull();
+  });
+
+  it("REJEITA hostname com subdomínio extra antes do ref (ref não é o hostname inteiro)", () => {
+    expect(resolveProjectRef("https://x.abc123.supabase.co")).toBeNull();
+  });
+
+  it("REJEITA URL cujo hostname não termina exatamente em .supabase.co, mesmo contendo o texto", () => {
+    expect(resolveProjectRef("https://supabase.co.abc123.example.com")).toBeNull();
+    expect(resolveProjectRef("https://evil.com/?x=abc123.supabase.co")).toBeNull();
+  });
+
+  it("REJEITA URL malformada sem lançar exceção", () => {
+    expect(resolveProjectRef("http://")).toBeNull();
+    expect(resolveProjectRef(null)).toBeNull();
+    expect(resolveProjectRef(123)).toBeNull();
+  });
 });
 
-describe("dbIdentityFromUrl", () => {
-  it("liga via pooler: o project ref vem do username (postgres.<ref>), não do hostname", () => {
-    // Formato real deste projeto — confirmado ao investigar por que a
-    // primeira versão desta guarda (que só olhava para o hostname) falhava
-    // sempre com --apply neste repositório: o hostname do pooler
-    // (aws-x-region.pooler.supabase.com) é partilhado entre projetos, o
-    // ref só aparece no username.
-    const identity = dbIdentityFromUrl("postgresql://postgres.ceqzxgizhgmvcniapyla:senha@aws-1-eu-central-2.pooler.supabase.com:6543/postgres");
-    expect(identity).toContain("ceqzxgizhgmvcniapyla");
+describe("extractDbProjectRef — extração estruturada, nunca por substring", () => {
+  const REF = "ceqzxgizhgmvcniapyla";
+
+  it("ligação via pooler: o ref vem do username (postgres.<ref>)", () => {
+    expect(extractDbProjectRef(`postgresql://postgres.${REF}:senha@aws-1-eu-central-2.pooler.supabase.com:6543/postgres`)).toBe(REF);
   });
 
-  it("liga direta: o project ref vem do hostname (db.<ref>.supabase.co)", () => {
-    const identity = dbIdentityFromUrl("postgresql://postgres:senha@db.ceqzxgizhgmvcniapyla.supabase.co:5432/postgres");
-    expect(identity).toContain("ceqzxgizhgmvcniapyla");
+  it("ligação direta: o ref vem do hostname (db.<ref>.supabase.co)", () => {
+    expect(extractDbProjectRef(`postgresql://postgres:senha@db.${REF}.supabase.co:5432/postgres`)).toBe(REF);
   });
 
-  it("descodifica o username (password/username podem vir URL-encoded)", () => {
-    const identity = dbIdentityFromUrl("postgresql://postgres.abc%2Ddef:senha@host.supabase.com:5432/postgres");
-    expect(identity).toContain("abc-def");
+  it("descodifica o username (pode vir URL-encoded) — refs reais do Supabase são só [a-z0-9]", () => {
+    // %63 = 'c': confirma que a descodificação acontece antes do match,
+    // sem introduzir um caráter fora do alfabeto real de um project ref.
+    expect(extractDbProjectRef(`postgresql://postgres.%63${REF.slice(1)}:senha@aws-1.pooler.supabase.com:6543/postgres`)).toBe(REF);
+  });
+
+  it("REJEITA host com sufixo depois do ref — não é 'includes', é âncora completa", () => {
+    expect(extractDbProjectRef(`postgresql://postgres:senha@db.${REF}-extra.supabase.co:5432/postgres`)).toBeNull();
+  });
+
+  it("REJEITA username com sufixo depois do ref", () => {
+    expect(extractDbProjectRef(`postgresql://postgres.${REF}-extra:senha@aws-1.pooler.supabase.com:6543/postgres`)).toBeNull();
+  });
+
+  it("REJEITA host com prefixo antes do ref", () => {
+    expect(extractDbProjectRef(`postgresql://postgres:senha@db.prefixo-${REF}.supabase.co:5432/postgres`)).toBeNull();
+  });
+
+  it("devolve null para hostname/username em formato completamente diferente (pooler partilhado sem ref no host)", () => {
+    // O hostname do pooler é partilhado entre projetos — não deve ser
+    // confundido com um ref válido só porque não há sufixo/prefixo óbvio.
+    expect(extractDbProjectRef("postgresql://postgres:senha@aws-1-eu-central-2.pooler.supabase.com:6543/postgres")).toBeNull();
+  });
+
+  // 2026-08-05 (terceira revisão pós-incidente): o caminho do pooler validava
+  // só o username (postgres.<ref>), aceitando esse username em QUALQUER
+  // hostname — um username correto apontando para um servidor que não é o
+  // pooler do Supabase extraía o ref na mesma. Agora exige username E
+  // hostname simultaneamente.
+  describe("REJEITA username postgres.<ref> correto num hostname que não é o pooler real", () => {
+    it("hostname completamente alheio", () => {
+      expect(extractDbProjectRef(`postgresql://postgres.${REF}:senha@evil.example.com:6543/postgres`)).toBeNull();
+    });
+
+    it("hostname que contém .pooler.supabase.com mas não termina nele (sufixo malicioso)", () => {
+      expect(extractDbProjectRef(`postgresql://postgres.${REF}:senha@pooler.supabase.com.evil.com:6543/postgres`)).toBeNull();
+    });
+
+    it("hostname com sufixo malicioso depois do domínio real do pooler", () => {
+      expect(extractDbProjectRef(`postgresql://postgres.${REF}:senha@aws-1.pooler.supabase.com.evil.com:6543/postgres`)).toBeNull();
+    });
+
+    it("qualquer hostname que não termine exatamente em .pooler.supabase.com", () => {
+      expect(extractDbProjectRef(`postgresql://postgres.${REF}:senha@meu-servidor-privado.com:6543/postgres`)).toBeNull();
+      expect(extractDbProjectRef(`postgresql://postgres.${REF}:senha@supabase.com:6543/postgres`)).toBeNull();
+      expect(extractDbProjectRef(`postgresql://postgres.${REF}:senha@fake.supabase.com:6543/postgres`)).toBeNull();
+    });
+  });
+
+  it("aceita username+hostname pooler reais em conjunto (região variável, sufixo fixo)", () => {
+    expect(extractDbProjectRef(`postgresql://postgres.${REF}:senha@aws-1-eu-central-2.pooler.supabase.com:6543/postgres`)).toBe(REF);
+    expect(extractDbProjectRef(`postgresql://postgres.${REF}:senha@aws-0-us-east-1.pooler.supabase.com:6543/postgres`)).toBe(REF);
   });
 });
 
 describe("validateProductionConfirmation", () => {
   const REF = "ceqzxgizhgmvcniapyla";
-  // Identidade real deste projeto: host de pooler (sem o ref) + username
-  // com o ref — dbIdentityFromUrl junta os dois, e é essa junção que tem
-  // de conter o ref, não o host isolado.
-  const IDENTITY_POOLER = `aws-1-eu-central-2.pooler.supabase.com postgres.${REF}`;
-  const IDENTITY_SEM_REF = "aws-1-eu-central-2.pooler.supabase.com postgres.outro-projeto";
-  const IDENTITY_DIRECT = `db.${REF}.supabase.co postgres`;
 
   it("dry-run (apply=false): sempre ok, não exige nada", () => {
-    expect(validateProductionConfirmation({ apply: false, confirmProductionValue: null, projectRef: null, dbIdentity: null }).ok).toBe(true);
+    expect(validateProductionConfirmation({ apply: false, confirmProductionValue: null, projectRef: null, dbProjectRef: null }).ok).toBe(true);
   });
 
   it("--apply sem NEXT_PUBLIC_SUPABASE_URL configurada: rejeitado", () => {
-    const r = validateProductionConfirmation({ apply: true, confirmProductionValue: REF, projectRef: null, dbIdentity: IDENTITY_POOLER });
+    const r = validateProductionConfirmation({ apply: true, confirmProductionValue: REF, projectRef: null, dbProjectRef: REF });
     expect(r.ok).toBe(false);
     expect(r.error).toMatch(/NEXT_PUBLIC_SUPABASE_URL/);
   });
 
-  it("--apply com identidade (host+username) que não contém o ref: rejeitado (evita escrever no projeto errado)", () => {
-    const r = validateProductionConfirmation({ apply: true, confirmProductionValue: REF, projectRef: REF, dbIdentity: IDENTITY_SEM_REF });
+  it("--apply sem conseguir extrair o ref de SUPABASE_DB_URL (formato inesperado): rejeitado", () => {
+    const r = validateProductionConfirmation({ apply: true, confirmProductionValue: REF, projectRef: REF, dbProjectRef: null });
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/Não foi possível extrair/);
+  });
+
+  it("--apply com dbProjectRef diferente do projectRef: rejeitado (evita escrever no projeto errado)", () => {
+    const r = validateProductionConfirmation({ apply: true, confirmProductionValue: REF, projectRef: REF, dbProjectRef: "outro-projeto" });
     expect(r.ok).toBe(false);
     expect(r.error).toMatch(/não corresponde ao projeto/);
   });
 
-  it("--apply sem --confirm-production (valor null): rejeitado mesmo com projeto/identidade corretos", () => {
-    const r = validateProductionConfirmation({ apply: true, confirmProductionValue: null, projectRef: REF, dbIdentity: IDENTITY_POOLER });
+  it("--apply com dbProjectRef que É o projectRef mais um sufixo: rejeitado — nunca por substring", () => {
+    const r = validateProductionConfirmation({ apply: true, confirmProductionValue: REF, projectRef: REF, dbProjectRef: `${REF}-extra` });
+    expect(r.ok).toBe(false);
+  });
+
+  it("--apply sem --confirm-production (valor null): rejeitado mesmo com projeto/dbProjectRef corretos", () => {
+    const r = validateProductionConfirmation({ apply: true, confirmProductionValue: null, projectRef: REF, dbProjectRef: REF });
     expect(r.ok).toBe(false);
     expect(r.error).toMatch(/--confirm-production/);
   });
 
-  it("--apply com --confirm-production errado (projeto diferente): rejeitado", () => {
-    const r = validateProductionConfirmation({ apply: true, confirmProductionValue: "outro-projeto", projectRef: REF, dbIdentity: IDENTITY_POOLER });
-    expect(r.ok).toBe(false);
-  });
-
-  it("--apply com --confirm-production vazio: rejeitado (não é 'null' passa livre')", () => {
-    const r = validateProductionConfirmation({ apply: true, confirmProductionValue: "", projectRef: REF, dbIdentity: IDENTITY_POOLER });
+  it("--apply com --confirm-production vazio: rejeitado", () => {
+    const r = validateProductionConfirmation({ apply: true, confirmProductionValue: "", projectRef: REF, dbProjectRef: REF });
     expect(r.ok).toBe(false);
   });
 
   it("--confirm-production que CONTÉM o ref mas não é exatamente igual: rejeitado — a comparação nunca é por substring", () => {
-    const r1 = validateProductionConfirmation({ apply: true, confirmProductionValue: `${REF}-extra`, projectRef: REF, dbIdentity: IDENTITY_POOLER });
-    const r2 = validateProductionConfirmation({ apply: true, confirmProductionValue: REF.slice(0, -1), projectRef: REF, dbIdentity: IDENTITY_POOLER });
-    const r3 = validateProductionConfirmation({ apply: true, confirmProductionValue: `prefixo-${REF}`, projectRef: REF, dbIdentity: IDENTITY_POOLER });
+    const r1 = validateProductionConfirmation({ apply: true, confirmProductionValue: `${REF}-extra`, projectRef: REF, dbProjectRef: REF });
+    const r2 = validateProductionConfirmation({ apply: true, confirmProductionValue: REF.slice(0, -1), projectRef: REF, dbProjectRef: REF });
+    const r3 = validateProductionConfirmation({ apply: true, confirmProductionValue: `prefixo-${REF}`, projectRef: REF, dbProjectRef: REF });
     expect(r1.ok).toBe(false);
     expect(r2.ok).toBe(false);
     expect(r3.ok).toBe(false);
   });
 
-  it("--apply com tudo correto via pooler (ref só no username): aceite", () => {
-    const r = validateProductionConfirmation({ apply: true, confirmProductionValue: REF, projectRef: REF, dbIdentity: IDENTITY_POOLER });
+  it("--apply com --confirm-production errado (projeto diferente): rejeitado", () => {
+    const r = validateProductionConfirmation({ apply: true, confirmProductionValue: "outro-projeto", projectRef: REF, dbProjectRef: REF });
+    expect(r.ok).toBe(false);
+  });
+
+  it("--apply com tudo correto via pooler (ref extraído do username): aceite", () => {
+    const dbProjectRef = extractDbProjectRef(`postgresql://postgres.${REF}:senha@aws-1.pooler.supabase.com:6543/postgres`);
+    const r = validateProductionConfirmation({ apply: true, confirmProductionValue: REF, projectRef: REF, dbProjectRef });
     expect(r.ok).toBe(true);
   });
 
-  it("--apply com tudo correto via ligação direta (ref no hostname): aceite", () => {
-    const r = validateProductionConfirmation({ apply: true, confirmProductionValue: REF, projectRef: REF, dbIdentity: IDENTITY_DIRECT });
+  it("--apply com tudo correto via ligação direta (ref extraído do hostname): aceite", () => {
+    const dbProjectRef = extractDbProjectRef(`postgresql://postgres:senha@db.${REF}.supabase.co:5432/postgres`);
+    const r = validateProductionConfirmation({ apply: true, confirmProductionValue: REF, projectRef: REF, dbProjectRef });
     expect(r.ok).toBe(true);
   });
 });
@@ -233,20 +309,34 @@ describe("integração: fluxo completo a partir de argv cru", () => {
       apply: parsed.apply,
       confirmProductionValue: parsed.confirmProductionValue,
       projectRef: "abc123",
-      dbIdentity: "host.example.com postgres.abc123",
+      dbProjectRef: "abc123",
     });
     expect(confirmation.ok).toBe(false);
   });
 
-  it("`--apply --confirm-production <ref-certo>` com projeto/identidade corretos: fluxo completo aceite, formato pooler real", () => {
+  it("`--apply --confirm-production <ref-certo>` com projeto/ligação corretos (formato pooler real): fluxo completo aceite", () => {
     const parsed = parseArgs(["--apply", "--confirm-production", "abc123"]);
     expect(validateArgCombination(parsed).ok).toBe(true);
+    const dbProjectRef = extractDbProjectRef("postgresql://postgres.abc123:senha@aws-1-eu-central-2.pooler.supabase.com:6543/postgres");
     const confirmation = validateProductionConfirmation({
       apply: parsed.apply,
       confirmProductionValue: parsed.confirmProductionValue,
       projectRef: "abc123",
-      dbIdentity: dbIdentityFromUrl("postgresql://postgres.abc123:senha@aws-1-eu-central-2.pooler.supabase.com:6543/postgres"),
+      dbProjectRef,
     });
     expect(confirmation.ok).toBe(true);
+  });
+
+  it("host com sufixo (abc123-extra) nunca passa mesmo confirmando abc123 corretamente — a extração já rejeita antes da comparação", () => {
+    const parsed = parseArgs(["--apply", "--confirm-production", "abc123"]);
+    const dbProjectRef = extractDbProjectRef("postgresql://postgres:senha@db.abc123-extra.supabase.co:5432/postgres");
+    expect(dbProjectRef).toBeNull();
+    const confirmation = validateProductionConfirmation({
+      apply: parsed.apply,
+      confirmProductionValue: parsed.confirmProductionValue,
+      projectRef: "abc123",
+      dbProjectRef,
+    });
+    expect(confirmation.ok).toBe(false);
   });
 });

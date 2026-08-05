@@ -80,8 +80,13 @@ describe("run-migrations.mjs seguro", () => {
   });
 
   it("seed só com flag explícita e guarda contra base com dados", () => {
+    // dbHasData() vive em scripts/lib/migration-runner-core.mjs desde a
+    // correção de "dry-run true read-only" (2026-08-05) — o runner
+    // continua a exigir --seed explícito e a guardar contra base com
+    // dados, só que via esse módulo importado.
+    const runnerCore = readFileSync(join(ROOT, "scripts", "lib", "migration-runner-core.mjs"), "utf8");
     expect(src).toContain("--seed");
-    expect(src).toMatch(/dbHasData/);
+    expect(runnerCore).toMatch(/dbHasData/);
   });
 
   it("não engole erros de migração (sem 'already exists' ignorado)", () => {
@@ -249,13 +254,17 @@ describe("auditoria E — buracos residuais fechados", () => {
     const src = readFileSync(join(ROOT, "scripts", "run-migrations.mjs"), "utf8");
     // sha256 em si vive em scripts/lib/migration-checksum.mjs desde a correção
     // de portabilidade de EOL (docs/atomicidade-audit/migration-checksum-map-2026-08-05.md);
-    // o runner continua a validar checksum e a bloquear divergências, só que
-    // via esse módulo importado.
+    // a orquestração de checksum/divergência (historicalChecksumMatches,
+    // CHECKSUM DIVERGENTE) vive em scripts/lib/migration-runner-core.mjs
+    // desde a correção de "dry-run true read-only" (2026-08-05, revisão
+    // pós-incidente PR #32) — o runner continua a validar checksum e a
+    // bloquear divergências, só que via esses módulos importados.
     const checksumLib = readFileSync(join(ROOT, "scripts", "lib", "migration-checksum.mjs"), "utf8");
+    const runnerCore = readFileSync(join(ROOT, "scripts", "lib", "migration-runner-core.mjs"), "utf8");
     expect(src).toContain("checksum");
-    expect(src).toContain("historicalChecksumMatches");
+    expect(runnerCore).toContain("historicalChecksumMatches");
     expect(checksumLib).toContain("sha256");
-    expect(src).toContain("CHECKSUM DIVERGENTE");
+    expect(runnerCore).toContain("CHECKSUM DIVERGENTE");
   });
 
   it("migração 061 guarda schedule_days de contrato ativo e pricing do local", () => {
@@ -328,8 +337,13 @@ describe("auditoria F — campos operacionais, delete atómico e actor", () => {
   });
 
   it("runner faz backfill de checksums antigos", () => {
-    const src = readFileSync(join(ROOT, "scripts", "run-migrations.mjs"), "utf8");
-    expect(src).toContain("checksum backfill");
+    // O backfill vive em scripts/lib/migration-runner-core.mjs desde a
+    // correção de "dry-run true read-only" (2026-08-05) — só executa
+    // UPDATE em --apply; em dry-run reporta "(would-backfill)" sem escrever
+    // (ver src/__tests__/migration-runner-core.test.ts para a prova via
+    // cliente Postgres falso).
+    const runnerCore = readFileSync(join(ROOT, "scripts", "lib", "migration-runner-core.mjs"), "utf8");
+    expect(runnerCore).toContain("checksum backfill");
   });
 });
 

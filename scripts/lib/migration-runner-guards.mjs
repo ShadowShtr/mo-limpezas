@@ -8,6 +8,14 @@
 // dry-run por padrão, --apply obrigatório para escrever, confirmação extra
 // do projeto antes de qualquer escrita, flags desconhecidas rejeitadas,
 // combinações contraditórias bloqueadas.
+//
+// 2026-08-05 (revisão pós-incidente, PR #32): a primeira versão desta guarda
+// comparava a identidade da ligação (host+username) com o project ref via
+// `.includes()` — correspondência por SUBSTRING, não exata. Isso aceitaria
+// indevidamente um projeto "abc123-extra" ao confirmar apenas "abc123".
+// Substituído por extração ESTRUTURADA do ref (regex ancorada ao formato
+// exato de host/username do Supabase) seguida de comparação `===`. Ver
+// extractDbProjectRef().
 // ============================================================================
 
 export const KNOWN_FLAGS = Object.freeze([
@@ -101,38 +109,87 @@ export function effectiveMode(parsed) {
   return parsed.apply ? "apply" : "dry-run";
 }
 
-/** Extrai o project ref de uma URL do Supabase (https://<ref>.supabase.co). */
+/**
+ * Extrai o project ref de uma URL do Supabase (https://<ref>.supabase.co).
+ *
+ * 2026-08-05 (segunda revisão pós-incidente): a versão anterior usava uma
+ * regex sobre a string completa sem ancorar ao fim do hostname — aceitava
+ * "https://abc123.supabase.co.evil.com" e devolvia "abc123" indevidamente.
+ * Agora faz parsing estrutural via `URL` e exige que o hostname INTEIRO seja
+ * "<ref>.supabase.co" — nada antes, nada depois.
+ */
 export function resolveProjectRef(supabaseUrl) {
-  const match = String(supabaseUrl ?? "").match(/^https?:\/\/([a-z0-9-]+)\.supabase\.co/i);
+  let url;
+  try {
+    url = new URL(String(supabaseUrl ?? ""));
+  } catch {
+    return null;
+  }
+  const match = url.hostname.match(/^([a-z0-9]+)\.supabase\.co$/i);
   return match?.[1] ?? null;
 }
 
 /**
- * "Identidade" da ligação para conferir contra o project ref: hostname +
- * username decodificado. Necessário porque uma connection string via
- * pooler do Supabase (`aws-x-region.pooler.supabase.com`) NÃO tem o
- * project ref no hostname — vem no username (`postgres.<ref>`). Uma
- * ligação direta (`db.<ref>.supabase.co`) tem o ref no próprio hostname.
- * Juntar os dois cobre as duas formas sem ter de adivinhar qual está em uso.
+ * Extrai o project ref de SUPABASE_DB_URL por ESTRUTURA, nunca por
+ * substring — cobre as duas formas de ligação do Supabase:
+ *   - direta:  hostname = db.<ref>.supabase.co        → ref no hostname;
+ *   - pooler:  username = postgres.<ref>               → ref no username,
+ *              MAS só é aceite se o hostname também terminar exatamente em
+ *              ".pooler.supabase.com" (ver nota abaixo).
+ * Cada regex é ancorada (^...$) ao formato completo do segmento — um host
+ * como "db.abc123-extra.supabase.co" ou um username como
+ * "postgres.abc123-extra" NÃO batem, porque o ref inteiro tem de ser o
+ * único conteúdo do grupo, sem sobra antes/depois. Devolve null se nenhuma
+ * das duas formas bater (ligação em formato inesperado — quem chamar deve
+ * tratar isso como "não foi possível confirmar", nunca como "ok").
+ *
+ * 2026-08-05 (segunda revisão pós-incidente): o caminho do pooler validava
+ * só o username (postgres.<ref>), aceitando esse username em QUALQUER
+ * hostname — ex.: "postgres.<ref>@servidor-errado.example.com" extraía o
+ * ref correto apontando para um servidor que não é o pooler do Supabase.
+ * Agora exige as duas coisas ao mesmo tempo: username no formato
+ * postgres.<ref> E hostname terminado exatamente em ".pooler.supabase.com"
+ * (o próprio host completo, ex. "aws-1-eu-central-2.pooler.supabase.com" —
+ * o subdomínio da região varia, mas o sufixo final não pode ter nada a
+ * mais depois de ".supabase.com").
  */
-export function dbIdentityFromUrl(dbUrl) {
+export function extractDbProjectRef(dbUrl) {
   const parsed = new URL(dbUrl);
-  return `${parsed.hostname} ${decodeURIComponent(parsed.username)}`;
+  const host = parsed.hostname;
+  const username = decodeURIComponent(parsed.username);
+
+  const directMatch = host.match(/^db\.([a-z0-9]+)\.supabase\.co$/i);
+  if (directMatch) return directMatch[1];
+
+  const isPoolerHost = /^[a-z0-9-]+\.pooler\.supabase\.com$/i.test(host);
+  if (isPoolerHost) {
+    const poolerMatch = username.match(/^postgres\.([a-z0-9]+)$/i);
+    if (poolerMatch) return poolerMatch[1];
+  }
+
+  return null;
 }
 
 /**
- * Confirmação obrigatória antes de qualquer --apply: o projeto identificado
- * por NEXT_PUBLIC_SUPABASE_URL tem de aparecer na identidade da ligação
- * (host + username de SUPABASE_DB_URL — ver dbIdentityFromUrl), e quem
- * chamou tem de repetir esse project ref exato em --confirm-production.
- * As três coisas têm de coincidir — não basta uma delas.
+ * Confirmação obrigatória antes de qualquer --apply: o project ref extraído
+ * estruturalmente de SUPABASE_DB_URL (dbProjectRef — ver
+ * extractDbProjectRef) tem de ser EXATAMENTE igual ao de
+ * NEXT_PUBLIC_SUPABASE_URL, e quem chamou tem de repetir esse mesmo ref
+ * exato em --confirm-production. As três coisas têm de coincidir por
+ * igualdade estrita — nunca por substring, prefixo ou sufixo.
  */
-export function validateProductionConfirmation({ apply, confirmProductionValue, projectRef, dbIdentity }) {
+export function validateProductionConfirmation({ apply, confirmProductionValue, projectRef, dbProjectRef }) {
   if (!apply) return { ok: true }; // dry-run nunca precisa disto
   if (!projectRef) {
     return { ok: false, error: "NEXT_PUBLIC_SUPABASE_URL não definida — não é possível confirmar o projeto antes de escrever." };
   }
-  if (!dbIdentity || !dbIdentity.includes(projectRef)) {
+  if (!dbProjectRef) {
+    return {
+      ok: false,
+      error: "Não foi possível extrair o project ref de SUPABASE_DB_URL (nem formato direto db.<ref>.supabase.co, nem pooler postgres.<ref>) — abortando por segurança.",
+    };
+  }
+  if (dbProjectRef !== projectRef) {
     return { ok: false, error: "SUPABASE_DB_URL não corresponde ao projeto de NEXT_PUBLIC_SUPABASE_URL — abortando por segurança." };
   }
   if (confirmProductionValue !== projectRef) {
