@@ -136,6 +136,29 @@ describe("resolveProjectRef", () => {
     expect(resolveProjectRef("not-a-url")).toBeNull();
     expect(resolveProjectRef("https://example.com")).toBeNull();
   });
+
+  // 2026-08-05 (terceira revisão pós-incidente): a versão anterior usava uma
+  // regex não ancorada ao fim do hostname — "https://abc123.supabase.co.evil.com"
+  // batia no início e devolvia "abc123" indevidamente. Agora exige que o
+  // hostname INTEIRO seja "<ref>.supabase.co", via parsing estrutural com URL.
+  it("REJEITA hostname com sufixo depois de .supabase.co — domínio falso não passa", () => {
+    expect(resolveProjectRef("https://abc123.supabase.co.evil.com")).toBeNull();
+  });
+
+  it("REJEITA hostname com subdomínio extra antes do ref (ref não é o hostname inteiro)", () => {
+    expect(resolveProjectRef("https://x.abc123.supabase.co")).toBeNull();
+  });
+
+  it("REJEITA URL cujo hostname não termina exatamente em .supabase.co, mesmo contendo o texto", () => {
+    expect(resolveProjectRef("https://supabase.co.abc123.example.com")).toBeNull();
+    expect(resolveProjectRef("https://evil.com/?x=abc123.supabase.co")).toBeNull();
+  });
+
+  it("REJEITA URL malformada sem lançar exceção", () => {
+    expect(resolveProjectRef("http://")).toBeNull();
+    expect(resolveProjectRef(null)).toBeNull();
+    expect(resolveProjectRef(123)).toBeNull();
+  });
 });
 
 describe("extractDbProjectRef — extração estruturada, nunca por substring", () => {
@@ -171,6 +194,36 @@ describe("extractDbProjectRef — extração estruturada, nunca por substring", 
     // O hostname do pooler é partilhado entre projetos — não deve ser
     // confundido com um ref válido só porque não há sufixo/prefixo óbvio.
     expect(extractDbProjectRef("postgresql://postgres:senha@aws-1-eu-central-2.pooler.supabase.com:6543/postgres")).toBeNull();
+  });
+
+  // 2026-08-05 (terceira revisão pós-incidente): o caminho do pooler validava
+  // só o username (postgres.<ref>), aceitando esse username em QUALQUER
+  // hostname — um username correto apontando para um servidor que não é o
+  // pooler do Supabase extraía o ref na mesma. Agora exige username E
+  // hostname simultaneamente.
+  describe("REJEITA username postgres.<ref> correto num hostname que não é o pooler real", () => {
+    it("hostname completamente alheio", () => {
+      expect(extractDbProjectRef(`postgresql://postgres.${REF}:senha@evil.example.com:6543/postgres`)).toBeNull();
+    });
+
+    it("hostname que contém .pooler.supabase.com mas não termina nele (sufixo malicioso)", () => {
+      expect(extractDbProjectRef(`postgresql://postgres.${REF}:senha@pooler.supabase.com.evil.com:6543/postgres`)).toBeNull();
+    });
+
+    it("hostname com sufixo malicioso depois do domínio real do pooler", () => {
+      expect(extractDbProjectRef(`postgresql://postgres.${REF}:senha@aws-1.pooler.supabase.com.evil.com:6543/postgres`)).toBeNull();
+    });
+
+    it("qualquer hostname que não termine exatamente em .pooler.supabase.com", () => {
+      expect(extractDbProjectRef(`postgresql://postgres.${REF}:senha@meu-servidor-privado.com:6543/postgres`)).toBeNull();
+      expect(extractDbProjectRef(`postgresql://postgres.${REF}:senha@supabase.com:6543/postgres`)).toBeNull();
+      expect(extractDbProjectRef(`postgresql://postgres.${REF}:senha@fake.supabase.com:6543/postgres`)).toBeNull();
+    });
+  });
+
+  it("aceita username+hostname pooler reais em conjunto (região variável, sufixo fixo)", () => {
+    expect(extractDbProjectRef(`postgresql://postgres.${REF}:senha@aws-1-eu-central-2.pooler.supabase.com:6543/postgres`)).toBe(REF);
+    expect(extractDbProjectRef(`postgresql://postgres.${REF}:senha@aws-0-us-east-1.pooler.supabase.com:6543/postgres`)).toBe(REF);
   });
 });
 

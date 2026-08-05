@@ -44,6 +44,8 @@ interface FakeClientOptions {
   appliedRows?: AppliedRow[];
   companiesCount?: number;
   failOnSqlContaining?: string | null;
+  /** Se definido, a query a public.companies lança este erro em vez de devolver rows. */
+  companiesQueryError?: { code?: string; message?: string } | null;
 }
 
 interface CapturedQuery {
@@ -58,13 +60,15 @@ class FakeClient {
   private _appliedRows: AppliedRow[];
   private _companiesCount: number;
   private _failOnSqlContaining: string | null;
+  private _companiesQueryError: { code?: string; message?: string } | null;
 
-  constructor({ tableExists = false, hasChecksumCol = false, appliedRows = [], companiesCount = 0, failOnSqlContaining = null }: FakeClientOptions = {}) {
+  constructor({ tableExists = false, hasChecksumCol = false, appliedRows = [], companiesCount = 0, failOnSqlContaining = null, companiesQueryError = null }: FakeClientOptions = {}) {
     this._tableExists = tableExists;
     this._hasChecksumCol = hasChecksumCol;
     this._appliedRows = appliedRows;
     this._companiesCount = companiesCount;
     this._failOnSqlContaining = failOnSqlContaining;
+    this._companiesQueryError = companiesQueryError;
   }
 
   async query(sql: string, params?: unknown) {
@@ -84,6 +88,11 @@ class FakeClient {
       return { rows: this._appliedRows.map((r) => ({ name: r.name })) };
     }
     if (trimmed.startsWith("SELECT count(*)::int AS n FROM public.companies")) {
+      if (this._companiesQueryError) {
+        const err: { code?: string; message?: string } = new Error(this._companiesQueryError.message ?? "erro simulado");
+        if (this._companiesQueryError.code) err.code = this._companiesQueryError.code;
+        throw err;
+      }
       return { rows: [{ n: this._companiesCount }] };
     }
     if (this._failOnSqlContaining && trimmed.includes(this._failOnSqlContaining)) {
@@ -255,6 +264,86 @@ describe("runMigrations — --apply válido (cliente simulado): fluxo de escrita
 
     expect(exitCode).toBe(1);
     expect(logger.lines.some((l) => l.includes("CHECKSUM DIVERGENTE"))).toBe(true);
+  });
+});
+
+describe("dbHasData — falha fechado: só 42P01 (tabela ausente) é tratado como 'sem dados'", () => {
+  // 2026-08-05 (terceira revisão pós-incidente): a versão anterior convertia
+  // QUALQUER erro (permissão negada, timeout, conexão perdida) em "false"
+  // (base vazia), o que podia deixar um --apply avançar sobre um estado que
+  // nunca foi realmente confirmado. Agora só 42P01 (undefined_table — o caso
+  // esperado numa base nova antes do baseline) é engolido; qualquer outro
+  // erro aborta o runner antes de tocar em BEGIN/SQL de migração/INSERT.
+
+  it("42P01 (tabela companies não existe): tratado como base vazia, runner prossegue normalmente", async () => {
+    const migrationsDir = fixtureDir({});
+    const client = new FakeClient({
+      tableExists: true,
+      hasChecksumCol: true,
+      appliedRows: [],
+      companiesQueryError: { code: "42P01", message: "relation \"public.companies\" does not exist" },
+    });
+    const logger = makeCapturingLogger();
+
+    const { exitCode } = await runMigrations({ client, migrationsDir, rootDir: migrationsDir, apply: false, ...logger });
+
+    expect(exitCode).toBe(0);
+    expect(client.queries.some((q) => isMutatingQuery(q.sql))).toBe(false);
+  });
+
+  it("42501 (permission denied): aborta — não trata como base vazia", async () => {
+    const migrationsDir = fixtureDir({ "001_pending.sql": "CREATE TABLE algo (id int);\n" });
+    const client = new FakeClient({
+      tableExists: true,
+      hasChecksumCol: true,
+      appliedRows: [],
+      companiesQueryError: { code: "42501", message: "permission denied for table companies" },
+    });
+    const logger = makeCapturingLogger();
+
+    await expect(
+      runMigrations({ client, migrationsDir, rootDir: migrationsDir, apply: true, ...logger }),
+    ).rejects.toThrow(/permission denied/);
+
+    expect(client.queries.some((q) => q.sql === "BEGIN")).toBe(false);
+    expect(client.queries.some((q) => q.sql.includes("algo"))).toBe(false);
+    expect(client.queries.some((q) => q.sql.toUpperCase().startsWith("INSERT"))).toBe(false);
+  });
+
+  it("erro genérico/conexão perdida: aborta — não trata como base vazia", async () => {
+    const migrationsDir = fixtureDir({ "001_pending.sql": "CREATE TABLE algo (id int);\n" });
+    const client = new FakeClient({
+      tableExists: true,
+      hasChecksumCol: true,
+      appliedRows: [],
+      companiesQueryError: { message: "connection terminated unexpectedly" },
+    });
+    const logger = makeCapturingLogger();
+
+    await expect(
+      runMigrations({ client, migrationsDir, rootDir: migrationsDir, apply: true, ...logger }),
+    ).rejects.toThrow(/connection terminated/);
+
+    expect(client.queries.some((q) => q.sql === "BEGIN")).toBe(false);
+    expect(client.queries.some((q) => q.sql.includes("algo"))).toBe(false);
+    expect(client.queries.some((q) => q.sql.toUpperCase().startsWith("INSERT"))).toBe(false);
+  });
+
+  it("dry-run com erro de permissão na checagem de base vazia: também aborta (falha fechado em qualquer modo)", async () => {
+    const migrationsDir = fixtureDir({});
+    const client = new FakeClient({
+      tableExists: true,
+      hasChecksumCol: true,
+      appliedRows: [],
+      companiesQueryError: { code: "42501", message: "permission denied for table companies" },
+    });
+    const logger = makeCapturingLogger();
+
+    await expect(
+      runMigrations({ client, migrationsDir, rootDir: migrationsDir, apply: false, ...logger }),
+    ).rejects.toThrow(/permission denied/);
+
+    expect(client.queries.some((q) => isMutatingQuery(q.sql))).toBe(false);
   });
 });
 

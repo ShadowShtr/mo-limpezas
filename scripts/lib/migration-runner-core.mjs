@@ -65,13 +65,21 @@ export async function readAppliedMap(client, hasTable, hasChecksumCol) {
   return new Map(rows.map((r) => [r.name, null]));
 }
 
-/** SELECT puro, com fallback seguro se a tabela nem existir. */
+/**
+ * SELECT puro. Só trata como "base vazia" o caso em que a tabela
+ * `public.companies` genuinamente ainda não existe (42P01 — undefined_table,
+ * o estado esperado numa base nova antes do baseline/primeira migração).
+ * Qualquer outro erro (permissão negada, timeout, ligação perdida, etc.)
+ * é reencaminhado para quem chamou — nunca interpretado como "sem dados".
+ * Um `--apply` não pode avançar sobre um estado que não foi confirmado.
+ */
 export async function dbHasData(client) {
   try {
     const { rows } = await client.query("SELECT count(*)::int AS n FROM public.companies");
     return rows[0].n > 0;
-  } catch {
-    return false;
+  } catch (error) {
+    if (error?.code === "42P01") return false;
+    throw error;
   }
 }
 

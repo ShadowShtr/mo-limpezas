@@ -109,9 +109,23 @@ export function effectiveMode(parsed) {
   return parsed.apply ? "apply" : "dry-run";
 }
 
-/** Extrai o project ref de uma URL do Supabase (https://<ref>.supabase.co). */
+/**
+ * Extrai o project ref de uma URL do Supabase (https://<ref>.supabase.co).
+ *
+ * 2026-08-05 (segunda revisão pós-incidente): a versão anterior usava uma
+ * regex sobre a string completa sem ancorar ao fim do hostname — aceitava
+ * "https://abc123.supabase.co.evil.com" e devolvia "abc123" indevidamente.
+ * Agora faz parsing estrutural via `URL` e exige que o hostname INTEIRO seja
+ * "<ref>.supabase.co" — nada antes, nada depois.
+ */
 export function resolveProjectRef(supabaseUrl) {
-  const match = String(supabaseUrl ?? "").match(/^https?:\/\/([a-z0-9]+)\.supabase\.co/i);
+  let url;
+  try {
+    url = new URL(String(supabaseUrl ?? ""));
+  } catch {
+    return null;
+  }
+  const match = url.hostname.match(/^([a-z0-9]+)\.supabase\.co$/i);
   return match?.[1] ?? null;
 }
 
@@ -119,15 +133,25 @@ export function resolveProjectRef(supabaseUrl) {
  * Extrai o project ref de SUPABASE_DB_URL por ESTRUTURA, nunca por
  * substring — cobre as duas formas de ligação do Supabase:
  *   - direta:  hostname = db.<ref>.supabase.co        → ref no hostname;
- *   - pooler:  username = postgres.<ref>               → ref no username
- *              (o hostname do pooler, aws-x-region.pooler.supabase.com,
- *              é PARTILHADO entre projetos — nunca contém o ref).
+ *   - pooler:  username = postgres.<ref>               → ref no username,
+ *              MAS só é aceite se o hostname também terminar exatamente em
+ *              ".pooler.supabase.com" (ver nota abaixo).
  * Cada regex é ancorada (^...$) ao formato completo do segmento — um host
  * como "db.abc123-extra.supabase.co" ou um username como
  * "postgres.abc123-extra" NÃO batem, porque o ref inteiro tem de ser o
  * único conteúdo do grupo, sem sobra antes/depois. Devolve null se nenhuma
  * das duas formas bater (ligação em formato inesperado — quem chamar deve
  * tratar isso como "não foi possível confirmar", nunca como "ok").
+ *
+ * 2026-08-05 (segunda revisão pós-incidente): o caminho do pooler validava
+ * só o username (postgres.<ref>), aceitando esse username em QUALQUER
+ * hostname — ex.: "postgres.<ref>@servidor-errado.example.com" extraía o
+ * ref correto apontando para um servidor que não é o pooler do Supabase.
+ * Agora exige as duas coisas ao mesmo tempo: username no formato
+ * postgres.<ref> E hostname terminado exatamente em ".pooler.supabase.com"
+ * (o próprio host completo, ex. "aws-1-eu-central-2.pooler.supabase.com" —
+ * o subdomínio da região varia, mas o sufixo final não pode ter nada a
+ * mais depois de ".supabase.com").
  */
 export function extractDbProjectRef(dbUrl) {
   const parsed = new URL(dbUrl);
@@ -137,8 +161,11 @@ export function extractDbProjectRef(dbUrl) {
   const directMatch = host.match(/^db\.([a-z0-9]+)\.supabase\.co$/i);
   if (directMatch) return directMatch[1];
 
-  const poolerMatch = username.match(/^postgres\.([a-z0-9]+)$/i);
-  if (poolerMatch) return poolerMatch[1];
+  const isPoolerHost = /^[a-z0-9-]+\.pooler\.supabase\.com$/i.test(host);
+  if (isPoolerHost) {
+    const poolerMatch = username.match(/^postgres\.([a-z0-9]+)$/i);
+    if (poolerMatch) return poolerMatch[1];
+  }
 
   return null;
 }
