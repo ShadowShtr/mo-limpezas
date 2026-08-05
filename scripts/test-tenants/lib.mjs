@@ -83,11 +83,32 @@ export function fingerprint(value) {
 
 // ── Clientes Supabase ───────────────────────────────────────────────────────
 
-/** Cliente admin (service_role) — só em provision.mjs e cleanup.mjs, nunca em verify-isolation.mjs. */
+/**
+ * Chave administrativa: aceita a nova sb_secret_ (SUPABASE_SECRET_KEY) ou a
+ * legada service_role (SUPABASE_SERVICE_ROLE_KEY, ainda válida em paralelo
+ * durante a migração da Supabase para o novo formato de chaves). Nunca
+ * expor esta função nem o valor devolvido fora de scripts server-side.
+ */
+export function resolveAdminKey() {
+  const key = process.env.SUPABASE_SECRET_KEY ?? process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!key || key.trim() === "") {
+    throw new Error("Nenhuma chave administrativa definida (SUPABASE_SECRET_KEY ou SUPABASE_SERVICE_ROLE_KEY).");
+  }
+  return key;
+}
+
+/** true se alguma das duas variáveis de chave administrativa estiver definida — sem expor qual nem o valor. */
+export function hasAdminKey() {
+  const key = process.env.SUPABASE_SECRET_KEY ?? process.env.SUPABASE_SERVICE_ROLE_KEY;
+  return Boolean(key && key.trim() !== "");
+}
+
+/** Cliente admin (chave elevada, ignora RLS) — só em provision.mjs e cleanup.mjs, nunca em verify-isolation.mjs. Exclusivamente Node/server. */
 export function makeAdminClient() {
-  const { SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY } = requireEnv(["SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY"]);
-  return createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
-    auth: { autoRefreshToken: false, persistSession: false },
+  const { SUPABASE_URL } = requireEnv(["SUPABASE_URL"]);
+  const adminKey = resolveAdminKey();
+  return createClient(SUPABASE_URL, adminKey, {
+    auth: { autoRefreshToken: false, persistSession: false, detectSessionInUrl: false },
   });
 }
 

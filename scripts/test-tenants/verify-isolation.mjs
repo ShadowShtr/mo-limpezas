@@ -23,6 +23,7 @@ import {
   requireEnv,
   makeAdminClient,
   makeAnonClient,
+  hasAdminKey,
   genRunId,
   syntheticName,
   TestResults,
@@ -82,12 +83,13 @@ async function main() {
   // ── Leitura administrativa de configuração de teste, isolada do resto ──
   // Não prova nem depende de RLS: só descobre o UUID da empresa real (para
   // usar como alvo dos testes negativos 7 e 22) e captura uma contagem de
-  // baseline (para o teste 21). Opcional — se SUPABASE_SERVICE_ROLE_KEY não
-  // estiver definida, esses testes são reportados como FAIL explícito (não
-  // silenciosamente ignorados), porque sem essa base não há como prová-los.
+  // baseline (para o teste 21). Opcional — se nenhuma chave administrativa
+  // (SUPABASE_SECRET_KEY ou SUPABASE_SERVICE_ROLE_KEY) estiver definida,
+  // esses testes são reportados como FAIL explícito (não silenciosamente
+  // ignorados), porque sem essa base não há como prová-los.
   let realCompanyId = null;
   let realBaselineCount = null;
-  if (process.env.SUPABASE_SERVICE_ROLE_KEY) {
+  if (hasAdminKey()) {
     const admin = makeAdminClient();
     const { data: companies, error: compErr } = await admin
       .from("companies")
@@ -152,7 +154,7 @@ async function main() {
       }
       results.report(allBlocked, "Nenhuma conta de teste consulta a empresa real por UUID direto");
     } else {
-      results.fail("Nenhuma conta de teste consulta a empresa real por UUID direto (SUPABASE_SERVICE_ROLE_KEY ausente — não foi possível descobrir o UUID da empresa real para testar)");
+      results.fail("Nenhuma conta de teste consulta a empresa real por UUID direto (chave administrativa ausente — não foi possível descobrir o UUID da empresa real para testar)");
     }
 
     // 8: Admin A cria um cliente sintético no tenant A.
@@ -254,12 +256,12 @@ async function main() {
     }
 
     // 21: nenhuma contagem da empresa real pode mudar.
-    if (realCompanyId && realBaselineCount !== null && process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    if (realCompanyId && realBaselineCount !== null && hasAdminKey()) {
       const admin = makeAdminClient();
       const { count } = await admin.from("clients").select("id", { count: "exact", head: true }).eq("company_id", realCompanyId);
       results.report(count === realBaselineCount, "Nenhuma contagem da empresa real mudou");
     } else {
-      results.fail("Nenhuma contagem da empresa real mudou (baseline indisponível — SUPABASE_SERVICE_ROLE_KEY ausente)");
+      results.fail("Nenhuma contagem da empresa real mudou (baseline indisponível — chave administrativa ausente)");
     }
 
     // 22: nenhuma operação pode criar registos ligados à company_id real.
@@ -267,7 +269,7 @@ async function main() {
       const { error } = await a1.client.from("clients").insert({ company_id: realCompanyId, name: syntheticName(runId, "TENTA_REAL") });
       results.report(Boolean(error), "Nenhuma operação cria registos ligados à company_id real");
     } else {
-      results.fail("Nenhuma operação cria registos ligados à company_id real (não verificável sem SUPABASE_SERVICE_ROLE_KEY)");
+      results.fail("Nenhuma operação cria registos ligados à company_id real (não verificável sem chave administrativa)");
     }
   } finally {
     // Só apaga os dados sintéticos deste run_id — nunca as empresas/contas

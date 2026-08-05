@@ -16,6 +16,7 @@ import {
   loadTestTenantsEnv,
   requireEnv,
   makeAdminClient,
+  resolveAdminKey,
   maskEmail,
   safeErrorMessage,
 } from "./lib.mjs";
@@ -42,7 +43,8 @@ const EXPECTED_EMAILS = [
 ].map((k) => process.env[k]).filter(Boolean);
 
 async function main() {
-  requireEnv(["SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY"]);
+  requireEnv(["SUPABASE_URL"]);
+  resolveAdminKey();
   const admin = makeAdminClient();
 
   console.log(WRITE ? "🔴 MODO --apply (apaga em produção)" : "🟡 dry-run (nenhuma escrita)");

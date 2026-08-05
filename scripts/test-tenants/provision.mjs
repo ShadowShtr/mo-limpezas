@@ -24,6 +24,7 @@ import {
   loadTestTenantsEnv,
   requireEnv,
   makeAdminClient,
+  resolveAdminKey,
   maskEmail,
   safeErrorMessage,
 } from "./lib.mjs";
@@ -44,7 +45,6 @@ if (APPLY && !CONFIRMED) {
 
 const REQUIRED_ENV = [
   "SUPABASE_URL",
-  "SUPABASE_SERVICE_ROLE_KEY",
   "TEST_A_ADMIN_EMAIL",
   "TEST_A_ADMIN_PASSWORD",
   "TEST_A_MANAGER_EMAIL",
@@ -100,9 +100,44 @@ function recordState(entry) {
   return file;
 }
 
+/**
+ * Validação administrativa mínima — confirma que a chave é aceite antes de
+ * tentar seja o que for. Nunca imprime utilizadores, emails, UUIDs, tokens,
+ * headers ou o objeto de erro completo — só PASS/FAIL com mensagem
+ * sanitizada.
+ */
+async function validateAdminKey(admin) {
+  try {
+    const { error: listErr } = await admin.auth.admin.listUsers({ page: 1, perPage: 1 });
+    if (listErr) {
+      console.log(`FAIL — chave administrativa rejeitada: ${safeErrorMessage(listErr)}`);
+      return false;
+    }
+    const { error: selErr } = await admin.from("companies").select("id").in("slug", [TENANT_A_SLUG, TENANT_B_SLUG]);
+    if (selErr) {
+      console.log(`FAIL — chave administrativa rejeitada: ${safeErrorMessage(selErr)}`);
+      return false;
+    }
+    console.log("PASS — chave administrativa aceite");
+    return true;
+  } catch (err) {
+    console.log(`FAIL — chave administrativa rejeitada: ${safeErrorMessage(err)}`);
+    return false;
+  }
+}
+
 async function main() {
   requireEnv(REQUIRED_ENV);
+  resolveAdminKey(); // lança cedo se nem SUPABASE_SECRET_KEY nem SUPABASE_SERVICE_ROLE_KEY estiverem definidas
   const admin = makeAdminClient();
+
+  const keyOk = await validateAdminKey(admin);
+  if (!keyOk) {
+    console.log("");
+    console.log("Verifica: .env.test-tenants.local foi carregado; SUPABASE_URL e a chave são do mesmo projeto;");
+    console.log("sem espaços/quebras de linha; chave é a sb_secret_ ativa ou a service_role legada.");
+    process.exit(1);
+  }
 
   console.log(WRITE ? "🔴 MODO --apply (escreve em produção)" : "🟡 dry-run (nenhuma escrita)");
   console.log("");

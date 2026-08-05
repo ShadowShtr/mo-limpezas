@@ -26,6 +26,8 @@ import {
   genRunId,
   syntheticName,
   SYNTHETIC_PREFIX,
+  resolveAdminKey,
+  hasAdminKey,
 } from "../../scripts/test-tenants/lib.mjs";
 
 const ROOT = path.join(__dirname, "..", "..");
@@ -34,6 +36,7 @@ const readNormalized = (p: string) => fs.readFileSync(p, "utf8").replace(/\r\n/g
 const provisionSrc = readNormalized(path.join(ROOT, "scripts/test-tenants/provision.mjs"));
 const verifySrc = readNormalized(path.join(ROOT, "scripts/test-tenants/verify-isolation.mjs"));
 const cleanupSrc = readNormalized(path.join(ROOT, "scripts/test-tenants/cleanup.mjs"));
+const libSrc = readNormalized(path.join(ROOT, "scripts/test-tenants/lib.mjs"));
 
 describe("lib.mjs — funções puras", () => {
   it("maskEmail nunca devolve o email completo", () => {
@@ -110,9 +113,99 @@ describe("lib.mjs — funções puras", () => {
     const name = syntheticName(genRunId(), "CLIENTE");
     expect(name.startsWith(SYNTHETIC_PREFIX)).toBe(true);
   });
+
+  describe("resolveAdminKey / hasAdminKey — compatibilidade sb_secret_ / service_role legada", () => {
+    const KEYS = ["SUPABASE_SECRET_KEY", "SUPABASE_SERVICE_ROLE_KEY"] as const;
+    const saved: Record<string, string | undefined> = {};
+
+    function clear() {
+      for (const k of KEYS) { saved[k] = process.env[k]; delete process.env[k]; }
+    }
+    function restore() {
+      for (const k of KEYS) {
+        if (saved[k] === undefined) delete process.env[k];
+        else process.env[k] = saved[k];
+      }
+    }
+
+    it("prefere SUPABASE_SECRET_KEY quando ambas estão definidas", () => {
+      clear();
+      try {
+        process.env.SUPABASE_SECRET_KEY = "sb_secret_novo";
+        process.env.SUPABASE_SERVICE_ROLE_KEY = "eyJ_legado";
+        expect(resolveAdminKey()).toBe("sb_secret_novo");
+      } finally { restore(); }
+    });
+
+    it("cai para SUPABASE_SERVICE_ROLE_KEY legada quando SUPABASE_SECRET_KEY não está definida", () => {
+      clear();
+      try {
+        process.env.SUPABASE_SERVICE_ROLE_KEY = "eyJ_legado";
+        expect(resolveAdminKey()).toBe("eyJ_legado");
+      } finally { restore(); }
+    });
+
+    it("lança quando nenhuma das duas está definida", () => {
+      clear();
+      try {
+        expect(() => resolveAdminKey()).toThrow();
+        expect(hasAdminKey()).toBe(false);
+      } finally { restore(); }
+    });
+
+    it("hasAdminKey reflete a disponibilidade sem expor o valor", () => {
+      clear();
+      try {
+        process.env.SUPABASE_SECRET_KEY = "sb_secret_novo";
+        expect(hasAdminKey()).toBe(true);
+      } finally { restore(); }
+    });
+  });
+});
+
+describe("lib.mjs — cliente admin", () => {
+  it("makeAdminClient nunca é chamado sem detectSessionInUrl:false (exclusivo Node/server)", () => {
+    const start = libSrc.indexOf("export function makeAdminClient");
+    const end = libSrc.indexOf("}", libSrc.indexOf("createClient(", start));
+    const body = libSrc.slice(start, end);
+    expect(body).toContain("detectSessionInUrl: false");
+    expect(body).toContain("autoRefreshToken: false");
+    expect(body).toContain("persistSession: false");
+  });
+
+  it("resolveAdminKey nunca imprime o valor da chave (sem console.log na função)", () => {
+    const start = libSrc.indexOf("export function resolveAdminKey");
+    const end = libSrc.indexOf("\n}", start);
+    const body = libSrc.slice(start, end);
+    expect(body).not.toContain("console.log");
+  });
 });
 
 describe("provision.mjs — guardas estáticas", () => {
+  it("aceita SUPABASE_SECRET_KEY ou SUPABASE_SERVICE_ROLE_KEY (via resolveAdminKey), não exige só a legada", () => {
+    expect(provisionSrc).not.toMatch(/REQUIRED_ENV = \[[^\]]*SUPABASE_SERVICE_ROLE_KEY/);
+    expect(provisionSrc).toContain("resolveAdminKey()");
+  });
+
+  it("valida a chave administrativa antes de qualquer outra operação, só com PASS/FAIL sanitizado", () => {
+    expect(provisionSrc).toMatch(/async function validateAdminKey/);
+    expect(provisionSrc).toContain('"PASS — chave administrativa aceite"');
+    expect(provisionSrc).toMatch(/FAIL — chave administrativa rejeitada: \$\{safeErrorMessage/);
+    // chamada antes de qualquer console.log de "MODO --apply" / "dry-run"
+    const validateIdx = provisionSrc.indexOf("await validateAdminKey(admin)");
+    const modeLogIdx = provisionSrc.indexOf("MODO --apply");
+    expect(validateIdx).toBeGreaterThan(0);
+    expect(validateIdx).toBeLessThan(modeLogIdx);
+  });
+
+  it("a validação da chave nunca imprime utilizadores/emails/UUIDs/tokens — só a mensagem sanitizada do erro", () => {
+    const start = provisionSrc.indexOf("async function validateAdminKey");
+    const end = provisionSrc.indexOf("\nasync function main");
+    const body = provisionSrc.slice(start, end);
+    expect(body).not.toMatch(/console\.log\(.*data\)/);
+    expect(body).toContain("safeErrorMessage(");
+  });
+
   it("dry-run é o padrão: WRITE só fica true com --apply E --confirm juntos", () => {
     expect(provisionSrc).toMatch(/const APPLY = args\.includes\("--apply"\)/);
     expect(provisionSrc).toMatch(/const WRITE = APPLY && CONFIRMED/);
