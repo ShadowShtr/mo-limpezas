@@ -15,7 +15,17 @@ const supabase = createClient(
 );
 
 const COMPANY_ID = "00000000-0000-0000-0000-000000000001";
-const PASSWORD = "@molimpezas2026";
+
+// Nunca no ficheiro: uma senha versionada é uma senha pública (incidente de
+// 2026-08-06, ver docs/PRODUCTION-RUNBOOK.md).
+const PASSWORD = process.env.SEED_PASSWORD;
+
+if (!PASSWORD) {
+  console.error(
+    "Define SEED_PASSWORD no ambiente antes de correr este script.",
+  );
+  process.exit(1);
+}
 
 const ADMINS = [
   { username: "admin1", full_name: "Admin 1" },

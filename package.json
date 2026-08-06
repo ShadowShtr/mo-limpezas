@@ -12,6 +12,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
+    "secrets:scan": "node scripts/scan-secrets.mjs",
     "audit:code": "node scripts/audit-codebase.mjs",
     "audit:code:json": "node scripts/audit-codebase.mjs --output reports/code-audit.json",
     "audit:code:strict": "node scripts/audit-codebase.mjs --fail-on-high-confidence",

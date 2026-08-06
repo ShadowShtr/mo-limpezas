@@ -73,6 +73,13 @@ jobs:
         # dessincronizado do package.json — que é a verificação que queremos.
         run: npm ci
 
+      - name: Verificar segredos versionados
+        # Antes dos testes de propósito: uma credencial no repositório é o
+        # problema mais urgente que este workflow pode encontrar, e não faz
+        # sentido gastar minutos a compilar antes de o reportar.
+        # O scanner nunca imprime o valor encontrado — só ficheiro, linha e tipo.
+        run: npm run secrets:scan
+
       - name: Verificar tipos
         run: npm run typecheck
 
