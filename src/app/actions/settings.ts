@@ -5,6 +5,14 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { requireProfile } from "@/lib/auth-guard";
 import { revalidatePath } from "next/cache";
+import {
+  ACTION_ERROR_CODES,
+  actionFailure,
+  actionSuccess,
+  internalFailure,
+  validationFailure,
+  type ActionResult,
+} from "@/lib/action-result";
 
 const settingsSchema = z.object({
   vat_rate: z.number().min(0, "IVA não pode ser negativo.").max(100, "IVA não pode exceder 100%."),
@@ -71,17 +79,35 @@ export async function getCompanySettings(_companyId?: string): Promise<CompanySe
   };
 }
 
-export async function saveCompanySettings(settings: CompanySettings) {
+/**
+ * PILOTO da Task T05 — primeira action no formato único de `ActionResult`.
+ *
+ * Escolhida por ser a mais isolada que o inventário encontrou: escreve numa
+ * única tabela, sem transação, sem cron, sem tocar em contratos, calendário
+ * ou faturação, e com **um** consumidor (`settings-form.tsx`), migrado na
+ * mesma alteração.
+ *
+ * As mensagens visíveis ao utilizador são exatamente as de antes. A única
+ * mudança de comportamento é deliberada e corrige um defeito: a falha de
+ * escrita devolvia `error.message` do Supabase diretamente ao ecrã.
+ *
+ * Ver `src/lib/action-result.ts` para a estratégia de adoção gradual.
+ */
+export async function saveCompanySettings(
+  settings: CompanySettings,
+): Promise<ActionResult<CompanySettings>> {
   const parsed = settingsSchema.safeParse(settings);
   if (!parsed.success) {
-    return { ok: false as const, error: parsed.error.issues[0].message };
+    return validationFailure(parsed.error);
   }
 
   const supabase = await createClient();
   const admin = createAdminClient();
 
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { ok: false as const, error: "Não autenticado." };
+  if (!user) {
+    return actionFailure(ACTION_ERROR_CODES.UNAUTHENTICATED, "Não autenticado.");
+  }
 
   const { data: profile } = await admin
     .from("profiles")
@@ -89,12 +115,17 @@ export async function saveCompanySettings(settings: CompanySettings) {
     .eq("id", user.id)
     .single();
 
-  if (!profile) return { ok: false as const, error: "Perfil não encontrado." };
+  if (!profile) {
+    return actionFailure(ACTION_ERROR_CODES.NOT_FOUND, "Perfil não encontrado.");
+  }
 
   const { company_id, role } = profile;
 
   if (role !== "admin" && role !== "gestor") {
-    return { ok: false as const, error: "Sem permissão para alterar configurações." };
+    return actionFailure(
+      ACTION_ERROR_CODES.FORBIDDEN,
+      "Sem permissão para alterar configurações.",
+    );
   }
 
   const { error } = await admin
@@ -116,9 +147,19 @@ export async function saveCompanySettings(settings: CompanySettings) {
       { onConflict: "company_id" },
     );
 
-  if (error) return { ok: false as const, error: error.message };
+  if (error) {
+    // Antes: `error.message` do Supabase ia direto para o ecrã, expondo nomes
+    // de tabelas e restrições a quem não tem nada com isso — e sem ajudar o
+    // utilizador. O detalhe real passa a ficar no log do servidor.
+    return internalFailure(
+      "saveCompanySettings",
+      error,
+      ACTION_ERROR_CODES.PERSISTENCE,
+    );
+  }
 
   revalidatePath("/dashboard/configuracoes");
   revalidatePath("/dashboard/relatorios");
-  return { ok: true as const };
+
+  return actionSuccess(parsed.data);
 }
