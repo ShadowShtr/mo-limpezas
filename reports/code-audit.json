@@ -1,0 +1,74 @@
+{
+  "generatedAt": "2026-08-06T12:07:39.405Z",
+  "repository": "mo-limpezas",
+  "inventorySource": "git ls-files",
+  "summary": {
+    "repositoryFiles": 446,
+    "textFiles": 433,
+    "sourceFiles": 297,
+    "textLines": 88058,
+    "typescriptDiagnostics": 0,
+    "productionEntries": 71,
+    "unreachableProductionModules": 4,
+    "exactDuplicateFileGroups": 0
+  },
+  "highConfidence": {
+    "dangerousArtifacts": [
+      "supabase/APPLY_ALL.sql",
+      "scripts/build-combined-sql.mjs",
+      "CRIAR_PAGAMENTOS.sql",
+      "src/app/api/seed-demo/route.ts"
+    ],
+    "adminClientInClientComponent": [],
+    "publicSignupCalls": [
+      "src/__tests__/tenant-isolation-hotfix.test.ts"
+    ]
+  },
+  "reviewRequired": {
+    "unreachableProductionModules": [
+      "src/app/actions/whatsapp.ts",
+      "src/lib/bank-import/pdf.ts",
+      "src/lib/bank-import/xlsx.ts",
+      "src/types/supabase.ts"
+    ],
+    "testOnlyModules": [],
+    "exactDuplicateFiles": [],
+    "directRevalidatePath": [
+      "src/app/(dashboard)/dashboard/calendario/_actions/create-service.ts",
+      "src/app/actions/absences.ts",
+      "src/app/actions/auth.ts",
+      "src/app/actions/bank-reconciliation.ts",
+      "src/app/actions/building-cards.ts",
+      "src/app/actions/cancellations.ts",
+      "src/app/actions/cash-flow.ts",
+      "src/app/actions/clientes.ts",
+      "src/app/actions/colaboradores.ts",
+      "src/app/actions/collaborator-documents.ts",
+      "src/app/actions/csv-import.ts",
+      "src/app/actions/daily-billing.ts",
+      "src/app/actions/equipas.ts",
+      "src/app/actions/intervencoes.ts",
+      "src/app/actions/invoices.ts",
+      "src/app/actions/locations.ts",
+      "src/app/actions/management-tasks.ts",
+      "src/app/actions/notifications.ts",
+      "src/app/actions/payments.ts",
+      "src/app/actions/payroll.ts",
+      "src/app/actions/settings.ts",
+      "src/app/actions/timesheets.ts",
+      "src/app/actions/vacation.ts",
+      "src/app/actions/vehicles.ts"
+    ],
+    "dateRiskCandidates": [
+      "src/app/(app)/app/escala/page.tsx",
+      "src/app/actions/contratos.ts",
+      "src/app/actions/invoices.ts",
+      "src/app/actions/payroll.ts",
+      "src/app/api/cron/generate-services/route.ts",
+      "src/app/api/seed-demo/route.ts",
+      "src/lib/bank-import/reconcile-db.ts",
+      "src/lib/payroll-calc.ts"
+    ]
+  },
+  "diagnostics": []
+}
