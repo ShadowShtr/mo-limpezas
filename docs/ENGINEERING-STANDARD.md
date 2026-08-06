@@ -149,10 +149,32 @@ git diff --check
 npm run quality    # typecheck + lint:strict + test + build
 ```
 
-`npm run quality` **não** corre o auditor. `npm run audit:code` é uma
-ferramenta de inventário, e `npm run audit:code:strict` só passa a fazer parte
-do gate depois de a **Task T03** remover os artefactos perigosos — hoje falha
-de propósito. Quem mexer em `scripts/audit-codebase.mjs` corre-o à mão.
+`npm run quality` **não** corre o auditor — `npm run audit:code` é uma
+ferramenta de inventário. Mas `npm run audit:code:strict` faz parte do gate:
+corre no CI, e falha se aparecer um risco de confiança alta.
+
+### O que corre automaticamente
+
+`.github/workflows/quality.yml` corre em cada pull request, sem segredos:
+
+```text
+npm ci
+npm run typecheck
+npm run lint:strict
+npm test
+npm run audit:code:strict
+```
+
+`npm run build` fica **fora** do CI: o `prebuild` valida variáveis de ambiente
+reais, e é essa ausência que permite o workflow não ter segredo nenhum. A
+Vercel continua a construir cada pull request — o build está coberto, noutro
+sítio.
+
+Correr `npm run quality` localmente antes de abrir a PR continua a ser a
+Definition of Done; o CI é a rede, não a substituição.
+
+Ao mexer em `reports/code-audit.json`, regenerar à mão com `git add` antes —
+o CI nunca o reescreve.
 
 Mais: sem warnings novos, sem alterações não relacionadas, plano de rollback
 escrito e — quando a alteração toca produção — autorização explícita do dono na

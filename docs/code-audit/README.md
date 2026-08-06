@@ -20,9 +20,12 @@ npm run audit:code:json && cp reports/code-audit.json /tmp/first.json
 npm run audit:code:json && diff /tmp/first.json reports/code-audit.json
 ```
 
-O auditor **não** faz parte de `npm run quality`. É ferramenta de inventário; o
-`audit:code:strict` só passa a gate depois de a Task T03 remover os artefactos
-perigosos.
+O auditor **não** faz parte de `npm run quality` — é ferramenta de inventário.
+Mas `audit:code:strict` é gate desde a Task T03: corre em cada pull request,
+em `.github/workflows/quality.yml`.
+
+O CI **nunca** regenera `reports/code-audit.json`. O relatório é escrito pelo
+autor da alteração — ver o aviso abaixo.
 
 > ⚠️ Ao regenerar o relatório versionado, fazer `git add` **primeiro**. O
 > inventário vem de `git ls-files --cached`, isto é, do índice — ficheiros

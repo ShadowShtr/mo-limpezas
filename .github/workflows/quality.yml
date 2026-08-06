@@ -1,0 +1,89 @@
+# =============================================================================
+# Gate de qualidade — corre em cada pull request
+# =============================================================================
+# Fecha a pendência deixada pela Task T02: os gates existiam como comandos npm,
+# mas não corriam em lado nenhum automaticamente. Na prática,
+# `no-unused-vars: error` só falhava para quem se lembrasse de correr o lint.
+#
+# O que este workflow NÃO faz, deliberadamente:
+#   - não usa segredos;
+#   - não liga ao Supabase, à Vercel ou a qualquer serviço externo;
+#   - não corre `npm run build` (o `prebuild` valida variáveis de ambiente
+#     reais, que este workflow não tem e não deve ter);
+#   - não corre `npm run audit:code:json` — o relatório versionado é escrito
+#     pelo autor da alteração, com `git add` antes, e nunca regenerado
+#     automaticamente aqui;
+#   - não aplica migrations, não faz deploy, não faz merge.
+#
+# Ver docs/ENGINEERING-STANDARD.md (Definition of Done) e
+# docs/code-audit/lint-baseline.md (baseline medido).
+# =============================================================================
+
+name: Qualidade
+
+on:
+  pull_request:
+  push:
+    branches: [master]
+
+# Sem segredos e sem escrita: o workflow só precisa de ler o código.
+permissions:
+  contents: read
+
+# Uma alteração nova cancela a verificação anterior do mesmo ramo.
+concurrency:
+  group: qualidade-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  qualidade:
+    name: typecheck · lint · testes · auditoria
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          # O commit exato do ramo, não o merge simulado com a base.
+          #
+          # `reports/code-audit.json` é versionado e tem de bater certo com a
+          # árvore do commit que o acompanha — há um teste que o verifica
+          # (src/__tests__/audit-codebase.test.ts). Num merge simulado, a
+          # árvore é a combinação com a base e o relatório deixaria de bater
+          # certo, produzindo falhas que não são do autor.
+          #
+          # Em `push` para master este valor é vazio e o checkout usa o
+          # comportamento normal.
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Node
+        uses: actions/setup-node@v7
+        with:
+          # Versão fixa, igual à de desenvolvimento. Next 16 exige >= 20.9.0.
+          # Ao subir aqui, subir também no ambiente local.
+          node-version: '24.16.0'
+          # Cacheia apenas a cache do npm, com chave derivada do
+          # package-lock.json. Nunca node_modules, nunca .next — uma cache de
+          # artefactos construídos poderia mascarar uma falha real.
+          cache: 'npm'
+
+      - name: Instalar dependências
+        # `npm ci` respeita o lockfile exatamente e falha se ele estiver
+        # dessincronizado do package.json — que é a verificação que queremos.
+        run: npm ci
+
+      - name: Verificar tipos
+        run: npm run typecheck
+
+      - name: Lint estrito
+        run: npm run lint:strict
+
+      - name: Testes
+        run: npm test
+
+      - name: Auditoria do código
+        # Falha se aparecer um risco de confiança alta: artefacto capaz de
+        # destruir ou popular uma base real, `createAdminClient` num client
+        # component, ou `auth.signUp` em código de produção.
+        run: npm run audit:code:strict
