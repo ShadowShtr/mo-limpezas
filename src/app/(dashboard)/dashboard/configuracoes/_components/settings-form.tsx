@@ -25,8 +25,14 @@ export function SettingsForm({ initial }: Props) {
     e.preventDefault();
     setMsg(null);
     startTransition(async () => {
+      // `ActionResult` distingue-se por `res.ok`, nunca por presença de
+      // campos — ver src/lib/action-result.ts (Task T05).
       const res = await saveCompanySettings(values);
-      setMsg(res.ok ? { ok: true, text: "Configurações guardadas com sucesso." } : { ok: false, text: res.error });
+      setMsg(
+        res.ok
+          ? { ok: true, text: "Configurações guardadas com sucesso." }
+          : { ok: false, text: res.error.message },
+      );
     });
   }
 

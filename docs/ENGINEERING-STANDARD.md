@@ -56,7 +56,49 @@ Uma Server Action deve, por esta ordem:
 - duplicar cálculo financeiro;
 - fazer compensação manual de escritas parciais;
 - gerar números de documento por contagem;
-- implementar autorização alternativa à central.
+- implementar autorização alternativa à central;
+- devolver ao utilizador a mensagem de erro crua do Supabase.
+
+### Formato do resultado
+
+Uma action devolve `ActionResult<T>` de [`../src/lib/action-result.ts`](../src/lib/action-result.ts).
+É a **única** fonte deste formato — não criar um segundo.
+
+```ts
+if (resultado.ok) {
+  // resultado.data
+} else {
+  // resultado.error.code    → para decidir
+  // resultado.error.message → para mostrar
+  // resultado.error.fieldErrors → opcional, para assinalar campos
+}
+```
+
+A mensagem é para ler; o **código** é para decidir. Ramificar por texto de
+mensagem torna a interface refém da redação.
+
+Falhas técnicas passam por `internalFailure(contexto, causa)`: o detalhe real
+vai para o log do servidor e o utilizador recebe uma mensagem genérica. Nomes
+de tabelas, colunas e restrições nunca chegam ao ecrã.
+
+### Adoção gradual
+
+As actions migram **uma área de cada vez**, nunca todas de uma vez, e nunca
+numa PR que também mude comportamento. Por migração:
+
+1. inventariar os consumidores (componentes, toasts, redirecionamentos, testes);
+2. migrar a action e os seus consumidores na **mesma** PR;
+3. preservar as mensagens de negócio — o utilizador não deve notar a mudança;
+4. só usar adaptador de compatibilidade se uma action tiver consumidores que
+   não caibam na PR; marcá-lo como temporário e registá-lo para remoção.
+
+Enquanto houver actions por migrar, os dois formatos coexistem. Isso é
+esperado e temporário — o que não pode acontecer é nascer um terceiro.
+
+| Área | Estado |
+|---|---|
+| `saveCompanySettings` | ✅ migrada (piloto, T05) |
+| Restantes actions | formato antigo, a migrar por área |
 
 ## 4. Base de dados
 
