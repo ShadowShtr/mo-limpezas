@@ -1,0 +1,168 @@
+# Padrão de Engenharia — Mó Limpezas
+
+Este documento define como qualquer funcionalidade, correção, refatoração,
+migration ou limpeza deve ser implementada neste repositório.
+
+É **canónico**: quando outro documento contradisser este, este prevalece — com
+uma única exceção, a **REGRA ZERO** de [`../AGENTS.md`](../AGENTS.md), que está
+acima de tudo o resto.
+
+Origem: Task T01 do [plano mestre](PLANO-MESTRE.md).
+
+---
+
+## 1. Prioridades
+
+Por esta ordem, sempre:
+
+1. Não interromper utilizadores ativos.
+2. Preservar integridade e isolamento entre empresas.
+3. Manter compatibilidade entre código e base de dados.
+4. Evitar múltiplas fontes da mesma regra.
+5. Preferir alterações pequenas, reversíveis e testáveis.
+
+Quando duas prioridades colidem, ganha a de número mais baixo.
+
+## 2. Estrutura
+
+| Diretório | Responsabilidade |
+|---|---|
+| `src/domain` | Regras puras. Sem I/O, sem Supabase, sem React. Testáveis isoladamente. |
+| `src/application` | Casos de uso — orquestram domínio e infraestrutura. |
+| `src/infrastructure` | Acesso a dados e serviços externos. |
+| `src/app/actions` | Adaptadores finos entre a interface e os casos de uso. |
+| `src/components` | Apresentação. Não calcula regras de negócio. |
+| `src/lib` | Utilitários partilhados e helpers centrais. |
+| `supabase/migrations` | **Append-only.** |
+
+A migração para esta estrutura é incremental (secção 17 do plano mestre): regras
+novas nascem aqui; regras antigas migram quando a área for alterada; wrappers
+preservam compatibilidade e são removidos quando não houver referências.
+
+## 3. Server Actions
+
+Uma Server Action deve, por esta ordem:
+
+1. autenticar;
+2. validar a entrada;
+3. chamar um caso de uso ou uma RPC;
+4. mapear o resultado para o formato padrão;
+5. revalidar cache através do helper central;
+6. devolver o snapshot autoritativo ou um erro com código estável.
+
+É proibido numa Server Action:
+
+- implementar recorrência;
+- duplicar cálculo financeiro;
+- fazer compensação manual de escritas parciais;
+- gerar números de documento por contagem;
+- implementar autorização alternativa à central.
+
+## 4. Base de dados
+
+- migrations são **append-only**;
+- nunca editar uma migration já aplicada — corrige-se com uma nova;
+- escrita em múltiplas tabelas exige uma RPC transacional;
+- a RPC recebe `company_id`, ator, `mutation_id` e `expected_revision`;
+- a RPC valida o ator dentro da própria transação, nunca confia no cliente;
+- auditoria e outbox gravam **dentro** da transação;
+- o código consumidor só entra depois de o objeto existir na base.
+
+## 5. Concorrência
+
+- `expected_revision` é obrigatória em entidades editáveis;
+- o `mutation_id` nasce na interface e é reutilizado em retries;
+- conflito de revisão **nunca** é convertido em sucesso;
+- a garantia final é uma constraint na base, não uma consulta prévia.
+
+## 6. Datas
+
+- datas de negócio usam `Europe/Lisbon` (`src/lib/lisbon-time.ts`);
+- recorrência é data civil, não instante;
+- timestamps gravados com offset correto;
+- é proibido decidir "hoje" com `new Date()` no servidor — o processo corre em
+  UTC na Vercel.
+
+## 7. Valores
+
+- o valor do serviço vem de um módulo central;
+- a distribuição da avença mensal vem de um módulo central;
+- relatórios separam os conceitos (contratado, agendado, realizado, faturado,
+  recebido, em aberto, vencido, custo, margem);
+- componentes apresentam, não recalculam.
+
+## 8. Cache e Realtime
+
+- revalidação passa pelo helper central;
+- mutações publicam no outbox;
+- eventos têm sequência por empresa;
+- uma lacuna na sequência obriga a resync;
+- o cliente reconcilia com o snapshot autoritativo, não com estado local.
+
+## 9. Erros
+
+- verificar sempre o `error` de qualquer consulta;
+- uma falha **não** é uma lista vazia;
+- códigos de erro estáveis, mensagens legíveis;
+- nunca expor segredos, chaves ou dados de outra empresa.
+
+## 10. Limpeza
+
+Remover só depois de verificar, por esta ordem:
+
+1. imports;
+2. referências estáticas em todo o repositório;
+3. convenções automáticas do Next.js;
+4. imports dinâmicos e `require`;
+5. utilização em testes;
+6. smoke test da área afetada.
+
+`npm run audit:code` produz os candidatos. Candidato não é prova — ver
+[`code-audit/README.md`](code-audit/README.md).
+
+## 11. Testes
+
+| Tipo | Prova |
+|---|---|
+| Unitário | A regra pura está correta. |
+| Regressão | O bug corrigido não volta. |
+| Integração | O código e a base concordam. |
+| Concorrência | Duas sessões em simultâneo não corrompem estado. |
+| Isolamento | Uma empresa não vê nem altera dados de outra. |
+
+Um teste que procura uma string num ficheiro SQL não prova que a função existe
+na base, nem que funciona. Testes estáticos são úteis como guarda, nunca como
+evidência de comportamento.
+
+## 12. Pull Requests
+
+Cada PR apresenta: problema, causa, escopo, ficheiros, tabelas, alterações,
+removidos, mantidos, standby, riscos, testes executados, rollback e nota da área.
+
+O template em [`../.github/pull_request_template.md`](../.github/pull_request_template.md)
+é obrigatório.
+
+## 13. Definition of Done
+
+```bash
+git diff --check
+npm run typecheck
+npm run lint
+npm test
+npm run build
+```
+
+Mais: sem warnings novos, sem alterações não relacionadas, plano de rollback
+escrito e — quando a alteração toca produção — autorização explícita do dono na
+conversa atual.
+
+Quando houver base de dados envolvida, acrescenta-se:
+
+```text
+migration review
+rollback rehearsal
+duas ligações em simultâneo
+teste de isolamento
+backup
+plano de rollback
+```

@@ -7,8 +7,12 @@ const eslintConfig = defineConfig([
   ...nextTs,
   {
     rules: {
+      // "error", não "warn": o baseline medido na Task T02 do plano mestre
+      // (docs/code-audit/lint-baseline.md) era de 0 erros e 0 warnings, por
+      // isso apertar não exigiu nenhuma correção prévia. Como warning, código
+      // morto podia entrar sem nada falhar.
       "@typescript-eslint/no-unused-vars": [
-        "warn",
+        "error",
         {
           argsIgnorePattern: "^_",
           varsIgnorePattern: "^_",
