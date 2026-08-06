@@ -6,10 +6,24 @@
  * TypeScript já instalado (sem dependências novas). NÃO remove nada: apenas
  * classifica e reporta, para que qualquer remoção posterior tenha prova.
  *
+ * O relatório é **determinístico**: duas execuções sem alterações no
+ * repositório produzem bytes idênticos. Nada de timestamps, caminhos absolutos
+ * ou métricas que dependam do estado local (build, nome da diretoria).
+ *
+ * IMPORTANTE ao regenerar o relatório versionado: o inventário vem de
+ * `git ls-files --cached`, ou seja, do **índice**. Ficheiros novos ainda por
+ * adicionar não são contados. Fazer `git add` ANTES de regenerar, senão o
+ * relatório fica desatualizado em relação ao commit que o acompanha:
+ *
+ *   git add -A && npm run audit:code:json && git add -A
+ *
+ * `src/__tests__/audit-codebase.test.ts` falha se isto for esquecido.
+ *
  * Uso:
  *   node scripts/audit-codebase.mjs                       # imprime JSON
  *   node scripts/audit-codebase.mjs --output reports/code-audit.json
  *   node scripts/audit-codebase.mjs --fail-on-high-confidence   # sai 1 se houver risco
+ *   node scripts/audit-codebase.mjs --include-timestamp   # junta generatedAt (quebra o determinismo)
  */
 
 import { execFileSync } from "node:child_process";
@@ -22,6 +36,10 @@ const ROOT = process.cwd();
 const args = process.argv.slice(2);
 
 const FAIL_ON_HIGH_CONFIDENCE = args.includes("--fail-on-high-confidence");
+
+// Fora por omissão: o relatório é versionado, e um timestamp faria cada
+// execução produzir um diff mesmo sem nada ter mudado no repositório.
+const INCLUDE_TIMESTAMP = args.includes("--include-timestamp");
 
 function readArgument(flag) {
   const index = args.indexOf(flag);
@@ -98,6 +116,15 @@ const NEXT_ENTRY_NAMES = new Set([
   "twitter-image.tsx",
 ]);
 
+/**
+ * Saída gerada pelo próprio auditor. Fica fora do inventário: sem isto o
+ * relatório conta-se a si próprio, e como cada execução muda o tamanho do
+ * ficheiro que a execução seguinte vai medir, `textLines` oscilava entre
+ * corridas (95447 -> 95446 -> ...). Um inventário não pode ter a sua própria
+ * saída como entrada.
+ */
+const GENERATED_OUTPUT_PREFIXES = ["reports/"];
+
 /** Artefactos capazes de destruir ou popular uma base real (Task T03). */
 const DANGEROUS_ARTIFACTS = [
   "supabase/APPLY_ALL.sql",
@@ -138,6 +165,11 @@ function walk(directory, output = []) {
  * — ficheiros ignorados (`backups/`, `.env*`, dados locais) não são repositório e
  * distorceriam as contagens e as duplicações. Sem git, faz varredura da árvore.
  */
+function isGeneratedOutput(absolute) {
+  const rel = relative(absolute);
+  return GENERATED_OUTPUT_PREFIXES.some((prefix) => rel.startsWith(prefix));
+}
+
 function inventoryFiles() {
   try {
     const output = execFileSync("git", ["ls-files", "-z", "--cached"], {
@@ -150,7 +182,8 @@ function inventoryFiles() {
       .split("\0")
       .filter(Boolean)
       .map((rel) => path.join(ROOT, rel))
-      .filter((absolute) => fs.existsSync(absolute));
+      .filter((absolute) => fs.existsSync(absolute))
+      .filter((absolute) => !isGeneratedOutput(absolute));
 
     if (files.length > 0) {
       return { files, source: "git ls-files" };
@@ -159,7 +192,10 @@ function inventoryFiles() {
     // Sem git disponível ou fora de um repositório: cai para a varredura.
   }
 
-  return { files: walk(ROOT), source: "filesystem walk" };
+  return {
+    files: walk(ROOT).filter((absolute) => !isGeneratedOutput(absolute)),
+    source: "filesystem walk",
+  };
 }
 
 function lineNumber(sourceFile, position) {
@@ -243,31 +279,45 @@ const program = ts.createProgram({
   options: programOptions,
 });
 
+// O `tsconfig` inclui `.next/types/**`, que só existe depois de um build. Sem
+// este filtro, `sourceFiles` valia 298 numa máquina com build e 297 sem ele —
+// uma métrica de inventário não pode depender do estado local.
 const sourceFiles = program
   .getSourceFiles()
   .filter(
     (sourceFile) =>
-      isInsideProject(sourceFile.fileName) && !sourceFile.isDeclarationFile,
+      isInsideProject(sourceFile.fileName) &&
+      !sourceFile.isDeclarationFile &&
+      !relative(sourceFile.fileName).startsWith(".next/"),
   );
 
-const diagnostics = ts.getPreEmitDiagnostics(program).map((diagnostic) => {
-  const file = diagnostic.file;
+const diagnostics = ts
+  .getPreEmitDiagnostics(program)
+  // Mesma razão do filtro de `sourceFiles`: diagnósticos vindos de `.next/`
+  // dependeriam de haver um build local.
+  .filter(
+    (diagnostic) =>
+      !diagnostic.file ||
+      !relative(diagnostic.file.fileName).startsWith(".next/"),
+  )
+  .map((diagnostic) => {
+    const file = diagnostic.file;
 
-  const location =
-    file && diagnostic.start != null
-      ? {
-          file: relative(file.fileName),
-          line: lineNumber(file, diagnostic.start),
-        }
-      : null;
+    const location =
+      file && diagnostic.start != null
+        ? {
+            file: relative(file.fileName),
+            line: lineNumber(file, diagnostic.start),
+          }
+        : null;
 
-  return {
-    code: diagnostic.code,
-    category: ts.DiagnosticCategory[diagnostic.category],
-    message: ts.flattenDiagnosticMessageText(diagnostic.messageText, "\n"),
-    location,
-  };
-});
+    return {
+      code: diagnostic.code,
+      category: ts.DiagnosticCategory[diagnostic.category],
+      message: ts.flattenDiagnosticMessageText(diagnostic.messageText, "\n"),
+      location,
+    };
+  });
 
 // ---------------------------------------------------------------------------
 // 3. Grafo de imports (estáticos, dinâmicos e require)
@@ -435,13 +485,15 @@ const exactDuplicateFiles = [...duplicateFilesByHash.values()]
 // ---------------------------------------------------------------------------
 
 const directRevalidatePath = [];
-const adminClientInClientComponent = [];
-const publicSignupCalls = [];
+const productionAdminClientInClientComponent = [];
+const productionPublicSignupCalls = [];
+const testSignupCalls = [];
 const dateRiskCandidates = [];
 
 for (const sourceFile of sourceFiles) {
   const rel = relative(sourceFile.fileName);
   const content = sourceFile.getFullText();
+  const isTest = isTestFile(sourceFile.fileName);
 
   if (
     rel !== "src/lib/revalidate-business.ts" &&
@@ -451,14 +503,19 @@ for (const sourceFile of sourceFiles) {
   }
 
   if (
+    !isTest &&
     /^\s*["']use client["'];/m.test(content) &&
     /\bcreateAdminClient\b/.test(content)
   ) {
-    adminClientInClientComponent.push(rel);
+    productionAdminClientInClientComponent.push(rel);
   }
 
+  // `signUp` num teste é quase sempre o oposto de um risco: é a suite a
+  // verificar que o registo público está fechado. Só conta como risco de
+  // confiança alta em código de produção — senão o gate `--fail-on-high-
+  // confidence` ficaria permanentemente vermelho por causa de um teste bom.
   if (/\.auth\.signUp\s*\(/.test(content)) {
-    publicSignupCalls.push(rel);
+    (isTest ? testSignupCalls : productionPublicSignupCalls).push(rel);
   }
 
   if (
@@ -484,8 +541,7 @@ const totalLines = textFiles.reduce(
 // ---------------------------------------------------------------------------
 
 const report = {
-  generatedAt: new Date().toISOString(),
-  repository: path.basename(ROOT),
+  ...(INCLUDE_TIMESTAMP ? { generatedAt: new Date().toISOString() } : {}),
   inventorySource,
   summary: {
     repositoryFiles: allFiles.length,
@@ -499,12 +555,13 @@ const report = {
   },
   highConfidence: {
     dangerousArtifacts,
-    adminClientInClientComponent,
-    publicSignupCalls,
+    productionAdminClientInClientComponent,
+    productionPublicSignupCalls,
   },
   reviewRequired: {
     unreachableProductionModules,
     testOnlyModules,
+    testSignupCalls: [...new Set(testSignupCalls)].sort(),
     exactDuplicateFiles,
     directRevalidatePath: [...new Set(directRevalidatePath)].sort(),
     dateRiskCandidates: [...new Set(dateRiskCandidates)].sort(),
@@ -527,8 +584,8 @@ if (OUTPUT) {
 
 const highConfidenceCount =
   dangerousArtifacts.length +
-  adminClientInClientComponent.length +
-  publicSignupCalls.length;
+  productionAdminClientInClientComponent.length +
+  productionPublicSignupCalls.length;
 
 if (
   FAIL_ON_HIGH_CONFIDENCE &&

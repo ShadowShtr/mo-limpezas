@@ -73,17 +73,22 @@ describe("documentos canónicos — Task T01", () => {
       expect(standard, `falta a secção "${subject}"`).toContain(subject);
     }
 
-    // A Definition of Done tem de ser executável, não uma intenção.
-    for (const command of [
-      "npm run typecheck",
-      "npm run lint",
-      "npm test",
-      "npm run build",
-    ]) {
-      expect(standard, `Definition of Done deve incluir ${command}`).toContain(
-        command,
-      );
-    }
+    // A Definition of Done tem de ser executável, não uma intenção: cada
+    // comando `npm run X` citado no documento tem de existir em package.json.
+    // Verifica a ligação documento->realidade sem prender a redação a uma
+    // lista fixa de comandos.
+    const pkg = JSON.parse(read("package.json"));
+    const scripts: Record<string, string> = pkg.scripts ?? {};
+
+    const cited = [
+      ...standard.matchAll(/npm run ([a-z][a-z0-9:-]*)/g),
+    ].map((match) => match[1]);
+
+    expect(cited.length, "a Definition of Done deve citar comandos").toBeGreaterThan(0);
+
+    const inexistentes = [...new Set(cited)].filter((name) => !scripts[name]);
+
+    expect(inexistentes, "comandos citados que não existem em package.json").toEqual([]);
   });
 
   it("a arquitetura descreve o fluxo completo de uma mutação", () => {

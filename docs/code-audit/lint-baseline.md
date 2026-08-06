@@ -35,7 +35,7 @@ gate foi fechado imediatamente em vez de ficar como intenção:
 | `noUnusedParameters` | desligado | `true` |
 | `npm run lint:strict` | não existia | `eslint --max-warnings=0` |
 | `npm run typecheck` | não existia | `tsc --noEmit` |
-| `npm run quality` | não existia | typecheck + lint + test + build |
+| `npm run quality` | não existia | typecheck + **lint:strict** + test + build |
 
 Parâmetros intencionalmente não usados continuam permitidos com o prefixo `_`
 (`argsIgnorePattern`, `varsIgnorePattern`, `caughtErrorsIgnorePattern`) — a

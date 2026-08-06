@@ -8,10 +8,30 @@ Fonte: [`../PLANO-MESTRE.md`](../PLANO-MESTRE.md), secção 21 (Task T00).
 ## Como reproduzir
 
 ```bash
-npm run audit:code          # imprime o relatório em JSON
-npm run audit:code:json     # grava em reports/code-audit.json
-npm run audit:code:strict   # sai com código 1 se houver risco de confiança alta
+npm run audit:code            # imprime o relatório em JSON
+npm run audit:code:json       # grava em reports/code-audit.json
+npm run audit:code:strict     # sai com código 1 se houver risco de confiança alta
 ```
+
+Para confirmar o determinismo à mão:
+
+```bash
+npm run audit:code:json && cp reports/code-audit.json /tmp/first.json
+npm run audit:code:json && diff /tmp/first.json reports/code-audit.json
+```
+
+O auditor **não** faz parte de `npm run quality`. É ferramenta de inventário; o
+`audit:code:strict` só passa a gate depois de a Task T03 remover os artefactos
+perigosos.
+
+> ⚠️ Ao regenerar o relatório versionado, fazer `git add` **primeiro**. O
+> inventário vem de `git ls-files --cached`, isto é, do índice — ficheiros
+> novos ainda por adicionar não são contados, e o relatório sairia
+> desatualizado em relação ao próprio commit que o acompanha:
+>
+> ```bash
+> git add -A && npm run audit:code:json && git add -A
+> ```
 
 O auditor (`scripts/audit-codebase.mjs`) não instala dependências novas: usa o
 compilador TypeScript já presente no projeto e o `git` para o inventário.
@@ -28,16 +48,17 @@ compilador TypeScript já presente no projeto e o `git` para o inventário.
 
 ## Resultado (2026-08-06)
 
-`reports/code-audit.json` corresponde ao **topo desta branch**. A coluna do
-commit base fica registada para se ver o que esta própria entrega acrescentou
-(documentos e testes, nenhum código de produção).
+`reports/code-audit.json` é **determinístico**: duas execuções seguidas sem
+alterações no repositório produzem conteúdo idêntico, e o ficheiro versionado
+tem de bater certo com a execução atual — há um teste que falha se não bater
+(`src/__tests__/audit-codebase.test.ts`).
 
-| Métrica | Commit base `11cdea7` | Topo da branch |
+| Métrica | Commit base `11cdea7` | Atual |
 |---|---:|---:|
 | Ficheiros versionados | 446 | 456 |
 | Ficheiros de texto analisados | 433 | 443 |
 | Ficheiros TypeScript no programa | 297 | 298 |
-| Linhas de texto | 88 058 | 95 402 |
+| Linhas de texto | 88 058 | 95 575 |
 | Entradas de produção Next.js | 71 | 71 |
 | Diagnósticos TypeScript | 0 | 0 |
 | Módulos de produção inalcançáveis | 4 | 4 |
@@ -45,8 +66,27 @@ commit base fica registada para se ver o que esta própria entrega acrescentou
 | Módulos de produção só alcançados por testes | 0 | 0 |
 
 Os quatro candidatos a código morto e os quatro artefactos perigosos são
-exatamente os mesmos nas duas medições: esta entrega não removeu nem
-acrescentou nenhum.
+exatamente os mesmos nas duas medições: nada foi removido nem acrescentado.
+
+`reports/` está fora do inventário — é saída gerada, não código. Contá-la
+tornava o relatório entrada de si próprio.
+
+## Categorias do relatório
+
+`highConfidence` contém **apenas código de produção**. Uma chamada de risco
+dentro de um teste vai para `reviewRequired`, com a sua própria categoria:
+
+| Campo | Significado |
+|---|---|
+| `highConfidence.dangerousArtifacts` | Ficheiros capazes de destruir ou popular uma base real |
+| `highConfidence.productionAdminClientInClientComponent` | `createAdminClient` num client component |
+| `highConfidence.productionPublicSignupCalls` | `auth.signUp` em código de produção |
+| `reviewRequired.testSignupCalls` | `auth.signUp` em testes — normalmente o **oposto** de um risco |
+
+A distinção não é cosmética: `npm run audit:code:strict` falha com base em
+`highConfidence`. Sem ela, o gate ficaria vermelho para sempre por causa de
+`src/__tests__/tenant-isolation-hotfix.test.ts`, que é a suite a verificar que
+o registo público está fechado.
 
 ## Matriz de classificação
 
@@ -61,7 +101,7 @@ Estados possíveis: **manter**, **centralizar**, **substituir**, **remover**,
 | `scripts/build-combined-sql.mjs` | remover | T03 | Reconstrói o `APPLY_ALL.sql`. |
 | `CRIAR_PAGAMENTOS.sql` | remover | T03 | UUIDs fixos e lançamentos financeiros operacionais dentro do repositório. |
 | `src/app/api/seed-demo/route.ts` | remover | T03 | Cria utilizadores Auth, clientes, faturas e salários com service role. |
-| `src/__tests__/tenant-isolation-hotfix.test.ts` (`auth.signUp`) | manter | — | Falso positivo do detetor: é um teste de isolamento que verifica precisamente que o registo público está fechado. O detetor fica como está, para apanhar `signUp` em código de produção. |
+| `src/__tests__/tenant-isolation-hotfix.test.ts` (`auth.signUp`) | manter | — | Não é risco: é um teste de isolamento que verifica precisamente que o registo público está fechado. Deixou de aparecer em `highConfidence` — passou para `reviewRequired.testSignupCalls`. |
 
 ### Candidatos a código morto — exigem verificação antes de remover
 

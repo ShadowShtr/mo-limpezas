@@ -1,12 +1,10 @@
 {
-  "generatedAt": "2026-08-06T12:16:03.570Z",
-  "repository": "mo-limpezas",
   "inventorySource": "git ls-files",
   "summary": {
     "repositoryFiles": 456,
     "textFiles": 443,
     "sourceFiles": 298,
-    "textLines": 95402,
+    "textLines": 95593,
     "typescriptDiagnostics": 0,
     "productionEntries": 71,
     "unreachableProductionModules": 4,
@@ -19,10 +17,8 @@
       "CRIAR_PAGAMENTOS.sql",
       "src/app/api/seed-demo/route.ts"
     ],
-    "adminClientInClientComponent": [],
-    "publicSignupCalls": [
-      "src/__tests__/tenant-isolation-hotfix.test.ts"
-    ]
+    "productionAdminClientInClientComponent": [],
+    "productionPublicSignupCalls": []
   },
   "reviewRequired": {
     "unreachableProductionModules": [
@@ -32,6 +28,9 @@
       "src/types/supabase.ts"
     ],
     "testOnlyModules": [],
+    "testSignupCalls": [
+      "src/__tests__/tenant-isolation-hotfix.test.ts"
+    ],
     "exactDuplicateFiles": [],
     "directRevalidatePath": [
       "src/app/(dashboard)/dashboard/calendario/_actions/create-service.ts",
