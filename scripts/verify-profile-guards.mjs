@@ -14,10 +14,15 @@
  *   1. Nunca lê `SUPABASE_DB_URL` do ambiente. A URL tem de ser passada
  *      explicitamente em `--database-url`, para não haver forma de apontar
  *      para produção por descuido de configuração.
- *   2. Recusa-se a correr se o project ref da URL for o mesmo de
- *      `NEXT_PUBLIC_SUPABASE_URL` — isto é, o projeto configurado no ambiente.
- *   3. Exige `--i-know-this-database-is-disposable`.
- *   4. Tudo corre dentro de uma transação terminada em ROLLBACK. Mesmo numa
+ *   2. Exige saber qual é o projeto proibido, e recusa-se a correr contra ele.
+ *      `--forbid-project-ref <ref>` declara-o explicitamente e prevalece sobre
+ *      `NEXT_PUBLIC_SUPABASE_URL`, que durante o ensaio aponta legitimamente
+ *      para a base descartável. Sem flag, a variável de ambiente continua a
+ *      valer como rede de segurança; sem nenhuma das duas, o script recusa.
+ *   3. Recusa-se a correr se não conseguir identificar o project ref da base
+ *      alvo — não saber contra o que se está a correr não é razão para avançar.
+ *   4. Exige `--i-know-this-database-is-disposable`.
+ *   5. Tudo corre dentro de uma transação terminada em ROLLBACK. Mesmo numa
  *      base descartável, não fica nada.
  *
  * Ver AGENTS.md, REGRA ZERO.
@@ -27,10 +32,12 @@
  * ---------------------------------------------------------------------------
  *   node scripts/verify-profile-guards.mjs \
  *     --database-url postgresql://... \
+ *     --forbid-project-ref <ref-do-projeto-real> \
  *     --i-know-this-database-is-disposable
  *
  *   node scripts/verify-profile-guards.mjs \
  *     --database-url postgresql://... \
+ *     --forbid-project-ref <ref-do-projeto-real> \
  *     --i-know-this-database-is-disposable \
  *     --rehearse-rollback
  *
@@ -72,6 +79,7 @@ import {
   TRIGGER_070,
   validarMigration070,
 } from "./lib/migration-070-integrity.mjs";
+import { resolveTargetGuard } from "./lib/verify-target-guard.mjs";
 
 const args = process.argv.slice(2);
 
@@ -83,57 +91,25 @@ function readArgument(flag) {
 const DATABASE_URL = readArgument("--database-url");
 const DISPOSABLE = args.includes("--i-know-this-database-is-disposable");
 const REHEARSE_ROLLBACK = args.includes("--rehearse-rollback");
+const FORBID_PROJECT_REF = readArgument("--forbid-project-ref");
 
 function fail(message) {
   console.error(`❌ ${message}`);
   process.exit(1);
 }
 
-if (!DATABASE_URL) {
-  fail(
-    "--database-url é obrigatório. Este script nunca lê SUPABASE_DB_URL do ambiente, de propósito.",
-  );
-}
+// Decisão de "posso correr contra esta base?" — em módulo próprio, para poder
+// ser testada sem processo filho. Ver scripts/lib/verify-target-guard.mjs.
+const alvo = resolveTargetGuard({
+  databaseUrl: DATABASE_URL,
+  disposable: DISPOSABLE,
+  forbidProjectRef: FORBID_PROJECT_REF,
+  configuredSupabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL,
+});
 
-if (!DISPOSABLE) {
-  fail(
-    "--i-know-this-database-is-disposable é obrigatório: este script escreve na base.",
-  );
-}
+if (!alvo.ok) fail(alvo.error);
 
-/** Mesmo formato usado por scripts/lib/migration-runner-guards.mjs. */
-function extractDbProjectRef(dbUrl) {
-  const parsed = new URL(dbUrl);
-  const host = parsed.hostname;
-  const username = decodeURIComponent(parsed.username);
-
-  const direct = host.match(/^db\.([a-z0-9]+)\.supabase\.co$/i);
-  if (direct) return direct[1];
-
-  if (/^[a-z0-9-]+\.pooler\.supabase\.com$/i.test(host)) {
-    const pooler = username.match(/^postgres\.([a-z0-9]+)$/i);
-    if (pooler) return pooler[1];
-  }
-
-  return null;
-}
-
-function resolveConfiguredRef() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  if (!url) return null;
-  const match = url.match(/^https:\/\/([a-z0-9]+)\.supabase\.co/i);
-  return match ? match[1] : null;
-}
-
-const targetRef = extractDbProjectRef(DATABASE_URL);
-const configuredRef = resolveConfiguredRef();
-
-if (configuredRef && targetRef && configuredRef === targetRef) {
-  fail(
-    `A --database-url aponta para o projeto configurado no ambiente (${configuredRef}). ` +
-      "Este script só corre contra uma base descartável.",
-  );
-}
+const { targetRef, protectedRef, protectedSource } = alvo;
 
 // ---------------------------------------------------------------------------
 // SQL da migration 070 — fonte única
@@ -394,7 +370,14 @@ async function main() {
 
   await client.connect();
 
-  console.log(`Base alvo: ${targetRef ?? "(fora do Supabase)"}`);
+  console.log(`Base alvo: ${targetRef}`);
+  console.log(
+    `Projeto protegido: ${protectedRef} (${
+      protectedSource === "flag"
+        ? "--forbid-project-ref"
+        : "NEXT_PUBLIC_SUPABASE_URL"
+    })`,
+  );
   console.log(
     `Modo: ${REHEARSE_ROLLBACK ? "ensaio de rollback" : "verificação"}`,
   );
