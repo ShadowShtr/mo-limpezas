@@ -46,8 +46,10 @@ interfaces.
 
 | Item | Estado | Motivo |
 |---|---|---|
-| Workflow de CI | standby | `npm run build` precisa das variáveis de ambiente reais (`prebuild` corre `check-env.ts`). Um workflow que corra typecheck + lint:strict + test é viável e fica para PR própria, para não misturar configuração de CI com esta entrega. |
-| `npm run audit:code:strict` como gate | pronto, por ligar | A **Task T03** removeu os quatro artefactos perigosos e o comando passa agora. Falta só um workflow que o corra — ver a linha acima. |
+| Workflow de CI | ✅ **ligado** | `.github/workflows/quality.yml` corre `typecheck`, `lint:strict`, `test` e `audit:code:strict` em cada pull request. |
+| `npm run audit:code:strict` como gate | ✅ **ligado** | A **Task T03** removeu os quatro artefactos perigosos, o comando passou a devolver 0, e o workflow corre-o. |
+| `npm run build` no CI | standby | O `prebuild` corre `check-env.ts`, que exige as variáveis de ambiente reais. Mantê-lo fora do workflow é o que permite o CI não ter segredos nenhuns. A Vercel continua a construir cada pull request. |
+| `npm run audit:code:json` no CI | fora, por decisão | O relatório versionado é escrito pelo autor da alteração, com `git add` antes de regenerar. Regenerá-lo automaticamente faria o CI escrever no repositório e retiraria ao autor a responsabilidade de olhar para o que mudou. |
 | Remoção de código morto | standby | Pertence à **Task T17**. Os candidatos estão em [`README.md`](README.md) e nenhum foi removido nesta fase. |
 
 ## Como verificar
