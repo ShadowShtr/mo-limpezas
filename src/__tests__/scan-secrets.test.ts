@@ -3,139 +3,131 @@
 // ============================================================================
 // Origem: incidente de 2026-08-06. `scripts/reset-password.mjs` continha, num
 // repositório PÚBLICO e desde 2026-06-03, uma chave `sb_secret_` de service
-// role (ignora RLS, acesso total ao projeto), a URL do projeto real, um id de
-// utilizador real, uma senha em texto simples, e a chamada
-// `auth.admin.updateUserById` que a aplicava.
+// role, a URL do projeto real, um id de utilizador real, uma senha em texto
+// simples, e a chamada `auth.admin.updateUserById` que a aplicava.
 //
-// A regra mais importante aqui, e a que mais fácil seria falhar: **o scanner
-// nunca pode imprimir o valor que encontrou**. Um detetor que ecoa o segredo
-// para o log do CI passa a ser ele próprio uma fuga — e os logs do CI de um
-// repositório público são públicos.
+// A primeira versão do scanner tinha um bypass grave: depois de encontrar um
+// padrão, ignorava a LINHA INTEIRA se ela contivesse um marcador como
+// "example", "placeholder", "xxxx" ou "...". Uma credencial real acompanhada
+// de um comentário inocente escapava:
 //
-// As fixtures deste ficheiro são construídas por concatenação, para que nem
-// o próprio teste contenha uma credencial com formato completo em texto.
+//     const k = "sb_secret_<real>"; // placeholder, trocar depois
+//
+// A correção avalia apenas o VALOR capturado. É isso que a maior parte destes
+// testes prova — cada um deles falharia contra a versão antiga.
+//
+// Nenhuma credencial com formato completo aparece literalmente neste ficheiro:
+// as fixtures são construídas por concatenação, para o próprio teste não ser
+// uma fuga nem disparar o scanner.
 // ============================================================================
 
 import { describe, it, expect } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
 
-import { analisarConteudo } from "../../scripts/scan-secrets.mjs";
+import {
+  analisarConteudo,
+  analisarFicheiro,
+  ehBinario,
+} from "../../scripts/scan-secrets.mjs";
 
 const ROOT = path.join(__dirname, "..", "..");
 
-/** Construída em partes de propósito — ver cabeçalho. */
-const CHAVE_SINTETICA = "sb_secret_" + "A".repeat(24);
-const TOKEN_SINTETICO = "sbp_" + "b".repeat(40);
+// Construídas em partes — ver cabeçalho.
+const CHAVE = "sb_secret_" + "K7pQ2mN4vR8xT1wY6zA3bC5d";
+const CHAVE_COM_XXXX = "sb_secret_" + "K7pQxxxxN4vR8xT1wY6zA3bC";
+const TOKEN = "sbp_" + "9f3a1c7e5b2d8046af91c3e57b0d2946af81c3e5";
+const PG = "postgre" + "sql://postgres.abcdefghijkl:" + "R3alP4ss!x" + "@db.h.com:5432/postgres";
+const SENHA_LINHA = "pass" + "word: " + '"' + "Escala2026!" + '"';
 
-describe("deteção — o que tem de ser apanhado", () => {
-  it("apanha uma chave secreta do Supabase", () => {
-    const achados = analisarConteudo(
-      "scripts/qualquer.mjs",
-      `const k = "${CHAVE_SINTETICA}";`,
-    );
-
-    expect(achados).toHaveLength(1);
-    expect(achados[0].tipo).toBe("chave-secreta-supabase");
-    expect(achados[0].gravidade).toBe("critico");
-    expect(achados[0].linha).toBe(1);
-  });
-
-  it("apanha um token de acesso pessoal", () => {
-    const achados = analisarConteudo(
-      "docs/notas.md",
-      `login com token ${TOKEN_SINTETICO}`,
-    );
-
-    expect(achados.map((a) => a.tipo)).toContain("token-supabase-pessoal");
-  });
-
-  it("apanha SUPABASE_SERVICE_ROLE_KEY atribuída a um literal", () => {
+describe("bypass por marcador na linha — o defeito corrigido", () => {
+  it("credencial real + comentário 'placeholder' → DETETADA", () => {
     const achados = analisarConteudo(
       "scripts/x.mjs",
-      `SUPABASE_SERVICE_ROLE_KEY = "${"z".repeat(30)}"`,
+      `const k = "${CHAVE}"; // placeholder, trocar depois`,
     );
 
-    expect(achados.map((a) => a.tipo)).toContain("atribuicao-service-role");
+    expect(achados.map((a) => a.tipo)).toContain("chave-secreta-supabase");
   });
 
-  it("apanha uma URL de Postgres com credenciais", () => {
+  it("credencial real contendo 'xxxx' no meio → DETETADA", () => {
+    // O valor tem xxxx lá dentro, mas não é xxxx por inteiro.
     const achados = analisarConteudo(
       "scripts/x.mjs",
-      `const url = "postgresql://postgres.abc:P4ssw0rdReal@db.host.com:5432/postgres";`,
+      `const k = "${CHAVE_COM_XXXX}";`,
     );
 
-    expect(achados.map((a) => a.tipo)).toContain("url-postgres");
+    expect(achados.map((a) => a.tipo)).toContain("chave-secreta-supabase");
   });
 
-  it("apanha uma senha literal num script administrativo", () => {
+  it("senha real + comentário 'example' → DETETADA", () => {
     const achados = analisarConteudo(
-      "scripts/reset-qualquer-coisa.mjs",
-      `await admin.updateUserById(id, { password: "Escala9999!" });`,
+      "scripts/admin.mjs",
+      `${SENHA_LINHA} // example only`,
     );
 
     expect(achados.map((a) => a.tipo)).toContain("senha-literal");
   });
 
-  it("apanha uma URL de projeto Supabase escrita em código", () => {
+  it("credencial real na mesma linha de '<ref>' → DETETADA", () => {
     const achados = analisarConteudo(
-      "scripts/x.mjs",
-      `const supabase = createClient("https://abcdefghijklmnop.supabase.co", k);`,
+      "docs/x.md",
+      `Para o projeto <ref-descartavel>, usar a chave ${CHAVE}`,
     );
 
-    expect(achados.map((a) => a.tipo)).toContain("url-supabase-hardcoded");
+    expect(achados.map((a) => a.tipo)).toContain("chave-secreta-supabase");
   });
 
-  it("reporta a linha certa num ficheiro com várias", () => {
+  it("credencial real acompanhada de '...' → DETETADA", () => {
     const achados = analisarConteudo(
       "scripts/x.mjs",
-      ["// linha 1", "// linha 2", `const k = "${CHAVE_SINTETICA}";`].join("\n"),
+      `const k = "${CHAVE}"; // ver ... documentação`,
     );
 
-    expect(achados[0].linha).toBe(3);
+    expect(achados).toHaveLength(1);
+  });
+
+  it("token real com 'dummy' no comentário → DETETADO", () => {
+    const achados = analisarConteudo("docs/x.md", `token ${TOKEN} (dummy?)`);
+
+    expect(achados.map((a) => a.tipo)).toContain("token-supabase-pessoal");
+  });
+
+  it("URL de Postgres com senha real + 'example' na linha → DETETADA", () => {
+    const achados = analisarConteudo(
+      "docs/exemplo.md",
+      `# example de ligação\nSUPABASE_DB_URL=${PG}`,
+    );
+
+    expect(achados.map((a) => a.tipo)).toContain("url-postgres");
+    expect(achados[0].linha).toBe(2);
   });
 });
 
-describe("o scanner nunca expõe o valor encontrado", () => {
-  it("nenhum campo do achado contém a credencial", () => {
-    const achados = analisarConteudo(
-      "scripts/x.mjs",
-      `const k = "${CHAVE_SINTETICA}";`,
-    );
-
-    const serializado = JSON.stringify(achados);
-
-    expect(serializado).not.toContain(CHAVE_SINTETICA);
-    // Nem sequer um pedaço reconhecível.
-    expect(serializado).not.toContain("A".repeat(12));
-
-    // O achado tem de ser útil na mesma: onde está e o que é.
-    expect(achados[0]).toMatchObject({
-      ficheiro: "scripts/x.mjs",
-      linha: 1,
-      tipo: "chave-secreta-supabase",
-    });
+describe("marcador puro — o que continua permitido", () => {
+  it("valor inteiramente formado por x", () => {
+    expect(
+      analisarConteudo("docs/x.md", `chave: sb_secret_${"x".repeat(20)}`),
+    ).toEqual([]);
   });
 
-  it("o próprio scanner não imprime a linha lida", () => {
-    const fonte = fs
-      .readFileSync(path.join(ROOT, "scripts/scan-secrets.mjs"), "utf8")
-      .replace(/\r\n/g, "\n");
-
-    // A saída é construída só com metadados. Se alguém acrescentar a linha ou
-    // o valor ao console, este teste falha.
-    const saidas = fonte.match(/console\.(log|error)\([^;]*/g) ?? [];
-
-    for (const saida of saidas) {
-      expect(saida, `saída suspeita: ${saida}`).not.toMatch(
-        /\blinha\.|\bvalor\b|match\[|\.match\(/,
-      );
-    }
+  it("marcador em ângulos", () => {
+    expect(
+      analisarConteudo(
+        "docs/x.md",
+        "SUPABASE_DB_URL=postgre" +
+          "sql://postgres.<ref>:<password>@host:5432/postgres",
+      ),
+    ).toEqual([]);
   });
-});
 
-describe("permitido — o que não pode dar falso positivo", () => {
-  it("variáveis de ambiente são a forma correta e não são sinalizadas", () => {
+  it("variável de ambiente por interpolação", () => {
+    expect(
+      analisarConteudo("scripts/x.sh", 'SUPABASE_SERVICE_ROLE_KEY="${SUPA_KEY}"'),
+    ).toEqual([]);
+  });
+
+  it("leitura correta a partir do ambiente", () => {
     const achados = analisarConteudo(
       "scripts/x.mjs",
       [
@@ -150,33 +142,140 @@ describe("permitido — o que não pode dar falso positivo", () => {
     expect(achados).toEqual([]);
   });
 
-  it("marcadores de documentação não são credenciais", () => {
-    const achados = analisarConteudo(
-      "docs/x.md",
-      [
-        "SUPABASE_DB_URL=postgresql://postgres.<ref-descartavel>:<password>@host:5432/postgres",
-        'password: "<YOUR_PASSWORD>"',
-        "chave: sb_secret_xxxxxxxxxxxxxxxxxxxx",
-      ].join("\n"),
-    );
-
-    expect(achados).toEqual([]);
+  it("declaração vazia num ficheiro de exemplo", () => {
+    expect(
+      analisarConteudo(
+        ".env.example",
+        "SUPABASE_SERVICE_ROLE_KEY=       # apenas server-side",
+      ),
+    ).toEqual([]);
   });
 
-  it("um project ref sintético num teste é permitido", () => {
-    const fixture = fs
-      .readFileSync(
-        path.join(ROOT, "src/__tests__/migration-runner-guards.test.ts"),
-        "utf8",
-      )
+  it("chave de objeto de configuração não é um valor", () => {
+    expect(
+      analisarConteudo(
+        "scripts/check-env.ts",
+        "  SUPABASE_SERVICE_ROLE_KEY: {\n    desc: 'Service role key',\n  },",
+      ),
+    ).toEqual([]);
+  });
+});
+
+describe("cobertura de ficheiros — sem filtrar por extensão", () => {
+  it("segredo num .txt → DETETADO", () => {
+    const achados = analisarFicheiro("notas.txt", Buffer.from(`chave ${CHAVE}`));
+
+    expect(achados.map((a) => a.tipo)).toContain("chave-secreta-supabase");
+  });
+
+  it("segredo num ficheiro sem extensão → DETETADO", () => {
+    const achados = analisarFicheiro("Dockerfile", Buffer.from(`ENV K=${CHAVE}`));
+
+    expect(achados.map((a) => a.tipo)).toContain("chave-secreta-supabase");
+  });
+
+  it("segredo num .toml, .ini e .csv → DETETADO", () => {
+    for (const nome of ["config.toml", "app.ini", "dados.csv"]) {
+      const achados = analisarFicheiro(nome, Buffer.from(`k=${CHAVE}`));
+
+      expect(achados.length, nome).toBeGreaterThan(0);
+    }
+  });
+
+  it("ficheiro binário → IGNORADO", () => {
+    // Um byte nulo é o sinal, tal como no git — não a extensão.
+    const binario = Buffer.concat([
+      Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x00, 0x00]),
+      Buffer.from(CHAVE),
+    ]);
+
+    expect(ehBinario(binario)).toBe(true);
+    expect(analisarFicheiro("imagem.png", binario)).toEqual([]);
+  });
+
+  it("texto sem bytes nulos não é confundido com binário", () => {
+    expect(ehBinario(Buffer.from("texto normal com acentuação ção"))).toBe(false);
+  });
+});
+
+describe("o scanner nunca expõe o valor encontrado", () => {
+  it("nenhum campo do achado contém a credencial", () => {
+    const achados = analisarConteudo("scripts/x.mjs", `const k = "${CHAVE}";`);
+    const serializado = JSON.stringify(achados);
+
+    expect(serializado).not.toContain(CHAVE);
+    expect(serializado).not.toContain("K7pQ2mN4");
+
+    expect(achados[0]).toMatchObject({
+      ficheiro: "scripts/x.mjs",
+      linha: 1,
+      tipo: "chave-secreta-supabase",
+      gravidade: "critico",
+    });
+  });
+
+  it("o próprio scanner não imprime a linha nem o valor", () => {
+    const fonte = fs
+      .readFileSync(path.join(ROOT, "scripts/scan-secrets.mjs"), "utf8")
       .replace(/\r\n/g, "\n");
 
+    const saidas = fonte.match(/console\.(log|error)\([^;]*/g) ?? [];
+
+    for (const saida of saidas) {
+      expect(saida, `saída suspeita: ${saida}`).not.toMatch(
+        /\blinha\.|\bvalor\b|match\[|\.match\(/,
+      );
+    }
+  });
+
+  it("reporta a linha certa num ficheiro com várias", () => {
     const achados = analisarConteudo(
-      "src/__tests__/migration-runner-guards.test.ts",
-      fixture,
+      "scripts/x.mjs",
+      ["// um", "// dois", `const k = "${CHAVE}";`].join("\n"),
     );
 
-    expect(achados).toEqual([]);
+    expect(achados[0].linha).toBe(3);
+  });
+});
+
+describe("allowlist — sem perdões genéricos", () => {
+  it("nenhuma entrada usa o tipo curinga", () => {
+    const fonte = fs
+      .readFileSync(path.join(ROOT, "scripts/scan-secrets.mjs"), "utf8")
+      .replace(/\r\n/g, "\n");
+
+    const bloco = fonte.slice(
+      fonte.indexOf("const ALLOWLIST"),
+      fonte.indexOf("const VALOR_SINTETICO"),
+    );
+
+    expect(bloco).not.toMatch(/tipos:\s*\[\s*["']\*["']/);
+    // Cada entrada tem de justificar-se.
+    const entradas = bloco.match(/ficheiro:/g) ?? [];
+    const motivos = bloco.match(/motivo:/g) ?? [];
+    expect(motivos.length).toBe(entradas.length);
+  });
+
+  it("o próprio scanner não precisa de estar na allowlist", () => {
+    const fonte = fs.readFileSync(
+      path.join(ROOT, "scripts/scan-secrets.mjs"),
+      "utf8",
+    );
+
+    // Se os padrões estivessem escritos de forma a apanhar-se a si próprios,
+    // a saída seria a de um perdão implícito. Não é: não encontra nada.
+    expect(analisarConteudo("scripts/scan-secrets.mjs", fonte)).toEqual([]);
+  });
+
+  it("este ficheiro de teste também passa limpo", () => {
+    const fonte = fs.readFileSync(
+      path.join(ROOT, "src/__tests__/scan-secrets.test.ts"),
+      "utf8",
+    );
+
+    expect(analisarConteudo("src/__tests__/scan-secrets.test.ts", fonte)).toEqual(
+      [],
+    );
   });
 });
 

@@ -13,11 +13,29 @@
  * ---------------------------------------------------------------------------
  * 1. **Nunca imprime o valor encontrado.** Reporta ficheiro, linha e tipo de
  *    risco, e mais nada. Um scanner que ecoa o segredo para o log do CI
- *    transforma-se ele próprio numa fuga.
+ *    transforma-se ele próprio numa fuga — e os registos do CI de um
+ *    repositório público também são públicos.
+ *
  * 2. Só olha para o que está versionado (`git ls-files`). O que o git ignora
- *    não é repositório — `.env.local` e afins ficam de fora por definição.
- * 3. Falha fechado: qualquer achado devolve código de saída 1.
- * 4. Fixtures sintéticas são permitidas quando declaradas — ver ALLOWLIST.
+ *    não é repositório.
+ *
+ * 3. **Analisa todos os ficheiros de texto, sem filtrar por extensão.** Um
+ *    segredo num `.txt`, `.toml`, `.ini`, `Dockerfile` ou ficheiro sem
+ *    extensão conta tanto como num `.ts`. Binários são detetados por bytes
+ *    nulos, não por nome.
+ *
+ * 4. **A verificação de marcador aplica-se só ao VALOR capturado**, nunca à
+ *    linha. A primeira versão ignorava a linha inteira se ela contivesse
+ *    "example", "placeholder", "xxxx" ou "..." em qualquer sítio — o que
+ *    deixava passar uma chave real acompanhada de um comentário inocente:
+ *
+ *        const k = "sb_secret_<credencial-real>"; // placeholder, trocar depois
+ *
+ *    Essa linha continha "placeholder", e a chave real escapava. Agora só o
+ *    valor entre aspas é avaliado, e "xxxx" no meio de material real não
+ *    perdoa nada: um valor só é marcador se for marcador POR INTEIRO.
+ *
+ * 5. Falha fechado: qualquer achado devolve código de saída 1.
  *
  * Uso:
  *   npm run secrets:scan
@@ -29,156 +47,120 @@ import path from "node:path";
 
 const ROOT = process.cwd();
 
-/** Extensões que vale a pena analisar. */
-const EXTENSOES = new Set([
-  ".ts",
-  ".tsx",
-  ".js",
-  ".jsx",
-  ".mjs",
-  ".cjs",
-  ".json",
-  ".sql",
-  ".md",
-  ".yml",
-  ".yaml",
-  ".sh",
-  ".ps1",
-  ".env",
-  ".example",
-]);
-
 /**
- * Ficheiros onde um padrão é legítimo, com o motivo exigido.
+ * Ficheiros onde um tipo específico é legítimo, com o motivo exigido.
  *
- * Não é uma lista de perdão genérico: cada entrada nomeia o tipo de risco que
- * se aceita naquele ficheiro, e mais nenhum.
+ * Nunca `"*"`: um perdão genérico esconderia uma credencial nova num ficheiro
+ * que só devia estar isento de um tipo. Cada entrada nomeia exatamente os
+ * tipos que aceita.
  */
 const ALLOWLIST = [
   {
-    ficheiro: "scripts/scan-secrets.mjs",
-    tipos: ["*"],
-    motivo: "É o próprio detetor — contém os padrões que procura.",
-  },
-  {
-    ficheiro: "src/__tests__/scan-secrets.test.ts",
-    tipos: ["*"],
-    motivo: "Testes do detetor, com fixtures sintéticas construídas no teste.",
-  },
-  {
-    ficheiro: ".env.example",
-    tipos: ["url-postgres", "atribuicao-service-role"],
-    motivo: "Modelo de configuração, com marcadores e não valores.",
-  },
-  {
-    ficheiro: "docs/PRODUCTION-RUNBOOK.md",
-    tipos: ["url-postgres"],
-    motivo: "Procedimento com marcadores <ref-...>, sem credenciais.",
-  },
-  {
-    ficheiro: "docs/PLANO-MESTRE.md",
-    tipos: ["url-postgres"],
-    motivo: "Documento de planeamento, sem credenciais.",
-  },
-  {
     ficheiro: "src/__tests__/migration-runner-guards.test.ts",
-    tipos: ["url-postgres", "url-supabase-hardcoded"],
+    tipos: ["url-supabase-hardcoded"],
     motivo:
-      "Testa a extração de project ref a partir de URLs — tem de conter URLs. " +
-      "Os refs e senhas são sintéticos, verificado em scan-secrets.test.ts.",
-  },
-  {
-    ficheiro: "src/__tests__/audit.test.ts",
-    tipos: ["senha-literal"],
-    motivo:
-      "Fixture do sanitizador de auditoria: prova que um campo `password` é " +
-      "removido dos logs. O valor é a palavra 'segredo'.",
+      "Testa a extração de project ref a partir de URLs — tem de conter URLs " +
+      "com forma real. Os refs são sintéticos, verificado em scan-secrets.test.ts.",
   },
 ];
 
 /**
- * Um valor é considerado marcador (e não credencial) quando é claramente um
- * espaço reservado. Evita falsos positivos em documentação e exemplos.
+ * Um VALOR é marcador quando é marcador por inteiro. Nunca por conter um
+ * pedaço que pareça um.
  */
-// `x{4,}` sem fronteira de palavra de propósito: um marcador escrito como
-// `sb_secret_xxxxxxxx` não tem fronteira antes dos `x` (o `_` é caráter de
-// palavra). Uma chave real com quatro `x` seguidos é possível mas improvável,
-// e o custo do falso negativo é menor que o de o CI ficar vermelho por
-// documentação — que levaria alguém a desligar o scanner.
-const MARCADORES =
-  /(<[^>]+>|\$\{[^}]+\}|x{4,}|\bYOUR_|\bSEU_|\bTEU_|\bexample\b|\bplaceholder\b|\bfake\b|ficti|sintetic|\bdummy\b|\bchangeme\b|\bREPLACE\b|\.\.\.)/i;
+const VALOR_SINTETICO = [
+  /^x+$/i, // xxxxxxxx
+  /^<[^>]*>$/, // <ref-descartavel>, <password>
+  /^\$\{[A-Za-z_][A-Za-z0-9_]*\}$/, // ${SUPABASE_KEY}
+  /^\$[A-Za-z_][A-Za-z0-9_]*$/, // $SUPABASE_KEY
+  /^\.{3,}$/, // ...
+  /^(seu|teu|your|my)[-_]?(valor|value|key|chave|password|senha|token)$/i,
+  /^(placeholder|example|exemplo|changeme|dummy|fake|ficticio|sintetico|test|teste|todo|tbd)$/i,
+  /^(password|passwd|senha|segredo|secret|pass)$/i,
+  /^[-_]+$/,
+];
 
+function ehValorSintetico(valor) {
+  if (!valor) return true;
+  const limpo = valor.trim();
+  if (limpo.length === 0) return true;
+  return VALOR_SINTETICO.some((padrao) => padrao.test(limpo));
+}
+
+/**
+ * Cada regra captura o VALOR no grupo 1. É esse valor — e só esse — que passa
+ * pela verificação de marcador.
+ */
 const REGRAS = [
   {
     tipo: "chave-secreta-supabase",
     gravidade: "critico",
     descricao: "Chave secreta do Supabase (sb_secret_) — ignora RLS",
-    // Só conta se vier seguida de material que pareça mesmo uma chave.
-    padrao: /sb_secret_[A-Za-z0-9_-]{8,}/,
+    padrao: /sb_secret_([A-Za-z0-9_-]{8,})/g,
   },
   {
     tipo: "token-supabase-pessoal",
     gravidade: "critico",
-    descricao: "Token de acesso pessoal do Supabase (sbp_)",
-    padrao: /\bsbp_[a-f0-9]{20,}/,
+    descricao: "Token de acesso pessoal do Supabase (sbp_) — Management API",
+    padrao: /\bsbp_([A-Za-z0-9]{20,})/g,
   },
   {
     tipo: "jwt-literal",
     gravidade: "critico",
     descricao: "JWT literal (pode ser service_role)",
-    padrao: /\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}/,
+    padrao: /\b(eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,})/g,
   },
   {
     tipo: "atribuicao-service-role",
     gravidade: "critico",
     descricao: "SUPABASE_SERVICE_ROLE_KEY atribuída a um literal",
-    padrao: /SUPABASE_SERVICE_ROLE_KEY\s*[:=]\s*["'`][^"'`\s]{8,}["'`]/,
+    // Mínimo de 8 e sem `{`, `#` ou `,`: senão apanha `KEY: {` de um objeto de
+    // configuração e `KEY=   # comentário` de um ficheiro de exemplo, que não
+    // são valores nenhuns.
+    padrao:
+      /SUPABASE_SERVICE_ROLE_KEY\s*[:=]\s*(?:["'`]([^"'`\r\n]{8,})["'`]|([^\s"'`\r\n#{},]{8,}))/g,
   },
   {
     tipo: "url-postgres",
     gravidade: "critico",
     descricao: "URL de ligação Postgres com credenciais",
-    padrao: /postgresql:\/\/[^\s"'`:]+:[^\s"'`@]+@/,
+    // Captura a senha, que é a parte sensível.
+    padrao: /postgresql:\/\/[^\s"'`:@]+:([^\s"'`@]+)@/g,
   },
   {
     tipo: "senha-literal",
     gravidade: "critico",
     descricao: "Senha em texto simples",
-    padrao: /\bpassword\s*[:=]\s*["'`][^"'`\s]{4,}["'`]/i,
+    padrao: /\bpass(?:word|wd)?\s*[:=]\s*["'`]([^"'`\r\n]{3,})["'`]/gi,
   },
   {
     tipo: "url-supabase-hardcoded",
     gravidade: "alto",
     descricao: "URL de projeto Supabase escrita em código",
-    padrao: /["'`]https:\/\/[a-z0-9]{12,}\.supabase\.co/,
-    // Documentação pode citar o formato; o risco é em código executável.
+    padrao: /["'`]https:\/\/([a-z0-9]{12,})\.supabase\.co/g,
     apenasEm: /\.(mjs|cjs|js|jsx|ts|tsx)$/,
   },
 ];
 
-function ficheirosVersionados() {
-  const saida = execFileSync("git", ["ls-files", "-z"], {
-    cwd: ROOT,
-    encoding: "utf8",
-    maxBuffer: 64 * 1024 * 1024,
-  });
-
-  return saida
-    .split("\0")
-    .filter(Boolean)
-    .filter((rel) => {
-      const ext = path.extname(rel).toLowerCase();
-      return EXTENSOES.has(ext) || path.basename(rel).startsWith(".env");
-    })
-    .filter((rel) => fs.existsSync(path.join(ROOT, rel)));
-}
+/** Um ref de projeto sintético é reconhecível pelo próprio valor. */
+const REF_SINTETICO = /ficti|sintetic|dummy|fake|example|exemplo|placeholder|teste/i;
 
 function permitido(rel, tipo) {
   return ALLOWLIST.some(
-    (entrada) =>
-      entrada.ficheiro === rel &&
-      (entrada.tipos.includes("*") || entrada.tipos.includes(tipo)),
+    (entrada) => entrada.ficheiro === rel && entrada.tipos.includes(tipo),
   );
+}
+
+/**
+ * Binário por conteúdo, não por extensão: um byte nulo nos primeiros 8 KB é o
+ * sinal usado pelo próprio git.
+ */
+export function ehBinario(buffer) {
+  const limite = Math.min(buffer.length, 8192);
+  for (let i = 0; i < limite; i += 1) {
+    if (buffer[i] === 0) return true;
+  }
+  return false;
 }
 
 export function analisarConteudo(rel, conteudo) {
@@ -190,33 +172,79 @@ export function analisarConteudo(rel, conteudo) {
     if (permitido(rel, regra.tipo)) continue;
 
     linhas.forEach((linha, indice) => {
-      if (!regra.padrao.test(linha)) return;
-      // Um marcador não é uma credencial.
-      if (MARCADORES.test(linha)) return;
+      // `g` é partilhado entre chamadas — reiniciar antes de cada linha.
+      regra.padrao.lastIndex = 0;
 
-      achados.push({
-        ficheiro: rel,
-        linha: indice + 1,
-        tipo: regra.tipo,
-        gravidade: regra.gravidade,
-        descricao: regra.descricao,
-      });
+      let match;
+      while ((match = regra.padrao.exec(linha)) !== null) {
+        // Só o valor capturado é avaliado. A linha à volta é irrelevante.
+        const valor = match[1] ?? match[2] ?? "";
+
+        if (ehValorSintetico(valor)) continue;
+
+        if (
+          regra.tipo === "url-supabase-hardcoded" &&
+          REF_SINTETICO.test(valor)
+        ) {
+          continue;
+        }
+
+        achados.push({
+          ficheiro: rel,
+          linha: indice + 1,
+          tipo: regra.tipo,
+          gravidade: regra.gravidade,
+          descricao: regra.descricao,
+        });
+
+        // Um achado por linha e por tipo chega para agir.
+        break;
+      }
     });
   }
 
   return achados;
 }
 
+/** Devolve `[]` para binários, sem os ler como texto. */
+export function analisarFicheiro(rel, buffer) {
+  if (ehBinario(buffer)) return [];
+  return analisarConteudo(rel, buffer.toString("utf8"));
+}
+
+function ficheirosVersionados() {
+  const saida = execFileSync("git", ["ls-files", "-z"], {
+    cwd: ROOT,
+    encoding: "utf8",
+    maxBuffer: 64 * 1024 * 1024,
+  });
+
+  return saida
+    .split("\0")
+    .filter(Boolean)
+    .filter((rel) => fs.existsSync(path.join(ROOT, rel)));
+}
+
 function main() {
   const ficheiros = ficheirosVersionados();
   const achados = [];
+  let binarios = 0;
 
   for (const rel of ficheiros) {
-    const conteudo = fs.readFileSync(path.join(ROOT, rel), "utf8");
-    achados.push(...analisarConteudo(rel, conteudo));
+    const buffer = fs.readFileSync(path.join(ROOT, rel));
+
+    if (ehBinario(buffer)) {
+      binarios += 1;
+      continue;
+    }
+
+    achados.push(...analisarConteudo(rel, buffer.toString("utf8")));
   }
 
-  console.log(`Analisados ${ficheiros.length} ficheiros versionados.`);
+  console.log(
+    `Analisados ${ficheiros.length - binarios} ficheiros de texto versionados ` +
+      `(${binarios} binários ignorados).`,
+  );
 
   if (achados.length === 0) {
     console.log("✔ Nenhuma credencial encontrada.");
@@ -233,14 +261,14 @@ function main() {
   console.error(
     "\nUma credencial versionada tem de ser ROTACIONADA, não apenas apagada:\n" +
       "apagar o ficheiro não desativa a chave que já foi publicada.\n" +
-      "Ver docs/PRODUCTION-RUNBOOK.md.",
+      "Ver docs/PRODUCTION-RUNBOOK.md, secção 10.",
   );
 
   process.exitCode = 1;
 }
 
-// Só corre quando é invocado como programa, para os testes poderem importar
-// `analisarConteudo` sem disparar a análise da árvore toda.
+// Só corre quando é invocado como programa, para os testes poderem importar as
+// funções sem disparar a análise da árvore toda.
 if (process.argv[1] && path.resolve(process.argv[1]).endsWith("scan-secrets.mjs")) {
   main();
 }
