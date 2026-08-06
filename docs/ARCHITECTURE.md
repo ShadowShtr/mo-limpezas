@@ -122,6 +122,24 @@ corrige e centraliza — não cria uma segunda versão.
   `expected_revision`;
 - auditoria e outbox gravam dentro da transação da mutação.
 
+### Campos de `profiles` que ninguém edita a si próprio
+
+RLS não consegue exprimir "esta coluna mudou" — `USING`/`WITH CHECK` não veem o
+valor `OLD`. Por isso a proteção de colunas é feita por trigger `BEFORE UPDATE`:
+
+| Guarda | Migration | Cobre |
+|---|---|---|
+| `trg_guard_profile_tenant_role` | `069` | `company_id`, `role` |
+| `trg_guard_profile_managed_fields` | `070` | `hourly_rate`, `contracted_hours_month`, `contract_start`, `contract_end`, `vacation_balance`, `status`, `skills`, `invited_at`, `invite_accepted_at` |
+
+Uma coluna pertence a **uma** destas guardas, nunca às duas. Campos pessoais
+(`full_name`, `phone`, `email`, `nif`, `iban`, `avatar_url`, `availability`)
+continuam livres para o próprio.
+
+Escrever nos campos geridos exige contexto `service_role` — o de todas as
+Server Actions administrativas — ou ser admin/gestor da mesma empresa. Verificar
+contra uma base descartável com `scripts/verify-profile-guards.mjs`.
+
 Procedimento operacional de deploy, rollback e resposta a incidentes:
 [`PRODUCTION-RUNBOOK.md`](PRODUCTION-RUNBOOK.md).
 
