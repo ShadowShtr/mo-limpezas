@@ -10,7 +10,14 @@ import { revalidatePath } from "next/cache";
 // action nova usa isto em vez de chamar revalidatePath à mão e arriscar
 // esquecer uma rota.
 export type BusinessScope =
-  | "clientes" | "calendario" | "contratos" | "cobrancas" | "financeiro" | "locais";
+  | "clientes"
+  | "calendario"
+  | "contratos"
+  | "cobrancas"
+  | "financeiro"
+  | "locais"
+  | "configuracoes"
+  | "relatorios";
 
 export function revalidateBusinessPaths(opts: {
   clientId?: string | null;
@@ -26,4 +33,9 @@ export function revalidateBusinessPaths(opts: {
   if (scopes.includes("cobrancas")) revalidatePath("/dashboard/cobrancas");
   if (scopes.includes("financeiro")) revalidatePath("/dashboard/financeiro");
   if (scopes.includes("locais")) revalidatePath("/dashboard/locais");
+  if (scopes.includes("configuracoes")) revalidatePath("/dashboard/configuracoes");
+  // As configurações (IVA, taxa horária, subsídio) entram nos cálculos dos
+  // relatórios — guardá-las sem revalidar esta rota deixava números antigos
+  // no ecrã de quem já a tivesse aberta.
+  if (scopes.includes("relatorios")) revalidatePath("/dashboard/relatorios");
 }

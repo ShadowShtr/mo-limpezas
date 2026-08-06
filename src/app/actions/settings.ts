@@ -1,10 +1,8 @@
 "use server";
 
 import { z } from "zod";
-import { createAdminClient } from "@/lib/supabase/admin";
-import { createClient } from "@/lib/supabase/server";
-import { requireProfile } from "@/lib/auth-guard";
-import { revalidatePath } from "next/cache";
+import { AUTH_GUARD_CODES, requireProfile } from "@/lib/auth-guard";
+import { revalidateBusinessPaths } from "@/lib/revalidate-business";
 import {
   ACTION_ERROR_CODES,
   actionFailure,
@@ -101,32 +99,35 @@ export async function saveCompanySettings(
     return validationFailure(parsed.error);
   }
 
-  const supabase = await createClient();
-  const admin = createAdminClient();
+  // Sessão, perfil, empresa e papel numa só chamada. O `company_id` vem
+  // sempre da sessão — nunca do formulário nem de nada que o browser controle.
+  const guard = await requireProfile({ roles: ["admin", "gestor"] });
 
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) {
-    return actionFailure(ACTION_ERROR_CODES.UNAUTHENTICATED, "Não autenticado.");
-  }
+  if (!guard.ok) {
+    // Ramificação por código estável, nunca pelo texto de `guard.error`: a
+    // mensagem que o utilizador deve ver depende da action.
+    if (guard.code === AUTH_GUARD_CODES.UNAUTHENTICATED) {
+      return actionFailure(
+        ACTION_ERROR_CODES.UNAUTHENTICATED,
+        "Não autenticado.",
+      );
+    }
 
-  const { data: profile } = await admin
-    .from("profiles")
-    .select("company_id, role")
-    .eq("id", user.id)
-    .single();
+    if (guard.code === AUTH_GUARD_CODES.PROFILE_NOT_FOUND) {
+      return actionFailure(
+        ACTION_ERROR_CODES.NOT_FOUND,
+        "Perfil não encontrado.",
+      );
+    }
 
-  if (!profile) {
-    return actionFailure(ACTION_ERROR_CODES.NOT_FOUND, "Perfil não encontrado.");
-  }
-
-  const { company_id, role } = profile;
-
-  if (role !== "admin" && role !== "gestor") {
     return actionFailure(
       ACTION_ERROR_CODES.FORBIDDEN,
       "Sem permissão para alterar configurações.",
     );
   }
+
+  const { admin } = guard;
+  const company_id = guard.profile.company_id;
 
   const { error } = await admin
     .from("company_settings")
@@ -158,8 +159,9 @@ export async function saveCompanySettings(
     );
   }
 
-  revalidatePath("/dashboard/configuracoes");
-  revalidatePath("/dashboard/relatorios");
+  // Matriz central, em vez de duas chamadas diretas: as rotas afetadas por
+  // uma alteração de configurações passam a estar declaradas num só sítio.
+  revalidateBusinessPaths({ scopes: ["configuracoes", "relatorios"] });
 
   return actionSuccess(parsed.data);
 }
