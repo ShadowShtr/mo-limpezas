@@ -29,11 +29,49 @@
  *     --database-url postgresql://... \
  *     --i-know-this-database-is-disposable
  *
+ *   node scripts/verify-profile-guards.mjs \
+ *     --database-url postgresql://... \
+ *     --i-know-this-database-is-disposable \
+ *     --rehearse-rollback
+ *
  * A base tem de ser um projeto Supabase descartável com as migrations
  * aplicadas (precisa do schema `auth` para `auth.uid()` / `auth.role()`).
+ *
+ * ---------------------------------------------------------------------------
+ * MODO --rehearse-rollback
+ * ---------------------------------------------------------------------------
+ * Prova que a 070 se desliga e se volta a ligar sem deixar resíduo. Corre, na
+ * MESMA transação:
+ *
+ *   1. os cenários com a guarda ativa                      → esperado 12/12
+ *   2. DROP do trigger e da função da 070 (o rollback)
+ *   3. os cenários outra vez — os bloqueios da 070 têm de DESAPARECER, e os
+ *      da 069 têm de PERMANECER (prova que o rollback é cirúrgico)
+ *   4. reaplicação do SQL lido de supabase/migrations/070_*.sql
+ *   5. os cenários uma última vez                          → esperado 12/12
+ *   6. ROLLBACK
+ *
+ * ⚠️ Este modo ALTERA temporariamente objetos da base: larga e recria um
+ * trigger e uma função. Tudo acontece dentro da transação e é revertido pelo
+ * ROLLBACK final, mas enquanto a transação está aberta a guarda está mesmo
+ * ausente para esta ligação. Nunca contra uma base que não seja descartável.
+ *
+ * O SQL da 070 é LIDO DO FICHEIRO, nunca reescrito aqui: duas cópias do mesmo
+ * SQL seriam duas fontes de verdade, e o ensaio deixaria de provar o que a
+ * migration realmente faz.
  */
 
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
 import pg from "pg";
+
+import {
+  FUNCAO_070,
+  TRIGGER_070,
+  validarMigration070,
+} from "./lib/migration-070-integrity.mjs";
 
 const args = process.argv.slice(2);
 
@@ -44,6 +82,7 @@ function readArgument(flag) {
 
 const DATABASE_URL = readArgument("--database-url");
 const DISPOSABLE = args.includes("--i-know-this-database-is-disposable");
+const REHEARSE_ROLLBACK = args.includes("--rehearse-rollback");
 
 function fail(message) {
   console.error(`❌ ${message}`);
@@ -94,6 +133,40 @@ if (configuredRef && targetRef && configuredRef === targetRef) {
     `A --database-url aponta para o projeto configurado no ambiente (${configuredRef}). ` +
       "Este script só corre contra uma base descartável.",
   );
+}
+
+// ---------------------------------------------------------------------------
+// SQL da migration 070 — fonte única
+// ---------------------------------------------------------------------------
+
+const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
+
+const MIGRATION_070 = path.join(
+  ROOT,
+  "supabase",
+  "migrations",
+  "070_guard_profile_managed_fields.sql",
+);
+
+/**
+ * Lê o SQL da 070 do ficheiro e recusa-se a executá-lo se não for o que se
+ * espera. O ensaio só vale se aplicar exatamente a migration real: por isso
+ * nada de reescrever o SQL aqui, e nada de executar às cegas um ficheiro que
+ * possa ter mudado de natureza. A decisão vive em
+ * `scripts/lib/migration-070-integrity.mjs`, para poder ser testada.
+ */
+function lerMigration070() {
+  const rel = path.relative(ROOT, MIGRATION_070);
+
+  const sql = fs.existsSync(MIGRATION_070)
+    ? fs.readFileSync(MIGRATION_070, "utf8")
+    : null;
+
+  const veredito = validarMigration070(sql);
+
+  if (!veredito.ok) fail(`${rel}: ${veredito.error}`);
+
+  return sql;
 }
 
 // ---------------------------------------------------------------------------
@@ -218,100 +291,198 @@ async function comoAtor(ator, fn) {
   }
 }
 
-async function main() {
-  await client.connect();
+async function executar(cenario) {
+  return comoAtor(cenario.ator, async () => {
+    try {
+      const r = await client.query(cenario.sql, [cenario.alvo]);
+      return { tipo: "ok", linhas: r.rowCount };
+    } catch (erro) {
+      return { tipo: "erro", mensagem: String(erro.message) };
+    }
+  });
+}
 
-  console.log(`Base alvo: ${targetRef ?? "(fora do Supabase)"}`);
-  console.log("Tudo corre numa transação terminada em ROLLBACK.\n");
+function avaliar(esperado, resultado) {
+  if (esperado === "ok") {
+    return resultado.tipo === "ok" && resultado.linhas > 0;
+  }
 
-  await client.query("BEGIN");
+  if (esperado === "isolado") {
+    // RLS não deixa sequer ver a linha da outra empresa: ou 0 linhas
+    // afetadas, ou erro da guarda. As duas coisas são isolamento.
+    return (
+      (resultado.tipo === "ok" && resultado.linhas === 0) ||
+      (resultado.tipo === "erro" &&
+        resultado.mensagem.includes("PROFILE_MANAGED_FIELD_BLOCKED"))
+    );
+  }
+
+  return (
+    resultado.tipo === "erro" && resultado.mensagem.includes(esperado)
+  );
+}
+
+/**
+ * Expectativa de cada cenário quando a guarda da 070 está AUSENTE.
+ *
+ * É aqui que o ensaio ganha valor: os bloqueios da 070 têm de desaparecer
+ * (prova que era ela a bloquear, e que o rollback funciona), enquanto os da
+ * 069 têm de permanecer (prova que o rollback é cirúrgico e não derruba a
+ * proteção vizinha).
+ */
+function esperadoSemGuarda(cenario) {
+  if (cenario.expect === "PROFILE_MANAGED_FIELD_BLOCKED") return "ok";
+  return cenario.expect;
+}
+
+async function correrFase(titulo, esperadoDe) {
+  console.log(`\n── ${titulo}`);
 
   const resultados = [];
 
-  try {
-    // Pré-condição: as guardas existem mesmo nesta base.
-    const { rows: triggers } = await client.query(
-      `SELECT tgname FROM pg_trigger
-        WHERE tgrelid = 'public.profiles'::regclass AND NOT tgisinternal`,
+  for (const cenario of CENARIOS) {
+    const esperado = esperadoDe(cenario);
+    const resultado = await executar(cenario);
+    const passou = avaliar(esperado, resultado);
+
+    resultados.push({ cenario: cenario.nome, passou, esperado, resultado });
+
+    console.log(
+      `${passou ? "✔" : "✘"} ${cenario.nome}` +
+        (passou
+          ? ""
+          : `\n    esperado: ${esperado}\n    obtido:   ${JSON.stringify(resultado)}`),
     );
+  }
 
-    const nomes = triggers.map((r) => r.tgname);
+  const passaram = resultados.filter((r) => r.passou).length;
+  console.log(`   ${passaram}/${resultados.length}`);
 
-    for (const esperado of [
-      "trg_guard_profile_tenant_role",
-      "trg_guard_profile_managed_fields",
-    ]) {
-      if (!nomes.includes(esperado)) {
+  return resultados;
+}
+
+async function prepararDados() {
+  await client.query(
+    `INSERT INTO public.companies (id, name) VALUES ($1, 'Empresa A'), ($2, 'Empresa B')
+     ON CONFLICT (id) DO NOTHING`,
+    [EMPRESA_A, EMPRESA_B],
+  );
+
+  await client.query(
+    `INSERT INTO public.profiles (id, company_id, full_name, role, status, hourly_rate, vacation_balance, contracted_hours_month)
+     VALUES
+       ($1, $4, 'Colaboradora A', 'colaborador', 'ativo', 8.00, 22, 168),
+       ($2, $4, 'Admin A',        'admin',       'ativo', 8.00, 22, 168),
+       ($3, $5, 'Colaboradora B', 'colaborador', 'ativo', 8.00, 22, 168)
+     ON CONFLICT (id) DO NOTHING`,
+    [COLABORADOR_A, ADMIN_A, COLABORADOR_B, EMPRESA_A, EMPRESA_B],
+  );
+}
+
+async function guardasPresentes() {
+  const { rows } = await client.query(
+    `SELECT tgname FROM pg_trigger
+      WHERE tgrelid = 'public.profiles'::regclass AND NOT tgisinternal`,
+  );
+
+  return rows.map((r) => r.tgname);
+}
+
+async function main() {
+  // Falha antes de ligar à base se a migration não for o que se espera.
+  const sqlMigration070 = REHEARSE_ROLLBACK ? lerMigration070() : null;
+
+  await client.connect();
+
+  console.log(`Base alvo: ${targetRef ?? "(fora do Supabase)"}`);
+  console.log(
+    `Modo: ${REHEARSE_ROLLBACK ? "ensaio de rollback" : "verificação"}`,
+  );
+  console.log("Tudo corre numa transação terminada em ROLLBACK.\n");
+
+  if (REHEARSE_ROLLBACK) {
+    console.log(
+      "⚠️  Este modo larga e recria temporariamente o trigger e a função da 070.\n" +
+        "   Reversível pelo ROLLBACK final, mas nunca contra uma base não descartável.\n",
+    );
+  }
+
+  await client.query("BEGIN");
+
+  let todas = [];
+
+  try {
+    const presentes = await guardasPresentes();
+
+    for (const esperado of ["trg_guard_profile_tenant_role", TRIGGER_070]) {
+      if (!presentes.includes(esperado)) {
         throw new Error(
           `Trigger ${esperado} não existe nesta base. As migrations 069/070 estão aplicadas?`,
         );
       }
     }
 
-    console.log("✔ Triggers 069 e 070 presentes.\n");
+    console.log("✔ Triggers 069 e 070 presentes.");
 
-    // Dados mínimos, dentro da transação.
-    await client.query(
-      `INSERT INTO public.companies (id, name) VALUES ($1, 'Empresa A'), ($2, 'Empresa B')
-       ON CONFLICT (id) DO NOTHING`,
-      [EMPRESA_A, EMPRESA_B],
-    );
+    await prepararDados();
 
-    await client.query(
-      `INSERT INTO public.profiles (id, company_id, full_name, role, status, hourly_rate, vacation_balance, contracted_hours_month)
-       VALUES
-         ($1, $4, 'Colaboradora A', 'colaborador', 'ativo', 8.00, 22, 168),
-         ($2, $4, 'Admin A',        'admin',       'ativo', 8.00, 22, 168),
-         ($3, $5, 'Colaboradora B', 'colaborador', 'ativo', 8.00, 22, 168)
-       ON CONFLICT (id) DO NOTHING`,
-      [COLABORADOR_A, ADMIN_A, COLABORADOR_B, EMPRESA_A, EMPRESA_B],
-    );
+    if (!REHEARSE_ROLLBACK) {
+      todas = await correrFase("Guarda ativa", (c) => c.expect);
+    } else {
+      // 1. Estado inicial.
+      const antes = await correrFase("1/3 · guarda ativa", (c) => c.expect);
 
-    for (const cenario of CENARIOS) {
-      const resultado = await comoAtor(cenario.ator, async () => {
-        try {
-          const r = await client.query(cenario.sql, [cenario.alvo]);
-          return { tipo: "ok", linhas: r.rowCount };
-        } catch (erro) {
-          return { tipo: "erro", mensagem: String(erro.message) };
-        }
-      });
+      // 2. Rollback da 070 — exatamente as instruções documentadas na migration.
+      await client.query(
+        `DROP TRIGGER IF EXISTS ${TRIGGER_070} ON public.profiles`,
+      );
+      await client.query(`DROP FUNCTION IF EXISTS public.${FUNCAO_070}()`);
 
-      let passou;
+      const depoisDoDrop = await guardasPresentes();
 
-      if (cenario.expect === "ok") {
-        passou = resultado.tipo === "ok" && resultado.linhas > 0;
-      } else if (cenario.expect === "isolado") {
-        // RLS não deixa sequer ver a linha da outra empresa: ou 0 linhas
-        // afetadas, ou erro da guarda. As duas coisas são isolamento.
-        passou =
-          (resultado.tipo === "ok" && resultado.linhas === 0) ||
-          (resultado.tipo === "erro" &&
-            resultado.mensagem.includes("PROFILE_MANAGED_FIELD_BLOCKED"));
-      } else {
-        passou =
-          resultado.tipo === "erro" &&
-          resultado.mensagem.includes(cenario.expect);
+      if (depoisDoDrop.includes(TRIGGER_070)) {
+        throw new Error(`O rollback não removeu o trigger ${TRIGGER_070}.`);
       }
 
-      resultados.push({ cenario: cenario.nome, passou, resultado });
+      if (!depoisDoDrop.includes("trg_guard_profile_tenant_role")) {
+        throw new Error(
+          "O rollback da 070 removeu também a guarda da 069 — não é cirúrgico.",
+        );
+      }
 
-      console.log(
-        `${passou ? "✔" : "✘"} ${cenario.nome}` +
-          (passou
-            ? ""
-            : `\n    esperado: ${cenario.expect}\n    obtido:   ${JSON.stringify(resultado)}`),
+      console.log("\n✔ Rollback aplicado: trigger e função da 070 removidos, 069 intacta.");
+
+      // 3. Sem guarda, os bloqueios da 070 têm de desaparecer.
+      const semGuarda = await correrFase(
+        "2/3 · guarda removida (os bloqueios da 070 devem desaparecer)",
+        esperadoSemGuarda,
       );
+
+      // 4. Reaplicar a migration, tal e qual está no ficheiro.
+      await client.query(sqlMigration070);
+
+      const depoisDeReaplicar = await guardasPresentes();
+
+      if (!depoisDeReaplicar.includes(TRIGGER_070)) {
+        throw new Error("A reaplicação da 070 não recriou o trigger.");
+      }
+
+      console.log("\n✔ Migration 070 reaplicada a partir do ficheiro.");
+
+      // 5. Estado final tem de ser igual ao inicial.
+      const depois = await correrFase("3/3 · guarda reaplicada", (c) => c.expect);
+
+      todas = [...antes, ...semGuarda, ...depois];
     }
   } finally {
     await client.query("ROLLBACK");
     await client.end();
   }
 
-  const falhas = resultados.filter((r) => !r.passou);
+  const falhas = todas.filter((r) => !r.passou);
 
   console.log(
-    `\n${resultados.length - falhas.length}/${resultados.length} cenários passaram. Transação revertida.`,
+    `\n${todas.length - falhas.length}/${todas.length} verificações passaram. Transação revertida.`,
   );
 
   if (falhas.length > 0) process.exitCode = 1;

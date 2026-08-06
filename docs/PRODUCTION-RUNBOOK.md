@@ -179,7 +179,122 @@ Todo script assim (ex.: `scripts/run-migrations.mjs`,
 - nunca ter um valor por omissão que aponte para produção sem essa
   confirmação explícita.
 
-## 9. Na dúvida
+## 9. Ensaio de uma migration de guarda numa base descartável
+
+> Procedimento obrigatório **antes** de pedir autorização para aplicar uma
+> migration que altere permissões, triggers ou policies. Escrito para a
+> migration `070_guard_profile_managed_fields.sql` (Task T04); o mesmo
+> procedimento serve para qualquer guarda futura.
+>
+> 🔴 **Nada disto se faz contra produção.** Nem o runner, nem o script de
+> verificação. Se em qualquer passo houver dúvida sobre que base está do outro
+> lado, parar — ver secção 10.
+
+### 9.1 Porquê
+
+Os testes estáticos de `src/__tests__/` provam que o SQL contém as cláusulas
+certas. Não provam que a base recusa a escrita, nem que o rollback desliga a
+guarda sem deixar resíduo. Só uma ligação a Postgres prova isso.
+
+### 9.2 Base descartável
+
+Criar (ou reutilizar) um projeto Supabase **exclusivamente para ensaio**, sem
+dados reais e que possa ser destruído sem consequências. Nunca um projeto de
+preview ligado a dados de clientes.
+
+### 9.3 `.env` exclusivo do ensaio
+
+Não editar o `.env` de trabalho. Criar um ficheiro separado, por exemplo
+`.env.ensaio` (ignorado pelo git, como todos os `.env*`), com as variáveis a
+apontar **apenas** ao projeto descartável:
+
+```bash
+NEXT_PUBLIC_SUPABASE_URL=https://<ref-descartavel>.supabase.co
+SUPABASE_DB_URL=postgresql://postgres.<ref-descartavel>:<password>@<host>.pooler.supabase.com:5432/postgres
+```
+
+### 9.4 Confirmação visual do project ref
+
+**O passo de maior risco de todo o processo.** Antes de qualquer comando que
+escreva, confirmar com os próprios olhos que o ref é o descartável:
+
+```bash
+set -a; . ./.env.ensaio; set +a
+echo "$NEXT_PUBLIC_SUPABASE_URL"
+node scripts/run-migrations.mjs        # sem flags = dry-run, só SELECT
+```
+
+O dry-run imprime o projeto e as migrations pendentes. Se o ref que aparece não
+for o descartável, **parar aqui** — a variável está errada.
+
+### 9.5 Aplicar as migrations
+
+O runner exige `--confirm-production <ref>` **mesmo numa base descartável**.
+Não é um erro nem um aviso a ignorar: a flag compara o ref extraído de
+`SUPABASE_DB_URL` com o de `NEXT_PUBLIC_SUPABASE_URL` e obriga a repetir esse
+mesmo ref à mão. Aqui, o ref a passar é o do projeto de ensaio:
+
+```bash
+node scripts/run-migrations.mjs --apply --confirm-production <ref-descartavel>
+```
+
+Numa base vazia isto aplica tudo, da 001 à 070.
+
+### 9.6 Verificação normal
+
+```bash
+node scripts/verify-profile-guards.mjs \
+  --database-url "$SUPABASE_DB_URL" \
+  --i-know-this-database-is-disposable
+```
+
+O script recusa-se a correr se a URL apontar para o projeto de
+`NEXT_PUBLIC_SUPABASE_URL`, nunca lê `SUPABASE_DB_URL` do ambiente por si, e
+corre tudo numa transação terminada em `ROLLBACK`.
+
+**Critério de sucesso:** `12/12 verificações passaram. Transação revertida.`
+
+### 9.7 Ensaio do rollback
+
+```bash
+node scripts/verify-profile-guards.mjs \
+  --database-url "$SUPABASE_DB_URL" \
+  --i-know-this-database-is-disposable \
+  --rehearse-rollback
+```
+
+Na mesma transação: valida com a guarda ativa → larga trigger e função →
+confirma que os bloqueios da 070 desaparecem e que os da 069 permanecem →
+reaplica o SQL lido do ficheiro da migration → valida outra vez → `ROLLBACK`.
+
+⚠️ Este modo **altera temporariamente objetos da base**. É revertido pelo
+`ROLLBACK` final, mas enquanto a transação está aberta a guarda está mesmo
+ausente para aquela ligação. Só contra a base descartável.
+
+**Critérios de sucesso, todos obrigatórios:**
+
+| Sinal | Significado |
+|---|---|
+| `✔ Triggers 069 e 070 presentes.` | As migrations estão mesmo aplicadas |
+| Fase `1/3` a `12/12` | A guarda funciona |
+| `✔ Rollback aplicado: ... 069 intacta.` | O rollback é cirúrgico |
+| Fase `2/3` a `12/12` | Sem a 070 os bloqueios dela desaparecem, e os da 069 ficam |
+| `✔ Migration 070 reaplicada a partir do ficheiro.` | A reaplicação corre |
+| Fase `3/3` a `12/12` | O estado final é igual ao inicial |
+| `36/36 verificações passaram. Transação revertida.` | Ensaio completo |
+| Código de saída `0` | Nada falhou |
+
+Qualquer fase abaixo de `12/12`, ou saída diferente de `0`, invalida o ensaio.
+Não avançar para o pedido de autorização.
+
+### 9.8 Depois do ensaio
+
+Só depois de tudo acima passar se prepara um pedido **separado** de autorização
+para aplicar a migration no ambiente real, anexando a saída do ensaio como
+evidência. A aplicação em produção continua sujeita à REGRA ZERO (`AGENTS.md`)
+e à secção 2 deste runbook.
+
+## 10. Na dúvida
 
 Não executar. Parar, mostrar exatamente o que foi encontrado, e pedir
 autorização.
