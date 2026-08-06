@@ -26,19 +26,27 @@ compilador TypeScript já presente no projeto e o `git` para o inventário.
 | Alcançabilidade | Travessia do grafo a partir das entradas | Um módulo não alcançado a partir de nenhuma entrada de produção é **candidato**, nunca conclusão. |
 | Duplicações | SHA-256 do conteúdo | Só ficheiros com mais de 80 caracteres úteis; `package-lock.json` e mapas excluídos. |
 
-## Resultado da primeira execução (2026-08-06, commit base `11cdea7`)
+## Resultado (2026-08-06)
 
-| Métrica | Valor |
-|---|---:|
-| Ficheiros versionados | 446 |
-| Ficheiros de texto analisados | 433 |
-| Ficheiros TypeScript no programa | 297 |
-| Linhas de texto | 88 058 |
-| Entradas de produção Next.js | 71 |
-| Diagnósticos TypeScript | 0 |
-| Módulos de produção inalcançáveis | 4 |
-| Grupos de ficheiros duplicados | 0 |
-| Módulos de produção só alcançados por testes | 0 |
+`reports/code-audit.json` corresponde ao **topo desta branch**. A coluna do
+commit base fica registada para se ver o que esta própria entrega acrescentou
+(documentos e testes, nenhum código de produção).
+
+| Métrica | Commit base `11cdea7` | Topo da branch |
+|---|---:|---:|
+| Ficheiros versionados | 446 | 456 |
+| Ficheiros de texto analisados | 433 | 443 |
+| Ficheiros TypeScript no programa | 297 | 298 |
+| Linhas de texto | 88 058 | 95 402 |
+| Entradas de produção Next.js | 71 | 71 |
+| Diagnósticos TypeScript | 0 | 0 |
+| Módulos de produção inalcançáveis | 4 | 4 |
+| Grupos de ficheiros duplicados | 0 | 0 |
+| Módulos de produção só alcançados por testes | 0 | 0 |
+
+Os quatro candidatos a código morto e os quatro artefactos perigosos são
+exatamente os mesmos nas duas medições: esta entrega não removeu nem
+acrescentou nenhum.
 
 ## Matriz de classificação
 

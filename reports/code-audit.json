@@ -1,12 +1,12 @@
 {
-  "generatedAt": "2026-08-06T12:07:39.405Z",
+  "generatedAt": "2026-08-06T12:16:03.570Z",
   "repository": "mo-limpezas",
   "inventorySource": "git ls-files",
   "summary": {
-    "repositoryFiles": 446,
-    "textFiles": 433,
-    "sourceFiles": 297,
-    "textLines": 88058,
+    "repositoryFiles": 456,
+    "textFiles": 443,
+    "sourceFiles": 298,
+    "textLines": 95402,
     "typescriptDiagnostics": 0,
     "productionEntries": 71,
     "unreachableProductionModules": 4,
