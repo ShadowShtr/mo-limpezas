@@ -2,6 +2,24 @@
 
 Lê este ficheiro no início de CADA sessão antes de fazer qualquer coisa.
 
+## 📚 Hierarquia documental
+
+Este ficheiro é **estado e histórico**, não é fonte de regras de engenharia.
+As regras ativas vivem em documentos canónicos — ver `docs/README.md` para o
+índice completo e a ordem de precedência:
+
+1. `AGENTS.md` — REGRA ZERO (acima de tudo)
+2. `docs/PRODUCTION-RUNBOOK.md` — operação de produção
+3. `docs/ARCHITECTURE.md` — onde vive cada coisa
+4. `docs/ENGINEERING-STANDARD.md` — como implementar e fechar uma alteração
+5. `docs/PLANO-MESTRE.md` — o trabalho planeado (tasks T00–T19) e a sua ordem
+6. este ficheiro — estado atual e pontos de paragem
+
+Tudo o que está abaixo neste ficheiro é **registo do que aconteceu**. Nunca é
+autorização para repetir a ação hoje.
+
+---
+
 ## 🔴 Ver primeiro: AGENTS.md — REGRA ZERO
 
 Antes de qualquer outra coisa neste ficheiro, ler a **REGRA ZERO** em
