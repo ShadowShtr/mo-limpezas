@@ -659,7 +659,7 @@ serviço (thumbnails lazy, signed URL ao clicar)
 
 ### Vercel e Supabase CLI configurados localmente
 - `vercel` CLI instalado globalmente + login com conta `shadowshtr`
-- `npx supabase` CLI + login com token `sbp_b78fd974755706008439101acdcc53b64875000f` (expira 30 dias — ~2026-07-08)
+- `npx supabase` CLI + login com token `[REDIGIDO — token rotacionado, incidente 2026-08-06]` (expira 30 dias — ~2026-07-08)
 - Todos os env vars confirmados no Vercel: SUPABASE keys, RESEND, VAPID, MAPBOX, CRON_SECRET, COMPANY_PHONE
 
 ### WhatsApp

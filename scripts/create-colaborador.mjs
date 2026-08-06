@@ -14,9 +14,19 @@ const supabase = createClient(
   { auth: { autoRefreshToken: false, persistSession: false } }
 );
 
-const EMAIL    = "vitorshadowmedina@gmail.com";
-const PASSWORD = "vitortmf1";
+// Nunca no ficheiro: uma senha versionada é uma senha pública, e um email
+// pessoal versionado é dado pessoal exposto (incidente de 2026-08-06, ver
+// docs/PRODUCTION-RUNBOOK.md).
+const EMAIL = process.env.SEED_EMAIL;
+const PASSWORD = process.env.SEED_PASSWORD;
 const COMPANY_ID = "00000000-0000-0000-0000-000000000001";
+
+if (!EMAIL || !PASSWORD) {
+  console.error(
+    "Define SEED_EMAIL e SEED_PASSWORD no ambiente antes de correr este script.",
+  );
+  process.exit(1);
+}
 
 async function run() {
   // 1. Criar utilizador no auth

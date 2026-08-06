@@ -341,7 +341,50 @@ para aplicar a migration no ambiente real, anexando a saída do ensaio como
 evidência. A aplicação em produção continua sujeita à REGRA ZERO (`AGENTS.md`)
 e à secção 2 deste runbook.
 
-## 10. Na dúvida
+## 10. Credencial exposta no repositório
+
+> 🔴 **Apagar o ficheiro não desativa a chave.** Uma credencial que chegou a ser
+> versionada tem de ser **rotacionada**. Num repositório público, considera-se
+> comprometida a partir do primeiro segundo — bots varrem o GitHub à procura
+> destes padrões continuamente.
+
+Ordem obrigatória. A limpeza do histórico **nunca** vem antes da rotação:
+
+1. **Rotacionar.** Criar a credencial nova no painel (Supabase → Project
+   Settings → API Keys), atualizá-la em todos os locais legítimos (Vercel
+   Production/Preview/Development, `.env.local`, scripts e processos externos),
+   fazer deploy, verificar login e uma operação administrativa controlada, e só
+   então **eliminar a antiga** no painel. Criar uma chave nova não desativa a
+   velha.
+2. **Proteger as contas afetadas.** Senha nova, longa e sem reaproveitar nada da
+   anterior; terminar sessões ativas; confirmar com a pessoa legítima; verificar
+   se email, telefone ou metadata foram alterados.
+3. **Rever os registos** desde a data em que o commit entrou: chamadas
+   administrativas de Auth, criação/alteração/remoção de utilizadores, mudanças
+   de senha, alterações em `profiles`, acessos entre empresas, operações fora de
+   horas, volume anormal, IPs desconhecidos, alterações em tabelas financeiras e
+   em configurações. **Não apagar registos antes desta revisão.**
+4. **Limpar o código atual** e ligar a prevenção.
+5. **Só então** decidir sobre a reescrita do histórico — exige `force-push`,
+   coordenação e autorização própria.
+
+### Prevenção
+
+```bash
+npm run secrets:scan
+```
+
+Corre em cada pull request, antes dos testes. Analisa apenas ficheiros
+versionados (`git ls-files`) e reporta **ficheiro, linha e tipo** — nunca o
+valor, porque os registos do CI de um repositório público também são públicos.
+
+Regras para scripts administrativos, sem exceção:
+
+- credenciais e URLs de projeto vêm de variáveis de ambiente, nunca de literais;
+- senhas nunca aparecem no código, nem como valor por omissão;
+- nenhum script aponta para um projeto por omissão — o alvo é sempre explícito.
+
+## 11. Na dúvida
 
 Não executar. Parar, mostrar exatamente o que foi encontrado, e pedir
 autorização.

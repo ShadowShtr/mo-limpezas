@@ -80,7 +80,7 @@ commit estava no ar quando alguém reportava uma reversão.
 O `scripts/run-migrations.mjs` original:
 
 ```js
-password: "@vitortmf36978",            // password de produção HARDCODED no repo
+password: "[REDIGIDO — incidente 2026-08-06]",            // password de produção HARDCODED no repo
 ...
 for (const file of files) {            // re-executa TODAS as migrações, sempre
   try { await client.query(sql); }

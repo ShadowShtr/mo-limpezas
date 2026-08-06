@@ -90,7 +90,7 @@ posterior repõe a versão do GitHub (sem fixes) → **o site anda para trás**.
 Versão original do `scripts/run-migrations.mjs`:
 
 ```js
-password: "@vitortmf36978",     // password de produção HARDCODED (no histórico git!)
+password: "[REDIGIDO — incidente 2026-08-06]",     // password de produção HARDCODED (no histórico git!)
 // re-executa TODAS as migrações em cada run, engolindo "already exists"
 // e aplica SEMPRE o seed.sql — que diz "NÃO executar em produção"
 ```

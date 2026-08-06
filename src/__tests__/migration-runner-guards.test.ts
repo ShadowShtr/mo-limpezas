@@ -127,7 +127,7 @@ describe("effectiveMode", () => {
 
 describe("resolveProjectRef", () => {
   it("extrai o ref de uma URL Supabase normal", () => {
-    expect(resolveProjectRef("https://ceqzxgizhgmvcniapyla.supabase.co")).toBe("ceqzxgizhgmvcniapyla");
+    expect(resolveProjectRef("https://cprojetofictic1o.supabase.co")).toBe("cprojetofictic1o");
   });
 
   it("devolve null para valores vazios/inválidos", () => {
@@ -162,7 +162,7 @@ describe("resolveProjectRef", () => {
 });
 
 describe("extractDbProjectRef — extração estruturada, nunca por substring", () => {
-  const REF = "ceqzxgizhgmvcniapyla";
+  const REF = "cprojetofictic1o";
 
   it("ligação via pooler: o ref vem do username (postgres.<ref>)", () => {
     expect(extractDbProjectRef(`postgresql://postgres.${REF}:senha@aws-1-eu-central-2.pooler.supabase.com:6543/postgres`)).toBe(REF);
@@ -228,7 +228,7 @@ describe("extractDbProjectRef — extração estruturada, nunca por substring", 
 });
 
 describe("validateProductionConfirmation", () => {
-  const REF = "ceqzxgizhgmvcniapyla";
+  const REF = "cprojetofictic1o";
 
   it("dry-run (apply=false): sempre ok, não exige nada", () => {
     expect(validateProductionConfirmation({ apply: false, confirmProductionValue: null, projectRef: null, dbProjectRef: null }).ok).toBe(true);
