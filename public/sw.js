@@ -27,7 +27,15 @@ self.addEventListener("activate", (e) => {
 
 // Quando o SW actualiza, força reload em todos os clientes abertos
 self.addEventListener("message", (e) => {
-  if (e.data === "SKIP_WAITING") self.skipWaiting();
+  if (e.data === "SKIP_WAITING") { self.skipWaiting(); return; }
+  // A página pergunta "que versão és tu?" antes de decidir se mostra o
+  // aviso de atualização — só assim consegue comparar com a última versão
+  // já aceite (guardada em localStorage) e evitar mostrar o aviso outra vez
+  // para a mesma versão. Responde pela MessageChannel que a página abriu,
+  // nunca por broadcast (evita responder à pergunta de outra aba/versão).
+  if (e.data && e.data.type === "GET_VERSION" && e.ports && e.ports[0]) {
+    e.ports[0].postMessage({ version: CACHE });
+  }
 });
 
 self.addEventListener("fetch", (e) => {
