@@ -227,6 +227,39 @@ node scripts/run-migrations.mjs        # sem flags = dry-run, só SELECT
 O dry-run imprime o projeto e as migrations pendentes. Se o ref que aparece não
 for o descartável, **parar aqui** — a variável está errada.
 
+Sequência completa, para leitura de uma vez (os passos seguintes explicam cada
+comando):
+
+```bash
+set -a
+. ./.env.ensaio
+set +a
+
+echo "$NEXT_PUBLIC_SUPABASE_URL"
+
+node scripts/run-migrations.mjs
+
+node scripts/run-migrations.mjs \
+  --apply \
+  --confirm-production "<ref-descartavel>"
+
+node scripts/verify-profile-guards.mjs \
+  --database-url "$SUPABASE_DB_URL" \
+  --forbid-project-ref "<ref-do-projeto-real>" \
+  --i-know-this-database-is-disposable
+
+node scripts/verify-profile-guards.mjs \
+  --database-url "$SUPABASE_DB_URL" \
+  --forbid-project-ref "<ref-do-projeto-real>" \
+  --i-know-this-database-is-disposable \
+  --rehearse-rollback
+```
+
+> ⚠️ Os dois refs são **diferentes**: `<ref-descartavel>` é a base de ensaio,
+> `<ref-do-projeto-real>` é o projeto que nunca pode ser tocado. Trocá-los é o
+> erro mais grave possível neste procedimento — e é por isso que o verificador
+> exige que sejam declarados em sítios distintos.
+
 ### 9.5 Aplicar as migrations
 
 O runner exige `--confirm-production <ref>` **mesmo numa base descartável**.
@@ -245,12 +278,25 @@ Numa base vazia isto aplica tudo, da 001 à 070.
 ```bash
 node scripts/verify-profile-guards.mjs \
   --database-url "$SUPABASE_DB_URL" \
+  --forbid-project-ref "<ref-do-projeto-real>" \
   --i-know-this-database-is-disposable
 ```
 
-O script recusa-se a correr se a URL apontar para o projeto de
-`NEXT_PUBLIC_SUPABASE_URL`, nunca lê `SUPABASE_DB_URL` do ambiente por si, e
-corre tudo numa transação terminada em `ROLLBACK`.
+`--forbid-project-ref` declara qual é o projeto que o verificador **nunca** pode
+tocar — o real. É obrigatório indicá-lo aqui, e não pode ser deduzido do
+ambiente: neste procedimento, `NEXT_PUBLIC_SUPABASE_URL` aponta legitimamente
+para o projeto **descartável**, porque o runner de migrations exige que coincida
+com `SUPABASE_DB_URL` (passo 9.5).
+
+> Substituir `<ref-do-projeto-real>` pelo ref do projeto de produção. Esse valor
+> nunca é escrito neste documento nem em nenhum ficheiro versionado.
+
+O script imprime, antes de qualquer escrita, qual é a base alvo e qual é o
+projeto protegido. Confirmar os dois com os próprios olhos.
+
+Além disso: nunca lê `SUPABASE_DB_URL` do ambiente por si, recusa correr se não
+conseguir identificar o project ref da base alvo, e corre tudo numa transação
+terminada em `ROLLBACK`.
 
 **Critério de sucesso:** `12/12 verificações passaram. Transação revertida.`
 
@@ -259,6 +305,7 @@ corre tudo numa transação terminada em `ROLLBACK`.
 ```bash
 node scripts/verify-profile-guards.mjs \
   --database-url "$SUPABASE_DB_URL" \
+  --forbid-project-ref "<ref-do-projeto-real>" \
   --i-know-this-database-is-disposable \
   --rehearse-rollback
 ```
