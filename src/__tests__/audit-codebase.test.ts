@@ -139,15 +139,50 @@ describe("auditor — testes não são risco de produção", () => {
     expect(testesEmHighConfidence).toEqual([]);
   });
 
-  it("o gate --fail-on-high-confidence falha hoje só por causa dos artefactos perigosos", () => {
+  it("o código de saída do gate corresponde ao conteúdo de highConfidence", async () => {
+    // Invariante, não fotografia: a versão anterior deste teste afirmava
+    // `dangerousArtifacts.length > 0`, o que era verdade antes da Task T03 e
+    // passou a falhar assim que os artefactos foram removidos. O que deve ser
+    // verificado é a *relação* entre o relatório e o código de saída.
     const report = JSON.parse(primeira);
 
-    // Enquanto a Task T03 não correr, estes quatro existem e o gate deve
-    // continuar vermelho — mas apenas por causa deles.
-    expect(report.highConfidence.dangerousArtifacts.length).toBeGreaterThan(0);
-    expect(report.highConfidence.productionPublicSignupCalls).toEqual([]);
-    expect(report.highConfidence.productionAdminClientInClientComponent).toEqual(
-      [],
+    const riscos = [
+      ...report.highConfidence.dangerousArtifacts,
+      ...report.highConfidence.productionPublicSignupCalls,
+      ...report.highConfidence.productionAdminClientInClientComponent,
+    ];
+
+    let exitCode = 0;
+
+    try {
+      await execFileAsync(
+        process.execPath,
+        [AUDITOR, "--fail-on-high-confidence"],
+        { cwd: ROOT, maxBuffer: 32 * 1024 * 1024 },
+      );
+    } catch (erro) {
+      exitCode = (erro as { code?: number }).code ?? 1;
+    }
+
+    if (riscos.length === 0) {
+      expect(exitCode).toBe(0);
+    } else {
+      expect(exitCode).not.toBe(0);
+    }
+  }, 180_000);
+
+  it("nenhum risco de confiança alta vem de um ficheiro de teste", () => {
+    const report = JSON.parse(primeira);
+
+    const doTeste = [
+      ...report.highConfidence.dangerousArtifacts,
+      ...report.highConfidence.productionPublicSignupCalls,
+      ...report.highConfidence.productionAdminClientInClientComponent,
+    ].filter(
+      (file: string) =>
+        file.includes("/__tests__/") || /\.(test|spec)\./.test(file),
     );
+
+    expect(doTeste).toEqual([]);
   });
 });

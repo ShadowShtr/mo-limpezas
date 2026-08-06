@@ -3,7 +3,6 @@ import { createClient } from "@/lib/supabase/server";
 import { Header } from "@/components/layout/header";
 import { getCompanySettings } from "@/app/actions/settings";
 import { SettingsForm } from "./_components/settings-form";
-import { SeedButton } from "./_components/seed-button";
 import { CsvImport } from "./_components/csv-import";
 import { BackupSection } from "./_components/backup-section";
 
@@ -38,7 +37,6 @@ export default async function ConfiguracoesPage() {
         <BackupSection />
         <SettingsForm initial={settings} />
         <CsvImport />
-        <SeedButton />
       </div>
     </div>
   );
