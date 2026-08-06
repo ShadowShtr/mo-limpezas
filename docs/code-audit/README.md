@@ -97,10 +97,11 @@ Estados possíveis: **manter**, **centralizar**, **substituir**, **remover**,
 
 | Item | Estado | Task | Nota |
 |---|---|---|---|
-| `supabase/APPLY_ALL.sql` | remover | T03 | Capaz de `DROP ... CASCADE` sobre uma base real. |
-| `scripts/build-combined-sql.mjs` | remover | T03 | Reconstrói o `APPLY_ALL.sql`. |
-| `CRIAR_PAGAMENTOS.sql` | remover | T03 | UUIDs fixos e lançamentos financeiros operacionais dentro do repositório. |
-| `src/app/api/seed-demo/route.ts` | remover | T03 | Cria utilizadores Auth, clientes, faturas e salários com service role. |
+| `supabase/APPLY_ALL.sql` | ✅ **removido** | T03 | 26 × `DROP ... CASCADE` sobre uma base real. Substituído por 71 migrations numeradas + `scripts/run-migrations.mjs`. |
+| `scripts/build-combined-sql.mjs` | ✅ **removido** | T03 | Existia só para reconstruir o `APPLY_ALL.sql`. |
+| `CRIAR_PAGAMENTOS.sql` | ✅ **removido** | T03 | 40 linhas de dados financeiros reais (rendas, contabilista, garagens) com UUID fixo da empresa. Substituído pela migration `037_fixed_variable_payments.sql`, cuja policy é idêntica. |
+| `src/app/api/seed-demo/route.ts` | ✅ **removido** | T03 | Criava utilizadores Auth, clientes, faturas e salários com service role. Bloqueado em produção (403), mas funcional em preview/staging. Removido com o botão que o chamava. |
+| `src/app/(dashboard)/.../seed-button.tsx` | ✅ **removido** | T03 | Único chamador do endpoint, visível em `/dashboard/configuracoes`. Sem ele, o botão ficaria a apontar para um 404. |
 | `src/__tests__/tenant-isolation-hotfix.test.ts` (`auth.signUp`) | manter | — | Não é risco: é um teste de isolamento que verifica precisamente que o registo público está fechado. Deixou de aparecer em `highConfidence` — passou para `reviewRequired.testSignupCalls`. |
 
 ### Candidatos a código morto — exigem verificação antes de remover
@@ -117,7 +118,7 @@ Estados possíveis: **manter**, **centralizar**, **substituir**, **remover**,
 | Categoria | Ocorrências | Estado | Task |
 |---|---:|---|---|
 | `revalidatePath` chamado fora de um helper central | 24 actions | centralizar | T06 (`src/lib/revalidate-business.ts`) |
-| Datas de negócio por `toISOString().slice(0,10)` / `.split("T")[0]` | 8 ficheiros | centralizar | T07 / T11 (`src/lib/lisbon-time.ts`) |
+| Datas de negócio por `toISOString().slice(0,10)` / `.split("T")[0]` | 7 ficheiros | centralizar | T07 / T11 (`src/lib/lisbon-time.ts`) |
 
 Ficheiros com risco de data, para registo:
 
@@ -127,7 +128,6 @@ src/app/actions/contratos.ts
 src/app/actions/invoices.ts
 src/app/actions/payroll.ts
 src/app/api/cron/generate-services/route.ts
-src/app/api/seed-demo/route.ts          (desaparece com a Task T03)
 src/lib/bank-import/reconcile-db.ts
 src/lib/payroll-calc.ts
 ```

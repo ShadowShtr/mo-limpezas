@@ -47,7 +47,7 @@ interfaces.
 | Item | Estado | Motivo |
 |---|---|---|
 | Workflow de CI | standby | `npm run build` precisa das variáveis de ambiente reais (`prebuild` corre `check-env.ts`). Um workflow que corra typecheck + lint:strict + test é viável e fica para PR própria, para não misturar configuração de CI com esta entrega. |
-| `npm run audit:code:strict` como gate | standby | Falharia hoje, e com razão: os quatro artefactos perigosos ainda existem. Passa a ser gate assim que a **Task T03** os remover. |
+| `npm run audit:code:strict` como gate | pronto, por ligar | A **Task T03** removeu os quatro artefactos perigosos e o comando passa agora. Falta só um workflow que o corra — ver a linha acima. |
 | Remoção de código morto | standby | Pertence à **Task T17**. Os candidatos estão em [`README.md`](README.md) e nenhum foi removido nesta fase. |
 
 ## Como verificar
