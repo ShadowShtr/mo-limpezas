@@ -146,11 +146,13 @@ O template em [`../.github/pull_request_template.md`](../.github/pull_request_te
 
 ```bash
 git diff --check
-npm run typecheck
-npm run lint
-npm test
-npm run build
+npm run quality    # typecheck + lint:strict + test + build
 ```
+
+`npm run quality` **não** corre o auditor. `npm run audit:code` é uma
+ferramenta de inventário, e `npm run audit:code:strict` só passa a fazer parte
+do gate depois de a **Task T03** remover os artefactos perigosos — hoje falha
+de propósito. Quem mexer em `scripts/audit-codebase.mjs` corre-o à mão.
 
 Mais: sem warnings novos, sem alterações não relacionadas, plano de rollback
 escrito e — quando a alteração toca produção — autorização explícita do dono na

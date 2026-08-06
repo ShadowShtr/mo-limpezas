@@ -15,7 +15,7 @@
     "audit:code": "node scripts/audit-codebase.mjs",
     "audit:code:json": "node scripts/audit-codebase.mjs --output reports/code-audit.json",
     "audit:code:strict": "node scripts/audit-codebase.mjs --fail-on-high-confidence",
-    "quality": "npm run typecheck && npm run lint && npm test && npm run build"
+    "quality": "npm run typecheck && npm run lint:strict && npm test && npm run build"
   },
   "dependencies": {
     "@base-ui/react": "^1.5.0",

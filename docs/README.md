@@ -30,7 +30,7 @@ remeter para ele.
 | [`auditoria-tecnica-senior-2026-06-20.md`](auditoria-tecnica-senior-2026-06-20.md) | Auditoria técnica de 2026-06-20. |
 | [`riscos-operacionais.md`](riscos-operacionais.md) | Riscos operacionais identificados. |
 | [`MIGRACAO_DADOS_REAIS.md`](MIGRACAO_DADOS_REAIS.md) | Migração dos dados reais. |
-| [`atomicidade-audit/`](atomicidade-audit/) | Checkpoints congelados e diagnósticos de atomicidade. Referência, **não** aplicável como migration. |
+| [`atomicidade-audit/`](atomicidade-audit/) | Errata e mapas de checksum das migrations. Os **checkpoints congelados** (`frozen/064`, `frozen/065`) não estão no `master` — vivem só na branch `fix/atomic-contract-calendar-sync`, que está congelada. Referência, **nunca** aplicável como migration. |
 
 ## Onde escrever o quê
 
