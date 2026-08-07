@@ -1,13 +1,13 @@
 {
   "inventorySource": "git ls-files",
   "summary": {
-    "repositoryFiles": 469,
-    "textFiles": 456,
-    "sourceFiles": 311,
-    "textLines": 98721,
+    "repositoryFiles": 497,
+    "textFiles": 484,
+    "sourceFiles": 333,
+    "textLines": 105590,
     "typescriptDiagnostics": 0,
     "productionEntries": 70,
-    "unreachableProductionModules": 4,
+    "unreachableProductionModules": 12,
     "exactDuplicateFileGroups": 0
   },
   "highConfidence": {
@@ -18,11 +18,28 @@
   "reviewRequired": {
     "unreachableProductionModules": [
       "src/app/actions/whatsapp.ts",
+      "src/domain/realtime/event-reconciler.ts",
+      "src/domain/scheduling/horizons.ts",
+      "src/domain/scheduling/legacy-recurrence.ts",
+      "src/domain/scheduling/occurrence-identity.ts",
+      "src/domain/scheduling/occurrence-projection.ts",
+      "src/domain/scheduling/occurrence-repair.ts",
+      "src/domain/scheduling/reconciliation.ts",
+      "src/domain/scheduling/recurrence-compat.ts",
       "src/lib/bank-import/pdf.ts",
       "src/lib/bank-import/xlsx.ts",
       "src/types/supabase.ts"
     ],
-    "testOnlyModules": [],
+    "testOnlyModules": [
+      "src/domain/realtime/event-reconciler.ts",
+      "src/domain/scheduling/horizons.ts",
+      "src/domain/scheduling/legacy-recurrence.ts",
+      "src/domain/scheduling/occurrence-identity.ts",
+      "src/domain/scheduling/occurrence-projection.ts",
+      "src/domain/scheduling/occurrence-repair.ts",
+      "src/domain/scheduling/reconciliation.ts",
+      "src/domain/scheduling/recurrence-compat.ts"
+    ],
     "testSignupCalls": [
       "src/__tests__/tenant-isolation-hotfix.test.ts"
     ],
