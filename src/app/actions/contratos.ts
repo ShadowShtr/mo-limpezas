@@ -401,9 +401,7 @@ async function reconcileFutureServicesForContract(
 
   // Conjunto de datas válidas (YYYY-MM-DD) segundo o padrão atual.
   const validDates = new Set(
-    getOccurrences(contract, todayStart, windowEnd).map(
-      ({ date }) => date.toISOString().split("T")[0],
-    ),
+    getOccurrences(contract, todayStart, windowEnd).map(({ date }) => toLocalDateStr(date)),
   );
 
   const { data: future } = await admin

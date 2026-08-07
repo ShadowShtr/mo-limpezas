@@ -3,6 +3,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { checkCronAuth } from "@/lib/cron-auth";
 import { CONTRACT_FINANCIAL_FIELDS } from "@/lib/contrato-sheet-fields";
 import { getOccurrences } from "@/lib/contract-occurrences";
+import { fromLocalDate } from "@/domain/scheduling/civil-date";
 import type { ScheduleDay } from "@/types/database";
 
 // Permite até 60s na Vercel Pro (TASK 14/16); mesmo assim corre em lotes.
@@ -82,8 +83,12 @@ function toLisbonTimestamp(dateStr: string, timeStr: string): string {
   return `${dateStr}T${timeStr}:00${offset}`;
 }
 
+// Lê o dia pelos campos LOCAIS do `Date`, nunca por `.toISOString()`: as datas
+// aqui são construídas com `new Date(ano, mês, dia)` (meia-noite local) e a
+// conversão para UTC deslocava-as um dia sempre que o processo não corresse em
+// UTC.
 function toDateStr(d: Date): string {
-  return d.toISOString().split("T")[0];
+  return fromLocalDate(d);
 }
 
 function addMinutesToTime(time: string, mins: number): string {

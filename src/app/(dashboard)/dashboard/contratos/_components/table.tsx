@@ -12,7 +12,9 @@ import {
 } from "@/lib/cleaning-types";
 import type { ContratosTableRow } from "../page";
 import type { ScheduleDay } from "@/types/database";
-import { shiftToNextBusinessDay } from "@/lib/contract-occurrences";
+import { nextOccurrences } from "@/domain/scheduling/recurrence-engine";
+import { toLocalDate } from "@/domain/scheduling/civil-date";
+import { todayInLisbon } from "@/lib/lisbon-time";
 
 const FREQUENCY_LABEL: Record<string, string> = {
   daily: "Diário",
@@ -37,34 +39,28 @@ function formatDate(d: string) {
   });
 }
 
+// Esta coluna também deixou de ter regras próprias. As que tinha estavam
+// erradas: "diário" anunciava hoje mesmo ao sábado, "quinzenal" ignorava a
+// cadência (mostrava o próximo dia da semana, mesmo em semana errada),
+// "mensal" mostrava o dia de hoje em vez do dia âncora do contrato, e
+// "personalizado" não mostrava nada.
 function nextOccurrence(contrato: ContratosTableRow): string {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const start = new Date(contrato.starts_on + "T00:00:00");
-  const base = start > today ? start : today;
-
-  if (contrato.frequency === "daily") {
-    return base.toLocaleDateString("pt-PT", { day: "2-digit", month: "short" });
-  }
-
-  if (contrato.frequency === "weekly" || contrato.frequency === "biweekly" || contrato.frequency === "triweekly") {
-    const weekdays = contrato.weekdays ?? [];
-    if (weekdays.length === 0) return "—";
-    for (let i = 0; i < 21; i++) {
-      const d = new Date(base);
-      d.setDate(base.getDate() + i);
-      if (weekdays.includes(d.getDay())) {
-        return d.toLocaleDateString("pt-PT", { weekday: "short", day: "2-digit", month: "short" });
-      }
-    }
-    return "—";
-  }
-
-  if (contrato.frequency === "monthly") {
-    return shiftToNextBusinessDay(base).toLocaleDateString("pt-PT", { day: "2-digit", month: "short" });
-  }
-
-  return "—";
+  const today = todayInLisbon();
+  const [next] = nextOccurrences(
+    {
+      frequency: contrato.frequency,
+      weekdays: contrato.weekdays,
+      intervalDays: contrato.interval_days,
+      startsOn: contrato.starts_on,
+      endsOn: contrato.ends_on,
+    },
+    contrato.starts_on > today ? contrato.starts_on : today,
+    1,
+  );
+  if (!next) return "—";
+  return toLocalDate(next).toLocaleDateString("pt-PT", {
+    weekday: "short", day: "2-digit", month: "short",
+  });
 }
 
 interface Props {
