@@ -1,13 +1,13 @@
 {
   "inventorySource": "git ls-files",
   "summary": {
-    "repositoryFiles": 497,
-    "textFiles": 484,
-    "sourceFiles": 333,
-    "textLines": 105590,
+    "repositoryFiles": 514,
+    "textFiles": 501,
+    "sourceFiles": 348,
+    "textLines": 109783,
     "typescriptDiagnostics": 0,
     "productionEntries": 70,
-    "unreachableProductionModules": 12,
+    "unreachableProductionModules": 19,
     "exactDuplicateFileGroups": 0
   },
   "highConfidence": {
@@ -18,6 +18,13 @@
   "reviewRequired": {
     "unreachableProductionModules": [
       "src/app/actions/whatsapp.ts",
+      "src/domain/billing/billing-compat.ts",
+      "src/domain/billing/consumer-parity.ts",
+      "src/domain/billing/financial-model.ts",
+      "src/domain/billing/legacy-formulas.ts",
+      "src/domain/billing/money.ts",
+      "src/domain/billing/monthly-allocation.ts",
+      "src/domain/billing/vat.ts",
       "src/domain/realtime/event-reconciler.ts",
       "src/domain/scheduling/horizons.ts",
       "src/domain/scheduling/legacy-recurrence.ts",
@@ -31,6 +38,13 @@
       "src/types/supabase.ts"
     ],
     "testOnlyModules": [
+      "src/domain/billing/billing-compat.ts",
+      "src/domain/billing/consumer-parity.ts",
+      "src/domain/billing/financial-model.ts",
+      "src/domain/billing/legacy-formulas.ts",
+      "src/domain/billing/money.ts",
+      "src/domain/billing/monthly-allocation.ts",
+      "src/domain/billing/vat.ts",
       "src/domain/realtime/event-reconciler.ts",
       "src/domain/scheduling/horizons.ts",
       "src/domain/scheduling/legacy-recurrence.ts",

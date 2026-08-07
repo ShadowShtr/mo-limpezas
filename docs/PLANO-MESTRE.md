@@ -1075,6 +1075,77 @@ A execução não deve saltar etapas. Uma task pode ser dividida em subtasks, ma
 
 ---
 
+## 20.1 ESTADO DA EXECUÇÃO — atualizado em 2026-08-07
+
+> Esta secção regista **onde a execução está**. Não reescreve a história nem
+> substitui as descrições das tasks abaixo — cada task mantém o texto original.
+> Retoma completa da sessão: `docs/HANDOFF-2026-08-07.md`.
+
+### Gate transversal de integridade de dados
+
+> 🚨 **Ocorreu uma regressão financeira em produção**: pagamentos VARIÁVEIS
+> deixaram de aparecer e as datas dos FIXOS ficaram iguais. A causa **não está
+> determinada** (perda / sobrescrita / clonagem / query / UI).
+>
+> **Enquanto não existir diagnóstico read-only da base, nenhuma task pode
+> reparar dados.** Proibido `UPDATE`, `DELETE`, `INSERT`, `UPSERT`, `TRUNCATE`,
+> migration, backfill, `ensureMonth`, alteração de `due_date`/`source_id`,
+> recriação de pagamentos ou qualquer write no Supabase real.
+>
+> Este gate aplica-se a **todas** as tasks, não só às financeiras. Qualquer
+> alteração que toque em dados começa por capturar baseline e provar
+> **BEFORE = AFTER** para tudo o que não faça parte explícita da alteração
+> autorizada. Uma invariante inesperada a mudar → **ABORT / ROLLBACK**.
+
+### Três estados distintos
+
+Nenhuma task desta pilha está em produção. `master` continua em `e479367`.
+
+| Estado | Significado |
+|---|---|
+| **Offline** | módulo puro, testado, **não ligado** a ecrã, cron ou schema |
+| **Integração runtime** | ligado à aplicação, a correr |
+| **Produção** | aplicado e validado ao vivo |
+
+### Situação por task
+
+| Task | Estado | PR | Bloqueio |
+|---|---|---|---|
+| T00–T06 | mescladas em `master` | #35–#45 | — |
+| **T07** | **offline concluída** | #46 draft | 🔴 **snapshot real pendente** — sem o comparador executado, **não mergear** (quinzenal/3-em-3 podem mudar de paridade; 24/49 combinações teóricas) |
+| **T08** | **offline concluída** | #47 draft | schema + runtime pendentes — SQL congelado em `supabase/frozen/`, **não aplicado** |
+| **T09** | **offline concluída** | #47 draft | integração pendente — SQL atómico congelado, **não aplicado** |
+| **T10** | **offline concluída** | #47 draft | integração realtime pendente — reconciliador não ligado aos 10 handlers |
+| **T11** | **offline concluída** | **#50 draft** | integração pendente — nenhum consumidor ligado ao modelo canónico |
+| **T12** | **não iniciada** | — | 🔴 **bloqueada** pelo diagnóstico financeiro (toca `services` + `cash_flow_entries` de forma transacional) |
+| T13–T19 | não iniciadas | — | dependem das anteriores |
+
+### Frente reservada — FINANCEIRO V2
+
+Não faz parte da numeração T00–T19. Reservada, **não iniciada**. Aguarda:
+
+- **A)** imagem da nova interface do Financeiro;
+- **B)** diagnóstico read-only dos pagamentos.
+
+Junta: proteção de dados · correção fixos × variáveis · identidade e idempotência
+de pagamento recorrente · constraint anti-duplicados · preservação de `due_date`
+· `source_id` seguro · nova UI · read model da T11 · queries autoritativas ·
+realtime/invalidação · BEFORE × AFTER · rollback · testes.
+
+> A nova UI **não calcula dinheiro**: consome o modelo canónico da T11.
+
+### Pendências operacionais transversais
+
+- **Incidente de credenciais aberto** — rotação por concluir; nenhuma credencial
+  deve ser usada até haver evidência operacional do proprietário.
+- **Migration 070 NÃO aplicada.**
+- **Base descartável por criar** — pré-requisito para validar T07–T10 em runtime.
+- **`npm audit`: 16 vulnerabilidades** (11 high). `next` é dependência direta e a
+  correção exige major. **Não executar `npm audit fix --force`** — frente
+  separada, não misturar com o modelo financeiro.
+
+---
+
 # 21. TASK T00 — INVENTÁRIO INTEGRAL DO REPOSITÓRIO
 
 ## Problema
