@@ -282,3 +282,55 @@ data/hora:
 ```
 
 Não guardar valores de credenciais neste registo.
+
+## 15. Registo lateral — falha de infraestrutura do CI (2026-08-06)
+
+Não faz parte do incidente de credenciais. Registado aqui apenas para que a
+falha não seja confundida com regressão de código durante a resposta.
+
+| Campo | Valor |
+|---|---|
+| SHA | `bb0ee3c` (merge do PR #44 no master) |
+| Estado | Falha de infraestrutura |
+| Sintoma | GitHub-hosted runner não adquirido |
+| Fase da falha | `Set up job`, antes do primeiro step do workflow |
+
+Nada do repositório chegou a correr:
+
+| Etapa | Executada |
+|---|---|
+| Checkout | não |
+| `npm ci` | não |
+| `secrets:scan` | não |
+| typecheck | não |
+| lint | não |
+| testes | não |
+| auditoria | não |
+
+Contexto:
+
+- último CI completo conhecido: SHA `77b73bc` — sucesso;
+- alterações entre `77b73bc` e o merge do #44: documentação sanitizada,
+  nenhuma alteração funcional;
+- o PR #44 adicionou um único ficheiro e não tocou no workflow, nas
+  dependências nem em código executável;
+- `.github/workflows/quality.yml` usa `runs-on: ubuntu-latest`; o primeiro
+  step real é `Checkout`;
+- o mesmo sintoma ocorreu nos merges dos PRs #41 e #42.
+
+Decisão:
+
+- não modificar o workflow por causa desta falha;
+- não alterar `runs-on`, timeouts, `actions/checkout`, `actions/setup-node`,
+  versão de Node ou cache;
+- não introduzir self-hosted runner nem outro sistema operativo — seria
+  mascarar uma falha externa com complexidade permanente;
+- reexecutar o workflow quando houver hosted runner disponível.
+
+Critério de recuperação: se a execução entrar no step `Checkout`, o problema
+de provisionamento terminou e o resultado volta a ter valor como CI do
+código.
+
+Verificação local entretanto disponível (não substitui o CI):
+`npm run secrets:scan` na árvore de `bb0ee3c` — 465 ficheiros analisados,
+zero achados.
