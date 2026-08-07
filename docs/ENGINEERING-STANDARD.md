@@ -120,7 +120,13 @@ esperado e temporário — o que não pode acontecer é nascer um terceiro.
 ## 6. Datas
 
 - datas de negócio usam `Europe/Lisbon` (`src/lib/lisbon-time.ts`);
-- recorrência é data civil, não instante;
+- recorrência é data civil, não instante
+  (`src/domain/scheduling/civil-date.ts`);
+- a regra de recorrência vive **só** em
+  `src/domain/scheduling/recurrence-engine.ts` — nenhum consumidor, preview ou
+  cron pode recalcular datas por sua conta;
+- aritmética de calendário nunca por milissegundos: somar `7 * 24 * 3600 *
+  1000` desloca-se com o horário de verão;
 - timestamps gravados com offset correto;
 - é proibido decidir "hoje" com `new Date()` no servidor — o processo corre em
   UTC na Vercel.
@@ -215,8 +221,26 @@ sítio.
 Correr `npm run quality` localmente antes de abrir a PR continua a ser a
 Definition of Done; o CI é a rede, não a substituição.
 
-Ao mexer em `reports/code-audit.json`, regenerar à mão com `git add` antes —
-o CI nunca o reescreve.
+### Relatório de auditoria versionado
+
+`reports/code-audit.json` é um inventário versionado e o CI nunca o reescreve —
+compara-o com a árvore e falha se divergirem.
+
+Qualquer PR que altere o que o auditor contabiliza (ficheiros novos ou
+apagados, linhas de texto — **incluindo documentação**) tem de terminar com:
+
+```bash
+npm run audit:code:json
+```
+
+Isto é das **últimas** operações antes dos gates finais: se a PR ainda
+acrescentar documentação depois de regenerar, o relatório volta a ficar
+desatualizado e é preciso regenerar outra vez.
+
+O PR #44 mostrou o custo de saltar este passo: acrescentou um documento sem
+regenerar o relatório e deixou o `master` vermelho. Só não se viu logo porque
+o CI desse merge nem chegou a arrancar — o runner não foi adquirido — e a
+quebra ficou escondida até à execução seguinte.
 
 Mais: sem warnings novos, sem alterações não relacionadas, plano de rollback
 escrito e — quando a alteração toca produção — autorização explícita do dono na

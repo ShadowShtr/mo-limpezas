@@ -1,5 +1,15 @@
+// Adaptador entre o motor canónico e os consumidores que usam `Date`.
+//
+// A regra da recorrência está coberta em `recurrence-engine.test.ts`. Aqui
+// testa-se só o que este ficheiro faz: converter `Date` ↔ data civil na
+// fronteira e escolher o horário certo para cada ocorrência.
+//
+// Os casos de regressão que já existiam antes da Task T07 ficam todos, agora
+// através do motor — foram eles que provaram que o comportamento visível não
+// mudou onde não devia mudar.
+
 import { describe, it, expect } from "vitest";
-import { getOccurrences, shiftToNextBusinessDay, type OccurrenceContract } from "@/lib/contract-occurrences";
+import { getOccurrences, toRecurrenceRule, DOW_TO_KEY, type OccurrenceContract } from "@/lib/contract-occurrences";
 import type { ScheduleDay } from "@/types/database";
 
 const SCHEDULE: ScheduleDay[] = [
@@ -19,90 +29,128 @@ function base(overrides: Partial<OccurrenceContract>): OccurrenceContract {
   };
 }
 
-// ─── shiftToNextBusinessDay ───────────────────────────────────────────────────
+const dias = (occ: Array<{ date: Date }>) =>
+  occ.map((o) => `${o.date.getFullYear()}-${String(o.date.getMonth() + 1).padStart(2, "0")}-${String(o.date.getDate()).padStart(2, "0")}`);
 
-describe("shiftToNextBusinessDay", () => {
-  it("empurra sábado para segunda (+2 dias)", () => {
-    const sat = new Date(2026, 6, 18); // 2026-07-18 é sábado
-    expect(sat.getDay()).toBe(6);
-    const shifted = shiftToNextBusinessDay(sat);
-    expect(shifted.getDay()).toBe(1);
-    expect(shifted.getDate()).toBe(20);
-  });
+// ─── tradução da regra ──────────────────────────────────────────────────────
 
-  it("empurra domingo para segunda (+1 dia)", () => {
-    const sun = new Date(2026, 6, 19); // 2026-07-19 é domingo
-    expect(sun.getDay()).toBe(0);
-    const shifted = shiftToNextBusinessDay(sun);
-    expect(shifted.getDay()).toBe(1);
-    expect(shifted.getDate()).toBe(20);
-  });
-
-  it("não mexe em dia útil", () => {
-    const wed = new Date(2026, 6, 15); // quarta
-    const shifted = shiftToNextBusinessDay(wed);
-    expect(shifted.getTime()).toBe(wed.getTime());
+describe("toRecurrenceRule", () => {
+  it("traduz os campos da base para a regra do motor", () => {
+    const contract = base({
+      frequency: "biweekly",
+      weekdays: [1, 3],
+      interval_days: 5,
+      starts_on: "2026-07-06",
+      ends_on: "2026-12-31",
+      excluded_dates: ["2026-08-03"],
+    });
+    expect(toRecurrenceRule(contract)).toEqual({
+      frequency: "biweekly",
+      weekdays: [1, 3],
+      intervalDays: 5,
+      startsOn: "2026-07-06",
+      endsOn: "2026-12-31",
+      excludedDates: ["2026-08-03"],
+    });
   });
 });
 
-// ─── mensal ────────────────────────────────────────────────────────────────
+// ─── fronteira Date ─────────────────────────────────────────────────────────
 
-describe("getOccurrences — mensal", () => {
-  it("gera no dia do mês quando cai em dia útil", () => {
-    const contract = base({ frequency: "monthly", starts_on: "2026-07-15" }); // 15/07/2026 = quarta
+describe("fronteira com Date", () => {
+  it("lê o intervalo pelos campos LOCAIS do Date", () => {
+    const contract = base({ frequency: "daily", starts_on: "2026-07-01" });
+    const occ = getOccurrences(contract, new Date(2026, 6, 1), new Date(2026, 6, 3, 23, 59, 59));
+    expect(dias(occ)).toEqual(["2026-07-01", "2026-07-02", "2026-07-03"]);
+  });
+
+  it("devolve Date à meia-noite local", () => {
+    const contract = base({ frequency: "monthly", starts_on: "2026-07-15" });
+    const [occ] = getOccurrences(contract, new Date(2026, 6, 1), new Date(2026, 6, 31, 23, 59, 59));
+    expect(occ.date.getHours()).toBe(0);
+    expect(occ.date.getMinutes()).toBe(0);
+    expect(occ.date.getDate()).toBe(15);
+  });
+
+  it("sem schedule_days não gera nada", () => {
+    const contract = base({ frequency: "daily", schedule_days: [] });
+    expect(getOccurrences(contract, new Date(2026, 6, 1), new Date(2026, 6, 31))).toEqual([]);
+  });
+});
+
+// ─── escolha do horário ─────────────────────────────────────────────────────
+
+describe("horário de cada ocorrência", () => {
+  it("com vários dias, cada dia leva o seu horário e a sua equipa", () => {
+    const schedule: ScheduleDay[] = [
+      { day: "mon", start_time: "08:00", duration_min: 60, team_id: "equipa-A" },
+      { day: "wed", start_time: "14:00", duration_min: 180, team_id: "equipa-B" },
+    ];
+    const contract = base({
+      frequency: "weekly", weekdays: [1, 3], schedule_days: schedule, starts_on: "2026-07-06",
+    });
+    const occ = getOccurrences(contract, new Date(2026, 6, 6), new Date(2026, 6, 8, 23, 59, 59));
+    expect(occ).toHaveLength(2);
+    expect(occ[0].schedule.team_id).toBe("equipa-A");
+    expect(occ[0].schedule.start_time).toBe("08:00");
+    expect(occ[1].schedule.team_id).toBe("equipa-B");
+    expect(occ[1].schedule.start_time).toBe("14:00");
+  });
+
+  it("sem horário para o dia, usa o primeiro (o caso `day: \"all\"`)", () => {
+    const contract = base({ frequency: "weekly", weekdays: [1], starts_on: "2026-07-06" });
+    const occ = getOccurrences(contract, new Date(2026, 6, 6), new Date(2026, 6, 6, 23, 59, 59));
+    expect(occ[0].schedule.team_id).toBe("team-1");
+  });
+
+  it("DOW_TO_KEY cobre a semana toda", () => {
+    expect(Object.keys(DOW_TO_KEY)).toHaveLength(7);
+    expect(DOW_TO_KEY[0]).toBe("sun");
+    expect(DOW_TO_KEY[6]).toBe("sat");
+  });
+});
+
+// ─── regressões anteriores à T07 (comportamento visível preservado) ─────────
+
+describe("regressões preservadas", () => {
+  it("mensal gera no dia do mês quando cai em dia útil", () => {
+    const contract = base({ frequency: "monthly", starts_on: "2026-07-15" });
     const occ = getOccurrences(contract, new Date(2026, 6, 1), new Date(2026, 6, 31, 23, 59, 59));
-    expect(occ).toHaveLength(1);
-    expect(occ[0].date.getDate()).toBe(15);
+    expect(dias(occ)).toEqual(["2026-07-15"]);
   });
 
-  it("empurra para segunda quando o dia do mês cai em fim de semana (caso relatado: 17/10 sábado)", () => {
-    // Contrato com dia de início 17 → em outubro de 2026 o dia 17 é sábado.
+  it("mensal empurra para segunda quando o dia cai em fim de semana (17/10 sábado)", () => {
     const contract = base({ frequency: "monthly", starts_on: "2026-01-17" });
-    const oct = getOccurrences(contract, new Date(2026, 9, 1), new Date(2026, 9, 31, 23, 59, 59));
-    expect(oct).toHaveLength(1);
-    expect(oct[0].date.getDay()).toBe(1); // segunda
-    expect(oct[0].date.getDate()).toBe(19); // 17 (sáb) + 2 = 19
+    const occ = getOccurrences(contract, new Date(2026, 9, 1), new Date(2026, 9, 31, 23, 59, 59));
+    expect(dias(occ)).toEqual(["2026-10-19"]);
   });
 
-  it("mantém a ocorrência mesmo quando o desvio ultrapassa o fim do mês gerado", () => {
-    // dia 31 cai em sábado em 2026-01 (31/01/2026 é sábado) → desvio cai em fevereiro.
+  it("mensal mantém a ocorrência quando o desvio ultrapassa o fim do mês pedido", () => {
     const contract = base({ frequency: "monthly", starts_on: "2025-01-31" });
-    const jan = getOccurrences(contract, new Date(2026, 0, 1), new Date(2026, 0, 31, 23, 59, 59));
-    expect(jan).toHaveLength(1);
-    expect(jan[0].date.getMonth()).toBe(1); // fevereiro
-    expect(jan[0].date.getDate()).toBe(2);
+    const occ = getOccurrences(contract, new Date(2026, 0, 1), new Date(2026, 0, 31, 23, 59, 59));
+    expect(dias(occ)).toEqual(["2026-02-02"]);
   });
 
-  it("respeita ends_on mesmo após o desvio", () => {
+  it("mensal respeita ends_on mesmo após o desvio", () => {
     const contract = base({ frequency: "monthly", starts_on: "2026-01-17", ends_on: "2026-10-18" });
-    const oct = getOccurrences(contract, new Date(2026, 9, 1), new Date(2026, 9, 31, 23, 59, 59));
-    expect(oct).toHaveLength(0); // desvio cairia em 19/10, depois do fim do contrato
+    const occ = getOccurrences(contract, new Date(2026, 9, 1), new Date(2026, 9, 31, 23, 59, 59));
+    expect(occ).toHaveLength(0);
   });
-});
 
-// ─── personalizado ───────────────────────────────────────────────────────────
-
-describe("getOccurrences — personalizado", () => {
-  it("empurra ocorrência que cai em fim de semana", () => {
-    const contract = base({ frequency: "custom", interval_days: 7, starts_on: "2026-07-18" }); // sábado
+  it("personalizado empurra ocorrência que cai em fim de semana", () => {
+    const contract = base({ frequency: "custom", interval_days: 7, starts_on: "2026-07-18" });
     const occ = getOccurrences(contract, new Date(2026, 6, 1), new Date(2026, 6, 31, 23, 59, 59));
     expect(occ.length).toBeGreaterThan(0);
-    expect(occ[0].date.getDay()).not.toBe(0);
-    expect(occ[0].date.getDay()).not.toBe(6);
+    expect(occ.every((o) => o.date.getDay() !== 0 && o.date.getDay() !== 6)).toBe(true);
   });
 
-  it("nunca gera duas ocorrências no mesmo dia por causa do desvio (intervalo de 1 dia sáb+dom)", () => {
-    const contract = base({ frequency: "custom", interval_days: 1, starts_on: "2026-07-17" }); // sexta
+  it("personalizado nunca gera duas ocorrências no mesmo dia", () => {
+    const contract = base({ frequency: "custom", interval_days: 1, starts_on: "2026-07-17" });
     const occ = getOccurrences(contract, new Date(2026, 6, 17), new Date(2026, 6, 21, 23, 59, 59));
-    const dateStrs = occ.map((o) => o.date.toDateString());
-    expect(new Set(dateStrs).size).toBe(dateStrs.length);
+    expect(new Set(dias(occ)).size).toBe(occ.length);
   });
-});
 
-// ─── semanal/quinzenal/3-em-3-semanas — NUNCA empurra (dia explícito) ────────
-
-describe("getOccurrences — semanal/quinzenal/3-em-3-semanas nunca empurram fim de semana", () => {
-  it("mantém sábado explicitamente escolhido em semanal", () => {
+  it("semanal mantém sábado explicitamente escolhido", () => {
     const contract = base({ frequency: "weekly", weekdays: [6], starts_on: "2026-07-04" });
     const occ = getOccurrences(contract, new Date(2026, 6, 1), new Date(2026, 6, 31, 23, 59, 59));
     expect(occ.length).toBeGreaterThan(0);
@@ -110,24 +158,44 @@ describe("getOccurrences — semanal/quinzenal/3-em-3-semanas nunca empurram fim
   });
 
   it("triweekly repete de 3 em 3 semanas no dia escolhido", () => {
-    const contract = base({ frequency: "triweekly", weekdays: [2], starts_on: "2026-07-07" }); // terça
+    const contract = base({ frequency: "triweekly", weekdays: [2], starts_on: "2026-07-07" });
     const occ = getOccurrences(contract, new Date(2026, 6, 1), new Date(2026, 8, 30, 23, 59, 59));
     expect(occ.every((o) => o.date.getDay() === 2)).toBe(true);
-    // 07/07, depois +21 dias = 28/07, depois +21 = 18/08 ...
-    const dates = occ.map((o) => o.date.getDate());
-    expect(dates).toContain(7);
-    expect(dates).toContain(28);
-    expect(dates).not.toContain(14); // semana errada (cadência 3)
-    expect(dates).not.toContain(21);
+    const numeros = occ.map((o) => o.date.getDate());
+    expect(numeros).toContain(7);
+    expect(numeros).toContain(28);
+    expect(numeros).not.toContain(14);
+    expect(numeros).not.toContain(21);
   });
-});
 
-// ─── diário — nunca gera em fim de semana (rótulo "todos os dias úteis") ────
-
-describe("getOccurrences — diário salta fins de semana", () => {
-  it("não inclui sábado/domingo", () => {
+  it("diário nunca inclui fim de semana", () => {
     const contract = base({ frequency: "daily", starts_on: "2026-07-01" });
     const occ = getOccurrences(contract, new Date(2026, 6, 1), new Date(2026, 6, 31, 23, 59, 59));
     expect(occ.some((o) => o.date.getDay() === 0 || o.date.getDay() === 6)).toBe(false);
+  });
+});
+
+// ─── correções trazidas pela T07 ────────────────────────────────────────────
+
+describe("correções da T07 visíveis através do wrapper", () => {
+  it("mensal gera em TODOS os meses do intervalo (antes: só no primeiro)", () => {
+    const contract = base({ frequency: "monthly", starts_on: "2026-07-15" });
+    const occ = getOccurrences(contract, new Date(2026, 6, 1), new Date(2026, 11, 31, 23, 59, 59));
+    expect(dias(occ)).toEqual([
+      "2026-07-15", "2026-08-17", "2026-09-15", "2026-10-15", "2026-11-16", "2026-12-15",
+    ]);
+  });
+
+  it("dia 31 não transborda nem arrasta a âncora", () => {
+    const contract = base({ frequency: "monthly", starts_on: "2026-01-31" });
+    const occ = getOccurrences(contract, new Date(2026, 0, 1), new Date(2026, 5, 30, 23, 59, 59));
+    expect(dias(occ)).toEqual([
+      "2026-02-02", "2026-03-02", "2026-03-31", "2026-04-30", "2026-06-01", "2026-06-30",
+    ]);
+  });
+
+  it("contrato com data corrompida não gera nada em vez de rebentar", () => {
+    const contract = base({ frequency: "monthly", starts_on: "72026-01-01" });
+    expect(getOccurrences(contract, new Date(2026, 6, 1), new Date(2026, 6, 31))).toEqual([]);
   });
 });

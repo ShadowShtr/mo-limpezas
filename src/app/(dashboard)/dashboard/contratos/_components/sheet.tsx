@@ -7,7 +7,8 @@ import { X, Loader2, Check, Users, ChevronDown, ChevronLeft, ChevronRight } from
 import { createContrato, updateContrato } from "@/app/actions/contratos";
 import { todayInLisbon } from "@/lib/lisbon-time";
 import { isValidIsoDateString } from "@/lib/utils";
-import { shiftToNextBusinessDay } from "@/lib/contract-occurrences";
+import { nextOccurrences } from "@/domain/scheduling/recurrence-engine";
+import { toLocalDate } from "@/domain/scheduling/civil-date";
 import type { ScheduleDay } from "@/types/database";
 import type { ContratosTableRow } from "../page";
 import {
@@ -48,90 +49,35 @@ const FREQUENCY_OPTS = [
 ];
 
 // ─── Preview de ocorrências ──────────────────────────────────────────────────
-
-function calcOccurrences(
-  frequency: string,
-  weekdays: number[],
-  startsOn: string,
-  intervalDays: number,
-  count = 12,
-): Date[] {
-  if (!startsOn) return [];
-  const results: Date[] = [];
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const start = new Date(startsOn + "T00:00:00");
-  const cursor = start >= today ? new Date(start) : new Date(today);
-
-  let iter = 0;
-  if (frequency === "daily") {
-    while (results.length < count && iter < 400) {
-      iter++;
-      const dow = cursor.getDay();
-      if (dow !== 0 && dow !== 6) results.push(new Date(cursor));
-      cursor.setDate(cursor.getDate() + 1);
-    }
-    return results;
-  }
-
-  const CADENCE_WEEKS: Record<string, number> = { weekly: 1, biweekly: 2, triweekly: 3 };
-  if (Object.hasOwn(CADENCE_WEEKS, frequency)) {
-    if (weekdays.length === 0) return [];
-    const cadence = CADENCE_WEEKS[frequency];
-    const startWeek = Math.floor((start.getTime()) / (7 * 24 * 3600 * 1000));
-    while (results.length < count && iter < 400) {
-      iter++;
-      const dow = cursor.getDay();
-      const thisWeek = Math.floor((cursor.getTime()) / (7 * 24 * 3600 * 1000));
-      const isCorrectWeek = cadence === 1 || (thisWeek - startWeek) % cadence === 0;
-      if (isCorrectWeek && weekdays.includes(dow)) {
-        results.push(new Date(cursor));
-      }
-      cursor.setDate(cursor.getDate() + 1);
-    }
-    return results;
-  }
-
-  if (frequency === "monthly") {
-    const d = new Date(cursor);
-    while (results.length < count && iter < 36) {
-      iter++;
-      results.push(shiftToNextBusinessDay(d));
-      d.setMonth(d.getMonth() + 1);
-    }
-    return results;
-  }
-
-  if (frequency === "custom") {
-    const step = Math.max(1, intervalDays);
-    const used = new Set<string>();
-    while (results.length < count && iter < 400) {
-      iter++;
-      if (cursor >= start) {
-        const shifted = shiftToNextBusinessDay(cursor);
-        const key = shifted.toDateString();
-        if (!used.has(key)) { used.add(key); results.push(shifted); }
-      }
-      cursor.setDate(cursor.getDate() + step);
-    }
-    return results;
-  }
-
-  return results;
-}
+//
+// O preview NÃO tem regras próprias: pergunta ao mesmo motor que gera os
+// serviços. Enquanto teve a sua própria implementação, mostrava datas que a
+// geração real nunca produzia — o mensal ancorado a 31/01, por exemplo,
+// anunciava 03/03 (transbordo de `setMonth`) em vez de 28/02.
 
 function OccurrencePreview({
-  frequency, weekdays, startsOn, intervalDays,
-}: { frequency: string; weekdays: number[]; startsOn: string; intervalDays: number }) {
-  const dates = useMemo(
-    () => calcOccurrences(frequency, weekdays, startsOn, intervalDays, 12),
-    [frequency, weekdays, startsOn, intervalDays],
-  );
+  frequency, weekdays, startsOn, endsOn, intervalDays,
+}: {
+  frequency: string;
+  weekdays: number[];
+  startsOn: string;
+  endsOn: string;
+  intervalDays: number;
+}) {
+  const dates = useMemo(() => {
+    if (!startsOn) return [];
+    const today = todayInLisbon();
+    return nextOccurrences(
+      { frequency, weekdays, intervalDays, startsOn, endsOn: endsOn || null },
+      startsOn > today ? startsOn : today,
+      12,
+    );
+  }, [frequency, weekdays, startsOn, endsOn, intervalDays]);
 
   if (dates.length === 0) return null;
 
-  const fmt = (d: Date) =>
-    d.toLocaleDateString("pt-PT", { weekday: "short", day: "2-digit", month: "short", year: "numeric" });
+  const fmt = (d: string) =>
+    toLocalDate(d).toLocaleDateString("pt-PT", { weekday: "short", day: "2-digit", month: "short", year: "numeric" });
 
   return (
     <div className="mt-2 p-3 rounded-lg bg-[var(--color-background)] border border-[var(--color-border)]">
@@ -139,9 +85,9 @@ function OccurrencePreview({
         Próximas {dates.length} ocorrências:
       </p>
       <div className="flex flex-wrap gap-1.5">
-        {dates.map((d, i) => (
+        {dates.map((d) => (
           <span
-            key={i}
+            key={d}
             className="text-xs px-2 py-1 rounded-md bg-[var(--color-primary-light)] text-[var(--color-primary)] font-medium"
           >
             {fmt(d)}
@@ -757,6 +703,7 @@ export function ContratoSheet({
                 frequency={frequency}
                 weekdays={selectedWeekdays}
                 startsOn={startsOn}
+                endsOn={endsOn}
                 intervalDays={intervalDays}
               />
 
