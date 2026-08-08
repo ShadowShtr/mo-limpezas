@@ -1117,8 +1117,22 @@ Nenhuma task desta pilha está em produção. `master` continua em `e479367`.
 | **T09** | **offline concluída** | #47 draft | integração pendente — SQL atómico congelado, **não aplicado** |
 | **T10** | **offline concluída** | #47 draft | integração realtime pendente — reconciliador não ligado aos 10 handlers |
 | **T11** | **offline concluída** | **#50 draft** | integração pendente — nenhum consumidor ligado ao modelo canónico |
-| **T12** | **não iniciada** | — | 🔴 **bloqueada** pelo diagnóstico financeiro (toca `services` + `cash_flow_entries` de forma transacional) |
-| T13–T19 | não iniciadas | — | dependem das anteriores |
+| **T12** | **não iniciada** | — | 🔴 **congelada** pelo diagnóstico financeiro (toca `services` + `cash_flow_entries` de forma transacional) |
+| **T13** | **não iniciada** | — | 🔴 **congelada** — geração atómica de faturas, mesma área da regressão |
+| **T14** | **offline concluída** | **#51 draft** | integração pendente — nenhum ecrã de relatório ligado ao read model |
+| **T15** | **offline concluída** | **#52 draft** | integração pendente — **UI não tocada**; aguarda imagem do Financeiro V2 |
+| **T16** | **não iniciada** | — | 🔴 **congelada** — realtime/outbox/cache mexem em runtime e schema |
+| **T17-A** | **auditoria concluída** | **#53 draft** | 557 ficheiros classificados; **nada removido** |
+| **T17-B** | **não iniciada** | — | limpeza comprovada — decisões pendentes em §13 do handoff de 2026-08-08 |
+| T18–T19 | não iniciadas | — | dependem das anteriores |
+
+> **Revisão cruzada T11 → T14 → T15: APROVADA** (2026-08-08). Dependências sem
+> inversões (`dashboard → reports → billing`), 11 conceitos com significado
+> estável entre camadas, provado por `src/__tests__/financeiro-pipeline.test.ts`.
+> Contrato em `docs/FINANCEIRO-CANONICAL-PIPELINE.md`.
+>
+> ⚠️ **Provado apenas com fixtures sintéticas.** Nada da pilha correu contra a
+> base real.
 
 ### Frente reservada — FINANCEIRO V2
 
