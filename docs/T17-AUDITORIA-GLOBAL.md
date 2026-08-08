@@ -18,15 +18,26 @@ execução de qualquer script analisado.
 
 ## 1. Totais
 
-**552 ficheiros versionados.**
+**557 ficheiros versionados.**
+
+> ℹ️ **Porquê 557 e não 552.** O primeiro varrimento contou 552 — o repositório
+> *antes* de os artefactos desta auditoria existirem. Ao serem preparados para
+> commit, os 4 ficheiros da T17-A (`audit-file-inventory.mjs`,
+> `t17-inventory-guard.test.ts`, `T17-AUDITORIA-GLOBAL.md`,
+> `file-classification.json`) passaram a ser versionados e a contar-se a si
+> próprios; o handoff de encerramento juntou o quinto.
+>
+> O relatório versionado é sempre a fonte: **`reports/file-classification.json`**.
+> A guarda do inventário obriga a regenerá-lo sempre que a lista muda — foi ela
+> que apanhou esta discrepância.
 
 | Extensão | # | Topo | # |
 |---|---|---|---|
 | `.ts` | 236 | `src/` | 367 |
 | `.tsx` | 140 | `supabase/` | 76 |
 | `.sql` | 76 | `scripts/` | 41 |
-| `.md` | 42 | `docs/` | 23 |
-| `.mjs` | 33 | raiz | 19 |
+| `.md` | 44 | `docs/` | 25 |
+| `.mjs` | 34 | raiz | 19 |
 | outros | 25 | `planning/` | 15 |
 | | | `public/` | 8 |
 | | | `.github/`, `reports/` | 3 |
@@ -37,8 +48,8 @@ execução de qualquer script analisado.
 
 | Estado | # | Leitura |
 |---|---|---|
-| **MANTER** | **503** | em uso, comprovado |
-| **STANDBY** | **33** | precisa de decisão antes de qualquer acção |
+| **MANTER** | **507** | em uso, comprovado |
+| **STANDBY** | **34** | precisa de decisão antes de qualquer acção |
 | **ARQUIVAR** | **15** | `planning/` — documentação anterior ao produto |
 | **REMOVER** | **1** | único candidato com confiança total |
 | CENTRALIZAR | 0 | oportunidades listadas em §9, sem alteração nesta ronda |
@@ -49,13 +60,13 @@ execução de qualquer script analisado.
 | Categoria | # | | Categoria | # |
 |---|---|---|---|---|
 | route-ui | 132 | | api-route | 16 |
-| test | 77 | | planning | 15 |
+| test | 78 | | planning | 15 |
 | migration | 72 | | component | 14 |
 | lib | 56 | | config | 12 |
-| script | 41 | | asset | 8 |
+| script | 42 | | asset | 8 |
 | server-action | 35 | | ci / types / sql-frozen / supabase-other | 2 cada |
 | domain | 34 | | report / src-other | 1 cada |
-| doc | 28 | | other | 2 |
+| doc | 30 | | report / src-other | 2 / 1 |
 
 ---
 

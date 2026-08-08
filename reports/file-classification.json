@@ -1,8 +1,8 @@
 {
   "generatedBy": "scripts/audit-file-inventory.mjs",
-  "totalFiles": 556,
+  "totalFiles": 557,
   "byStatus": {
-    "MANTER": 506,
+    "MANTER": 507,
     "STANDBY": 34,
     "ARQUIVAR": 15,
     "REMOVER": 1
@@ -15,7 +15,7 @@
     "script": 42,
     "server-action": 35,
     "domain": 34,
-    "doc": 29,
+    "doc": 30,
     "api-route": 16,
     "planning": 15,
     "component": 14,
@@ -30,7 +30,7 @@
     "src-other": 1
   },
   "byConfidence": {
-    "alta": 524,
+    "alta": 525,
     "média": 26,
     "baixa": 6
   },
@@ -478,7 +478,9 @@
       "consumers": 0,
       "consumerSample": [],
       "autoLoaded": false,
-      "referencedBy": [],
+      "referencedBy": [
+        "docs"
+      ],
       "sideEffects": [],
       "risks": [],
       "signals": {},
@@ -507,6 +509,28 @@
         "network": 1,
         "serviceRole": 2,
         "sqlWrite": 10
+      },
+      "action": "nenhuma",
+      "reason": "documentação",
+      "manualDecision": false
+    },
+    {
+      "path": "docs/HANDOFF-2026-08-08.md",
+      "category": "doc",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [
+        "service-role",
+        "erro-de-query-ignorado(1)"
+      ],
+      "signals": {
+        "serviceRole": 1,
+        "ignoredError": 1
       },
       "action": "nenhuma",
       "reason": "documentação",
@@ -821,7 +845,9 @@
       "consumers": 0,
       "consumerSample": [],
       "autoLoaded": false,
-      "referencedBy": [],
+      "referencedBy": [
+        "docs"
+      ],
       "sideEffects": [
         "env"
       ],
@@ -1457,13 +1483,16 @@
       ],
       "sideEffects": [
         "supabase",
-        "revalidatePath(26)"
+        "revalidatePath(28)"
       ],
-      "risks": [],
+      "risks": [
+        "debugger"
+      ],
       "signals": {
         "supabase": 1,
         "sqlWrite": 7,
-        "revalidatePath": 26
+        "debugger": 6,
+        "revalidatePath": 28
       },
       "action": "nenhuma",
       "reason": "configuração/infra",
