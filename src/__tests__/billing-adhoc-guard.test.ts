@@ -29,6 +29,22 @@ const SRC = path.join(ROOT, "src");
 /** O módulo canónico é o único sítio onde estas contas são legítimas. */
 const CANONICAL_PREFIX = path.join("src", "domain", "billing");
 
+/**
+ * Réplicas deliberadas das fórmulas antigas, fora do módulo canónico.
+ *
+ * `src/domain/billing/legacy-formulas.ts` (T11) já está coberto pelo prefixo
+ * acima. `src/domain/reports/legacy-reports.ts` (T14) é o seu gémeo para as
+ * agregações de relatório e tem exactamente o mesmo papel: existe para ser
+ * COMPARADO, nunca usado. Um teste próprio em `reports-adhoc-guard.test.ts`
+ * garante que nenhum código de aplicação o importa.
+ *
+ * A isenção é por ficheiro, e não por pasta: o resto de `src/domain/reports`
+ * continua a ser varrido por esta guarda.
+ */
+const LEGACY_REPLICAS = new Set([
+  path.join("src", "domain", "reports", "legacy-reports.ts"),
+]);
+
 interface Rule {
   id: string;
   /** O defeito que o padrão representa. Aparece na mensagem de falha. */
@@ -112,6 +128,7 @@ function scan(pattern: RegExp): Map<string, number> {
   for (const file of FILES) {
     const rel = path.relative(ROOT, file);
     if (rel.startsWith(CANONICAL_PREFIX)) continue;
+    if (LEGACY_REPLICAS.has(rel)) continue;
     const content = fs.readFileSync(file, "utf8");
     const matches = content.match(new RegExp(pattern.source, "g"));
     if (matches && matches.length > 0) {
