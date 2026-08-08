@@ -38,7 +38,7 @@
 // da T08 e dos `IntegrityIssue.subject` da T14: um DTO financeiro pode acabar
 // num ficheiro exportado, e não deve levar dados pessoais consigo.
 
-import { type MoneyCents, ZERO_CENTS, sumCents } from "../billing/money";
+import { type MoneyCents, ZERO_CENTS, subtractCents, sumCents } from "../billing/money";
 
 /**
  * O que se sabe de um cliente num período. Cada conceito com a sua fonte, como
@@ -106,7 +106,12 @@ export function buildClientSummaries(
       performedCents,
       invoicedCents,
       receivedCents,
-      outstandingCents: (invoicedCents - receivedCents) as MoneyCents,
+      // `subtractCents` da T11, e não uma subtracção com `as MoneyCents`: a
+      // regra "em aberto = faturado − recebido" pertence ao modelo canónico, e
+      // uma segunda implementação aqui — ainda que aritmeticamente idêntica —
+      // seria exactamente a duplicação que estas tasks existem para fechar.
+      // O `as` também saltava a verificação de inteiro seguro.
+      outstandingCents: subtractCents(invoicedCents, receivedCents),
       completedServices: e.completed,
       performedWithoutInvoice: performedCents > 0 && invoicedCents === 0,
     });

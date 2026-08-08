@@ -34,10 +34,10 @@
 import {
   type CivilDate,
   addDays,
-  dayOfWeek,
   daysInMonth,
   isValidCivilDate,
   partsOf,
+  startOfWeek,
 } from "../scheduling/civil-date";
 import {
   type CivilPeriod,
@@ -78,10 +78,12 @@ export function buildDashboardPeriods(todayCivilDate: CivilDate): DashboardPerio
   const yearPeriod = makePeriod(`${String(year).padStart(4, "0")}-01-01`, `${String(year).padStart(4, "0")}-12-31`);
   if (!today || !month_ || !yearPeriod) return null;
 
-  // Semana de segunda a domingo. `dayOfWeek` é 0 = domingo.
-  const dow = dayOfWeek(todayCivilDate);
-  const backToMonday = dow === 0 ? 6 : dow - 1;
-  const weekStart = addDays(todayCivilDate, -backToMonday);
+  // Semana de segunda a domingo, pela MESMA função que o motor de recorrência
+  // da T07 usa (`startOfWeek` em `civil-date.ts`). A primeira versão repetia
+  // aqui o cálculo do recuo até segunda; era idêntico, mas duas
+  // implementações da convenção de semana significam que o dashboard e o
+  // calendário podiam vir a discordar sobre a que semana pertence um dia.
+  const weekStart = startOfWeek(todayCivilDate);
   const week = makePeriod(weekStart, addDays(weekStart, 6));
   if (!week) return null;
 

@@ -49,7 +49,9 @@ import { type FinancialAmount, type MarginBasis } from "../billing/financial-mod
 import { type CivilPeriod } from "../reports/period";
 import {
   type DailyReportPoint,
+  type NonAdditiveConcept,
   type ReportReadModel,
+  NON_ADDITIVE_CONCEPTS,
 } from "../reports/report-read-model";
 import { type OperationalMetrics } from "../reports/operational-metrics";
 import {
@@ -179,10 +181,20 @@ function availabilityOf(amount: FinancialAmount): KpiAvailability {
 /**
  * Conceitos cuja comparação entre períodos é entre **saldos**, não fluxos.
  * A UI deve dizê-lo — ver `PeriodComparison.snapshot`.
+ *
+ * **Derivado de `NON_ADDITIVE_CONCEPTS` da T14, não copiado.** A primeira
+ * versão desta constante era uma lista escrita à mão com o mesmo conteúdo. As
+ * duas coincidiam, mas eram mantidas em separado — e uma alteração na T14
+ * passaria despercebida aqui. Uma regra copiada em vez de derivada é
+ * precisamente o defeito que a T11, a T14 e a T15 andam a fechar; não faz
+ * sentido reintroduzi-lo na costura entre elas.
+ *
+ * A conversão é directa porque as chaves de `NON_ADDITIVE_CONCEPTS` são um
+ * subconjunto de `DashboardKpiKey`, o que o compilador verifica.
  */
-const SNAPSHOT_KPIS: ReadonlySet<DashboardKpiKey> = new Set([
-  "contracted", "outstanding", "overdue", "payroll", "cost",
-]);
+const SNAPSHOT_KPIS: ReadonlySet<DashboardKpiKey> = new Set(
+  Object.keys(NON_ADDITIVE_CONCEPTS) as NonAdditiveConcept[],
+);
 
 function amountOf(report: ReportReadModel, key: DashboardKpiKey): FinancialAmount {
   return report.financial[key];
