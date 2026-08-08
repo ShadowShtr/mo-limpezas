@@ -33,16 +33,18 @@ const CANONICAL_PREFIX = path.join("src", "domain", "billing");
  * Réplicas deliberadas das fórmulas antigas, fora do módulo canónico.
  *
  * `src/domain/billing/legacy-formulas.ts` (T11) já está coberto pelo prefixo
- * acima. `src/domain/reports/legacy-reports.ts` (T14) é o seu gémeo para as
- * agregações de relatório e tem exactamente o mesmo papel: existe para ser
- * COMPARADO, nunca usado. Um teste próprio em `reports-adhoc-guard.test.ts`
+ * acima. Os outros dois são os seus gémeos — `legacy-reports.ts` (T14) para as
+ * agregações de relatório, `legacy-dashboard.ts` (T15) para os cartões e a
+ * projecção — e têm exactamente o mesmo papel: existem para ser COMPARADOS,
+ * nunca usados. Cada um tem no seu próprio ficheiro de guarda um teste que
  * garante que nenhum código de aplicação o importa.
  *
- * A isenção é por ficheiro, e não por pasta: o resto de `src/domain/reports`
- * continua a ser varrido por esta guarda.
+ * A isenção é por ficheiro, e não por pasta: o resto de `src/domain/reports` e
+ * de `src/domain/dashboard` continua a ser varrido por esta guarda.
  */
 const LEGACY_REPLICAS = new Set([
   path.join("src", "domain", "reports", "legacy-reports.ts"),
+  path.join("src", "domain", "dashboard", "legacy-dashboard.ts"),
 ]);
 
 interface Rule {
