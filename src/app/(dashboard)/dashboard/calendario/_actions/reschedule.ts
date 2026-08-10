@@ -6,6 +6,7 @@ import { auditLog } from "@/lib/audit";
 import { ensureLisbonOffset, addDaysToDateString, toLisbonTimestamp } from "@/lib/lisbon-time";
 import { getTeamSize } from "@/lib/services/reference";
 import { calculateServiceValue } from "@/lib/service-value";
+import { isNoRowsError, logQueryFailure, queryFailure, QUERY_FAILURE_MESSAGE } from "@/lib/query-error";
 
 export type ConflictInfo = {
   id: string;
@@ -46,13 +47,19 @@ export async function rescheduleService(
     return { ok: false, error: "Sem permissao." };
   }
 
-  const { data: service } = await admin
+  const { data: service, error: serviceError } = await admin
     .from("services")
     .select("id, company_id, team_id, status, scheduled_start, scheduled_end, hourly_rate, num_people, manual_value, upholstery_unit_price, contract_id")
     .eq("id", serviceId)
     .eq("company_id", profile.company_id)
     .single();
 
+  // Prerequisite: decide QUAL serviço é movido e se pode sê-lo. Uma falha de
+  // leitura devolvia "Servico invalido." — uma afirmação sobre o serviço,
+  // feita a partir de uma avaria.
+  if (serviceError && !isNoRowsError(serviceError)) {
+    return queryFailure("rescheduleService:service", serviceError);
+  }
   if (!service) return { ok: false, error: "Servico invalido." };
   if (["concluido", "cancelado", "falta"].includes(service.status)) {
     return { ok: false, error: "Este servico ja esta fechado e nao pode ser movido por drag." };
@@ -62,17 +69,26 @@ export async function rescheduleService(
   }
 
   if (newTeamId) {
-    const { data: team } = await admin
+    const { data: team, error: teamError } = await admin
       .from("teams")
       .select("id")
       .eq("id", newTeamId)
       .eq("company_id", profile.company_id)
       .eq("active", true)
       .single();
+    if (teamError && !isNoRowsError(teamError)) {
+      return queryFailure("rescheduleService:team", teamError);
+    }
     if (!team) return { ok: false, error: "Equipa destino invalida ou inativa." };
   }
 
   const conflicts = await getConflicts(admin, profile.company_id, serviceId, newStart, newEnd, newTeamId);
+  // `null` = não se conseguiu apurar. Não é o mesmo que "não há conflitos", e
+  // `--force` não o cobre: forçar é decidir apesar de um conflito conhecido,
+  // não avançar às cegas.
+  if (conflicts === null) {
+    return { ok: false, error: QUERY_FAILURE_MESSAGE };
+  }
   if (conflicts.length > 0 && !options?.force) {
     return {
       ok: false,
@@ -152,6 +168,13 @@ export async function rescheduleService(
   return { ok: true, conflicts };
 }
 
+/**
+ * Devolve os conflitos, ou `null` se não os conseguir apurar.
+ *
+ * O `null` existe para que o chamador não possa confundir "olhei e não há" com
+ * "não consegui olhar". Era esse o defeito: o erro da consulta era ignorado,
+ * a lista vinha vazia, e o serviço era remarcado por cima de outro.
+ */
 async function getConflicts(
   admin: ReturnType<typeof createAdminClient>,
   companyId: string,
@@ -159,10 +182,13 @@ async function getConflicts(
   newStart: string,
   newEnd: string,
   newTeamId: string | null,
-): Promise<ConflictInfo[]> {
+): Promise<ConflictInfo[] | null> {
   if (!newTeamId) return [];
   const dayStr = newStart.slice(0, 10);
-  const { data: others } = await admin
+  // Deteção de conflito. Ignorar o erro daria "sem conflitos" e o serviço
+  // seria remarcado por cima de outro — o mesmo defeito que a T17-B2 encontrou
+  // em fix-weekend-services.mjs, aqui em runtime.
+  const { data: others, error: othersError } = await admin
     .from("services_full")
     .select("id, reference_number, location_name, scheduled_start, scheduled_end")
     .eq("company_id", companyId)
@@ -171,6 +197,11 @@ async function getConflicts(
     .lt("scheduled_start", toLisbonTimestamp(addDaysToDateString(dayStr, 1), "00:00"))
     .neq("id", serviceId)
     .in("status", ["agendado", "em_curso"]);
+
+  if (othersError) {
+    logQueryFailure("rescheduleService:conflicts", othersError);
+    return null;
+  }
 
   const conflicts: ConflictInfo[] = [];
   const ts = new Date(newStart).getTime();

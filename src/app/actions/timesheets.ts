@@ -3,6 +3,7 @@
 import { calcTimesheetDuration } from "@/lib/payroll-calc";
 import { requireProfile } from "@/lib/auth-guard";
 import { revalidatePath } from "next/cache";
+import { queryFailure } from "@/lib/query-error";
 
 export interface ServiceTimeUpdate {
   id: string;
@@ -80,11 +81,15 @@ export async function adminEditTimesheet(
 
   // Re-avaliar actual_end e status do serviço após correção manual.
   if (ts?.service_id) {
-    const { data: timesheets } = await admin
+    const { data: timesheets, error: timesheetsError } = await admin
       .from("timesheets")
       .select("clock_in_at, clock_out_at")
       .eq("service_id", ts.service_id)
       .eq("company_id", profile.company_id);
+
+    // Decide o estado do serviço a partir dos pontos da equipa. Falhando, o
+    // bloco era saltado e o serviço ficava com um estado que ninguém calculou.
+    if (timesheetsError) return queryFailure("adminEditTimesheet:timesheets", timesheetsError);
 
     if (timesheets && timesheets.length > 0) {
       const hasOpen = timesheets.some((t) => !t.clock_out_at);

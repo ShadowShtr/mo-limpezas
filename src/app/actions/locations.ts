@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { auditLog } from "@/lib/audit";
 import { assertCriticalFieldsLoaded, CRITICAL_FIELDS_BLOCKED_MESSAGE } from "@/lib/critical-fields";
+import { isNoRowsError, logQueryFailure } from "@/lib/query-error";
 
 interface LocationInput {
   name: string;
@@ -86,12 +87,14 @@ export async function updateLocation(id: string, input: Omit<LocationInput, "cli
 
   // Valor antigo dos campos de preço/acesso, só para auditoria — nunca
   // bloqueia o update se falhar.
-  const { data: before } = await admin
+  const { data: before, error: beforeError } = await admin
     .from("locations")
     .select("pricing_type, hourly_rate, fixed_price, access_code, has_key, key_label")
     .eq("id", id)
     .eq("company_id", me.company_id)
     .single();
+  // Auxiliar: alimenta a auditoria do que mudou, não decide o update.
+  if (!isNoRowsError(beforeError)) logQueryFailure("updateLocation:before", beforeError);
 
   const { error } = await admin
     .from("locations")

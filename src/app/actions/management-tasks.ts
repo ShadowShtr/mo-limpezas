@@ -11,6 +11,7 @@ import {
   buildTaskAttachmentPath,
   isTaskAttachmentPathInCompany,
 } from "@/lib/task-attachments";
+import { isNoRowsError, logQueryFailure, queryFailure } from "@/lib/query-error";
 
 type AdminClient = ReturnType<typeof createAdminClient>;
 
@@ -88,17 +89,20 @@ export async function getManagementTasks(
 
   const names: Record<string, string> = {};
   if (peopleIds.length > 0) {
-    const { data: profiles } = await admin
+    const { data: profiles, error: profilesError } = await admin
       .from("profiles")
       .select("id, full_name")
       .in("id", peopleIds);
+    // Auxiliar: sem os nomes a lista mostra ids, mas continua correcta.
+    logQueryFailure("getManagementTasks:profiles", profilesError);
     for (const p of profiles ?? []) names[p.id] = p.full_name;
   }
 
   const clientIds = [...new Set((data ?? []).map((t) => t.client_id).filter(Boolean) as string[])];
   const clientNames: Record<string, string> = {};
   if (clientIds.length > 0) {
-    const { data: clients } = await admin.from("clients").select("id, name").in("id", clientIds);
+    const { data: clients, error: clientsError } = await admin.from("clients").select("id, name").in("id", clientIds);
+    logQueryFailure("getManagementTasks:clients", clientsError);
     for (const c of clients ?? []) clientNames[c.id] = c.name;
   }
 
@@ -158,7 +162,9 @@ export async function createManagementTask(
   let createdByName: string | null = null;
   const idsToFetch = [row.assigned_to, row.created_by].filter(Boolean) as string[];
   if (idsToFetch.length > 0) {
-    const { data: profiles } = await admin.from("profiles").select("id, full_name").in("id", idsToFetch);
+    const { data: profiles, error: profilesError } = await admin.from("profiles").select("id, full_name").in("id", idsToFetch);
+    // A tarefa JÁ foi criada. Isto só decora a resposta com nomes.
+    logQueryFailure("createManagementTask:profiles", profilesError);
     const map = Object.fromEntries((profiles ?? []).map((p) => [p.id, p.full_name]));
     assignedName = row.assigned_to ? (map[row.assigned_to] ?? null) : null;
     createdByName = row.created_by ? (map[row.created_by] ?? null) : null;
@@ -166,7 +172,8 @@ export async function createManagementTask(
 
   let clientName: string | null = null;
   if (row.client_id) {
-    const { data: client } = await admin.from("clients").select("name").eq("id", row.client_id).single();
+    const { data: client, error: clientError } = await admin.from("clients").select("name").eq("id", row.client_id).single();
+    if (!isNoRowsError(clientError)) logQueryFailure("createManagementTask:client", clientError);
     clientName = client?.name ?? null;
   }
 
@@ -226,12 +233,16 @@ export async function updateManagementTask(
   let previousAssignedTo: string | null = null;
   let previousTitle: string | null = null;
   if (data.assigned_to !== undefined) {
-    const { data: before } = await admin
+    const { data: before, error: beforeError } = await admin
       .from("management_tasks")
       .select("assigned_to, title")
       .eq("id", taskId)
       .eq("company_id", profile.company_id)
       .single();
+    // Decide se a pessoa nova é avisada. Falhando, `previousAssignedTo` ficava
+    // null e QUALQUER responsável parecia "acabado de atribuir" — a pessoa
+    // errada recebia aviso, ou a certa não recebia. Aborta antes do update.
+    if (beforeError) return queryFailure("updateManagementTask:before", beforeError);
     previousAssignedTo = before?.assigned_to ?? null;
     previousTitle = before?.title ?? null;
   }
@@ -308,12 +319,18 @@ export async function uploadTaskAttachment(
   if (!guard.ok) return { ok: false, error: guard.error };
   const { admin, profile } = guard;
 
-  const { data: task } = await admin
+  const { data: task, error: taskError } = await admin
     .from("management_tasks")
     .select("id, attachment_url")
     .eq("id", taskId)
     .eq("company_id", profile.company_id)
     .single();
+  // Existência: decide se o ficheiro é enviado e a linha actualizada. Uma
+  // falha de leitura dizia "Tarefa não encontrada" — indistinguível de a
+  // tarefa não existir mesmo.
+  if (taskError && !isNoRowsError(taskError)) {
+    return queryFailure("uploadTaskAttachment:task", taskError);
+  }
   if (!task) return { ok: false, error: "Tarefa não encontrada." };
 
   const file = formData.get("file") as File | null;
@@ -362,12 +379,15 @@ export async function deleteTaskAttachment(taskId: string): Promise<{ ok: boolea
   if (!guard.ok) return { ok: false, error: guard.error };
   const { admin, profile } = guard;
 
-  const { data: task } = await admin
+  const { data: task, error: taskError } = await admin
     .from("management_tasks")
     .select("attachment_url")
     .eq("id", taskId)
     .eq("company_id", profile.company_id)
     .single();
+  if (taskError && !isNoRowsError(taskError)) {
+    return queryFailure("deleteTaskAttachment:task", taskError);
+  }
   if (!task) return { ok: false, error: "Tarefa não encontrada." };
 
   if (task.attachment_url) {

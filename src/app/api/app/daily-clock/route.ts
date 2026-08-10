@@ -5,6 +5,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { rateLimit, rateLimitKey } from "@/lib/rate-limit";
 import { auditLog } from "@/lib/audit";
 import { parseJsonBody } from "@/lib/payload-guard";
+import { logQueryFailure, QUERY_FAILURE_MESSAGE } from "@/lib/query-error";
 
 // Ponto GERAL do dia: entrada e saída únicas. É isto que conta para a folha.
 type Action = "clock_in" | "clock_out";
@@ -57,13 +58,20 @@ export async function POST(req: NextRequest) {
   const workDate = lisbonDate();
 
   // Garante a linha do dia.
-  const { data: existing } = await admin
+  // Verificação de duplicado: decide entre criar o ponto do dia e actualizar
+  // o existente. Falhando, "existing" vinha null e o registo do dia era
+  // inserido outra vez — dois pontos para a mesma pessoa no mesmo dia.
+  const { data: existing, error: existingError } = await admin
     .from("daily_clocks")
     .select("id, clock_in_at, clock_out_at")
     .eq("company_id", profile.company_id)
     .eq("collaborator_id", user.id)
     .eq("work_date", workDate)
     .maybeSingle();
+  if (existingError) {
+    logQueryFailure("dailyClock:existing", existingError);
+    return NextResponse.json({ error: QUERY_FAILURE_MESSAGE }, { status: 503 });
+  }
 
   // Guardas de coerência.
   if (action === "clock_in" && existing?.clock_in_at) {

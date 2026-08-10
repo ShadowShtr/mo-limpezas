@@ -6,6 +6,7 @@ import { rateLimit, rateLimitKey } from "@/lib/rate-limit";
 import { withRouteMetrics } from "@/lib/observability/route-metrics";
 import { auditLog } from "@/lib/audit";
 import { parseJsonBody } from "@/lib/payload-guard";
+import { logQueryFailure, QUERY_FAILURE_MESSAGE } from "@/lib/query-error";
 
 const confirmSchema = z.object({
   client_event_id: z.string().min(1).max(100),
@@ -37,12 +38,18 @@ async function handle(req: NextRequest) {
     .from("profiles").select("company_id").eq("id", user.id).single();
   if (!profile) return NextResponse.json({ error: "Perfil não encontrado" }, { status: 404 });
 
-  const { data: photo } = await admin
+  const { data: photo, error: photoError } = await admin
     .from("service_photos")
     .select("id, status, collaborator_id")
     .eq("company_id", profile.company_id)
     .eq("client_event_id", client_event_id)
     .maybeSingle();
+  // Identifica QUE registo é marcado como carregado. Falhando, respondia 404
+  // e a app dava a foto por perdida — quando o ficheiro já estava no storage.
+  if (photoError) {
+    logQueryFailure("uploadsConfirm:photo", photoError);
+    return NextResponse.json({ error: QUERY_FAILURE_MESSAGE }, { status: 503 });
+  }
 
   if (!photo) return NextResponse.json({ error: "Registo de foto não encontrado" }, { status: 404 });
   if (photo.collaborator_id !== user.id) {

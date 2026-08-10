@@ -6,6 +6,7 @@ import { revalidatePath } from "next/cache";
 import { ensureLisbonOffset, addDaysToDateString, toLisbonTimestamp } from "@/lib/lisbon-time";
 import { getTeamSize, maxReferenceNumber } from "@/lib/services/reference";
 import type { ConflictInfo } from "./reschedule";
+import { isNoRowsError, queryFailure } from "@/lib/query-error";
 
 export interface CreateServiceInput {
   companyId: string;
@@ -49,12 +50,17 @@ export async function createService(
     return { ok: false, error: "Sem permissao." };
   }
 
-  const { data: location } = await admin
+  // Existência do local: decide se o serviço é criado. Falhando a leitura, o
+  // "não existe" a seguir recusaria um local perfeitamente válido.
+  const { data: location, error: locationError } = await admin
     .from("locations")
     .select("id")
     .eq("id", input.locationId)
     .eq("company_id", profile.company_id)
     .single();
+  if (locationError && !isNoRowsError(locationError)) {
+    return queryFailure("createService:location", locationError);
+  }
   if (!location) return { ok: false, error: "Local invalido." };
 
   // Normaliza para o fuso de Lisboa (o cliente envia hora "naive" sem offset).

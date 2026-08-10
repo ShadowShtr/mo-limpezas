@@ -5,6 +5,7 @@ import { CONTRACT_FINANCIAL_FIELDS } from "@/lib/contrato-sheet-fields";
 import { getOccurrences } from "@/lib/contract-occurrences";
 import { fromLocalDate } from "@/domain/scheduling/civil-date";
 import type { ScheduleDay } from "@/types/database";
+import { logQueryFailure, QUERY_FAILURE_MESSAGE } from "@/lib/query-error";
 
 // Permite até 60s na Vercel Pro (TASK 14/16); mesmo assim corre em lotes.
 export const maxDuration = 60;
@@ -158,8 +159,14 @@ export async function GET(req: NextRequest) {
   const monthKey = monthStartStr.slice(0, 7); // "YYYY-MM"
 
   if (jobId) {
-    const { data: job } = await supabase
+    // Retoma de um lote interrompido. Falhando a leitura, o cursor voltava a
+    // 0 e o cron recomeçava do princípio — regerando o que já tinha gerado.
+    const { data: job, error: jobError } = await supabase
       .from("background_jobs").select("cursor, processed, failed, meta").eq("id", jobId).single();
+    if (jobError) {
+      logQueryFailure("generateServices:job", jobError);
+      return NextResponse.json({ error: QUERY_FAILURE_MESSAGE }, { status: 503 });
+    }
     if (job) {
       cursor = job.cursor ?? 0;
       totalCreated = job.processed ?? 0;
@@ -216,12 +223,19 @@ export async function GET(req: NextRequest) {
     // Pré-carregar serviços já existentes deste lote no mês (1 query, não N).
     const batchIds = batch.map((c) => c.id);
     const nextMonthStartStr = toDateStr(new Date(monthStart.getFullYear(), monthStart.getMonth() + 1, 1));
-    const { data: existingRows } = await supabase
+    // 🔴 A verificação de idempotência do cron mensal. Um erro ignorado dava
+    // conjunto vazio — "ainda não existe nada este mês" — e o lote inteiro era
+    // gerado outra vez, por cima do que já lá estava.
+    const { data: existingRows, error: existingRowsError } = await supabase
       .from("services")
       .select("contract_id, scheduled_start")
       .in("contract_id", batchIds)
       .gte("scheduled_start", toLisbonTimestamp(monthStartStr, "00:00"))
       .lt("scheduled_start", toLisbonTimestamp(nextMonthStartStr, "00:00"));
+    if (existingRowsError) {
+      logQueryFailure("generateServices:existing", existingRowsError);
+      return NextResponse.json({ error: QUERY_FAILURE_MESSAGE }, { status: 503 });
+    }
 
     const existingSet = new Set(
       (existingRows ?? []).map((r) => `${r.contract_id}|${(r.scheduled_start as string).slice(0, 10)}`),
@@ -232,10 +246,16 @@ export async function GET(req: NextRequest) {
       if (!(c.company_id in companyCounts)) {
         // Baseia o contador no MÁXIMO de referência existente (não count(*), que
         // colide com buracos deixados por serviços apagados/cancelados).
-        const { data: recent } = await supabase
+        // Base do próximo número de referência. Falhando, "maxRef" ficava 0 e
+        // a geração colidia com referências já atribuídas.
+        const { data: recent, error: recentError } = await supabase
           .from("services").select("reference_number")
           .eq("company_id", c.company_id)
           .order("created_at", { ascending: false }).limit(500);
+        if (recentError) {
+          logQueryFailure("generateServices:reference", recentError);
+          return NextResponse.json({ error: QUERY_FAILURE_MESSAGE }, { status: 503 });
+        }
         let maxRef = 0;
         for (const r of recent ?? []) {
           const n = parseInt(r.reference_number as string, 10);
@@ -342,10 +362,13 @@ export async function GET(req: NextRequest) {
 
   // ── Terminou: deteção de conflitos só no fim ─────────────────────────────────
   // Detetar conflitos: mesma equipa, horários sobrepostos, no mês gerado
-  const { data: rawConflicts } = await supabase.rpc("detect_schedule_conflicts", {
+  // Relatório de conflitos do lote gerado. Auxiliar: a geração já terminou e
+  // isto só alimenta o resumo devolvido ao cron.
+  const { data: rawConflicts, error: rawConflictsError } = await supabase.rpc("detect_schedule_conflicts", {
     p_start: monthStartStr,
     p_end: monthEndStr,
   });
+  logQueryFailure("generateServices:conflicts", rawConflictsError);
   const conflicts = Array.isArray(rawConflicts)
     ? (rawConflicts as ConflictRow[])
     : [];
