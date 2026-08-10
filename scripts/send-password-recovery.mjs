@@ -21,9 +21,16 @@
 // ============================================================
 import { createClient } from "@supabase/supabase-js";
 import { Resend } from "resend";
-import { config } from "dotenv";
+import { loadEnvFile } from "./lib/admin-db.mjs";
 
-config({ path: "./.env.local" });
+// Carregador único de ambiente (T17-B2) — substitui o `dotenv` que injectava
+// em `process.env`.
+//
+// ⚠️ Este script não escreve na base, mas ENVIA EMAIL REAL a pessoas reais, o
+//    que também é irreversível. Não passa pelo guard de `openAdminDb` porque
+//    esse cobre escrita em base de dados, não envio de mensagens. Fica
+//    registado como lacuna conhecida em docs/SCRIPTS-SAFETY-MATRIX.md §7.
+const env = loadEnvFile();
 
 const args = process.argv.slice(2);
 const SEND = args.includes("--send");
@@ -35,10 +42,12 @@ const THROTTLE_MS = 700; // respeitar limites de envio
 // Logins/emails a NÃO incluir (contas de teste/dev).
 const EXCLUDE = new Set(["vitorshadowmedina@gmail.com", "shadowshtr@gmail.com"]);
 
-const sb = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, {
-  auth: { autoRefreshToken: false, persistSession: false },
-});
-const FROM = process.env.RESEND_FROM_EMAIL || "Mó Limpezas <noreply@molimpezas.pt>";
+const sb = createClient(
+  env.NEXT_PUBLIC_SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL,
+  env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.SUPABASE_SERVICE_ROLE_KEY,
+  { auth: { autoRefreshToken: false, persistSession: false } },
+);
+const FROM = env.RESEND_FROM_EMAIL ?? process.env.RESEND_FROM_EMAIL ?? "Mó Limpezas <noreply@molimpezas.pt>";
 
 function emailHtml(name, url) {
   return `<div style="font-family:Inter,Arial,sans-serif;max-width:560px;margin:auto;border:1px solid #e5e7eb;border-radius:12px;overflow:hidden">

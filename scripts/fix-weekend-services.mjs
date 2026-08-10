@@ -5,18 +5,18 @@
 // concluídos, cancelados, exceções já movidas à mão, nem em semanal/
 // quinzenal/3-em-3-semanas (dia da semana aí é escolha explícita).
 //
-//   node scripts/fix-weekend-services.mjs          → dry-run (só mostra)
-//   node scripts/fix-weekend-services.mjs --apply  → aplica as alterações
-import fs from "node:fs";
-import { createClient } from "@supabase/supabase-js";
+//   node scripts/fix-weekend-services.mjs --project-ref <ref> --company-id <uuid>
+//   node scripts/fix-weekend-services.mjs --project-ref <ref> --company-id <uuid> --apply
+//
+// Guardas comuns em scripts/lib/admin-db.mjs (T17-B2).
+import { openAdminDb } from "./lib/admin-db.mjs";
 
-const env = fs.readFileSync(".env.local", "utf8").split("\n").reduce((a, l) => {
-  const m = l.match(/^([A-Z_]+)=(.*)$/);
-  if (m) a[m[1]] = m[2].replace(/^"|"$/g, "");
-  return a;
-}, {});
-const sb = createClient(env.NEXT_PUBLIC_SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY);
-const APPLY = process.argv.includes("--apply");
+const db = await openAdminDb({
+  script: "fix-weekend-services.mjs",
+  purpose: "mover para segunda-feira serviços mensais/personalizados caídos em fim de semana",
+  writes: true,
+});
+const sb = db.sb;
 
 function lisbonOffset(dateStr) {
   const midday = new Date(`${dateStr}T12:00:00Z`);
@@ -40,6 +40,7 @@ const nowIso = new Date().toISOString();
 const { data: services, error } = await sb
   .from("services")
   .select("id, reference_number, company_id, contract_id, team_id, scheduled_start, scheduled_end, is_exception, status, contracts!inner(frequency)")
+  .eq("company_id", db.companyId)
   .eq("status", "agendado")
   .eq("is_exception", false)
   .gte("scheduled_start", nowIso)
@@ -67,28 +68,37 @@ for (const s of services ?? []) {
   const newStart = toLisbon(newDateStr, startTime);
   const newEnd = toLisbon(newEndDateStr, endTime);
 
+  // As duas deteções de conflito abaixo decidem se um serviço é movido. Se a
+  // consulta falhar e o erro for ignorado, `data` vem null, o código conclui
+  // "não há conflito" e move o serviço para cima de outro — falha aberta, com
+  // dano real na escala. O erro aborta.
+  //
   // Conflito 1: já existe outro serviço deste MESMO contrato no novo dia (evita duplicar a ocorrência).
-  const { data: dupContract } = await sb
+  const { data: dupContract, error: dupError } = await sb
     .from("services")
     .select("id")
+    .eq("company_id", db.companyId)
     .eq("contract_id", s.contract_id)
     .neq("id", s.id)
     .gte("scheduled_start", `${newDateStr}T00:00:00`)
     .lt("scheduled_start", `${newDateStr}T23:59:59`)
     .maybeSingle();
+  if (dupError) throw new Error(`conflito de contrato (#${s.reference_number}): ${dupError.message}`);
 
   // Conflito 2: a equipa já tem outro serviço a sobrepor-se no novo horário.
   let teamConflict = null;
   if (s.team_id) {
-    const { data } = await sb
+    const { data, error: teamError } = await sb
       .from("services")
       .select("id, reference_number")
+      .eq("company_id", db.companyId)
       .eq("team_id", s.team_id)
       .neq("id", s.id)
       .in("status", ["agendado", "em_curso"])
       .lt("scheduled_start", newEnd)
       .gt("scheduled_end", newStart)
       .maybeSingle();
+    if (teamError) throw new Error(`conflito de equipa (#${s.reference_number}): ${teamError.message}`);
     teamConflict = data;
   }
 
@@ -101,18 +111,18 @@ for (const s of services ?? []) {
 
   moved++;
   console.log(`#${s.reference_number}: ${s.scheduled_start} (${["dom","seg","ter","qua","qui","sex","sáb"][dow]}) → ${newStart}`);
-  if (APPLY) {
-    const { error: upErr } = await sb.from("services")
-      .update({
-        scheduled_start: newStart,
-        scheduled_end: newEnd,
-        is_exception: true,
-        original_date: startDateStr,
-      })
-      .eq("id", s.id);
-    if (upErr) console.error(`  ERRO #${s.reference_number}:`, upErr.message);
-  }
+  await db.write(
+    "services",
+    (t) => t.update({
+      scheduled_start: newStart,
+      scheduled_end: newEnd,
+      is_exception: true,
+      original_date: startDateStr,
+    }).eq("id", s.id).eq("company_id", db.companyId),
+    `#${s.reference_number}`,
+  );
 }
 
-console.log(`\n${APPLY ? "APLICADO" : "DRY-RUN"} — analisados: ${scanned}, em fim de semana: ${weekend}, ` +
-  `${APPLY ? "movidos" : "a mover"}: ${moved}, com conflito (não mexidos): ${skippedConflict}.`);
+console.log(`\nAnalisados: ${scanned}, em fim de semana: ${weekend}, `
+  + `a mover: ${moved}, com conflito (não mexidos): ${skippedConflict}.`);
+db.summary();

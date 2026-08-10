@@ -243,6 +243,10 @@ function categoryOf(rel) {
   if (rel.startsWith("supabase/migrations/")) return "migration";
   if (rel.startsWith("supabase/frozen/")) return "sql-frozen";
   if (rel.startsWith("supabase/")) return "supabase-other";
+  // Antes de `scripts/`: um script arquivado continua a ser código versionado,
+  // mas deixou de fazer parte da superfície operacional. Selado com uma recusa
+  // sem escapatória na T17-B2 — ver docs/SCRIPTS-SAFETY-MATRIX.md.
+  if (rel.startsWith("scripts/historico/")) return "script-historico";
   if (rel.startsWith("scripts/")) return "script";
   // Antes de `docs/`: o arquivo histórico é documentação, mas não é
   // documentação VIGENTE, e a distinção tem de sobreviver no inventário.
@@ -379,7 +383,27 @@ const USES_SERVICE_ROLE =
  * palavras que tenha no corpo. Esta pergunta vem primeiro que todas as outras.
  */
 const CONSTRUCTS_DB_CLIENT =
-  /createClient\s*\(|createAdminClient\s*\(|from\s+["']@supabase\/|require\s*\(\s*["']@supabase\/|new\s+(?:Client|Pool)\s*\(|from\s+["']pg["']/;
+  /createClient\s*\(|createAdminClient\s*\(|openAdminDb\s*\(|from\s+["']@supabase\/|require\s*\(\s*["']@supabase\/|new\s+(?:Client|Pool)\s*\(|from\s+["']pg["']/;
+
+/**
+ * Passa pelas guardas comuns da T17-B2?
+ *
+ * Esta pergunta teve de ser acrescentada no momento em que os scripts foram
+ * migrados — e a razão é instrutiva. Ao substituir `createClient(...)` por
+ * `openAdminDb(...)`, os quinze `PRODUCTION_DANGEROUS` desapareceram do
+ * inventário de uma vez: passaram todos a `SAFE_OFFLINE`, porque nenhum
+ * continha já `process.env.SUPABASE_SERVICE_ROLE_KEY` nem construía um cliente
+ * que o classificador reconhecesse.
+ *
+ * Continuavam, evidentemente, a escrever na base com a chave administrativa.
+ * Só a tinham deixado de pedir directamente.
+ *
+ * É o mesmo falso "seguro" que a T17-B1 apanhou em `import-predios.mjs`, agora
+ * causado pela própria correcção. A capacidade não mudou — mudou a forma de a
+ * exercer, e um detector que só conhece a forma antiga dá luz verde à nova.
+ */
+const USES_GUARDED_ADMIN = /openAdminDb\s*\(/;
+const GUARDED_WRITES = /writes:\s*true|\bdb\.(write|restWrite)\s*\(/;
 
 /**
  * O SDK não é a única porta de entrada.
@@ -434,8 +458,17 @@ function scriptRisk(rel, raw) {
     SIGNALS.write.test(src) || writesViaRest || writesViaSql
     || /deleteUser|admin\.auth\.(?:create|delete|update)/i.test(src);
 
+  // Chave administrativa **através das guardas comuns**: o alvo é declarado e
+  // confrontado, dry-run é o omisso, produção é recusada e `company_id` é
+  // obrigatório. Continua a ser poder a sério — por isso tem classe própria e
+  // não se confunde com uma ferramenta offline — mas já não é a mesma coisa
+  // que a chave crua.
+  if (USES_GUARDED_ADMIN.test(src)) {
+    return GUARDED_WRITES.test(src) ? "ADMIN_GUARDED_WRITE" : "ADMIN_READ";
+  }
+
   if (USES_SERVICE_ROLE.test(src)) {
-    // Chave administrativa + escrita é a combinação que apagou dados no
+    // Chave administrativa crua + escrita é a combinação que apagou dados no
     // passado. Chave administrativa só para ler é grave, mas menos.
     return writes ? "PRODUCTION_DANGEROUS" : "ADMIN_READ";
   }
@@ -564,6 +597,13 @@ function classify(rel) {
     confidence = "média";
     reason = "documentação de planeamento anterior ao produto actual";
     action = "avaliar movimento para docs/historico/ na T17-B";
+  } else if (category === "script-historico") {
+    status = "MANTER";
+    reason =
+      "script arquivado na T17-B2: preservado para auditoria e para explicar como "
+      + "os dados chegaram à base, selado com uma recusa sem escapatória que o impede "
+      + "de correr. Já não é superfície operacional";
+    action = "não desbloquear: se o que faz voltar a ser preciso, escrever ferramenta nova com as guardas actuais";
   } else if (category === "doc-historico") {
     status = "MANTER";
     reason =
@@ -590,8 +630,16 @@ function classify(rel) {
     if (risk === "PRODUCTION_DANGEROUS") {
       status = "STANDBY";
       confidence = "alta";
-      reason = "usa a chave administrativa E escreve/apaga — capaz de estragar uma base real";
-      action = "T17-B: decidir entre arquivar, exigir flag explícita, ou remover";
+      reason = "usa a chave administrativa crua E escreve/apaga — capaz de estragar uma base real";
+      action = "endurecer com scripts/lib/admin-db.mjs (T17-B2), arquivar, ou remover";
+    } else if (risk === "ADMIN_GUARDED_WRITE") {
+      status = "MANTER";
+      confidence = "alta";
+      reason =
+        "escreve com a chave administrativa, mas através das guardas comuns da T17-B2: "
+        + "alvo declarado e confrontado, dry-run por omissão, produção recusada sem "
+        + "autorização explícita, company_id obrigatório";
+      action = "manter fora de qualquer execução automática";
     } else if (risk === "ADMIN_READ") {
       status = "MANTER";
       confidence = "média";

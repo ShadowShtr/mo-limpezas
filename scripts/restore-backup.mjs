@@ -5,31 +5,28 @@
 // base com --apply. Faz upsert por `id`, na ordem do manifesto (pais antes
 // de filhos), em lotes — idempotente, pode voltar a correr sem duplicar.
 //
-//   node scripts/restore-backup.mjs backups/2026-07-16
-//   node scripts/restore-backup.mjs backups/2026-07-16 --apply
-//   node scripts/restore-backup.mjs backups/2026-07-16 --apply --tables=contracts,services
+//   node scripts/restore-backup.mjs backups/2026-07-16 --project-ref <ref> --company-id <uuid>
+//   … --apply                      escreve mesmo
+//   … --apply --tables=contracts,services
+//
+// Guardas comuns em scripts/lib/admin-db.mjs (T17-B2).
 
 import fs from "node:fs";
 import path from "node:path";
-import { createClient } from "@supabase/supabase-js";
+import { openAdminDb } from "./lib/admin-db.mjs";
 
-const env = fs.readFileSync(".env.local", "utf8").split("\n").reduce((a, l) => {
-  const m = l.match(/^([A-Z_]+)=(.*)$/);
-  if (m) a[m[1]] = m[2].replace(/^"|"$/g, "");
-  return a;
-}, {});
-const sb = createClient(env.NEXT_PUBLIC_SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, {
-  auth: { persistSession: false },
+const db = await openAdminDb({
+  script: "restore-backup.mjs",
+  purpose: "restaurar tabelas a partir de uma pasta de backup (upsert por id)",
+  writes: true,
 });
 
-const args = process.argv.slice(2);
-const dir = args.find((a) => !a.startsWith("--"));
-const APPLY = args.includes("--apply");
-const tablesArg = args.find((a) => a.startsWith("--tables="));
+const dir = db.rest.find((a) => !a.startsWith("--"));
+const tablesArg = db.rest.find((a) => a.startsWith("--tables="));
 const onlyTables = tablesArg ? tablesArg.slice("--tables=".length).split(",").map((t) => t.trim()) : null;
 
 if (!dir) {
-  console.error("Uso: node scripts/restore-backup.mjs <pasta-backup> [--apply] [--tables=a,b,c]");
+  console.error("Uso: node scripts/restore-backup.mjs <pasta-backup> --project-ref <ref> --company-id <uuid> [--apply] [--tables=a,b,c]");
   process.exit(1);
 }
 
@@ -47,12 +44,9 @@ if (tableNames.length === 0) {
 }
 
 console.log(`Backup: ${dir} (gerado a partir de ${manifest.url ?? "?"})`);
-console.log(`Modo: ${APPLY ? "APLICAR (vai escrever na base)" : "DRY-RUN (nada é escrito — usa --apply para aplicar)"}`);
 console.log(`Tabelas: ${tableNames.join(", ")}\n`);
 
 const BATCH = 200;
-let totalOk = 0;
-let totalErr = 0;
 
 for (const table of tableNames) {
   const file = path.join(dir, `${table}.json`);
@@ -60,36 +54,34 @@ for (const table of tableNames) {
     console.log(`⚠️  ${table}: ficheiro ${file} não existe, salto.`);
     continue;
   }
-  const rows = JSON.parse(fs.readFileSync(file, "utf8"));
-  if (!Array.isArray(rows) || rows.length === 0) {
+  const todos = JSON.parse(fs.readFileSync(file, "utf8"));
+  if (!Array.isArray(todos) || todos.length === 0) {
     console.log(`—  ${table}: 0 registos no backup.`);
     continue;
   }
 
-  if (!APPLY) {
-    console.log(`   ${table}: ${rows.length} registos seriam restaurados (upsert por id).`);
-    continue;
-  }
+  // Um backup pode conter várias empresas. Restaurar com a chave
+  // administrativa contorna o RLS, por isso o filtro por empresa tem de ser
+  // feito aqui — senão `--company-id` era só uma flag para satisfazer o guard.
+  const temCompanyId = Object.hasOwn(todos[0], "company_id");
+  const rows = temCompanyId ? todos.filter((r) => r.company_id === db.companyId) : todos;
+  const ignorados = todos.length - rows.length;
 
-  let ok = 0;
-  let err = 0;
+  if (!temCompanyId) {
+    console.log(`   ${table}: sem coluna company_id — restaurado na íntegra (${rows.length}).`);
+  } else if (ignorados) {
+    console.log(`   ${table}: ${ignorados} registo(s) de outras empresas ignorados.`);
+  }
+  if (rows.length === 0) { console.log(`—  ${table}: nada desta empresa.`); continue; }
+
   for (let i = 0; i < rows.length; i += BATCH) {
     const chunk = rows.slice(i, i + BATCH);
-    const { data, error } = await sb.from(table).upsert(chunk, { onConflict: "id" }).select("id");
-    if (error) {
-      err += chunk.length;
-      console.error(`   ❌ ${table} lote ${i}: ${error.message}`);
-      continue;
-    }
-    ok += data.length;
+    await db.write(
+      table,
+      (t) => t.upsert(chunk, { onConflict: "id" }).select("id"),
+      `${table} lote ${i}–${i + chunk.length - 1} (${chunk.length})`,
+    );
   }
-  totalOk += ok;
-  totalErr += err;
-  console.log(`✅ ${table}: ${ok}/${rows.length} restaurados${err ? ` (${err} falharam)` : ""}.`);
 }
 
-if (APPLY) {
-  console.log(`\nTotal: ${totalOk} restaurados, ${totalErr} falhas.`);
-} else {
-  console.log("\nDry-run concluído — nada foi escrito. Confirma os números e corre de novo com --apply.");
-}
+db.summary();

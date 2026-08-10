@@ -1,3 +1,38 @@
+// ============================================================================
+// 🔴 ARQUIVADO — NÃO EXECUTAR (T17-B2, 2026-08-10)
+// ============================================================================
+//
+// Preservado para AUDITORIA e para explicar como os dados actuais chegaram à
+// base. NÃO é uma ferramenta operacional e não deve voltar a correr contra
+// base nenhuma.
+//
+// Porquê:
+//   apaga TODAS as linhas de services, contracts, daily_clocks, absences,
+//   vacation_requests e management_tasks, sem filtro de company_id — portanto
+//   em todas as empresas. Por cascata leva timesheets, ou seja o registo de
+//   ponto das colaboradoras. A protecção de backup aponta para um caminho fixo
+//   de 2026-07-01. Era de uma fase em que a base era descartável; deixou de
+//   ser.
+//
+// A recusa abaixo é deliberadamente SEM ESCAPATÓRIA: não há flag, variável de
+// ambiente nem argumento que a contorne. Se algum dia for mesmo preciso o que
+// este código faz, o caminho é lê-lo, perceber o que faz HOJE, e escrever de
+// propósito uma ferramenta nova com as guardas da T17-B2 — não desbloquear
+// esta.
+//
+// Ver docs/SCRIPTS-SAFETY-MATRIX.md e AGENTS.md (REGRA ZERO).
+// ============================================================================
+
+console.error(
+  "\n🔴 reset-operacao.mjs está ARQUIVADO e não pode ser executado.\n",
+);
+console.error(
+  "   Foi retirado da superfície operacional na T17-B2 por ser capaz de\n   destruir ou duplicar dados reais. Fica versionado apenas como registo\n   histórico e para auditoria.\n\n   Ver docs/SCRIPTS-SAFETY-MATRIX.md\n",
+);
+process.exit(1);
+
+// ─── Código histórico a partir daqui. Preservado sem alterações. ───────────
+
 // RESET da operação: apaga serviços, contratos e registos de trabalho.
 // MANTÉM: empresa, utilizadores/colaboradores, equipas, clientes, locais,
 //         e TODO o financeiro (banco, cash flow, faturas, salários).

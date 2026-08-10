@@ -1,3 +1,35 @@
+// ============================================================================
+// 🔴 ARQUIVADO — NÃO EXECUTAR (T17-B2, 2026-08-10)
+// ============================================================================
+//
+// Preservado para AUDITORIA e para explicar como os dados actuais chegaram à
+// base. NÃO é uma ferramenta operacional e não deve voltar a correr contra
+// base nenhuma.
+//
+// Porquê:
+//   importador de uma única remessa — o fluxo de caixa de Junho de 2026 — para
+//   cash_flow_entries. Já correu. A flag --force repete a importação e duplica
+//   movimentos.
+//
+// A recusa abaixo é deliberadamente SEM ESCAPATÓRIA: não há flag, variável de
+// ambiente nem argumento que a contorne. Se algum dia for mesmo preciso o que
+// este código faz, o caminho é lê-lo, perceber o que faz HOJE, e escrever de
+// propósito uma ferramenta nova com as guardas da T17-B2 — não desbloquear
+// esta.
+//
+// Ver docs/SCRIPTS-SAFETY-MATRIX.md e AGENTS.md (REGRA ZERO).
+// ============================================================================
+
+console.error(
+  "\n🔴 import-fluxo-junho.mjs está ARQUIVADO e não pode ser executado.\n",
+);
+console.error(
+  "   Foi retirado da superfície operacional na T17-B2 por ser capaz de\n   destruir ou duplicar dados reais. Fica versionado apenas como registo\n   histórico e para auditoria.\n\n   Ver docs/SCRIPTS-SAFETY-MATRIX.md\n",
+);
+process.exit(1);
+
+// ─── Código histórico a partir daqui. Preservado sem alterações. ───────────
+
 // ============================================================
 // Importa o Fluxo de Caixa de Junho (Mó Limpezas) para cash_flow_entries.
 // Fonte: pacote mo_limpezas_CODEX_FLUXO_CAIXA_JUNHO_CSV_SIMPLES

@@ -203,12 +203,22 @@ describe("T17-A — invariantes que o inventário protege", () => {
     }
   });
 
-  it("os scripts que usam a chave administrativa e escrevem estão assinalados", () => {
-    const perigosos = REPORT.files.filter((e) => e.scriptRisk === "PRODUCTION_DANGEROUS");
-    expect(perigosos.length).toBeGreaterThan(0);
-    for (const p of perigosos) {
-      expect(p.status, `${p.path}: script perigoso não pode ficar em MANTER silencioso`).toBe("STANDBY");
+  it("um script com a chave administrativa crua e escrita nunca passa em silêncio", () => {
+    // A T17-B2 endureceu os 15 e a contagem é agora zero — este teste passa por
+    // vacuidade, de propósito. Não afirma que existem scripts perigosos: afirma
+    // que, se voltar a aparecer um, não fica em MANTER sem ninguém reparar.
+    for (const p of REPORT.files.filter((e) => e.scriptRisk === "PRODUCTION_DANGEROUS")) {
+      expect(p.status, `${p.path}: chave administrativa crua + escrita não pode ficar em MANTER`).toBe("STANDBY");
     }
+  });
+
+  it("os scripts que escrevem passaram todos pelas guardas comuns", () => {
+    const guardados = REPORT.files.filter((e) => e.scriptRisk === "ADMIN_GUARDED_WRITE");
+    expect(guardados.length, "a T17-B2 migrou os scripts de escrita para openAdminDb").toBeGreaterThanOrEqual(10);
+    expect(
+      REPORT.files.filter((e) => e.scriptRisk === "PRODUCTION_DANGEROUS").map((e) => e.path),
+      "nenhum script deve voltar a usar a chave administrativa crua para escrever",
+    ).toEqual([]);
   });
 
   it("os scanners de segurança não são confundidos com ameaças", () => {
@@ -247,7 +257,11 @@ describe("T17-A — invariantes que o inventário protege", () => {
     // T17-B1: reconhecer só `.insert(` declarava inofensivo o
     // `import-predios.mjs`, que faz POST a `/rest/v1/building_cards` com a
     // chave administrativa. Um falso "seguro" é pior que nenhuma regra.
-    expect(CLASSIFIED.get("scripts/import-predios.mjs")?.scriptRisk).toBe("PRODUCTION_DANGEROUS");
+    //
+    // Na T17-B2 passou a escrever pelo caminho REST do helper — continua a ser
+    // escrita com a chave administrativa, agora guardada. O que este teste
+    // protege é que **nunca volte a contar como leitura**.
+    expect(CLASSIFIED.get("scripts/import-predios.mjs")?.scriptRisk).toBe("ADMIN_GUARDED_WRITE");
     expect(CLASSIFIED.get("scripts/restore-from-history.mjs")?.scriptRisk).toBe("WRITE_CAPABLE");
   });
 

@@ -1,4 +1,11 @@
-# Matriz de segurança dos scripts — `PRODUCTION_DANGEROUS`
+# Matriz de segurança dos scripts
+
+> ⚠️ **Actualizado pela T17-B2 (2026-08-10).** O estado descrito em §2 é o que
+> a T17-B1 encontrou. **Já não é o estado actual** — os 15 foram entretanto
+> arquivados ou endurecidos. Ver **§8** para o que existe hoje.
+>
+> A matriz original fica porque explica **porque** cada decisão foi tomada.
+> Apagá-la deixaria as guardas sem motivo escrito.
 
 > ⚠️ **São 15, não 14.** A T17-A publicou 14. Ao escrever esta matriz
 > encontrou-se um 15.º — `import-predios.mjs` — que estava classificado
@@ -245,3 +252,91 @@ A T17-B2 deve, por esta ordem:
 3. aplicar `dry-run` por omissão aos 8 `NEEDS_HARD_GUARD`;
 4. exigir `company_id` em toda a escrita;
 5. arquivar o `ARCHIVE_CANDIDATE`.
+
+---
+
+## 8. Estado depois da T17-B2 (2026-08-10)
+
+Tudo o que está acima descreve o problema. Isto descreve o que ficou feito.
+
+### 8.1 Os 4 `MANUAL_REVIEW` — arquivados
+
+Decisão do proprietário: **arquivar, não apagar.** Movidos com `git mv` para
+`scripts/historico/`, conteúdo preservado, e selados com uma recusa **sem
+escapatória** — não há flag, variável de ambiente nem argumento que a contorne.
+
+| Script | Porquê |
+|---|---|
+| `reset-operacao.mjs` | reset global sem `company_id`, protegido por um backup de data fixa |
+| `migrate-real-data.mjs` | migração histórica com IDs embutidos; `--wipe` apaga faturas e caixa |
+| `import-fluxo-junho.mjs` | importador de Junho/2026; `--force` duplicava movimentos |
+| `import-pdf-jun26.mjs` | importador de um PDF específico de Junho/2026 |
+
+A recusa é a **primeira instrução executável** de cada ficheiro — um teste
+verifica isso, e não apenas que a mensagem existe. Se algum dia o que fazem
+voltar a ser preciso, o caminho é escrever uma ferramenta nova com as guardas
+actuais, não desbloquear estas.
+
+### 8.2 Guardas comuns
+
+`scripts/lib/admin-script-guard.mjs` — decisão **pura**, testável, sem I/O.
+`scripts/lib/admin-db.mjs` — o I/O, que obedece ao veredito.
+
+| Regra | O que faz |
+|---|---|
+| **Alvo declarado** | `--project-ref <ref>` obrigatório, confrontado com o ambiente carregado. Uma divergência aborta |
+| **Dry-run por omissão** | sem `--apply` nada é escrito; o script corre inteiro e diz o que faria |
+| **Produção recusada** | e **o desconhecido conta como produção**. Só passa com `--i-am-authorized-to-write-to-production` |
+| **`company_id` obrigatório** | a chave administrativa contorna o RLS; sem âmbito, a escrita atinge todas as empresas |
+| **Alvo sempre impresso** | projecto, empresa e modo aparecem antes de qualquer trabalho |
+| **Erros nunca ignorados** | `db.write` devolve o erro; nenhuma escrita falha em silêncio |
+
+`MO_PRODUCTION_PROJECT_REF` (em `.env.example`) declara qual é o projecto real.
+**Se ficar por preencher, tudo é tratado como produção** — deliberado: um guard
+que só protege quando está bem configurado não protege nada no dia em que
+alguém se esquece de o configurar.
+
+### 8.3 Parsers de `.env.local` — zero
+
+Eram sete, cada um com regras próprias. Agora há **um** `loadEnvFile()`. Um
+teste falha se voltar a aparecer outro.
+
+Deixou-se de usar `dotenv` nestes scripts de propósito: injectava em
+`process.env`, e um script que leia `process.env.SUPABASE_SERVICE_ROLE_KEY`
+directamente volta a escapar ao guard.
+
+### 8.4 Classes de risco hoje
+
+| Risco | # | Significado |
+|---|---|---|
+| `SAFE_OFFLINE` | 22 | não tocam na base |
+| **`ADMIN_GUARDED_WRITE`** | **11** | escrevem com a chave administrativa **através das guardas** |
+| `ADMIN_READ` | 6 | chave administrativa só para ler |
+| `WRITE_CAPABLE` | 3 | escrevem sem chave administrativa (RLS aplica-se) |
+| **`PRODUCTION_DANGEROUS`** | **0** | — |
+
+> 🔴 **O zero foi quase falso.** Ao migrar os scripts, os 15
+> `PRODUCTION_DANGEROUS` desapareceram do inventário de uma vez — passaram
+> todos a `SAFE_OFFLINE`, porque nenhum continha já
+> `process.env.SUPABASE_SERVICE_ROLE_KEY` nem construía um cliente que o
+> classificador reconhecesse. Continuavam a escrever na base com a chave
+> administrativa; só a tinham deixado de pedir directamente.
+>
+> É o **mesmo falso "seguro"** de `import-predios.mjs`, desta vez provocado
+> pela própria correcção. A capacidade não mudou — mudou a forma de a exercer.
+> Daí a classe `ADMIN_GUARDED_WRITE`: continua a ser poder a sério, e não se
+> confunde com uma ferramenta offline. O zero de `PRODUCTION_DANGEROUS` só
+> significa "nenhum usa a chave crua", nunca "nenhum escreve".
+
+### 8.5 Lacunas conhecidas
+
+- **`send-password-recovery.mjs`** envia **email real a pessoas reais** — também
+  irreversível, e não passa pelo guard, que cobre escrita em base de dados e não
+  envio de mensagens. Ficou só com o carregador de ambiente unificado. Merece
+  guarda equivalente (`--apply`, alvo declarado, confirmação) numa próxima ronda.
+- **`restore-from-history.mjs`**, **`run-migrations.mjs`** e
+  **`verify-profile-guards.mjs`** escrevem sem chave administrativa; o RLS ainda
+  se aplica, e os dois últimos já têm guardas próprias (`verify-target-guard`).
+  Não foram tocados.
+- **`import-contratos-5.mjs`** continua `ARCHIVE_CANDIDATE` — foi endurecido,
+  mas a decisão de o arquivar não foi tomada.
