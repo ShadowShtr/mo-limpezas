@@ -126,4 +126,5 @@ Os crons requerem o header `x-cron-secret` com o valor de `CRON_SECRET`.
 
 ## Documentacao Operacional
 
-- [Mapa e GPS operacional](planning/docs/10-mapa-gps.md)
+- [Mapa e GPS operacional](docs/historico/planning/docs/10-mapa-gps.md) — arquivo
+  histórico (movido na T17-B1; ver [`docs/historico/planning/README-ARQUIVO.md`](docs/historico/planning/README-ARQUIVO.md))

@@ -43,15 +43,20 @@ não instrução a repetir.
 
 ## Onde Está Tudo
 
+> ⚠️ Na **T17-B1** (2026-08-10) a pasta `planning/` foi movida sem alterações
+> para `docs/historico/planning/`. É **arquivo histórico**, não fonte
+> operacional — ver `docs/historico/planning/README-ARQUIVO.md`. Os caminhos
+> abaixo já apontam para o novo local.
+
 | O quê | Onde |
 |-------|------|
-| Todas as decisões tomadas | `planning/docs/08-decisions-log.md` |
-| Base de dados (schema completo) | `planning/docs/03-database-schema.md` |
-| Funcionalidades detalhadas | `planning/docs/01-features.md` |
-| Sistema de design (cores, componentes) | `planning/docs/09-design-system.md` |
-| Stack tecnológica justificada | `planning/docs/02-tech-stack.md` |
-| Roadmap por fases | `planning/docs/05-roadmap.md` |
-| Módulo financeiro | `planning/docs/07-financial-module.md` |
+| Todas as decisões tomadas | `docs/historico/planning/docs/08-decisions-log.md` |
+| Base de dados (schema completo) | `docs/historico/planning/docs/03-database-schema.md` |
+| Funcionalidades detalhadas | `docs/historico/planning/docs/01-features.md` |
+| Sistema de design (cores, componentes) | `docs/historico/planning/docs/09-design-system.md` |
+| Stack tecnológica justificada | `docs/historico/planning/docs/02-tech-stack.md` |
+| Roadmap por fases | `docs/historico/planning/docs/05-roadmap.md` |
+| Módulo financeiro | `docs/historico/planning/docs/07-financial-module.md` |
 
 ---
 
@@ -857,7 +862,7 @@ serviço (thumbnails lazy, signed URL ao clicar)
 
 ## Regras para o Claude
 
-- Seguir o design system de `planning/docs/09-design-system.md` em tudo
+- Seguir o design system de `docs/historico/planning/docs/09-design-system.md` em tudo
 - Verde `#16A34A` como cor primária, nunca outra
 - Fonte Inter em todo o projeto
 - Ícones sempre Lucide

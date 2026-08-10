@@ -1,0 +1,457 @@
+{
+  "generatedBy": "scripts/audit-auth-guards.mjs",
+  "task": "T17-B1",
+  "backlogId": "AUTH_GUARD_CENTRALIZATION",
+  "note": "NENHUMA destas actions está desprotegida — a T17-A encontrou zero sem autenticação. O defeito é duplicação, não vulnerabilidade. Nada foi alterado nesta ronda.",
+  "canonical": {
+    "module": "src/lib/auth-guard.ts",
+    "fn": "requireProfile",
+    "select": "id, company_id, role",
+    "cardinality": "single",
+    "companyIdSource": "sessão"
+  },
+  "usingCentralGuard": 15,
+  "inlineGuards": 20,
+  "byVerdict": {
+    "SAFE_TO_CENTRALIZE": 9,
+    "SEMANTIC_DIFFERENCE": 5,
+    "NEEDS_TEST": 5,
+    "STANDBY": 1
+  },
+  "entries": [
+    {
+      "path": "src/app/(dashboard)/dashboard/calendario/_actions/create-service.ts",
+      "guardStyle": "inline: getUser() → ler profiles com chave administrativa → verificar role",
+      "getUserCalls": 1,
+      "profileSelects": [
+        "company_id, role"
+      ],
+      "cardinality": "single",
+      "rolesReferenced": [
+        "admin",
+        "gestor"
+      ],
+      "localHelpers": [],
+      "validatesCompanyIdAgainstInput": false,
+      "writes": 1,
+      "matchesCanonicalShape": true,
+      "verdict": "SAFE_TO_CENTRALIZE",
+      "notes": "guard idêntico ao canónico, um único ponto de chamada.",
+      "classified": true
+    },
+    {
+      "path": "src/app/(dashboard)/dashboard/calendario/_actions/reschedule.ts",
+      "guardStyle": "inline: getUser() → ler profiles com chave administrativa → verificar role",
+      "getUserCalls": 1,
+      "profileSelects": [
+        "company_id, role"
+      ],
+      "cardinality": "single",
+      "rolesReferenced": [
+        "admin",
+        "gestor"
+      ],
+      "localHelpers": [],
+      "validatesCompanyIdAgainstInput": false,
+      "writes": 1,
+      "matchesCanonicalShape": true,
+      "verdict": "SAFE_TO_CENTRALIZE",
+      "notes": "guard idêntico ao canónico, um único ponto de chamada.",
+      "classified": true
+    },
+    {
+      "path": "src/app/(dashboard)/dashboard/calendario/_actions/update-service.ts",
+      "guardStyle": "inline: getUser() → ler profiles com chave administrativa → verificar role",
+      "getUserCalls": 1,
+      "profileSelects": [
+        "company_id, role"
+      ],
+      "cardinality": "single",
+      "rolesReferenced": [
+        "admin",
+        "gestor"
+      ],
+      "localHelpers": [
+        "authorize"
+      ],
+      "validatesCompanyIdAgainstInput": false,
+      "writes": 4,
+      "matchesCanonicalShape": true,
+      "verdict": "SAFE_TO_CENTRALIZE",
+      "notes": "já está factorizado num helper local `authorize()` — a troca é substituir o corpo desse helper.",
+      "classified": true
+    },
+    {
+      "path": "src/app/actions/absences.ts",
+      "guardStyle": "inline: getUser() → ler profiles com chave administrativa → verificar role",
+      "getUserCalls": 4,
+      "profileSelects": [
+        "company_id",
+        "role, company_id",
+        "skills",
+        "id, full_name, skills"
+      ],
+      "cardinality": "single",
+      "rolesReferenced": [
+        "admin",
+        "gestor",
+        "colaborador"
+      ],
+      "localHelpers": [
+        "getCompanyId"
+      ],
+      "validatesCompanyIdAgainstInput": false,
+      "writes": 3,
+      "matchesCanonicalShape": true,
+      "verdict": "SEMANTIC_DIFFERENCE",
+      "notes": "além do guard, lê `skills` e `full_name` de outros perfis para o motor de substituição, e admite o papel `colaborador` a agir sobre si próprio. Só a parte do guard centraliza; as outras leituras ficam.",
+      "classified": true
+    },
+    {
+      "path": "src/app/actions/auth.ts",
+      "guardStyle": "inline: getUser() → ler profiles com chave administrativa → verificar role",
+      "getUserCalls": 2,
+      "profileSelects": [
+        "role",
+        "company_id, role"
+      ],
+      "cardinality": "single",
+      "rolesReferenced": [
+        "colaborador",
+        "colaboradora",
+        "admin",
+        "gestor"
+      ],
+      "localHelpers": [],
+      "validatesCompanyIdAgainstInput": false,
+      "writes": 0,
+      "matchesCanonicalShape": true,
+      "verdict": "SEMANTIC_DIFFERENCE",
+      "notes": "é a própria superfície de autenticação (login, convite, reposição de password). Centralizar aqui arrisca dependência circular com o guard. Tratar em último.",
+      "classified": true
+    },
+    {
+      "path": "src/app/actions/building-cards.ts",
+      "guardStyle": "inline: getUser() → ler profiles com chave administrativa → verificar role",
+      "getUserCalls": 2,
+      "profileSelects": [
+        "company_id",
+        "company_id, role"
+      ],
+      "cardinality": "single",
+      "rolesReferenced": [
+        "admin",
+        "gestor"
+      ],
+      "localHelpers": [
+        "getCompanyId",
+        "requireManager"
+      ],
+      "validatesCompanyIdAgainstInput": false,
+      "writes": 4,
+      "matchesCanonicalShape": true,
+      "verdict": "SAFE_TO_CENTRALIZE",
+      "notes": "já tem `getCompanyId()` e `requireManager()` locais — trocar o corpo dos dois.",
+      "classified": true
+    },
+    {
+      "path": "src/app/actions/cancellations.ts",
+      "guardStyle": "inline: getUser() → ler profiles com chave administrativa → verificar role",
+      "getUserCalls": 2,
+      "profileSelects": [
+        "company_id, role, full_name",
+        "company_id, role"
+      ],
+      "cardinality": "single",
+      "rolesReferenced": [
+        "admin",
+        "gestor"
+      ],
+      "localHelpers": [],
+      "validatesCompanyIdAgainstInput": true,
+      "writes": 5,
+      "matchesCanonicalShape": true,
+      "verdict": "NEEDS_TEST",
+      "notes": "o guard lê também `full_name` para registar quem cancelou; a troca tem de preservar esse campo. Cancelamento tardio tem efeitos de notificação a jusante.",
+      "classified": true
+    },
+    {
+      "path": "src/app/actions/clientes.ts",
+      "guardStyle": "inline: getUser() → ler profiles com chave administrativa → verificar role",
+      "getUserCalls": 5,
+      "profileSelects": [
+        "company_id, role"
+      ],
+      "cardinality": "single",
+      "rolesReferenced": [
+        "admin",
+        "gestor"
+      ],
+      "localHelpers": [],
+      "validatesCompanyIdAgainstInput": true,
+      "writes": 10,
+      "matchesCanonicalShape": true,
+      "verdict": "NEEDS_TEST",
+      "notes": "5 pontos de chamada. Valida `profile.company_id !== input.company_id` em vez de confiar no input — comportamento correcto que a migração tem de manter.",
+      "classified": true
+    },
+    {
+      "path": "src/app/actions/colaboradores.ts",
+      "guardStyle": "inline: getUser() → ler profiles com chave administrativa → verificar role",
+      "getUserCalls": 6,
+      "profileSelects": [
+        "company_id, role",
+        "role, iban, hourly_rate, nif",
+        "company_id, full_name",
+        "id, company_id, full_name"
+      ],
+      "cardinality": "single",
+      "rolesReferenced": [
+        "colaborador",
+        "gestor",
+        "admin"
+      ],
+      "localHelpers": [],
+      "validatesCompanyIdAgainstInput": true,
+      "writes": 12,
+      "matchesCanonicalShape": true,
+      "verdict": "SEMANTIC_DIFFERENCE",
+      "notes": "6 pontos de chamada e regras por papel diferentes por função (gestor cria mas não apaga; colaborador vê-se a si). Lê ainda `iban`/`hourly_rate`/`nif`, que são dados sensíveis e não pertencem ao guard.",
+      "classified": true
+    },
+    {
+      "path": "src/app/actions/contratos.ts",
+      "guardStyle": "inline: getUser() → ler profiles com chave administrativa → verificar role",
+      "getUserCalls": 3,
+      "profileSelects": [
+        "company_id, role"
+      ],
+      "cardinality": "single",
+      "rolesReferenced": [
+        "admin",
+        "gestor"
+      ],
+      "localHelpers": [],
+      "validatesCompanyIdAgainstInput": true,
+      "writes": 10,
+      "matchesCanonicalShape": true,
+      "verdict": "NEEDS_TEST",
+      "notes": "3 pontos de chamada. Valida `company_id` contra o input, como `clientes.ts`. Superfície financeira — qualquer mexida cruza a zona congelada.",
+      "classified": true
+    },
+    {
+      "path": "src/app/actions/csv-import.ts",
+      "guardStyle": "inline: getUser() → ler profiles com chave administrativa → verificar role",
+      "getUserCalls": 1,
+      "profileSelects": [
+        "company_id, role"
+      ],
+      "cardinality": "single",
+      "rolesReferenced": [
+        "admin",
+        "gestor",
+        "colaborador"
+      ],
+      "localHelpers": [
+        "getCallerContext"
+      ],
+      "validatesCompanyIdAgainstInput": false,
+      "writes": 3,
+      "matchesCanonicalShape": true,
+      "verdict": "SEMANTIC_DIFFERENCE",
+      "notes": "`getCallerContext()` distingue admin de gestor para limitar o que cada um pode importar (gestor só cria colaborador — correcção P0-6). `requireProfile` devolve o papel mas não essa regra; ela fica na action.",
+      "classified": true
+    },
+    {
+      "path": "src/app/actions/email.ts",
+      "guardStyle": "inline: getUser() → ler profiles com chave administrativa → verificar role",
+      "getUserCalls": 1,
+      "profileSelects": [
+        "company_id, role"
+      ],
+      "cardinality": "single",
+      "rolesReferenced": [
+        "admin",
+        "gestor"
+      ],
+      "localHelpers": [],
+      "validatesCompanyIdAgainstInput": false,
+      "writes": 1,
+      "matchesCanonicalShape": true,
+      "verdict": "SAFE_TO_CENTRALIZE",
+      "notes": "guard idêntico, um ponto de chamada.",
+      "classified": true
+    },
+    {
+      "path": "src/app/actions/equipas.ts",
+      "guardStyle": "inline: getUser() → ler profiles com chave administrativa → verificar role",
+      "getUserCalls": 2,
+      "profileSelects": [
+        "role, company_id"
+      ],
+      "cardinality": "single",
+      "rolesReferenced": [
+        "admin",
+        "gestor"
+      ],
+      "localHelpers": [],
+      "validatesCompanyIdAgainstInput": false,
+      "writes": 5,
+      "matchesCanonicalShape": true,
+      "verdict": "SAFE_TO_CENTRALIZE",
+      "notes": "guard idêntico; ordem do select invertida (`role, company_id`), sem efeito.",
+      "classified": true
+    },
+    {
+      "path": "src/app/actions/intervencoes.ts",
+      "guardStyle": "inline: getUser() → ler profiles com chave administrativa → verificar role",
+      "getUserCalls": 1,
+      "profileSelects": [
+        "company_id, role"
+      ],
+      "cardinality": "single",
+      "rolesReferenced": [
+        "admin",
+        "gestor"
+      ],
+      "localHelpers": [
+        "requireManager"
+      ],
+      "validatesCompanyIdAgainstInput": false,
+      "writes": 2,
+      "matchesCanonicalShape": true,
+      "verdict": "SAFE_TO_CENTRALIZE",
+      "notes": "já factorizado em `requireManager()` local.",
+      "classified": true
+    },
+    {
+      "path": "src/app/actions/locations.ts",
+      "guardStyle": "inline: getUser() → ler profiles com chave administrativa → verificar role",
+      "getUserCalls": 4,
+      "profileSelects": [
+        "company_id, role"
+      ],
+      "cardinality": "single",
+      "rolesReferenced": [
+        "admin",
+        "gestor"
+      ],
+      "localHelpers": [],
+      "validatesCompanyIdAgainstInput": false,
+      "writes": 4,
+      "matchesCanonicalShape": true,
+      "verdict": "NEEDS_TEST",
+      "notes": "4 pontos de chamada; `updateLocationAccess` toca códigos de acesso a locais.",
+      "classified": true
+    },
+    {
+      "path": "src/app/actions/map.ts",
+      "guardStyle": "inline: getUser() → ler profiles com chave administrativa → verificar role",
+      "getUserCalls": 1,
+      "profileSelects": [
+        "company_id, role"
+      ],
+      "cardinality": "single",
+      "rolesReferenced": [
+        "admin",
+        "gestor"
+      ],
+      "localHelpers": [],
+      "validatesCompanyIdAgainstInput": false,
+      "writes": 0,
+      "matchesCanonicalShape": true,
+      "verdict": "SAFE_TO_CENTRALIZE",
+      "notes": "guard idêntico, leitura apenas.",
+      "classified": true
+    },
+    {
+      "path": "src/app/actions/notifications.ts",
+      "guardStyle": "inline: getUser() → ler profiles com chave administrativa → verificar role",
+      "getUserCalls": 6,
+      "profileSelects": [
+        "company_id, role"
+      ],
+      "cardinality": "single",
+      "rolesReferenced": [
+        "admin",
+        "gestor"
+      ],
+      "localHelpers": [],
+      "validatesCompanyIdAgainstInput": false,
+      "writes": 4,
+      "matchesCanonicalShape": true,
+      "verdict": "NEEDS_TEST",
+      "notes": "6 pontos de chamada e o `company_id` nem sempre vem da sessão (T17-A §4.3). Centralizar corrige isso — e é precisamente por isso que precisa de teste.",
+      "classified": true
+    },
+    {
+      "path": "src/app/actions/vacation.ts",
+      "guardStyle": "inline: getUser() → ler profiles com chave administrativa → verificar role",
+      "getUserCalls": 6,
+      "profileSelects": [
+        "company_id",
+        "full_name",
+        "id",
+        "company_id, role",
+        "id, full_name, vacation_balance, contract_start"
+      ],
+      "cardinality": "single",
+      "rolesReferenced": [
+        "gestor",
+        "admin",
+        "colaborador"
+      ],
+      "localHelpers": [],
+      "validatesCompanyIdAgainstInput": false,
+      "writes": 7,
+      "matchesCanonicalShape": true,
+      "verdict": "SEMANTIC_DIFFERENCE",
+      "notes": "6 pontos de chamada com dois papéis em jogo: o colaborador pede, o gestor aprova. Lê ainda `vacation_balance`/`contract_start`. Guard e regra de negócio estão misturados e têm de ser separados antes de centralizar.",
+      "classified": true
+    },
+    {
+      "path": "src/app/actions/vehicles.ts",
+      "guardStyle": "inline: getUser() → ler profiles com chave administrativa → verificar role",
+      "getUserCalls": 2,
+      "profileSelects": [
+        "company_id",
+        "company_id, role",
+        "id, full_name, company_id"
+      ],
+      "cardinality": "single",
+      "rolesReferenced": [
+        "admin",
+        "gestor"
+      ],
+      "localHelpers": [
+        "getCompanyId"
+      ],
+      "validatesCompanyIdAgainstInput": false,
+      "writes": 9,
+      "matchesCanonicalShape": true,
+      "verdict": "SAFE_TO_CENTRALIZE",
+      "notes": "já tem `getCompanyId()` local; 9 escritas, todas a jusante do mesmo guard.",
+      "classified": true
+    },
+    {
+      "path": "src/app/actions/whatsapp.ts",
+      "guardStyle": "inline: getUser() → ler profiles com chave administrativa → verificar role",
+      "getUserCalls": 1,
+      "profileSelects": [
+        "role, company_id"
+      ],
+      "cardinality": "single",
+      "rolesReferenced": [
+        "admin",
+        "gestor"
+      ],
+      "localHelpers": [],
+      "validatesCompanyIdAgainstInput": false,
+      "writes": 0,
+      "matchesCanonicalShape": true,
+      "verdict": "STANDBY",
+      "notes": "o ficheiro inteiro está STANDBY no inventário — implementação da Meta Cloud API deliberadamente não activa. Não mexer enquanto o destino dele não estiver decidido.",
+      "classified": true
+    }
+  ]
+}
