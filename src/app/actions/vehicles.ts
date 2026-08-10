@@ -3,6 +3,7 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
+import { isNoRowsError, logQueryFailure, queryFailure } from "@/lib/query-error";
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 
@@ -244,19 +245,26 @@ export async function moveCollaboratorToTeam(input: {
     }
     const companyId = actor.company_id;
 
-    const { data: collab } = await admin
+    const { data: collab, error: collabError } = await admin
       .from("profiles").select("id, full_name, company_id").eq("id", input.collaboratorId).single();
+    // A verificação de empresa depende desta leitura: sem ela, "inválida".
+    if (collabError && !isNoRowsError(collabError)) {
+      return queryFailure("moveCollaboratorToTeam:collaborator", collabError);
+    }
     if (!collab || collab.company_id !== companyId) {
       return { ok: false, error: "Colaboradora inválida." };
     }
 
     // Validar que a equipa de destino é da empresa.
-    const { data: targetTeam } = await admin
+    const { data: targetTeam, error: targetTeamError } = await admin
       .from("teams")
       .select("id")
       .eq("id", input.teamId)
       .eq("company_id", companyId)
       .single();
+    if (targetTeamError && !isNoRowsError(targetTeamError)) {
+      return queryFailure("moveCollaboratorToTeam:team", targetTeamError);
+    }
     if (!targetTeam) return { ok: false, error: "Equipa inválida." };
 
     // Movimento PERMANENTE: atualiza a composição da equipa (team_members), para
@@ -361,12 +369,18 @@ async function notifyDayTeam(args: {
     data: { team_id: teamId, date },
   }).then(() => null, () => null);
 
-  const { data: subs } = await admin
+  const { data: subs, error: subsError } = await admin
     .from("push_subscriptions")
     .select("endpoint, p256dh, auth_key")
     .eq("user_id", collaboratorId)
     .eq("company_id", companyId);
 
+  // Auxiliar: a função já devolve "avisou?". `false` por falha é a resposta
+  // certa — o que faltava era o registo de que houve falha.
+  if (subsError) {
+    logQueryFailure("notifyDayTeam:subscriptions", subsError);
+    return false;
+  }
   if (!subs?.length) return false;
 
   const vapidPublic  = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;

@@ -8,6 +8,7 @@ import { haversineDistanceM } from "@/lib/calculations";
 import { withRouteMetrics } from "@/lib/observability/route-metrics";
 import { auditLog } from "@/lib/audit";
 import { parseJsonBody } from "@/lib/payload-guard";
+import { isNoRowsError, logQueryFailure, QUERY_FAILURE_MESSAGE } from "@/lib/query-error";
 
 // Pontos offline aceites até 48h no passado; mais antigos vão para revisão automática
 const MAX_OFFLINE_AGE_MS = 48 * 60 * 60 * 1000;
@@ -114,12 +115,18 @@ async function postHandler(req: NextRequest) {
   const lisbonDate = new Intl.DateTimeFormat("en-CA", {
     timeZone: "Europe/Lisbon", year: "numeric", month: "2-digit", day: "2-digit",
   }).format(new Date());
-  const { data: dayClock } = await admin
+  const { data: dayClock, error: dayClockError } = await admin
     .from("daily_clocks")
     .select("clock_in_at")
     .eq("collaborator_id", user.id)
     .eq("work_date", lisbonDate)
     .maybeSingle();
+  // Sem isto, uma falha de leitura dizia à colaboradora que ainda não tinha
+  // dado entrada no dia — quando podia ter dado.
+  if (dayClockError) {
+    logQueryFailure("timesheet:dayClock", dayClockError);
+    return NextResponse.json({ error: QUERY_FAILURE_MESSAGE }, { status: 503 });
+  }
   if (!dayClock?.clock_in_at) {
     return NextResponse.json(
       { error: "Bate o ponto de início do dia (aba Ponto) antes de registar pontos nos serviços.", needsDailyClockIn: true },
@@ -127,13 +134,17 @@ async function postHandler(req: NextRequest) {
     );
   }
 
-  const { data: service } = await admin
+  const { data: service, error: serviceError } = await admin
     .from("services_full")
     .select("id, company_id, team_id, location_lat, location_lng, scheduled_start, scheduled_end, status")
     .eq("id", service_id)
     .eq("company_id", profile.company_id)
     .single();
 
+  if (serviceError && !isNoRowsError(serviceError)) {
+    logQueryFailure("timesheet:service", serviceError);
+    return NextResponse.json({ error: QUERY_FAILURE_MESSAGE }, { status: 503 });
+  }
   if (!service)
     return NextResponse.json({ error: "Serviço não encontrado" }, { status: 404 });
 
@@ -167,14 +178,24 @@ async function postHandler(req: NextRequest) {
   }
 
   // Guard: ponto aberto para este serviço (double clock-in)
-  const { data: dupOpen } = await admin
+  // Anti-duplicado. Falhando a leitura, "dupOpen" vinha null e a entrada era
+  // registada outra vez — dois pontos abertos para o mesmo serviço.
+  const { data: dupOpen, error: dupOpenError } = await admin
     .from("timesheets").select("id").eq("service_id", service_id).eq("collaborator_id", user.id).is("clock_out_at", null).maybeSingle();
+  if (dupOpenError) {
+    logQueryFailure("timesheet:dupOpen", dupOpenError);
+    return NextResponse.json({ error: QUERY_FAILURE_MESSAGE }, { status: 503 });
+  }
   if (dupOpen)
     return NextResponse.json({ error: "Já tem um ponto aberto para este serviço. Registe a saída primeiro." }, { status: 409 });
 
   // Guard: ponto aberto noutro serviço
-  const { data: openElsewhere } = await admin
+  const { data: openElsewhere, error: openElsewhereError } = await admin
     .from("timesheets").select("id").eq("collaborator_id", user.id).is("clock_out_at", null).neq("service_id", service_id).maybeSingle();
+  if (openElsewhereError) {
+    logQueryFailure("timesheet:openElsewhere", openElsewhereError);
+    return NextResponse.json({ error: QUERY_FAILURE_MESSAGE }, { status: 503 });
+  }
   if (openElsewhere)
     return NextResponse.json({ error: "Tem um ponto aberto noutro serviço. Registe a saída nesse serviço antes de iniciar um novo." }, { status: 409 });
 
@@ -261,13 +282,18 @@ async function patchHandler(req: NextRequest) {
   if (!profile)
     return NextResponse.json({ error: "Perfil não encontrado" }, { status: 404 });
 
-  const { data: ts } = await admin
+  const { data: ts, error: tsError } = await admin
     .from("timesheets")
     .select("id, clock_in_at")
     .eq("service_id", service_id)
     .eq("collaborator_id", user.id)
     .is("clock_out_at", null)
     .single();
+  // Identifica QUE ponto é fechado. Uma falha dizia "não tem ponto aberto".
+  if (tsError && !isNoRowsError(tsError)) {
+    logQueryFailure("timesheet:openTimesheet", tsError);
+    return NextResponse.json({ error: QUERY_FAILURE_MESSAGE }, { status: 503 });
+  }
 
   if (!ts)
     return NextResponse.json({ error: "Registo de entrada não encontrado" }, { status: 404 });
@@ -283,11 +309,14 @@ async function patchHandler(req: NextRequest) {
   let checkout_distance_m: number | null = null;
   let checkout_location_warning = false;
   if (lat != null && lng != null) {
-    const { data: svc } = await admin
+    const { data: svc, error: svcError } = await admin
       .from("services")
       .select("location_id, locations(lat, lng)")
       .eq("id", service_id)
       .single();
+    // Auxiliar: só serve para calcular o aviso de distância do GPS, que nunca
+    // bloqueia o registo de ponto (decisão de produto, ver CLAUDE.md).
+    if (!isNoRowsError(svcError)) logQueryFailure("timesheet:serviceLocation", svcError);
     const loc = (svc?.locations as unknown as { lat: number | null; lng: number | null } | null);
     if (loc?.lat != null && loc?.lng != null) {
       const settings = await getCompanySettings(profile.company_id);

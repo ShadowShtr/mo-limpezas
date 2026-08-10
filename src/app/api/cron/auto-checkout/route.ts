@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { checkCronAuth } from "@/lib/cron-auth";
+import { logQueryFailure, QUERY_FAILURE_MESSAGE } from "@/lib/query-error";
 
 export const maxDuration = 60;
 
@@ -31,10 +32,17 @@ export async function GET(req: NextRequest) {
 
   // Uma query para as settings de todas as empresas envolvidas.
   const companyIds = [...new Set(openTimesheets.map((t) => t.company_id))];
-  const { data: settingsRows } = await admin
+  // Define a tolerância de fecho automático por empresa. Falhando, todas caem
+  // no valor por omissão e pontos são fechados mais cedo do que a empresa
+  // configurou — sem nada a indicar porquê.
+  const { data: settingsRows, error: settingsError } = await admin
     .from("company_settings")
     .select("company_id, checkout_after_minutes")
     .in("company_id", companyIds);
+  if (settingsError) {
+    logQueryFailure("autoCheckout:settings", settingsError);
+    return NextResponse.json({ error: QUERY_FAILURE_MESSAGE }, { status: 503 });
+  }
 
   const settingsMap: Record<string, number> = {};
   for (const row of settingsRows ?? []) {
@@ -44,10 +52,16 @@ export async function GET(req: NextRequest) {
 
   // Uma query para o scheduled_end de todos os serviços envolvidos.
   const serviceIds = [...new Set(openTimesheets.map((t) => t.service_id))];
-  const { data: services } = await admin
+  // O fim previsto de cada serviço decide QUANDO o ponto é fechado. Sem ele,
+  // o mapa fica vazio e a hora de fecho é inventada.
+  const { data: services, error: servicesError } = await admin
     .from("services")
     .select("id, scheduled_end")
     .in("id", serviceIds);
+  if (servicesError) {
+    logQueryFailure("autoCheckout:services", servicesError);
+    return NextResponse.json({ error: QUERY_FAILURE_MESSAGE }, { status: 503 });
+  }
 
   const serviceEndMap: Record<string, string | null> = {};
   for (const svc of services ?? []) {

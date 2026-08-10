@@ -4,6 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import type { BuildingCardWeekday } from "@/types/database";
+import { queryFailure } from "@/lib/query-error";
 
 export interface BuildingCard {
   id: string;
@@ -77,13 +78,17 @@ export async function createBuildingCard(input: {
     const { companyId, userId } = await requireManager();
     const admin = createAdminClient();
 
-    const { data: maxRow } = await admin
+    // Próxima posição na coluna. Falhando a leitura, `sort_order` recomeçava
+    // em 1 e o cartão novo aterrava no meio da ordem já existente — sem erro
+    // nenhum, só a coluna desarrumada.
+    const { data: maxRow, error: maxRowError } = await admin
       .from("building_cards")
       .select("sort_order")
       .eq("company_id", companyId)
       .eq("weekday", input.weekday)
       .order("sort_order", { ascending: false })
       .limit(1);
+    if (maxRowError) return queryFailure("createBuildingCard:sort_order", maxRowError);
     const sortOrder = (maxRow?.[0]?.sort_order ?? 0) + 1;
 
     const { data, error } = await admin

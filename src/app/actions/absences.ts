@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { addDaysToDateString, toLisbonTimestamp } from "@/lib/lisbon-time";
 import { isValidIsoDateString } from "@/lib/utils";
+import { isNoRowsError, logQueryFailure } from "@/lib/query-error";
 
 export type AbsenceType =
   | "doenca_com_baixa"
@@ -117,11 +118,14 @@ export async function getSubstituteSuggestions(
   const companyId = await getCompanyId();
 
   // Skills do colaborador ausente
-  const { data: absent } = await admin
+  const { data: absent, error: absentError } = await admin
     .from("profiles")
     .select("skills")
     .eq("id", collaboratorId)
     .single();
+  // Sugestão de substituta: sem competências a lista sai enviesada, não vazia.
+  // Não escreve nada, por isso não aborta — mas deixa de ser invisível.
+  if (!isNoRowsError(absentError)) logQueryFailure("getSubstituteSuggestions:skills", absentError);
 
   const absentSkills: string[] = absent?.skills ?? [];
 
@@ -169,13 +173,14 @@ export async function getSubstituteSuggestions(
   const allTeamIds = [...new Set((membershipsRes.data ?? []).map((m) => m.team_id))];
   const servicesByTeam = new Map<string, number>();
   if (allTeamIds.length > 0) {
-    const { data: services } = await admin
+    const { data: services, error: servicesError } = await admin
       .from("services")
       .select("team_id")
       .in("team_id", allTeamIds)
       .gte("scheduled_start", toLisbonTimestamp(startsOn, "00:00"))
       .lt("scheduled_start", toLisbonTimestamp(addDaysToDateString(endsOn, 1), "00:00"))
       .in("status", ["agendado", "em_curso"]);
+    logQueryFailure("getSubstituteSuggestions:services", servicesError);
     for (const s of services ?? []) {
       if (!s.team_id) continue;
       servicesByTeam.set(s.team_id, (servicesByTeam.get(s.team_id) ?? 0) + 1);

@@ -3,6 +3,7 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
+import { isNoRowsError, logQueryFailure, QUERY_FAILURE_MESSAGE } from "@/lib/query-error";
 
 export interface AppNotification {
   id: string;
@@ -108,30 +109,46 @@ async function _notifyTeam(serviceId: string, message: string) {
     return { ok: false as const, error: "Sem permissão.", sent: 0 };
   }
 
-  const { data: svc } = await admin
+  const { data: svc, error: svcError } = await admin
     .from("services")
     .select("team_id, scheduled_start, location_id")
     .eq("id", serviceId)
     .single();
 
+  // "Serviço sem equipa" é uma afirmação sobre o serviço. Uma leitura falhada
+  // não a autoriza.
+  if (svcError && !isNoRowsError(svcError)) {
+    logQueryFailure("notifyTeam:service", svcError);
+    return { ok: false as const, error: QUERY_FAILURE_MESSAGE, sent: 0 };
+  }
   if (!svc?.team_id) return { ok: false as const, error: "Serviço sem equipa.", sent: 0 };
 
-  const { data: members } = await admin
+  const { data: members, error: membersError } = await admin
     .from("team_members")
     .select("collaborator_id")
     .eq("team_id", svc.team_id)
     .is("left_at", null);
 
+  // "ok: true, sent: 0" diria "equipa vazia". Não é o mesmo que "não consegui
+  // saber quem é a equipa", e quem pediu o aviso fica a pensar que seguiu.
+  if (membersError) {
+    logQueryFailure("notifyTeam:members", membersError);
+    return { ok: false as const, error: QUERY_FAILURE_MESSAGE, sent: 0 };
+  }
   if (!members?.length) return { ok: true as const, sent: 0 };
 
   const memberIds = members.map((m) => m.collaborator_id);
 
-  const { data: subs } = await admin
+  const { data: subs, error: subsError } = await admin
     .from("push_subscriptions")
     .select("user_id, endpoint, p256dh, auth_key")
     .in("user_id", memberIds)
     .eq("company_id", sender.company_id);
 
+  if (subsError) {
+    logQueryFailure("notifyTeam:subscriptions", subsError);
+    return { ok: false as const, error: QUERY_FAILURE_MESSAGE, sent: 0 };
+  }
   if (!subs?.length) return { ok: true as const, sent: 0 };
 
   // Verificar VAPID keys

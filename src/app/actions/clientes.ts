@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { auditLog } from "@/lib/audit";
 import { assertCriticalFieldsLoaded, CRITICAL_FIELDS_BLOCKED_MESSAGE } from "@/lib/critical-fields";
+import { isNoRowsError, logQueryFailure, queryFailure } from "@/lib/query-error";
 
 export interface ClienteInput {
   name: string;
@@ -145,11 +146,14 @@ export async function archiveCliente(id: string) {
 
   // Verificar se existem serviços futuros ligados aos locais deste cliente
   const now = new Date().toISOString();
-  const { data: locations } = await admin
+  // Esta lista decide se o arquivo é permitido: vazia por falha de leitura,
+  // o contador de serviços futuros fica 0 e o cliente é arquivado à mesma.
+  const { data: locations, error: locationsError } = await admin
     .from("locations")
     .select("id")
     .eq("client_id", id)
     .eq("company_id", profile.company_id);
+  if (locationsError) return queryFailure("archiveCliente:locations", locationsError);
 
   const locationIds = (locations ?? []).map((l) => l.id);
   let futureCount = 0;
@@ -215,12 +219,15 @@ export async function updateCliente(id: string, input: Omit<ClienteInput, "compa
 
   // Valor antigo, só para a auditoria (ver comentário abaixo) — nunca bloqueia
   // o update se falhar.
-  const { data: before } = await admin
+  const { data: before, error: beforeError } = await admin
     .from("clients")
     .select("type, notes")
     .eq("id", id)
     .eq("company_id", profile.company_id)
     .single();
+  // Auxiliar por decisão já existente (ver comentário acima): serve a
+  // auditoria, não o update. Deixa de falhar em silêncio; continua a não bloquear.
+  if (!isNoRowsError(beforeError)) logQueryFailure("updateCliente:before", beforeError);
 
   const { error } = await admin.from("clients").update({
     name: input.name,
@@ -282,20 +289,27 @@ export async function deleteCliente(id: string) {
     return { ok: false as const, error: "Sem permissao." };
   }
 
-  const { data: client } = await admin
+  const { data: client, error: clientError } = await admin
     .from("clients")
     .select("id, name")
     .eq("id", id)
     .eq("company_id", profile.company_id)
     .single();
+  if (clientError && !isNoRowsError(clientError)) {
+    return queryFailure("deleteCliente:client", clientError);
+  }
   if (!client) return { ok: false as const, error: "Cliente invalido." };
 
   // Locais do cliente (services/contracts têm FK RESTRICT para locations).
-  const { data: locations } = await admin
+  // A lista comanda a eliminação em cascata. Vazia por falha, os serviços e
+  // contratos dos locais sobreviviam e a eliminação batia na FK — ou deixava
+  // dados órfãos.
+  const { data: locations, error: locationsError } = await admin
     .from("locations")
     .select("id")
     .eq("client_id", id)
     .eq("company_id", profile.company_id);
+  if (locationsError) return queryFailure("deleteCliente:locations", locationsError);
   const locationIds = (locations ?? []).map((l) => l.id);
 
   // 1) Serviços (cascade: timesheets, fotos, reforços, auditoria de preço).

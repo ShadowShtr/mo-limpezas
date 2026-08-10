@@ -4,6 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { calcVacationEntitlement } from "@/lib/vacation-entitlement";
+import { isNoRowsError, queryFailure } from "@/lib/query-error";
 
 export interface VacationRequest {
   id: string;
@@ -218,12 +219,16 @@ export async function reviewVacationRequest(
     return { ok: false, error: "Sem permissão." };
   }
 
-  const { data: req } = await admin
+  const { data: req, error: reqError } = await admin
     .from("vacation_requests")
     .select("id, company_id, collaborator_id, starts_on, ends_on")
     .eq("id", id)
     .eq("company_id", me.company_id)
     .single();
+  // Decide QUE pedido é aprovado/recusado e a quem contam os dias.
+  if (reqError && !isNoRowsError(reqError)) {
+    return queryFailure("reviewVacationRequest:request", reqError);
+  }
   if (!req) return { ok: false, error: "Pedido não encontrado." };
 
   const { error } = await admin

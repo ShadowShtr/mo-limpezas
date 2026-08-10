@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { auditLog } from "@/lib/audit";
 import { calculateServiceValue } from "@/lib/service-value";
 import { revalidateBusinessPaths } from "@/lib/revalidate-business";
+import { isNoRowsError, logQueryFailure, queryFailure } from "@/lib/query-error";
 
 type AdminClient = ReturnType<typeof createAdminClient>;
 
@@ -38,7 +39,9 @@ async function authorize(admin: AdminClient): Promise<Authorized | Unauthorized>
 }
 
 async function revalidateAfterServiceChange(admin: AdminClient, locationId: string, includeCobrancas: boolean) {
-  const { data: loc } = await admin.from("locations").select("client_id").eq("id", locationId).maybeSingle();
+  const { data: loc, error: locError } = await admin.from("locations").select("client_id").eq("id", locationId).maybeSingle();
+  // Auxiliar: a escrita já ocorreu; isto só escolhe que caminhos revalidar.
+  logQueryFailure("revalidateAfterServiceChange:locations", locError);
   revalidateBusinessPaths({
     clientId: loc?.client_id ?? null,
     scopes: includeCobrancas ? ["calendario", "clientes", "cobrancas"] : ["calendario", "clientes"],
@@ -66,19 +69,25 @@ export async function updateServiceTime(
     return { ok: false, error: "A hora de fim tem de ser depois do início." };
   }
 
-  const { data: service } = await admin
+  const { data: service, error: serviceError } = await admin
     .from("services")
     .select("id, location_id, team_id, contract_id, status, scheduled_start, scheduled_end, hourly_rate, num_people, manual_value, upholstery_unit_price")
     .eq("id", serviceId)
     .eq("company_id", auth.companyId)
     .single();
+  // Prerequisite: decide QUAL serviço é editado e se o estado o permite.
+  if (serviceError && !isNoRowsError(serviceError)) {
+    return queryFailure("updateServiceTime:service", serviceError);
+  }
   if (!service) return { ok: false, error: "Serviço não encontrado." };
   if (["concluido", "cancelado", "falta"].includes(service.status)) {
     return { ok: false, error: "Este serviço já está fechado e não pode ser editado." };
   }
 
   if (!input.force && service.team_id) {
-    const { data: clashes } = await admin
+    // Deteção de sobreposição. Erro ignorado dava lista vazia — "sem
+    // conflitos" — e o serviço era remarcado por cima de outro da mesma equipa.
+    const { data: clashes, error: clashesError } = await admin
       .from("services")
       .select("reference_number, scheduled_start, scheduled_end")
       .eq("team_id", service.team_id)
@@ -86,6 +95,7 @@ export async function updateServiceTime(
       .in("status", ["agendado", "em_curso"])
       .lt("scheduled_start", input.endISO)
       .gt("scheduled_end", input.startISO);
+    if (clashesError) return queryFailure("updateServiceTime:clashes", clashesError);
     if (clashes && clashes.length > 0) {
       return { ok: false, error: "A equipa tem conflito neste horário.", conflicts: clashes as ConflictInfo[] };
     }
@@ -163,12 +173,15 @@ export async function updateServiceValue(
   const auth = await authorize(admin);
   if (!auth.ok) return auth;
 
-  const { data: service } = await admin
+  const { data: service, error: serviceError } = await admin
     .from("services")
     .select("id, location_id, contract_id, manual_value, apply_vat, calculated_value")
     .eq("id", serviceId)
     .eq("company_id", auth.companyId)
     .single();
+  if (serviceError && !isNoRowsError(serviceError)) {
+    return queryFailure("updateServiceValue:service", serviceError);
+  }
   if (!service) return { ok: false, error: "Serviço não encontrado." };
 
   const update: { manual_value: number | null; apply_vat: boolean; is_exception?: boolean } = {
@@ -213,12 +226,15 @@ export async function updateServiceNotes(
   const auth = await authorize(admin);
   if (!auth.ok) return auth;
 
-  const { data: service } = await admin
+  const { data: service, error: serviceError } = await admin
     .from("services")
     .select("id, location_id, contract_id, notes")
     .eq("id", serviceId)
     .eq("company_id", auth.companyId)
     .single();
+  if (serviceError && !isNoRowsError(serviceError)) {
+    return queryFailure("updateServiceNotes:service", serviceError);
+  }
   if (!service) return { ok: false, error: "Serviço não encontrado." };
 
   const update: { notes: string | null; is_exception?: boolean } = { notes: input.notes };
@@ -257,12 +273,15 @@ export async function markServiceAbsence(serviceId: string): Promise<MarkService
   const auth = await authorize(admin);
   if (!auth.ok) return auth;
 
-  const { data: service } = await admin
+  const { data: service, error: serviceError } = await admin
     .from("services")
     .select("id, location_id, status, contract_id, is_exception")
     .eq("id", serviceId)
     .eq("company_id", auth.companyId)
     .single();
+  if (serviceError && !isNoRowsError(serviceError)) {
+    return queryFailure("markServiceAbsence:service", serviceError);
+  }
   if (!service) return { ok: false, error: "Serviço não encontrado." };
 
   // Regra de segurança: qualquer alteração manual num serviço de contrato vira

@@ -5,6 +5,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { auditLog } from "@/lib/audit";
+import { isNoRowsError, logQueryFailure, queryFailure } from "@/lib/query-error";
 
 export interface ColaboradorInput {
   full_name: string;
@@ -117,12 +118,14 @@ export async function updateColaborador(
 
   // Valor antigo dos campos sensíveis (privilégio, dados bancários), só para
   // auditoria — nunca bloqueia o update se falhar.
-  const { data: before } = await admin
+  const { data: before, error: beforeError } = await admin
     .from("profiles")
     .select("role, iban, hourly_rate, nif")
     .eq("id", id)
     .eq("company_id", callerProfile.company_id)
     .single();
+  // Auxiliar: alimenta a auditoria do que mudou, não decide o update.
+  if (!isNoRowsError(beforeError)) logQueryFailure("updateColaborador:before", beforeError);
 
   const { error } = await admin
     .from("profiles")
@@ -220,11 +223,15 @@ export async function resetColaboradorPassword(id: string) {
     return { ok: false as const, error: "Sem permissão." };
   }
 
-  const { data: target } = await admin
+  const { data: target, error: targetError } = await admin
     .from("profiles")
     .select("company_id, full_name")
     .eq("id", id)
     .single();
+  // Decide sobre QUEM se repõe a password. Falhando, dizia "não encontrada".
+  if (targetError && !isNoRowsError(targetError)) {
+    return queryFailure("resetColaboradorPassword:target", targetError);
+  }
   if (!target) return { ok: false as const, error: "Colaboradora não encontrada." };
   if (target.company_id !== callerProfile.company_id) {
     return { ok: false as const, error: "Acesso negado." };
@@ -263,11 +270,15 @@ export async function forceAppUpdate(id: string) {
     return { ok: false as const, error: "Sem permissão." };
   }
 
-  const { data: target } = await admin
+  const { data: target, error: targetError } = await admin
     .from("profiles")
     .select("company_id, full_name")
     .eq("id", id)
     .single();
+  // Decide a QUEM se envia o pedido de actualização forçada da app.
+  if (targetError && !isNoRowsError(targetError)) {
+    return queryFailure("forceAppUpdate:target", targetError);
+  }
   if (!target) return { ok: false as const, error: "Colaboradora não encontrada." };
   if (target.company_id !== callerProfile.company_id) {
     return { ok: false as const, error: "Acesso negado." };
@@ -307,8 +318,12 @@ export async function deleteColaborador(id: string, companyId: string) {
   }
   if (caller.company_id !== companyId) return { ok: false as const, error: "Empresa inválida." };
 
-  const { data: target } = await admin
+  const { data: target, error: targetError } = await admin
     .from("profiles").select("id, company_id, full_name").eq("id", id).single();
+  // Decide QUEM é eliminado, e a verificação de empresa depende disto.
+  if (targetError && !isNoRowsError(targetError)) {
+    return queryFailure("deleteColaborador:target", targetError);
+  }
   if (!target || target.company_id !== companyId) {
     return { ok: false as const, error: "Colaboradora inválida." };
   }

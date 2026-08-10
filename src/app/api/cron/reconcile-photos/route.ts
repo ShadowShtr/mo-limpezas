@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { SERVICE_PHOTOS_BUCKET } from "@/lib/service-photos";
 import { checkCronAuth } from "@/lib/cron-auth";
+import { logQueryFailure } from "@/lib/query-error";
 
 export const maxDuration = 60;
 
@@ -27,12 +28,17 @@ export async function GET(req: NextRequest) {
   // ── 1. Metadata presa em pending/uploading há muito → marcar review_required ──
   // (o ficheiro pode nunca ter chegado; a gestora decide).
   let markedReview = 0;
-  const { data: stale } = await admin
+  const { data: stale, error: staleError } = await admin
     .from("service_photos")
     .select("id, storage_path, company_id")
     .in("status", ["pending", "uploading"])
     .lt("created_at", staleBefore)
     .limit(500);
+  // Auxiliar: o cron é de reconciliação e volta a correr na semana seguinte.
+  // Uma lista vazia por falha significa "nada reconciliado desta vez", não
+  // uma escrita errada — mas tem de ficar registado, senão o cron passa a
+  // reportar sucesso sem nunca ter feito nada.
+  logQueryFailure("reconcilePhotos:stale", staleError);
 
   for (const row of stale ?? []) {
     // Confirmar se o ficheiro existe no storage antes de marcar.
@@ -63,12 +69,16 @@ export async function GET(req: NextRequest) {
   // ── 3. Metadata 'deleted'/'review_required' antiga → remover ficheiro + linha ──
   let purged = 0;
   const purgeBefore = new Date(Date.now() - ORPHAN_GRACE_DAYS * 24 * 3600_000).toISOString();
-  const { data: toPurge } = await admin
+  const { data: toPurge, error: toPurgeError } = await admin
     .from("service_photos")
     .select("id, storage_path")
     .eq("status", "deleted")
     .lt("created_at", purgeBefore)
     .limit(500);
+  // Auxiliar na direcção segura: falhando, nada é apagado. O que faltava era
+  // o registo — sem ele, "purged: 0" tanto significa "não havia nada" como
+  // "não consegui perguntar", e a purga podia estar parada há semanas.
+  logQueryFailure("reconcilePhotos:toPurge", toPurgeError);
 
   if ((toPurge ?? []).length > 0 && !dryRun) {
     const paths = (toPurge ?? []).map((p) => p.storage_path);

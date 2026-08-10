@@ -6,13 +6,24 @@ import { createClient } from "@/lib/supabase/server";
 import { CANCEL_TYPE_LABELS } from "@/lib/cancel-types";
 import type { CancelType } from "@/lib/cancel-types";
 import { auditLog } from "@/lib/audit";
+import { logQueryFailure, queryFailure } from "@/lib/query-error";
 
 export async function cancelService(
   serviceId: string,
   cancelType: CancelType,
   cancelReason: string,
   notifyTeamMembers: boolean,
-): Promise<{ ok: boolean; error?: string; isLate?: boolean; sent?: number }> {
+): Promise<{
+  ok: boolean; error?: string; isLate?: boolean; sent?: number;
+  /**
+   * O cancelamento foi gravado, mas não se conseguiu saber a quem enviar o
+   * aviso. Campo **acrescentado** (opcional, nenhum consumidor obrigado a
+   * mudar) porque sem ele `sent: 0` significaria as duas coisas: "não havia
+   * ninguém para avisar" e "não consegui perguntar" — e a diferença é a equipa
+   * aparecer, ou não, a um serviço cancelado.
+   */
+  notifyFailed?: boolean;
+}> {
   const supabase = await createClient();
   const admin = createAdminClient();
 
@@ -85,8 +96,11 @@ export async function cancelService(
 
   // Revalidar SEMPRE antes de qualquer return dos caminhos de notificação —
   // sem isto, "cancelei e o calendário/ficha do cliente não mostram".
-  const { data: cancelLoc } = await admin
+  const { data: cancelLoc, error: cancelLocError } = await admin
     .from("locations").select("client_id").eq("id", svc.location_id).maybeSingle();
+  // Auxiliar: o cancelamento já está gravado. Falhar aqui só significa que a
+  // ficha do cliente não é revalidada — recusar a operação inteira seria pior.
+  logQueryFailure("cancelService:locations", cancelLocError);
   revalidatePath("/dashboard/calendario");
   revalidatePath("/dashboard");
   revalidatePath("/dashboard/cobrancas");
@@ -97,30 +111,44 @@ export async function cancelService(
   }
 
   // Notificar membros da equipa via push
-  const { data: members } = await admin
+  const { data: members, error: membersError } = await admin
     .from("team_members")
     .select("collaborator_id")
     .eq("team_id", svc.team_id)
     .is("left_at", null);
 
+  // O cancelamento está gravado; o que falha aqui é só o aviso à equipa. Mas
+  // `sent: 0` com `ok: true` diria "não havia ninguém para avisar", quando a
+  // verdade é "não consegui saber quem avisar" — e a equipa aparece ao serviço
+  // cancelado. A distinção é reportada, sem desfazer o cancelamento.
+  if (membersError) {
+    logQueryFailure("cancelService:team_members", membersError);
+    return { ok: true, isLate, sent: 0, notifyFailed: true as const };
+  }
   if (!members?.length) return { ok: true, isLate, sent: 0 };
 
   const memberIds = members.map((m) => m.collaborator_id);
 
-  const { data: subs } = await admin
+  const { data: subs, error: subsError } = await admin
     .from("push_subscriptions")
     .select("endpoint, p256dh, auth_key")
     .in("user_id", memberIds)
     .eq("company_id", profile.company_id);
 
+  if (subsError) {
+    logQueryFailure("cancelService:push_subscriptions", subsError);
+    return { ok: true, isLate, sent: 0, notifyFailed: true as const };
+  }
   if (!subs?.length) return { ok: true, isLate, sent: 0 };
 
-  const { data: location } = await admin
+  const { data: location, error: locationError } = await admin
     .from("locations")
     .select("name")
     .eq("id", svc.location_id)
     .single();
 
+  // Auxiliar: só decide o texto da notificação.
+  logQueryFailure("cancelService:location-name", locationError);
   const serviceName = location?.name ?? "Serviço";
   const motivo = CANCEL_TYPE_LABELS[cancelType];
   const body = isLate
@@ -182,12 +210,18 @@ export async function deleteCalendarService(
     return { ok: false, error: "Sem permissão." };
   }
 
-  const { data: svc } = await admin
+  // Prerequisite: decide se o serviço é apagado. Uma falha de leitura dizia
+  // "Serviço não encontrado" — a mesma resposta que quando ele mesmo não
+  // existe. O caminho de sucesso é idêntico; só a origem do "não" muda.
+  const { data: svc, error: svcError } = await admin
     .from("services")
     .select("id, company_id, contract_id, scheduled_start, location_id")
     .eq("id", serviceId)
     .eq("company_id", profile.company_id)
     .single();
+  if (svcError && svcError.code !== "PGRST116") {
+    return queryFailure("deleteCalendarService:services", svcError);
+  }
   if (!svc) return { ok: false, error: "Serviço não encontrado." };
 
   let deleted = 0;
@@ -277,8 +311,10 @@ export async function deleteCalendarService(
     source: "dashboard",
   }, admin);
 
-  const { data: loc } = await admin
+  const { data: loc, error: locError } = await admin
     .from("locations").select("client_id").eq("id", svc.location_id).maybeSingle();
+  // Auxiliar: a eliminação já ocorreu; isto só escolhe que caminho revalidar.
+  logQueryFailure("deleteCalendarService:locations", locError);
   revalidatePath("/dashboard/calendario");
   revalidatePath("/dashboard");
   revalidatePath("/dashboard/cobrancas");

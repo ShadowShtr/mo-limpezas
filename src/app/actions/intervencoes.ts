@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import { auditLog } from "@/lib/audit";
 import { maxReferenceNumber } from "@/lib/services/reference";
 import { removeFutureScheduledServices } from "./contratos";
+import { isNoRowsError, logQueryFailure, queryFailure } from "@/lib/query-error";
 
 type ActionResult = { ok: true } | { ok: false; error: string };
 
@@ -90,21 +91,27 @@ export async function duplicatePointService(serviceId: string): Promise<ActionRe
   if (!auth.ok) return { ok: false, error: auth.error };
 
   const { admin, companyId, userId } = auth;
-  const { data: service } = await admin
+  const { data: service, error: serviceError } = await admin
     .from("services")
     .select("location_id, team_id, scheduled_start, scheduled_end, hourly_rate, calculated_value, manual_value, notes")
     .eq("id", serviceId)
     .eq("company_id", companyId)
     .single();
 
+  // Origem do duplicado: decide o que é copiado para a linha nova.
+  if (serviceError && !isNoRowsError(serviceError)) {
+    return queryFailure("duplicatePointService:service", serviceError);
+  }
   if (!service) return { ok: false, error: "Servico invalido." };
 
-  const { data: location } = await admin
+  const { data: location, error: locationError } = await admin
     .from("locations")
     .select("client_id")
     .eq("id", service.location_id)
     .eq("company_id", companyId)
     .single();
+  // Auxiliar: só serve para revalidar a ficha do cliente.
+  if (!isNoRowsError(locationError)) logQueryFailure("duplicatePointService:location", locationError);
 
   const originalStart = new Date(service.scheduled_start);
   const originalEnd = new Date(service.scheduled_end);

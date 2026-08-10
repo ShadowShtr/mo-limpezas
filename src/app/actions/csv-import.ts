@@ -3,6 +3,7 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
+import { queryFailure } from "@/lib/query-error";
 
 async function getCallerContext() {
   const supabase = await createClient();
@@ -159,10 +160,17 @@ export async function importLocaisCSV(rows: CsvLocal[]) {
   const admin = createAdminClient();
 
   // Pre-carregar todos os clientes da empresa para resolver pelo nome
-  const { data: clientes } = await admin
+  // O mapa de clientes decide a que cliente cada local é ligado. Vazio por
+  // falha de leitura, a importação inteira criaria locais órfãos ou saltaria
+  // todas as linhas — e reportaria isso como resultado normal.
+  const { data: clientes, error: clientesError } = await admin
     .from("clients")
     .select("id, name")
     .eq("company_id", company_id);
+  if (clientesError) {
+    const falha = queryFailure("importLocaisCSV:clients", clientesError);
+    return { ok: false as const, error: falha.error, imported: 0, errors: [] as string[] };
+  }
 
   const clientMap = new Map(
     (clientes ?? []).map((c: { id: string; name: string }) => [c.name.toLowerCase(), c.id]),

@@ -9,6 +9,7 @@ import {
   isValidPhotoKind,
 } from "@/lib/service-photos";
 import { startRouteTimer } from "@/lib/observability/route-metrics";
+import { isNoRowsError, logQueryFailure, QUERY_FAILURE_MESSAGE } from "@/lib/query-error";
 
 /**
  * TASK 01 — Cria uma signed upload URL para o telemóvel enviar a foto
@@ -58,12 +59,16 @@ async function handle(req: NextRequest, m: ReturnType<typeof startRouteTimer>) {
   if (!profile) return NextResponse.json({ error: "Perfil não encontrado" }, { status: 404 });
   m.setContext({ companyId: profile.company_id, role: "colaborador" });
 
-  const { data: service } = await admin
+  const { data: service, error: serviceError } = await admin
     .from("services_full")
     .select("id, company_id, team_id, status")
     .eq("id", service_id)
     .eq("company_id", profile.company_id)
     .single();
+  if (serviceError && !isNoRowsError(serviceError)) {
+    logQueryFailure("uploadsSign:service", serviceError);
+    return NextResponse.json({ error: QUERY_FAILURE_MESSAGE }, { status: 503 });
+  }
   if (!service) return NextResponse.json({ error: "Serviço não encontrado" }, { status: 404 });
 
   if (["cancelado", "arquivado"].includes(service.status ?? "")) {
@@ -94,12 +99,18 @@ async function handle(req: NextRequest, m: ReturnType<typeof startRouteTimer>) {
 
   // Idempotência: se já existe metadata para este client_event_id, devolver
   // o registo existente (retry após falha de rede) em vez de duplicar.
-  const { data: existing } = await admin
+  // Anti-duplicado por evento: decide entre reaproveitar o registo e criar um
+  // novo. Falhando, o mesmo evento gerava uma segunda linha de foto.
+  const { data: existing, error: existingError } = await admin
     .from("service_photos")
     .select("id, storage_path, status")
     .eq("company_id", profile.company_id)
     .eq("client_event_id", client_event_id)
     .maybeSingle();
+  if (existingError) {
+    logQueryFailure("uploadsSign:existing", existingError);
+    return NextResponse.json({ error: QUERY_FAILURE_MESSAGE }, { status: 503 });
+  }
 
   if (existing && existing.status === "uploaded") {
     return NextResponse.json({ duplicate: true, upload_id: existing.id, storage_path: existing.storage_path });

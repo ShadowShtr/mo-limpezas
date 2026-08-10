@@ -45,6 +45,20 @@ function trackedFiles() {
 // coisas diferentes com o mesmo nome, que é pior do que não ter nenhum.
 const IGNORED_ERROR = /const\s*\{\s*data:\s*(\w+)\s*\}\s*=\s*(?:(?:await\s+)?(?:admin|supabase)\b|[^;=]{0,60}\?\s*\n?\s*await\s+(?:admin|supabase)\b)/g;
 
+/**
+ * Nem tudo o que devolve `{ data }` é uma consulta.
+ *
+ * `admin.storage.from(bucket).getPublicUrl(path)` é **síncrono** e não tem
+ * `error` nenhum para desestruturar — devolve `{ data: { publicUrl } }` e
+ * pronto. A expressão acima apanhava-o na mesma, porque casa com `= admin` sem
+ * exigir `await`, e o resultado era um "erro ignorado" que ninguém pode
+ * corrigir: não há erro.
+ *
+ * Mais um caso da armadilha de sempre — desta vez a forma parece a de uma
+ * consulta sem o ser.
+ */
+const NOT_A_QUERY = /\.storage\b|getPublicUrl\s*\(/;
+
 // ─── Superfícies ────────────────────────────────────────────────────────────
 
 /** Tabelas onde uma consulta silenciosamente vazia vira um número em euros. */
@@ -195,6 +209,20 @@ function userImpactOf(o) {
 
 const BLOCKED = /src\/app\/actions\/(payments|invoices)\.ts$/;
 
+/**
+ * "Action de escrita" quer dizer que o ficheiro **escreve**.
+ *
+ * A primeira versão desta regra bastava-se com "está em `actions/` ou tem
+ * `use server`", e pôs 19 ocorrências de ficheiros puramente de leitura
+ * (`reports.ts`, `map.ts`, `pendencias.ts`, `calendar.ics`) no lote das actions
+ * de escrita. O lote existe para ordenar o trabalho por risco: um erro
+ * ignorado numa página de leitura, no pior caso, mostra uma tabela vazia; num
+ * ficheiro que escreve, autoriza uma escrita que não devia acontecer.
+ *
+ * Misturar os dois torna o número do lote inútil para decidir por onde começar.
+ */
+const WRITES = /\.(insert|update|upsert|delete|rpc)\s*\(/;
+
 function batchOf(o) {
   if (BLOCKED.test(o.path)) return "BLOCKED_FINANCIAL_INCIDENT";
   // Acima da ordem do handoff: uma leitura de autorização que falhou em
@@ -202,7 +230,7 @@ function batchOf(o) {
   if (o.tenantRisk) return "BATCH_0_TENANT_AUTORIZACAO";
   if (o.financialRisk) return "BATCH_1_SUPERFICIE_FINANCEIRA";
   if (o.documentSurface) return "BATCH_2_DOCUMENTOS_COLABORADOR";
-  if (o.serverAction || o.apiRoute) return "BATCH_3_ACTIONS_ESCRITA";
+  if ((o.serverAction || o.apiRoute) && o.fileWrites) return "BATCH_3_ACTIONS_ESCRITA";
   return "BATCH_4_PAGINAS_LEITURA";
 }
 
@@ -219,6 +247,7 @@ for (const rel of FILES) {
   const lines = src.split(/\r?\n/);
   const isAction = /^src\/app\/actions\//.test(rel) || /_actions\//.test(rel) || /["']use server["']/.test(src);
   const isApi = /^src\/app\/api\//.test(rel);
+  const fileWrites = WRITES.test(src);
 
   IGNORED_ERROR.lastIndex = 0;
   let m;
@@ -228,6 +257,9 @@ for (const rel of FILES) {
     // Janela: a consulta encadeia-se por várias linhas e o fallback costuma
     // ficar logo a seguir.
     const window = lines.slice(idx, idx + 8).join("\n");
+
+    // Ver `NOT_A_QUERY`: uma linha que devolve `{ data }` mas não é consulta.
+    if (NOT_A_QUERY.test(lines[idx] ?? "")) continue;
 
     const table = nearbyTable(window);
     const fallback = fallbackOf(window);
@@ -243,6 +275,7 @@ for (const rel of FILES) {
       writeContext: writesAfter(lines, idx),
       serverAction: isAction,
       apiRoute: isApi,
+      fileWrites,
       financialRisk: (table != null && FINANCIAL_TABLES.has(table)) || FINANCIAL_PATH.test(rel),
       // Só conta como risco de autorização se a leitura for USADA para decidir
       // — comparar role/company_id, ou escrever a seguir. Ver TENANT_TABLES.
