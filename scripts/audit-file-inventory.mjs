@@ -99,6 +99,19 @@ for (const [rel, src] of CONTENT) {
   IMPORTS.set(rel, set);
 }
 
+/**
+ * Existe algum `import(...)` cujo especificador NÃO é uma string literal?
+ *
+ * Se existir, o grafo de imports acima está incompleto por construção: não há
+ * como saber estaticamente para onde um especificador construído em tempo de
+ * execução aponta. É a terceira porta de `deadCodeDoors`, e é global — basta um
+ * no repositório para que "sem importadores" deixe de significar "sem
+ * consumidores" para qualquer módulo.
+ */
+const UNRESOLVED_DYNAMIC_IMPORT = [...CONTENT].some(
+  ([rel, src]) => CODE_EXT.test(rel) && /\bimport\s*\(\s*(?!["'])/.test(src),
+);
+
 // ─── Referências não-import (npm, CI, config, docs) ─────────────────────────
 
 const PKG = JSON.parse(read("package.json"));
@@ -139,6 +152,40 @@ const ROOT_CONVENTION = /^(src\/)?(proxy|middleware|instrumentation|instrumentat
 function isNextConvention(rel) {
   if (ROOT_CONVENTION.test(rel)) return true;
   return rel.startsWith("src/app/") && NEXT_CONVENTION.test(rel);
+}
+
+/**
+ * AS TRÊS PORTAS — helper reutilizável (T17-B1).
+ *
+ * A T17-A produziu três falsos positivos, todos do mesmo feitio: uma busca
+ * textual não encontrou consumidores e o classificador concluiu "morto". Não
+ * encontrar consumidores não prova que não existem. Há três caminhos que a
+ * busca por imports **não vê**:
+ *
+ *   1. **convenção do framework** — o Next carrega `page`/`route`/`proxy` pelo
+ *      NOME. `src/proxy.ts` protege todas as rotas por role e não tem um único
+ *      importador, por desenho;
+ *   2. **entrada de linha de comandos** — `package.json`, CI, `vercel.json`, ou
+ *      execução manual. Um ficheiro de `scripts/` não ter importadores é o
+ *      normal, não um sinal;
+ *   3. **import dinâmico** — `import(...)`/`require(...)` com especificador
+ *      construído em tempo de execução, que o grafo estático não resolve.
+ *
+ * Enquanto uma destas portas não estiver PROVADAMENTE fechada, o veredicto é
+ * `STANDBY`. `STANDBY` é uma resposta honesta e não custa nada; um `REMOVER`
+ * errado custa um incidente.
+ */
+function deadCodeDoors(rel, src, ctx) {
+  const doors = {
+    frameworkConvention: isNextConvention(rel),
+    cliEntrypoint: rel.startsWith("scripts/") || ctx.inNpm || ctx.inCi || ctx.inVercel || ctx.inConfig,
+    // Conservador de propósito: qualquer `import(` não resolvido no ficheiro
+    // OU em quem quer que seja mantém a porta aberta a nível global — não se
+    // consegue provar estaticamente para onde um especificador dinâmico aponta.
+    dynamicImport: /import\s*\(\s*[^"')]/.test(src) || UNRESOLVED_DYNAMIC_IMPORT,
+  };
+  doors.allClosed = !doors.frameworkConvention && !doors.cliEntrypoint && !doors.dynamicImport;
+  return doors;
 }
 
 // Nota: um ficheiro de `scripts/` é um ponto de entrada de linha de comandos.
@@ -197,6 +244,10 @@ function categoryOf(rel) {
   if (rel.startsWith("supabase/frozen/")) return "sql-frozen";
   if (rel.startsWith("supabase/")) return "supabase-other";
   if (rel.startsWith("scripts/")) return "script";
+  // Antes de `docs/`: o arquivo histórico é documentação, mas não é
+  // documentação VIGENTE, e a distinção tem de sobreviver no inventário.
+  // Movido de `planning/` na T17-B1 — ver docs/historico/planning/README-ARQUIVO.md
+  if (rel.startsWith("docs/historico/")) return "doc-historico";
   if (rel.startsWith("docs/")) return "doc";
   if (rel.startsWith("planning/")) return "planning";
   if (rel.startsWith("public/")) return "asset";
@@ -209,6 +260,93 @@ function categoryOf(rel) {
 }
 
 // ─── Classificação de scripts ───────────────────────────────────────────────
+
+/**
+ * Remove **literais de expressão regular** do código.
+ *
+ * Este é o remédio de raiz para a família de falsos positivos que a T17-A
+ * registou três vezes e a T17-B1 apanhou mais duas: um analisador estático que
+ * procura padrões no código acaba, inevitavelmente, a encontrá-los **em si
+ * próprio** — porque as regras que aplica são texto no seu próprio corpo. Este
+ * ficheiro chegou a classificar-se a si mesmo como `PRODUCTION_DANGEROUS` por
+ * conter `SERVICE_ROLE`, `DROP`, `TRUNCATE` e `/rest/v1/` dentro das suas
+ * próprias expressões.
+ *
+ * Corrigir caso a caso era jogar à apanhada: cada regra nova voltava a
+ * disparar. Tirar os literais de regex resolve a classe inteira de uma vez —
+ * uma regra escrita **é** uma menção, nunca um uso.
+ *
+ * Os comentários são tratados conforme a PERGUNTA, através de
+ * `{ dropComments }` — e a distinção não é arbitrária:
+ *
+ * - **capacidade** ("consegue tocar na base?") tem de ser provada por código a
+ *   correr. Um comentário que descreve uma chamada REST não faz nenhuma. Aqui
+ *   os comentários saem (`dropComments: true`);
+ * - **interface de linha de comandos** ("tem `--apply`?") está declarada no
+ *   cabeçalho de uso, em comentário. Removê-los produziu o erro simétrico e
+ *   mais perigoso: `run-migrations.mjs` caiu de `WRITE_CAPABLE` para
+ *   `READ_ONLY` porque as flags que o tornam capaz de escrever só aparecem
+ *   ali. Aqui os comentários ficam.
+ *
+ * Os literais de string ficam sempre: `.from("services")` é uso a sério.
+ */
+function stripNonCode(src, { dropComments = false } = {}) {
+  let out = "";
+  let i = 0;
+  const n = src.length;
+  // Contexto de operador: a seguir a estes, um `/` inicia um literal de regex,
+  // não uma divisão.
+  const opBefore = /[=(,:;[!&|?{}+\-*%~^]|\breturn\b|\btypeof\b|\bcase\b/;
+
+  while (i < n) {
+    const c = src[i];
+    const next = src[i + 1];
+
+    if (c === "/" && next === "/") {                       // comentário de linha
+      while (i < n && src[i] !== "\n") { if (!dropComments) out += src[i]; i++; }
+      continue;
+    }
+    if (c === "/" && next === "*") {                       // comentário de bloco
+      while (i < n && !(src[i] === "*" && src[i + 1] === "/")) { if (!dropComments) out += src[i]; i++; }
+      if (!dropComments) out += "*/";
+      i += 2;
+      continue;
+    }
+    if (c === '"' || c === "'" || c === "`") {              // string: preservada
+      const quote = c;
+      out += c; i++;
+      while (i < n) {
+        if (src[i] === "\\") { out += src[i] + (src[i + 1] ?? ""); i += 2; continue; }
+        out += src[i];
+        if (src[i] === quote) { i++; break; }
+        i++;
+      }
+      continue;
+    }
+    if (c === "/") {                                        // possível regex
+      const prev = out.replace(/\s+$/, "").slice(-8);
+      if (opBefore.test(prev.slice(-1)) || opBefore.test(prev)) {
+        let j = i + 1;
+        let inClass = false;
+        let closed = false;
+        while (j < n && src[j] !== "\n") {
+          if (src[j] === "\\") { j += 2; continue; }
+          if (src[j] === "[") inClass = true;
+          else if (src[j] === "]") inClass = false;
+          else if (src[j] === "/" && !inClass) { closed = true; j++; break; }
+          j++;
+        }
+        if (closed) {
+          while (j < n && /[gimsuyd]/.test(src[j])) j++;
+          i = j;                                            // literal descartado
+          continue;
+        }
+      }
+    }
+    out += c; i++;
+  }
+  return out;
+}
 
 /**
  * **Usa** a chave administrativa, por oposição a apenas mencioná-la.
@@ -225,28 +363,86 @@ function categoryOf(rel) {
 const USES_SERVICE_ROLE =
   /process\.env\.SUPABASE_SERVICE_ROLE_KEY|env\.SUPABASE_SERVICE_ROLE_KEY|createAdminClient\s*\(|SUPABASE_SECRET_KEY/;
 
-function scriptRisk(rel, src) {
+/**
+ * O script CONSTRÓI mesmo um cliente de base de dados?
+ *
+ * Quarto falso positivo da mesma família (T17-B1). O próprio
+ * `audit-file-inventory.mjs` aparecia como `PRODUCTION_DANGEROUS` no inventário
+ * da T17-A — o relatório dizia 15 enquanto o documento dizia 14 e nomeava 14
+ * scripts de dados. A causa: este ficheiro contém as palavras `SERVICE_ROLE`,
+ * `DROP` e `TRUNCATE` **dentro das suas próprias expressões de detecção**. Um
+ * auditor estático classificado como ameaça pelo próprio critério que aplica.
+ *
+ * A correcção é a mesma lição já aprendida três vezes — **mencionar ≠ usar** —
+ * levada ao fim: um script que nunca constrói um cliente, nunca importa o SDK e
+ * nunca abre uma ligação **não consegue tocar na base**, independentemente das
+ * palavras que tenha no corpo. Esta pergunta vem primeiro que todas as outras.
+ */
+const CONSTRUCTS_DB_CLIENT =
+  /createClient\s*\(|createAdminClient\s*\(|from\s+["']@supabase\/|require\s*\(\s*["']@supabase\/|new\s+(?:Client|Pool)\s*\(|from\s+["']pg["']/;
+
+/**
+ * O SDK não é a única porta de entrada.
+ *
+ * A primeira versão de `CONSTRUCTS_DB_CLIENT` assumia que sim, e baixou
+ * `backup-now.mjs` e `import-predios.mjs` para `SAFE_OFFLINE`. Ambos chegam à
+ * base por **HTTP directo à API REST** (`${SUPABASE_URL}/rest/v1/…` com a chave
+ * administrativa no cabeçalho), sem importar uma única linha do SDK —
+ * `import-predios.mjs --apply` escreve mesmo em `building_cards`, e foi assim
+ * que os 146 prédios reais entraram em produção.
+ *
+ * Uma regra de segurança que só reconhece o caminho conhecido dá um falso
+ * "seguro" — que é pior do que não ter regra nenhuma.
+ */
+const CALLS_REST_API = /\/rest\/v1\/|\/auth\/v1\/admin|\/storage\/v1\//;
+
+function scriptRisk(rel, raw) {
   if (!rel.startsWith("scripts/")) return null;
 
-  // Primeiro o que é comprovadamente inofensivo, senão as menções às flags
-  // perigosas dentro de `assertNoWriteFlags` — que existe para as RECUSAR —
-  // fazem o comparador parecer capaz de escrever. Foi o que aconteceu na
-  // primeira versão com os três `compare-*-compat.ts`.
-  const semBase = !SIGNALS.supabase.test(src) && !/SUPABASE_DB_URL|SERVICE_ROLE/i.test(src);
-  if (/assertNoWriteFlags/.test(src) && semBase) return "SAFE_OFFLINE";
-  if (semBase && !SIGNALS.write.test(src)) return "SAFE_OFFLINE";
+  // Duas vistas do mesmo ficheiro, para duas perguntas diferentes.
+  // `code`: o que o script FAZ — sem comentários nem literais de regex.
+  // `text`: o que o script OFERECE como interface — comentários de uso mantidos.
+  const src = stripNonCode(raw, { dropComments: true });
+  const text = stripNonCode(raw);
+
+  // Porta zero: sem cliente construído, sem cadeia de ligação lida do ambiente
+  // e sem chamada à API REST, o script não consegue tocar na base — por mais
+  // nomes de chave e verbos SQL que mencione.
+  const usesDbUrl = /(?:process\.)?env\.SUPABASE_DB_URL|env\[["']SUPABASE_DB_URL["']\]/.test(src);
+  if (!CONSTRUCTS_DB_CLIENT.test(src) && !usesDbUrl && !CALLS_REST_API.test(src)) return "SAFE_OFFLINE";
+
+  // A partir daqui está PROVADO que o script consegue chegar a uma base. Os
+  // antigos atalhos `semBase` foram removidos: só sabiam reconhecer o SDK do
+  // Supabase e deixavam passar por "offline" um script que fala Postgres
+  // directo. Foi o que aconteceu a `verify-profile-guards.mjs`, cujo próprio
+  // cabeçalho diz "Este script ESCREVE" — liga por `pg` e executa SQL, sem um
+  // único `.insert(`. Porta zero torna esses atalhos desnecessários.
+
+  // Há três maneiras de escrever, e reconhecer só uma dá um falso "seguro":
+  //   SDK   → `.insert(` / `.update(` / …
+  //   HTTP  → método que não é GET contra `/rest/v1/`
+  //   SQL   → verbo de escrita numa query enviada por `pg`
+  const writesViaRest =
+    CALLS_REST_API.test(src) && /method:\s*["'](POST|PATCH|PUT|DELETE)["']/i.test(src);
+  // Sem `/i`, de propósito. Com a flag, `UPDATE\s+\w` apanhava prosa
+  // portuguesa — "update manual", "update quando a app está idle" — e promovia
+  // `audit-reversoes.mjs`, que só LÊ, a `PRODUCTION_DANGEROUS`. O SQL destes
+  // scripts é escrito em maiúsculas; a linguagem natural à volta não é.
+  const writesViaSql =
+    /\b(INSERT\s+INTO|UPDATE\s+(?:public\.|"|\w+\s+SET)|DELETE\s+FROM|DROP\s+(?:TABLE|VIEW|FUNCTION|TRIGGER|POLICY|SCHEMA)|TRUNCATE\s+|ALTER\s+TABLE|CREATE\s+(?:OR\s+REPLACE\s+)?(?:TABLE|FUNCTION|TRIGGER|POLICY))/.test(src);
+  const writes =
+    SIGNALS.write.test(src) || writesViaRest || writesViaSql
+    || /deleteUser|admin\.auth\.(?:create|delete|update)/i.test(src);
 
   if (USES_SERVICE_ROLE.test(src)) {
     // Chave administrativa + escrita é a combinação que apagou dados no
     // passado. Chave administrativa só para ler é grave, mas menos.
-    return SIGNALS.write.test(src) || /\bDROP\b|\bTRUNCATE\b|deleteUser|admin\.auth/i.test(src)
-      ? "PRODUCTION_DANGEROUS"
-      : "ADMIN_READ";
+    return writes ? "PRODUCTION_DANGEROUS" : "ADMIN_READ";
   }
-  if (/--apply|--confirm-production|--execute|--commit\b/.test(src)) return "WRITE_CAPABLE";
-  if (SIGNALS.write.test(src) || /\bDROP\b|\bTRUNCATE\b/i.test(src)) return "WRITE_CAPABLE";
-  if (SIGNALS.supabase.test(src) || /SUPABASE_DB_URL/i.test(src)) return "READ_ONLY";
-  return "SAFE_OFFLINE";
+  if (writes) return "WRITE_CAPABLE";
+  // Flags declaradas no cabeçalho de uso contam — ver `stripNonCode`.
+  if (/--apply|--confirm-production|--execute|--commit\b/.test(text)) return "WRITE_CAPABLE";
+  return "READ_ONLY";
 }
 
 // ─── Decisões manuais ───────────────────────────────────────────────────────
@@ -260,19 +456,6 @@ function scriptRisk(rel, src) {
  * aparece no diff.
  */
 const MANUAL = {
-  // O nome contém U+F03A — o carácter que o Windows usa no lugar de `:`, que é
-  // ilegal em NTFS. Descodificado, o nome do ficheiro é o caminho
-  // `C:\Temp\mo-limpezas-dev.log`: alguém escreveu `> C:\Temp\...` numa shell
-  // que tratou o caminho como nome relativo, e o resultado foi commitado.
-  "C\uF03ATempmo-limpezas-dev.log": {
-    status: "REMOVER",
-    confidence: "alta",
-    reason:
-      "o nome do ficheiro é um caminho do Windows capturado por engano num "
-      + "redireccionamento de saída. Não é código, não é documentação, tem zero "
-      + "referências e o conteúdo é um log de desenvolvimento de uma sessão antiga.",
-    action: "T17-B: remover",
-  },
   "src/app/actions/whatsapp.ts": {
     status: "STANDBY",
     confidence: "alta",
@@ -306,6 +489,21 @@ const MANUAL = {
     action: "nenhuma",
   },
 };
+
+/**
+ * Resíduo de redireccionamento de shell do Windows (T17-B1).
+ *
+ * `:` é ilegal num nome de ficheiro NTFS, e o Windows substitui-o por **U+F03A**
+ * na área de uso privado do Unicode. Quando alguém escreve `> C:\Temp\x.log`
+ * numa shell que trata o caminho como nome relativo, nasce um ficheiro cujo
+ * NOME é o caminho inteiro — e se ninguém reparar, é commitado.
+ *
+ * A T17-B1 removeu um caso destes (`C:\Temp\mo-limpezas-dev.log`). Esta regra
+ * substitui a entrada manual que lá estava: em vez de fixar o nome de um
+ * ficheiro que já não existe — o que congelaria o lixo no inventário — apanha o
+ * **padrão**, para que um resíduo novo do mesmo tipo seja marcado sozinho.
+ */
+const WINDOWS_PATH_RESIDUE = /[\uE000-\uF8FF]/;
 
 // ─── Classificador principal ────────────────────────────────────────────────
 
@@ -353,6 +551,7 @@ function classify(rel) {
   let action = "nenhuma";
 
   const reachable = auto || inNpm || inCi || inVercel || inConfig || consumers.length > 0;
+  const doors = deadCodeDoors(rel, src, { inNpm, inCi, inVercel, inConfig });
 
   if (category === "migration") {
     status = "MANTER";
@@ -365,6 +564,12 @@ function classify(rel) {
     confidence = "média";
     reason = "documentação de planeamento anterior ao produto actual";
     action = "avaliar movimento para docs/historico/ na T17-B";
+  } else if (category === "doc-historico") {
+    status = "MANTER";
+    reason =
+      "arquivo histórico preservado em docs/historico/ — explica o porquê das "
+      + "decisões, NÃO descreve o sistema actual e nunca é instrução de implementação";
+    action = "não reescrever: histórico não se corrige, corrige-se o documento vigente";
   } else if (category === "doc") {
     status = "MANTER";
     reason = "documentação";
@@ -404,12 +609,19 @@ function classify(rel) {
         : "script de leitura";
     }
   } else if (isCode && !reachable) {
+    // Sem consumidores. NÃO é o mesmo que morto — ver `deadCodeDoors`.
     status = "STANDBY";
     confidence = inDocs ? "média" : "baixa";
     reason = inDocs
       ? "sem consumidor no código, mas referido na documentação"
       : "sem consumidor encontrado por análise estática";
-    action = "T17-B: provar ausência de import dinâmico/convenção antes de remover";
+    action = doors.allClosed
+      ? "as três portas estão fechadas — candidato a REMOVER, mas exige decisão manual e prova caso a caso"
+      : `porta(s) ainda abertas (${[
+        doors.frameworkConvention && "convenção do framework",
+        doors.cliEntrypoint && "entrada de CLI",
+        doors.dynamicImport && "import dinâmico não resolúvel",
+      ].filter(Boolean).join(", ")}) — não remover`;
   } else if (isCode) {
     // Alcançável. Diz-se PORQUÊ — uma classificação sem razão escrita é um
     // palpite, e o teste do inventário recusa-a.
@@ -439,6 +651,20 @@ function classify(rel) {
     action = action === "nenhuma" ? "auditar atomicidade (T12/T13)" : action;
   }
 
+  // Resíduo de redireccionamento do Windows: o nome do ficheiro é um caminho.
+  // Sobrepõe-se a tudo — nenhum ficheiro destes é código, documentação ou
+  // configuração, e nenhum tem consumidores.
+  if (WINDOWS_PATH_RESIDUE.test(rel)) {
+    status = "REMOVER";
+    confidence = "alta";
+    reason =
+      "o nome do ficheiro contém um carácter da área de uso privado do Unicode "
+      + "(U+E000–U+F8FF), o que o Windows usa para caracteres ilegais em NTFS como "
+      + "`:` — é um caminho capturado por engano num redireccionamento de saída, não "
+      + "um ficheiro que alguém tenha decidido criar.";
+    action = "remover, depois de confirmar zero referências e conteúdo sem valor";
+  }
+
   // ── Decisão manual tem a última palavra ──
   const manual = MANUAL[rel];
   if (manual) {
@@ -466,6 +692,10 @@ function classify(rel) {
     action,
     reason,
     manualDecision: manual != null,
+    // As três portas, explícitas no relatório: um `REMOVER` futuro tem de as
+    // mostrar todas fechadas, e quem ler o inventário vê porquê sem reler o
+    // classificador.
+    deadCodeDoors: isCode ? doors : undefined,
   };
 
   if (category === "script") entry.scriptRisk = scriptRisk(rel, src);
