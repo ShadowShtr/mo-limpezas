@@ -1,3 +1,36 @@
+// ============================================================================
+// 🔴 ARQUIVADO — NÃO EXECUTAR (T17-B2, 2026-08-10)
+// ============================================================================
+//
+// Preservado para AUDITORIA e para explicar como os dados actuais chegaram à
+// base. NÃO é uma ferramenta operacional e não deve voltar a correr contra
+// base nenhuma.
+//
+// Porquê:
+//   migração histórica única. Cria utilizadores, clientes, equipas e locais a
+//   partir de um ficheiro de dados que já não existe, com IDs e pressupostos
+//   daquela migração gravados no código. A flag --wipe apaga inclusive
+//   invoices e cash_flow_entries, sem dry-run e sem confirmação.
+//
+// A recusa abaixo é deliberadamente SEM ESCAPATÓRIA: não há flag, variável de
+// ambiente nem argumento que a contorne. Se algum dia for mesmo preciso o que
+// este código faz, o caminho é lê-lo, perceber o que faz HOJE, e escrever de
+// propósito uma ferramenta nova com as guardas da T17-B2 — não desbloquear
+// esta.
+//
+// Ver docs/SCRIPTS-SAFETY-MATRIX.md e AGENTS.md (REGRA ZERO).
+// ============================================================================
+
+console.error(
+  "\n🔴 migrate-real-data.mjs está ARQUIVADO e não pode ser executado.\n",
+);
+console.error(
+  "   Foi retirado da superfície operacional na T17-B2 por ser capaz de\n   destruir ou duplicar dados reais. Fica versionado apenas como registo\n   histórico e para auditoria.\n\n   Ver docs/SCRIPTS-SAFETY-MATRIX.md\n",
+);
+process.exit(1);
+
+// ─── Código histórico a partir daqui. Preservado sem alterações. ───────────
+
 // ============================================================
 // Migração de dados reais — Mó Limpezas
 // Ver docs/MIGRACAO_DADOS_REAIS.md

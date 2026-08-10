@@ -6,12 +6,12 @@
 import fs from "node:fs";
 import path from "node:path";
 import { createClient } from "@supabase/supabase-js";
+import { loadEnvFile } from "./lib/admin-db.mjs";
 
-const env = fs.readFileSync(".env.local", "utf8").split("\n").reduce((a, l) => {
-  const m = l.match(/^([A-Z_]+)=(.*)$/);
-  if (m) a[m[1]] = m[2].replace(/^"|"$/g, "");
-  return a;
-}, {});
+// Carregador único de ambiente (T17-B2) — substitui o parser próprio que este
+// ficheiro tinha. Só lê: um backup não escreve, por isso não passa pelo guard
+// completo de `openAdminDb`.
+const env = loadEnvFile();
 const sb = createClient(env.NEXT_PUBLIC_SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, {
   auth: { persistSession: false },
 });

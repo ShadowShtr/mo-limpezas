@@ -33,6 +33,7 @@ remeter para ele.
 | [`historico/planning/`](historico/planning/README-ARQUIVO.md) | **Arquivo histórico.** A antiga pasta `planning/`, movida sem alterações na T17-B1. Documentação anterior ao produto — explica o *porquê*, **não** descreve o sistema actual. Nunca usar como instrução nem como schema vigente. |
 | [`SCRIPTS-SAFETY-MATRIX.md`](SCRIPTS-SAFETY-MATRIX.md) | Classificação de risco dos scripts capazes de escrever ou apagar dados, e o que falta a cada um em guardas. |
 | [`T17-B1-LIMPEZA-COMPROVADA.md`](T17-B1-LIMPEZA-COMPROVADA.md) | O que a T17-B1 removeu, arquivou e inventariou — com as provas. |
+| [`T17-B2-ENDURECER-SCRIPTS.md`](T17-B2-ENDURECER-SCRIPTS.md) | As guardas comuns dos scripts administrativos, os 4 arquivados e os defeitos encontrados a migrá-los. |
 | [`atomicidade-audit/`](atomicidade-audit/) | Errata e mapas de checksum das migrations. Os **checkpoints congelados** (`frozen/064`, `frozen/065`) não estão no `master` — vivem só na branch `fix/atomic-contract-calendar-sync`, que está congelada. Referência, **nunca** aplicável como migration. |
 
 ## Onde escrever o quê

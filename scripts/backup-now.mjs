@@ -4,15 +4,18 @@
 //
 //   node scripts/backup-now.mjs
 
-import { config } from "dotenv";
-config({ path: ".env.local" });
 import JSZip from "jszip";
 import { writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import path from "node:path";
+import { loadEnvFile } from "./lib/admin-db.mjs";
 
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+// Carregador único de ambiente (T17-B2) — substitui o `dotenv` que injectava
+// em `process.env`. Só lê: um backup não escreve, por isso não passa pelo
+// guard completo de `openAdminDb`.
+const env = loadEnvFile();
+const SUPABASE_URL = env.NEXT_PUBLIC_SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL;
+const SERVICE_KEY = env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.SUPABASE_SERVICE_ROLE_KEY;
 if (!SUPABASE_URL || !SERVICE_KEY) {
   console.error("Faltam NEXT_PUBLIC_SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY em .env.local");
   process.exit(1);

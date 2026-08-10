@@ -2,18 +2,18 @@
 // contratos, recalculando scheduled_start/end a partir do horário do contrato
 // com o offset de Europe/Lisbon. Não toca em exceções, passados, ou pontuais.
 //
-//   node scripts/fix-service-times.mjs          → dry-run (só mostra)
-//   node scripts/fix-service-times.mjs --apply  → aplica as alterações
-import fs from "node:fs";
-import { createClient } from "@supabase/supabase-js";
+//   node scripts/fix-service-times.mjs --project-ref <ref> --company-id <uuid>
+//   node scripts/fix-service-times.mjs --project-ref <ref> --company-id <uuid> --apply
+//
+// Guardas comuns em scripts/lib/admin-db.mjs (T17-B2).
+import { openAdminDb } from "./lib/admin-db.mjs";
 
-const env = fs.readFileSync(".env.local", "utf8").split("\n").reduce((a, l) => {
-  const m = l.match(/^([A-Z_]+)=(.*)$/);
-  if (m) a[m[1]] = m[2].replace(/^"|"$/g, "");
-  return a;
-}, {});
-const sb = createClient(env.NEXT_PUBLIC_SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY);
-const APPLY = process.argv.includes("--apply");
+const db = await openAdminDb({
+  script: "fix-service-times.mjs",
+  purpose: "recalcular scheduled_start/end de serviços agendados futuros com o offset de Lisboa",
+  writes: true,
+});
+const sb = db.sb;
 
 const DOW_TO_KEY = { 0: "sun", 1: "mon", 2: "tue", 3: "wed", 4: "thu", 5: "fri", 6: "sat" };
 
@@ -39,6 +39,7 @@ const nowIso = new Date().toISOString();
 const { data: contracts, error } = await sb
   .from("contracts")
   .select("id, schedule_days, status")
+  .eq("company_id", db.companyId)
   .eq("status", "ativo");
 if (error) { console.error(error.message); process.exit(1); }
 
@@ -48,12 +49,16 @@ for (const c of contracts ?? []) {
   if (!schedule.length) continue;
   const def = schedule[0];
 
-  const { data: services } = await sb
+  const { data: services, error: servicesError } = await sb
     .from("services")
     .select("id, reference_number, scheduled_start, scheduled_end, is_exception")
+    .eq("company_id", db.companyId)
     .eq("contract_id", c.id)
     .eq("status", "agendado")
     .gte("scheduled_start", nowIso);
+  // Sem isto, uma consulta falhada dá lista vazia e o contrato passa por
+  // "nada a corrigir" — o padrão que a T17-B1 contou 268 vezes na aplicação.
+  if (servicesError) throw new Error(`services (contrato ${c.id}): ${servicesError.message}`);
 
   for (const s of services ?? []) {
     if (s.is_exception) continue;
@@ -78,12 +83,13 @@ for (const c of contracts ?? []) {
 
     changed++;
     console.log(`#${s.reference_number} ${s.scheduled_start} -> ${newStart}`);
-    if (APPLY) {
-      const { error: upErr } = await sb.from("services")
-        .update({ scheduled_start: newStart, scheduled_end: newEnd })
-        .eq("id", s.id);
-      if (upErr) console.error(`  ERRO #${s.reference_number}:`, upErr.message);
-    }
+    await db.write(
+      "services",
+      (t) => t.update({ scheduled_start: newStart, scheduled_end: newEnd })
+        .eq("id", s.id).eq("company_id", db.companyId),
+      `#${s.reference_number}`,
+    );
   }
 }
-console.log(`\n${APPLY ? "APLICADO" : "DRY-RUN"} — analisados: ${scanned}, a corrigir: ${changed}`);
+console.log(`\nAnalisados: ${scanned}, a corrigir: ${changed}`);
+db.summary();

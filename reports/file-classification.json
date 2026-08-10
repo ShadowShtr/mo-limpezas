@@ -1,25 +1,26 @@
 {
   "generatedBy": "scripts/audit-file-inventory.mjs",
-  "totalFiles": 564,
+  "totalFiles": 568,
   "byStatus": {
-    "MANTER": 532,
-    "STANDBY": 32
+    "MANTER": 551,
+    "STANDBY": 17
   },
   "byCategory": {
     "route-ui": 132,
-    "test": 79,
+    "test": 80,
     "migration": 72,
     "lib": 56,
-    "script": 44,
+    "script": 42,
     "server-action": 35,
     "domain": 34,
-    "doc": 32,
+    "doc": 33,
     "doc-historico": 16,
     "api-route": 16,
     "component": 14,
     "config": 12,
     "asset": 8,
     "report": 4,
+    "script-historico": 4,
     "ci": 2,
     "types": 2,
     "sql-frozen": 2,
@@ -28,14 +29,14 @@
     "src-other": 1
   },
   "byConfidence": {
-    "alta": 550,
-    "média": 8,
+    "alta": 553,
+    "média": 9,
     "baixa": 6
   },
   "scriptRisk": {
-    "SAFE_OFFLINE": 21,
-    "PRODUCTION_DANGEROUS": 15,
-    "ADMIN_READ": 5,
+    "SAFE_OFFLINE": 22,
+    "ADMIN_GUARDED_WRITE": 11,
+    "ADMIN_READ": 6,
     "WRITE_CAPABLE": 3
   },
   "files": [
@@ -57,7 +58,7 @@
         "service-role"
       ],
       "signals": {
-        "supabase": 1,
+        "supabase": 2,
         "serviceRole": 1
       },
       "action": "nenhuma",
@@ -998,8 +999,8 @@
       ],
       "signals": {
         "supabase": 1,
-        "env": 1,
-        "serviceRole": 2,
+        "env": 4,
+        "serviceRole": 4,
         "write": 4,
         "sqlWrite": 19
       },
@@ -1228,6 +1229,33 @@
         "ignoredError": 1,
         "fallbackZero": 2,
         "fallbackArray": 3
+      },
+      "action": "nenhuma",
+      "reason": "documentação",
+      "manualDecision": false
+    },
+    {
+      "path": "docs/T17-B2-ENDURECER-SCRIPTS.md",
+      "category": "doc",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [
+        "docs"
+      ],
+      "sideEffects": [
+        "supabase",
+        "env"
+      ],
+      "risks": [
+        "service-role"
+      ],
+      "signals": {
+        "supabase": 1,
+        "env": 3,
+        "serviceRole": 2
       },
       "action": "nenhuma",
       "reason": "documentação",
@@ -1721,10 +1749,10 @@
         "todo(4)"
       ],
       "signals": {
-        "supabase": 5,
-        "env": 1,
+        "supabase": 6,
+        "env": 2,
         "network": 3,
-        "serviceRole": 11,
+        "serviceRole": 12,
         "write": 3,
         "sqlWrite": 28,
         "todo": 4,
@@ -1870,7 +1898,9 @@
       "consumers": 0,
       "consumerSample": [],
       "autoLoaded": false,
-      "referencedBy": [],
+      "referencedBy": [
+        "docs"
+      ],
       "sideEffects": [
         "supabase"
       ],
@@ -1903,7 +1933,9 @@
       "consumers": 0,
       "consumerSample": [],
       "autoLoaded": false,
-      "referencedBy": [],
+      "referencedBy": [
+        "docs"
+      ],
       "sideEffects": [
         "env",
         "network"
@@ -1912,9 +1944,9 @@
         "service-role"
       ],
       "signals": {
-        "env": 2,
+        "env": 3,
         "network": 2,
-        "serviceRole": 2,
+        "serviceRole": 3,
         "consoleLog": 1,
         "consoleErr": 3
       },
@@ -2077,7 +2109,7 @@
     {
       "path": "scripts/create-admins.mjs",
       "category": "script",
-      "status": "STANDBY",
+      "status": "MANTER",
       "confidence": "alta",
       "consumers": 0,
       "consumerSample": [],
@@ -2090,21 +2122,16 @@
         "env",
         "write"
       ],
-      "risks": [
-        "service-role",
-        "erro-de-query-ignorado(1)"
-      ],
+      "risks": [],
       "signals": {
-        "supabase": 5,
-        "env": 3,
-        "serviceRole": 1,
+        "supabase": 2,
+        "env": 1,
         "write": 1,
-        "consoleLog": 6,
-        "consoleErr": 4,
-        "ignoredError": 1
+        "consoleLog": 5,
+        "consoleErr": 4
       },
-      "action": "T17-B: decidir entre arquivar, exigir flag explícita, ou remover",
-      "reason": "usa a chave administrativa E escreve/apaga — capaz de estragar uma base real",
+      "action": "manter fora de qualquer execução automática",
+      "reason": "escreve com a chave administrativa, mas através das guardas comuns da T17-B2: alvo declarado e confrontado, dry-run por omissão, produção recusada sem autorização explícita, company_id obrigatório",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -2112,12 +2139,12 @@
         "dynamicImport": true,
         "allClosed": false
       },
-      "scriptRisk": "PRODUCTION_DANGEROUS"
+      "scriptRisk": "ADMIN_GUARDED_WRITE"
     },
     {
       "path": "scripts/create-colaborador.mjs",
       "category": "script",
-      "status": "STANDBY",
+      "status": "MANTER",
       "confidence": "alta",
       "consumers": 0,
       "consumerSample": [],
@@ -2130,21 +2157,16 @@
         "env",
         "write"
       ],
-      "risks": [
-        "service-role",
-        "erro-de-query-ignorado(1)"
-      ],
+      "risks": [],
       "signals": {
-        "supabase": 5,
-        "env": 4,
-        "serviceRole": 1,
+        "supabase": 2,
+        "env": 2,
         "write": 1,
         "consoleLog": 4,
-        "consoleErr": 4,
-        "ignoredError": 1
+        "consoleErr": 4
       },
-      "action": "T17-B: decidir entre arquivar, exigir flag explícita, ou remover",
-      "reason": "usa a chave administrativa E escreve/apaga — capaz de estragar uma base real",
+      "action": "manter fora de qualquer execução automática",
+      "reason": "escreve com a chave administrativa, mas através das guardas comuns da T17-B2: alvo declarado e confrontado, dry-run por omissão, produção recusada sem autorização explícita, company_id obrigatório",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -2152,7 +2174,7 @@
         "dynamicImport": true,
         "allClosed": false
       },
-      "scriptRisk": "PRODUCTION_DANGEROUS"
+      "scriptRisk": "ADMIN_GUARDED_WRITE"
     },
     {
       "path": "scripts/diagnose-duplicate-monthly-contracts.sql",
@@ -2205,7 +2227,7 @@
     {
       "path": "scripts/fix-num-people.mjs",
       "category": "script",
-      "status": "STANDBY",
+      "status": "MANTER",
       "confidence": "alta",
       "consumers": 0,
       "consumerSample": [],
@@ -2214,23 +2236,17 @@
         "docs"
       ],
       "sideEffects": [
-        "supabase",
         "write"
       ],
-      "risks": [
-        "service-role"
-      ],
+      "risks": [],
       "signals": {
-        "supabase": 3,
-        "serviceRole": 1,
         "write": 1,
         "sqlWrite": 1,
         "consoleLog": 2,
-        "consoleErr": 1,
         "fallbackArray": 2
       },
-      "action": "T17-B: decidir entre arquivar, exigir flag explícita, ou remover",
-      "reason": "usa a chave administrativa E escreve/apaga — capaz de estragar uma base real",
+      "action": "manter fora de qualquer execução automática",
+      "reason": "escreve com a chave administrativa, mas através das guardas comuns da T17-B2: alvo declarado e confrontado, dry-run por omissão, produção recusada sem autorização explícita, company_id obrigatório",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -2238,12 +2254,12 @@
         "dynamicImport": true,
         "allClosed": false
       },
-      "scriptRisk": "PRODUCTION_DANGEROUS"
+      "scriptRisk": "ADMIN_GUARDED_WRITE"
     },
     {
       "path": "scripts/fix-service-times.mjs",
       "category": "script",
-      "status": "STANDBY",
+      "status": "MANTER",
       "confidence": "alta",
       "consumers": 0,
       "consumerSample": [],
@@ -2252,23 +2268,18 @@
         "docs"
       ],
       "sideEffects": [
-        "supabase",
         "write"
       ],
-      "risks": [
-        "service-role"
-      ],
+      "risks": [],
       "signals": {
-        "supabase": 3,
-        "serviceRole": 1,
         "write": 1,
         "sqlWrite": 1,
         "consoleLog": 2,
-        "consoleErr": 2,
+        "consoleErr": 1,
         "fallbackArray": 3
       },
-      "action": "T17-B: decidir entre arquivar, exigir flag explícita, ou remover",
-      "reason": "usa a chave administrativa E escreve/apaga — capaz de estragar uma base real",
+      "action": "manter fora de qualquer execução automática",
+      "reason": "escreve com a chave administrativa, mas através das guardas comuns da T17-B2: alvo declarado e confrontado, dry-run por omissão, produção recusada sem autorização explícita, company_id obrigatório",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -2276,12 +2287,12 @@
         "dynamicImport": true,
         "allClosed": false
       },
-      "scriptRisk": "PRODUCTION_DANGEROUS"
+      "scriptRisk": "ADMIN_GUARDED_WRITE"
     },
     {
       "path": "scripts/fix-weekend-services.mjs",
       "category": "script",
-      "status": "STANDBY",
+      "status": "MANTER",
       "confidence": "alta",
       "consumers": 0,
       "consumerSample": [],
@@ -2290,23 +2301,18 @@
         "docs"
       ],
       "sideEffects": [
-        "supabase",
         "write"
       ],
-      "risks": [
-        "service-role"
-      ],
+      "risks": [],
       "signals": {
-        "supabase": 3,
-        "serviceRole": 1,
         "write": 1,
         "sqlWrite": 1,
         "consoleLog": 3,
-        "consoleErr": 2,
+        "consoleErr": 1,
         "fallbackArray": 1
       },
-      "action": "T17-B: decidir entre arquivar, exigir flag explícita, ou remover",
-      "reason": "usa a chave administrativa E escreve/apaga — capaz de estragar uma base real",
+      "action": "manter fora de qualquer execução automática",
+      "reason": "escreve com a chave administrativa, mas através das guardas comuns da T17-B2: alvo declarado e confrontado, dry-run por omissão, produção recusada sem autorização explícita, company_id obrigatório",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -2314,7 +2320,7 @@
         "dynamicImport": true,
         "allClosed": false
       },
-      "scriptRisk": "PRODUCTION_DANGEROUS"
+      "scriptRisk": "ADMIN_GUARDED_WRITE"
     },
     {
       "path": "scripts/gen-credenciais-pdf.mjs",
@@ -2344,7 +2350,7 @@
     {
       "path": "scripts/geocode-locations.mjs",
       "category": "script",
-      "status": "STANDBY",
+      "status": "MANTER",
       "confidence": "alta",
       "consumers": 0,
       "consumerSample": [],
@@ -2353,7 +2359,6 @@
         "docs"
       ],
       "sideEffects": [
-        "supabase",
         "env",
         "network",
         "write"
@@ -2362,16 +2367,16 @@
         "service-role"
       ],
       "signals": {
-        "supabase": 3,
-        "env": 3,
+        "env": 1,
         "network": 1,
-        "serviceRole": 2,
+        "serviceRole": 1,
         "write": 1,
         "sqlWrite": 1,
-        "consoleLog": 3
+        "consoleLog": 3,
+        "consoleErr": 3
       },
-      "action": "T17-B: decidir entre arquivar, exigir flag explícita, ou remover",
-      "reason": "usa a chave administrativa E escreve/apaga — capaz de estragar uma base real",
+      "action": "manter fora de qualquer execução automática",
+      "reason": "escreve com a chave administrativa, mas através das guardas comuns da T17-B2: alvo declarado e confrontado, dry-run por omissão, produção recusada sem autorização explícita, company_id obrigatório",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -2379,51 +2384,12 @@
         "dynamicImport": true,
         "allClosed": false
       },
-      "scriptRisk": "PRODUCTION_DANGEROUS"
+      "scriptRisk": "ADMIN_GUARDED_WRITE"
     },
     {
-      "path": "scripts/import-contratos-5.mjs",
-      "category": "script",
-      "status": "STANDBY",
-      "confidence": "alta",
-      "consumers": 0,
-      "consumerSample": [],
-      "autoLoaded": false,
-      "referencedBy": [
-        "docs"
-      ],
-      "sideEffects": [
-        "supabase",
-        "env",
-        "write"
-      ],
-      "risks": [
-        "service-role"
-      ],
-      "signals": {
-        "supabase": 3,
-        "env": 2,
-        "serviceRole": 1,
-        "write": 2,
-        "sqlWrite": 2,
-        "consoleLog": 8,
-        "consoleErr": 2
-      },
-      "action": "T17-B: decidir entre arquivar, exigir flag explícita, ou remover",
-      "reason": "usa a chave administrativa E escreve/apaga — capaz de estragar uma base real",
-      "manualDecision": false,
-      "deadCodeDoors": {
-        "frameworkConvention": false,
-        "cliEntrypoint": true,
-        "dynamicImport": true,
-        "allClosed": false
-      },
-      "scriptRisk": "PRODUCTION_DANGEROUS"
-    },
-    {
-      "path": "scripts/import-fluxo-junho.mjs",
-      "category": "script",
-      "status": "STANDBY",
+      "path": "scripts/historico/import-fluxo-junho.mjs",
+      "category": "script-historico",
+      "status": "MANTER",
       "confidence": "alta",
       "consumers": 0,
       "consumerSample": [],
@@ -2446,23 +2412,22 @@
         "write": 1,
         "sqlWrite": 1,
         "consoleLog": 7,
-        "consoleErr": 3
+        "consoleErr": 5
       },
-      "action": "T17-B: decidir entre arquivar, exigir flag explícita, ou remover",
-      "reason": "usa a chave administrativa E escreve/apaga — capaz de estragar uma base real",
+      "action": "não desbloquear: se o que faz voltar a ser preciso, escrever ferramenta nova com as guardas actuais",
+      "reason": "script arquivado na T17-B2: preservado para auditoria e para explicar como os dados chegaram à base, selado com uma recusa sem escapatória que o impede de correr. Já não é superfície operacional",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
         "cliEntrypoint": true,
         "dynamicImport": true,
         "allClosed": false
-      },
-      "scriptRisk": "PRODUCTION_DANGEROUS"
+      }
     },
     {
-      "path": "scripts/import-pdf-jun26.mjs",
-      "category": "script",
-      "status": "STANDBY",
+      "path": "scripts/historico/import-pdf-jun26.mjs",
+      "category": "script-historico",
+      "status": "MANTER",
       "confidence": "alta",
       "consumers": 0,
       "consumerSample": [],
@@ -2485,23 +2450,22 @@
         "write": 3,
         "sqlWrite": 3,
         "consoleLog": 11,
-        "consoleErr": 3
+        "consoleErr": 5
       },
-      "action": "T17-B: decidir entre arquivar, exigir flag explícita, ou remover",
-      "reason": "usa a chave administrativa E escreve/apaga — capaz de estragar uma base real",
+      "action": "não desbloquear: se o que faz voltar a ser preciso, escrever ferramenta nova com as guardas actuais",
+      "reason": "script arquivado na T17-B2: preservado para auditoria e para explicar como os dados chegaram à base, selado com uma recusa sem escapatória que o impede de correr. Já não é superfície operacional",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
         "cliEntrypoint": true,
         "dynamicImport": true,
         "allClosed": false
-      },
-      "scriptRisk": "PRODUCTION_DANGEROUS"
+      }
     },
     {
-      "path": "scripts/import-predios.mjs",
-      "category": "script",
-      "status": "STANDBY",
+      "path": "scripts/historico/migrate-real-data.mjs",
+      "category": "script-historico",
+      "status": "MANTER",
       "confidence": "alta",
       "consumers": 0,
       "consumerSample": [],
@@ -2510,21 +2474,94 @@
         "docs"
       ],
       "sideEffects": [
+        "supabase",
         "env",
-        "network"
+        "write"
       ],
       "risks": [
         "service-role"
       ],
       "signals": {
+        "supabase": 3,
         "env": 2,
-        "network": 3,
         "serviceRole": 2,
-        "consoleLog": 8,
-        "consoleErr": 6
+        "write": 6,
+        "sqlWrite": 6,
+        "consoleLog": 13,
+        "consoleErr": 3,
+        "fallbackArray": 2
       },
-      "action": "T17-B: decidir entre arquivar, exigir flag explícita, ou remover",
-      "reason": "usa a chave administrativa E escreve/apaga — capaz de estragar uma base real",
+      "action": "não desbloquear: se o que faz voltar a ser preciso, escrever ferramenta nova com as guardas actuais",
+      "reason": "script arquivado na T17-B2: preservado para auditoria e para explicar como os dados chegaram à base, selado com uma recusa sem escapatória que o impede de correr. Já não é superfície operacional",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": true,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "scripts/historico/reset-operacao.mjs",
+      "category": "script-historico",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [
+        "docs"
+      ],
+      "sideEffects": [
+        "supabase",
+        "write"
+      ],
+      "risks": [
+        "service-role",
+        "todo(1)"
+      ],
+      "signals": {
+        "supabase": 3,
+        "serviceRole": 1,
+        "write": 1,
+        "sqlWrite": 1,
+        "todo": 1,
+        "consoleLog": 3,
+        "consoleErr": 4,
+        "fallbackZero": 1
+      },
+      "action": "não desbloquear: se o que faz voltar a ser preciso, escrever ferramenta nova com as guardas actuais",
+      "reason": "script arquivado na T17-B2: preservado para auditoria e para explicar como os dados chegaram à base, selado com uma recusa sem escapatória que o impede de correr. Já não é superfície operacional",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": true,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "scripts/import-contratos-5.mjs",
+      "category": "script",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [
+        "docs"
+      ],
+      "sideEffects": [
+        "write"
+      ],
+      "risks": [],
+      "signals": {
+        "write": 2,
+        "sqlWrite": 2,
+        "consoleLog": 7
+      },
+      "action": "manter fora de qualquer execução automática",
+      "reason": "escreve com a chave administrativa, mas através das guardas comuns da T17-B2: alvo declarado e confrontado, dry-run por omissão, produção recusada sem autorização explícita, company_id obrigatório",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -2532,7 +2569,115 @@
         "dynamicImport": true,
         "allClosed": false
       },
-      "scriptRisk": "PRODUCTION_DANGEROUS"
+      "scriptRisk": "ADMIN_GUARDED_WRITE"
+    },
+    {
+      "path": "scripts/import-predios.mjs",
+      "category": "script",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [
+        "docs"
+      ],
+      "sideEffects": [
+        "write"
+      ],
+      "risks": [],
+      "signals": {
+        "write": 1,
+        "sqlWrite": 1,
+        "consoleLog": 3,
+        "consoleErr": 2
+      },
+      "action": "manter fora de qualquer execução automática",
+      "reason": "escreve com a chave administrativa, mas através das guardas comuns da T17-B2: alvo declarado e confrontado, dry-run por omissão, produção recusada sem autorização explícita, company_id obrigatório",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": true,
+        "dynamicImport": true,
+        "allClosed": false
+      },
+      "scriptRisk": "ADMIN_GUARDED_WRITE"
+    },
+    {
+      "path": "scripts/lib/admin-db.mjs",
+      "category": "script",
+      "status": "MANTER",
+      "confidence": "média",
+      "consumers": 14,
+      "consumerSample": [
+        "scripts/backup-all.mjs",
+        "scripts/backup-now.mjs",
+        "scripts/create-admins.mjs"
+      ],
+      "autoLoaded": false,
+      "referencedBy": [
+        "docs"
+      ],
+      "sideEffects": [
+        "supabase",
+        "env",
+        "network",
+        "write"
+      ],
+      "risks": [
+        "service-role"
+      ],
+      "signals": {
+        "supabase": 3,
+        "env": 9,
+        "network": 2,
+        "serviceRole": 7,
+        "write": 1,
+        "sqlWrite": 1,
+        "consoleErr": 23
+      },
+      "action": "manter fora de qualquer execução automática",
+      "reason": "usa a chave administrativa, mas só para ler",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": true,
+        "dynamicImport": true,
+        "allClosed": false
+      },
+      "scriptRisk": "ADMIN_READ"
+    },
+    {
+      "path": "scripts/lib/admin-script-guard.mjs",
+      "category": "script",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 2,
+      "consumerSample": [
+        "scripts/lib/admin-db.mjs",
+        "src/__tests__/admin-script-guard.test.ts"
+      ],
+      "autoLoaded": false,
+      "referencedBy": [
+        "docs"
+      ],
+      "sideEffects": [],
+      "risks": [
+        "service-role"
+      ],
+      "signals": {
+        "serviceRole": 2
+      },
+      "action": "nenhuma",
+      "reason": "ferramenta offline, sem acesso à base",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": true,
+        "dynamicImport": true,
+        "allClosed": false
+      },
+      "scriptRisk": "SAFE_OFFLINE"
     },
     {
       "path": "scripts/lib/migration-070-integrity.mjs",
@@ -2662,8 +2807,9 @@
       "category": "script",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 2,
+      "consumers": 3,
       "consumerSample": [
+        "scripts/lib/admin-script-guard.mjs",
         "scripts/verify-profile-guards.mjs",
         "src/__tests__/verify-target-guard.test.ts"
       ],
@@ -2688,46 +2834,6 @@
         "allClosed": false
       },
       "scriptRisk": "SAFE_OFFLINE"
-    },
-    {
-      "path": "scripts/migrate-real-data.mjs",
-      "category": "script",
-      "status": "STANDBY",
-      "confidence": "alta",
-      "consumers": 0,
-      "consumerSample": [],
-      "autoLoaded": false,
-      "referencedBy": [
-        "docs"
-      ],
-      "sideEffects": [
-        "supabase",
-        "env",
-        "write"
-      ],
-      "risks": [
-        "service-role"
-      ],
-      "signals": {
-        "supabase": 3,
-        "env": 2,
-        "serviceRole": 2,
-        "write": 6,
-        "sqlWrite": 6,
-        "consoleLog": 13,
-        "consoleErr": 1,
-        "fallbackArray": 2
-      },
-      "action": "T17-B: decidir entre arquivar, exigir flag explícita, ou remover",
-      "reason": "usa a chave administrativa E escreve/apaga — capaz de estragar uma base real",
-      "manualDecision": false,
-      "deadCodeDoors": {
-        "frameworkConvention": false,
-        "cliEntrypoint": true,
-        "dynamicImport": true,
-        "allClosed": false
-      },
-      "scriptRisk": "PRODUCTION_DANGEROUS"
     },
     {
       "path": "scripts/plan-occurrence-repair.ts",
@@ -2758,49 +2864,9 @@
       "scriptRisk": "SAFE_OFFLINE"
     },
     {
-      "path": "scripts/reset-operacao.mjs",
-      "category": "script",
-      "status": "STANDBY",
-      "confidence": "alta",
-      "consumers": 0,
-      "consumerSample": [],
-      "autoLoaded": false,
-      "referencedBy": [
-        "docs"
-      ],
-      "sideEffects": [
-        "supabase",
-        "write"
-      ],
-      "risks": [
-        "service-role",
-        "todo(1)"
-      ],
-      "signals": {
-        "supabase": 3,
-        "serviceRole": 1,
-        "write": 1,
-        "sqlWrite": 1,
-        "todo": 1,
-        "consoleLog": 3,
-        "consoleErr": 2,
-        "fallbackZero": 1
-      },
-      "action": "T17-B: decidir entre arquivar, exigir flag explícita, ou remover",
-      "reason": "usa a chave administrativa E escreve/apaga — capaz de estragar uma base real",
-      "manualDecision": false,
-      "deadCodeDoors": {
-        "frameworkConvention": false,
-        "cliEntrypoint": true,
-        "dynamicImport": true,
-        "allClosed": false
-      },
-      "scriptRisk": "PRODUCTION_DANGEROUS"
-    },
-    {
       "path": "scripts/restore-backup.mjs",
       "category": "script",
-      "status": "STANDBY",
+      "status": "MANTER",
       "confidence": "alta",
       "consumers": 0,
       "consumerSample": [],
@@ -2809,21 +2875,16 @@
         "docs"
       ],
       "sideEffects": [
-        "supabase",
         "write"
       ],
-      "risks": [
-        "service-role"
-      ],
+      "risks": [],
       "signals": {
-        "supabase": 3,
-        "serviceRole": 1,
         "write": 1,
-        "consoleLog": 9,
-        "consoleErr": 4
+        "consoleLog": 7,
+        "consoleErr": 3
       },
-      "action": "T17-B: decidir entre arquivar, exigir flag explícita, ou remover",
-      "reason": "usa a chave administrativa E escreve/apaga — capaz de estragar uma base real",
+      "action": "manter fora de qualquer execução automática",
+      "reason": "escreve com a chave administrativa, mas através das guardas comuns da T17-B2: alvo declarado e confrontado, dry-run por omissão, produção recusada sem autorização explícita, company_id obrigatório",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -2831,12 +2892,12 @@
         "dynamicImport": true,
         "allClosed": false
       },
-      "scriptRisk": "PRODUCTION_DANGEROUS"
+      "scriptRisk": "ADMIN_GUARDED_WRITE"
     },
     {
       "path": "scripts/restore-contratos.mjs",
       "category": "script",
-      "status": "STANDBY",
+      "status": "MANTER",
       "confidence": "alta",
       "consumers": 0,
       "consumerSample": [],
@@ -2845,21 +2906,16 @@
         "docs"
       ],
       "sideEffects": [
-        "supabase",
         "write"
       ],
-      "risks": [
-        "service-role"
-      ],
+      "risks": [],
       "signals": {
-        "supabase": 3,
-        "serviceRole": 1,
         "write": 1,
-        "consoleLog": 2,
-        "consoleErr": 1
+        "consoleLog": 3,
+        "consoleErr": 4
       },
-      "action": "T17-B: decidir entre arquivar, exigir flag explícita, ou remover",
-      "reason": "usa a chave administrativa E escreve/apaga — capaz de estragar uma base real",
+      "action": "manter fora de qualquer execução automática",
+      "reason": "escreve com a chave administrativa, mas através das guardas comuns da T17-B2: alvo declarado e confrontado, dry-run por omissão, produção recusada sem autorização explícita, company_id obrigatório",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -2867,7 +2923,7 @@
         "dynamicImport": true,
         "allClosed": false
       },
-      "scriptRisk": "PRODUCTION_DANGEROUS"
+      "scriptRisk": "ADMIN_GUARDED_WRITE"
     },
     {
       "path": "scripts/restore-from-history.mjs",
@@ -2904,7 +2960,7 @@
     {
       "path": "scripts/restore-servicos.mjs",
       "category": "script",
-      "status": "STANDBY",
+      "status": "MANTER",
       "confidence": "alta",
       "consumers": 0,
       "consumerSample": [],
@@ -2913,21 +2969,16 @@
         "docs"
       ],
       "sideEffects": [
-        "supabase",
         "write"
       ],
-      "risks": [
-        "service-role"
-      ],
+      "risks": [],
       "signals": {
-        "supabase": 3,
-        "serviceRole": 1,
         "write": 1,
-        "consoleLog": 2,
-        "consoleErr": 1
+        "consoleLog": 3,
+        "consoleErr": 5
       },
-      "action": "T17-B: decidir entre arquivar, exigir flag explícita, ou remover",
-      "reason": "usa a chave administrativa E escreve/apaga — capaz de estragar uma base real",
+      "action": "manter fora de qualquer execução automática",
+      "reason": "escreve com a chave administrativa, mas através das guardas comuns da T17-B2: alvo declarado e confrontado, dry-run por omissão, produção recusada sem autorização explícita, company_id obrigatório",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -2935,7 +2986,7 @@
         "dynamicImport": true,
         "allClosed": false
       },
-      "scriptRisk": "PRODUCTION_DANGEROUS"
+      "scriptRisk": "ADMIN_GUARDED_WRITE"
     },
     {
       "path": "scripts/run-migrations.mjs",
@@ -3024,8 +3075,8 @@
       ],
       "signals": {
         "supabase": 3,
-        "env": 4,
-        "serviceRole": 2,
+        "env": 5,
+        "serviceRole": 3,
         "consoleLog": 10,
         "consoleErr": 1
       },
@@ -3148,6 +3199,39 @@
       "risks": [],
       "signals": {
         "dynamicImport": 6
+      },
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/__tests__/admin-script-guard.test.ts",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [
+        "docs"
+      ],
+      "sideEffects": [
+        "supabase"
+      ],
+      "risks": [
+        "service-role"
+      ],
+      "signals": {
+        "supabase": 5,
+        "serviceRole": 1,
+        "sqlWrite": 4,
+        "fallbackArray": 1
       },
       "action": "nenhuma",
       "reason": "suite de testes — corre por convenção do vitest",

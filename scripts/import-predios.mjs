@@ -2,23 +2,25 @@
 // (Equipa 11-Alenquer, Equipa 12-Carregado, Equipa 13-Alverca) para a tabela
 // building_cards. Correr uma vez, depois da migration 051 aplicada:
 //
-//   node scripts/import-predios.mjs           (mostra o que faria)
-//   node scripts/import-predios.mjs --apply   (grava mesmo)
+//   node scripts/import-predios.mjs --project-ref <ref> --company-id <uuid>
+//   node scripts/import-predios.mjs --project-ref <ref> --company-id <uuid> --apply
 //
 // Idempotente: salta qualquer (nome, dia da semana) que já exista na tabela,
 // por isso é seguro correr mais que uma vez.
+//
+// ⚠️ Este script escreve com a chave administrativa — por HTTP à API REST, e
+//    não pelo SDK. Foi exactamente por isso que a T17-A o classificou como
+//    ADMIN_READ ("só lê"): o detector procurava `.insert(`. A T17-B1 corrigiu
+//    a classificação e a T17-B2 pô-lo a passar pelas guardas comuns
+//    (scripts/lib/admin-db.mjs), pelo caminho REST do helper.
 
-import { config } from "dotenv";
-config({ path: ".env.local" });
+import { openAdminDb } from "./lib/admin-db.mjs";
 
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
-if (!SUPABASE_URL || !SERVICE_KEY) {
-  console.error("Faltam NEXT_PUBLIC_SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY em .env.local");
-  process.exit(1);
-}
-const H = { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}`, "Content-Type": "application/json" };
-const APPLY = process.argv.includes("--apply");
+const db = await openAdminDb({
+  script: "import-predios.mjs",
+  purpose: "importar os prédios das 3 rotas para building_cards",
+  writes: true,
+});
 
 // IDs reais confirmados em produção (ver conversa) — não inventar/adivinhar.
 const TEAM_IDS = {
@@ -198,33 +200,32 @@ const ROWS = [
 ];
 
 async function main() {
-  console.log(`Modo: ${APPLY ? "APLICAR (grava na base de produção)" : "SIMULAÇÃO (--apply para gravar)"}`);
   console.log(`Total de linhas a processar: ${ROWS.length}`);
 
-  // Confirmar company_id via uma das equipas conhecidas.
-  const teamRes = await fetch(
-    `${SUPABASE_URL}/rest/v1/teams?id=eq.${TEAM_IDS.alenquer}&select=company_id`,
-    { headers: H },
+  // O company_id vem agora de `--company-id`, declarado por quem corre. Antes
+  // era deduzido da equipa 11: o script descobria sozinho em que empresa ia
+  // escrever, o que é o oposto de uma guarda.
+  const companyId = db.companyId;
+
+  // As equipas têm de pertencer à empresa declarada — senão os cards ficariam
+  // ligados a equipas de outro tenant.
+  const equipas = await db.restRead(
+    `teams?id=in.(${Object.values(TEAM_IDS).join(",")})&select=id,company_id`,
   );
-  const teamRows = await teamRes.json();
-  const companyId = teamRows?.[0]?.company_id;
-  if (!companyId) {
-    console.error("Não consegui resolver o company_id a partir da Equipa 11. A abortar.");
+  const forasteiras = equipas.filter((t) => t.company_id !== companyId);
+  if (equipas.length !== Object.keys(TEAM_IDS).length || forasteiras.length > 0) {
+    console.error(
+      `As equipas fixas deste script não pertencem todas a ${companyId} `
+      + `(encontradas ${equipas.length} de ${Object.keys(TEAM_IDS).length}`
+      + `${forasteiras.length ? `, ${forasteiras.length} de outra empresa` : ""}). A abortar.`,
+    );
     process.exit(1);
   }
-  console.log(`company_id: ${companyId}`);
 
   // Cards já existentes (idempotência por nome+dia da semana).
-  const existingRes = await fetch(
-    `${SUPABASE_URL}/rest/v1/building_cards?company_id=eq.${companyId}&select=name,weekday,sort_order`,
-    { headers: H },
+  const existing = await db.restRead(
+    `building_cards?company_id=eq.${companyId}&select=name,weekday,sort_order`,
   );
-  if (!existingRes.ok) {
-    console.error("Erro ao ler building_cards existentes:", await existingRes.text());
-    console.error("(A tabela existe? A migration 051 já foi aplicada?)");
-    process.exit(1);
-  }
-  const existing = await existingRes.json();
   const existingKeys = new Set(existing.map((r) => `${r.name}|${r.weekday}`));
   const maxSortByWeekday = {};
   for (const r of existing) {
@@ -251,33 +252,24 @@ async function main() {
 
   console.log(`A criar: ${toInsert.length} · Já existiam (saltados): ${skipped}`);
 
-  if (!APPLY) {
-    console.log("Simulação — nada foi gravado. Corre com --apply para gravar de facto.");
-    return;
-  }
   if (toInsert.length === 0) {
     console.log("Nada para inserir.");
+    db.summary();
     return;
   }
 
   const BATCH = 50;
-  let created = 0;
   for (let i = 0; i < toInsert.length; i += BATCH) {
     const batch = toInsert.slice(i, i + BATCH);
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/building_cards`, {
-      method: "POST",
-      headers: { ...H, Prefer: "return=minimal" },
-      body: JSON.stringify(batch),
-    });
-    if (!res.ok) {
-      console.error(`Erro no lote ${i}-${i + batch.length}:`, await res.text());
-      process.exit(1);
-    }
-    created += batch.length;
-    console.log(`  ${created}/${toInsert.length} gravados...`);
+    const r = await db.restWrite(
+      "building_cards",
+      { method: "POST", headers: { Prefer: "return=minimal" }, body: JSON.stringify(batch) },
+      `lote ${i}–${i + batch.length - 1} (${batch.length} prédios)`,
+    );
+    if (!r.ok) process.exit(1);
   }
 
-  console.log(`Concluído. ${created} prédios criados.`);
+  db.summary();
 }
 
 main().catch((err) => {

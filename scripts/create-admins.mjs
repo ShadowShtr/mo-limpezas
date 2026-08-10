@@ -1,20 +1,18 @@
 // Script: criar 2 contas admin (admin1, admin2)
-// Uso: node scripts/create-admins.mjs
-import { createClient } from "@supabase/supabase-js";
-import { config } from "dotenv";
-import { resolve, dirname } from "path";
-import { fileURLToPath } from "url";
+//
+//   node scripts/create-admins.mjs --project-ref <ref> --company-id <uuid>
+//   node scripts/create-admins.mjs --project-ref <ref> --company-id <uuid> --apply
+//
+// Guardas comuns em scripts/lib/admin-db.mjs (T17-B2).
+import { openAdminDb } from "./lib/admin-db.mjs";
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-config({ path: resolve(__dirname, "../.env.local") });
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY,
-  { auth: { autoRefreshToken: false, persistSession: false } }
-);
-
-const COMPANY_ID = "00000000-0000-0000-0000-000000000001";
+const db = await openAdminDb({
+  script: "create-admins.mjs",
+  purpose: "criar/promover as contas admin1 e admin2",
+  writes: true,
+});
+const supabase = db.sb;
+const COMPANY_ID = db.companyId;
 
 // Nunca no ficheiro: uma senha versionada é uma senha pública (incidente de
 // 2026-08-06, ver docs/PRODUCTION-RUNBOOK.md).
@@ -35,6 +33,13 @@ const ADMINS = [
 async function createAdmin({ username, full_name }) {
   const email = `${username}@molimpezas.local`;
 
+  // Criar contas é uma escrita no Auth, que o helper não intercepta — a
+  // travagem do dry-run tem de ser explícita aqui.
+  if (!db.apply) {
+    console.log(`  [dry-run] criaria/promoveria ${username} (${email}) como admin`);
+    return;
+  }
+
   const { data: authData, error: authError } = await supabase.auth.admin.createUser({
     email,
     password: PASSWORD,
@@ -46,7 +51,8 @@ async function createAdmin({ username, full_name }) {
   if (authError) {
     if (authError.message?.includes("already registered") || authError.status === 422) {
       console.log(`⚠️  ${username} já existe, a actualizar perfil...`);
-      const { data: list } = await supabase.auth.admin.listUsers();
+      const { data: list, error: listError } = await supabase.auth.admin.listUsers();
+      if (listError) { console.error(`❌ listUsers: ${listError.message}`); return; }
       const existing = list?.users?.find((u) => u.email === email);
       if (!existing) { console.error(`❌ Não encontrado: ${email}`); return; }
       userId = existing.id;
@@ -59,24 +65,24 @@ async function createAdmin({ username, full_name }) {
     console.log(`✅ Utilizador criado: ${username} (${userId})`);
   }
 
-  const { error: profileError } = await supabase
-    .from("profiles")
-    .upsert({
+  const perfil = await db.write(
+    "profiles",
+    (t) => t.upsert({
       id: userId,
       full_name,
       email,
       role: "admin",
       company_id: COMPANY_ID,
       status: "ativo",
-    }, { onConflict: "id" });
+    }, { onConflict: "id" }),
+    `perfil admin de ${username}`,
+  );
+  if (!perfil.ok) return;
 
-  if (profileError) {
-    console.error(`❌ Erro no perfil de ${username}:`, profileError.message);
-    return;
-  }
-
-  console.log(`✅ Perfil admin definido para: ${username}`);
-  console.log(`   Login: ${username}  |  Password: ${PASSWORD}\n`);
+  // A password NÃO é impressa. Quem corre o script foi quem definiu
+  // SEED_PASSWORD, por isso já a sabe — imprimi-la só a punha no histórico da
+  // shell e nos logs de quem estiver a ver o ecrã.
+  console.log(`✅ Perfil admin definido para: ${username} (login: ${username})\n`);
 }
 
 async function run() {
@@ -84,7 +90,7 @@ async function run() {
   for (const admin of ADMINS) {
     await createAdmin(admin);
   }
-  console.log("Concluído.");
+  db.summary();
 }
 
-run();
+await run();
