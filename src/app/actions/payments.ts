@@ -51,68 +51,9 @@ export interface PaymentsData {
 
 const COLS = "id, kind, description, amount, due_date, direct_debit, status, recurring, period_year, period_month, paid_at, notes, sort_order, attachment_url, attachment_name, attachment_size, attachment_mime";
 
-// Desloca uma data para o mês alvo, mantendo o dia (limitado ao último dia do mês).
-function shiftDate(due: string | null, year: number, month: number): string | null {
-  if (!due) return null;
-  const day = Number(due.slice(8, 10)) || 1;
-  const lastDay = new Date(year, month, 0).getDate();
-  const d = Math.min(day, lastDay);
-  return `${year}-${String(month).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
-}
-
-// Garante que os pagamentos FIXOS existem no mês pedido, clonados do mês
-// anterior mais recente. Os variáveis nunca se clonam.
-async function ensureMonth(admin: AdminClient, companyId: string, year: number, month: number) {
-  const { data: existingRecurring } = await admin
-    .from("fixed_variable_payments")
-    .select("id")
-    .eq("company_id", companyId)
-    .eq("period_year", year)
-    .eq("period_month", month)
-    .eq("recurring", true)
-    .limit(1);
-  if (existingRecurring && existingRecurring.length > 0) return; // já gerado
-
-  // mês anterior mais recente com fixos
-  const { data: prior } = await admin
-    .from("fixed_variable_payments")
-    .select("period_year, period_month")
-    .eq("company_id", companyId)
-    .eq("recurring", true)
-    .or(`period_year.lt.${year},and(period_year.eq.${year},period_month.lt.${month})`)
-    .order("period_year", { ascending: false })
-    .order("period_month", { ascending: false })
-    .limit(1);
-  if (!prior || prior.length === 0) return; // não há fixos anteriores para repetir
-
-  const src = prior[0];
-  const { data: templates } = await admin
-    .from("fixed_variable_payments")
-    .select("id, description, amount, due_date, direct_debit, notes, sort_order, created_by")
-    .eq("company_id", companyId)
-    .eq("recurring", true)
-    .eq("period_year", src.period_year)
-    .eq("period_month", src.period_month);
-  if (!templates || templates.length === 0) return;
-
-  const rows = templates.map((t) => ({
-    company_id: companyId,
-    kind: "fixo" as const,
-    description: t.description,
-    amount: t.amount,
-    due_date: shiftDate(t.due_date, year, month),
-    direct_debit: t.direct_debit,
-    status: "pendente" as const,
-    recurring: true,
-    period_year: year,
-    period_month: month,
-    notes: t.notes,
-    sort_order: t.sort_order,
-    source_id: t.id,
-    created_by: t.created_by ?? null,
-  }));
-  await admin.from("fixed_variable_payments").insert(rows);
-}
+// A materialização de mês (clonar os fixos do mês anterior) vivia aqui, e era
+// chamada pelas duas funções de leitura abaixo. Está desligada e em quarentena
+// em `src/lib/payments-month-materialization.ts`, com a explicação completa.
 
 // ─── Leitura ──────────────────────────────────────────────────────────────────
 
@@ -122,7 +63,29 @@ export async function getPayments(year: number, month: number): Promise<{ ok: tr
   const { admin } = guard;
   const companyId = guard.profile.company_id;
 
-  await ensureMonth(admin, companyId, year, month);
+  // ───────────────────────────────────────────────────────────────────────────
+  // 🔴 Aqui estava `await ensureMonth(admin, companyId, year, month)`.
+  //
+  // Uma função chamada `getPayments` **materializava o mês**: clonava os fixos
+  // recorrentes do mês anterior mais recente e inseria-os. Abrir a página, ou
+  // mudar de mês, criava dados.
+  //
+  // A 2026-08-03, às 11:56:02, foi assim que os 15 fixos de Agosto nasceram —
+  // todos no mesmo segundo, todos com `source_id`. E com eles veio a perda:
+  // `shiftDate` guarda o dia e força o mês de destino, sem saber que um
+  // pagamento pode ser trimestral. Quatro vencimentos que eram 03/08, 03/11,
+  // 03/02 e 03/05 passaram a ser todos **03/08**. A informação de que aqueles
+  // pagamentos se venciam em Novembro, Fevereiro e Maio deixou de existir na
+  // linha de Agosto.
+  //
+  // Ler deixou de escrever. A função está preservada em quarentena, em
+  // `src/lib/payments-month-materialization.ts`, e não volta enquanto o modelo
+  // não souber distinguir mensal de trimestral. Ver
+  // `docs/incidents/2026-08-11-pagamentos-materializacao-implicita.md`.
+  //
+  // Um mês sem fixos passa a mostrar-se como **não preparado** — que é a
+  // verdade. Zero linhas não é zero euros.
+  // ───────────────────────────────────────────────────────────────────────────
 
   const { data, error } = await admin
     .from("fixed_variable_payments")
@@ -170,7 +133,14 @@ export async function getPaymentsReminder(): Promise<{ ok: true; data: PaymentsR
   const companyId = guard.profile.company_id;
 
   const [year, month] = todayInLisbon().split("-").map(Number);
-  await ensureMonth(admin, companyId, year, month);
+
+  // 🔴 Aqui estava `await ensureMonth(...)` — e este era o caminho mais largo
+  // de todos: o banner é renderizado no Dashboard, a página de entrada depois
+  // do login. Bastava um admin ou gestor abrir a aplicação para o mês corrente
+  // ser materializado. Um lembrete não pode criar aquilo que lembra.
+  //
+  // Se o mês ainda não tiver pagamentos, o lembrete não mostra nada — que é a
+  // resposta honesta: não há nada registado a pagar.
 
   const { data, error } = await admin
     .from("fixed_variable_payments")

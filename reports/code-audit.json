@@ -3,11 +3,11 @@
   "summary": {
     "repositoryFiles": 575,
     "textFiles": 563,
-    "sourceFiles": 395,
-    "textLines": 129392,
+    "sourceFiles": 397,
+    "textLines": 129535,
     "typescriptDiagnostics": 0,
     "productionEntries": 70,
-    "unreachableProductionModules": 37,
+    "unreachableProductionModules": 38,
     "exactDuplicateFileGroups": 0
   },
   "highConfidence": {
@@ -53,6 +53,7 @@
       "src/lib/bank-import/pdf.ts",
       "src/lib/bank-import/xlsx.ts",
       "src/lib/finance-write-surface.ts",
+      "src/lib/payments-month-materialization.ts",
       "src/types/supabase.ts"
     ],
     "testOnlyModules": [

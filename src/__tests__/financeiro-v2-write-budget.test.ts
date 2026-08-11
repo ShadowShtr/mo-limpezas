@@ -47,10 +47,14 @@ import {
   stripComments,
   writeActionsUsedBy,
   writeCapableExports,
+  createWriteCapabilityResolver,
 } from "@/lib/finance-write-surface";
 
 const ROOT = process.cwd();
 const ler = (rel: string) => fs.readFileSync(path.join(ROOT, rel), "utf8");
+const lerOuNull = (rel: string): string | null => {
+  try { return ler(rel); } catch { return null; }
+};
 
 // ─── A superfície de UI financeira ──────────────────────────────────────────
 
@@ -96,8 +100,15 @@ function actionSources(): string[] {
   return out;
 }
 
+// O resolvedor segue a delegação **através de ficheiros**. Um teste de mutação
+// mostrou que a versão por-ficheiro era cega a isto: mover a materialização de
+// mês para outro módulo e importá-la de volta fazia `getPayments` voltar a
+// escrever sem nenhuma guarda acusar. Um `insert` a um import de distância era
+// invisível — e reconhecer só o caminho conhecido dá um "seguro" falso.
+const resolvedor = createWriteCapabilityResolver(lerOuNull);
+
 const WRITE_ACTIONS: string[] = [
-  ...new Set(actionSources().flatMap((f) => writeCapableExports(ler(f)))),
+  ...new Set(actionSources().flatMap((f) => resolvedor.exportsThatWrite(f))),
 ].sort();
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -111,16 +122,15 @@ const WRITE_ACTIONS: string[] = [
 
 const CAPABILITY_CEILING: Record<string, string[]> = {
   // ── Pagamentos ────────────────────────────────────────────────────────────
+  // `getPayments` saiu desta lista nesta PR: deixou de chamar `ensureMonth` e
+  // passou a ser mesmo leitura. O tecto desce com ele — se voltasse a escrever,
+  // `compareToCeiling` acusaria capacidade nova e este teste falharia.
   "src/app/(dashboard)/dashboard/financeiro/pagamentos/_components/payments-client.tsx": [
-    "createPayment", "deletePayment", "deletePaymentAttachment", "getPayments",
+    "createPayment", "deletePayment", "deletePaymentAttachment",
     "setPaymentStatus", "updatePayment", "uploadPaymentAttachment",
   ],
-  // 🔴 `getPayments` NÃO é leitura. Chama `ensureMonth`, que faz
-  //    `.insert(rows)` para clonar os pagamentos fixos do mês anterior.
-  //    Está aqui porque é a verdade — ver a secção AUTO_WRITE_ON_RENDER.
-  "src/app/(dashboard)/dashboard/financeiro/pagamentos/page.tsx": [
-    "getPayments",
-  ],
+  // `pagamentos/page.tsx` desapareceu deste inventário por não lhe restar
+  // nenhuma capacidade de escrita — só chama `getPayments`.
 
   // ── Contas e Fluxo de Caixa (mesma fonte, mesmas actions) ─────────────────
   "src/app/(dashboard)/dashboard/financeiro/contas/_components/contas-client.tsx": [
@@ -147,9 +157,14 @@ const CAPABILITY_CEILING: Record<string, string[]> = {
   ],
 
   // ── Conciliação ───────────────────────────────────────────────────────────
+  // `recalcSuggestions` entrou aqui quando o detector passou a seguir imports.
+  // Não é capacidade nova — sempre escreveu, via
+  // `generateSuggestions` (`src/lib/bank-import/reconcile-db.ts`) → `.upsert`.
+  // Era invisível porque a mutação vive noutro ficheiro. É CLICK_TRIGGER: o
+  // componente é de cliente, e o grafo de render não lhe chega.
   "src/app/(dashboard)/dashboard/financeiro/conciliacao/_components/reconciliation-client.tsx": [
     "confirmMatch", "createEntryFromTransaction", "deleteImport",
-    "ignoreTransaction", "manualMatch", "rejectMatch",
+    "ignoreTransaction", "manualMatch", "recalcSuggestions", "rejectMatch",
   ],
 };
 
@@ -157,23 +172,17 @@ const CAPABILITY_CEILING: Record<string, string[]> = {
  * Páginas de servidor autorizadas a chamar uma action que escreve durante o
  * render.
  *
- * 🔴 **Uma só, e é uma dívida, não um padrão.**
+ * ✅ **Vazio.** Renderizar não escreve, em lado nenhum do Financeiro.
  *
- * `pagamentos/page.tsx` chama `getPayments`, que chama `ensureMonth`, que
- * insere: abrir a página **gera** os pagamentos fixos do mês pedido, clonados
- * do mês anterior mais recente.
+ * Teve uma entrada — `pagamentos/page.tsx → getPayments → ensureMonth →
+ * insert`. Abrir a página gerava os pagamentos fixos do mês, clonados do mês
+ * anterior. Foi assim que os 15 fixos de Agosto/2026 nasceram todos no mesmo
+ * segundo, e que quatro vencimentos trimestrais foram esmagados numa só data.
  *
- * Não foi corrigido nesta PR porque a correcção vive em `payments.ts`, que está
- * `BLOQUEADO_INCIDENTE_FINANCEIRO` — é exactamente o ficheiro sob diagnóstico.
- * Mexer-lhe antes da evidência seria escrever por cima do que se está a medir.
- *
- * A Folha tinha o mesmo defeito e **foi** corrigida nesta PR
- * (`ensurePayrollCalculated` saiu do render), porque aí a correcção era só
- * retirar o gatilho, sem tocar no motor.
+ * A PR C retirou-a. Este objecto ficar vazio é o invariante: uma entrada nova
+ * é uma decisão que se lê no diff, e tem de ser defendida.
  */
-const AUTO_WRITE_ON_RENDER_ALLOWED: Record<string, string[]> = {
-  "src/app/(dashboard)/dashboard/financeiro/pagamentos/page.tsx": ["getPayments"],
-};
+const AUTO_WRITE_ON_RENDER_ALLOWED: Record<string, string[]> = {};
 
 // ═══════════════════════════════════════════════════════════════════════════
 
@@ -278,7 +287,6 @@ describe("Financeiro V2 — a lista de actions de escrita é real", () => {
     for (const a of [
       "createPayment", "deletePayment", "generateInvoices", "markPayrollPaid",
       "calculateAndSavePayroll",   // → runPayrollCalculation → upsert
-      "getPayments",               // → ensureMonth → insert
     ]) {
       expect(WRITE_ACTIONS, `${a} devia ser reconhecida como escrita`).toContain(a);
     }
@@ -375,10 +383,6 @@ const FINANCE_RENDER_ROOTS = [
   "src/app/(dashboard)/dashboard/cobrancas/page.tsx",
   "src/app/(dashboard)/dashboard/folha-pagamento/page.tsx",
 ];
-
-const lerOuNull = (rel: string): string | null => {
-  try { return fs.readFileSync(path.join(ROOT, rel), "utf8"); } catch { return null; }
-};
 
 describe("Financeiro V2 — o grafo de render é percorrido a sério", () => {
   it("resolve imports relativos e de alias", () => {
@@ -498,29 +502,38 @@ describe("Financeiro V2 — invariante 3: o grafo de render não escreve", () =>
     expect(comEscrita, "a casca não pode ter efeito financeiro partilhado").toEqual([]);
   });
 
-  it("H: Pagamentos continua inventariada à parte, como risco pré-existente", () => {
+  it("🔴 H: PAYMENTS_PAGE_PREEXISTING_AUTO_WRITE = 0", () => {
+    // Era 1: `getPayments` → `ensureMonth` → `insert`.
     const pag = "src/app/(dashboard)/dashboard/financeiro/pagamentos/page.tsx";
-    expect(AUTO_WRITE_ON_RENDER_ALLOWED[pag]).toEqual(["getPayments"]);
-    expect(writeActionsUsedBy(lerOuNull(pag) ?? "", WRITE_ACTIONS)).toEqual(["getPayments"]);
+    expect(AUTO_WRITE_ON_RENDER_ALLOWED[pag]).toBeUndefined();
+    expect(
+      writeActionsUsedBy(lerOuNull(pag) ?? "", WRITE_ACTIONS),
+      "abrir Pagamentos não pode gerar pagamentos",
+    ).toEqual([]);
   });
 
-  it("I: a lista de excepções não cresce em silêncio", () => {
-    expect(Object.keys(AUTO_WRITE_ON_RENDER_ALLOWED)).toEqual([
-      "src/app/(dashboard)/dashboard/financeiro/pagamentos/page.tsx",
-    ]);
+  it("I: não há excepções nenhumas, e a lista não cresce em silêncio", () => {
+    expect(Object.keys(AUTO_WRITE_ON_RENDER_ALLOWED)).toEqual([]);
   });
 
-  it("a Folha saiu da lista — foi corrigida nesta PR", () => {
+  it("a Folha saiu da lista — foi corrigida na PR A", () => {
     const folha = "src/app/(dashboard)/dashboard/folha-pagamento/page.tsx";
     expect(AUTO_WRITE_ON_RENDER_ALLOWED[folha]).toBeUndefined();
     expect(writeActionsUsedBy(lerOuNull(folha) ?? "", WRITE_ACTIONS)).toEqual([]);
   });
 
-  it("o Dashboard mantém o seu banner — anterior a esta PR, fora do âmbito", () => {
-    // PREEXISTING_AUTO_WRITE / NEEDS_FINANCIAL_INCIDENT_RESOLUTION.
-    // Documentado, não corrigido: retirá-lo seria mudança funcional fora da
-    // casca do Financeiro V2.
+  it("🔴 DASHBOARD_PREEXISTING_AUTO_WRITE = 0", () => {
+    // O banner continua montado no Dashboard — e pode continuar, porque
+    // `getPaymentsReminder` deixou de materializar o mês corrente. O que se
+    // corrigiu não foi o sítio onde o banner está: foi o que ele fazia.
     const dash = stripComments(lerOuNull("src/app/(dashboard)/dashboard/page.tsx") ?? "");
-    expect(dash, "não foi tocado nesta ronda").toMatch(/PaymentsReminderBanner/);
+    expect(dash).toMatch(/PaymentsReminderBanner/);
+
+    const banner = "src/app/(dashboard)/dashboard/_components/payments-reminder-banner.tsx";
+    expect(lerOuNull(banner), "o banner tem de existir para isto provar algo").not.toBeNull();
+    expect(
+      writeActionsUsedBy(lerOuNull(banner) ?? "", WRITE_ACTIONS),
+      "entrar no Dashboard não pode criar pagamentos",
+    ).toEqual([]);
   });
 });

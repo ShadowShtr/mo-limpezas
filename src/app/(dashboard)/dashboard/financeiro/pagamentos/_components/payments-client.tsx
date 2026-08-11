@@ -171,7 +171,8 @@ export function PaymentsClient({ initialData, error: initErr, mesParam, year, mo
         </div>
         <div className="flex-1" />
         <p className="text-xs text-[var(--color-text-muted)] max-w-xs">
-          Os <strong>fixos</strong> repetem-se todos os meses automaticamente. Os <strong>variáveis</strong> são pontuais.
+          Os <strong>fixos</strong> repetem-se de mês para mês; os <strong>variáveis</strong> são pontuais.
+          Nenhum é criado automaticamente ao abrir um mês.
         </p>
       </div>
 
@@ -182,8 +183,26 @@ export function PaymentsClient({ initialData, error: initErr, mesParam, year, mo
         </div>
       )}
 
+      {/* Mês sem nenhuma linha registada.
+          Mostrar os KPIs a 0,00 € aqui seria dizer que não há nada a pagar —
+          e o que se sabe é apenas que ainda não foi registado nada. Ausência
+          de dados não é ausência de despesa. */}
+      {data && data.fixos.length === 0 && data.variaveis.length === 0 && (
+        <div className="flex items-start gap-3 p-4 bg-[var(--color-background)] border border-[var(--color-border)] rounded-xl">
+          <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-[var(--color-text-muted)]" />
+          <div className="text-sm">
+            <p className="font-medium text-[var(--color-text-main)]">Mês ainda não preparado</p>
+            <p className="text-[var(--color-text-muted)] mt-0.5">
+              Não há pagamentos registados neste mês. Isto não quer dizer que não haja nada
+              a pagar — quer dizer que ainda não foi lançado. Adicione os pagamentos deste
+              mês nas listas abaixo.
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* KPIs */}
-      {data && (
+      {data && (data.fixos.length > 0 || data.variaveis.length > 0) && (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           <Kpi icon={<Clock className="w-4 h-4 text-amber-600" />} bg="bg-amber-50" label="Por pagar" value={fmtEur(data.totalPendente)} accent="text-amber-600" />
           <Kpi icon={<CheckCircle2 className="w-4 h-4 text-green-600" />} bg="bg-green-50" label="Já pago" value={fmtEur(data.totalPago)} accent="text-green-600" />
@@ -195,11 +214,13 @@ export function PaymentsClient({ initialData, error: initErr, mesParam, year, mo
       {data && (
         <>
           <PaymentSection
-            title="Pagamentos Fixos" subtitle="Repetem todos os meses" icon={<Repeat className="w-4 h-4 text-[var(--color-primary)]" />}
+            title="Pagamentos Fixos" subtitle="Repetem de mês para mês" icon={<Repeat className="w-4 h-4 text-[var(--color-primary)]" />}
+            emptyLabel="Ainda não existem pagamentos fixos neste mês."
             items={data.fixos} today={today} onAdd={() => openNew("fixo")} onEdit={openEdit} onToggle={toggleStatus} onDelete={handleDelete} busy={isPending}
           />
           <PaymentSection
             title="Pagamentos Variáveis" subtitle="Pontuais deste mês" icon={<Zap className="w-4 h-4 text-amber-600" />}
+            emptyLabel="Ainda não existem pagamentos variáveis neste mês."
             items={data.variaveis} today={today} onAdd={() => openNew("variavel")} onEdit={openEdit} onToggle={toggleStatus} onDelete={handleDelete} busy={isPending}
           />
         </>
@@ -299,9 +320,9 @@ function Kpi({ icon, bg, label, value, accent }: { icon: React.ReactNode; bg: st
 }
 
 function PaymentSection({
-  title, subtitle, icon, items, today, onAdd, onEdit, onToggle, onDelete, busy,
+  title, subtitle, icon, emptyLabel, items, today, onAdd, onEdit, onToggle, onDelete, busy,
 }: {
-  title: string; subtitle: string; icon: React.ReactNode; items: Payment[]; today: string;
+  title: string; subtitle: string; icon: React.ReactNode; emptyLabel: string; items: Payment[]; today: string;
   onAdd: () => void; onEdit: (p: Payment) => void; onToggle: (p: Payment) => void; onDelete: (p: Payment) => void; busy: boolean;
 }) {
   return (
@@ -319,7 +340,7 @@ function PaymentSection({
         </button>
       </div>
       {items.length === 0 ? (
-        <div className="py-10 text-center text-sm text-[var(--color-text-muted)]">Sem pagamentos nesta lista.</div>
+        <div className="py-10 text-center text-sm text-[var(--color-text-muted)]">{emptyLabel}</div>
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full">
