@@ -43,11 +43,22 @@ interface Props {
   year: number;
   month: number;
   mesLabel: string;
+  /**
+   * A folha do período está por calcular (ou incompleta) — há colaboradores
+   * activos sem registo.
+   *
+   * Existe porque o cálculo deixou de acontecer sozinho durante o render da
+   * página (ver o comentário em `folha-pagamento/page.tsx`). Em vez de gravar
+   * em silêncio, a página diz que falta calcular e oferece a acção.
+   */
+  needsCalculation: boolean;
+  /** Quantos colaboradores activos deviam ter registo neste período. */
+  expectedRecords: number;
 }
 
 // ─── Componente ───────────────────────────────────────────────────────────────
 
-export function PayrollClient({ initialRecords, companyId, mesParam, year, month, mesLabel }: Props) {
+export function PayrollClient({ initialRecords, companyId, mesParam, year, month, mesLabel, needsCalculation, expectedRecords }: Props) {
   const [records, setRecords] = useState<PayrollRecord[]>(initialRecords);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [editing, setEditing]   = useState<PayrollRecord | null>(null);
@@ -191,36 +202,48 @@ export function PayrollClient({ initialRecords, companyId, mesParam, year, month
   return (
     <>
       <div className="space-y-5">
-        {/* Toolbar: filtro de mês + ações */}
-        <div className="bg-white rounded-xl border border-[var(--color-border)] px-4 py-3 flex flex-wrap items-end gap-3">
-          <form method="GET" className="flex items-end gap-2">
-            <div>
-              <label className="block text-xs text-[var(--color-text-muted)] mb-1">Mês</label>
-              <input
-                type="month"
-                name="mes"
-                defaultValue={mesParam}
-                className="px-3 py-2 rounded-lg border border-[var(--color-border)] text-sm text-[var(--color-text-main)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
-              />
+        {/* Financeiro V2 (PR A): a folha está por calcular.
+            Antes, esta situação era resolvida pelo render da página, que
+            gravava sozinho. Agora é dita ao utilizador, e a gravação só
+            acontece se ele a pedir. */}
+        {needsCalculation && (
+          <div
+            role="status"
+            className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 flex flex-wrap items-center justify-between gap-3"
+          >
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-amber-900">
+                {records.length === 0
+                  ? `Nenhuma folha calculada para ${mesLabel}.`
+                  : `Folha incompleta em ${mesLabel}: ${records.length} de ${expectedRecords} colaboradores.`}
+              </p>
+              <p className="text-xs text-amber-800 mt-0.5">
+                Abrir esta página não calcula nada. Usa &quot;Recalcular folha&quot; quando quiseres gerar.
+              </p>
             </div>
             <button
-              type="submit"
-              className="px-4 py-2 rounded-lg border border-[var(--color-border)] text-sm text-[var(--color-text-sub)] hover:bg-[var(--color-background)] transition-colors"
+              onClick={handleRecalculate}
+              disabled={isPending}
+              className="shrink-0 flex items-center gap-2 px-4 py-2 rounded-lg bg-amber-600 text-white text-sm font-semibold hover:bg-amber-700 transition-colors disabled:opacity-50"
             >
-              Ver
+              {isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+              Recalcular folha
             </button>
-          </form>
+          </div>
+        )}
 
-          <div className="flex-1" />
-
+        {/* Toolbar: ações do período (o mês é do módulo, na URL) */}
+        <div className="bg-white rounded-xl border border-[var(--color-border)] px-4 py-3 flex flex-wrap items-center gap-3">
           <button
             onClick={handleRecalculate}
             disabled={isPending}
             className="flex items-center gap-2 px-4 py-2 rounded-lg border border-[var(--color-border)] text-sm text-[var(--color-text-sub)] hover:bg-[var(--color-background)] transition-colors disabled:opacity-50"
           >
             {isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
-            Recalcular
+            Recalcular folha
           </button>
+
+          <div className="flex-1" />
 
           {allAprovavel && (
             <button

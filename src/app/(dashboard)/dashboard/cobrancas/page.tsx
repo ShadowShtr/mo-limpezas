@@ -1,8 +1,10 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
-import { Header } from "@/components/layout/header";
 import { getInvoices, getUnbilledServices } from "@/app/actions/invoices";
 import { getDailyBilling } from "@/app/actions/daily-billing";
+import { FinanceShell } from "@/components/financeiro/finance-shell";
+import { parseFinancePeriod, formatFinancePeriod } from "@/lib/finance-period";
+import { todayInLisbon } from "@/lib/lisbon-time";
 import { CobrancasTabs } from "./_components/cobrancas-tabs";
 
 export const metadata = { title: "Cobranças — Escala" };
@@ -27,44 +29,38 @@ export default async function CobrancastPage({
 
   const companyId = profile?.company_id ?? "";
 
-  const now = new Date();
-  const mesParam = params.mes ?? `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
-  const [year, month] = mesParam.split("-").map(Number);
-  const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+  const period = parseFinancePeriod(params.mes);
+  // A cobrança diária continua ancorada em HOJE, não no período do módulo:
+  // é uma vista operacional do dia, não do mês. Trocar isso seria mudar
+  // semântica, e este PR não muda nenhuma.
+  const todayStr = todayInLisbon();
 
   const [result, unbilledResult, dailyResult] = await Promise.all([
-    getInvoices(companyId, year, month),
+    getInvoices(companyId, period.year, period.month),
     getUnbilledServices(companyId),
     getDailyBilling(todayStr),
   ]);
   const invoices         = result.ok ? result.invoices : [];
   const unbilledServices = unbilledResult.ok ? unbilledResult.services : [];
 
-  const mesLabel = new Date(year, month - 1).toLocaleDateString("pt-PT", {
-    month: "long",
-    year: "numeric",
-  });
-
   return (
-    <div>
-      <Header
-        title="Cobranças"
-        subtitle="Controlo diário e faturas mensais"
+    <FinanceShell
+      period={period}
+      title="Cobranças"
+      subtitle="Controlo diário e faturas do período"
+    >
+      <CobrancasTabs
+        initialInvoices={invoices}
+        unbilledServices={unbilledServices}
+        companyId={companyId}
+        mesParam={period.key}
+        year={period.year}
+        month={period.month}
+        mesLabel={formatFinancePeriod(period)}
+        dailyDate={todayStr}
+        dailyData={dailyResult.ok ? dailyResult.data : null}
+        dailyError={dailyResult.ok ? null : dailyResult.error}
       />
-      <div className="px-4 py-5 sm:p-6 lg:px-8 mx-auto max-w-[1400px]">
-        <CobrancasTabs
-          initialInvoices={invoices}
-          unbilledServices={unbilledServices}
-          companyId={companyId}
-          mesParam={mesParam}
-          year={year}
-          month={month}
-          mesLabel={mesLabel}
-          dailyDate={todayStr}
-          dailyData={dailyResult.ok ? dailyResult.data : null}
-          dailyError={dailyResult.ok ? null : dailyResult.error}
-        />
-      </div>
-    </div>
+    </FinanceShell>
   );
 }

@@ -1,13 +1,18 @@
-﻿import { createAdminClient } from "@/lib/supabase/admin";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
-import { Header } from "@/components/layout/header";
 import { getFinancialDashboard, getOperationalSummary } from "@/app/actions/financial-dashboard";
+import { FinanceShell } from "@/components/financeiro/finance-shell";
+import { parseFinancePeriod } from "@/lib/finance-period";
 import { FinancialDashboardClient } from "./_components/financial-dashboard-client";
-import { PaymentsReminderBanner } from "../_components/payments-reminder-banner";
 
 export const metadata = { title: "Financeiro — Escala" };
 
-export default async function FinanceiroPage() {
+export default async function FinanceiroPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ mes?: string }>;
+}) {
+  const params   = await searchParams;
   const supabase = await createClient();
   const admin    = createAdminClient();
 
@@ -19,29 +24,27 @@ export default async function FinanceiroPage() {
     .single();
 
   const companyId = profile?.company_id ?? "";
+
+  // Financeiro V2 (PR A): o período vem da URL, não de `new Date()`.
+  const period = parseFinancePeriod(params.mes);
+
   const [result, summaryResult] = await Promise.all([
     getFinancialDashboard(companyId),
     getOperationalSummary(),
   ]);
 
-  const now = new Date();
-  const yearLabel = now.getFullYear().toString();
-
   return (
-    <div>
-      <Header
-        title="Financeiro"
-        subtitle={`Resumo do dia, semana e mês · Visão geral ${yearLabel}`}
+    <FinanceShell
+      period={period}
+      title="Resumo"
+      subtitle="Visão geral do módulo financeiro"
+    >
+      <FinancialDashboardClient
+        data={result.ok ? result.data : null}
+        error={result.ok ? null : result.error}
+        companyId={companyId}
+        initialSummary={summaryResult.ok ? summaryResult.data : null}
       />
-      <div className="px-4 py-5 sm:p-6 lg:px-8 mx-auto max-w-[1400px] space-y-6">
-        <PaymentsReminderBanner />
-        <FinancialDashboardClient
-          data={result.ok ? result.data : null}
-          error={result.ok ? null : result.error}
-          companyId={companyId}
-          initialSummary={summaryResult.ok ? summaryResult.data : null}
-        />
-      </div>
-    </div>
+    </FinanceShell>
   );
 }

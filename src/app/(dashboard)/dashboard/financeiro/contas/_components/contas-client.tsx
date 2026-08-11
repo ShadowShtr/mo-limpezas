@@ -3,7 +3,6 @@
 import { useState, useEffect, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { AlertCircle, ArrowUpRight, ArrowDownRight, ShoppingBag, Plus, X, Loader2, CheckCircle2, Trash2 } from "lucide-react";
-import Link from "next/link";
 import {
   createCashFlowEntry,
   updateCashFlowEntry,
@@ -196,7 +195,6 @@ export function ContasClient({ toReceive, toPay, expenses: initialExpenses, comp
             <ArrowUpRight className="w-4 h-4 text-green-600" />
             <h3 className="text-sm font-semibold text-[var(--color-text-main)]">Faturas Pendentes (a receber)</h3>
           </div>
-          <Link href="/dashboard/cobrancas" className="text-xs text-[var(--color-primary)] hover:underline">Ver cobranças →</Link>
         </div>
         {toReceive.length === 0 ? (
           <div className="py-10 text-center">
@@ -249,7 +247,6 @@ export function ContasClient({ toReceive, toPay, expenses: initialExpenses, comp
             <ArrowDownRight className="w-4 h-4 text-red-600" />
             <h3 className="text-sm font-semibold text-[var(--color-text-main)]">Salários Aprovados (a pagar)</h3>
           </div>
-          <Link href="/dashboard/folha-pagamento" className="text-xs text-[var(--color-primary)] hover:underline">Ver folha →</Link>
         </div>
         {toPay.length === 0 ? (
           <div className="py-10 text-center">
