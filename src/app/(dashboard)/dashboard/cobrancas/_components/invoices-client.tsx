@@ -13,6 +13,7 @@ import {
   type UnbilledService,
 } from "@/app/actions/invoices";
 import { InvoiceDetailSheet } from "./invoice-detail-sheet";
+import { Kpi } from "@/components/financeiro/v2/primitives";
 import { downloadCsv } from "@/lib/csv";
 import { usePagination, Pagination } from "@/components/ui/pagination";
 
@@ -270,21 +271,12 @@ export function InvoicesClient({ initialInvoices, unbilledServices, companyId, m
       <div className="space-y-5">
         {/* Toolbar: filtro + ações */}
         <div className="bg-white rounded-xl border border-[var(--color-border)] px-4 py-3 flex flex-wrap items-end gap-3">
-          <form method="GET" className="flex items-end gap-2">
-            <div>
-              <label className="block text-xs text-[var(--color-text-muted)] mb-1">Mês</label>
-              <input
-                type="month"
-                name="mes"
-                defaultValue={mesParam}
-                className="px-3 py-2 rounded-lg border border-[var(--color-border)] text-sm text-[var(--color-text-main)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
-              />
-            </div>
-            <button type="submit" className="px-4 py-2 rounded-lg border border-[var(--color-border)] text-sm text-[var(--color-text-sub)] hover:bg-[var(--color-background)] transition-colors">
-              Ver
-            </button>
-          </form>
-
+          {/*
+            O filtro de mês desta vista saiu. Era um `<form method="GET">` com
+            um `<input name="mes">` e um botão "Ver" — submeter escrevia
+            `?mes=…`, exactamente o que o seletor do módulo escreve. Dois
+            controlos para o mesmo efeito, e este ainda exigia dois cliques.
+          */}
           <div className="flex-1" />
 
           <button
@@ -580,15 +572,18 @@ export function InvoicesClient({ initialInvoices, unbilledServices, companyId, m
 
 // ─── KPI Card ─────────────────────────────────────────────────────────────────
 
+/**
+ * Financeiro V2: passou a desenhar com o primitivo partilhado.
+ * Assinatura intacta — nenhum ponto de chamada foi tocado.
+ */
 function KpiCard({
   label, value, highlight, warn, danger,
 }: { label: string; value: string; highlight?: boolean; warn?: boolean; danger?: boolean }) {
   return (
-    <div className={`rounded-xl border p-4 ${highlight ? "border-[var(--color-primary)] bg-[var(--color-primary-light)]" : "border-[var(--color-border)] bg-white"}`}>
-      <p className="text-xs text-[var(--color-text-muted)] mb-1">{label}</p>
-      <p className={`text-xl font-bold ${highlight ? "text-[var(--color-primary)]" : warn ? "text-amber-600" : danger ? "text-red-600" : "text-[var(--color-text-main)]"}`}>
-        {value}
-      </p>
-    </div>
+    <Kpi
+      label={label}
+      value={value}
+      tone={danger ? "danger" : warn ? "warning" : highlight ? "positive" : "neutral"}
+    />
   );
 }

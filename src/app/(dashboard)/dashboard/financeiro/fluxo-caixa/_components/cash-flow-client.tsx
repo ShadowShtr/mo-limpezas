@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { Kpi } from "@/components/financeiro/v2/primitives";
 import {
   TrendingUp, TrendingDown, Clock, Plus, Trash2,
   ArrowUpRight, ArrowDownRight, Loader2, AlertCircle, X,
@@ -50,12 +51,11 @@ interface Props {
   initialData: DataShape | null;
   error: string | null;
   companyId: string;
-  mesParam: string;
   year: number;
   month: number;
 }
 
-export function CashFlowClient({ initialData, error: initErr, companyId, mesParam, year, month }: Props) {
+export function CashFlowClient({ initialData, error: initErr, companyId, year, month }: Props) {
   const [data, setData] = useState<DataShape | null>(initialData);
   const [error, setError] = useState(initErr);
   const [filterType, setFilterType] = useState<"" | "entrada" | "saida">("");
@@ -79,12 +79,6 @@ export function CashFlowClient({ initialData, error: initErr, companyId, mesPara
       if (res.ok) setData({ entries: res.entries, balance: res.balance, entradas: res.entradas, saidas: res.saidas, pendentes: res.pendentes });
       else setError(res.error);
     });
-  }
-
-  function handleMonthChange(val: string) {
-    const [y, m] = val.split("-").map(Number);
-    window.location.href = `/dashboard/financeiro/fluxo-caixa?mes=${val}`;
-    reload(y, m);
   }
 
   async function handleCreate(e: React.FormEvent) {
@@ -146,15 +140,12 @@ export function CashFlowClient({ initialData, error: initErr, companyId, mesPara
     <div className="space-y-5">
       {/* Toolbar: filtros + botão novo */}
       <div className="bg-white rounded-xl border border-[var(--color-border)] px-4 py-3 flex flex-wrap items-end gap-3">
-        <div>
-          <label className="block text-xs text-[var(--color-text-muted)] mb-1">Mês</label>
-          <input
-            type="month"
-            defaultValue={mesParam}
-            onChange={(e) => handleMonthChange(e.target.value)}
-            className="px-3 py-2 rounded-lg border border-[var(--color-border)] text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
-          />
-        </div>
+        {/*
+          O seletor de mês desta vista saiu. Era um `<input type="month">` que
+          navegava para `?mes=…` — exactamente o que o seletor do módulo faz.
+          Dois controlos para o mesmo efeito, no mesmo ecrã, capazes de
+          discordar. Nenhuma capacidade se perdeu.
+        */}
         <div>
           <label className="block text-xs text-[var(--color-text-muted)] mb-1">Tipo</label>
           <select value={filterType} onChange={(e) => setFilterType(e.target.value as "" | "entrada" | "saida")}
@@ -193,44 +184,15 @@ export function CashFlowClient({ initialData, error: initErr, companyId, mesPara
       {/* KPI Cards */}
       {data && (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          <div className="bg-white rounded-xl border border-[var(--color-border)] p-4">
-            <div className="flex items-center gap-2 mb-2">
-              <div className="w-7 h-7 rounded-lg bg-green-50 flex items-center justify-center">
-                <ArrowUpRight className="w-4 h-4 text-green-600" />
-              </div>
-              <p className="text-xs text-[var(--color-text-muted)] font-medium">Entradas</p>
-            </div>
-            <p className="text-xl font-bold text-green-600">{fmtEur(data.entradas)}</p>
-          </div>
-          <div className="bg-white rounded-xl border border-[var(--color-border)] p-4">
-            <div className="flex items-center gap-2 mb-2">
-              <div className="w-7 h-7 rounded-lg bg-red-50 flex items-center justify-center">
-                <ArrowDownRight className="w-4 h-4 text-red-600" />
-              </div>
-              <p className="text-xs text-[var(--color-text-muted)] font-medium">Saídas</p>
-            </div>
-            <p className="text-xl font-bold text-red-600">{fmtEur(data.saidas)}</p>
-          </div>
-          <div className={`bg-white rounded-xl border p-4 ${data.balance >= 0 ? "border-[var(--color-border)]" : "border-red-200"}`}>
-            <div className="flex items-center gap-2 mb-2">
-              <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${data.balance >= 0 ? "bg-[var(--color-primary-light)]" : "bg-red-50"}`}>
-                {data.balance >= 0
-                  ? <TrendingUp className="w-4 h-4 text-[var(--color-primary)]" />
-                  : <TrendingDown className="w-4 h-4 text-red-600" />}
-              </div>
-              <p className="text-xs text-[var(--color-text-muted)] font-medium">Saldo do mês</p>
-            </div>
-            <p className={`text-xl font-bold ${data.balance >= 0 ? "text-[var(--color-primary)]" : "text-red-600"}`}>{fmtEur(data.balance)}</p>
-          </div>
-          <div className="bg-white rounded-xl border border-amber-200 p-4">
-            <div className="flex items-center gap-2 mb-2">
-              <div className="w-7 h-7 rounded-lg bg-amber-50 flex items-center justify-center">
-                <Clock className="w-4 h-4 text-amber-600" />
-              </div>
-              <p className="text-xs text-[var(--color-text-muted)] font-medium">Pendentes</p>
-            </div>
-            <p className="text-xl font-bold text-amber-600">{fmtEur(data.pendentes)}</p>
-          </div>
+          <Kpi label="Entradas" value={fmtEur(data.entradas)} tone="positive" icon={<ArrowUpRight className="w-4 h-4" />} />
+          <Kpi label="Saídas"   value={fmtEur(data.saidas)}   tone="danger"   icon={<ArrowDownRight className="w-4 h-4" />} />
+          <Kpi
+            label="Saldo do mês"
+            value={fmtEur(data.balance)}
+            tone={data.balance >= 0 ? "positive" : "danger"}
+            icon={data.balance >= 0 ? <TrendingUp className="w-4 h-4" /> : <TrendingDown className="w-4 h-4" />}
+          />
+          <Kpi label="Pendentes" value={fmtEur(data.pendentes)} tone="warning" icon={<Clock className="w-4 h-4" />} />
         </div>
       )}
 

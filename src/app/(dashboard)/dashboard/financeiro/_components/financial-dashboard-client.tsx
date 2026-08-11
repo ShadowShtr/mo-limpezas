@@ -12,6 +12,13 @@ import {
   type FinancialDashboardData,
   type OperationalSummary,
 } from "@/app/actions/financial-dashboard";
+import {
+  FinanceCard,
+  CardHeader,
+  Kpi,
+  EmptyState,
+  type KpiTone,
+} from "@/components/financeiro/v2/primitives";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -34,51 +41,85 @@ interface KpiCardProps {
   accent?: string;
 }
 
+/**
+ * Financeiro V2: passou a desenhar com o primitivo partilhado.
+ *
+ * A assinatura ficou igual de propósito — os sete pontos de chamada não foram
+ * tocados. O que mudou é a aparência, e o mapeamento de `accent` (uma cor) para
+ * `tone` (uma intenção), que é o que o primitivo entende.
+ *
+ * Os rótulos continuam a ser os legados: "Receita", "Custos (Salários)",
+ * "Margem Bruta", "Pendente a Receber". Renomeá-los para o vocabulário canónico
+ * — Faturado, Recebido, Custos, Margem, Em aberto — daria a estes números um
+ * significado que a fonte actual não garante. Os nomes mudam quando a fonte
+ * mudar, na PR B, e não antes.
+ */
 function KpiCard({ label, value, sub, trend, trendLabel, accent = "var(--color-primary)" }: KpiCardProps) {
+  const tone: KpiTone =
+    accent === "#EF4444" ? "danger"
+    : accent === "#F59E0B" ? "warning"
+    : accent === "var(--color-primary)" && trend === "up" ? "positive"
+    : "neutral";
+
   return (
-    <div className="bg-white rounded-xl border border-[var(--color-border)] p-5 flex flex-col gap-3">
-      <p className="text-sm text-[var(--color-text-muted)] font-medium">{label}</p>
-      <p className="text-2xl font-bold text-[var(--color-text-main)]" style={{ color: accent !== "var(--color-primary)" ? accent : undefined }}>
-        {value}
-      </p>
-      <div className="flex items-center gap-1.5 text-xs">
-        {trend === "up" && <ArrowUpRight className="w-3.5 h-3.5 text-[var(--color-primary)]" />}
-        {trend === "down" && <ArrowDownRight className="w-3.5 h-3.5 text-red-500" />}
-        {trendLabel && (
-          <span className={trend === "up" ? "text-[var(--color-primary)]" : trend === "down" ? "text-red-500" : "text-[var(--color-text-muted)]"}>
-            {trendLabel}
+    <Kpi
+      label={label}
+      value={value}
+      tone={tone}
+      sub={
+        (trendLabel || sub) && (
+          <span className="flex items-center gap-1.5 flex-wrap">
+            {trend === "up" && <ArrowUpRight className="w-3.5 h-3.5 text-[#15803D]" />}
+            {trend === "down" && <ArrowDownRight className="w-3.5 h-3.5 text-[#DC2626]" />}
+            {trendLabel && (
+              <span className={trend === "up" ? "text-[#15803D]" : trend === "down" ? "text-[#DC2626]" : ""}>
+                {trendLabel}
+              </span>
+            )}
+            {sub && <span>{sub}</span>}
           </span>
-        )}
-        {sub && <span className="text-[var(--color-text-muted)]">{sub}</span>}
-      </div>
-    </div>
+        )
+      }
+    />
   );
 }
 
 // ─── Gráfico de barras + linha (Receita vs Custos) ────────────────────────────
 
+/**
+ * Receita vs Custos, 12 meses.
+ *
+ * 🔴 **A série é a mesma de sempre** (`data.monthly`, de faturas e folhas
+ * registadas). Financeiro V2 redesenhou o contentor, os eixos, a legenda e
+ * acrescentou tooltip — não tocou nos números nem inventou uma série diária de
+ * Faturado/Recebido/Despesas, que a fonte actual não fornece. Um gráfico bonito
+ * com uma série inventada seria a pior peça desta apresentação.
+ */
 function RevenueChart({ data }: { data: FinancialDashboardData["monthly"] }) {
   const maxVal = Math.max(...data.flatMap((m) => [m.revenue, m.costs]), 1);
   const H = 160;
 
   return (
-    <div className="bg-white rounded-xl border border-[var(--color-border)] p-5">
-      <div className="flex items-center justify-between mb-4">
-        <p className="text-sm font-semibold text-[var(--color-text-main)]">Receita vs Custos (12 meses)</p>
-        <div className="flex items-center gap-4 text-xs text-[var(--color-text-muted)]">
-          <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm bg-[#16A34A] inline-block" />Receita</span>
-          <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm bg-[#EF4444] inline-block" />Custos</span>
-          <span className="flex items-center gap-1.5"><span className="w-4 h-0.5 bg-[#F59E0B] inline-block" />Margem</span>
-        </div>
-      </div>
-      <svg viewBox={`0 0 ${data.length * 44} ${H + 32}`} className="w-full overflow-visible">
-        {/* Linhas de referência */}
+    <FinanceCard className="h-full">
+      <CardHeader
+        title="Receita vs Custos"
+        hint="Últimos 12 meses · de faturas e folhas registadas"
+        right={
+          <div className="flex items-center gap-3 text-[11px] text-[#94A3B8]">
+            <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-[#16A34A] inline-block" />Receita</span>
+            <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-[#94A3B8] inline-block" />Custos</span>
+            <span className="flex items-center gap-1.5"><span className="w-3.5 h-0.5 bg-[#F59E0B] inline-block" />Margem</span>
+          </div>
+        }
+      />
+      <svg viewBox={`0 0 ${data.length * 44} ${H + 32}`} className="w-full overflow-visible" style={{ height: 296 }}>
+        {/* Linhas de referência — discretas, para não competir com os dados. */}
         {[0, 0.25, 0.5, 0.75, 1].map((pct) => (
           <line
             key={pct}
             x1="0" y1={H - pct * H}
             x2={data.length * 44} y2={H - pct * H}
-            stroke="#E5E7EB" strokeWidth="1"
+            stroke="#F1F5F9" strokeWidth="1"
           />
         ))}
         {/* Barras e linha de margem */}
@@ -88,10 +129,12 @@ function RevenueChart({ data }: { data: FinancialDashboardData["monthly"] }) {
           const cosH = (m.costs   / maxVal) * H;
           return (
             <g key={i}>
-              {/* Barra receita */}
-              <rect x={x + 4}  y={H - revH} width={16} height={revH} fill="#16A34A" rx="2" opacity="0.85" />
-              {/* Barra custos */}
-              <rect x={x + 22} y={H - cosH} width={16} height={cosH} fill="#EF4444" rx="2" opacity="0.75" />
+              {/* Tooltip nativo: sem biblioteca nova e sem estado. */}
+              <title>{`${m.label} · Receita ${fmtEur(m.revenue)} · Custos ${fmtEur(m.costs)} · Margem ${fmtEur(m.margin)}`}</title>
+              <rect x={x + 6}  y={H - revH} width={14} height={revH} fill="#16A34A" rx="4" />
+              <rect x={x + 23} y={H - cosH} width={14} height={cosH} fill="#CBD5E1" rx="4" />
+              {/* Alvo largo e invisível, para o tooltip pegar em toda a coluna. */}
+              <rect x={x} y={0} width={44} height={H} fill="transparent" />
             </g>
           );
         })}
@@ -100,10 +143,11 @@ function RevenueChart({ data }: { data: FinancialDashboardData["monthly"] }) {
           fill="none"
           stroke="#F59E0B"
           strokeWidth="2"
+          strokeLinecap="round"
           strokeLinejoin="round"
           points={data.map((m, i) => {
             const marginPct = Math.max(m.margin, 0) / maxVal;
-            return `${i * 44 + 20},${H - marginPct * H}`;
+            return `${i * 44 + 22},${H - marginPct * H}`;
           }).join(" ")}
         />
         {/* Labels do eixo X */}
@@ -120,7 +164,7 @@ function RevenueChart({ data }: { data: FinancialDashboardData["monthly"] }) {
           </text>
         ))}
       </svg>
-    </div>
+    </FinanceCard>
   );
 }
 
@@ -130,29 +174,36 @@ function ClientRevenueChart({ data }: { data: FinancialDashboardData["byClient"]
   const max = Math.max(...data.map((c) => c.total), 1);
 
   return (
-    <div className="bg-white rounded-xl border border-[var(--color-border)] p-5">
-      <p className="text-sm font-semibold text-[var(--color-text-main)] mb-4">Receita por Cliente (ano atual)</p>
+    <FinanceCard className="h-full">
+      <CardHeader title="Top clientes" hint="Receita faturada no ano atual" />
       {data.length === 0 ? (
-        <p className="text-sm text-[var(--color-text-muted)] py-6 text-center">Sem dados de faturação este ano.</p>
+        <EmptyState title="Sem faturação registada este ano." />
       ) : (
-        <div className="space-y-3">
-          {data.map((c) => (
+        <div className="space-y-3.5">
+          {data.map((c, i) => (
             <div key={c.client_id} className="flex items-center gap-3">
-              <p className="text-xs text-[var(--color-text-sub)] w-28 truncate shrink-0">{c.client_name}</p>
-              <div className="flex-1 bg-gray-100 rounded-full h-2 overflow-hidden">
-                <div
-                  className="h-2 rounded-full bg-[#16A34A] transition-all"
-                  style={{ width: `${(c.total / max) * 100}%` }}
-                />
+              <span className="w-5 shrink-0 text-[11px] font-semibold text-[#CBD5E1] tabular-nums">
+                {i + 1}
+              </span>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-baseline justify-between gap-2 mb-1.5">
+                  <p className="text-[13px] text-[#334155] truncate">{c.client_name}</p>
+                  <p className="text-[13px] font-semibold text-[#0F172A] shrink-0 tabular-nums">
+                    {fmtEurCompact(c.total)}
+                  </p>
+                </div>
+                <div className="bg-[#F1F5F9] rounded-full h-1.5 overflow-hidden">
+                  <div
+                    className="h-1.5 rounded-full bg-[#16A34A]"
+                    style={{ width: `${Math.max((c.total / max) * 100, 2)}%` }}
+                  />
+                </div>
               </div>
-              <p className="text-xs font-medium text-[var(--color-text-main)] w-20 text-right shrink-0">
-                {fmtEurCompact(c.total)}
-              </p>
             </div>
           ))}
         </div>
       )}
-    </div>
+    </FinanceCard>
   );
 }
 
@@ -514,9 +565,15 @@ export function FinancialDashboardClient({ data, error, companyId, initialSummar
             </div>
           </div>
 
-          {/* Gráficos */}
-          <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-            <RevenueChart data={data.monthly} />
+          {/* Gráfico principal 2/3 + Top clientes 1/3.
+              O espaço que a especificação reservava para "Atividade recente"
+              foi para aqui: não há feed real, e um painel "em construção" numa
+              página financeira parece um sistema por acabar. Melhor dar o
+              espaço a dados verdadeiros. */}
+          <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
+            <div className="xl:col-span-2">
+              <RevenueChart data={data.monthly} />
+            </div>
             <ClientRevenueChart data={data.byClient} />
           </div>
 

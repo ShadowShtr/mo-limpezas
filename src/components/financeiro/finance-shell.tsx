@@ -81,14 +81,12 @@ export function FinanceShell({
         {/* 2. Período do módulo + acção principal da vista. */}
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="min-w-0">
-            <h2 className="text-[19px] font-bold text-[#0F172A] truncate">{title}</h2>
+            <h2 className="text-[22px] font-bold text-[#0F172A] tracking-[-0.02em] truncate">{title}</h2>
             {subtitle && <p className="text-[13px] text-[#64748B] mt-0.5">{subtitle}</p>}
           </div>
           <div className="flex items-center gap-2">
             {actions}
             {periodIsolated ? (
-              // Sem seletor e sem setas. Nota neutra — o utilizador não tem de
-              // saber o que é `ensureMonth`, só onde muda o mês.
               <p className="text-[12px] text-[#64748B] px-3 py-2 rounded-xl bg-[#F8FAFC] border border-[#E2E8F0]">
                 Período gerido pela própria vista
               </p>

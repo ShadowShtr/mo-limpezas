@@ -43,30 +43,24 @@ export const FINANCE_VIEWS = [
 ] as const;
 
 /**
- * 🔴 Vistas que **não participam** no período global.
+ * Vistas que não participam no período global.
  *
- * `pagamentos/page.tsx` chama `getPayments`, que chama `ensureMonth`, que faz
- * `.insert(rows)`: **abrir um mês em Pagamentos gera os pagamentos fixos desse
- * mês**, clonados do mês anterior mais recente.
+ * ✅ **Nenhuma.** As sete partilham o mesmo mês.
  *
- * Isto é anterior ao Financeiro V2 — mas o período global tornaria o gatilho
- * trivial de puxar. Passar de Agosto para Setembro em qualquer vista e clicar
- * em Pagamentos materializaria Setembro; as setas ‹ › fariam o mesmo a cada
- * clique.
+ * Pagamentos esteve aqui, e por uma razão concreta: `getPayments` chamava
+ * `ensureMonth`, que inseria. Um período global teria tornado esse gatilho
+ * trivial de puxar — passar de Agosto para Setembro em qualquer vista e clicar
+ * em Pagamentos materializaria Setembro, e as setas ‹ › fariam o mesmo a cada
+ * clique. O isolamento era a contenção possível **enquanto ler escrevia**.
  *
- * Enquanto o incidente financeiro não estiver diagnosticado, a regra é:
+ * A PR C tirou a escrita do caminho de leitura. A condição que justificava o
+ * isolamento deixou de existir, e mantê-lo passaria a ser só uma cicatriz: uma
+ * vista fora do período do módulo, sem nada que o explique ao utilizador.
  *
- *   **Pagamentos não recebe o período do módulo, e o módulo não lhe oferece
- *   nenhum controlo novo para o mudar.**
- *
- * O seletor legado da própria vista continua como estava — não é deste PR, e
- * removê-lo tiraria a única forma de navegar meses ali.
- *
- * A correcção definitiva vive em `payments.ts`, `BLOQUEADO_INCIDENTE_FINANCEIRO`.
+ * Se alguma vista voltar a precisar de isolamento, esta lista é o sítio — e a
+ * razão tem de vir escrita ao lado.
  */
-export const PERIOD_ISOLATED_VIEWS: readonly string[] = [
-  "/dashboard/financeiro/pagamentos",
-];
+export const PERIOD_ISOLATED_VIEWS: readonly string[] = [];
 
 export function isPeriodIsolated(pathname: string): boolean {
   return PERIOD_ISOLATED_VIEWS.some((h) => pathname === h || pathname.startsWith(`${h}/`));

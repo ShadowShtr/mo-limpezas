@@ -12,6 +12,7 @@ import {
   type PayrollRecord,
 } from "@/app/actions/payroll";
 import { PayrollEditSheet } from "./payroll-edit-sheet";
+import { Kpi } from "@/components/financeiro/v2/primitives";
 import { usePagination, Pagination } from "@/components/ui/pagination";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -485,15 +486,12 @@ export function PayrollClient({ initialRecords, companyId, mesParam, year, month
 
 // ─── KPI Card ─────────────────────────────────────────────────────────────────
 
+/**
+ * Financeiro V2: passou a desenhar com o primitivo partilhado.
+ * Assinatura intacta — nenhum ponto de chamada foi tocado.
+ */
 function KpiCard({
   label, value, highlight, danger,
 }: { label: string; value: string; highlight?: boolean; danger?: boolean }) {
-  return (
-    <div className={`rounded-xl border p-4 ${highlight ? "border-[var(--color-primary)] bg-[var(--color-primary-light)]" : "border-[var(--color-border)] bg-white"}`}>
-      <p className="text-xs text-[var(--color-text-muted)] mb-1">{label}</p>
-      <p className={`text-xl font-bold ${highlight ? "text-[var(--color-primary)]" : danger ? "text-red-600" : "text-[var(--color-text-main)]"}`}>
-        {value}
-      </p>
-    </div>
-  );
+  return <Kpi label={label} value={value} tone={danger ? "danger" : highlight ? "positive" : "neutral"} />;
 }

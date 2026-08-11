@@ -10,6 +10,7 @@ import {
   uploadPaymentAttachment, deletePaymentAttachment, getSignedPaymentAttachmentUrl,
   type PaymentsData, type Payment, type PaymentKind,
 } from "@/app/actions/payments";
+import { LocalTabs, Kpi as V2Kpi, type KpiTone } from "@/components/financeiro/v2/primitives";
 import { todayInLisbon } from "@/lib/lisbon-time";
 import { isValidIsoDateString } from "@/lib/utils";
 
@@ -17,14 +18,25 @@ function fmtEur(v: number | null) {
   if (v === null || v === undefined) return "—";
   return v.toLocaleString("pt-PT", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " €";
 }
+/**
+ * Uma data de vencimento, **sempre com ano**.
+ *
+ * 🔴 Mostrava só dia e mês. Num incidente em que quatro vencimentos
+ * trimestrais foram esmagados numa data só, isso escondia a diferença que mais
+ * importava: `03 mai. 2027` e `03 mai. 2026` apareciam exactamente iguais no
+ * ecrã, e não havia como distinguir um contrato do ano que vem de um deste ano.
+ *
+ * Isto é **apresentação**. Não altera `due_date`, nem o que está gravado.
+ */
 function fmtDate(s: string | null) {
   if (!s) return "—";
-  return new Date(s + "T00:00:00").toLocaleDateString("pt-PT", { day: "2-digit", month: "short" });
+  return new Date(s + "T00:00:00").toLocaleDateString("pt-PT", {
+    day: "2-digit", month: "short", year: "numeric",
+  });
 }
 interface Props {
   initialData: PaymentsData | null;
   error: string | null;
-  mesParam: string;
   year: number;
   month: number;
 }
@@ -46,7 +58,7 @@ const emptyForm = (kind: PaymentKind): FormState => ({
   attachment_url: null, attachment_name: null,
 });
 
-export function PaymentsClient({ initialData, error: initErr, mesParam, year, month }: Props) {
+export function PaymentsClient({ initialData, error: initErr, year, month }: Props) {
   const [data, setData] = useState<PaymentsData | null>(initialData);
   const [error, setError] = useState(initErr);
   const [isPending, startTransition] = useTransition();
@@ -54,6 +66,9 @@ export function PaymentsClient({ initialData, error: initErr, mesParam, year, mo
   const [formError, setFormError] = useState("");
   const [attachUploading, setAttachUploading] = useState(false);
   const [attachError, setAttachError] = useState("");
+  // Filtro **local**, sobre os dados já carregados. Trocar de aba não vai à
+  // base, não muda o mês e não dispara mutação nenhuma.
+  const [aba, setAba] = useState<"fixos" | "variaveis">("fixos");
 
   function reload() {
     startTransition(async () => {
@@ -61,10 +76,6 @@ export function PaymentsClient({ initialData, error: initErr, mesParam, year, mo
       if (res.ok) setData(res.data);
       else setError(res.error);
     });
-  }
-
-  function handleMonthChange(val: string) {
-    window.location.href = `/dashboard/financeiro/pagamentos?mes=${val}`;
   }
 
   function openNew(kind: PaymentKind) {
@@ -158,20 +169,25 @@ export function PaymentsClient({ initialData, error: initErr, mesParam, year, mo
 
   return (
     <div className="space-y-5">
-      {/* Toolbar */}
-      <div className="bg-white rounded-xl border border-[var(--color-border)] px-4 py-3 flex flex-wrap items-end gap-3">
-        <div>
-          <label className="block text-xs text-[var(--color-text-muted)] mb-1">Mês</label>
-          <input
-            type="month"
-            defaultValue={mesParam}
-            onChange={(e) => handleMonthChange(e.target.value)}
-            className="px-3 py-2 rounded-lg border border-[var(--color-border)] text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
-          />
-        </div>
-        <div className="flex-1" />
-        <p className="text-xs text-[var(--color-text-muted)] max-w-xs">
-          Os <strong>fixos</strong> repetem-se de mês para mês; os <strong>variáveis</strong> são pontuais.
+      {/*
+        O seletor de mês desta vista saiu. Não é funcionalidade perdida: era um
+        `<input type="month">` que navegava para `?mes=…`, exactamente o que o
+        seletor do módulo faz agora que Pagamentos participa no período global.
+        Manter os dois seria ter dois controlos para a mesma coisa, no mesmo
+        ecrã, capazes de discordar.
+      */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <LocalTabs
+          value={aba}
+          onChange={setAba}
+          items={[
+            { value: "fixos" as const, label: "Fixos", count: data?.fixos.length },
+            { value: "variaveis" as const, label: "Variáveis", count: data?.variaveis.length },
+          ]}
+        />
+        <p className="text-[12px] text-[#94A3B8] max-w-md">
+          Os <strong className="font-medium text-[#64748B]">fixos</strong> repetem-se de mês para mês;
+          os <strong className="font-medium text-[#64748B]">variáveis</strong> são pontuais.
           Nenhum é criado automaticamente ao abrir um mês.
         </p>
       </div>
@@ -213,16 +229,19 @@ export function PaymentsClient({ initialData, error: initErr, mesParam, year, mo
 
       {data && (
         <>
-          <PaymentSection
-            title="Pagamentos Fixos" subtitle="Repetem de mês para mês" icon={<Repeat className="w-4 h-4 text-[var(--color-primary)]" />}
-            emptyLabel="Ainda não existem pagamentos fixos neste mês."
-            items={data.fixos} today={today} onAdd={() => openNew("fixo")} onEdit={openEdit} onToggle={toggleStatus} onDelete={handleDelete} busy={isPending}
-          />
-          <PaymentSection
-            title="Pagamentos Variáveis" subtitle="Pontuais deste mês" icon={<Zap className="w-4 h-4 text-amber-600" />}
-            emptyLabel="Ainda não existem pagamentos variáveis neste mês."
-            items={data.variaveis} today={today} onAdd={() => openNew("variavel")} onEdit={openEdit} onToggle={toggleStatus} onDelete={handleDelete} busy={isPending}
-          />
+          {aba === "fixos" ? (
+            <PaymentSection
+              title="Pagamentos Fixos" subtitle="Repetem de mês para mês" icon={<Repeat className="w-4 h-4 text-[var(--color-primary)]" />}
+              emptyLabel="Ainda não existem pagamentos fixos neste mês."
+              items={data.fixos} today={today} onAdd={() => openNew("fixo")} onEdit={openEdit} onToggle={toggleStatus} onDelete={handleDelete} busy={isPending}
+            />
+          ) : (
+            <PaymentSection
+              title="Pagamentos Variáveis" subtitle="Pontuais deste mês" icon={<Zap className="w-4 h-4 text-amber-600" />}
+              emptyLabel="Ainda não existem pagamentos variáveis neste mês."
+              items={data.variaveis} today={today} onAdd={() => openNew("variavel")} onEdit={openEdit} onToggle={toggleStatus} onDelete={handleDelete} busy={isPending}
+            />
+          )}
         </>
       )}
 
@@ -307,16 +326,20 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 
-function Kpi({ icon, bg, label, value, accent }: { icon: React.ReactNode; bg: string; label: string; value: string; accent: string }) {
-  return (
-    <div className="bg-white rounded-xl border border-[var(--color-border)] p-4">
-      <div className="flex items-center gap-2 mb-2">
-        <div className={`w-7 h-7 rounded-lg ${bg} flex items-center justify-center`}>{icon}</div>
-        <p className="text-xs text-[var(--color-text-muted)] font-medium">{label}</p>
-      </div>
-      <p className={`text-xl font-bold ${accent}`}>{value}</p>
-    </div>
-  );
+/**
+ * Financeiro V2: desenha com o primitivo partilhado.
+ *
+ * A assinatura ficou igual — os quatro pontos de chamada não foram tocados.
+ * `accent` (uma cor) mapeia para `tone` (uma intenção), e `bg` deixou de ter
+ * uso: o primitivo não pinta caixas atrás dos ícones.
+ */
+function Kpi({ icon, bg: _bg, label, value, accent }: { icon: React.ReactNode; bg: string; label: string; value: string; accent: string }) {
+  const tone: KpiTone =
+    accent.includes("red") ? "danger"
+    : accent.includes("amber") ? "warning"
+    : accent.includes("green") ? "positive"
+    : "neutral";
+  return <V2Kpi label={label} value={value} tone={tone} icon={icon} />;
 }
 
 function PaymentSection({

@@ -295,21 +295,28 @@ describe("Financeiro V2 — render das sete vistas é read-only", () => {
 //
 // Estes testes provam que a casca não amplia a exposição.
 
-describe("Financeiro V2 — Pagamentos isolada do período global", () => {
+describe("Financeiro V2 — as sete vistas partilham o período global", () => {
   const NAV = "src/components/financeiro/finance-nav.tsx";
   const SHELL = "src/components/financeiro/finance-shell.tsx";
   const PAGAMENTOS = "src/app/(dashboard)/dashboard/financeiro/pagamentos/page.tsx";
 
-  it("a lista de vistas isoladas tem exactamente Pagamentos", () => {
+  it("🔴 nenhuma vista está isolada do período", () => {
+    // Pagamentos esteve aqui, e por uma razão concreta: `getPayments` chamava
+    // `ensureMonth`, e um seletor de período teria transformado "mudar de mês"
+    // em "gerar esse mês". A PR C tirou a escrita do caminho de leitura, e a
+    // condição que justificava o isolamento deixou de existir.
+    //
+    // A lista continua a existir, e este teste com ela: se alguma vista voltar
+    // a precisar de isolamento, aparece no diff com a razão ao lado.
     const nav = codigo(ler(NAV));
     const bloco = nav.slice(nav.indexOf("PERIOD_ISOLATED_VIEWS"));
     const rotas = [...bloco.slice(0, 400).matchAll(/"(\/dashboard\/[^"]+)"/g)].map((m) => m[1]);
-    expect(rotas).toEqual(["/dashboard/financeiro/pagamentos"]);
+    expect(rotas).toEqual([]);
   });
 
-  it("A/B: a navegação não transporta o mês para Pagamentos", () => {
-    // Sair do Resumo ou do Fluxo em Setembro e clicar em Pagamentos não pode
-    // levar `?mes=2026-09` — isso materializaria Setembro.
+  it("A/B: o mecanismo de isolamento continua ligado, mesmo sem ninguém a usá-lo", () => {
+    // Apagar o mecanismo por já não ter utilizadores seria perder a única
+    // forma de conter uma vista se voltar a ser preciso.
     const nav = codigo(ler(NAV));
     expect(nav, "o destino tem de depender do isolamento").toMatch(/isPeriodIsolated\(href\)/);
     expect(nav).toMatch(/isPeriodIsolated\(href\)\s*\?\s*href\s*:\s*withFinancePeriod/);
@@ -322,8 +329,14 @@ describe("Financeiro V2 — Pagamentos isolada do período global", () => {
     expect(shell).toMatch(/periodIsolated\s*\?[\s\S]{0,400}?:\s*\(\s*<FinancePeriodPicker/);
   });
 
-  it("a página de Pagamentos declara-se isolada", () => {
-    expect(codigo(ler(PAGAMENTOS))).toMatch(/periodIsolated/);
+  it("🔴 Pagamentos deixou de se declarar isolada", () => {
+    expect(codigo(ler(PAGAMENTOS))).not.toMatch(/periodIsolated/);
+  });
+
+  it("Pagamentos recebe o período global e lê o mês da rota", () => {
+    const pag = codigo(ler(PAGAMENTOS));
+    expect(pag, "o mês vem da rota, como nas outras seis").toMatch(/parseFinancePeriod\(params\.mes\)/);
+    expect(pag).toMatch(/period=\{period\}/);
   });
 
   it("E: as outras seis vistas continuam a receber o período", () => {
@@ -351,13 +364,15 @@ describe("Financeiro V2 — Pagamentos isolada do período global", () => {
     }
   });
 
-  it("o seletor legado da própria vista não foi tocado", () => {
-    // Removê-lo tiraria a única forma de navegar meses em Pagamentos. Não é
-    // deste PR, e mexer-lhe seria mudar comportamento sob diagnóstico.
+  it("🔴 o seletor de mês legado saiu — era um segundo controlo para a mesma coisa", () => {
+    // Não é funcionalidade perdida. Era um `<input type="month">` que navegava
+    // para `?mes=…`, exactamente o que o seletor do módulo faz agora que
+    // Pagamentos participa no período global. Manter os dois seria ter dois
+    // controlos para o mesmo efeito, no mesmo ecrã, capazes de discordar.
     const client = codigo(ler(
       "src/app/(dashboard)/dashboard/financeiro/pagamentos/_components/payments-client.tsx",
     ));
-    expect(client).toMatch(/type="month"/);
-    expect(client).toMatch(/handleMonthChange/);
+    expect(client).not.toMatch(/type="month"/);
+    expect(client).not.toMatch(/handleMonthChange/);
   });
 });
