@@ -484,7 +484,8 @@
       ],
       "risks": [],
       "signals": {
-        "write": 1
+        "write": 2,
+        "sqlWrite": 1
       },
       "action": "nenhuma",
       "reason": "documentação",
@@ -4037,8 +4038,8 @@
       ],
       "risks": [],
       "signals": {
-        "write": 1,
-        "sqlWrite": 3
+        "write": 2,
+        "sqlWrite": 4
       },
       "action": "nenhuma",
       "reason": "suite de testes — corre por convenção do vitest",
@@ -4058,7 +4059,9 @@
       "consumers": 0,
       "consumerSample": [],
       "autoLoaded": false,
-      "referencedBy": [],
+      "referencedBy": [
+        "docs"
+      ],
       "sideEffects": [
         "supabase",
         "write"
@@ -8290,11 +8293,14 @@
         "docs"
       ],
       "sideEffects": [
-        "supabase"
+        "supabase",
+        "write"
       ],
       "risks": [],
       "signals": {
-        "supabase": 3
+        "supabase": 3,
+        "write": 1,
+        "sqlWrite": 1
       },
       "action": "nenhuma",
       "reason": "em uso: convenção do Next",
@@ -11128,10 +11134,14 @@
       ],
       "autoLoaded": false,
       "referencedBy": [],
-      "sideEffects": [],
+      "sideEffects": [
+        "write"
+      ],
       "risks": [],
       "signals": {
-        "clientComponent": 1
+        "clientComponent": 1,
+        "write": 1,
+        "sqlWrite": 1
       },
       "action": "nenhuma",
       "reason": "em uso: 1 consumidor(es)",
@@ -11185,7 +11195,7 @@
       "sideEffects": [],
       "risks": [],
       "signals": {
-        "sqlWrite": 1
+        "sqlWrite": 2
       },
       "action": "nenhuma",
       "reason": "em uso: 7 consumidor(es)",

@@ -43,6 +43,36 @@ export const FINANCE_VIEWS = [
 ] as const;
 
 /**
+ * 🔴 Vistas que **não participam** no período global.
+ *
+ * `pagamentos/page.tsx` chama `getPayments`, que chama `ensureMonth`, que faz
+ * `.insert(rows)`: **abrir um mês em Pagamentos gera os pagamentos fixos desse
+ * mês**, clonados do mês anterior mais recente.
+ *
+ * Isto é anterior ao Financeiro V2 — mas o período global tornaria o gatilho
+ * trivial de puxar. Passar de Agosto para Setembro em qualquer vista e clicar
+ * em Pagamentos materializaria Setembro; as setas ‹ › fariam o mesmo a cada
+ * clique.
+ *
+ * Enquanto o incidente financeiro não estiver diagnosticado, a regra é:
+ *
+ *   **Pagamentos não recebe o período do módulo, e o módulo não lhe oferece
+ *   nenhum controlo novo para o mudar.**
+ *
+ * O seletor legado da própria vista continua como estava — não é deste PR, e
+ * removê-lo tiraria a única forma de navegar meses ali.
+ *
+ * A correcção definitiva vive em `payments.ts`, `BLOQUEADO_INCIDENTE_FINANCEIRO`.
+ */
+export const PERIOD_ISOLATED_VIEWS: readonly string[] = [
+  "/dashboard/financeiro/pagamentos",
+];
+
+export function isPeriodIsolated(pathname: string): boolean {
+  return PERIOD_ISOLATED_VIEWS.some((h) => pathname === h || pathname.startsWith(`${h}/`));
+}
+
+/**
  * Qual das vistas corresponde a um caminho.
  *
  * Escolhe a correspondência **mais longa**: `/dashboard/financeiro` é prefixo de
@@ -72,10 +102,14 @@ export function FinanceNav({ period }: { period: FinancePeriod }) {
     >
       {FINANCE_VIEWS.map(({ href, label, icon: Icon }) => {
         const active = activa === href;
+        // Uma vista isolada recebe a rota **limpa**: o período não a atravessa.
+        // Ver PERIOD_ISOLATED_VIEWS — em Pagamentos, transportar o mês faria
+        // com que clicar no separador gerasse esse mês.
+        const destino = isPeriodIsolated(href) ? href : withFinancePeriod(href, period);
         return (
           <Link
             key={href}
-            href={withFinancePeriod(href, period)}
+            href={destino}
             prefetch
             aria-current={active ? "page" : undefined}
             className={[

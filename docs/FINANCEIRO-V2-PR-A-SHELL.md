@@ -109,12 +109,29 @@ faz o teste falhar.
 
 ---
 
-## 4. 🔴 O render deixou de escrever
+## 4. 🔴 O render — o que é verdade e o que não é
 
 ```
 NAVEGAÇÃO E VISUALIZAÇÃO SÃO READ-ONLY.
 ESCRITA SÓ APÓS ACÇÃO EXPLÍCITA DO UTILIZADOR.
 ```
+
+> ⚠️ **Correcção a uma afirmação anterior desta PR.** Uma versão inicial deste
+> documento dizia que *"as sete vistas são read-only ao navegar"*. **É falso.**
+>
+> O cliquet do orçamento de escrita, ao ser reescrito, apanhou que
+> `getPayments` chama `ensureMonth`, que faz `.insert(rows)` — **abrir um mês
+> em Pagamentos gera os pagamentos fixos desse mês**, clonados do mês anterior
+> mais recente.
+>
+> O correcto é:
+>
+> - a casca nova **não introduz** nenhuma mutação;
+> - **seis** vistas usam o período global e são read-only ao navegar;
+> - **Pagamentos tem auto-write anterior a esta PR**, agora explicitamente
+>   inventariado;
+> - esta PR **não o amplia** — pelo contrário, isola-o (§4.2);
+> - a correcção definitiva está bloqueada pela E0.
 
 `folha-pagamento/page.tsx` chamava `ensurePayrollCalculated` **durante o
 render** — que delega em `runPayrollCalculation` e faz `.upsert(payroll_records)`
@@ -136,6 +153,51 @@ que já existia.
 **O motor não foi tocado:** `runPayrollCalculation`, `calculateAndSavePayroll`,
 `approvePayrollRecords`, `markPayrollPaid` e `adjustPayrollRecord` estão como
 estavam. Nenhuma fórmula, nenhuma tabela.
+
+### 4.2 🔴 Pagamentos — isolada do período global
+
+A Folha pôde ser corrigida porque bastava retirar o gatilho. Em Pagamentos a
+correcção vive dentro de `payments.ts` — `BLOQUEADO_INCIDENTE_FINANCEIRO`, o
+próprio ficheiro sob diagnóstico. Mexer-lhe antes da evidência seria escrever
+por cima do que se está a medir.
+
+O período global tornaria o gatilho trivial: passar de Agosto para Setembro em
+qualquer vista e clicar em Pagamentos materializaria Setembro, e cada clique nas
+setas `‹ ›` faria o mesmo. **Esta PR criaria uma exposição que não existia.**
+
+Regra temporária:
+
+> **Pagamentos não participa no período global** até à E0 e à correcção de
+> `getPayments`/`ensureMonth`.
+
+Em concreto:
+- a navegação do módulo leva Pagamentos **sem** `?mes`;
+- a casca **não desenha** seletor nem setas nessa vista;
+- o cabeçalho diz apenas *"Período gerido pela própria vista"*;
+- o **seletor legado** da própria vista fica como estava — não é desta PR, e
+  removê-lo tiraria a única forma de navegar meses ali.
+
+### Período global por vista
+
+```
+Resumo ............... habilitado
+Pagamentos ........... ISOLADO / BLOCKED_FINANCIAL_INCIDENT
+Contas ............... habilitado
+Fluxo de Caixa ....... habilitado
+Cobranças ............ habilitado
+Folha de Pagamento ... habilitado
+Conciliação .......... habilitado
+```
+
+### 4.3 O cliquet que apanhou isto
+
+`src/__tests__/financeiro-v2-write-budget.test.ts` — determinístico, **sem
+git**. A versão anterior comparava com o ramo base e falhava no CI (checkout
+com profundidade 1), pelo que o invariante nunca correu onde interessa.
+
+`AUTO_WRITE_ON_RENDER_ALLOWED` tem **exactamente uma** excepção
+(`getPayments` em `pagamentos/page.tsx`), sem wildcard e sem allowlist
+genérica. Um teste falha se aparecer uma segunda.
 
 ---
 

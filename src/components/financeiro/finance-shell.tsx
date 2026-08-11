@@ -27,6 +27,7 @@ export function FinanceShell({
   title,
   subtitle,
   actions,
+  periodIsolated = false,
   children,
 }: {
   period: FinancePeriod;
@@ -35,11 +36,22 @@ export function FinanceShell({
   subtitle?: string;
   /** Acção principal da vista, se houver. Uma só — ver a regra de acções. */
   actions?: ReactNode;
+  /**
+   * 🔴 A vista **não participa** no período do módulo.
+   *
+   * A casca não desenha o seletor nem as setas. Hoje só Pagamentos: abrir um
+   * mês ali chama `getPayments` → `ensureMonth` → `insert`, e um controlo de
+   * período tornaria isso um clique. Ver `PERIOD_ISOLATED_VIEWS`.
+   */
+  periodIsolated?: boolean;
   children: ReactNode;
 }) {
   return (
     <div>
-      <Header title="Financeiro" subtitle={`${title} · ${formatFinancePeriod(period)}`} />
+      <Header
+        title="Financeiro"
+        subtitle={periodIsolated ? title : `${title} · ${formatFinancePeriod(period)}`}
+      />
 
       <div className="px-4 py-5 sm:p-6 lg:px-8 mx-auto max-w-[1400px] space-y-5">
         {/* 1. Avisos — sempre primeiro, nunca atrás de uma aba. */}
@@ -53,7 +65,15 @@ export function FinanceShell({
           </div>
           <div className="flex items-center gap-2">
             {actions}
-            <FinancePeriodPicker period={period} />
+            {periodIsolated ? (
+              // Sem seletor e sem setas. Nota neutra — o utilizador não tem de
+              // saber o que é `ensureMonth`, só onde muda o mês.
+              <p className="text-[12px] text-[#64748B] px-3 py-2 rounded-xl bg-[#F8FAFC] border border-[#E2E8F0]">
+                Período gerido pela própria vista
+              </p>
+            ) : (
+              <FinancePeriodPicker period={period} />
+            )}
           </div>
         </div>
 

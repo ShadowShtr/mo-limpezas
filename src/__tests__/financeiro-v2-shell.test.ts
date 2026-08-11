@@ -283,3 +283,81 @@ describe("Financeiro V2 — render das sete vistas é read-only", () => {
 // que interessa. Foi reescrito como cliquet determinístico, sem git, em
 // `financeiro-v2-write-budget.test.ts` — com inventário versionado por
 // ficheiro, verificação nos dois sentidos, e testes do próprio mecanismo.
+
+// ---------------------------------------------------------------------------
+// Parte E — 🔴 Pagamentos está isolada do período global
+// ---------------------------------------------------------------------------
+//
+// `getPayments` → `ensureMonth` → `.insert(rows)`. Abrir um mês em Pagamentos
+// **gera** os pagamentos fixos desse mês. É anterior ao Financeiro V2 e está
+// bloqueado pelo incidente — mas o período global tornaria o gatilho um clique
+// nas setas ‹ ›.
+//
+// Estes testes provam que a casca não amplia a exposição.
+
+describe("Financeiro V2 — Pagamentos isolada do período global", () => {
+  const NAV = "src/components/financeiro/finance-nav.tsx";
+  const SHELL = "src/components/financeiro/finance-shell.tsx";
+  const PAGAMENTOS = "src/app/(dashboard)/dashboard/financeiro/pagamentos/page.tsx";
+
+  it("a lista de vistas isoladas tem exactamente Pagamentos", () => {
+    const nav = codigo(ler(NAV));
+    const bloco = nav.slice(nav.indexOf("PERIOD_ISOLATED_VIEWS"));
+    const rotas = [...bloco.slice(0, 400).matchAll(/"(\/dashboard\/[^"]+)"/g)].map((m) => m[1]);
+    expect(rotas).toEqual(["/dashboard/financeiro/pagamentos"]);
+  });
+
+  it("A/B: a navegação não transporta o mês para Pagamentos", () => {
+    // Sair do Resumo ou do Fluxo em Setembro e clicar em Pagamentos não pode
+    // levar `?mes=2026-09` — isso materializaria Setembro.
+    const nav = codigo(ler(NAV));
+    expect(nav, "o destino tem de depender do isolamento").toMatch(/isPeriodIsolated\(href\)/);
+    expect(nav).toMatch(/isPeriodIsolated\(href\)\s*\?\s*href\s*:\s*withFinancePeriod/);
+  });
+
+  it("C/D: a casca não desenha seletor nem setas numa vista isolada", () => {
+    const shell = codigo(ler(SHELL));
+    expect(shell).toMatch(/periodIsolated/);
+    // O seletor (que contém as setas ‹ ›) só é renderizado no ramo não-isolado.
+    expect(shell).toMatch(/periodIsolated\s*\?[\s\S]{0,400}?:\s*\(\s*<FinancePeriodPicker/);
+  });
+
+  it("a página de Pagamentos declara-se isolada", () => {
+    expect(codigo(ler(PAGAMENTOS))).toMatch(/periodIsolated/);
+  });
+
+  it("E: as outras seis vistas continuam a receber o período", () => {
+    const nav = codigo(ler(NAV));
+    for (const rota of [
+      "/dashboard/financeiro",
+      "/dashboard/financeiro/contas",
+      "/dashboard/financeiro/fluxo-caixa",
+      "/dashboard/cobrancas",
+      "/dashboard/folha-pagamento",
+      "/dashboard/financeiro/conciliacao",
+    ]) {
+      // Estão em FINANCE_VIEWS e não na lista de isoladas.
+      expect(nav).toContain(`"${rota}"`);
+    }
+    const bloco = nav.slice(nav.indexOf("PERIOD_ISOLATED_VIEWS"), nav.indexOf("PERIOD_ISOLATED_VIEWS") + 400);
+    for (const rota of [
+      "/dashboard/financeiro/contas",
+      "/dashboard/financeiro/fluxo-caixa",
+      "/dashboard/cobrancas",
+      "/dashboard/folha-pagamento",
+      "/dashboard/financeiro/conciliacao",
+    ]) {
+      expect(bloco, `${rota} não é isolada`).not.toContain(rota);
+    }
+  });
+
+  it("o seletor legado da própria vista não foi tocado", () => {
+    // Removê-lo tiraria a única forma de navegar meses em Pagamentos. Não é
+    // deste PR, e mexer-lhe seria mudar comportamento sob diagnóstico.
+    const client = codigo(ler(
+      "src/app/(dashboard)/dashboard/financeiro/pagamentos/_components/payments-client.tsx",
+    ));
+    expect(client).toMatch(/type="month"/);
+    expect(client).toMatch(/handleMonthChange/);
+  });
+});
