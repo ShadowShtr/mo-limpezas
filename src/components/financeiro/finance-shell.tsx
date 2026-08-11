@@ -16,7 +16,6 @@
 import type { ReactNode } from "react";
 
 import { Header } from "@/components/layout/header";
-import { PaymentsReminderBanner } from "@/app/(dashboard)/dashboard/_components/payments-reminder-banner";
 import { type FinancePeriod, formatFinancePeriod } from "@/lib/finance-period";
 
 import { FinanceNav } from "./finance-nav";
@@ -54,8 +53,30 @@ export function FinanceShell({
       />
 
       <div className="px-4 py-5 sm:p-6 lg:px-8 mx-auto max-w-[1400px] space-y-5">
-        {/* 1. Avisos — sempre primeiro, nunca atrás de uma aba. */}
-        <PaymentsReminderBanner />
+        {/*
+          1. FINANCE_V2_ALERT_SLOT — reservado, deliberadamente vazio.
+
+          A especificação prevê avisos aqui, primeiro e fora da navegação. O
+          candidato natural era o `PaymentsReminderBanner`, e a primeira versão
+          desta casca montava-o. **Foi removido.**
+
+          O banner é um componente de servidor que chama `getPaymentsReminder`,
+          que chama `ensureMonth`, que faz `.insert(rows)`: renderizá-lo **gera**
+          os pagamentos fixos do mês corrente. Montá-lo aqui levava esse efeito
+          das duas superfícies que já o tinham (Dashboard e o Resumo antigo)
+          para as sete vistas financeiras — a casca estaria a **ampliar** um
+          auto-write em vez de o conter.
+
+            PAYMENTS_REMINDER_CURRENT_IMPLEMENTATION = WRITE_CAPABLE
+            FINANCE_SHELL_MOUNT                      = BLOCKED_UNTIL_READ_ONLY
+
+          Nada foi posto no lugar: um aviso financeiro inventado seria pior do
+          que nenhum. O slot volta a ser preenchido quando existir uma fonte de
+          avisos sem efeito de escrita.
+
+          O Dashboard mantém o banner — é anterior a esta PR e corrigi-lo é
+          decisão do incidente financeiro, não desta casca.
+        */}
 
         {/* 2. Período do módulo + acção principal da vista. */}
         <div className="flex flex-wrap items-center justify-between gap-3">

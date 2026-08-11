@@ -161,6 +161,117 @@ export function writeActionsUsedBy(src: string, writeActions: Iterable<string>):
   return out.sort();
 }
 
+// ============================================================================
+// Grafo de renderização
+// ============================================================================
+//
+// O detector anterior só olhava para `page.tsx` dentro das pastas financeiras.
+// Falhou-lhe **exactamente** este caminho:
+//
+//     finance-shell.tsx  →  PaymentsReminderBanner  →  getPaymentsReminder
+//                        →  ensureMonth  →  insert
+//
+// O banner nem sequer vive numa pasta financeira (`dashboard/_components/`), e
+// não é uma página. Uma regra baseada em pastas e em nomes de ficheiro não
+// podia chegar lá.
+//
+// A pergunta certa não é "onde está o ficheiro?" mas **"o que corre quando
+// esta página é renderizada?"**. É um grafo, e percorre-se.
+
+/** Um componente de cliente. A partir daqui já não é render de servidor. */
+export function isClientComponent(src: string): boolean {
+  return /^\s*["']use client["']/m.test(src);
+}
+
+/**
+ * Um módulo de server actions.
+ *
+ * Também é fronteira do grafo, e a razão não é óbvia: um módulo `"use server"`
+ * **define** operações de escrita, não as executa ao ser importado. Entrar nele
+ * faria toda a página que importa `@/app/actions/…` parecer que escreve durante
+ * o render — a primeira versão desta travessia deu 27 falsos positivos assim,
+ * um por cada action definida nos módulos importados.
+ *
+ * O que interessa é quais destas actions a página **chama**, e isso mede-se no
+ * próprio ficheiro da página, pelo nome.
+ */
+export function isServerActionModule(src: string): boolean {
+  return /^\s*["']use server["']/m.test(src);
+}
+
+/**
+ * Resolve um especificador de import para um caminho do repositório.
+ *
+ * Devolve `null` para pacotes externos — que não fazem parte do grafo.
+ */
+export function resolveImport(fromRel: string, spec: string, exists: (rel: string) => boolean): string | null {
+  let base: string;
+  if (spec.startsWith("@/")) {
+    base = `src/${spec.slice(2)}`;
+  } else if (spec.startsWith(".")) {
+    const dir = fromRel.split("/").slice(0, -1);
+    for (const part of spec.split("/")) {
+      if (part === ".") continue;
+      else if (part === "..") dir.pop();
+      else dir.push(part);
+    }
+    base = dir.join("/");
+  } else {
+    return null;
+  }
+
+  for (const c of [base, `${base}.tsx`, `${base}.ts`, `${base}/index.tsx`, `${base}/index.ts`]) {
+    if (exists(c)) return c;
+  }
+  return null;
+}
+
+/**
+ * Todos os ficheiros que correm **no servidor** ao renderizar as raízes.
+ *
+ * A travessia pára num componente de cliente, e a distinção é o coração desta
+ * ferramenta:
+ *
+ * - **CAPABILITY** — o código consegue escrever;
+ * - **RENDER_TRIGGER** — corre durante o render no servidor;
+ * - **CLICK_TRIGGER** — só corre depois de o utilizador agir.
+ *
+ * Um componente de cliente que importa `deletePayment` para o pôr num `onClick`
+ * tem capacidade, não gatilho de render. Tratá-los como a mesma coisa daria uma
+ * lista cheia de falsos positivos — e uma guarda cheia de falsos positivos é
+ * desligada, deixando de proteger do caso verdadeiro.
+ */
+export function collectServerRenderGraph(
+  roots: string[],
+  readFile: (rel: string) => string | null,
+): string[] {
+  const exists = (rel: string) => readFile(rel) != null;
+  const visited = new Set<string>();
+  const queue = [...roots];
+
+  while (queue.length > 0) {
+    const rel = queue.shift()!;
+    if (visited.has(rel)) continue;
+
+    const raw = readFile(rel);
+    if (raw == null) continue;
+    // Fronteiras do grafo:
+    //  - componente de cliente → o que lá está dentro já não é render;
+    //  - módulo de server actions → define escrita, não a executa ao importar.
+    if (isClientComponent(raw) || isServerActionModule(raw)) continue;
+
+    visited.add(rel);
+
+    const code = stripComments(raw);
+    for (const m of code.matchAll(/(?:^|\n)\s*import\s[\s\S]*?from\s*["']([^"']+)["']/g)) {
+      const alvo = resolveImport(rel, m[1], exists);
+      if (alvo && !visited.has(alvo)) queue.push(alvo);
+    }
+  }
+
+  return [...visited].sort();
+}
+
 export interface CeilingVerdict {
   /** Capacidade nova, não inventariada. Falha sempre. */
   added: string[];

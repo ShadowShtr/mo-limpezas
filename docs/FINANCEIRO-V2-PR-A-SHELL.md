@@ -127,10 +127,11 @@ ESCRITA SÓ APÓS ACÇÃO EXPLÍCITA DO UTILIZADOR.
 > O correcto é:
 >
 > - a casca nova **não introduz** nenhuma mutação;
-> - **seis** vistas usam o período global e são read-only ao navegar;
-> - **Pagamentos tem auto-write anterior a esta PR**, agora explicitamente
->   inventariado;
-> - esta PR **não o amplia** — pelo contrário, isola-o (§4.2);
+> - **seis** vistas usam o período global; a casca não lhes acrescenta efeito de escrita nenhum;
+> - **Pagamentos** e o **banner do Dashboard** têm auto-write anterior a esta
+>   PR, ambos explicitamente inventariados (§4.3);
+> - esta PR **não os amplia** — isola Pagamentos (§4.2) e reverteu a
+>   ampliação do banner (§4.3);
 > - a correcção definitiva está bloqueada pela E0.
 
 `folha-pagamento/page.tsx` chamava `ensurePayrollCalculated` **durante o
@@ -189,15 +190,83 @@ Folha de Pagamento ... habilitado
 Conciliação .......... habilitado
 ```
 
-### 4.3 O cliquet que apanhou isto
+### 4.3 🔴 O terceiro auto-write — e o cegueira que o escondeu
 
-`src/__tests__/financeiro-v2-write-budget.test.ts` — determinístico, **sem
-git**. A versão anterior comparava com o ramo base e falhava no CI (checkout
-com profundidade 1), pelo que o invariante nunca correu onde interessa.
+Ao reescrever o cliquet apareceu um terceiro caminho, que o detector anterior
+**não podia** ver:
 
-`AUTO_WRITE_ON_RENDER_ALLOWED` tem **exactamente uma** excepção
-(`getPayments` em `pagamentos/page.tsx`), sem wildcard e sem allowlist
-genérica. Um teste falha se aparecer uma segunda.
+```
+PaymentsReminderBanner → getPaymentsReminder → ensureMonth → insert
+```
+
+O banner é um componente de **servidor**. Renderizá-lo gera os pagamentos fixos
+do **mês corrente** (`todayInLisbon()`), clonados do mês anterior mais recente.
+
+Era renderizado por `dashboard/page.tsx` — a página de entrada depois do login,
+anterior a esta PR — e a primeira versão desta casca montava-o **nas sete
+vistas**. A casca estava a **ampliar** o auto-write, não a contê-lo.
+
+**Removido da casca.** O Dashboard fica como estava: retirá-lo de lá é mudança
+funcional fora do Financeiro V2, e pertence à resolução do incidente.
+
+#### Porque o detector não o via
+
+Varria `page.tsx` dentro das pastas financeiras. O banner não é uma página e
+vive em `dashboard/_components/` — fora do âmbito por dois motivos ao mesmo
+tempo. Uma regra baseada em **nomes de ficheiro e pastas** nunca lá chegaria.
+
+A pergunta certa não é *"onde está o ficheiro?"* mas **"o que corre quando esta
+página é renderizada?"**. É um grafo, e agora percorre-se:
+
+```
+page → shell → componente de servidor → action/helper → mutação
+```
+
+com duas fronteiras, ambas necessárias:
+
+- **componente de cliente** — o código lá dentro só corre depois de o
+  utilizador agir. Um `onClick={() => deletePayment(id)}` é *capacidade*, não
+  gatilho de render. Confundi-los encheria a guarda de falsos positivos, e uma
+  guarda assim é desligada;
+- **módulo `"use server"`** — *define* escrita, não a executa ao ser importado.
+  Sem esta fronteira, toda a página que importa `@/app/actions/…` parecia
+  escrever no render: a primeira travessia deu 27 falsos positivos, um por cada
+  action definida nos módulos importados.
+
+#### Os três números, que não se somam
+
+```
+FINANCE_SHELL_SHARED_AUTO_WRITE      = 0
+PAYMENTS_PAGE_PREEXISTING_AUTO_WRITE = 1   (getPayments → ensureMonth)
+DASHBOARD_PREEXISTING_AUTO_WRITE     = 1   (reminder banner)
+```
+
+Medem coisas diferentes. O primeiro é o que **esta casca** acrescenta,
+partilhado pelas sete vistas — e é zero. Os outros dois são anteriores, e esta
+PR não os corrige: apenas deixa de os ampliar.
+
+#### Os três auto-writes, por estado
+
+| # | Caminho | Estado |
+|---|---|---|
+| 1 | Folha — `ensurePayrollCalculated` no render | ✅ **corrigido nesta PR** |
+| 2 | Pagamentos — `getPayments` → `ensureMonth` | ⚠️ pré-existente, **não corrigido**; período V2 isolado |
+| 3 | Reminder — banner → `getPaymentsReminder` → `ensureMonth` | ⚠️ pré-existente no Dashboard; **ampliação revertida** |
+
+`AUTO_WRITE_ON_RENDER_ALLOWED` tem **exactamente uma** entrada, sem wildcard e
+sem allowlist de directórios. Um teste falha se aparecer uma segunda.
+
+#### O slot de avisos
+
+```
+FINANCE_V2_ALERT_SLOT                    = reservado
+PAYMENTS_REMINDER_CURRENT_IMPLEMENTATION = WRITE_CAPABLE
+FINANCE_SHELL_MOUNT                      = BLOCKED_UNTIL_READ_ONLY
+```
+
+Nada foi posto no lugar. Um aviso financeiro inventado seria pior do que
+nenhum.
+
 
 ---
 
@@ -249,7 +318,7 @@ ano; respeita limites; fevereiro bissexto; formata em português; usa
 mês; a barra lateral não tem entradas duplicadas; Relatórios não ficou órfã; os
 atalhos e o `Atualizar` desapareceram.
 
-*🔴 Read-only* — **nenhuma das sete páginas chama uma action que escreve**
+*🔴 Read-only* — o **grafo de render** das sete vistas não chama nenhuma action que escreve, salvo a excepção declarada em Pagamentos
 (lista explícita, incluindo as que escrevem por delegação:
 `ensurePayrollCalculated`, `calculateAndSavePayroll`, `recalcSuggestions`);
 nenhuma faz mutação directa; a Folha diz que falta calcular em vez de calcular;

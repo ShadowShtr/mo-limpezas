@@ -39,8 +39,11 @@ import fs from "node:fs";
 import path from "node:path";
 
 import {
+  collectServerRenderGraph,
   compareToCeiling,
   countDirectDbMutations,
+  isClientComponent,
+  resolveImport,
   stripComments,
   writeActionsUsedBy,
   writeCapableExports,
@@ -69,9 +72,10 @@ function walk(dir: string, acc: string[] = []): string[] {
 
 const UI_FILES = UI_DIRS.flatMap((d) => walk(d)).sort();
 
-/** Os ficheiros que são renderizados no servidor — o que corre ao abrir. */
-const isServerPage = (rel: string) =>
-  /\/page\.tsx$/.test(rel) && !/["']use client["']/.test(ler(rel));
+// Nota: havia aqui um `isServerPage` que filtrava por `page.tsx`. Foi essa a
+// regra que deixou passar o `PaymentsReminderBanner` — o banner não é uma
+// página. O invariante 3 passou a percorrer o grafo de render a partir das
+// raízes; ver `collectServerRenderGraph`.
 
 // ─── Actions de escrita, derivadas do código ────────────────────────────────
 
@@ -344,40 +348,179 @@ describe("Financeiro V2 — invariante 2: capacidade inventariada", () => {
   });
 });
 
-describe("Financeiro V2 — invariante 3: o render não escreve", () => {
-  const paginas = UI_FILES.filter(isServerPage);
 
-  it("as sete vistas foram encontradas", () => {
-    // Se a descoberta partir, os testes seguintes passariam sem verificar nada.
-    expect(paginas.length).toBeGreaterThanOrEqual(7);
+// ═══════════════════════════════════════════════════════════════════════════
+// INVARIANTE 3 — o grafo de renderização
+// ═══════════════════════════════════════════════════════════════════════════
+//
+// A versão anterior olhava só para `page.tsx` dentro das pastas financeiras. E
+// falhou-lhe exactamente este caminho:
+//
+//     finance-shell.tsx → PaymentsReminderBanner → getPaymentsReminder
+//                       → ensureMonth → insert
+//
+// O banner não é uma página e nem sequer vive numa pasta financeira. Uma regra
+// baseada em nomes de ficheiro e pastas nunca lá chegaria.
+//
+// Agora parte-se das raízes e percorre-se o grafo, parando nos componentes de
+// cliente — onde o código deixa de correr no render do servidor.
+
+/** As sete vistas. É daqui que o render começa. */
+const FINANCE_RENDER_ROOTS = [
+  "src/app/(dashboard)/dashboard/financeiro/page.tsx",
+  "src/app/(dashboard)/dashboard/financeiro/pagamentos/page.tsx",
+  "src/app/(dashboard)/dashboard/financeiro/contas/page.tsx",
+  "src/app/(dashboard)/dashboard/financeiro/fluxo-caixa/page.tsx",
+  "src/app/(dashboard)/dashboard/financeiro/conciliacao/page.tsx",
+  "src/app/(dashboard)/dashboard/cobrancas/page.tsx",
+  "src/app/(dashboard)/dashboard/folha-pagamento/page.tsx",
+];
+
+const lerOuNull = (rel: string): string | null => {
+  try { return fs.readFileSync(path.join(ROOT, rel), "utf8"); } catch { return null; }
+};
+
+describe("Financeiro V2 — o grafo de render é percorrido a sério", () => {
+  it("resolve imports relativos e de alias", () => {
+    const existe = (r: string) => ["src/components/x.tsx", "src/a/b/c.ts"].includes(r);
+    expect(resolveImport("src/app/p/page.tsx", "@/components/x", existe)).toBe("src/components/x.tsx");
+    expect(resolveImport("src/a/b/d.ts", "./c", existe)).toBe("src/a/b/c.ts");
+    expect(resolveImport("src/a/b/d.ts", "../b/c", existe)).toBe("src/a/b/c.ts");
+    expect(resolveImport("src/a/b/d.ts", "react", existe)).toBeNull();
   });
 
-  it("🔴 abrir uma página só pode escrever onde está declarado", () => {
+  it("reconhece um componente de cliente", () => {
+    expect(isClientComponent('"use client";\nexport function X() {}')).toBe(true);
+    expect(isClientComponent("export function X() {}")).toBe(false);
+  });
+
+  it("B: shell → componente de servidor com escrita → é alcançado", () => {
+    const fake: Record<string, string> = {
+      "src/p/page.tsx": 'import { Shell } from "@/c/shell";',
+      "src/c/shell.tsx": 'import { Banner } from "@/c/banner";',
+      "src/c/banner.tsx": 'import { getReminder } from "@/app/actions/x";\nawait getReminder();',
+    };
+    const grafo = collectServerRenderGraph(["src/p/page.tsx"], (r) => fake[r] ?? null);
+    expect(grafo).toContain("src/c/banner.tsx");
+    expect(writeActionsUsedBy(fake["src/c/banner.tsx"], ["getReminder"])).toEqual(["getReminder"]);
+  });
+
+  it("C: página → intermédio → servidor → helper de escrita → é alcançado", () => {
+    const fake: Record<string, string> = {
+      "src/p/page.tsx": 'import { A } from "./a";',
+      "src/p/a.tsx": 'import { B } from "./b";',
+      "src/p/b.tsx": 'import { escrever } from "@/app/actions/y";\nawait escrever();',
+    };
+    const grafo = collectServerRenderGraph(["src/p/page.tsx"], (r) => fake[r] ?? null);
+    expect(grafo).toEqual(["src/p/a.tsx", "src/p/b.tsx", "src/p/page.tsx"]);
+  });
+
+  it("🔴 D: um componente de cliente com a action num onClick NÃO é auto-write", () => {
+    // A distinção que impede a guarda de encher de falsos positivos:
+    // CAPABILITY não é RENDER_TRIGGER.
+    const fake: Record<string, string> = {
+      "src/p/page.tsx": 'import { C } from "./c";',
+      "src/p/c.tsx": '"use client";\nimport { deletePayment } from "@/app/actions/payments";\nonClick={() => deletePayment(1)}',
+    };
+    const grafo = collectServerRenderGraph(["src/p/page.tsx"], (r) => fake[r] ?? null);
+    expect(grafo, "a travessia pára no componente de cliente").toEqual(["src/p/page.tsx"]);
+    expect(grafo).not.toContain("src/p/c.tsx");
+  });
+
+  it("E: componente de servidor novo com mutação directa é alcançado", () => {
+    const fake: Record<string, string> = {
+      "src/p/page.tsx": 'import { S } from "./s";',
+      "src/p/s.tsx": 'await admin.from("t").insert({});',
+    };
+    const grafo = collectServerRenderGraph(["src/p/page.tsx"], (r) => fake[r] ?? null);
+    expect(grafo).toContain("src/p/s.tsx");
+    expect(countDirectDbMutations(fake["src/p/s.tsx"])).toBe(1);
+  });
+
+  it("F: um componente fora da pasta da página continua a ser analisado", () => {
+    // Foi isto que falhou: o banner vive em `dashboard/_components/`.
+    const fake: Record<string, string> = {
+      "src/app/x/page.tsx": 'import { Longe } from "@/outra/pasta/longe";',
+      "src/outra/pasta/longe.tsx": "export async function Longe() { return null; }",
+    };
+    const grafo = collectServerRenderGraph(["src/app/x/page.tsx"], (r) => fake[r] ?? null);
+    expect(grafo).toContain("src/outra/pasta/longe.tsx");
+  });
+});
+
+describe("Financeiro V2 — invariante 3: o grafo de render não escreve", () => {
+  const grafo = collectServerRenderGraph(FINANCE_RENDER_ROOTS, lerOuNull);
+
+  it("o grafo foi mesmo percorrido", () => {
+    // Se a travessia partir, tudo o resto passaria por vacuidade.
+    expect(grafo.length).toBeGreaterThanOrEqual(FINANCE_RENDER_ROOTS.length);
+    for (const r of FINANCE_RENDER_ROOTS) expect(grafo).toContain(r);
+    expect(grafo, "a casca é partilhada pelas sete vistas")
+      .toContain("src/components/financeiro/finance-shell.tsx");
+  });
+
+  it("🔴 nada no grafo de render chama uma action que escreve, salvo o declarado", () => {
     const infractores: string[] = [];
-    for (const p of paginas) {
-      const usadas = writeActionsUsedBy(ler(p), WRITE_ACTIONS);
-      const permitidas = AUTO_WRITE_ON_RENDER_ALLOWED[p] ?? [];
-      for (const a of usadas) {
-        if (!permitidas.includes(a)) infractores.push(`${p} → ${a}`);
-      }
+    for (const f of grafo) {
+      const usadas = writeActionsUsedBy(lerOuNull(f) ?? "", WRITE_ACTIONS);
+      const permitidas = AUTO_WRITE_ON_RENDER_ALLOWED[f] ?? [];
+      for (const a of usadas) if (!permitidas.includes(a)) infractores.push(`${f} → ${a}`);
     }
     expect(
       infractores,
-      "navegar, mudar de aba ou mudar de mês não pode escrever",
+      "abrir uma vista financeira não pode escrever — ver o grafo de render",
     ).toEqual([]);
   });
 
-  it("a lista de excepções não cresce em silêncio", () => {
-    // Hoje é uma: `getPayments` em pagamentos/page.tsx, bloqueada pelo
-    // incidente. Se aparecer outra, tem de se ver no diff.
+  it("nada no grafo de render faz mutação directa", () => {
+    const infractores = grafo
+      .map((f) => [f, countDirectDbMutations(lerOuNull(f) ?? "")] as const)
+      .filter(([, n]) => n > 0)
+      .map(([f]) => f);
+    expect(infractores).toEqual([]);
+  });
+
+  it("A: a casca não monta o PaymentsReminderBanner", () => {
+    // Montá-lo levava `ensureMonth` das duas superfícies que já o tinham para
+    // as sete vistas — a casca estaria a ampliar o auto-write.
+    const shell = stripComments(lerOuNull("src/components/financeiro/finance-shell.tsx") ?? "");
+    expect(shell).not.toMatch(/PaymentsReminderBanner/);
+    expect(grafo).not.toContain("src/app/(dashboard)/dashboard/_components/payments-reminder-banner.tsx");
+  });
+
+  it("G: FINANCE_SHELL_SHARED_AUTO_WRITE = 0", () => {
+    // O que a casca acrescenta, partilhado pelas sete vistas.
+    const partilhados = grafo.filter((f) => f.startsWith("src/components/financeiro/"));
+    expect(partilhados.length).toBeGreaterThan(0);
+    const comEscrita = partilhados.filter((f) =>
+      writeActionsUsedBy(lerOuNull(f) ?? "", WRITE_ACTIONS).length > 0
+      || countDirectDbMutations(lerOuNull(f) ?? "") > 0);
+    expect(comEscrita, "a casca não pode ter efeito financeiro partilhado").toEqual([]);
+  });
+
+  it("H: Pagamentos continua inventariada à parte, como risco pré-existente", () => {
+    const pag = "src/app/(dashboard)/dashboard/financeiro/pagamentos/page.tsx";
+    expect(AUTO_WRITE_ON_RENDER_ALLOWED[pag]).toEqual(["getPayments"]);
+    expect(writeActionsUsedBy(lerOuNull(pag) ?? "", WRITE_ACTIONS)).toEqual(["getPayments"]);
+  });
+
+  it("I: a lista de excepções não cresce em silêncio", () => {
     expect(Object.keys(AUTO_WRITE_ON_RENDER_ALLOWED)).toEqual([
       "src/app/(dashboard)/dashboard/financeiro/pagamentos/page.tsx",
     ]);
   });
 
-  it("a Folha saiu da lista de excepções — foi corrigida nesta PR", () => {
+  it("a Folha saiu da lista — foi corrigida nesta PR", () => {
     const folha = "src/app/(dashboard)/dashboard/folha-pagamento/page.tsx";
     expect(AUTO_WRITE_ON_RENDER_ALLOWED[folha]).toBeUndefined();
-    expect(writeActionsUsedBy(ler(folha), WRITE_ACTIONS)).toEqual([]);
+    expect(writeActionsUsedBy(lerOuNull(folha) ?? "", WRITE_ACTIONS)).toEqual([]);
+  });
+
+  it("o Dashboard mantém o seu banner — anterior a esta PR, fora do âmbito", () => {
+    // PREEXISTING_AUTO_WRITE / NEEDS_FINANCIAL_INCIDENT_RESOLUTION.
+    // Documentado, não corrigido: retirá-lo seria mudança funcional fora da
+    // casca do Financeiro V2.
+    const dash = stripComments(lerOuNull("src/app/(dashboard)/dashboard/page.tsx") ?? "");
+    expect(dash, "não foi tocado nesta ronda").toMatch(/PaymentsReminderBanner/);
   });
 });
