@@ -1,17 +1,17 @@
 {
   "generatedBy": "scripts/audit-file-inventory.mjs",
-  "totalFiles": 579,
+  "totalFiles": 582,
   "byStatus": {
-    "MANTER": 562,
+    "MANTER": 565,
     "STANDBY": 17
   },
   "byCategory": {
     "route-ui": 132,
-    "test": 83,
+    "test": 84,
     "migration": 72,
-    "lib": 59,
+    "lib": 60,
     "script": 42,
-    "doc": 35,
+    "doc": 36,
     "server-action": 35,
     "domain": 34,
     "component": 17,
@@ -29,7 +29,7 @@
     "src-other": 1
   },
   "byConfidence": {
-    "alta": 564,
+    "alta": 567,
     "média": 9,
     "baixa": 6
   },
@@ -871,6 +871,24 @@
       ],
       "signals": {
         "serviceRole": 1
+      },
+      "action": "nenhuma",
+      "reason": "documentação",
+      "manualDecision": false
+    },
+    {
+      "path": "docs/incidents/2026-08-11-pagamentos-materializacao-implicita.md",
+      "category": "doc",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "sqlWrite": 8
       },
       "action": "nenhuma",
       "reason": "documentação",
@@ -4067,8 +4085,8 @@
       "risks": [],
       "signals": {
         "supabase": 1,
-        "write": 11,
-        "sqlWrite": 13,
+        "write": 10,
+        "sqlWrite": 14,
         "fallbackArray": 3
       },
       "action": "nenhuma",
@@ -4423,6 +4441,33 @@
       "sideEffects": [],
       "risks": [],
       "signals": {},
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/__tests__/payments-no-implicit-materialization.test.ts",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [
+        "write"
+      ],
+      "risks": [],
+      "signals": {
+        "write": 1,
+        "sqlWrite": 2
+      },
       "action": "nenhuma",
       "reason": "suite de testes — corre por convenção do vitest",
       "manualDecision": false,
@@ -10019,14 +10064,14 @@
         "revalidatePath(3)"
       ],
       "risks": [
-        "erro-de-query-ignorado(7)"
+        "erro-de-query-ignorado(4)"
       ],
       "signals": {
         "supabase": 2,
         "serverAction": 1,
-        "write": 7,
-        "sqlWrite": 7,
-        "ignoredError": 7,
+        "write": 6,
+        "sqlWrite": 6,
+        "ignoredError": 4,
         "fallbackZero": 4,
         "fallbackArray": 2,
         "revalidatePath": 3
@@ -13513,9 +13558,10 @@
       "category": "lib",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 1,
+      "consumers": 2,
       "consumerSample": [
-        "src/__tests__/financeiro-v2-write-budget.test.ts"
+        "src/__tests__/financeiro-v2-write-budget.test.ts",
+        "src/__tests__/payments-no-implicit-materialization.test.ts"
       ],
       "autoLoaded": false,
       "referencedBy": [],
@@ -13524,12 +13570,12 @@
       ],
       "risks": [],
       "signals": {
-        "write": 3,
-        "sqlWrite": 10,
+        "write": 5,
+        "sqlWrite": 12,
         "fallbackArray": 1
       },
       "action": "nenhuma",
-      "reason": "em uso: 1 consumidor(es)",
+      "reason": "em uso: 2 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -13850,6 +13896,42 @@
       }
     },
     {
+      "path": "src/lib/payments-month-materialization.ts",
+      "category": "lib",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 1,
+      "consumerSample": [
+        "src/lib/finance-write-surface.ts"
+      ],
+      "autoLoaded": false,
+      "referencedBy": [
+        "docs"
+      ],
+      "sideEffects": [
+        "supabase",
+        "write"
+      ],
+      "risks": [
+        "erro-de-query-ignorado(3)"
+      ],
+      "signals": {
+        "supabase": 2,
+        "write": 1,
+        "sqlWrite": 1,
+        "ignoredError": 3
+      },
+      "action": "nenhuma",
+      "reason": "em uso: 1 consumidor(es)",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
       "path": "src/lib/payroll-calc.ts",
       "category": "lib",
       "status": "MANTER",
@@ -14142,7 +14224,7 @@
       "category": "lib",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 77,
+      "consumers": 78,
       "consumerSample": [
         "src/app/(app)/app/perfil/page.tsx",
         "src/app/(app)/app/servico/[id]/page.tsx",
@@ -14165,7 +14247,7 @@
         "serviceRole": 1
       },
       "action": "nenhuma",
-      "reason": "em uso: 77 consumidor(es)",
+      "reason": "em uso: 78 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,

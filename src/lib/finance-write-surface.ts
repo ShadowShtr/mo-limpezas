@@ -151,6 +151,145 @@ export function writeCapableExports(src: string): string[] {
   return [...new Set(out)].sort();
 }
 
+// ============================================================================
+// Capacidade de escrita através de módulos
+// ============================================================================
+//
+// `writeCapableExports` acima resolve a delegação **dentro** de um ficheiro. Um
+// teste de mutação mostrou que isso não chega: bastou pôr a materialização de
+// mês noutro módulo e importá-la de volta para `getPayments` voltar a escrever
+// **sem nenhuma guarda dar por isso**.
+//
+//     // payments.ts
+//     import { ensureMonth } from "@/lib/payments-month-materialization";
+//     export async function getPayments() { await ensureMonth(...); ... }
+//
+// O corpo de `getPayments` não tem `.insert(`, e `ensureMonth` não é uma função
+// local — para o detector anterior, leitura pura. É a mesma família de erro que
+// este projecto já apanhou várias vezes: **reconhecer só o caminho conhecido dá
+// um "seguro" falso**, e um falso seguro é pior do que nenhuma guarda, porque
+// dispensa quem lê de olhar.
+//
+// Estas funções seguem os imports locais. Pacotes externos ficam de fora — não
+// são código do repositório e não é aqui que se auditam.
+
+interface ImportedSymbol { rel: string; orig: string }
+
+function parseImports(
+  code: string,
+  fromRel: string,
+  exists: (rel: string) => boolean,
+): Map<string, ImportedSymbol> {
+  const out = new Map<string, ImportedSymbol>();
+  for (const m of code.matchAll(/import\s+(type\s+)?\{([^}]*)\}\s*from\s*["']([^"']+)["']/g)) {
+    if (m[1]) continue;                      // `import type` não corre
+    const alvo = resolveImport(fromRel, m[3], exists);
+    if (!alvo) continue;                     // pacote externo
+    for (const peca of m[2].split(",")) {
+      const t = peca.trim();
+      if (!t || t.startsWith("type ")) continue;
+      const [orig, alias] = t.split(/\s+as\s+/).map((s) => s.trim());
+      out.set(alias || orig, { rel: alvo, orig });
+    }
+  }
+  return out;
+}
+
+export interface WriteCapabilityResolver {
+  /** Aquele símbolo, exportado por aquele ficheiro, escreve na base? */
+  writes(rel: string, name: string): boolean;
+  /** As exportações de um ficheiro que escrevem, incluindo via outros módulos. */
+  exportsThatWrite(rel: string): string[];
+}
+
+/**
+ * Resolve capacidade de escrita seguindo a delegação através de ficheiros.
+ *
+ * Memoizado por ficheiro, e à prova de ciclos: um símbolo já em análise conta
+ * como "não conclui nada" em vez de recorrer para sempre.
+ */
+export function createWriteCapabilityResolver(
+  readFile: (rel: string) => string | null,
+): WriteCapabilityResolver {
+  const exists = (rel: string) => readFile(rel) != null;
+
+  interface Analise {
+    bodies: Map<string, string>;
+    imports: Map<string, ImportedSymbol>;
+    exported: string[];
+  }
+  const analises = new Map<string, Analise | null>();
+
+  function analisar(rel: string): Analise | null {
+    if (analises.has(rel)) return analises.get(rel)!;
+    const raw = readFile(rel);
+    if (raw == null) { analises.set(rel, null); return null; }
+    const code = stripComments(raw);
+
+    const bodies = new Map<string, string>();
+    for (const m of code.matchAll(/(?:export\s+)?(?:async\s+)?function\s+(\w+)/g)) {
+      bodies.set(m[1], functionBody(code, m.index));
+    }
+    // Também as arrow functions atribuídas a const — comuns em helpers.
+    for (const m of code.matchAll(/(?:export\s+)?const\s+(\w+)\s*=\s*(?:async\s*)?\(/g)) {
+      if (!bodies.has(m[1])) bodies.set(m[1], functionBody(code, m.index));
+    }
+
+    const exported: string[] = [];
+    for (const m of code.matchAll(/export\s+(?:async\s+)?(?:function|const)\s+(\w+)/g)) {
+      exported.push(m[1]);
+    }
+
+    const a: Analise = { bodies, imports: parseImports(code, rel, exists), exported };
+    analises.set(rel, a);
+    return a;
+  }
+
+  const cache = new Map<string, boolean>();
+  const emCurso = new Set<string>();
+
+  function writes(rel: string, name: string): boolean {
+    const chave = `${rel}#${name}`;
+    const hit = cache.get(chave);
+    if (hit !== undefined) return hit;
+    if (emCurso.has(chave)) return false;    // ciclo: não conclui nada
+    emCurso.add(chave);
+
+    let resultado = false;
+    const a = analisar(rel);
+    const body = a?.bodies.get(name) ?? "";
+
+    if (body && (countDirectDbMutations(body) > 0 || REST_WRITE.test(body) || AUTH_WRITE.test(body))) {
+      resultado = true;
+    } else if (a && body) {
+      for (const chamado of new Set(
+        [...body.matchAll(/\b(\w+)\s*\(/g)].map((m) => m[1]),
+      )) {
+        if (chamado === name) continue;
+        if (a.bodies.has(chamado)) {
+          if (writes(rel, chamado)) { resultado = true; break; }
+        } else {
+          const imp = a.imports.get(chamado);
+          if (imp && writes(imp.rel, imp.orig)) { resultado = true; break; }
+        }
+      }
+    }
+
+    emCurso.delete(chave);
+    cache.set(chave, resultado);
+    return resultado;
+  }
+
+  return {
+    writes,
+    exportsThatWrite: (rel) => {
+      const a = analisar(rel);
+      if (!a) return [];
+      return [...new Set(a.exported.filter((n) => writes(rel, n)))].sort();
+    },
+  };
+}
+
 /** Quais destas actions de escrita um ficheiro chama. */
 export function writeActionsUsedBy(src: string, writeActions: Iterable<string>): string[] {
   const code = stripComments(src);
