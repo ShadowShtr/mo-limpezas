@@ -1,13 +1,13 @@
 {
   "inventorySource": "git ls-files",
   "summary": {
-    "repositoryFiles": 573,
-    "textFiles": 561,
-    "sourceFiles": 393,
-    "textLines": 128293,
+    "repositoryFiles": 575,
+    "textFiles": 563,
+    "sourceFiles": 395,
+    "textLines": 128837,
     "typescriptDiagnostics": 0,
     "productionEntries": 70,
-    "unreachableProductionModules": 36,
+    "unreachableProductionModules": 37,
     "exactDuplicateFileGroups": 0
   },
   "highConfidence": {
@@ -52,6 +52,7 @@
       "src/domain/scheduling/recurrence-compat.ts",
       "src/lib/bank-import/pdf.ts",
       "src/lib/bank-import/xlsx.ts",
+      "src/lib/finance-write-surface.ts",
       "src/types/supabase.ts"
     ],
     "testOnlyModules": [
@@ -86,7 +87,8 @@
       "src/domain/scheduling/occurrence-projection.ts",
       "src/domain/scheduling/occurrence-repair.ts",
       "src/domain/scheduling/reconciliation.ts",
-      "src/domain/scheduling/recurrence-compat.ts"
+      "src/domain/scheduling/recurrence-compat.ts",
+      "src/lib/finance-write-surface.ts"
     ],
     "testSignupCalls": [
       "src/__tests__/tenant-isolation-hotfix.test.ts"

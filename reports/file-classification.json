@@ -1,15 +1,15 @@
 {
   "generatedBy": "scripts/audit-file-inventory.mjs",
-  "totalFiles": 577,
+  "totalFiles": 579,
   "byStatus": {
-    "MANTER": 560,
+    "MANTER": 562,
     "STANDBY": 17
   },
   "byCategory": {
     "route-ui": 132,
-    "test": 82,
+    "test": 83,
     "migration": 72,
-    "lib": 58,
+    "lib": 59,
     "script": 42,
     "doc": 35,
     "server-action": 35,
@@ -29,7 +29,7 @@
     "src-other": 1
   },
   "byConfidence": {
-    "alta": 562,
+    "alta": 564,
     "média": 9,
     "baixa": 6
   },
@@ -4037,9 +4037,38 @@
       ],
       "risks": [],
       "signals": {
-        "write": 2,
-        "sqlWrite": 6,
-        "fallbackArray": 1
+        "write": 1,
+        "sqlWrite": 3
+      },
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/__tests__/financeiro-v2-write-budget.test.ts",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [
+        "supabase",
+        "write"
+      ],
+      "risks": [],
+      "signals": {
+        "supabase": 1,
+        "write": 10,
+        "sqlWrite": 11,
+        "fallbackArray": 3
       },
       "action": "nenhuma",
       "reason": "suite de testes — corre por convenção do vitest",
@@ -13461,6 +13490,36 @@
       "signals": {},
       "action": "nenhuma",
       "reason": "em uso: 11 consumidor(es)",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/lib/finance-write-surface.ts",
+      "category": "lib",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 1,
+      "consumerSample": [
+        "src/__tests__/financeiro-v2-write-budget.test.ts"
+      ],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [
+        "write"
+      ],
+      "risks": [],
+      "signals": {
+        "write": 3,
+        "sqlWrite": 9,
+        "fallbackArray": 1
+      },
+      "action": "nenhuma",
+      "reason": "em uso: 1 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,

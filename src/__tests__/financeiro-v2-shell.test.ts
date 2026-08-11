@@ -15,7 +15,6 @@
 import { describe, it, expect } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
-import { execFileSync } from "node:child_process";
 
 import {
   FINANCE_PERIOD_PARAM,
@@ -271,41 +270,16 @@ describe("Financeiro V2 — render das sete vistas é read-only", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Parte D — orçamento de escrita
+// Parte D — o orçamento de escrita vive noutro ficheiro
 // ---------------------------------------------------------------------------
-
-describe("Financeiro V2 — orçamento de escrita", () => {
-  const base = "fix/t17b3-action-query-errors";
-
-  function noBase(rel: string): string {
-    try {
-      return execFileSync("git", ["show", `${base}:${rel}`], { cwd: ROOT, maxBuffer: 1 << 25 })
-        .toString("utf8");
-    } catch {
-      return "";   // ficheiro novo
-    }
-  }
-
-  it("nenhuma capacidade de mutação nova foi criada", () => {
-    const alterados = execFileSync("git", ["diff", "--name-only", base], { cwd: ROOT })
-      .toString("utf8").split(/\r?\n/).filter((f) => /\.tsx?$/.test(f));
-
-    // Contar sobre o CÓDIGO. O comentário que explica porque o
-    // `.upsert(payroll_records)` deixou de acontecer no render contém, ele
-    // próprio, a expressão — e seria contado como uma mutação nova. É a mesma
-    // armadilha "mencionar ≠ usar" que já apareceu nas rondas anteriores.
-    const conta = (s: string) =>
-      (codigo(s).match(/\.(insert|update|upsert|delete|rpc)\s*\(/g) ?? []).length;
-
-    let antes = 0;
-    let depois = 0;
-    for (const f of alterados) {
-      antes += conta(noBase(f));
-      depois += conta(fs.existsSync(path.join(ROOT, f)) ? ler(f) : "");
-    }
-
-    // A casca não acrescenta escrita nenhuma. O que muda é **quem** dispara a
-    // que já existia: a Folha perdeu o gatilho automático do render.
-    expect(depois, `capacidade de mutação: ${antes} → ${depois}`).toBeLessThanOrEqual(antes);
-  });
-});
+//
+// Estava aqui, e comparava head com base por `git diff --name-only <ramo>`.
+// Passava localmente e **falhava no CI**: o checkout é do SHA da PR, com
+// profundidade 1, e o ramo base não existe nesse clone.
+//
+//     fatal: ambiguous argument 'fix/t17b3-action-query-errors'
+//
+// Resultado: o invariante mais importante da ronda nunca correu no ambiente
+// que interessa. Foi reescrito como cliquet determinístico, sem git, em
+// `financeiro-v2-write-budget.test.ts` — com inventário versionado por
+// ficheiro, verificação nos dois sentidos, e testes do próprio mecanismo.
