@@ -1,9 +1,12 @@
-﻿import { createAdminClient } from "@/lib/supabase/admin";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { getCashFlowEntries } from "@/app/actions/cash-flow";
+import { FinanceShell } from "@/components/financeiro/finance-shell";
+import { parseFinancePeriod } from "@/lib/finance-period";
 import { CashFlowClient } from "./_components/cash-flow-client";
-import { Header } from "@/components/layout/header";
+
+export const metadata = { title: "Fluxo de Caixa — Escala" };
 
 export default async function FluxoCaixaPage({
   searchParams,
@@ -19,27 +22,24 @@ export default async function FluxoCaixaPage({
   if (!profile?.company_id) redirect("/login");
 
   const params = await searchParams;
-  const now = new Date();
-  const mesParam = params.mes ?? `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
-  const [yearStr, monthStr] = mesParam.split("-");
-  const year  = parseInt(yearStr);
-  const month = parseInt(monthStr);
+  const period = parseFinancePeriod(params.mes);
 
-  const res = await getCashFlowEntries(profile.company_id, { year, month });
+  const res = await getCashFlowEntries(profile.company_id, { year: period.year, month: period.month });
 
   return (
-    <div>
-      <Header title="Fluxo de Caixa" subtitle="Registo de todas as entradas e saídas" />
-      <div className="px-4 py-5 sm:p-6 lg:px-8 mx-auto max-w-[1400px]">
-        <CashFlowClient
-          initialData={res.ok ? { entries: res.entries, balance: res.balance, entradas: res.entradas, saidas: res.saidas, pendentes: res.pendentes } : null}
-          error={res.ok ? null : res.error}
-          companyId={profile.company_id}
-          mesParam={mesParam}
-          year={year}
-          month={month}
-        />
-      </div>
-    </div>
+    <FinanceShell
+      period={period}
+      title="Fluxo de Caixa"
+      subtitle="Entradas e saídas do período"
+    >
+      <CashFlowClient
+        initialData={res.ok ? { entries: res.entries, balance: res.balance, entradas: res.entradas, saidas: res.saidas, pendentes: res.pendentes } : null}
+        error={res.ok ? null : res.error}
+        companyId={profile.company_id}
+        mesParam={period.key}
+        year={period.year}
+        month={period.month}
+      />
+    </FinanceShell>
   );
 }

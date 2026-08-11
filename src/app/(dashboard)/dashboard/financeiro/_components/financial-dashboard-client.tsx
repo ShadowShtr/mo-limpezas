@@ -1,16 +1,13 @@
 "use client";
 
-import { useState, useEffect, useCallback, useTransition } from "react";
-import Link from "next/link";
+import { useState, useEffect, useCallback } from "react";
 import {
   Euro, AlertCircle, Loader2,
-  ArrowUpRight, ArrowDownRight, RefreshCw, Receipt, Wallet,
-  BarChart2, FileText, Repeat, CalendarDays, Landmark, BarChart3,
+  ArrowUpRight, ArrowDownRight, CalendarDays,
   ChevronDown, CheckCircle2, Circle,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import {
-  getFinancialDashboard,
   getOperationalSummary,
   type FinancialDashboardData,
   type OperationalSummary,
@@ -368,12 +365,18 @@ interface Props {
   initialSummary: OperationalSummary | null;
 }
 
-export function FinancialDashboardClient({ data: initialData, error: initialError, companyId, initialSummary }: Props) {
-  const [data,  setData]  = useState<FinancialDashboardData | null>(initialData);
-  const [error, setError] = useState<string | null>(initialError);
+export function FinancialDashboardClient({ data, error, companyId, initialSummary }: Props) {
+  // Financeiro V2 (PR A): `data` e `error` deixaram de ter cópia em estado
+  // local. Vinham de `useState(initialData)` porque o botão "Atualizar" os
+  // reescrevia no cliente; sem esse botão, a página é renderizada no servidor
+  // para o período da URL e o cliente só apresenta. Uma cópia em estado que
+  // ninguém actualiza é apenas uma forma de o ecrã ficar desactualizado em
+  // silêncio quando o período muda.
+  //
+  // O resumo operacional (`summary`) MANTÉM estado: é actualizado em tempo real
+  // pela subscrição a `services`, que continua igual.
   const [summary, setSummary] = useState<OperationalSummary | null>(initialSummary);
   const [selectedPeriod, setSelectedPeriod] = useState<Period | null>(null);
-  const [isPending, startTransition] = useTransition();
 
   const refreshSummary = useCallback(async () => {
     const res = await getOperationalSummary();
@@ -402,15 +405,6 @@ export function FinancialDashboardClient({ data: initialData, error: initialErro
     };
   }, [companyId, refreshSummary]);
 
-  function handleRefresh() {
-    setError(null);
-    void refreshSummary();
-    startTransition(async () => {
-      const res = await getFinancialDashboard(companyId);
-      if (res.ok) setData(res.data);
-      else setError(res.error);
-    });
-  }
 
   const now = new Date();
   const mesAtualLabel = now.toLocaleDateString("pt-PT", { month: "long", year: "numeric" });
@@ -458,108 +452,19 @@ export function FinancialDashboardClient({ data: initialData, error: initialErro
         )}
       </div>
 
-      {/* Atalhos para módulos financeiros */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <Link
-          href="/dashboard/cobrancas"
-          className="flex items-center gap-3 p-4 bg-white rounded-xl border border-[var(--color-border)] hover:border-[var(--color-primary)] hover:bg-[var(--color-primary-light)] transition-colors group"
-        >
-          <div className="w-9 h-9 rounded-lg bg-green-50 flex items-center justify-center shrink-0 group-hover:bg-[var(--color-primary-muted)]">
-            <Receipt className="w-4 h-4 text-[var(--color-primary)]" />
-          </div>
-          <div>
-            <p className="text-sm font-semibold text-[var(--color-text-main)]">Cobranças</p>
-            <p className="text-xs text-[var(--color-text-muted)]">Faturas e documentos</p>
-          </div>
-        </Link>
-        <Link
-          href="/dashboard/folha-pagamento"
-          className="flex items-center gap-3 p-4 bg-white rounded-xl border border-[var(--color-border)] hover:border-[var(--color-primary)] hover:bg-[var(--color-primary-light)] transition-colors group"
-        >
-          <div className="w-9 h-9 rounded-lg bg-green-50 flex items-center justify-center shrink-0 group-hover:bg-[var(--color-primary-muted)]">
-            <Wallet className="w-4 h-4 text-[var(--color-primary)]" />
-          </div>
-          <div>
-            <p className="text-sm font-semibold text-[var(--color-text-main)]">Pagamentos</p>
-            <p className="text-xs text-[var(--color-text-muted)]">Folha de salários</p>
-          </div>
-        </Link>
-        <Link
-          href="/dashboard/financeiro/fluxo-caixa"
-          className="flex items-center gap-3 p-4 bg-white rounded-xl border border-[var(--color-border)] hover:border-[var(--color-primary)] hover:bg-[var(--color-primary-light)] transition-colors group"
-        >
-          <div className="w-9 h-9 rounded-lg bg-green-50 flex items-center justify-center shrink-0 group-hover:bg-[var(--color-primary-muted)]">
-            <BarChart2 className="w-4 h-4 text-[var(--color-primary)]" />
-          </div>
-          <div>
-            <p className="text-sm font-semibold text-[var(--color-text-main)]">Fluxo de Caixa</p>
-            <p className="text-xs text-[var(--color-text-muted)]">Entradas e saídas</p>
-          </div>
-        </Link>
-        <Link
-          href="/dashboard/financeiro/contas"
-          className="flex items-center gap-3 p-4 bg-white rounded-xl border border-[var(--color-border)] hover:border-[var(--color-primary)] hover:bg-[var(--color-primary-light)] transition-colors group"
-        >
-          <div className="w-9 h-9 rounded-lg bg-green-50 flex items-center justify-center shrink-0 group-hover:bg-[var(--color-primary-muted)]">
-            <FileText className="w-4 h-4 text-[var(--color-primary)]" />
-          </div>
-          <div>
-            <p className="text-sm font-semibold text-[var(--color-text-main)]">Contas</p>
-            <p className="text-xs text-[var(--color-text-muted)]">A pagar e a receber</p>
-          </div>
-        </Link>
-        <Link
-          href="/dashboard/financeiro/pagamentos"
-          className="flex items-center gap-3 p-4 bg-white rounded-xl border border-[var(--color-border)] hover:border-[var(--color-primary)] hover:bg-[var(--color-primary-light)] transition-colors group"
-        >
-          <div className="w-9 h-9 rounded-lg bg-green-50 flex items-center justify-center shrink-0 group-hover:bg-[var(--color-primary-muted)]">
-            <Repeat className="w-4 h-4 text-[var(--color-primary)]" />
-          </div>
-          <div>
-            <p className="text-sm font-semibold text-[var(--color-text-main)]">Pagamentos Fixos</p>
-            <p className="text-xs text-[var(--color-text-muted)]">Fixos e variáveis · lembrete</p>
-          </div>
-        </Link>
-        <Link
-          href="/dashboard/financeiro/conciliacao"
-          className="flex items-center gap-3 p-4 bg-white rounded-xl border border-[var(--color-border)] hover:border-[var(--color-primary)] hover:bg-[var(--color-primary-light)] transition-colors group"
-        >
-          <div className="w-9 h-9 rounded-lg bg-green-50 flex items-center justify-center shrink-0 group-hover:bg-[var(--color-primary-muted)]">
-            <Landmark className="w-4 h-4 text-[var(--color-primary)]" />
-          </div>
-          <div>
-            <p className="text-sm font-semibold text-[var(--color-text-main)]">Conciliação Bancária</p>
-            <p className="text-xs text-[var(--color-text-muted)]">Extratos e movimentos</p>
-          </div>
-        </Link>
-        <Link
-          href="/dashboard/relatorios"
-          className="flex items-center gap-3 p-4 bg-white rounded-xl border border-[var(--color-border)] hover:border-[var(--color-primary)] hover:bg-[var(--color-primary-light)] transition-colors group"
-        >
-          <div className="w-9 h-9 rounded-lg bg-green-50 flex items-center justify-center shrink-0 group-hover:bg-[var(--color-primary-muted)]">
-            <BarChart3 className="w-4 h-4 text-[var(--color-primary)]" />
-          </div>
-          <div>
-            <p className="text-sm font-semibold text-[var(--color-text-main)]">Relatórios</p>
-            <p className="text-xs text-[var(--color-text-muted)]">Horas, receita e faturação diária</p>
-          </div>
-        </Link>
-      </div>
+      {/* Financeiro V2 (PR A): os sete cartões de atalho foram removidos.
+          Eram navegação pura e a barra do módulo
+          (`src/components/financeiro/finance-nav.tsx`) cobre os mesmos
+          destinos — ter os dois criava dois sistemas de navegação para os
+          mesmos sítios, que podiam discordar sobre o que estava activo.
+          Nenhuma funcionalidade se perdeu: todos eram <Link>. */}
 
-      {/* Cabeçalho com botão de refresh */}
-      <div className="flex items-center justify-between">
-        <p className="text-sm text-[var(--color-text-muted)]">
-          Dados calculados a partir de faturas e folhas de pagamento registadas.
-        </p>
-        <button
-          onClick={handleRefresh}
-          disabled={isPending}
-          className="flex items-center gap-2 text-sm px-3 py-1.5 rounded-lg border border-[var(--color-border)] text-[var(--color-text-sub)] hover:bg-[var(--color-background)] transition-colors disabled:opacity-50"
-        >
-          {isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
-          Atualizar
-        </button>
-      </div>
+      {/* Financeiro V2 (PR A): o botão "Atualizar" saiu. A sua única função
+          era reler `getOperationalSummary`, e o seletor de período do módulo
+          já recarrega a vista ao mudar de mês. */}
+      <p className="text-sm text-[var(--color-text-muted)]">
+        Dados calculados a partir de faturas e folhas de pagamento registadas.
+      </p>
 
       {/* Erro */}
       {error && (
@@ -569,15 +474,7 @@ export function FinancialDashboardClient({ data: initialData, error: initialErro
         </div>
       )}
 
-      {/* Loading overlay */}
-      {isPending && (
-        <div className="flex items-center justify-center py-8 text-[var(--color-text-muted)]">
-          <Loader2 className="w-5 h-5 animate-spin mr-2" />
-          A carregar dados...
-        </div>
-      )}
-
-      {data && !isPending && (
+      {data && (
         <>
           {/* KPIs — mês atual */}
           <div>
@@ -658,7 +555,7 @@ export function FinancialDashboardClient({ data: initialData, error: initialErro
         </>
       )}
 
-      {!data && !isPending && !error && (
+      {!data && !error && (
         <div className="flex flex-col items-center justify-center py-16 text-[var(--color-text-muted)]">
           <Euro className="w-10 h-10 mb-3 opacity-30" />
           <p className="text-sm">Sem dados financeiros disponíveis.</p>

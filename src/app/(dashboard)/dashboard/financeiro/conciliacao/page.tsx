@@ -1,13 +1,18 @@
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { redirect } from "next/navigation";
-import { Header } from "@/components/layout/header";
 import { getBankReconciliationData } from "@/app/actions/bank-reconciliation";
+import { FinanceShell } from "@/components/financeiro/finance-shell";
+import { parseFinancePeriod } from "@/lib/finance-period";
 import { ReconciliationClient } from "./_components/reconciliation-client";
 
 export const metadata = { title: "Conciliação Bancária — Escala" };
 
-export default async function ConciliacaoPage() {
+export default async function ConciliacaoPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ mes?: string }>;
+}) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
@@ -22,17 +27,21 @@ export default async function ConciliacaoPage() {
   if (!profile?.company_id) redirect("/login");
   if (!["admin", "gestor"].includes(profile.role)) redirect("/dashboard");
 
+  const params = await searchParams;
+  const period = parseFinancePeriod(params.mes);
+
   const res = await getBankReconciliationData();
 
   return (
-    <div>
-      <Header title="Conciliação Bancária" subtitle="Importar extratos e cruzar com lançamentos financeiros" />
-      <div className="px-4 py-5 sm:p-6 lg:px-8 mx-auto max-w-[1400px]">
-        <ReconciliationClient
-          initial={res.ok ? { transactions: res.transactions, imports: res.imports, accounts: res.accounts } : null}
-          error={res.ok ? null : res.error}
-        />
-      </div>
-    </div>
+    <FinanceShell
+      period={period}
+      title="Conciliação"
+      subtitle="Importar extratos e cruzar com lançamentos financeiros"
+    >
+      <ReconciliationClient
+        initial={res.ok ? { transactions: res.transactions, imports: res.imports, accounts: res.accounts } : null}
+        error={res.ok ? null : res.error}
+      />
+    </FinanceShell>
   );
 }

@@ -100,13 +100,23 @@ const RULES: Rule[] = [
  */
 const CLOCK_FOR_PERIOD = /new Date\(\)\.getMonth\(\)|now\.getMonth\(\)|now\.getFullYear\(\)/g;
 
+// Financeiro V2 (PR A): as **páginas** deixaram de decidir o período pelo
+// relógio. O período vem da URL (`?mes=YYYY-MM`), resolvido por
+// `parseFinancePeriod`, e o mês por omissão vem de `todayInLisbon()` num único
+// sítio — `src/lib/finance-period.ts`.
+//
+// Estes tectos desceram a zero por isso, e ficam a zero: se voltar a aparecer
+// um `new Date().getMonth()` numa página financeira, esta guarda falha.
+//
+// `financial-dashboard.ts` continua em 4: é a **fonte legada**, que o PR B
+// substitui pela fronteira canónica. Este PR não lhe tocou.
 const CLOCK_CEILING: Record<string, number> = {
-  "src/app/(dashboard)/dashboard/cobrancas/page.tsx": 4,
+  "src/app/(dashboard)/dashboard/cobrancas/page.tsx": 0,
   "src/app/(dashboard)/dashboard/financeiro/_components/financial-dashboard-client.tsx": 1,
-  "src/app/(dashboard)/dashboard/financeiro/fluxo-caixa/page.tsx": 2,
-  "src/app/(dashboard)/dashboard/financeiro/pagamentos/page.tsx": 2,
-  "src/app/(dashboard)/dashboard/financeiro/page.tsx": 1,
-  "src/app/(dashboard)/dashboard/folha-pagamento/page.tsx": 2,
+  "src/app/(dashboard)/dashboard/financeiro/fluxo-caixa/page.tsx": 0,
+  "src/app/(dashboard)/dashboard/financeiro/pagamentos/page.tsx": 0,
+  "src/app/(dashboard)/dashboard/financeiro/page.tsx": 0,
+  "src/app/(dashboard)/dashboard/folha-pagamento/page.tsx": 0,
   "src/app/actions/financial-dashboard.ts": 4,
 };
 
