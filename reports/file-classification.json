@@ -4322,7 +4322,9 @@
       "consumers": 0,
       "consumerSample": [],
       "autoLoaded": false,
-      "referencedBy": [],
+      "referencedBy": [
+        "docs"
+      ],
       "sideEffects": [],
       "risks": [],
       "signals": {

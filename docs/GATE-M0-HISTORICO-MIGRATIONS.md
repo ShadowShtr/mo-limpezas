@@ -1,6 +1,10 @@
 # GATE M0 — reconciliação do histórico de migrations
 
-**Data:** 2026-08-12 · **Base:** PR #60, head `389ef10f` · **Método:** só leitura
+**Data:** 2026-08-12 · **Base:** PR #60 · **Método:** só leitura
+
+> Atualizado depois da revisão do dono. Ver §3.1 — a divergência do `022` já
+> estava cercada por uma política de exceção, e o relatório original não a
+> mencionava.
 
 Objetivo: provar que o estado que precede a 071 é reconstruível, antes de a
 ensaiar contra uma base descartável.
@@ -16,11 +20,11 @@ ensaiar contra uma base descartável.
 | Por aplicar | **070**, **071** — e só essas |
 | No ledger sem ficheiro correspondente | **nenhuma** |
 | Checksums que batem certo | **68 de 71** |
-| 🔴 Deriva real de conteúdo | **1** — `022` |
+| Deriva real de conteúdo | **1** — `022`, **exceção já pinada** |
 
-**Veredicto: o baseline é reconstruível, com uma ressalva.** O ramo contém
-todas as migrations aplicadas. A única coisa que impede uma reprodução fiel é
-o ficheiro `022`, que foi alterado depois de ter sido aplicado.
+**Veredicto: baseline reprodutível para o escopo da 071**, com a exceção
+histórica aceite do `022`. Este ensaio **não certifica byte-a-byte todo o
+histórico de storage** — e não precisa de o fazer, porque a 071 não lhe toca.
 
 ---
 
@@ -117,7 +121,7 @@ de 2026-08-05.
 
 ---
 
-## 3. 🔴 Deriva de checksum — o achado que bloqueia
+## 3. Deriva de checksum
 
 Três checksums não batem certo com o ficheiro em disco. Dois têm explicação
 inócua; um não tem.
@@ -126,7 +130,7 @@ inócua; um não tem.
 |---|---|---|---|---|
 | `068_disable_untrusted_profile_bootstrap.sql` | ✗ | ✓ | — | CRLF do checkout |
 | `069_guard_profile_tenant_role.sql` | ✗ | ✓ | — | CRLF do checkout |
-| **`022_storage_bucket_collaborator_documents.sql`** | ✗ | ✗ | ✗ | **conteúdo alterado** |
+| **`022_storage_bucket_collaborator_documents.sql`** | ✗ | ✗ | ✗ | **conteúdo alterado** — ver §3.1 |
 
 Os dois primeiros são artefacto do Windows: o git faz checkout em CRLF, o
 checksum foi calculado sobre LF. O conteúdo é o mesmo — o blob do git confirma.
@@ -143,18 +147,54 @@ O ficheiro versionado **não é o que foi aplicado em produção**. O `CLAUDE.md
 tem a explicação provável: a política RLS usava `role = 'colaborador'` e foi
 corrigida para `'colaboradora'` depois de a migration já estar aplicada.
 
-### Porque é que isto bloqueia um `db reset`
+### 3.1 🔴 Correção ao relatório original — a exceção já existia
+
+A primeira versão deste documento apresentou a divergência do `022` como um
+achado bloqueante. **Estava incompleta.** O projeto já tinha o caso cercado
+desde 2026-08-05, em `supabase/migration-policy.json`:
+
+```json
+{
+  "migration": "022_storage_bucket_collaborator_documents.sql",
+  "ledgerChecksum":               "63f34214405a7ae2…",
+  "acceptedNormalizedLfChecksum": "444dd49eb07ec2be…",
+  "reason": "divergência histórica documentada; estado final garantido pela 023."
+}
+```
+
+Os dois valores **coincidem exactamente** com os que foram medidos aqui de
+forma independente, a partir do ledger de produção e do ficheiro em disco. Duas
+derivações independentes a chegar ao mesmo número é a melhor confirmação
+possível de que a exceção descreve o caso real, e não uma aproximação.
+
+A política é **imposta pelo runner** (`scripts/lib/migration-checksum.mjs`,
+com teste em `migration-checksum.test.ts`), o que muda a natureza da coisa:
+não é uma nota num documento, é um controlo. Qualquer alteração futura ao
+ficheiro `022` produz um checksum diferente do aceite e **invalida a
+exceção** — o runner pára.
+
+E o estado funcional foi reposto pela `023_fix_collaborator_documents_upload.sql`,
+que corrige o bucket e a política.
+
+**Decisão do dono, 2026-08-12:** aceitar a divergência e avançar. Reconciliar
+o `022` agora aumentaria o risco e misturaria dívida histórica de storage com
+mecânicas financeiras.
+
+### Porque é que isto ainda assim limita o ensaio
 
 Um ensaio que reexecute a pasta local produz, para esta migration, um
 resultado **diferente** do que produção tem. O ensaio deixaria de provar o que
 diz provar: seria fiel a 70 das 71, e silenciosamente infiel numa.
 
-Para a 071 em concreto o risco é baixo — o 022 cria um bucket de storage e
-políticas, e a 071 não lhe toca. Mas a afirmação «o baseline é reproduzível»
-não pode ser feita sem esta ressalva escrita.
+Para a 071 em concreto o risco é baixo — o `022` cria um bucket de storage e
+políticas, e a 071 não lhe toca. Mas o ensaio tem de dizer o que prova e o que
+não prova:
 
-**Antes do `db reset`:** decidir se se aceita a divergência do 022 como
-conhecida e documentada, ou se se reconcilia primeiro.
+```
+BASELINE_REPRODUZIVEL_PARA_071 = SIM
+CERTIFICA_HISTORICO_DE_STORAGE = NAO
+EXCECAO_022                    = ACEITE E PINADA
+```
 
 ---
 
@@ -181,12 +221,31 @@ conhecida e documentada, ou se se reconcilia primeiro.
 | **C.** Origem provada | ✅ nunca aplicadas; a 071 não depende delas |
 | **D.** Duplicado 20260609 | ✅ confirmado como **latente** — inócuo para o runner atual, quebra se migrar para o CLI |
 | **E.** Histórico remoto lido | ✅ 71 linhas, só leitura |
-| **F.** Baseline reproduzível | ⚠️ **sim, com uma ressalva** — deriva real no `022` |
+| **F.** Baseline reproduzível | ✅ **sim, para o escopo da 071** — exceção do `022` aceite e pinada em `migration-policy.json`, imposta pelo runner |
 
 ### M1 — ensaio da 071
 
 **Não iniciado.** Bloqueado por falta de base descartável: o daemon do Docker
-não está a correr.
+não está a correr. Docker instalado (29.6.1), `psql` ausente, `supabase` CLI
+2.114.0 presente.
+
+#### Âmbito declarado do ensaio, quando correr
+
+O ensaio prova uma coisa e não prova outra, e as duas ficam escritas antes de
+começar — para ninguém depois lhe atribuir uma garantia que ele não dá:
+
+> **Baseline reprodutível para o escopo da 071, com exceção histórica aceite
+> da 022. Este rehearsal não certifica byte-a-byte todo o histórico de
+> storage.**
+
+O que fica de fora, e é deliberado:
+
+- o estado exacto do bucket `collaborator-documents` tal como está em
+  produção — a 022 diverge, a 023 repõe o estado funcional, e nenhuma das
+  duas é tocada pela 071;
+- as 066 e 067, que nunca foram aplicadas nesta linha;
+- a dívida latente dos três `20260609`, que só se manifesta se o projeto
+  migrar para o mecanismo de migrations do CLI.
 
 ---
 
