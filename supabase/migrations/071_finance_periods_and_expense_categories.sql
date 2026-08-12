@@ -1,8 +1,14 @@
 -- ============================================================================
--- 070 — Fechamento mensal, categorias de despesa e identidade de origem
+-- 071 — Fechamento mensal, categorias de despesa e identidade de origem
 -- ============================================================================
 --
 -- 🔴 NÃO APLICADA. Preparada para revisão.
+--
+-- Nasceu numerada 070 e colidia com `070_guard_profile_managed_fields.sql`.
+-- Duas migrations com a mesma versão é o tipo de coisa que só se descobre a
+-- meio de uma aplicação, com metade do esquema alterado. Renumerada para 071,
+-- e há agora uma guarda (`migration-versions.test.ts`) que falha se voltar a
+-- acontecer.
 --
 -- Suporta três das cinco mecânicas pedidas pela gestão. As outras duas —
 -- despesas por categoria e histórico do cliente — **não precisam de migration

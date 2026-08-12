@@ -166,7 +166,22 @@ export interface ClienteRank {
   valor: number;
 }
 
-export function FinanceTopClients({ slot, metrica }: { slot: Slot<ClienteRank[]>; metrica?: string }) {
+export function FinanceTopClients({
+  slot,
+  metrica,
+  hrefDe,
+}: {
+  slot: Slot<ClienteRank[]>;
+  metrica?: string;
+  /**
+   * Para onde vai um clique num cliente.
+   *
+   * Sem isto, o ranking é informação morta: mostra quem fatura mais e obriga a
+   * ir procurar o detalhe noutro sítio. Com isto, leva ao histórico desse
+   * cliente — sem duplicar informação nenhuma.
+   */
+  hrefDe?: (c: ClienteRank) => string;
+}) {
   return (
     <FinanceCard className="h-full">
       <SectionHeader title="Top clientes" hint={metrica} />
@@ -176,8 +191,9 @@ export function FinanceTopClients({ slot, metrica }: { slot: Slot<ClienteRank[]>
           const max = Math.max(...cs.map((c) => c.valor), 1);
           return (
             <div className="space-y-3">
-              {cs.map((c, i) => (
-                <div key={c.id} className="flex items-center gap-3">
+              {cs.map((c, i) => {
+                const conteudo = (
+                <div className="flex items-center gap-3">
                   <span
                     className="w-[22px] h-[22px] shrink-0 rounded-full inline-flex items-center justify-center text-[11px] font-semibold tabular-nums"
                     style={{ background: "var(--finance-primary-soft)", color: "var(--finance-primary)" }}
@@ -199,7 +215,21 @@ export function FinanceTopClients({ slot, metrica }: { slot: Slot<ClienteRank[]>
                     </span>
                   </div>
                 </div>
-              ))}
+                );
+
+                const href = hrefDe?.(c);
+                return href ? (
+                  <a
+                    key={c.id}
+                    href={href}
+                    className="block -mx-2 px-2 py-1 rounded-[10px] transition-colors hover:bg-[var(--finance-surface-soft)]"
+                  >
+                    {conteudo}
+                  </a>
+                ) : (
+                  <div key={c.id}>{conteudo}</div>
+                );
+              })}
             </div>
           );
         }}

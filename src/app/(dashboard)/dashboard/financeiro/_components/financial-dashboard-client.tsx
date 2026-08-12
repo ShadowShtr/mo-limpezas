@@ -536,6 +536,9 @@ export function FinancialDashboardClient({
               : { estado: "indisponivel", porque: snapshot?.topClients.nota }
           }
           metrica="Faturado no período"
+          // Clicar num cliente abre o seu histórico em Cobranças, já filtrado.
+          // O ranking deixa de ser informação morta.
+          hrefDe={(c) => `/dashboard/cobrancas?cliente=${c.id}`}
         />
       </div>
 
