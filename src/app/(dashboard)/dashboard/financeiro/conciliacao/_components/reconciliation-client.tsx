@@ -111,7 +111,7 @@ export function ReconciliationClient({ initial, error: initErr }: Props) {
               onClick={() => applyFilter(f.value)}
               className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition ${
                 statusFilter === f.value
-                  ? "bg-[var(--color-primary)] text-white border-[var(--color-primary)]"
+                  ? "bg-[var(--finance-primary)] text-white border-[var(--finance-primary)]"
                   : "bg-white text-[var(--color-text-muted)] border-[var(--color-border)] hover:bg-gray-50"
               }`}
             >
@@ -134,7 +134,7 @@ export function ReconciliationClient({ initial, error: initErr }: Props) {
           </button>
           <button
             onClick={() => setShowImport(true)}
-            className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-semibold bg-[var(--color-primary)] text-white hover:opacity-90"
+            className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-semibold bg-[var(--finance-primary)] text-white hover:opacity-90"
           >
             <Upload className="w-4 h-4" /> Importar Extrato
           </button>
@@ -236,7 +236,7 @@ function TransactionsTable({
                     <p className="truncate" title={tx.description}>{tx.description || "—"}</p>
                     {tx.counterparty_name && <p className="text-xs text-[var(--color-text-muted)] truncate">{tx.counterparty_name}</p>}
                   </td>
-                  <td className={`px-4 py-3 text-right whitespace-nowrap font-medium ${isCredit ? "text-[var(--color-primary)]" : "text-red-500"}`}>
+                  <td className={`px-4 py-3 text-right whitespace-nowrap font-medium ${isCredit ? "text-[var(--finance-primary)]" : "text-red-500"}`}>
                     <span className="inline-flex items-center gap-1 justify-end">
                       {isCredit ? <ArrowUpRight className="w-3.5 h-3.5" /> : <ArrowDownRight className="w-3.5 h-3.5" />}
                       {fmtEur(tx.amount)}
@@ -275,7 +275,7 @@ function TransactionsTable({
                             </>
                           )}
                           <IconBtn title="Associar manualmente" onClick={() => onManual(tx)} cls="text-blue-600 hover:bg-blue-50"><Link2 className="w-4 h-4" /></IconBtn>
-                          <IconBtn title="Criar lançamento" onClick={() => onCreateEntry(tx.id)} cls="text-[var(--color-primary)] hover:bg-green-50"><FilePlus2 className="w-4 h-4" /></IconBtn>
+                          <IconBtn title="Criar lançamento" onClick={() => onCreateEntry(tx.id)} cls="text-[var(--finance-primary)] hover:bg-green-50"><FilePlus2 className="w-4 h-4" /></IconBtn>
                           {tx.status !== "ignored" && (
                             <IconBtn title="Ignorar" onClick={() => onIgnore(tx.id)} cls="text-gray-400 hover:bg-gray-100"><EyeOff className="w-4 h-4" /></IconBtn>
                           )}
@@ -448,7 +448,7 @@ function ImportModal({ accounts, onClose, onDone }: { accounts: BankAccountDTO[]
                 {preview.duplicatesInternal > 0 && <span className="text-amber-700">Dup. ficheiro: <b>{preview.duplicatesInternal}</b></span>}
                 {preview.duplicatesExisting > 0 && <span className="text-gray-500">Já importados: <b>{preview.duplicatesExisting}</b></span>}
               </div>
-              <button onClick={() => setShowMapping((v) => !v)} className="text-xs font-medium text-[var(--color-primary)] hover:underline">
+              <button onClick={() => setShowMapping((v) => !v)} className="text-xs font-medium text-[var(--finance-primary)] hover:underline">
                 {showMapping ? "Esconder mapeamento de colunas" : "Ajustar mapeamento de colunas"}
               </button>
             </div>
@@ -479,7 +479,7 @@ function ImportModal({ accounts, onClose, onDone }: { accounts: BankAccountDTO[]
                     </div>
                   ))}
                 </div>
-                <button onClick={() => send("preview", true)} disabled={busy} className="text-xs font-semibold px-3 py-1.5 rounded-lg border border-[var(--color-primary)] text-[var(--color-primary)] hover:bg-green-50 disabled:opacity-50">
+                <button onClick={() => send("preview", true)} disabled={busy} className="text-xs font-semibold px-3 py-1.5 rounded-lg border border-[var(--finance-primary)] text-[var(--finance-primary)] hover:bg-green-50 disabled:opacity-50">
                   {busy && <Loader2 className="w-3 h-3 animate-spin inline mr-1" />} Atualizar pré-visualização
                 </button>
               </div>
@@ -509,7 +509,7 @@ function ImportModal({ accounts, onClose, onDone }: { accounts: BankAccountDTO[]
                             {r.description || (r.error ? <span className="text-red-600">{r.error}</span> : "—")}
                           </td>
                           <td className="px-3 py-1.5 text-right whitespace-nowrap text-red-500">{debit != null ? fmtEur(Math.abs(debit)) : ""}</td>
-                          <td className="px-3 py-1.5 text-right whitespace-nowrap text-[var(--color-primary)]">{credit != null ? fmtEur(Math.abs(credit)) : ""}</td>
+                          <td className="px-3 py-1.5 text-right whitespace-nowrap text-[var(--finance-primary)]">{credit != null ? fmtEur(Math.abs(credit)) : ""}</td>
                           <td className="px-3 py-1.5 whitespace-nowrap">
                             <span className={`px-1.5 py-0.5 rounded text-[11px] font-medium ${badge.cls}`}>{badge.label}</span>
                           </td>
@@ -526,11 +526,11 @@ function ImportModal({ accounts, onClose, onDone }: { accounts: BankAccountDTO[]
         <div className="flex justify-end gap-2 pt-1">
           <button onClick={onClose} className="px-4 py-2 rounded-lg text-sm border border-[var(--color-border)] bg-white hover:bg-gray-50">Cancelar</button>
           {!preview ? (
-            <button onClick={() => send("preview", false)} disabled={busy || !file} className="px-4 py-2 rounded-lg text-sm font-semibold bg-white border border-[var(--color-primary)] text-[var(--color-primary)] hover:bg-green-50 disabled:opacity-50 inline-flex items-center gap-1.5">
+            <button onClick={() => send("preview", false)} disabled={busy || !file} className="px-4 py-2 rounded-lg text-sm font-semibold bg-white border border-[var(--finance-primary)] text-[var(--finance-primary)] hover:bg-green-50 disabled:opacity-50 inline-flex items-center gap-1.5">
               {busy && <Loader2 className="w-4 h-4 animate-spin" />} Pré-visualizar
             </button>
           ) : (
-            <button onClick={() => send("commit", true)} disabled={busy || preview.valid === 0} className="px-4 py-2 rounded-lg text-sm font-semibold bg-[var(--color-primary)] text-white hover:opacity-90 disabled:opacity-50 inline-flex items-center gap-1.5">
+            <button onClick={() => send("commit", true)} disabled={busy || preview.valid === 0} className="px-4 py-2 rounded-lg text-sm font-semibold bg-[var(--finance-primary)] text-white hover:opacity-90 disabled:opacity-50 inline-flex items-center gap-1.5">
               {busy && <Loader2 className="w-4 h-4 animate-spin" />} Confirmar importação
             </button>
           )}
@@ -625,7 +625,7 @@ function ManualMatchModal({ tx, onClose, onMatch }: { tx: BankTransactionDTO; on
             placeholder="Procurar lançamento por descrição…"
             className="flex-1 border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm"
           />
-          <button onClick={doSearch} disabled={busy} className="px-3 py-2 rounded-lg bg-[var(--color-primary)] text-white inline-flex items-center gap-1.5 disabled:opacity-50">
+          <button onClick={doSearch} disabled={busy} className="px-3 py-2 rounded-lg bg-[var(--finance-primary)] text-white inline-flex items-center gap-1.5 disabled:opacity-50">
             {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
           </button>
         </div>
@@ -638,7 +638,7 @@ function ManualMatchModal({ tx, onClose, onMatch }: { tx: BankTransactionDTO; on
                 <span className="block truncate text-sm">{r.description}</span>
                 <span className="block text-xs text-[var(--color-text-muted)]">{fmtDate(r.date)} · {r.type}</span>
               </span>
-              <span className={`text-sm font-medium whitespace-nowrap ${r.type === "entrada" ? "text-[var(--color-primary)]" : "text-red-500"}`}>{fmtEur(r.amount)}</span>
+              <span className={`text-sm font-medium whitespace-nowrap ${r.type === "entrada" ? "text-[var(--finance-primary)]" : "text-red-500"}`}>{fmtEur(r.amount)}</span>
             </button>
           ))}
         </div>

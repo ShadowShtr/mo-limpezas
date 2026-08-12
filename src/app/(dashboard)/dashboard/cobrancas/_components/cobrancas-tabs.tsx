@@ -43,7 +43,7 @@ export function CobrancasTabs({
             onClick={() => setTab(key)}
             className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
               tab === key
-                ? "bg-white text-[var(--color-primary)] shadow-sm border border-[var(--color-border)]"
+                ? "bg-white text-[var(--finance-primary)] shadow-sm border border-[var(--color-border)]"
                 : "text-[var(--color-text-sub)] hover:text-[var(--color-text-main)]"
             }`}
           >

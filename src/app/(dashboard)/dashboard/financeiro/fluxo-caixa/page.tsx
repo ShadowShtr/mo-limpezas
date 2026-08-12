@@ -36,7 +36,6 @@ export default async function FluxoCaixaPage({
         initialData={res.ok ? { entries: res.entries, balance: res.balance, entradas: res.entradas, saidas: res.saidas, pendentes: res.pendentes } : null}
         error={res.ok ? null : res.error}
         companyId={profile.company_id}
-        mesParam={period.key}
         year={period.year}
         month={period.month}
       />

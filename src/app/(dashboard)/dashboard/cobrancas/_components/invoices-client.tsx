@@ -13,6 +13,7 @@ import {
   type UnbilledService,
 } from "@/app/actions/invoices";
 import { InvoiceDetailSheet } from "./invoice-detail-sheet";
+import { Kpi } from "@/components/financeiro/v2/primitives";
 import { downloadCsv } from "@/lib/csv";
 import { usePagination, Pagination } from "@/components/ui/pagination";
 
@@ -270,21 +271,12 @@ export function InvoicesClient({ initialInvoices, unbilledServices, companyId, m
       <div className="space-y-5">
         {/* Toolbar: filtro + ações */}
         <div className="bg-white rounded-xl border border-[var(--color-border)] px-4 py-3 flex flex-wrap items-end gap-3">
-          <form method="GET" className="flex items-end gap-2">
-            <div>
-              <label className="block text-xs text-[var(--color-text-muted)] mb-1">Mês</label>
-              <input
-                type="month"
-                name="mes"
-                defaultValue={mesParam}
-                className="px-3 py-2 rounded-lg border border-[var(--color-border)] text-sm text-[var(--color-text-main)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
-              />
-            </div>
-            <button type="submit" className="px-4 py-2 rounded-lg border border-[var(--color-border)] text-sm text-[var(--color-text-sub)] hover:bg-[var(--color-background)] transition-colors">
-              Ver
-            </button>
-          </form>
-
+          {/*
+            O filtro de mês desta vista saiu. Era um `<form method="GET">` com
+            um `<input name="mes">` e um botão "Ver" — submeter escrevia
+            `?mes=…`, exactamente o que o seletor do módulo escreve. Dois
+            controlos para o mesmo efeito, e este ainda exigia dois cliques.
+          */}
           <div className="flex-1" />
 
           <button
@@ -340,7 +332,7 @@ export function InvoicesClient({ initialInvoices, unbilledServices, companyId, m
             <button
               onClick={handleGenerate}
               disabled={isPending}
-              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-[var(--color-primary)] text-white text-sm font-semibold hover:bg-[var(--color-primary-hover)] transition-colors disabled:opacity-50"
+              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-[var(--finance-primary)] text-white text-sm font-semibold hover:bg-[var(--finance-primary-hover)] transition-colors disabled:opacity-50"
             >
               {isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
               Gerar cobranças de {mesLabel}
@@ -403,7 +395,7 @@ export function InvoicesClient({ initialInvoices, unbilledServices, companyId, m
                         )}
                         <button
                           onClick={() => setViewing(inv)}
-                          className="p-1.5 rounded-lg text-[var(--color-text-muted)] hover:text-[var(--color-primary)] hover:bg-[var(--color-primary-light)] transition-colors"
+                          className="p-1.5 rounded-lg text-[var(--color-text-muted)] hover:text-[var(--finance-primary)] hover:bg-[var(--finance-primary-soft)] transition-colors"
                           title="Ver detalhes"
                         >
                           <Eye className="w-3.5 h-3.5" />
@@ -432,7 +424,7 @@ export function InvoicesClient({ initialInvoices, unbilledServices, companyId, m
                         )}
                         <button
                           onClick={() => handleExportPdf(inv)}
-                          className="p-1.5 rounded-lg text-[var(--color-text-muted)] hover:text-[var(--color-primary)] hover:bg-[var(--color-primary-light)] transition-colors"
+                          className="p-1.5 rounded-lg text-[var(--color-text-muted)] hover:text-[var(--finance-primary)] hover:bg-[var(--finance-primary-soft)] transition-colors"
                           title="Exportar PDF"
                         >
                           <Download className="w-3.5 h-3.5" />
@@ -463,7 +455,7 @@ export function InvoicesClient({ initialInvoices, unbilledServices, companyId, m
                   <td className="px-4 py-3 text-right text-sm font-semibold text-[var(--color-text-muted)]">
                     {fmtEur(invoices.reduce((s, i) => s + i.vat_amount, 0))}
                   </td>
-                  <td className="px-4 py-3 text-right text-sm font-bold text-[var(--color-primary)]">
+                  <td className="px-4 py-3 text-right text-sm font-bold text-[var(--finance-primary)]">
                     {fmtEur(totalFaturado)}
                   </td>
                   <td colSpan={2} />
@@ -547,7 +539,7 @@ export function InvoicesClient({ initialInvoices, unbilledServices, companyId, m
                     onClick={() => setPaymentMethod(opt.value)}
                     className={`py-2 px-3 rounded-lg border text-sm font-medium transition-colors text-left ${
                       paymentMethod === opt.value
-                        ? "border-[var(--color-primary)] bg-[var(--color-primary-light)] text-[var(--color-primary)]"
+                        ? "border-[var(--finance-primary)] bg-[var(--finance-primary-soft)] text-[var(--finance-primary)]"
                         : "border-[var(--color-border)] text-[var(--color-text-sub)] hover:bg-[var(--color-background)]"
                     }`}
                   >
@@ -566,7 +558,7 @@ export function InvoicesClient({ initialInvoices, unbilledServices, companyId, m
               <button
                 onClick={confirmPayment}
                 disabled={isPending}
-                className="flex-1 py-2 rounded-lg bg-[var(--color-primary)] text-white text-sm font-medium hover:bg-[var(--color-primary-hover)] transition-colors disabled:opacity-50"
+                className="flex-1 py-2 rounded-lg bg-[var(--finance-primary)] text-white text-sm font-medium hover:bg-[var(--finance-primary-hover)] transition-colors disabled:opacity-50"
               >
                 {isPending ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : "Confirmar pago"}
               </button>
@@ -580,15 +572,18 @@ export function InvoicesClient({ initialInvoices, unbilledServices, companyId, m
 
 // ─── KPI Card ─────────────────────────────────────────────────────────────────
 
+/**
+ * Financeiro V2: passou a desenhar com o primitivo partilhado.
+ * Assinatura intacta — nenhum ponto de chamada foi tocado.
+ */
 function KpiCard({
   label, value, highlight, warn, danger,
 }: { label: string; value: string; highlight?: boolean; warn?: boolean; danger?: boolean }) {
   return (
-    <div className={`rounded-xl border p-4 ${highlight ? "border-[var(--color-primary)] bg-[var(--color-primary-light)]" : "border-[var(--color-border)] bg-white"}`}>
-      <p className="text-xs text-[var(--color-text-muted)] mb-1">{label}</p>
-      <p className={`text-xl font-bold ${highlight ? "text-[var(--color-primary)]" : warn ? "text-amber-600" : danger ? "text-red-600" : "text-[var(--color-text-main)]"}`}>
-        {value}
-      </p>
-    </div>
+    <Kpi
+      label={label}
+      value={value}
+      tone={danger ? "danger" : warn ? "warning" : highlight ? "positive" : "neutral"}
+    />
   );
 }

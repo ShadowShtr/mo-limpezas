@@ -2,9 +2,8 @@
 
 import { useState, useEffect, useCallback } from "react";
 import {
-  Euro, AlertCircle, Loader2,
-  ArrowUpRight, ArrowDownRight, CalendarDays,
   ChevronDown, CheckCircle2, Circle,
+  ChartNoAxesCombined, Wallet, Clock3, ReceiptText, PieChart, CalendarDays,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import {
@@ -12,149 +11,20 @@ import {
   type FinancialDashboardData,
   type OperationalSummary,
 } from "@/app/actions/financial-dashboard";
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-function fmtEur(v: number) {
-  return v.toLocaleString("pt-PT", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " €";
-}
-function fmtEurCompact(v: number) {
-  if (v >= 1000) return (v / 1000).toLocaleString("pt-PT", { maximumFractionDigits: 1 }) + "k €";
-  return fmtEur(v);
-}
-
-// ─── KPI Card ─────────────────────────────────────────────────────────────────
-
-interface KpiCardProps {
-  label: string;
-  value: string;
-  sub?: string;
-  trend?: "up" | "down" | "neutral";
-  trendLabel?: string;
-  accent?: string;
-}
-
-function KpiCard({ label, value, sub, trend, trendLabel, accent = "var(--color-primary)" }: KpiCardProps) {
-  return (
-    <div className="bg-white rounded-xl border border-[var(--color-border)] p-5 flex flex-col gap-3">
-      <p className="text-sm text-[var(--color-text-muted)] font-medium">{label}</p>
-      <p className="text-2xl font-bold text-[var(--color-text-main)]" style={{ color: accent !== "var(--color-primary)" ? accent : undefined }}>
-        {value}
-      </p>
-      <div className="flex items-center gap-1.5 text-xs">
-        {trend === "up" && <ArrowUpRight className="w-3.5 h-3.5 text-[var(--color-primary)]" />}
-        {trend === "down" && <ArrowDownRight className="w-3.5 h-3.5 text-red-500" />}
-        {trendLabel && (
-          <span className={trend === "up" ? "text-[var(--color-primary)]" : trend === "down" ? "text-red-500" : "text-[var(--color-text-muted)]"}>
-            {trendLabel}
-          </span>
-        )}
-        {sub && <span className="text-[var(--color-text-muted)]">{sub}</span>}
-      </div>
-    </div>
-  );
-}
-
-// ─── Gráfico de barras + linha (Receita vs Custos) ────────────────────────────
-
-function RevenueChart({ data }: { data: FinancialDashboardData["monthly"] }) {
-  const maxVal = Math.max(...data.flatMap((m) => [m.revenue, m.costs]), 1);
-  const H = 160;
-
-  return (
-    <div className="bg-white rounded-xl border border-[var(--color-border)] p-5">
-      <div className="flex items-center justify-between mb-4">
-        <p className="text-sm font-semibold text-[var(--color-text-main)]">Receita vs Custos (12 meses)</p>
-        <div className="flex items-center gap-4 text-xs text-[var(--color-text-muted)]">
-          <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm bg-[#16A34A] inline-block" />Receita</span>
-          <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm bg-[#EF4444] inline-block" />Custos</span>
-          <span className="flex items-center gap-1.5"><span className="w-4 h-0.5 bg-[#F59E0B] inline-block" />Margem</span>
-        </div>
-      </div>
-      <svg viewBox={`0 0 ${data.length * 44} ${H + 32}`} className="w-full overflow-visible">
-        {/* Linhas de referência */}
-        {[0, 0.25, 0.5, 0.75, 1].map((pct) => (
-          <line
-            key={pct}
-            x1="0" y1={H - pct * H}
-            x2={data.length * 44} y2={H - pct * H}
-            stroke="#E5E7EB" strokeWidth="1"
-          />
-        ))}
-        {/* Barras e linha de margem */}
-        {data.map((m, i) => {
-          const x = i * 44;
-          const revH = (m.revenue / maxVal) * H;
-          const cosH = (m.costs   / maxVal) * H;
-          return (
-            <g key={i}>
-              {/* Barra receita */}
-              <rect x={x + 4}  y={H - revH} width={16} height={revH} fill="#16A34A" rx="2" opacity="0.85" />
-              {/* Barra custos */}
-              <rect x={x + 22} y={H - cosH} width={16} height={cosH} fill="#EF4444" rx="2" opacity="0.75" />
-            </g>
-          );
-        })}
-        {/* Linha de margem */}
-        <polyline
-          fill="none"
-          stroke="#F59E0B"
-          strokeWidth="2"
-          strokeLinejoin="round"
-          points={data.map((m, i) => {
-            const marginPct = Math.max(m.margin, 0) / maxVal;
-            return `${i * 44 + 20},${H - marginPct * H}`;
-          }).join(" ")}
-        />
-        {/* Labels do eixo X */}
-        {data.map((m, i) => (
-          <text
-            key={i}
-            x={i * 44 + 20}
-            y={H + 18}
-            textAnchor="middle"
-            fontSize="9"
-            fill="#9CA3AF"
-          >
-            {m.label}
-          </text>
-        ))}
-      </svg>
-    </div>
-  );
-}
-
-// ─── Gráfico horizontal por cliente ───────────────────────────────────────────
-
-function ClientRevenueChart({ data }: { data: FinancialDashboardData["byClient"] }) {
-  const max = Math.max(...data.map((c) => c.total), 1);
-
-  return (
-    <div className="bg-white rounded-xl border border-[var(--color-border)] p-5">
-      <p className="text-sm font-semibold text-[var(--color-text-main)] mb-4">Receita por Cliente (ano atual)</p>
-      {data.length === 0 ? (
-        <p className="text-sm text-[var(--color-text-muted)] py-6 text-center">Sem dados de faturação este ano.</p>
-      ) : (
-        <div className="space-y-3">
-          {data.map((c) => (
-            <div key={c.client_id} className="flex items-center gap-3">
-              <p className="text-xs text-[var(--color-text-sub)] w-28 truncate shrink-0">{c.client_name}</p>
-              <div className="flex-1 bg-gray-100 rounded-full h-2 overflow-hidden">
-                <div
-                  className="h-2 rounded-full bg-[#16A34A] transition-all"
-                  style={{ width: `${(c.total / max) * 100}%` }}
-                />
-              </div>
-              <p className="text-xs font-medium text-[var(--color-text-main)] w-20 text-right shrink-0">
-                {fmtEurCompact(c.total)}
-              </p>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
+import { FinanceCard, IconCircle } from "@/components/financeiro/v2/finance-card";
+import { FinanceKpiCard, FinanceKpiGrid } from "@/components/financeiro/v2/finance-kpi-card";
+import { FinanceAlertStrip, type AlertaItem } from "@/components/financeiro/v2/finance-alert-strip";
+import { FinanceAttentionPanel, type AtencaoItem } from "@/components/financeiro/v2/finance-attention-panel";
+import { FinanceMainChart } from "@/components/financeiro/v2/finance-chart-card";
+import {
+  FinanceAging,
+  FinanceCashForecast,
+  FinanceRevenueByService,
+  FinanceTeamEfficiency,
+  FinanceTopClients,
+} from "@/components/financeiro/v2/finance-intelligence";
+import { ErroCard, Skeleton } from "@/components/financeiro/v2/visual-contract";
+import { fmtEur, fmtEurCompact } from "@/lib/finance-format";
 
 // ─── Tabela mensal resumida ────────────────────────────────────────────────────
 
@@ -183,10 +53,10 @@ function MonthlyTable({ data }: { data: FinancialDashboardData["monthly"] }) {
                   <td className="py-2 px-3 font-medium text-[var(--color-text-main)]">{m.label}</td>
                   <td className="py-2 px-3 text-right text-[var(--color-text-main)]">{fmtEur(m.revenue)}</td>
                   <td className="py-2 px-3 text-right text-[var(--color-text-sub)]">{fmtEur(m.costs)}</td>
-                  <td className={`py-2 px-3 text-right font-medium ${m.margin >= 0 ? "text-[var(--color-primary)]" : "text-red-500"}`}>
+                  <td className={`py-2 px-3 text-right font-medium ${m.margin >= 0 ? "text-[var(--finance-primary)]" : "text-red-500"}`}>
                     {fmtEur(m.margin)}
                   </td>
-                  <td className={`py-2 px-3 text-right ${pct >= 0 ? "text-[var(--color-primary)]" : "text-red-500"}`}>
+                  <td className={`py-2 px-3 text-right ${pct >= 0 ? "text-[var(--finance-primary)]" : "text-red-500"}`}>
                     {pct}%
                   </td>
                 </tr>
@@ -202,55 +72,6 @@ function MonthlyTable({ data }: { data: FinancialDashboardData["monthly"] }) {
 // ─── Resumo operacional (dia / semana / mês, em tempo real) ────────────────────
 
 type Period = "today" | "week" | "month";
-
-function PeriodCard({ label, sub, summary, selected, onClick }: {
-  label: string;
-  sub: string;
-  summary: OperationalSummary["today"] | null;
-  selected: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`bg-white rounded-xl border p-5 text-left transition-colors ${
-        selected
-          ? "border-[var(--color-primary)] ring-2 ring-[var(--color-primary-muted)]"
-          : "border-[var(--color-border)] hover:border-[var(--color-primary)]"
-      }`}
-    >
-      <div className="flex items-center justify-between mb-2">
-        <p className="text-sm font-semibold text-[var(--color-text-main)]">{label}</p>
-        <span className="flex items-center gap-1.5 text-[11px] text-[var(--color-text-muted)]">
-          {sub}
-          <ChevronDown className={`w-3.5 h-3.5 transition-transform ${selected ? "rotate-180 text-[var(--color-primary)]" : ""}`} />
-        </span>
-      </div>
-      {summary == null ? (
-        <div className="flex items-center gap-2 text-sm text-[var(--color-text-muted)] py-2">
-          <Loader2 className="w-4 h-4 animate-spin" /> A carregar…
-        </div>
-      ) : (
-        <>
-          <p className="text-2xl font-bold text-[var(--color-text-main)]">{fmtEur(summary.expected)}</p>
-          <div className="mt-2 space-y-1 text-xs text-[var(--color-text-muted)]">
-            <p>
-              <span className="font-semibold text-green-600">{fmtEur(summary.done)}</span> já concluído
-              ({summary.concluded}/{summary.services} serviço{summary.services !== 1 ? "s" : ""})
-            </p>
-            <div className="w-full h-1.5 bg-gray-100 rounded-full overflow-hidden">
-              <div
-                className="h-full bg-[var(--color-primary)] rounded-full transition-all"
-                style={{ width: `${summary.expected > 0 ? Math.min(100, (summary.done / summary.expected) * 100) : 0}%` }}
-              />
-            </div>
-          </div>
-        </>
-      )}
-    </button>
-  );
-}
 
 // Lista de conferência do período selecionado: no dia mostra serviço a serviço;
 // na semana/mês agrupa por cliente — para bater o total do cartão linha a linha.
@@ -356,6 +177,12 @@ function BreakdownShell({ title, total, count, children }: {
   );
 }
 
+const PERIODOS_OPERACIONAIS = [
+  ["today", "Hoje", ""],
+  ["week", "Esta semana", "seg – dom"],
+  ["month", "Este mês", ""],
+] as const;
+
 // ─── Componente principal ─────────────────────────────────────────────────────
 
 interface Props {
@@ -363,9 +190,11 @@ interface Props {
   error: string | null;
   companyId: string;
   initialSummary: OperationalSummary | null;
+  /** Serviços concluídos ainda por faturar. Leitura pura — ver `getUnbilledServices`. */
+  unbilled: { count: number; total: number } | null;
 }
 
-export function FinancialDashboardClient({ data, error, companyId, initialSummary }: Props) {
+export function FinancialDashboardClient({ data, error, companyId, initialSummary, unbilled }: Props) {
   // Financeiro V2 (PR A): `data` e `error` deixaram de ter cópia em estado
   // local. Vinham de `useState(initialData)` porque o botão "Atualizar" os
   // reescrevia no cliente; sem esse botão, a página é renderizada no servidor
@@ -409,159 +238,249 @@ export function FinancialDashboardClient({ data, error, companyId, initialSummar
   const now = new Date();
   const mesAtualLabel = now.toLocaleDateString("pt-PT", { month: "long", year: "numeric" });
 
-  return (
-    <div className="space-y-6">
+  const hojeLabel = now.toLocaleDateString("pt-PT", { day: "numeric", month: "short" });
 
-      {/* ── Resumo operacional: dia / semana / mês (tempo real, do calendário) ── */}
+  // ── Alertas e Atenção, construídos só a partir do que a fonte garante ──────
+  //
+  // Nada aqui é inventado. `unbilled` vem de `getUnbilledServices` (leitura
+  // pura) e `pendingRevenue` do painel financeiro. Atrasos por idade e
+  // próximos vencimentos exigiriam repartir as faturas por data de
+  // vencimento — a fonte actual dá só o agregado, por isso não aparecem.
+  const alertas: AlertaItem[] = [];
+  if (unbilled && unbilled.count > 0) {
+    alertas.push({
+      id: "por-faturar",
+      icon: <ReceiptText className="w-[18px] h-[18px]" />,
+      tom: "primary",
+      titulo: `${unbilled.count} serviço${unbilled.count !== 1 ? "s" : ""} por faturar`,
+      subtexto: `Valor estimado ${fmtEurCompact(unbilled.total)}`,
+      href: "/dashboard/cobrancas",
+    });
+  }
+  if (data && data.pendingRevenue > 0) {
+    alertas.push({
+      id: "em-aberto",
+      icon: <Clock3 className="w-[18px] h-[18px]" />,
+      tom: "orange",
+      titulo: `${fmtEur(data.pendingRevenue)} em aberto`,
+      subtexto: "Faturas pendentes ou vencidas",
+      href: "/dashboard/cobrancas",
+    });
+  }
+
+  const atencao: AtencaoItem[] = alertas.map((a) => ({
+    id: a.id,
+    icon: a.icon,
+    tom: a.tom,
+    titulo: a.titulo,
+    subtexto: a.subtexto,
+    href: a.href,
+  }));
+
+  return (
+    <div className="space-y-4">
+
+      {error && (
+        <FinanceCard>
+          <ErroCard mensagem={error} />
+        </FinanceCard>
+      )}
+
+      {/* ── 1. ALERTAS ────────────────────────────────────────────────────────
+          Antes dos KPIs, como manda a hierarquia aprovada: o que exige acção
+          vem antes do que descreve o passado.
+
+          🔴 Só entram alertas com fonte real. Atrasos e próximos vencimentos
+             exigem repartir as faturas por data de vencimento, e a fonte
+             actual só dá um total agregado (`pendingRevenue`). Ficam de fora
+             em vez de mostrarem um número que não se pode defender — a faixa
+             encolhe e distribui o espaço pelos que existem. */}
+      <FinanceAlertStrip itens={alertas} />
+
+      {/* ── 2. RESUMO DO CALENDÁRIO ───────────────────────────────────────────
+          Primeiro de tudo, a pedido do dono. É a única parte desta página
+          que fala do trabalho em curso e não do dinheiro já registado — e num
+          mês sem faturação emitida, é também a única que tem números a sério.
+
+          Clicar continua a abrir a lista de conferência do período. */}
       <div>
         <div className="flex items-center gap-2 mb-3">
-          <CalendarDays className="w-4 h-4 text-[var(--color-primary)]" />
-          <p className="text-xs font-semibold text-[var(--color-text-muted)] uppercase tracking-wider">
-            Resumo do calendário — atualiza em tempo real
+          <CalendarDays className="w-4 h-4 text-[var(--finance-primary)]" aria-hidden />
+          <p className="text-[12px] font-semibold text-[var(--finance-text-secondary)] uppercase tracking-[0.04em]">
+            Resumo do calendário
           </p>
-        </div>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <PeriodCard
-            label="Hoje"
-            sub={now.toLocaleDateString("pt-PT", { day: "numeric", month: "short" })}
-            summary={summary?.today ?? null}
-            selected={selectedPeriod === "today"}
-            onClick={() => setSelectedPeriod((p) => (p === "today" ? null : "today"))}
-          />
-          <PeriodCard
-            label="Esta semana"
-            sub="seg – dom"
-            summary={summary?.week ?? null}
-            selected={selectedPeriod === "week"}
-            onClick={() => setSelectedPeriod((p) => (p === "week" ? null : "week"))}
-          />
-          <PeriodCard
-            label="Este mês"
-            sub={mesAtualLabel}
-            summary={summary?.month ?? null}
-            selected={selectedPeriod === "month"}
-            onClick={() => setSelectedPeriod((p) => (p === "month" ? null : "month"))}
-          />
+          <span className="inline-flex items-center gap-1.5 text-[11px] text-[var(--finance-text-muted)]">
+            <span className="w-1.5 h-1.5 rounded-full bg-[var(--finance-green)] animate-pulse" />
+            atualiza em tempo real
+          </span>
         </div>
 
-        {/* Lista de conferência do período clicado */}
-        {selectedPeriod && summary && (
-          <div className="mt-4">
-            <PeriodBreakdown period={selectedPeriod} summary={summary} />
-          </div>
-        )}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          {PERIODOS_OPERACIONAIS.map(([chave, rotulo, sub]) => {
+            const sm = summary?.[chave] ?? null;
+            const activo = selectedPeriod === chave;
+            const progresso =
+              sm && sm.expected > 0 ? Math.min(100, (sm.done / sm.expected) * 100) : 0;
+
+            return (
+              <button
+                key={chave}
+                type="button"
+                aria-pressed={activo}
+                onClick={() => setSelectedPeriod((prev) => (prev === chave ? null : chave))}
+                className={[
+                  "text-left rounded-[18px] border bg-[var(--finance-surface)] px-5 py-4 transition-all duration-150",
+                  activo
+                    ? "border-[var(--finance-primary-border)] bg-[var(--finance-primary-soft-2)]"
+                    : "border-[var(--finance-border)] hover:shadow-[0_4px_16px_rgba(16,24,40,.06)]",
+                ].join(" ")}
+                style={{ boxShadow: activo ? undefined : "0 1px 2px rgba(16,24,40,.03), 0 2px 8px rgba(16,24,40,.035)" }}
+              >
+                <div className="flex items-center gap-3">
+                  <IconCircle bg="var(--finance-primary-soft)" fg="var(--finance-primary)" size={34}>
+                    <CalendarDays className="w-4 h-4" />
+                  </IconCircle>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[12px] font-medium text-[#344054]">{rotulo}</p>
+                    <p className="text-[11px] text-[var(--finance-text-muted)] truncate">
+                      {chave === "today" ? hojeLabel : chave === "month" ? mesAtualLabel : sub}
+                    </p>
+                  </div>
+                  <ChevronDown
+                    className={`w-4 h-4 shrink-0 text-[var(--finance-text-muted)] transition-transform ${activo ? "rotate-180" : ""}`}
+                    aria-hidden
+                  />
+                </div>
+
+                {sm == null ? (
+                  <Skeleton h={26} w="65%" className="mt-3" />
+                ) : (
+                  <>
+                    <p className="mt-3 text-[23px] leading-none font-bold tracking-[-0.02em] text-[var(--finance-text)] tabular-nums">
+                      {fmtEur(sm.expected)}
+                    </p>
+                    <p className="mt-2 text-[11.5px] text-[var(--finance-text-muted)]">
+                      <span className="font-semibold text-[var(--finance-green)]">{fmtEur(sm.done)}</span>
+                      {" "}concluído · {sm.concluded}/{sm.services} serviço{sm.services !== 1 ? "s" : ""}
+                    </p>
+                    <span className="mt-2 block h-1.5 rounded-full bg-[var(--finance-track)] overflow-hidden">
+                      <span
+                        className="block h-1.5 rounded-full bg-[var(--finance-green)] transition-all"
+                        style={{ width: `${progresso}%` }}
+                      />
+                    </span>
+                  </>
+                )}
+              </button>
+            );
+          })}
+        </div>
       </div>
 
-      {/* Financeiro V2 (PR A): os sete cartões de atalho foram removidos.
-          Eram navegação pura e a barra do módulo
-          (`src/components/financeiro/finance-nav.tsx`) cobre os mesmos
-          destinos — ter os dois criava dois sistemas de navegação para os
-          mesmos sítios, que podiam discordar sobre o que estava activo.
-          Nenhuma funcionalidade se perdeu: todos eram <Link>. */}
+      {selectedPeriod && summary && <PeriodBreakdown period={selectedPeriod} summary={summary} />}
 
-      {/* Financeiro V2 (PR A): o botão "Atualizar" saiu. A sua única função
-          era reler `getOperationalSummary`, e o seletor de período do módulo
-          já recarrega a vista ao mudar de mês. */}
-      <p className="text-sm text-[var(--color-text-muted)]">
-        Dados calculados a partir de faturas e folhas de pagamento registadas.
-      </p>
+      {/* ── 3. CINCO KPIs ─────────────────────────────────────────────────── */}
+      <FinanceKpiGrid>
+        <FinanceKpiCard
+          label="Receita"
+          slot={data ? { estado: "pronto", dados: fmtEur(data.currentMonthRevenue) } : { estado: "indisponivel" }}
+          icon={<ChartNoAxesCombined className="w-[18px] h-[18px]" />}
+          tom="primary"
+        />
+        {/* 🔴 "Recebido" existe como espaço, não como número. Distinguir
+             faturado de efectivamente recebido exige conciliar pagamentos, e
+             a fonte actual não o faz. Preenchê-lo com a receita faturada
+             seria afirmar que está tudo cobrado. */}
+        <FinanceKpiCard
+          label="Recebido"
+          slot={{ estado: "indisponivel", porque: "Requer conciliação de pagamentos" }}
+          icon={<Wallet className="w-[18px] h-[18px]" />}
+          tom="green"
+        />
+        <FinanceKpiCard
+          label="Em aberto"
+          slot={data ? { estado: "pronto", dados: fmtEur(data.pendingRevenue) } : { estado: "indisponivel" }}
+          icon={<Clock3 className="w-[18px] h-[18px]" />}
+          tom="orange"
+        />
+        {/* O rótulo diz "(Salários)" porque é só isso que a fonte cobre.
+            Chamar-lhe "Custos" faria passar a folha por custo total. */}
+        <FinanceKpiCard
+          label="Custos (Salários)"
+          slot={data ? { estado: "pronto", dados: fmtEur(data.currentMonthCosts) } : { estado: "indisponivel" }}
+          icon={<ReceiptText className="w-[18px] h-[18px]" />}
+          tom="peach"
+        />
+        <FinanceKpiCard
+          label="Margem"
+          slot={data ? { estado: "pronto", dados: fmtEur(data.currentMonthMargin) } : { estado: "indisponivel" }}
+          sufixo={data ? `· ${data.currentMonthMarginPct}%` : undefined}
+          icon={<PieChart className="w-[18px] h-[18px]" />}
+          tom="primary"
+        />
+      </FinanceKpiGrid>
 
-      {/* Erro */}
-      {error && (
-        <div className="flex items-center gap-3 p-4 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700">
-          <AlertCircle className="w-4 h-4 shrink-0" />
-          {error}
+      {/* ── 4. GRÁFICO DOMINANTE + ATENÇÃO ────────────────────────────────── */}
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
+        <div className="xl:col-span-2">
+          <FinanceMainChart
+            titulo="Evolução financeira"
+            hint="De faturas e folhas registadas"
+            seletor="Mês"
+            slot={
+              data
+                ? {
+                    estado: "pronto",
+                    dados: data.monthly.map((m) => ({
+                      label: m.label,
+                      faturado: m.revenue,
+                      recebido: null,
+                      despesas: m.costs,
+                    })),
+                  }
+                : { estado: "indisponivel" }
+            }
+          />
         </div>
-      )}
+        <FinanceAttentionPanel itens={atencao} />
+      </div>
 
-      {data && (
-        <>
-          {/* KPIs — mês atual */}
-          <div>
-            <p className="text-xs font-semibold text-[var(--color-text-muted)] uppercase tracking-wider mb-3">
-              Mês atual — {mesAtualLabel}
-            </p>
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-              <KpiCard
-                label="Receita"
-                value={fmtEur(data.currentMonthRevenue)}
-                sub="faturado este mês"
-                trend="neutral"
-              />
-              <KpiCard
-                label="Custos (Salários)"
-                value={fmtEur(data.currentMonthCosts)}
-                sub="folha de pagamento"
-                trend="neutral"
-                accent="#6B7280"
-              />
-              <KpiCard
-                label="Margem Bruta"
-                value={fmtEur(data.currentMonthMargin)}
-                sub={`${data.currentMonthMarginPct}% da receita`}
-                trend={data.currentMonthMargin >= 0 ? "up" : "down"}
-                trendLabel={data.currentMonthMargin >= 0 ? "positiva" : "negativa"}
-                accent={data.currentMonthMargin >= 0 ? "var(--color-primary)" : "#EF4444"}
-              />
-              <KpiCard
-                label="Pendente a Receber"
-                value={fmtEur(data.pendingRevenue)}
-                sub="faturas pendentes/vencidas"
-                trend={data.pendingRevenue > 0 ? "down" : "neutral"}
-                trendLabel={data.pendingRevenue > 0 ? "por cobrar" : "tudo cobrado"}
-                accent={data.pendingRevenue > 0 ? "#F59E0B" : "var(--color-primary)"}
-              />
-            </div>
-          </div>
+      {/* ── 5. PREVISÃO · AGING · TOP CLIENTES ────────────────────────────── */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <FinanceCashForecast
+          slot={{ estado: "indisponivel", porque: "Requer o pipeline canónico (PR B)" }}
+        />
+        <FinanceAging
+          slot={{ estado: "indisponivel", porque: "Requer repartir faturas por vencimento" }}
+        />
+        <FinanceTopClients
+          slot={
+            data
+              ? {
+                  estado: "pronto",
+                  dados: data.byClient.map((c) => ({ id: c.client_id, nome: c.client_name, valor: c.total })),
+                }
+              : { estado: "indisponivel" }
+          }
+          metrica="Receita faturada no ano"
+        />
+      </div>
 
-          {/* Gráficos */}
-          <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-            <RevenueChart data={data.monthly} />
-            <ClientRevenueChart data={data.byClient} />
-          </div>
+      {/* ── 6. RECEITA POR SERVIÇO · EFICIÊNCIA ───────────────────────────── */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {/* 🔴 Classificar receita por tipo de serviço exigiria adivinhar a
+             partir da descrição. Não se faz regex sobre texto livre para
+             produzir números financeiros. */}
+        <FinanceRevenueByService
+          slot={{ estado: "indisponivel", porque: "Requer classificação de serviço na fonte" }}
+        />
+        <FinanceTeamEfficiency
+          slot={{ estado: "indisponivel", porque: "Requer cruzar horas com receita (PR B)" }}
+        />
+      </div>
 
-          {/* Tabela de custos/receita dos 12 meses */}
-          <MonthlyTable data={data.monthly} />
 
-          {/* Resumo do ano — no fundo, como fecho */}
-          <div>
-            <p className="text-xs font-semibold text-[var(--color-text-muted)] uppercase tracking-wider mb-3">
-              Resumo do ano {now.getFullYear()}
-            </p>
-            <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
-              <KpiCard
-                label="Receita Total"
-                value={fmtEur(data.yearRevenue)}
-                sub="acumulado no ano"
-                trend="up"
-              />
-              <KpiCard
-                label="Custos Totais"
-                value={fmtEur(data.yearCosts)}
-                sub="salários acumulados"
-                trend="neutral"
-                accent="#6B7280"
-              />
-              <KpiCard
-                label="Projeção Anual"
-                value={fmtEur(data.projectedAnnualRevenue)}
-                sub="estimativa baseada na média mensal"
-                trend="up"
-                trendLabel="estimado"
-                accent="#8B5CF6"
-              />
-            </div>
-          </div>
-        </>
-      )}
-
-      {!data && !error && (
-        <div className="flex flex-col items-center justify-center py-16 text-[var(--color-text-muted)]">
-          <Euro className="w-10 h-10 mb-3 opacity-30" />
-          <p className="text-sm">Sem dados financeiros disponíveis.</p>
-          <p className="text-xs mt-1">Gere faturas ou registe folhas de pagamento primeiro.</p>
-        </div>
-      )}
+      {data && <MonthlyTable data={data.monthly} />}
     </div>
   );
 }

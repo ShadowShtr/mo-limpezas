@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useTransition } from "react";
+import { Kpi } from "@/components/financeiro/v2/primitives";
 import { useRouter } from "next/navigation";
 import { AlertCircle, ArrowUpRight, ArrowDownRight, ShoppingBag, Plus, X, Loader2, CheckCircle2, Trash2 } from "lucide-react";
 import {
@@ -61,7 +62,7 @@ interface Props {
   error: string | null;
 }
 
-const inputCls = "w-full px-3 py-2 rounded-lg border border-[var(--color-border)] text-sm text-[var(--color-text-main)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] focus:border-transparent bg-white";
+const inputCls = "w-full px-3 py-2 rounded-lg border border-[var(--color-border)] text-sm text-[var(--color-text-main)] focus:outline-none focus:ring-2 focus:ring-[var(--finance-primary)] focus:border-transparent bg-white";
 
 export function ContasClient({ toReceive, toPay, expenses: initialExpenses, companyId, error }: Props) {
   const [expenses, setExpenses] = useState<PendingExpense[]>(initialExpenses);
@@ -154,38 +155,29 @@ export function ContasClient({ toReceive, toPay, expenses: initialExpenses, comp
 
       {/* KPI cards */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="bg-white rounded-xl border border-green-200 p-5">
-          <div className="flex items-center gap-2 mb-2">
-            <ArrowUpRight className="w-5 h-5 text-green-600" />
-            <p className="text-sm font-semibold text-[var(--color-text-main)]">A Receber</p>
-          </div>
-          <p className="text-2xl font-bold text-green-600">{fmtEur(totalReceive)}</p>
-          <p className="text-xs text-[var(--color-text-muted)] mt-1">
-            {toReceive.length} fatura{toReceive.length !== 1 ? "s" : ""} pendente{toReceive.length !== 1 ? "s" : ""}
-          </p>
-        </div>
+        <Kpi
+          label="A Receber"
+          value={fmtEur(totalReceive)}
+          tone="positive"
+          icon={<ArrowUpRight className="w-4 h-4" />}
+          sub={`${toReceive.length} fatura${toReceive.length !== 1 ? "s" : ""} pendente${toReceive.length !== 1 ? "s" : ""}`}
+        />
 
-        <div className="bg-white rounded-xl border border-red-200 p-5">
-          <div className="flex items-center gap-2 mb-2">
-            <ArrowDownRight className="w-5 h-5 text-red-600" />
-            <p className="text-sm font-semibold text-[var(--color-text-main)]">A Pagar (Salários)</p>
-          </div>
-          <p className="text-2xl font-bold text-red-600">{fmtEur(totalPay)}</p>
-          <p className="text-xs text-[var(--color-text-muted)] mt-1">
-            {toPay.length} registo{toPay.length !== 1 ? "s" : ""} aprovado{toPay.length !== 1 ? "s" : ""}
-          </p>
-        </div>
+        <Kpi
+          label="A Pagar (Salários)"
+          value={fmtEur(totalPay)}
+          tone="danger"
+          icon={<ArrowDownRight className="w-4 h-4" />}
+          sub={`${toPay.length} registo${toPay.length !== 1 ? "s" : ""} aprovado${toPay.length !== 1 ? "s" : ""}`}
+        />
 
-        <div className="bg-white rounded-xl border border-amber-200 p-5">
-          <div className="flex items-center gap-2 mb-2">
-            <ShoppingBag className="w-5 h-5 text-amber-600" />
-            <p className="text-sm font-semibold text-[var(--color-text-main)]">A Pagar (Despesas)</p>
-          </div>
-          <p className="text-2xl font-bold text-amber-600">{fmtEur(totalExpenses)}</p>
-          <p className="text-xs text-[var(--color-text-muted)] mt-1">
-            {expenses.length} despesa{expenses.length !== 1 ? "s" : ""} pendente{expenses.length !== 1 ? "s" : ""}
-          </p>
-        </div>
+        <Kpi
+          label="A Pagar (Despesas)"
+          value={fmtEur(totalExpenses)}
+          tone="warning"
+          icon={<ShoppingBag className="w-4 h-4" />}
+          sub={`${expenses.length} despesa${expenses.length !== 1 ? "s" : ""} pendente${expenses.length !== 1 ? "s" : ""}`}
+        />
       </div>
 
       {/* Faturas Pendentes (a receber) */}
@@ -297,7 +289,7 @@ export function ContasClient({ toReceive, toPay, expenses: initialExpenses, comp
           </div>
           <button
             onClick={() => { resetForm(); setShowSheet(true); }}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[var(--color-primary)] text-white text-xs font-medium hover:opacity-90 transition-opacity"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[var(--finance-primary)] text-white text-xs font-medium hover:opacity-90 transition-opacity"
           >
             <Plus className="w-3.5 h-3.5" />
             Registar despesa
@@ -310,7 +302,7 @@ export function ContasClient({ toReceive, toPay, expenses: initialExpenses, comp
             <p className="text-sm text-[var(--color-text-muted)]">Sem despesas pendentes.</p>
             <button
               onClick={() => { resetForm(); setShowSheet(true); }}
-              className="text-xs text-[var(--color-primary)] hover:underline"
+              className="text-xs text-[var(--finance-primary)] hover:underline"
             >
               Registar uma despesa →
             </button>
@@ -473,7 +465,7 @@ export function ContasClient({ toReceive, toPay, expenses: initialExpenses, comp
               <button
                 onClick={(e) => handleCreate(e as unknown as React.FormEvent)}
                 disabled={isPending}
-                className="flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-[var(--color-primary)] text-white text-sm font-semibold hover:bg-[var(--color-primary-hover)] transition-colors disabled:opacity-50"
+                className="flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-[var(--finance-primary)] text-white text-sm font-semibold hover:bg-[var(--finance-primary-hover)] transition-colors disabled:opacity-50"
               >
                 {isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
                 Registar

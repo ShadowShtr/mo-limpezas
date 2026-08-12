@@ -71,7 +71,7 @@ export function FinancePeriodPicker({ period }: { period: FinancePeriod }) {
         type="button"
         onClick={() => irPara(shiftFinancePeriod(period, -1))}
         aria-label="Mês anterior"
-        className="p-1.5 rounded-lg text-[#64748B] hover:bg-[#F1F5F9] hover:text-[#0F172A] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#16A34A]"
+        className="p-1.5 rounded-lg text-[#64748B] hover:bg-[#F1F5F9] hover:text-[#0F172A] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--finance-primary)]"
       >
         <ChevronLeft className="w-4 h-4" aria-hidden />
       </button>
@@ -82,7 +82,7 @@ export function FinancePeriodPicker({ period }: { period: FinancePeriod }) {
           onClick={() => { setAno(period.year); setAberto((v) => !v); }}
           aria-haspopup="dialog"
           aria-expanded={aberto}
-          className="inline-flex items-center gap-2 rounded-xl border border-[#E2E8F0] bg-white px-3.5 py-2 text-[13px] font-semibold text-[#0F172A] hover:bg-[#F8FAFC] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#16A34A]"
+          className="inline-flex items-center gap-2 rounded-xl border border-[var(--finance-border)] bg-white px-3.5 py-2.5 text-[13px] font-semibold text-[var(--finance-text)] hover:bg-[#F8FAFC] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--finance-primary)]"
         >
           {formatFinancePeriod(period)}
           <ChevronDown className={`w-4 h-4 text-[#94A3B8] transition-transform ${aberto ? "rotate-180" : ""}`} aria-hidden />
@@ -99,7 +99,7 @@ export function FinancePeriodPicker({ period }: { period: FinancePeriod }) {
                 type="button"
                 onClick={() => setAno((a) => a - 1)}
                 aria-label="Ano anterior"
-                className="p-1 rounded-lg text-[#64748B] hover:bg-[#F1F5F9] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#16A34A]"
+                className="p-1 rounded-lg text-[#64748B] hover:bg-[#F1F5F9] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--finance-primary)]"
               >
                 <ChevronLeft className="w-4 h-4" aria-hidden />
               </button>
@@ -108,7 +108,7 @@ export function FinancePeriodPicker({ period }: { period: FinancePeriod }) {
                 type="button"
                 onClick={() => setAno((a) => a + 1)}
                 aria-label="Ano seguinte"
-                className="p-1 rounded-lg text-[#64748B] hover:bg-[#F1F5F9] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#16A34A]"
+                className="p-1 rounded-lg text-[#64748B] hover:bg-[#F1F5F9] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--finance-primary)]"
               >
                 <ChevronRight className="w-4 h-4" aria-hidden />
               </button>
@@ -126,11 +126,11 @@ export function FinancePeriodPicker({ period }: { period: FinancePeriod }) {
                     aria-current={seleccionado ? "true" : undefined}
                     className={[
                       "rounded-lg px-2 py-2 text-[12px] font-semibold transition-colors",
-                      "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#16A34A]",
+                      "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--finance-primary)]",
                       seleccionado
-                        ? "bg-[#16A34A] text-white"
+                        ? "bg-[var(--finance-primary)] text-white"
                         : eHoje
-                          ? "text-[#16A34A] bg-[#F0FDF4] hover:bg-[#DCFCE7]"
+                          ? "text-[var(--finance-primary)] bg-[var(--finance-primary-soft)] hover:bg-[var(--finance-primary-soft)]"
                           : "text-[#475569] hover:bg-[#F1F5F9]",
                     ].join(" ")}
                   >
@@ -143,7 +143,7 @@ export function FinancePeriodPicker({ period }: { period: FinancePeriod }) {
             <button
               type="button"
               onClick={() => irPara(hoje)}
-              className="mt-2 w-full rounded-lg py-2 text-[12px] font-semibold text-[#16A34A] hover:bg-[#F0FDF4] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#16A34A]"
+              className="mt-2 w-full rounded-lg py-2 text-[12px] font-semibold text-[#16A34A] hover:bg-[#F0FDF4] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--finance-primary)]"
             >
               Ir para {formatFinancePeriod(hoje)}
             </button>
@@ -155,7 +155,7 @@ export function FinancePeriodPicker({ period }: { period: FinancePeriod }) {
         type="button"
         onClick={() => irPara(shiftFinancePeriod(period, 1))}
         aria-label="Mês seguinte"
-        className="p-1.5 rounded-lg text-[#64748B] hover:bg-[#F1F5F9] hover:text-[#0F172A] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#16A34A]"
+        className="p-1.5 rounded-lg text-[#64748B] hover:bg-[#F1F5F9] hover:text-[#0F172A] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--finance-primary)]"
       >
         <ChevronRight className="w-4 h-4" aria-hidden />
       </button>

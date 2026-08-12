@@ -82,9 +82,12 @@ const RULES: Rule[] = [
       + "A margem negativa tem de continuar negativa no DTO; como se desenha é decisão "
       + "de apresentação, não de dados.",
     pattern: /Math\.max\(\w+\.margin,\s*0\)/g,
-    allow: {
-      "src/app/(dashboard)/dashboard/financeiro/_components/financial-dashboard-client.tsx": 1,
-    },
+    // Vazio desde a UI final do Financeiro V2. O padrão vivia na linha de
+    // margem do gráfico antigo, que achatava meses negativos em zero; esse
+    // gráfico foi substituído e o novo desenha Faturado e Despesas a partir
+    // dos valores como estão. Deixar o teto a 1 tornaria a guarda incapaz de
+    // acusar o regresso do padrão.
+    allow: {},
   },
 ];
 
@@ -112,7 +115,9 @@ const CLOCK_FOR_PERIOD = /new Date\(\)\.getMonth\(\)|now\.getMonth\(\)|now\.getF
 // substitui pela fronteira canónica. Este PR não lhe tocou.
 const CLOCK_CEILING: Record<string, number> = {
   "src/app/(dashboard)/dashboard/cobrancas/page.tsx": 0,
-  "src/app/(dashboard)/dashboard/financeiro/_components/financial-dashboard-client.tsx": 1,
+  // Baixou de 1 para 0 na UI final: o `new Date()` que decidia o mês vivia
+  // no cabeçalho do gráfico antigo, que já não existe.
+  "src/app/(dashboard)/dashboard/financeiro/_components/financial-dashboard-client.tsx": 0,
   "src/app/(dashboard)/dashboard/financeiro/fluxo-caixa/page.tsx": 0,
   "src/app/(dashboard)/dashboard/financeiro/pagamentos/page.tsx": 0,
   "src/app/(dashboard)/dashboard/financeiro/page.tsx": 0,

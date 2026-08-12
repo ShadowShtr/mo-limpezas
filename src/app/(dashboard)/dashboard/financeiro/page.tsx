@@ -1,6 +1,7 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { getFinancialDashboard, getOperationalSummary } from "@/app/actions/financial-dashboard";
+import { getUnbilledServices } from "@/app/actions/invoices";
 import { FinanceShell } from "@/components/financeiro/finance-shell";
 import { parseFinancePeriod } from "@/lib/finance-period";
 import { FinancialDashboardClient } from "./_components/financial-dashboard-client";
@@ -28,10 +29,20 @@ export default async function FinanceiroPage({
   // Financeiro V2 (PR A): o período vem da URL, não de `new Date()`.
   const period = parseFinancePeriod(params.mes);
 
-  const [result, summaryResult] = await Promise.all([
+  // `getUnbilledServices` é leitura pura — só faz `select`. Alimenta o único
+  // alerta desta vista que tem fonte real. Não escreve nada durante o render.
+  const [result, summaryResult, unbilledResult] = await Promise.all([
     getFinancialDashboard(companyId),
     getOperationalSummary(),
+    getUnbilledServices(companyId),
   ]);
+
+  const unbilled = unbilledResult.ok
+    ? {
+        count: unbilledResult.services.length,
+        total: unbilledResult.services.reduce((soma, s) => soma + (s.value ?? 0), 0),
+      }
+    : null;
 
   return (
     <FinanceShell
@@ -44,6 +55,7 @@ export default async function FinanceiroPage({
         error={result.ok ? null : result.error}
         companyId={companyId}
         initialSummary={summaryResult.ok ? summaryResult.data : null}
+        unbilled={unbilled}
       />
     </FinanceShell>
   );

@@ -16,7 +16,7 @@
 import type { ReactNode } from "react";
 
 import { Header } from "@/components/layout/header";
-import { type FinancePeriod, formatFinancePeriod } from "@/lib/finance-period";
+import type { FinancePeriod } from "@/lib/finance-period";
 
 import { FinanceNav } from "./finance-nav";
 import { FinancePeriodPicker } from "./finance-period-picker";
@@ -46,13 +46,22 @@ export function FinanceShell({
   children: ReactNode;
 }) {
   return (
-    <div>
-      <Header
-        title="Financeiro"
-        subtitle={periodIsolated ? title : `${title} · ${formatFinancePeriod(period)}`}
-      />
+    <div className="bg-[var(--finance-bg)] min-h-screen">
+      {/*
+        🔴 Um cabeçalho, não dois.
 
-      <div className="px-4 py-5 sm:p-6 lg:px-8 mx-auto max-w-[1400px] space-y-5">
+        Havia o `Header` da aplicação a dizer "Financeiro · Resumo · Agosto
+        2026" e, logo abaixo, o título da vista a repetir "Resumo". Dois
+        cabeçalhos empilhados, a dizer o mesmo, a roubar altura ao conteúdo — e
+        a referência aprovada tem um só.
+
+        O `Header` global fica, porque transporta o sino de notificações e a
+        navegação móvel, mas deixa de repetir a vista: o título grande e o
+        período vivem aqui em baixo, juntos, como na referência.
+      */}
+      <Header title="Financeiro" subtitle="Resumo financeiro do módulo" />
+
+      <div className="px-4 py-5 sm:p-6 lg:px-8 mx-auto max-w-[1440px] space-y-4">
         {/*
           1. FINANCE_V2_ALERT_SLOT — reservado, deliberadamente vazio.
 
@@ -78,18 +87,24 @@ export function FinanceShell({
           decisão do incidente financeiro, não desta casca.
         */}
 
-        {/* 2. Período do módulo + acção principal da vista. */}
+        {/*
+          2. Navegação + período, na mesma linha.
+
+          🔴 O título da vista saiu daqui. Na referência aprovada não existe: o
+          cabeçalho diz "Financeiro" e é a **pastilha activa da barra** que diz
+          em que vista se está. Ter um `<h2>Resumo</h2>` logo por baixo de uma
+          pastilha que já diz "Resumo" é a terceira vez que a mesma palavra
+          aparece no mesmo ecrã, e rouba altura ao conteúdo.
+
+          O `title` continua a existir na assinatura porque as sete vistas o
+          passam e porque alimenta a acessibilidade — mas não se desenha.
+        */}
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="min-w-0">
-            <h2 className="text-[19px] font-bold text-[#0F172A] truncate">{title}</h2>
-            {subtitle && <p className="text-[13px] text-[#64748B] mt-0.5">{subtitle}</p>}
-          </div>
-          <div className="flex items-center gap-2">
+          <FinanceNav period={period} />
+          <div className="flex items-center gap-2 shrink-0">
             {actions}
             {periodIsolated ? (
-              // Sem seletor e sem setas. Nota neutra — o utilizador não tem de
-              // saber o que é `ensureMonth`, só onde muda o mês.
-              <p className="text-[12px] text-[#64748B] px-3 py-2 rounded-xl bg-[#F8FAFC] border border-[#E2E8F0]">
+              <p className="text-[12px] text-[var(--finance-text-secondary)] px-3 py-2 rounded-[10px] bg-[var(--finance-surface-soft)] border border-[var(--finance-border)]">
                 Período gerido pela própria vista
               </p>
             ) : (
@@ -97,9 +112,8 @@ export function FinanceShell({
             )}
           </div>
         </div>
-
-        {/* 3. Navegação única do módulo. */}
-        <FinanceNav period={period} />
+        <h2 className="sr-only">{title}</h2>
+        {subtitle && <p className="sr-only">{subtitle}</p>}
 
         {/* 4. Conteúdo da vista. */}
         <div className="space-y-5">{children}</div>

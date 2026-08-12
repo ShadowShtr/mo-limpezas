@@ -17,7 +17,8 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
-  TrendingUp, Repeat, FileText, BarChart2, Receipt, Wallet, Landmark,
+  ChartNoAxesCombined, ArrowRightLeft, ReceiptText,
+  ChartNoAxesColumnIncreasing, BadgeDollarSign, WalletCards, Landmark,
 } from "lucide-react";
 
 import {
@@ -33,40 +34,34 @@ import {
  * mover ambas partiria ligações e favoritos por uma questão estética.
  */
 export const FINANCE_VIEWS = [
-  { href: "/dashboard/financeiro",             label: "Resumo",             icon: TrendingUp },
-  { href: "/dashboard/financeiro/pagamentos",  label: "Pagamentos",         icon: Repeat },
-  { href: "/dashboard/financeiro/contas",      label: "Contas",             icon: FileText },
-  { href: "/dashboard/financeiro/fluxo-caixa", label: "Fluxo de Caixa",     icon: BarChart2 },
-  { href: "/dashboard/cobrancas",              label: "Cobranças",          icon: Receipt },
-  { href: "/dashboard/folha-pagamento",        label: "Folha de Pagamento", icon: Wallet },
+  { href: "/dashboard/financeiro",             label: "Resumo",             icon: ChartNoAxesCombined },
+  { href: "/dashboard/financeiro/pagamentos",  label: "Pagamentos",         icon: ArrowRightLeft },
+  { href: "/dashboard/financeiro/contas",      label: "Contas",             icon: ReceiptText },
+  { href: "/dashboard/financeiro/fluxo-caixa", label: "Fluxo de Caixa",     icon: ChartNoAxesColumnIncreasing },
+  { href: "/dashboard/cobrancas",              label: "Cobranças",          icon: BadgeDollarSign },
+  { href: "/dashboard/folha-pagamento",        label: "Folha de Pagamento", icon: WalletCards },
   { href: "/dashboard/financeiro/conciliacao", label: "Conciliação",        icon: Landmark },
 ] as const;
 
 /**
- * 🔴 Vistas que **não participam** no período global.
+ * Vistas que não participam no período global.
  *
- * `pagamentos/page.tsx` chama `getPayments`, que chama `ensureMonth`, que faz
- * `.insert(rows)`: **abrir um mês em Pagamentos gera os pagamentos fixos desse
- * mês**, clonados do mês anterior mais recente.
+ * ✅ **Nenhuma.** As sete partilham o mesmo mês.
  *
- * Isto é anterior ao Financeiro V2 — mas o período global tornaria o gatilho
- * trivial de puxar. Passar de Agosto para Setembro em qualquer vista e clicar
- * em Pagamentos materializaria Setembro; as setas ‹ › fariam o mesmo a cada
- * clique.
+ * Pagamentos esteve aqui, e por uma razão concreta: `getPayments` chamava
+ * `ensureMonth`, que inseria. Um período global teria tornado esse gatilho
+ * trivial de puxar — passar de Agosto para Setembro em qualquer vista e clicar
+ * em Pagamentos materializaria Setembro, e as setas ‹ › fariam o mesmo a cada
+ * clique. O isolamento era a contenção possível **enquanto ler escrevia**.
  *
- * Enquanto o incidente financeiro não estiver diagnosticado, a regra é:
+ * A PR C tirou a escrita do caminho de leitura. A condição que justificava o
+ * isolamento deixou de existir, e mantê-lo passaria a ser só uma cicatriz: uma
+ * vista fora do período do módulo, sem nada que o explique ao utilizador.
  *
- *   **Pagamentos não recebe o período do módulo, e o módulo não lhe oferece
- *   nenhum controlo novo para o mudar.**
- *
- * O seletor legado da própria vista continua como estava — não é deste PR, e
- * removê-lo tiraria a única forma de navegar meses ali.
- *
- * A correcção definitiva vive em `payments.ts`, `BLOQUEADO_INCIDENTE_FINANCEIRO`.
+ * Se alguma vista voltar a precisar de isolamento, esta lista é o sítio — e a
+ * razão tem de vir escrita ao lado.
  */
-export const PERIOD_ISOLATED_VIEWS: readonly string[] = [
-  "/dashboard/financeiro/pagamentos",
-];
+export const PERIOD_ISOLATED_VIEWS: readonly string[] = [];
 
 export function isPeriodIsolated(pathname: string): boolean {
   return PERIOD_ISOLATED_VIEWS.some((h) => pathname === h || pathname.startsWith(`${h}/`));
@@ -113,12 +108,12 @@ export function FinanceNav({ period }: { period: FinancePeriod }) {
             prefetch
             aria-current={active ? "page" : undefined}
             className={[
-              "shrink-0 inline-flex items-center gap-2 rounded-xl px-3.5 py-2 text-[13px] font-semibold",
+              "shrink-0 inline-flex items-center gap-2 rounded-[10px] px-3.5 py-2.5 text-[13px] font-medium",
               "transition-colors whitespace-nowrap",
-              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#16A34A] focus-visible:ring-offset-2",
+              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--finance-primary)] focus-visible:ring-offset-2",
               active
-                ? "bg-[#16A34A] text-white shadow-sm"
-                : "text-[#475569] hover:bg-[#F1F5F9] hover:text-[#0F172A]",
+                ? "bg-[var(--finance-primary-soft)] text-[var(--finance-primary)]"
+                : "text-[var(--finance-slate)] hover:bg-[#F5F6FA] hover:text-[var(--finance-text)]",
             ].join(" ")}
           >
             <Icon className="w-4 h-4 shrink-0" aria-hidden />
