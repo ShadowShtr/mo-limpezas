@@ -1,13 +1,13 @@
 {
   "inventorySource": "git ls-files",
   "summary": {
-    "repositoryFiles": 594,
-    "textFiles": 582,
-    "sourceFiles": 412,
-    "textLines": 133836,
+    "repositoryFiles": 600,
+    "textFiles": 588,
+    "sourceFiles": 418,
+    "textLines": 134817,
     "typescriptDiagnostics": 0,
     "productionEntries": 70,
-    "unreachableProductionModules": 38,
+    "unreachableProductionModules": 39,
     "exactDuplicateFileGroups": 0
   },
   "highConfidence": {
@@ -33,6 +33,7 @@
       "src/domain/dashboard/legacy-dashboard.ts",
       "src/domain/dashboard/period-selection.ts",
       "src/domain/dashboard/projection.ts",
+      "src/domain/finance-v2/expense-categories.ts",
       "src/domain/realtime/event-reconciler.ts",
       "src/domain/reports/absence-metrics.ts",
       "src/domain/reports/export-adapter.ts",
@@ -72,6 +73,7 @@
       "src/domain/dashboard/legacy-dashboard.ts",
       "src/domain/dashboard/period-selection.ts",
       "src/domain/dashboard/projection.ts",
+      "src/domain/finance-v2/expense-categories.ts",
       "src/domain/realtime/event-reconciler.ts",
       "src/domain/reports/absence-metrics.ts",
       "src/domain/reports/export-adapter.ts",

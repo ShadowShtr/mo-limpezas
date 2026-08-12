@@ -1,19 +1,19 @@
 {
   "generatedBy": "scripts/audit-file-inventory.mjs",
-  "totalFiles": 598,
+  "totalFiles": 604,
   "byStatus": {
-    "MANTER": 581,
+    "MANTER": 587,
     "STANDBY": 17
   },
   "byCategory": {
-    "route-ui": 132,
-    "test": 87,
+    "route-ui": 133,
+    "test": 89,
     "migration": 73,
     "lib": 61,
     "script": 42,
+    "domain": 38,
+    "server-action": 37,
     "doc": 36,
-    "server-action": 36,
-    "domain": 36,
     "component": 25,
     "doc-historico": 16,
     "api-route": 16,
@@ -29,7 +29,7 @@
     "src-other": 1
   },
   "byConfidence": {
-    "alta": 583,
+    "alta": 589,
     "média": 9,
     "baixa": 6
   },
@@ -4015,6 +4015,33 @@
       }
     },
     {
+      "path": "src/__tests__/finance-v2-client-history.test.ts",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [
+        "supabase"
+      ],
+      "risks": [],
+      "signals": {
+        "supabase": 1,
+        "sqlWrite": 3
+      },
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
       "path": "src/__tests__/finance-v2-read-model.test.ts",
       "category": "test",
       "status": "MANTER",
@@ -4336,6 +4363,31 @@
       "risks": [],
       "signals": {
         "supabase": 29
+      },
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/__tests__/migration-versions.test.ts",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "sqlWrite": 3,
+        "fallbackArray": 1
       },
       "action": "nenhuma",
       "reason": "suite de testes — corre por convenção do vitest",
@@ -7214,6 +7266,33 @@
       }
     },
     {
+      "path": "src/app/(dashboard)/dashboard/cobrancas/_components/client-history-client.tsx",
+      "category": "route-ui",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 1,
+      "consumerSample": [
+        "src/app/(dashboard)/dashboard/cobrancas/_components/cobrancas-tabs.tsx"
+      ],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "clientComponent": 1,
+        "eslintDisable": 1
+      },
+      "action": "nenhuma",
+      "reason": "em uso: 1 consumidor(es)",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
       "path": "src/app/(dashboard)/dashboard/cobrancas/_components/cobrancas-tabs.tsx",
       "category": "route-ui",
       "status": "MANTER",
@@ -9455,6 +9534,35 @@
       }
     },
     {
+      "path": "src/app/actions/client-financial-history.ts",
+      "category": "server-action",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 1,
+      "consumerSample": [
+        "src/app/(dashboard)/dashboard/cobrancas/_components/client-history-client.tsx"
+      ],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "serverAction": 1,
+        "sqlWrite": 3,
+        "fallbackZero": 1,
+        "fallbackArray": 3
+      },
+      "action": "nenhuma",
+      "reason": "em uso: 1 consumidor(es)",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
       "path": "src/app/actions/clientes.ts",
       "category": "server-action",
       "status": "MANTER",
@@ -11419,11 +11527,11 @@
       "category": "component",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 6,
+      "consumers": 7,
       "consumerSample": [
+        "src/app/(dashboard)/dashboard/cobrancas/_components/client-history-client.tsx",
         "src/app/(dashboard)/dashboard/financeiro/_components/financial-dashboard-client.tsx",
-        "src/components/financeiro/v2/finance-alert-strip.tsx",
-        "src/components/financeiro/v2/finance-attention-panel.tsx"
+        "src/components/financeiro/v2/finance-alert-strip.tsx"
       ],
       "autoLoaded": false,
       "referencedBy": [],
@@ -11433,7 +11541,7 @@
         "sqlWrite": 1
       },
       "action": "nenhuma",
-      "reason": "em uso: 6 consumidor(es)",
+      "reason": "em uso: 7 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -11501,11 +11609,11 @@
       "category": "component",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 3,
+      "consumers": 4,
       "consumerSample": [
+        "src/app/(dashboard)/dashboard/cobrancas/_components/client-history-client.tsx",
         "src/app/(dashboard)/dashboard/financeiro/_components/financial-dashboard-client.tsx",
-        "src/components/financeiro/v2/finance-alert-strip.tsx",
-        "src/components/financeiro/v2/finance-attention-panel.tsx"
+        "src/components/financeiro/v2/finance-alert-strip.tsx"
       ],
       "autoLoaded": false,
       "referencedBy": [],
@@ -11516,7 +11624,7 @@
         "sqlWrite": 2
       },
       "action": "nenhuma",
-      "reason": "em uso: 3 consumidor(es)",
+      "reason": "em uso: 4 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -11559,11 +11667,11 @@
       "category": "component",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 5,
+      "consumers": 6,
       "consumerSample": [
+        "src/app/(dashboard)/dashboard/cobrancas/_components/client-history-client.tsx",
         "src/app/(dashboard)/dashboard/financeiro/_components/financial-dashboard-client.tsx",
-        "src/components/financeiro/v2/finance-attention-panel.tsx",
-        "src/components/financeiro/v2/finance-chart-card.tsx"
+        "src/components/financeiro/v2/finance-attention-panel.tsx"
       ],
       "autoLoaded": false,
       "referencedBy": [],
@@ -11573,7 +11681,7 @@
         "clientComponent": 1
       },
       "action": "nenhuma",
-      "reason": "em uso: 5 consumidor(es)",
+      "reason": "em uso: 6 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -12444,10 +12552,11 @@
       "category": "domain",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 2,
+      "consumers": 5,
       "consumerSample": [
+        "src/__tests__/finance-v2-client-history.test.ts",
         "src/__tests__/finance-v2-read-model.test.ts",
-        "src/app/actions/finance-dashboard-v2.ts"
+        "src/app/actions/client-financial-history.ts"
       ],
       "autoLoaded": false,
       "referencedBy": [],
@@ -12457,7 +12566,57 @@
         "fallbackZero": 2
       },
       "action": "nenhuma",
-      "reason": "em uso: 2 consumidor(es)",
+      "reason": "em uso: 5 consumidor(es)",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/domain/finance-v2/client-history.ts",
+      "category": "domain",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 3,
+      "consumerSample": [
+        "src/__tests__/finance-v2-client-history.test.ts",
+        "src/app/(dashboard)/dashboard/cobrancas/_components/client-history-client.tsx",
+        "src/app/actions/client-financial-history.ts"
+      ],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {},
+      "action": "nenhuma",
+      "reason": "em uso: 3 consumidor(es)",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/domain/finance-v2/expense-categories.ts",
+      "category": "domain",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 1,
+      "consumerSample": [
+        "src/__tests__/finance-v2-client-history.test.ts"
+      ],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {},
+      "action": "nenhuma",
+      "reason": "em uso: 1 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -13134,7 +13293,7 @@
       "category": "lib",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 17,
+      "consumers": 18,
       "consumerSample": [
         "src/__tests__/auth-revalidation-central.test.ts",
         "src/app/actions/bank-reconciliation.ts",
@@ -13155,7 +13314,7 @@
         "ignoredError": 1
       },
       "action": "nenhuma",
-      "reason": "em uso: 17 consumidor(es)",
+      "reason": "em uso: 18 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -13916,11 +14075,11 @@
       "category": "lib",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 3,
+      "consumers": 4,
       "consumerSample": [
+        "src/app/(dashboard)/dashboard/cobrancas/_components/client-history-client.tsx",
         "src/app/(dashboard)/dashboard/financeiro/_components/financial-dashboard-client.tsx",
-        "src/components/financeiro/v2/finance-chart-card.tsx",
-        "src/components/financeiro/v2/finance-intelligence.tsx"
+        "src/components/financeiro/v2/finance-chart-card.tsx"
       ],
       "autoLoaded": false,
       "referencedBy": [],
@@ -13928,7 +14087,7 @@
       "risks": [],
       "signals": {},
       "action": "nenhuma",
-      "reason": "em uso: 3 consumidor(es)",
+      "reason": "em uso: 4 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -13970,11 +14129,11 @@
       "category": "lib",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 5,
+      "consumers": 6,
       "consumerSample": [
+        "src/__tests__/finance-v2-client-history.test.ts",
         "src/__tests__/finance-v2-read-model.test.ts",
-        "src/__tests__/financeiro-v2-presentation.test.ts",
-        "src/__tests__/financeiro-v2-ui-final.test.ts"
+        "src/__tests__/financeiro-v2-presentation.test.ts"
       ],
       "autoLoaded": false,
       "referencedBy": [],
@@ -13988,7 +14147,7 @@
         "fallbackArray": 1
       },
       "action": "nenhuma",
-      "reason": "em uso: 5 consumidor(es)",
+      "reason": "em uso: 6 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -16372,24 +16531,6 @@
       "manualDecision": false
     },
     {
-      "path": "supabase/migrations/070_finance_periods_and_expense_categories.sql",
-      "category": "migration",
-      "status": "MANTER",
-      "confidence": "alta",
-      "consumers": 0,
-      "consumerSample": [],
-      "autoLoaded": false,
-      "referencedBy": [],
-      "sideEffects": [],
-      "risks": [],
-      "signals": {
-        "sqlWrite": 8
-      },
-      "action": "nenhuma",
-      "reason": "migration versionada — histórico do schema, nunca se apaga",
-      "manualDecision": false
-    },
-    {
       "path": "supabase/migrations/070_guard_profile_managed_fields.sql",
       "category": "migration",
       "status": "MANTER",
@@ -16410,6 +16551,24 @@
         "supabase": 1,
         "serviceRole": 5,
         "sqlWrite": 15
+      },
+      "action": "nenhuma",
+      "reason": "migration versionada — histórico do schema, nunca se apaga",
+      "manualDecision": false
+    },
+    {
+      "path": "supabase/migrations/071_finance_periods_and_expense_categories.sql",
+      "category": "migration",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "sqlWrite": 8
       },
       "action": "nenhuma",
       "reason": "migration versionada — histórico do schema, nunca se apaga",
