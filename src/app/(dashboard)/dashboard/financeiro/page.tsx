@@ -2,6 +2,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { getFinancialDashboard, getOperationalSummary } from "@/app/actions/financial-dashboard";
 import { getUnbilledServices } from "@/app/actions/invoices";
+import { getFinanceDashboardV2 } from "@/app/actions/finance-dashboard-v2";
 import { FinanceShell } from "@/components/financeiro/finance-shell";
 import { parseFinancePeriod } from "@/lib/finance-period";
 import { FinancialDashboardClient } from "./_components/financial-dashboard-client";
@@ -31,7 +32,12 @@ export default async function FinanceiroPage({
 
   // `getUnbilledServices` é leitura pura — só faz `select`. Alimenta o único
   // alerta desta vista que tem fonte real. Não escreve nada durante o render.
-  const [result, summaryResult, unbilledResult] = await Promise.all([
+  // 🔴 `getFinanceDashboardV2` é o motor novo: recebe o período e governa
+  //    todos os números. `getFinancialDashboard` fica só para a série de 12
+  //    meses do gráfico, que ainda não existe no modelo novo — e é a única
+  //    coisa que dele se usa.
+  const [snapshotResult, result, summaryResult, unbilledResult] = await Promise.all([
+    getFinanceDashboardV2({ year: period.year, month: period.month }),
     getFinancialDashboard(companyId),
     getOperationalSummary(),
     getUnbilledServices(companyId),
@@ -56,6 +62,8 @@ export default async function FinanceiroPage({
         companyId={companyId}
         initialSummary={summaryResult.ok ? summaryResult.data : null}
         unbilled={unbilled}
+        snapshot={snapshotResult.ok ? snapshotResult.snapshot : null}
+        snapshotError={snapshotResult.ok ? null : snapshotResult.error}
       />
     </FinanceShell>
   );

@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import {
   ChevronDown, CheckCircle2, Circle,
-  ChartNoAxesCombined, Wallet, Clock3, ReceiptText, PieChart, CalendarDays,
+  ChartNoAxesCombined, Wallet, Clock3, ReceiptText, PieChart, CalendarDays, CircleAlert,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import {
@@ -23,8 +23,9 @@ import {
   FinanceTeamEfficiency,
   FinanceTopClients,
 } from "@/components/financeiro/v2/finance-intelligence";
-import { ErroCard, Skeleton } from "@/components/financeiro/v2/visual-contract";
+import { ErroCard, Skeleton, type Slot } from "@/components/financeiro/v2/visual-contract";
 import { fmtEur, fmtEurCompact } from "@/lib/finance-format";
+import type { FinanceDashboardSnapshot, Medida } from "@/domain/finance-v2/types";
 
 // ─── Tabela mensal resumida ────────────────────────────────────────────────────
 
@@ -177,6 +178,26 @@ function BreakdownShell({ title, total, count, children }: {
   );
 }
 
+/**
+ * Traduz uma `Medida` do motor para o `Slot` que a UI entende.
+ *
+ * 🔴 Aqui é onde os quatro estados do modelo de leitura chegam ao ecrã, e
+ *    onde se garante que não colapsam:
+ *
+ *      AVAILABLE 0   → "0,00 €"        (zero verdadeiro)
+ *      UNAVAILABLE   → "Indisponível"  (não sabemos)
+ *      ERROR         → "Indisponível"  + a razão
+ *
+ *    Nunca há um caminho de `null` para `0`: `fmtEur` só é chamado quando
+ *    `valor` é um número.
+ */
+function slotDeMedida(m: Medida | undefined, sufixo?: (v: number) => string): Slot<string> {
+  if (!m) return { estado: "indisponivel" };
+  if (m.estado === "ERROR") return { estado: "indisponivel", porque: m.nota ?? "Falha ao carregar." };
+  if (m.valor === null) return { estado: "indisponivel", porque: m.nota };
+  return { estado: "pronto", dados: sufixo ? sufixo(m.valor) : fmtEur(m.valor) };
+}
+
 const PERIODOS_OPERACIONAIS = [
   ["today", "Hoje", ""],
   ["week", "Esta semana", "seg – dom"],
@@ -190,11 +211,28 @@ interface Props {
   error: string | null;
   companyId: string;
   initialSummary: OperationalSummary | null;
-  /** Serviços concluídos ainda por faturar. Leitura pura — ver `getUnbilledServices`. */
+  /**
+   * Serviços por faturar.
+   *
+   * Deixou de alimentar a faixa de alertas — isso passou para o motor, que os
+   * produz numa colecção única. Fica na assinatura porque a página continua a
+   * calculá-lo e removê-lo era churn sem ganho.
+   */
   unbilled: { count: number; total: number } | null;
+  /**
+   * A fotografia do motor novo, já do período seleccionado.
+   *
+   * 🔴 É esta que governa os KPIs. `data` (o legado) sobrevive apenas para a
+   *    série de 12 meses do gráfico — ignora o período, e é por isso que
+   *    deixou de alimentar números.
+   */
+  snapshot: FinanceDashboardSnapshot | null;
+  snapshotError: string | null;
 }
 
-export function FinancialDashboardClient({ data, error, companyId, initialSummary, unbilled }: Props) {
+export function FinancialDashboardClient({
+  data, error, companyId, initialSummary, snapshot, snapshotError,
+}: Props) {
   // Financeiro V2 (PR A): `data` e `error` deixaram de ter cópia em estado
   // local. Vinham de `useState(initialData)` porque o botão "Atualizar" os
   // reescrevia no cliente; sem esse botão, a página é renderizada no servidor
@@ -246,27 +284,38 @@ export function FinancialDashboardClient({ data, error, companyId, initialSummar
   // pura) e `pendingRevenue` do painel financeiro. Atrasos por idade e
   // próximos vencimentos exigiriam repartir as faturas por data de
   // vencimento — a fonte actual dá só o agregado, por isso não aparecem.
-  const alertas: AlertaItem[] = [];
-  if (unbilled && unbilled.count > 0) {
-    alertas.push({
+  // Uma colecção única, do motor, usada pela faixa **e** pelo painel Atenção.
+  // Duas implementações do mesmo alerta acabariam a discordar.
+  const alertas: AlertaItem[] = (snapshot?.alerts.alertas ?? []).map((a) => {
+    if (a.tipo === "VENCIDO") {
+      return {
+        id: "vencido",
+        icon: <CircleAlert className="w-[18px] h-[18px]" />,
+        tom: "red" as const,
+        titulo: `${fmtEur(a.amount)} em atraso`,
+        subtexto: `${a.count} fatura${a.count !== 1 ? "s" : ""} em aberto`,
+        href: "/dashboard/cobrancas",
+      };
+    }
+    if (a.tipo === "VENCE_7_DIAS") {
+      return {
+        id: "vence-7",
+        icon: <CalendarDays className="w-[18px] h-[18px]" />,
+        tom: "orange" as const,
+        titulo: `${fmtEur(a.amount)} vencem em 7 dias`,
+        subtexto: `${a.count} fatura${a.count !== 1 ? "s" : ""} a vencer`,
+        href: "/dashboard/cobrancas",
+      };
+    }
+    return {
       id: "por-faturar",
       icon: <ReceiptText className="w-[18px] h-[18px]" />,
-      tom: "primary",
-      titulo: `${unbilled.count} serviço${unbilled.count !== 1 ? "s" : ""} por faturar`,
-      subtexto: `Valor estimado ${fmtEurCompact(unbilled.total)}`,
+      tom: "primary" as const,
+      titulo: `${a.count} serviço${a.count !== 1 ? "s" : ""} por faturar`,
+      subtexto: `Valor estimado ${fmtEurCompact(a.amount)}`,
       href: "/dashboard/cobrancas",
-    });
-  }
-  if (data && data.pendingRevenue > 0) {
-    alertas.push({
-      id: "em-aberto",
-      icon: <Clock3 className="w-[18px] h-[18px]" />,
-      tom: "orange",
-      titulo: `${fmtEur(data.pendingRevenue)} em aberto`,
-      subtexto: "Faturas pendentes ou vencidas",
-      href: "/dashboard/cobrancas",
-    });
-  }
+    };
+  });
 
   const atencao: AtencaoItem[] = alertas.map((a) => ({
     id: a.id,
@@ -280,9 +329,9 @@ export function FinancialDashboardClient({ data, error, companyId, initialSummar
   return (
     <div className="space-y-4">
 
-      {error && (
+      {(snapshotError || error) && (
         <FinanceCard>
-          <ErroCard mensagem={error} />
+          <ErroCard mensagem={snapshotError ?? error ?? undefined} />
         </FinanceCard>
       )}
 
@@ -381,40 +430,50 @@ export function FinancialDashboardClient({ data, error, companyId, initialSummar
 
       {/* ── 3. CINCO KPIs ─────────────────────────────────────────────────── */}
       <FinanceKpiGrid>
+        {/* Faturado: só faturas **emitidas** no período. Um rascunho não é
+            receita — e hoje as 11 faturas da base estão todas em rascunho,
+            por isso este número é honestamente 0,00 €. */}
         <FinanceKpiCard
-          label="Receita"
-          slot={data ? { estado: "pronto", dados: fmtEur(data.currentMonthRevenue) } : { estado: "indisponivel" }}
+          label="Faturado"
+          slot={slotDeMedida(snapshot?.kpis.faturado)}
           icon={<ChartNoAxesCombined className="w-[18px] h-[18px]" />}
           tom="primary"
         />
-        {/* 🔴 "Recebido" existe como espaço, não como número. Distinguir
-             faturado de efectivamente recebido exige conciliar pagamentos, e
-             a fonte actual não o faz. Preenchê-lo com a receita faturada
-             seria afirmar que está tudo cobrado. */}
+        {/* Recebido: entradas de caixa confirmadas no período. Fonte única —
+            somar também `paid_at` das faturas contaria o mesmo recebimento
+            duas vezes. */}
         <FinanceKpiCard
           label="Recebido"
-          slot={{ estado: "indisponivel", porque: "Requer conciliação de pagamentos" }}
+          slot={slotDeMedida(snapshot?.kpis.recebido)}
           icon={<Wallet className="w-[18px] h-[18px]" />}
           tom="green"
         />
         <FinanceKpiCard
           label="Em aberto"
-          slot={data ? { estado: "pronto", dados: fmtEur(data.pendingRevenue) } : { estado: "indisponivel" }}
+          slot={slotDeMedida(snapshot?.kpis.emAberto)}
           icon={<Clock3 className="w-[18px] h-[18px]" />}
           tom="orange"
         />
-        {/* O rótulo diz "(Salários)" porque é só isso que a fonte cobre.
-            Chamar-lhe "Custos" faria passar a folha por custo total. */}
+        {/* Custos: saídas de caixa confirmadas + folha, com protecção contra
+            contar o salário duas vezes quando já saiu pelo caixa. O rótulo
+            deixou de dizer "(Salários)" porque a fonte deixou de ser só a
+            folha — agora cobre fornecedores, despesas e avarias. */}
         <FinanceKpiCard
-          label="Custos (Salários)"
-          slot={data ? { estado: "pronto", dados: fmtEur(data.currentMonthCosts) } : { estado: "indisponivel" }}
+          label="Custos"
+          slot={slotDeMedida(snapshot?.kpis.custos)}
           icon={<ReceiptText className="w-[18px] h-[18px]" />}
           tom="peach"
         />
+        {/* A percentagem só aparece quando há faturação. Sem ela o rácio seria
+            uma divisão por zero, e não se mostra Infinity nem NaN. */}
         <FinanceKpiCard
           label="Margem"
-          slot={data ? { estado: "pronto", dados: fmtEur(data.currentMonthMargin) } : { estado: "indisponivel" }}
-          sufixo={data ? `· ${data.currentMonthMarginPct}%` : undefined}
+          slot={slotDeMedida(snapshot?.kpis.margem)}
+          sufixo={
+            snapshot?.kpis.margemPct.valor != null
+              ? `· ${snapshot.kpis.margemPct.valor.toLocaleString("pt-PT", { maximumFractionDigits: 1 })}%`
+              : undefined
+          }
           icon={<PieChart className="w-[18px] h-[18px]" />}
           tom="primary"
         />
@@ -451,18 +510,32 @@ export function FinancialDashboardClient({ data, error, companyId, initialSummar
           slot={{ estado: "indisponivel", porque: "Requer o pipeline canónico (PR B)" }}
         />
         <FinanceAging
-          slot={{ estado: "indisponivel", porque: "Requer repartir faturas por vencimento" }}
+          slot={
+            snapshot?.aging.estado === "AVAILABLE"
+              ? {
+                  estado: "pronto",
+                  dados: snapshot.aging.faixas.map((f) => ({
+                    label: f.faixa === "30+" ? "+30 dias" : `${f.faixa} dias`,
+                    valor: f.amount,
+                  })),
+                }
+              : { estado: "indisponivel", porque: snapshot?.aging.nota }
+          }
         />
         <FinanceTopClients
           slot={
-            data
+            snapshot?.topClients.estado === "AVAILABLE"
               ? {
                   estado: "pronto",
-                  dados: data.byClient.map((c) => ({ id: c.client_id, nome: c.client_name, valor: c.total })),
+                  dados: snapshot.topClients.clientes.map((c) => ({
+                    id: c.clientId,
+                    nome: c.clientName,
+                    valor: c.value,
+                  })),
                 }
-              : { estado: "indisponivel" }
+              : { estado: "indisponivel", porque: snapshot?.topClients.nota }
           }
-          metrica="Receita faturada no ano"
+          metrica="Faturado no período"
         />
       </div>
 
