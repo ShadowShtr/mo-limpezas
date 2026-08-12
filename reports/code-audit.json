@@ -1,10 +1,10 @@
 {
   "inventorySource": "git ls-files",
   "summary": {
-    "repositoryFiles": 589,
-    "textFiles": 577,
-    "sourceFiles": 408,
-    "textLines": 132106,
+    "repositoryFiles": 593,
+    "textFiles": 581,
+    "sourceFiles": 412,
+    "textLines": 133372,
     "typescriptDiagnostics": 0,
     "productionEntries": 70,
     "unreachableProductionModules": 38,
@@ -126,6 +126,7 @@
       "src/app/(app)/app/escala/page.tsx",
       "src/app/actions/invoices.ts",
       "src/app/actions/payroll.ts",
+      "src/domain/finance-v2/aggregate.ts",
       "src/domain/scheduling/civil-date.ts",
       "src/lib/bank-import/reconcile-db.ts",
       "src/lib/payroll-calc.ts"
