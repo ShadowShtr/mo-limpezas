@@ -1,14 +1,14 @@
 {
   "generatedBy": "scripts/audit-file-inventory.mjs",
-  "totalFiles": 597,
+  "totalFiles": 598,
   "byStatus": {
-    "MANTER": 580,
+    "MANTER": 581,
     "STANDBY": 17
   },
   "byCategory": {
     "route-ui": 132,
     "test": 87,
-    "migration": 72,
+    "migration": 73,
     "lib": 61,
     "script": 42,
     "doc": 36,
@@ -29,7 +29,7 @@
     "src-other": 1
   },
   "byConfidence": {
-    "alta": 582,
+    "alta": 583,
     "média": 9,
     "baixa": 6
   },
@@ -12453,7 +12453,9 @@
       "referencedBy": [],
       "sideEffects": [],
       "risks": [],
-      "signals": {},
+      "signals": {
+        "fallbackZero": 2
+      },
       "action": "nenhuma",
       "reason": "em uso: 2 consumidor(es)",
       "manualDecision": false,
@@ -16364,6 +16366,24 @@
       "signals": {
         "serviceRole": 12,
         "sqlWrite": 14
+      },
+      "action": "nenhuma",
+      "reason": "migration versionada — histórico do schema, nunca se apaga",
+      "manualDecision": false
+    },
+    {
+      "path": "supabase/migrations/070_finance_periods_and_expense_categories.sql",
+      "category": "migration",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "sqlWrite": 8
       },
       "action": "nenhuma",
       "reason": "migration versionada — histórico do schema, nunca se apaga",
