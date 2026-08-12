@@ -33,7 +33,7 @@ function SummaryLine({ label, value, danger }: { label: string; value: string; d
 }
 
 const inputCls =
-  "w-full px-3 py-2 rounded-lg border border-[var(--color-border)] text-sm text-[var(--color-text-main)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] focus:border-transparent";
+  "w-full px-3 py-2 rounded-lg border border-[var(--color-border)] text-sm text-[var(--color-text-main)] focus:outline-none focus:ring-2 focus:ring-[var(--finance-primary)] focus:border-transparent";
 
 export function PayrollEditSheet({ record, onClose, onSaved }: Props) {
   // Campos de taxas
@@ -302,9 +302,9 @@ export function PayrollEditSheet({ record, onClose, onSaved }: Props) {
           </div>
 
           {/* Preview líquido */}
-          <div className="p-4 rounded-xl bg-[var(--color-primary-light)] border border-[var(--color-primary-muted)]">
+          <div className="p-4 rounded-xl bg-[var(--finance-primary-soft)] border border-[var(--color-primary-muted)]">
             <p className="text-xs text-[var(--color-text-muted)] mb-1">Total líquido (pré-visualização)</p>
-            <p className={`text-2xl font-bold ${previewNet >= 0 ? "text-[var(--color-primary)]" : "text-red-600"}`}>
+            <p className={`text-2xl font-bold ${previewNet >= 0 ? "text-[var(--finance-primary)]" : "text-red-600"}`}>
               {fmtEur(previewNet)}
             </p>
             <p className="text-xs text-[var(--color-text-muted)] mt-1.5 leading-relaxed">
@@ -336,7 +336,7 @@ export function PayrollEditSheet({ record, onClose, onSaved }: Props) {
           <button
             onClick={(e) => handleSubmit(e as unknown as React.FormEvent)}
             disabled={saving}
-            className="flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-[var(--color-primary)] text-white text-sm font-semibold hover:bg-[var(--color-primary-hover)] transition-colors disabled:opacity-50"
+            className="flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-[var(--finance-primary)] text-white text-sm font-semibold hover:bg-[var(--finance-primary-hover)] transition-colors disabled:opacity-50"
           >
             {saving && <Loader2 className="w-4 h-4 animate-spin" />}
             Guardar

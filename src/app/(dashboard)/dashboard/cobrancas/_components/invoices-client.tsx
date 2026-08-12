@@ -332,7 +332,7 @@ export function InvoicesClient({ initialInvoices, unbilledServices, companyId, m
             <button
               onClick={handleGenerate}
               disabled={isPending}
-              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-[var(--color-primary)] text-white text-sm font-semibold hover:bg-[var(--color-primary-hover)] transition-colors disabled:opacity-50"
+              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-[var(--finance-primary)] text-white text-sm font-semibold hover:bg-[var(--finance-primary-hover)] transition-colors disabled:opacity-50"
             >
               {isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
               Gerar cobranças de {mesLabel}
@@ -395,7 +395,7 @@ export function InvoicesClient({ initialInvoices, unbilledServices, companyId, m
                         )}
                         <button
                           onClick={() => setViewing(inv)}
-                          className="p-1.5 rounded-lg text-[var(--color-text-muted)] hover:text-[var(--color-primary)] hover:bg-[var(--color-primary-light)] transition-colors"
+                          className="p-1.5 rounded-lg text-[var(--color-text-muted)] hover:text-[var(--finance-primary)] hover:bg-[var(--finance-primary-soft)] transition-colors"
                           title="Ver detalhes"
                         >
                           <Eye className="w-3.5 h-3.5" />
@@ -424,7 +424,7 @@ export function InvoicesClient({ initialInvoices, unbilledServices, companyId, m
                         )}
                         <button
                           onClick={() => handleExportPdf(inv)}
-                          className="p-1.5 rounded-lg text-[var(--color-text-muted)] hover:text-[var(--color-primary)] hover:bg-[var(--color-primary-light)] transition-colors"
+                          className="p-1.5 rounded-lg text-[var(--color-text-muted)] hover:text-[var(--finance-primary)] hover:bg-[var(--finance-primary-soft)] transition-colors"
                           title="Exportar PDF"
                         >
                           <Download className="w-3.5 h-3.5" />
@@ -455,7 +455,7 @@ export function InvoicesClient({ initialInvoices, unbilledServices, companyId, m
                   <td className="px-4 py-3 text-right text-sm font-semibold text-[var(--color-text-muted)]">
                     {fmtEur(invoices.reduce((s, i) => s + i.vat_amount, 0))}
                   </td>
-                  <td className="px-4 py-3 text-right text-sm font-bold text-[var(--color-primary)]">
+                  <td className="px-4 py-3 text-right text-sm font-bold text-[var(--finance-primary)]">
                     {fmtEur(totalFaturado)}
                   </td>
                   <td colSpan={2} />
@@ -539,7 +539,7 @@ export function InvoicesClient({ initialInvoices, unbilledServices, companyId, m
                     onClick={() => setPaymentMethod(opt.value)}
                     className={`py-2 px-3 rounded-lg border text-sm font-medium transition-colors text-left ${
                       paymentMethod === opt.value
-                        ? "border-[var(--color-primary)] bg-[var(--color-primary-light)] text-[var(--color-primary)]"
+                        ? "border-[var(--finance-primary)] bg-[var(--finance-primary-soft)] text-[var(--finance-primary)]"
                         : "border-[var(--color-border)] text-[var(--color-text-sub)] hover:bg-[var(--color-background)]"
                     }`}
                   >
@@ -558,7 +558,7 @@ export function InvoicesClient({ initialInvoices, unbilledServices, companyId, m
               <button
                 onClick={confirmPayment}
                 disabled={isPending}
-                className="flex-1 py-2 rounded-lg bg-[var(--color-primary)] text-white text-sm font-medium hover:bg-[var(--color-primary-hover)] transition-colors disabled:opacity-50"
+                className="flex-1 py-2 rounded-lg bg-[var(--finance-primary)] text-white text-sm font-medium hover:bg-[var(--finance-primary-hover)] transition-colors disabled:opacity-50"
               >
                 {isPending ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : "Confirmar pago"}
               </button>

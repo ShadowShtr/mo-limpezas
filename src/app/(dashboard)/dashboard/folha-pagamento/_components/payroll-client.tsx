@@ -261,7 +261,7 @@ export function PayrollClient({ initialRecords, companyId, mesParam, year, month
             <button
               onClick={handlePay}
               disabled={isPending}
-              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-[var(--color-primary)] text-white text-sm font-semibold hover:bg-[var(--color-primary-hover)] transition-colors disabled:opacity-50"
+              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-[var(--finance-primary)] text-white text-sm font-semibold hover:bg-[var(--finance-primary-hover)] transition-colors disabled:opacity-50"
             >
               <Banknote className="w-4 h-4" />
               Marcar pago {selected.size > 1 ? `(${selected.size})` : ""}
@@ -308,7 +308,7 @@ export function PayrollClient({ initialRecords, companyId, mesParam, year, month
             <button
               onClick={handleRecalculate}
               disabled={isPending}
-              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-[var(--color-primary)] text-white text-sm font-semibold hover:bg-[var(--color-primary-hover)] transition-colors disabled:opacity-50"
+              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-[var(--finance-primary)] text-white text-sm font-semibold hover:bg-[var(--finance-primary-hover)] transition-colors disabled:opacity-50"
             >
               {isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
               Calcular folha de {mesLabel}
@@ -324,7 +324,7 @@ export function PayrollClient({ initialRecords, companyId, mesParam, year, month
                       type="checkbox"
                       checked={selected.size === records.length && records.length > 0}
                       onChange={toggleAll}
-                      className="rounded border-[var(--color-border)] text-[var(--color-primary)] focus:ring-[var(--color-primary)]"
+                      className="rounded border-[var(--color-border)] text-[var(--finance-primary)] focus:ring-[var(--finance-primary)]"
                     />
                   </th>
                   <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wider text-[var(--color-text-muted)]">Colaborador</th>
@@ -343,19 +343,19 @@ export function PayrollClient({ initialRecords, companyId, mesParam, year, month
                   <>
                     <tr
                       key={r.id}
-                      className={`hover:bg-[var(--color-background)] transition-colors ${selected.has(r.id) ? "bg-[var(--color-primary-light)]" : "bg-white"}`}
+                      className={`hover:bg-[var(--color-background)] transition-colors ${selected.has(r.id) ? "bg-[var(--finance-primary-soft)]" : "bg-white"}`}
                     >
                       <td className="px-4 py-3">
                         <input
                           type="checkbox"
                           checked={selected.has(r.id)}
                           onChange={() => toggleSelect(r.id)}
-                          className="rounded border-[var(--color-border)] text-[var(--color-primary)] focus:ring-[var(--color-primary)]"
+                          className="rounded border-[var(--color-border)] text-[var(--finance-primary)] focus:ring-[var(--finance-primary)]"
                         />
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-2">
-                          <div className="w-7 h-7 rounded-full bg-[var(--color-primary-muted)] flex items-center justify-center shrink-0 overflow-hidden text-xs font-semibold text-[var(--color-primary)]">
+                          <div className="w-7 h-7 rounded-full bg-[var(--color-primary-muted)] flex items-center justify-center shrink-0 overflow-hidden text-xs font-semibold text-[var(--finance-primary)]">
                             {r.avatar_url
                               // eslint-disable-next-line @next/next/no-img-element
                               ? <img src={r.avatar_url} alt="" className="w-full h-full object-cover" />
@@ -371,7 +371,7 @@ export function PayrollClient({ initialRecords, companyId, mesParam, year, month
                       <td className="px-4 py-3 text-right text-[var(--color-text-sub)]">
                         <button
                           onClick={() => setExpandedId(expandedId === r.id ? null : r.id)}
-                          className="flex items-center gap-1 ml-auto hover:text-[var(--color-primary)] transition-colors"
+                          className="flex items-center gap-1 ml-auto hover:text-[var(--finance-primary)] transition-colors"
                         >
                           {fmtH(r.worked_hours)}
                           {expandedId === r.id
@@ -402,7 +402,7 @@ export function PayrollClient({ initialRecords, companyId, mesParam, year, month
                         <button
                           onClick={() => setEditing(r)}
                           disabled={r.status === "pago"}
-                          className="p-1.5 rounded-lg text-[var(--color-text-muted)] hover:text-[var(--color-primary)] hover:bg-[var(--color-primary-light)] transition-colors disabled:opacity-30"
+                          className="p-1.5 rounded-lg text-[var(--color-text-muted)] hover:text-[var(--finance-primary)] hover:bg-[var(--finance-primary-soft)] transition-colors disabled:opacity-30"
                           title="Ajustar"
                         >
                           <Pencil className="w-3.5 h-3.5" />
@@ -463,7 +463,7 @@ export function PayrollClient({ initialRecords, companyId, mesParam, year, month
                   <td className="px-4 py-3 text-right text-sm font-semibold text-[var(--color-text-main)]">{fmtEur(totalSub)}</td>
                   <td className="px-4 py-3 text-right text-sm font-semibold text-[var(--color-text-main)]">{fmtEur(totalExtra)}</td>
                   <td className="px-4 py-3 text-right text-sm font-semibold text-red-600">{fmtEur(totalDesc)}</td>
-                  <td className="px-4 py-3 text-right text-sm font-bold text-[var(--color-primary)]">{fmtEur(totalLiq)}</td>
+                  <td className="px-4 py-3 text-right text-sm font-bold text-[var(--finance-primary)]">{fmtEur(totalLiq)}</td>
                   <td colSpan={2} />
                 </tr>
               </tfoot>

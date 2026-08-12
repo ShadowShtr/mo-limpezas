@@ -133,15 +133,18 @@ describe("Financeiro V2 — a hierarquia aprovada está montada", () => {
     expect(src).toMatch(/xl:col-span-2/);
   });
 
-  it("os três cartões gigantes Hoje/Semana/Mês saíram do topo", () => {
-    // Não foram apagados: continuam, compactos, no fim da página, com o mesmo
-    // detalhe ao clicar. Mas já não ocupam meio ecrã antes dos números.
+  it("o resumo do calendário abre a página, e mantém o detalhe ao clicar", () => {
+    // Esteve no fim, e voltou ao topo a pedido do dono. Faz sentido: num mês
+    // sem faturação emitida, é a única secção com números a sério.
+    //
+    // O que não pode voltar é o cartão antigo, pesado e com o seu próprio
+    // sistema de cor.
     expect(src).not.toMatch(/<PeriodCard/);
     expect(src, "o detalhe ao clicar tem de sobreviver").toMatch(/<PeriodBreakdown/);
-    // O uso no JSX, não a declaração da constante — essa vive no topo do ficheiro.
     const iOperacional = src.indexOf("PERIODOS_OPERACIONAIS.map");
     const iKpis = src.indexOf("<FinanceKpiGrid");
-    expect(iOperacional).toBeGreaterThan(iKpis);
+    expect(iOperacional).toBeGreaterThan(-1);
+    expect(iOperacional, "o calendário vem antes dos KPIs").toBeLessThan(iKpis);
   });
 });
 

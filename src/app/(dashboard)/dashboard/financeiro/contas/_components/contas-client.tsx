@@ -62,7 +62,7 @@ interface Props {
   error: string | null;
 }
 
-const inputCls = "w-full px-3 py-2 rounded-lg border border-[var(--color-border)] text-sm text-[var(--color-text-main)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] focus:border-transparent bg-white";
+const inputCls = "w-full px-3 py-2 rounded-lg border border-[var(--color-border)] text-sm text-[var(--color-text-main)] focus:outline-none focus:ring-2 focus:ring-[var(--finance-primary)] focus:border-transparent bg-white";
 
 export function ContasClient({ toReceive, toPay, expenses: initialExpenses, companyId, error }: Props) {
   const [expenses, setExpenses] = useState<PendingExpense[]>(initialExpenses);
@@ -289,7 +289,7 @@ export function ContasClient({ toReceive, toPay, expenses: initialExpenses, comp
           </div>
           <button
             onClick={() => { resetForm(); setShowSheet(true); }}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[var(--color-primary)] text-white text-xs font-medium hover:opacity-90 transition-opacity"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[var(--finance-primary)] text-white text-xs font-medium hover:opacity-90 transition-opacity"
           >
             <Plus className="w-3.5 h-3.5" />
             Registar despesa
@@ -302,7 +302,7 @@ export function ContasClient({ toReceive, toPay, expenses: initialExpenses, comp
             <p className="text-sm text-[var(--color-text-muted)]">Sem despesas pendentes.</p>
             <button
               onClick={() => { resetForm(); setShowSheet(true); }}
-              className="text-xs text-[var(--color-primary)] hover:underline"
+              className="text-xs text-[var(--finance-primary)] hover:underline"
             >
               Registar uma despesa →
             </button>
@@ -465,7 +465,7 @@ export function ContasClient({ toReceive, toPay, expenses: initialExpenses, comp
               <button
                 onClick={(e) => handleCreate(e as unknown as React.FormEvent)}
                 disabled={isPending}
-                className="flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-[var(--color-primary)] text-white text-sm font-semibold hover:bg-[var(--color-primary-hover)] transition-colors disabled:opacity-50"
+                className="flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-[var(--finance-primary)] text-white text-sm font-semibold hover:bg-[var(--finance-primary-hover)] transition-colors disabled:opacity-50"
               >
                 {isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
                 Registar

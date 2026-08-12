@@ -86,9 +86,9 @@ export function FinanceKpiCard({
   const t = TOM[tom];
 
   return (
-    <FinanceCard className="min-h-[108px] flex items-center gap-3.5" padded={false}>
-      <div className="flex items-center gap-3.5 px-4 py-4 w-full">
-        <IconCircle bg={t.bg} fg={t.fg} size={38}>
+    <FinanceCard className="min-h-[100px] flex items-center" padded={false}>
+      <div className="flex items-start gap-3 px-4 py-3.5 w-full">
+        <IconCircle bg={t.bg} fg={t.fg} size={36}>
           {icon}
         </IconCircle>
 
@@ -98,7 +98,7 @@ export function FinanceKpiCard({
           {slot.estado === "carregando" ? (
             <Skeleton h={24} w="70%" className="mt-1.5" />
           ) : slot.estado === "pronto" ? (
-            <p className="mt-1 text-[23px] leading-tight font-bold tracking-[-0.02em] text-[var(--finance-text)] truncate">
+            <p className="mt-1 text-[22px] leading-none font-bold tracking-[-0.02em] text-[var(--finance-text)] truncate">
               {slot.dados}
               {sufixo && (
                 <span className="ml-1.5 text-[13px] font-semibold text-[var(--finance-text-secondary)]">
@@ -125,7 +125,7 @@ export function FinanceKpiCard({
 
 export function FinanceKpiGrid({ children }: { children: ReactNode }) {
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3.5">
       {children}
     </div>
   );

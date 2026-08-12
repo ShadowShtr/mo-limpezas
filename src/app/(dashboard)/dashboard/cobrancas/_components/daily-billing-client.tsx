@@ -162,7 +162,7 @@ export function DailyBillingClient({ initialDate, initialData, initialError, com
             type="date"
             value={date}
             onChange={(e) => { if (isValidIsoDateString(e.target.value)) changeDay(e.target.value); }}
-            className="px-3 py-2 rounded-lg border border-[var(--color-border)] text-sm text-[var(--color-text-main)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
+            className="px-3 py-2 rounded-lg border border-[var(--color-border)] text-sm text-[var(--color-text-main)] focus:outline-none focus:ring-2 focus:ring-[var(--finance-primary)]"
           />
           <button
             onClick={() => changeDay(shiftDay(date, 1))}
@@ -174,7 +174,7 @@ export function DailyBillingClient({ initialDate, initialData, initialError, com
           {!isToday && (
             <button
               onClick={() => changeDay(todayStr())}
-              className="px-3 py-2 rounded-lg border border-[var(--color-border)] text-xs font-medium text-[var(--color-primary)] hover:bg-[var(--color-primary-light)] transition-colors"
+              className="px-3 py-2 rounded-lg border border-[var(--color-border)] text-xs font-medium text-[var(--finance-primary)] hover:bg-[var(--finance-primary-soft)] transition-colors"
             >
               Hoje
             </button>
@@ -222,7 +222,7 @@ export function DailyBillingClient({ initialDate, initialData, initialError, com
       {/* Serviços do dia */}
       <div className="bg-white rounded-xl border border-[var(--color-border)] overflow-hidden">
         <div className="px-4 py-3 border-b border-[var(--color-border)] flex items-center gap-2">
-          <CalendarDays className="w-4 h-4 text-[var(--color-primary)]" />
+          <CalendarDays className="w-4 h-4 text-[var(--finance-primary)]" />
           <p className="text-sm font-semibold text-[var(--color-text-main)]">Serviços do dia</p>
         </div>
         {day.length === 0 ? (
@@ -348,7 +348,7 @@ function PaymentRow({
         {/* Estado de pagamento */}
         <div className="flex items-center gap-1.5 shrink-0">
           {saving ? (
-            <Loader2 className="w-4 h-4 animate-spin text-[var(--color-primary)] mx-6" />
+            <Loader2 className="w-4 h-4 animate-spin text-[var(--finance-primary)] mx-6" />
           ) : (
             <>
               <button
@@ -376,7 +376,7 @@ function PaymentRow({
                 disabled={saving}
                 onClick={editing ? onCancelEdit : onStartEdit}
                 title="Registar valor recebido (€)"
-                className={stateBtn(row.paid_amount != null, "bg-[var(--color-primary)] text-white border-[var(--color-primary)]")}
+                className={stateBtn(row.paid_amount != null, "bg-[var(--finance-primary)] text-white border-[var(--finance-primary)]")}
               >
                 <Euro className="w-3.5 h-3.5" />
               </button>
@@ -405,7 +405,7 @@ function PaymentRow({
             value={amountInput}
             onChange={(e) => onAmountInput(e.target.value)}
             placeholder={`Valor recebido (total: ${total.toFixed(2)})`}
-            className="w-56 px-3 py-1.5 rounded-lg border border-[var(--color-border)] text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
+            className="w-56 px-3 py-1.5 rounded-lg border border-[var(--color-border)] text-sm focus:outline-none focus:ring-2 focus:ring-[var(--finance-primary)]"
           />
           <button
             disabled={saving || parsedAmount == null || !Number.isFinite(parsedAmount) || parsedAmount < 0}
@@ -415,7 +415,7 @@ function PaymentRow({
               const status = parsedAmount >= total - 0.005 ? "pago_total" : parsedAmount > 0 ? "sinal_50" : "nao_informado";
               onApply(status, parsedAmount);
             }}
-            className="px-3 py-1.5 rounded-lg bg-[var(--color-primary)] text-white text-xs font-semibold hover:bg-[var(--color-primary-hover)] transition-colors disabled:opacity-50"
+            className="px-3 py-1.5 rounded-lg bg-[var(--finance-primary)] text-white text-xs font-semibold hover:bg-[var(--finance-primary-hover)] transition-colors disabled:opacity-50"
           >
             Guardar
           </button>

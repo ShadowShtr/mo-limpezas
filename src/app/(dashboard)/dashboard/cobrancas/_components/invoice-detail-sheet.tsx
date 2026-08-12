@@ -105,7 +105,7 @@ export function InvoiceDetailSheet({ invoice, onClose, onStatusChange, onExportP
               <span>IVA ({invoice.vat_rate}%)</span>
               <span>{fmtEur(invoice.vat_amount)}</span>
             </div>
-            <div className="flex justify-between text-base font-bold text-[var(--color-primary)] pt-1 border-t border-[var(--color-border)]">
+            <div className="flex justify-between text-base font-bold text-[var(--finance-primary)] pt-1 border-t border-[var(--color-border)]">
               <span>Total</span>
               <span>{fmtEur(invoice.total)}</span>
             </div>
@@ -130,7 +130,7 @@ export function InvoiceDetailSheet({ invoice, onClose, onStatusChange, onExportP
               <button
                 onClick={() => onStatusChange("pago")}
                 disabled={isPending}
-                className="flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-[var(--color-primary)] text-white text-sm font-semibold hover:bg-[var(--color-primary-hover)] transition-colors disabled:opacity-50"
+                className="flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-[var(--finance-primary)] text-white text-sm font-semibold hover:bg-[var(--finance-primary-hover)] transition-colors disabled:opacity-50"
               >
                 {isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Banknote className="w-4 h-4" />}
                 Marcar como paga

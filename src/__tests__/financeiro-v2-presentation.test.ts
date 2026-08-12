@@ -84,7 +84,23 @@ const ACCOES: [keyof typeof V, string[]][] = [
                    "createEntryFromTransaction", "deleteImport", "recalcSuggestions"]],
 ];
 
+/**
+ * O inventário das acções visíveis, por vista.
+ *
+ * 🔴 Este número é um cliquet. Se uma action desaparecer de uma vista porque
+ * o botão foi "arrumado" num redesenho, o teste falha e obriga a justificar a
+ * remoção no diff — que é exactamente o risco de refazer sete ecrãs depressa.
+ */
+const VISIBLE_ACTION_BINDINGS = ACCOES.reduce((n, [, as]) => n + as.length, 0);
+
 describe("Financeiro V2 — nenhuma acção ficou decorativa", () => {
+  it("🔴 VISIBLE_ACTION_BINDINGS mantém-se", () => {
+    // 28, não 26: a contagem inclui `recalcSuggestions` (que só foi
+    // reconhecida como escrita quando o detector passou a seguir imports) e
+    // `getPayments`, que a vista continua a chamar — agora como leitura pura.
+    expect(VISIBLE_ACTION_BINDINGS).toBe(28);
+  });
+
   for (const [vista, actions] of ACCOES) {
     it(`${vista}: continua a chamar as suas ${actions.length} actions`, () => {
       const src = codigo(V[vista]);

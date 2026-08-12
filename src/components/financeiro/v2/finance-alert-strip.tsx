@@ -5,16 +5,19 @@
 // Um cartão só, com os itens lado a lado e divisores entre eles. Três cartões
 // separados pesariam mais e diriam menos.
 //
-// 🔴 Um alerta sem fonte real **não aparece**. Não há aqui espaço para
-//    "Dados ainda não disponíveis" a ocupar um terço da faixa: um aviso
-//    financeiro inventado é pior do que aviso nenhum, e um aviso vazio ensina
-//    a ignorar a faixa toda. Itens sem fonte são omitidos e o espaço
-//    redistribui-se pelos que existem.
+// 🔴 Um alerta sem fonte real **não aparece**. Itens sem fonte são omitidos e
+//    o espaço redistribui-se pelos que existem — um aviso financeiro inventado
+//    é pior do que aviso nenhum.
+//
+//    Quando não sobra nenhum, a faixa não desaparece: diz que está tudo em
+//    ordem. Uma barra ausente deixa a dúvida entre "não há alertas" e "isto
+//    partiu"; o silêncio explícito responde.
 // ============================================================================
 
 "use client";
 
 import type { ReactNode } from "react";
+import { ShieldCheck } from "lucide-react";
 
 import { FinanceCard, IconCircle } from "./finance-card";
 import type { KpiTom } from "./finance-kpi-card";
@@ -38,9 +41,30 @@ export interface AlertaItem {
 }
 
 export function FinanceAlertStrip({ itens }: { itens: AlertaItem[] }) {
-  // Sem nada real para dizer, a faixa não existe. Não fica uma barra vazia a
-  // ocupar o topo da página.
-  if (itens.length === 0) return null;
+  // Sem alertas, a faixa mostra-se na mesma — mas diz que não há nada, em vez
+  // de desaparecer. São coisas diferentes: uma barra ausente deixa a dúvida
+  // ("não há alertas, ou o painel partiu?"), e o silêncio explícito responde.
+  //
+  // 🔴 O que não pode acontecer é preencher-se com números para parecer viva.
+  if (itens.length === 0) {
+    return (
+      <FinanceCard>
+        <div className="flex items-center gap-3">
+          <IconCircle bg="var(--finance-green-soft)" fg="var(--finance-green)" size={34}>
+            <ShieldCheck className="w-4 h-4" />
+          </IconCircle>
+          <div className="min-w-0">
+            <p className="text-[13.5px] font-medium text-[var(--finance-text)]">
+              Sem alertas financeiros neste período
+            </p>
+            <p className="text-[12px] text-[var(--finance-text-muted)]">
+              Nada vencido, nada por faturar e nada a vencer nos próximos dias.
+            </p>
+          </div>
+        </div>
+      </FinanceCard>
+    );
+  }
 
   return (
     <FinanceCard padded={false}>

@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import {
   ChevronDown, CheckCircle2, Circle,
-  ChartNoAxesCombined, Wallet, Clock3, ReceiptText, PieChart,
+  ChartNoAxesCombined, Wallet, Clock3, ReceiptText, PieChart, CalendarDays,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import {
@@ -11,7 +11,7 @@ import {
   type FinancialDashboardData,
   type OperationalSummary,
 } from "@/app/actions/financial-dashboard";
-import { FinanceCard } from "@/components/financeiro/v2/finance-card";
+import { FinanceCard, IconCircle } from "@/components/financeiro/v2/finance-card";
 import { FinanceKpiCard, FinanceKpiGrid } from "@/components/financeiro/v2/finance-kpi-card";
 import { FinanceAlertStrip, type AlertaItem } from "@/components/financeiro/v2/finance-alert-strip";
 import { FinanceAttentionPanel, type AtencaoItem } from "@/components/financeiro/v2/finance-attention-panel";
@@ -53,10 +53,10 @@ function MonthlyTable({ data }: { data: FinancialDashboardData["monthly"] }) {
                   <td className="py-2 px-3 font-medium text-[var(--color-text-main)]">{m.label}</td>
                   <td className="py-2 px-3 text-right text-[var(--color-text-main)]">{fmtEur(m.revenue)}</td>
                   <td className="py-2 px-3 text-right text-[var(--color-text-sub)]">{fmtEur(m.costs)}</td>
-                  <td className={`py-2 px-3 text-right font-medium ${m.margin >= 0 ? "text-[var(--color-primary)]" : "text-red-500"}`}>
+                  <td className={`py-2 px-3 text-right font-medium ${m.margin >= 0 ? "text-[var(--finance-primary)]" : "text-red-500"}`}>
                     {fmtEur(m.margin)}
                   </td>
-                  <td className={`py-2 px-3 text-right ${pct >= 0 ? "text-[var(--color-primary)]" : "text-red-500"}`}>
+                  <td className={`py-2 px-3 text-right ${pct >= 0 ? "text-[var(--finance-primary)]" : "text-red-500"}`}>
                     {pct}%
                   </td>
                 </tr>
@@ -297,7 +297,89 @@ export function FinancialDashboardClient({ data, error, companyId, initialSummar
              encolhe e distribui o espaço pelos que existem. */}
       <FinanceAlertStrip itens={alertas} />
 
-      {/* ── 2. CINCO KPIs ─────────────────────────────────────────────────── */}
+      {/* ── 2. RESUMO DO CALENDÁRIO ───────────────────────────────────────────
+          Primeiro de tudo, a pedido do dono. É a única parte desta página
+          que fala do trabalho em curso e não do dinheiro já registado — e num
+          mês sem faturação emitida, é também a única que tem números a sério.
+
+          Clicar continua a abrir a lista de conferência do período. */}
+      <div>
+        <div className="flex items-center gap-2 mb-3">
+          <CalendarDays className="w-4 h-4 text-[var(--finance-primary)]" aria-hidden />
+          <p className="text-[12px] font-semibold text-[var(--finance-text-secondary)] uppercase tracking-[0.04em]">
+            Resumo do calendário
+          </p>
+          <span className="inline-flex items-center gap-1.5 text-[11px] text-[var(--finance-text-muted)]">
+            <span className="w-1.5 h-1.5 rounded-full bg-[var(--finance-green)] animate-pulse" />
+            atualiza em tempo real
+          </span>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          {PERIODOS_OPERACIONAIS.map(([chave, rotulo, sub]) => {
+            const sm = summary?.[chave] ?? null;
+            const activo = selectedPeriod === chave;
+            const progresso =
+              sm && sm.expected > 0 ? Math.min(100, (sm.done / sm.expected) * 100) : 0;
+
+            return (
+              <button
+                key={chave}
+                type="button"
+                aria-pressed={activo}
+                onClick={() => setSelectedPeriod((prev) => (prev === chave ? null : chave))}
+                className={[
+                  "text-left rounded-[18px] border bg-[var(--finance-surface)] px-5 py-4 transition-all duration-150",
+                  activo
+                    ? "border-[var(--finance-primary-border)] bg-[var(--finance-primary-soft-2)]"
+                    : "border-[var(--finance-border)] hover:shadow-[0_4px_16px_rgba(16,24,40,.06)]",
+                ].join(" ")}
+                style={{ boxShadow: activo ? undefined : "0 1px 2px rgba(16,24,40,.03), 0 2px 8px rgba(16,24,40,.035)" }}
+              >
+                <div className="flex items-center gap-3">
+                  <IconCircle bg="var(--finance-primary-soft)" fg="var(--finance-primary)" size={34}>
+                    <CalendarDays className="w-4 h-4" />
+                  </IconCircle>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[12px] font-medium text-[#344054]">{rotulo}</p>
+                    <p className="text-[11px] text-[var(--finance-text-muted)] truncate">
+                      {chave === "today" ? hojeLabel : chave === "month" ? mesAtualLabel : sub}
+                    </p>
+                  </div>
+                  <ChevronDown
+                    className={`w-4 h-4 shrink-0 text-[var(--finance-text-muted)] transition-transform ${activo ? "rotate-180" : ""}`}
+                    aria-hidden
+                  />
+                </div>
+
+                {sm == null ? (
+                  <Skeleton h={26} w="65%" className="mt-3" />
+                ) : (
+                  <>
+                    <p className="mt-3 text-[23px] leading-none font-bold tracking-[-0.02em] text-[var(--finance-text)] tabular-nums">
+                      {fmtEur(sm.expected)}
+                    </p>
+                    <p className="mt-2 text-[11.5px] text-[var(--finance-text-muted)]">
+                      <span className="font-semibold text-[var(--finance-green)]">{fmtEur(sm.done)}</span>
+                      {" "}concluído · {sm.concluded}/{sm.services} serviço{sm.services !== 1 ? "s" : ""}
+                    </p>
+                    <span className="mt-2 block h-1.5 rounded-full bg-[var(--finance-track)] overflow-hidden">
+                      <span
+                        className="block h-1.5 rounded-full bg-[var(--finance-green)] transition-all"
+                        style={{ width: `${progresso}%` }}
+                      />
+                    </span>
+                  </>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {selectedPeriod && summary && <PeriodBreakdown period={selectedPeriod} summary={summary} />}
+
+      {/* ── 3. CINCO KPIs ─────────────────────────────────────────────────── */}
       <FinanceKpiGrid>
         <FinanceKpiCard
           label="Receita"
@@ -338,7 +420,7 @@ export function FinancialDashboardClient({ data, error, companyId, initialSummar
         />
       </FinanceKpiGrid>
 
-      {/* ── 3. GRÁFICO DOMINANTE + ATENÇÃO ────────────────────────────────── */}
+      {/* ── 4. GRÁFICO DOMINANTE + ATENÇÃO ────────────────────────────────── */}
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
         <div className="xl:col-span-2">
           <FinanceMainChart
@@ -363,7 +445,7 @@ export function FinancialDashboardClient({ data, error, companyId, initialSummar
         <FinanceAttentionPanel itens={atencao} />
       </div>
 
-      {/* ── 4. PREVISÃO · AGING · TOP CLIENTES ────────────────────────────── */}
+      {/* ── 5. PREVISÃO · AGING · TOP CLIENTES ────────────────────────────── */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <FinanceCashForecast
           slot={{ estado: "indisponivel", porque: "Requer o pipeline canónico (PR B)" }}
@@ -384,7 +466,7 @@ export function FinancialDashboardClient({ data, error, companyId, initialSummar
         />
       </div>
 
-      {/* ── 5. RECEITA POR SERVIÇO · EFICIÊNCIA ───────────────────────────── */}
+      {/* ── 6. RECEITA POR SERVIÇO · EFICIÊNCIA ───────────────────────────── */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* 🔴 Classificar receita por tipo de serviço exigiria adivinhar a
              partir da descrição. Não se faz regex sobre texto livre para
@@ -397,57 +479,6 @@ export function FinancialDashboardClient({ data, error, companyId, initialSummar
         />
       </div>
 
-      {/* ── 6. OPERACIONAL, COMPACTO ──────────────────────────────────────────
-          Os três cartões gigantes Hoje/Semana/Mês saíram do topo: ocupavam
-          meio ecrã e repetiam o período. Os dados não se perderam — ficam
-          aqui numa faixa, com o mesmo detalhe ao clicar. */}
-      <FinanceCard padded={false}>
-        <div className="flex flex-col sm:flex-row">
-          {PERIODOS_OPERACIONAIS.map(([chave, rotulo, sub], i) => {
-            const sm = summary?.[chave] ?? null;
-            const activo = selectedPeriod === chave;
-            return (
-              <button
-                key={chave}
-                type="button"
-                aria-pressed={activo}
-                onClick={() => setSelectedPeriod((prev) => (prev === chave ? null : chave))}
-                className={[
-                  "flex-1 min-w-0 text-left px-5 py-4 transition-colors",
-                  i > 0 ? "border-t sm:border-t-0 sm:border-l border-[var(--finance-divider)]" : "",
-                  activo ? "bg-[var(--finance-primary-soft-2)]" : "hover:bg-[var(--finance-surface-soft)]",
-                ].join(" ")}
-              >
-                <div className="flex items-center gap-2">
-                  <p className="text-[12px] font-medium text-[var(--finance-text-secondary)]">{rotulo}</p>
-                  <span className="text-[11px] text-[var(--finance-text-muted)]">
-                    {chave === "today" ? hojeLabel : chave === "month" ? mesAtualLabel : sub}
-                  </span>
-                  <ChevronDown
-                    className={`w-3.5 h-3.5 ml-auto text-[var(--finance-text-muted)] transition-transform ${activo ? "rotate-180" : ""}`}
-                    aria-hidden
-                  />
-                </div>
-                {sm == null ? (
-                  <Skeleton h={20} w="60%" className="mt-2" />
-                ) : (
-                  <>
-                    <p className="mt-1 text-[19px] font-bold text-[var(--finance-text)] tabular-nums">
-                      {fmtEur(sm.expected)}
-                    </p>
-                    <p className="text-[11.5px] text-[var(--finance-text-muted)]">
-                      <span className="font-semibold text-[var(--finance-green)]">{fmtEur(sm.done)}</span>
-                      {" "}concluído · {sm.concluded}/{sm.services} serviço{sm.services !== 1 ? "s" : ""}
-                    </p>
-                  </>
-                )}
-              </button>
-            );
-          })}
-        </div>
-      </FinanceCard>
-
-      {selectedPeriod && summary && <PeriodBreakdown period={selectedPeriod} summary={summary} />}
 
       {data && <MonthlyTable data={data.monthly} />}
     </div>

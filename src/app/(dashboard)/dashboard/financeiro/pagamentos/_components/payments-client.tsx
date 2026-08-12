@@ -10,7 +10,7 @@ import {
   uploadPaymentAttachment, deletePaymentAttachment, getSignedPaymentAttachmentUrl,
   type PaymentsData, type Payment, type PaymentKind,
 } from "@/app/actions/payments";
-import { LocalTabs, Kpi as V2Kpi, type KpiTone } from "@/components/financeiro/v2/primitives";
+import { LocalTabs, Kpi as V2Kpi, RowMenu, type KpiTone } from "@/components/financeiro/v2/primitives";
 import { todayInLisbon } from "@/lib/lisbon-time";
 import { isValidIsoDateString } from "@/lib/utils";
 
@@ -223,7 +223,7 @@ export function PaymentsClient({ initialData, error: initErr, year, month }: Pro
           <Kpi icon={<Clock className="w-4 h-4 text-amber-600" />} bg="bg-amber-50" label="Por pagar" value={fmtEur(data.totalPendente)} accent="text-amber-600" />
           <Kpi icon={<CheckCircle2 className="w-4 h-4 text-green-600" />} bg="bg-green-50" label="Já pago" value={fmtEur(data.totalPago)} accent="text-green-600" />
           <Kpi icon={<AlertCircle className="w-4 h-4 text-red-600" />} bg="bg-red-50" label="Em atraso" value={`${data.countOverdue}`} accent="text-red-600" />
-          <Kpi icon={<Clock className="w-4 h-4 text-[var(--color-primary)]" />} bg="bg-[var(--color-primary-light)]" label="Itens por pagar" value={`${data.countPendente}`} accent="text-[var(--color-primary)]" />
+          <Kpi icon={<Clock className="w-4 h-4 text-[var(--finance-primary)]" />} bg="bg-[var(--finance-primary-soft)]" label="Itens por pagar" value={`${data.countPendente}`} accent="text-[var(--finance-primary)]" />
         </div>
       )}
 
@@ -231,7 +231,7 @@ export function PaymentsClient({ initialData, error: initErr, year, month }: Pro
         <>
           {aba === "fixos" ? (
             <PaymentSection
-              title="Pagamentos Fixos" subtitle="Repetem de mês para mês" icon={<Repeat className="w-4 h-4 text-[var(--color-primary)]" />}
+              title="Pagamentos Fixos" subtitle="Repetem de mês para mês" icon={<Repeat className="w-4 h-4 text-[var(--finance-primary)]" />}
               emptyLabel="Ainda não existem pagamentos fixos neste mês."
               items={data.fixos} today={today} onAdd={() => openNew("fixo")} onEdit={openEdit} onToggle={toggleStatus} onDelete={handleDelete} busy={isPending}
             />
@@ -283,7 +283,7 @@ export function PaymentsClient({ initialData, error: initErr, year, month }: Pro
                   {form.attachment_url ? (
                     <div className="flex items-center gap-2 px-3 py-2 rounded-lg border border-[var(--color-border)] bg-white text-sm">
                       <Paperclip className="w-4 h-4 text-[var(--color-text-muted)] shrink-0" />
-                      <button type="button" onClick={handleAttachmentDownload} className="flex-1 text-left truncate text-[var(--color-primary)] hover:underline">
+                      <button type="button" onClick={handleAttachmentDownload} className="flex-1 text-left truncate text-[var(--finance-primary)] hover:underline">
                         {form.attachment_name ?? "Ficheiro anexado"}
                       </button>
                       <button type="button" onClick={handleAttachmentRemove} title="Remover anexo" className="text-[var(--color-text-muted)] hover:text-red-600 shrink-0">
@@ -303,7 +303,7 @@ export function PaymentsClient({ initialData, error: initErr, year, month }: Pro
               {formError && <p className="text-sm text-red-600">{formError}</p>}
               <div className="flex gap-3 pt-1">
                 <button type="button" onClick={() => setForm(null)} className="flex-1 py-2 rounded-lg border border-[var(--color-border)] text-sm text-[var(--color-text-sub)] hover:bg-[var(--color-background)]">Cancelar</button>
-                <button type="submit" disabled={isPending} className="flex-1 py-2 rounded-lg bg-[var(--color-primary)] text-white text-sm font-medium hover:bg-[var(--color-primary-hover)] disabled:opacity-50">
+                <button type="submit" disabled={isPending} className="flex-1 py-2 rounded-lg bg-[var(--finance-primary)] text-white text-sm font-medium hover:bg-[var(--finance-primary-hover)] disabled:opacity-50">
                   {isPending ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : form.id ? "Guardar" : "Adicionar"}
                 </button>
               </div>
@@ -315,7 +315,7 @@ export function PaymentsClient({ initialData, error: initErr, year, month }: Pro
   );
 }
 
-const inputCls = "w-full px-3 py-2 rounded-lg border border-[var(--color-border)] text-sm text-[var(--color-text-main)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] bg-white";
+const inputCls = "w-full px-3 py-2 rounded-lg border border-[var(--color-border)] text-sm text-[var(--color-text-main)] focus:outline-none focus:ring-2 focus:ring-[var(--finance-primary)] bg-white";
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -349,54 +349,90 @@ function PaymentSection({
   onAdd: () => void; onEdit: (p: Payment) => void; onToggle: (p: Payment) => void; onDelete: (p: Payment) => void; busy: boolean;
 }) {
   return (
-    <div className="bg-white rounded-xl border border-[var(--color-border)] overflow-hidden">
-      <div className="px-4 py-3 border-b border-[var(--color-border)] flex items-center justify-between bg-[var(--color-background)]">
-        <div className="flex items-center gap-2">
+    <div
+      className="bg-[var(--finance-surface)] rounded-[18px] border border-[var(--finance-border)] overflow-hidden"
+      style={{ boxShadow: "0 1px 2px rgba(16,24,40,.03), 0 2px 8px rgba(16,24,40,.035)" }}
+    >
+      <div className="px-5 py-4 flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2.5 min-w-0">
           {icon}
-          <div>
-            <h2 className="text-sm font-semibold text-[var(--color-text-main)]">{title}</h2>
-            <p className="text-xs text-[var(--color-text-muted)]">{subtitle}</p>
+          <div className="min-w-0">
+            <h2 className="text-[14px] font-semibold text-[var(--finance-text)] truncate">{title}</h2>
+            <p className="text-[12px] text-[var(--finance-text-muted)] truncate">{subtitle}</p>
           </div>
         </div>
-        <button onClick={onAdd} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[var(--color-primary)] text-white text-xs font-medium hover:bg-[var(--color-primary-hover)]">
-          <Plus className="w-3.5 h-3.5" /> Adicionar
+        <button
+          onClick={onAdd}
+          className="shrink-0 inline-flex items-center gap-1.5 h-10 px-3.5 rounded-[10px] bg-[var(--finance-primary)] text-white text-[13px] font-medium hover:bg-[var(--finance-primary-hover)] transition-colors"
+        >
+          <Plus className="w-4 h-4" aria-hidden /> Adicionar
         </button>
       </div>
       {items.length === 0 ? (
-        <div className="py-10 text-center text-sm text-[var(--color-text-muted)]">{emptyLabel}</div>
+        <div className="py-10 text-center text-[13px] text-[var(--finance-text-muted)]">{emptyLabel}</div>
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead>
-              <tr className="bg-white border-b border-[var(--color-border)]">
-                <Th>Descrição</Th><Th right>Valor</Th><Th>Data</Th><Th>Déb. direto</Th><Th>Estado</Th><th className="px-3 py-2" />
+              <tr className="border-t border-[var(--finance-divider)]">
+                <Th>Descrição</Th><Th>Vencimento</Th><Th right>Valor</Th><Th>Estado</Th><Th>Débito direto</Th>
+                <th className="px-3 py-2 w-10" />
               </tr>
             </thead>
             <tbody className="divide-y divide-[var(--color-border)]">
               {items.map((p) => {
                 const overdue = p.status === "pendente" && p.due_date && p.due_date < today;
                 return (
-                  <tr key={p.id} className="hover:bg-[var(--color-background)]">
-                    <td className="px-3 py-2.5 text-sm text-[var(--color-text-main)]">{p.description}</td>
-                    <td className="px-3 py-2.5 text-sm font-semibold text-right text-[var(--color-text-main)]">{fmtEur(p.amount)}</td>
-                    <td className={`px-3 py-2.5 text-xs ${overdue ? "text-red-600 font-semibold" : "text-[var(--color-text-sub)]"} flex items-center gap-1`}>
-                      {p.due_date && <Calendar className="w-3 h-3" />}{fmtDate(p.due_date)}
+                  <tr key={p.id} className="border-t border-[var(--finance-divider)] hover:bg-[#FAFBFC] transition-colors">
+                    <td className="px-3 py-3.5 text-[13px] text-[var(--finance-text)]">{p.description}</td>
+                    <td className="px-3 py-3.5">
+                      <span className={`inline-flex items-center gap-1.5 text-[12.5px] ${overdue ? "text-[var(--finance-red)] font-semibold" : "text-[var(--finance-text-secondary)]"}`}>
+                        {p.due_date && <Calendar className="w-3.5 h-3.5" aria-hidden />}
+                        {fmtDate(p.due_date)}
+                      </span>
                     </td>
-                    <td className="px-3 py-2.5">
-                      {p.direct_debit === null ? <span className="text-xs text-[var(--color-text-muted)]">—</span>
-                        : p.direct_debit ? <span className="text-xs px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 font-medium">SIM</span>
-                        : <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-500 font-medium">NÃO</span>}
+                    <td className="px-3 py-3.5 text-[13px] font-semibold text-right text-[var(--finance-text)] tabular-nums">
+                      {fmtEur(p.amount)}
                     </td>
-                    <td className="px-3 py-2.5">
-                      <button onClick={() => onToggle(p)} disabled={busy}
-                        className={`text-xs px-2 py-0.5 rounded-full font-medium inline-flex items-center gap-1 ${p.status === "pago" ? "bg-green-100 text-green-700 hover:bg-green-200" : overdue ? "bg-red-100 text-red-700 hover:bg-red-200" : "bg-amber-100 text-amber-700 hover:bg-amber-200"}`}>
-                        {p.status === "pago" ? <><Check className="w-3 h-3" /> Pago</> : <>{overdue ? "Em atraso" : "Por pagar"}</>}
+                    {/* O estado é um badge pastel, e continua a alternar ao clicar —
+                        `setPaymentStatus`, a mesma action de sempre. */}
+                    <td className="px-3 py-3.5">
+                      <button
+                        onClick={() => onToggle(p)}
+                        disabled={busy}
+                        aria-label={`Alternar estado de ${p.description}`}
+                        className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11.5px] font-medium transition-colors ${
+                          p.status === "pago"
+                            ? "bg-[var(--finance-green-soft)] text-[var(--finance-green)] hover:brightness-95"
+                            : overdue
+                              ? "bg-[var(--finance-red-soft)] text-[var(--finance-red)] hover:brightness-95"
+                              : "bg-[var(--finance-orange-soft)] text-[var(--finance-orange)] hover:brightness-95"
+                        }`}
+                      >
+                        {p.status === "pago" ? <><Check className="w-3 h-3" aria-hidden /> Pago</> : overdue ? "Vencido" : "Pendente"}
                       </button>
                     </td>
-                    <td className="px-3 py-2.5">
-                      <div className="flex items-center gap-1 justify-end">
-                        <button onClick={() => onEdit(p)} className="p-1 rounded text-[var(--color-text-muted)] hover:text-[var(--color-primary)] hover:bg-[var(--color-primary-light)]" title="Editar"><Pencil className="w-3.5 h-3.5" /></button>
-                        <button onClick={() => onDelete(p)} className="p-1 rounded text-[var(--color-text-muted)] hover:text-red-600 hover:bg-red-50" title="Eliminar"><Trash2 className="w-3.5 h-3.5" /></button>
+                    <td className="px-3 py-3.5">
+                      {p.direct_debit === null ? (
+                        <span className="text-[12px] text-[var(--finance-text-muted)]">—</span>
+                      ) : p.direct_debit ? (
+                        <span className="px-2 py-0.5 rounded-full bg-[var(--finance-blue-soft)] text-[#3538CD] text-[11.5px] font-medium">Sim</span>
+                      ) : (
+                        <span className="px-2 py-0.5 rounded-full bg-[var(--finance-track)] text-[var(--finance-slate)] text-[11.5px] font-medium">Não</span>
+                      )}
+                    </td>
+                    {/* Editar e Eliminar recolheram para o «⋯». Recolher não é
+                        remover: as duas actions são exactamente as de antes. */}
+                    <td className="px-3 py-3.5">
+                      <div className="flex items-center justify-end">
+                        <RowMenu
+                          label={`Ações de ${p.description}`}
+                          actions={[
+                            { label: "Editar", icon: <Pencil className="w-3.5 h-3.5" />, onSelect: () => onEdit(p) },
+                            { label: p.status === "pago" ? "Marcar por pagar" : "Marcar como pago", icon: <Check className="w-3.5 h-3.5" />, onSelect: () => onToggle(p) },
+                            { label: "Eliminar", icon: <Trash2 className="w-3.5 h-3.5" />, onSelect: () => onDelete(p), danger: true },
+                          ]}
+                        />
                       </div>
                     </td>
                   </tr>

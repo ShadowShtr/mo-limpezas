@@ -17,7 +17,8 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
-  TrendingUp, Repeat, FileText, BarChart2, Receipt, Wallet, Landmark,
+  ChartNoAxesCombined, ArrowRightLeft, ReceiptText,
+  ChartNoAxesColumnIncreasing, BadgeDollarSign, WalletCards, Landmark,
 } from "lucide-react";
 
 import {
@@ -33,12 +34,12 @@ import {
  * mover ambas partiria ligações e favoritos por uma questão estética.
  */
 export const FINANCE_VIEWS = [
-  { href: "/dashboard/financeiro",             label: "Resumo",             icon: TrendingUp },
-  { href: "/dashboard/financeiro/pagamentos",  label: "Pagamentos",         icon: Repeat },
-  { href: "/dashboard/financeiro/contas",      label: "Contas",             icon: FileText },
-  { href: "/dashboard/financeiro/fluxo-caixa", label: "Fluxo de Caixa",     icon: BarChart2 },
-  { href: "/dashboard/cobrancas",              label: "Cobranças",          icon: Receipt },
-  { href: "/dashboard/folha-pagamento",        label: "Folha de Pagamento", icon: Wallet },
+  { href: "/dashboard/financeiro",             label: "Resumo",             icon: ChartNoAxesCombined },
+  { href: "/dashboard/financeiro/pagamentos",  label: "Pagamentos",         icon: ArrowRightLeft },
+  { href: "/dashboard/financeiro/contas",      label: "Contas",             icon: ReceiptText },
+  { href: "/dashboard/financeiro/fluxo-caixa", label: "Fluxo de Caixa",     icon: ChartNoAxesColumnIncreasing },
+  { href: "/dashboard/cobrancas",              label: "Cobranças",          icon: BadgeDollarSign },
+  { href: "/dashboard/folha-pagamento",        label: "Folha de Pagamento", icon: WalletCards },
   { href: "/dashboard/financeiro/conciliacao", label: "Conciliação",        icon: Landmark },
 ] as const;
 
@@ -107,12 +108,12 @@ export function FinanceNav({ period }: { period: FinancePeriod }) {
             prefetch
             aria-current={active ? "page" : undefined}
             className={[
-              "shrink-0 inline-flex items-center gap-2 rounded-xl px-3.5 py-2 text-[13px] font-semibold",
+              "shrink-0 inline-flex items-center gap-2 rounded-[10px] px-3.5 py-2.5 text-[13px] font-medium",
               "transition-colors whitespace-nowrap",
-              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#16A34A] focus-visible:ring-offset-2",
+              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--finance-primary)] focus-visible:ring-offset-2",
               active
-                ? "bg-[#16A34A] text-white shadow-sm"
-                : "text-[#475569] hover:bg-[#F1F5F9] hover:text-[#0F172A]",
+                ? "bg-[var(--finance-primary-soft)] text-[var(--finance-primary)]"
+                : "text-[var(--finance-slate)] hover:bg-[#F5F6FA] hover:text-[var(--finance-text)]",
             ].join(" ")}
           >
             <Icon className="w-4 h-4 shrink-0" aria-hidden />

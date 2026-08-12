@@ -134,7 +134,7 @@ export function CashFlowClient({ initialData, error: initErr, companyId, year, m
 
   const pag = usePagination(filtered, 10);
 
-  const inputCls = "w-full px-3 py-2 rounded-lg border border-[var(--color-border)] text-sm text-[var(--color-text-main)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] bg-white";
+  const inputCls = "w-full px-3 py-2 rounded-lg border border-[var(--color-border)] text-sm text-[var(--color-text-main)] focus:outline-none focus:ring-2 focus:ring-[var(--finance-primary)] bg-white";
 
   return (
     <div className="space-y-5">
@@ -149,7 +149,7 @@ export function CashFlowClient({ initialData, error: initErr, companyId, year, m
         <div>
           <label className="block text-xs text-[var(--color-text-muted)] mb-1">Tipo</label>
           <select value={filterType} onChange={(e) => setFilterType(e.target.value as "" | "entrada" | "saida")}
-            className="px-3 py-2 rounded-lg border border-[var(--color-border)] text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] bg-white">
+            className="px-3 py-2 rounded-lg border border-[var(--color-border)] text-sm focus:outline-none focus:ring-2 focus:ring-[var(--finance-primary)] bg-white">
             <option value="">Todos</option>
             <option value="entrada">Entradas</option>
             <option value="saida">Saídas</option>
@@ -158,7 +158,7 @@ export function CashFlowClient({ initialData, error: initErr, companyId, year, m
         <div>
           <label className="block text-xs text-[var(--color-text-muted)] mb-1">Estado</label>
           <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value as "" | "pendente" | "confirmado")}
-            className="px-3 py-2 rounded-lg border border-[var(--color-border)] text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] bg-white">
+            className="px-3 py-2 rounded-lg border border-[var(--color-border)] text-sm focus:outline-none focus:ring-2 focus:ring-[var(--finance-primary)] bg-white">
             <option value="">Todos</option>
             <option value="confirmado">Confirmado</option>
             <option value="pendente">Pendente</option>
@@ -167,7 +167,7 @@ export function CashFlowClient({ initialData, error: initErr, companyId, year, m
         <div className="flex-1" />
         <button
           onClick={() => setShowNew(true)}
-          className="flex items-center gap-2 px-4 py-2 rounded-lg bg-[var(--color-primary)] text-white text-sm font-medium hover:bg-[var(--color-primary-hover)] transition-colors"
+          className="flex items-center gap-2 px-4 py-2 rounded-lg bg-[var(--finance-primary)] text-white text-sm font-medium hover:bg-[var(--finance-primary-hover)] transition-colors"
         >
           <Plus className="w-4 h-4" />
           Novo registo
@@ -361,7 +361,7 @@ export function CashFlowClient({ initialData, error: initErr, companyId, year, m
                   Cancelar
                 </button>
                 <button type="submit" disabled={isPending}
-                  className="flex-1 py-2 rounded-lg bg-[var(--color-primary)] text-white text-sm font-medium hover:bg-[var(--color-primary-hover)] transition-colors disabled:opacity-50">
+                  className="flex-1 py-2 rounded-lg bg-[var(--finance-primary)] text-white text-sm font-medium hover:bg-[var(--finance-primary-hover)] transition-colors disabled:opacity-50">
                   {isPending ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : "Criar registo"}
                 </button>
               </div>
