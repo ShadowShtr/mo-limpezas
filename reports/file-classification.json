@@ -1,8 +1,8 @@
 {
   "generatedBy": "scripts/audit-file-inventory.mjs",
-  "totalFiles": 604,
+  "totalFiles": 605,
   "byStatus": {
-    "MANTER": 587,
+    "MANTER": 588,
     "STANDBY": 17
   },
   "byCategory": {
@@ -12,8 +12,8 @@
     "lib": 61,
     "script": 42,
     "domain": 38,
+    "doc": 37,
     "server-action": 37,
-    "doc": 36,
     "component": 25,
     "doc-historico": 16,
     "api-route": 16,
@@ -29,7 +29,7 @@
     "src-other": 1
   },
   "byConfidence": {
-    "alta": 589,
+    "alta": 590,
     "média": 9,
     "baixa": 6
   },
@@ -487,6 +487,22 @@
         "write": 2,
         "sqlWrite": 2
       },
+      "action": "nenhuma",
+      "reason": "documentação",
+      "manualDecision": false
+    },
+    {
+      "path": "docs/GATE-M0-HISTORICO-MIGRATIONS.md",
+      "category": "doc",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {},
       "action": "nenhuma",
       "reason": "documentação",
       "manualDecision": false
@@ -16496,7 +16512,9 @@
       "consumers": 0,
       "consumerSample": [],
       "autoLoaded": false,
-      "referencedBy": [],
+      "referencedBy": [
+        "docs"
+      ],
       "sideEffects": [],
       "risks": [
         "service-role"
@@ -16517,7 +16535,9 @@
       "consumers": 0,
       "consumerSample": [],
       "autoLoaded": false,
-      "referencedBy": [],
+      "referencedBy": [
+        "docs"
+      ],
       "sideEffects": [],
       "risks": [
         "service-role"
