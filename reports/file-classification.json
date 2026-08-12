@@ -8150,7 +8150,7 @@
       "signals": {
         "supabase": 3,
         "clientComponent": 1,
-        "sqlWrite": 3,
+        "sqlWrite": 4,
         "realtime": 2
       },
       "action": "nenhuma",
@@ -8363,7 +8363,7 @@
       "risks": [],
       "signals": {
         "clientComponent": 1,
-        "sqlWrite": 1
+        "sqlWrite": 3
       },
       "action": "nenhuma",
       "reason": "em uso: 1 consumidor(es)",
@@ -11286,7 +11286,7 @@
       "risks": [],
       "signals": {
         "write": 1,
-        "sqlWrite": 3
+        "sqlWrite": 2
       },
       "action": "nenhuma",
       "reason": "em uso: 7 consumidor(es)",
