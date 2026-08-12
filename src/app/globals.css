@@ -39,6 +39,63 @@
   --color-danger:          #EF4444;
   --color-info:            #3B82F6;
 
+  /* ══════════════════════════════════════════════════════════════════════
+     FINANCEIRO V2 — sistema de cor do módulo
+     ══════════════════════════════════════════════════════════════════════
+     Vive à parte do tema geral de propósito. A aplicação continua verde; o
+     Financeiro usa violeta como cor **estrutural** (navegação, analytics,
+     faturamento, rankings, seleção). Não é decoração: cada cor tem uma
+     função e essa função não muda de página para página.
+
+       violeta   estrutura, faturamento, analytics
+       verde     recebido, positivo, confirmação
+       laranja   despesas, atenção, vencimento próximo
+       vermelho  vencido, erro, crítico — raro
+       cinza     fundo, bordas, tracks, indisponível
+
+     🔴 Nunca usar violeta para sucesso, nem verde para estrutura. Trocar as
+        funções tira ao utilizador a única pista rápida que tem sobre o que
+        está a ver. */
+
+  --finance-bg:             #F7F8FC;
+  --finance-surface:        #FFFFFF;
+  --finance-surface-soft:   #FAFBFD;
+  --finance-border:         #E7ECF3;
+  --finance-divider:        #EDF1F6;
+
+  --finance-text:           #101828;
+  --finance-text-secondary: #667085;
+  --finance-text-muted:     #98A2B3;
+
+  --finance-primary:        #6558F5;
+  --finance-primary-hover:  #5548EA;
+  --finance-primary-soft:   #F0EEFF;
+  --finance-primary-soft-2: #F7F5FF;
+  --finance-primary-border: #DDD8FF;
+
+  --finance-green:          #16A35A;
+  --finance-green-strong:   #079447;
+  --finance-green-soft:     #EAF8EF;
+  --finance-green-border:   #D5F1DF;
+
+  --finance-orange:         #FF7A1A;
+  --finance-orange-soft:    #FFF2E7;
+  --finance-orange-border:  #FFE0C2;
+
+  --finance-red:            #F04438;
+  --finance-red-soft:       #FFF0EE;
+  --finance-red-border:     #FFD7D3;
+
+  --finance-blue-soft:      #EEF4FF;
+  --finance-slate:          #475467;
+  --finance-track:          #EEF1F5;
+
+  /* Séries dos gráficos — a mesma cor significa a mesma coisa em todos. */
+  --finance-series-faturado: #6558F5;
+  --finance-series-recebido: #16A35A;
+  --finance-series-despesas: #FF6B1A;
+  --finance-grid:            #EAECF0;
+
   /* ── Service states ── */
   --color-status-scheduled: #22C55E;
   --color-status-ongoing:   #F59E0B;
