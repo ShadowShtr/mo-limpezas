@@ -541,11 +541,32 @@ export function FinancialDashboardClient({
 
       {/* ── 6. RECEITA POR SERVIÇO · EFICIÊNCIA ───────────────────────────── */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {/* 🔴 Classificar receita por tipo de serviço exigiria adivinhar a
-             partir da descrição. Não se faz regex sobre texto livre para
-             produzir números financeiros. */}
+        {/*
+          «Receita por serviço» saiu daqui e entrou «Despesas por categoria».
+
+          Não foi uma troca estética. Classificar receita por tipo de serviço
+          exigiria adivinhar a partir da descrição — e não se faz regex sobre
+          texto livre para produzir números contabilísticos. Já a classificação
+          de despesas existe desde sempre em `cash_flow_entries.category`, com
+          444 movimentos reais por trás.
+
+          O componente `FinanceRevenueByService` não foi apagado: fica em
+          STANDBY e volta quando os serviços tiverem classificação verdadeira.
+        */}
         <FinanceRevenueByService
-          slot={{ estado: "indisponivel", porque: "Requer classificação de serviço na fonte" }}
+          titulo="Despesas por categoria"
+          slot={
+            snapshot?.expensesByCategory.estado === "AVAILABLE" && snapshot.expensesByCategory.total > 0
+              ? {
+                  estado: "pronto",
+                  dados: snapshot.expensesByCategory.fatias.map((f) => ({
+                    nome: f.categoria,
+                    valor: f.valor,
+                    cor: f.cor,
+                  })),
+                }
+              : { estado: "indisponivel", porque: snapshot?.expensesByCategory.nota ?? "Sem despesas neste período." }
+          }
         />
         <FinanceTeamEfficiency
           slot={{ estado: "indisponivel", porque: "Requer cruzar horas com receita (PR B)" }}

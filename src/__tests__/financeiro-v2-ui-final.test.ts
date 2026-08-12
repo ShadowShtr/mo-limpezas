@@ -153,14 +153,34 @@ describe("Financeiro V2 — a hierarquia aprovada está montada", () => {
 describe("Financeiro V2 — os painéis sem fonte não inventam", () => {
   const src = codigo(RESUMO);
 
-  it("🔴 previsão, receita por serviço e eficiência continuam indisponíveis", () => {
-    // Continuam sem fonte. `FinanceAging` saiu desta lista: a PR B ligou-o ao
-    // motor, e agora reparte faturas vencidas por idade a sério.
-    for (const bloco of ["FinanceCashForecast", "FinanceRevenueByService", "FinanceTeamEfficiency"]) {
+  it("🔴 previsão e eficiência continuam indisponíveis", () => {
+    // A lista encolhe à medida que as fontes existem. `FinanceAging` saiu
+    // quando o motor passou a repartir faturas vencidas por idade; o donut
+    // saiu quando deixou de mostrar receita por serviço e passou a mostrar
+    // despesas por categoria, que têm fonte real.
+    for (const bloco of ["FinanceCashForecast", "FinanceTeamEfficiency"]) {
       const i = src.indexOf(`<${bloco}`);
       const trecho = src.slice(i, i + 300);
       expect(trecho, `${bloco} devia estar indisponível`).toMatch(/estado:\s*"indisponivel"/);
     }
+  });
+
+  it("🔴 o donut mostra despesas por categoria, não receita por serviço", () => {
+    // Classificar receita por serviço exigiria adivinhar pela descrição. A
+    // classificação de despesas existe desde sempre em `category`.
+    const i = src.indexOf("<FinanceRevenueByService");
+    const trecho = src.slice(i, i + 700);
+    expect(trecho).toMatch(/titulo="Despesas por categoria"/);
+    expect(trecho).toMatch(/snapshot\?\.expensesByCategory\.estado === "AVAILABLE"/);
+    expect(trecho, "e tem saída para indisponível").toMatch(/estado:\s*"indisponivel"/);
+  });
+
+  it("o componente de receita por serviço fica em STANDBY, não apagado", () => {
+    // Volta quando os serviços tiverem classificação verdadeira. Apagá-lo
+    // obrigaria a reescrevê-lo do zero nessa altura.
+    const prim = ler(`${V2}/finance-intelligence.tsx`);
+    expect(prim).toContain("FinanceRevenueByService");
+    expect(prim, "o título tem de ser configurável").toMatch(/titulo\s*=\s*"Receita por serviço"/);
   });
 
   it("aging e top clientes vêm do snapshot, com estado", () => {

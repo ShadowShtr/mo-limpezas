@@ -22,6 +22,8 @@ import {
   calcularAlertas,
   calcularKpis,
   calcularTopClientes,
+  calcularDespesasPorCategoria,
+  corDaCategoria,
   diasEntre,
   somarDias,
   type FactoCaixa,
@@ -370,5 +372,78 @@ describe("🔴 fail-closed de escrita", () => {
     // `new Date()` só aparece para o carimbo `generatedAt` e para o último dia
     // do mês; nunca para decidir *qual* é o mês.
     expect(src).not.toMatch(/new Date\(\)\.getMonth|new Date\(\)\.getFullYear/);
+  });
+});
+
+// ─── 11. Despesas por categoria ──────────────────────────────────────────────
+
+describe("despesas por categoria", () => {
+  const saida = (amount: number, categoria: string | null, date = "2026-08-10"): FactoCaixa =>
+    ({ date, tipo: "saida", status: "confirmado", amount, categoria });
+
+  it("🔴 as fatias somam sempre o total das despesas", () => {
+    // Um donut cujas fatias não somam o todo mente sobre proporções.
+    const b = calcularDespesasPorCategoria(
+      ok([saida(100, "salario"), saida(50, "combustivel"), saida(25, null)]),
+      ctx(2026, 8),
+    );
+    expect(b.total).toBe(175);
+    expect(b.fatias.reduce((n, f) => n + f.valor, 0)).toBe(b.total);
+    expect(b.fatias.reduce((n, f) => n + f.share, 0)).toBeCloseTo(1, 2);
+  });
+
+  it("🔴 não adivinha categoria — sem categoria fica «Sem categoria»", () => {
+    // Inferir "Galp" → combustível por texto seria fabricar contabilidade a
+    // partir de uma descrição escrita à pressa.
+    const b = calcularDespesasPorCategoria(ok([saida(80, null)]), ctx(2026, 8));
+    const sem = b.fatias.find((f) => f.chave === null)!;
+    expect(sem.categoria).toBe("Sem categoria");
+    expect(sem.valor).toBe(80);
+    expect(b.semCategoria).toBe(80);
+  });
+
+  it("agrupa o excedente em «Outros», e só quando existe mesmo", () => {
+    const muitas = ["salario", "combustivel", "material", "seguro", "viatura", "equipamento", "outro"]
+      .map((c, i) => saida(100 - i, c));
+    const b = calcularDespesasPorCategoria(ok(muitas), ctx(2026, 8), 5);
+    expect(b.fatias.filter((f) => f.chave === "__outros__")).toHaveLength(1);
+
+    const poucas = calcularDespesasPorCategoria(ok([saida(10, "salario")]), ctx(2026, 8), 5);
+    expect(poucas.fatias.some((f) => f.chave === "__outros__")).toBe(false);
+  });
+
+  it("só conta saídas confirmadas do período", () => {
+    const b = calcularDespesasPorCategoria(
+      ok([
+        saida(100, "salario"),
+        { date: "2026-07-10", tipo: "saida", status: "confirmado", amount: 999, categoria: "salario" },
+        { date: "2026-08-10", tipo: "saida", status: "pendente", amount: 999, categoria: "salario" },
+        { date: "2026-08-10", tipo: "entrada", status: "confirmado", amount: 999, categoria: null },
+      ]),
+      ctx(2026, 8),
+    );
+    expect(b.total).toBe(100);
+  });
+
+  it("a fonte falhou → ERROR, não um donut vazio", () => {
+    const b = calcularDespesasPorCategoria(falhou("timeout"), ctx(2026, 8));
+    expect(b.estado).toBe("ERROR");
+    expect(b.fatias).toEqual([]);
+  });
+
+  it("a cor de uma categoria é estável entre chamadas", () => {
+    // Cor aleatória por render faria a mesma categoria mudar de cor entre
+    // carregamentos, e o donut deixaria de se comparar de mês para mês.
+    expect(corDaCategoria("salario")).toBe(corDaCategoria("salario"));
+    expect(corDaCategoria("salario")).not.toBe(corDaCategoria("combustivel"));
+    expect(corDaCategoria(null)).toBeTruthy();
+  });
+
+  it("ordena por valor e desempata pelo nome", () => {
+    const b = calcularDespesasPorCategoria(
+      ok([saida(50, "viatura"), saida(50, "combustivel"), saida(90, "salario")]),
+      ctx(2026, 8),
+    );
+    expect(b.fatias.map((f) => f.chave)).toEqual(["salario", "combustivel", "viatura"]);
   });
 });

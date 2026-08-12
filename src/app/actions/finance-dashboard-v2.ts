@@ -31,7 +31,9 @@ import {
   calcularAging,
   calcularAlertas,
   calcularKpis,
+  calcularDespesasPorCategoria,
   calcularTopClientes,
+  corDaCategoria,
   type FactoCaixa,
   type FactoFatura,
   type FactoFolha,
@@ -248,6 +250,18 @@ export async function getFinanceDashboardV2(
       // comprometida — usar `fixed_variable_payments` projectaria as datas
       // esmagadas do incidente de Agosto.
       forecast: { estado: "UNAVAILABLE", nota: "Bloqueada pelo incidente de periodicidade." },
+      expensesByCategory: (() => {
+        const b = calcularDespesasPorCategoria(caixa, ctx);
+        return {
+          estado: b.estado,
+          fatias: b.fatias.map((f) => ({ ...f, cor: corDaCategoria(f.chave) })),
+          total: b.total,
+          semCategoria: b.semCategoria,
+          nota: b.nota,
+        };
+      })(),
+      // STANDBY: o componente fica, a fonte é que não existe. Volta quando os
+      // serviços deixarem de estar todos por concluir e houver classificação.
       revenueByService: { estado: "UNAVAILABLE", nota: "Sem classificação de serviço na fonte." },
       teamEfficiency: { estado: "UNAVAILABLE", nota: "Horas trabalhadas a zero em toda a folha." },
       operation,

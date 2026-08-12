@@ -216,10 +216,17 @@ export interface FatiaServico {
   cor: string;
 }
 
-export function FinanceRevenueByService({ slot }: { slot: Slot<FatiaServico[]> }) {
+export function FinanceRevenueByService({
+  slot,
+  titulo = "Receita por serviço",
+}: {
+  slot: Slot<FatiaServico[]>;
+  /** O mesmo donut serve receita por serviço e despesas por categoria. */
+  titulo?: string;
+}) {
   return (
     <FinanceCard className="h-full">
-      <SectionHeader title="Receita por serviço" />
+      <SectionHeader title={titulo} />
       <RenderSlot slot={slot} esqueleto={<Skeleton h={150} />}>
         {(fatias) => {
           const total = fatias.reduce((s, f) => s + f.valor, 0);

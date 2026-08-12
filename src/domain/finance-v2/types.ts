@@ -175,6 +175,21 @@ export interface FinanceDashboardSnapshot {
   aging: BlocoAging;
   topClients: BlocoTopClientes;
   forecast: { estado: EstadoFonte; nota: string };
+  /**
+   * Despesas por categoria — substitui «Receita por serviço» no Resumo.
+   *
+   * A classificação de serviços não existe; a de despesas existe desde sempre
+   * em `cash_flow_entries.category`. Trocar um card indisponível por um com
+   * dados reais é a diferença entre um painel que informa e um que decora.
+   */
+  expensesByCategory: {
+    estado: EstadoFonte;
+    fatias: { categoria: string; chave: string | null; valor: number; share: number; cor: string }[];
+    total: number;
+    semCategoria: number;
+    nota?: string;
+  };
+  /** STANDBY — volta quando os serviços tiverem classificação real. */
   revenueByService: { estado: EstadoFonte; nota: string };
   teamEfficiency: { estado: EstadoFonte; nota: string };
   operation: ResumoOperacao;

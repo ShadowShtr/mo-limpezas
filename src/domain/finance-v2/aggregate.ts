@@ -342,3 +342,144 @@ export function calcularTopClientes(
     })),
   };
 }
+
+// ─── Despesas por categoria ──────────────────────────────────────────────────
+
+export interface FatiaCategoria {
+  categoria: string;
+  /** `null` quando a despesa não tem categoria — nunca inventada. */
+  chave: string | null;
+  valor: number;
+  share: number;
+}
+
+export interface BlocoCategorias {
+  estado: "AVAILABLE" | "ERROR";
+  fatias: FatiaCategoria[];
+  total: number;
+  semCategoria: number;
+  nota?: string;
+}
+
+/**
+ * Reparte as saídas de caixa do período pelas suas categorias.
+ *
+ * 🔴 **Não se adivinha categoria.** Uma despesa sem categoria vai para o grupo
+ * «Sem categoria» e conta na mesma para o total. Inferir «Galp» → combustível
+ * por texto seria fabricar informação contabilística a partir de uma descrição
+ * escrita à pressa, e ninguém depois saberia distinguir o que foi classificado
+ * do que foi adivinhado.
+ *
+ * O total das fatias é sempre igual ao total das despesas — os testes provam-no,
+ * porque um donut cujas fatias não somam o todo mente sobre proporções.
+ */
+export function calcularDespesasPorCategoria(
+  caixa: Fonte<FactoCaixa>,
+  ctx: FinanceReadContext,
+  topN = 5,
+): BlocoCategorias {
+  if (!caixa.ok) return { estado: "ERROR", fatias: [], total: 0, semCategoria: 0, nota: caixa.erro };
+
+  const saidas = caixa.factos.filter(
+    (c) => c.tipo === "saida" && c.status === "confirmado" && dentroDoPeriodo(c.date, ctx),
+  );
+
+  const porCat = new Map<string | null, number>();
+  for (const s of saidas) {
+    const k = s.categoria && s.categoria.trim() !== "" ? s.categoria.trim().toLowerCase() : null;
+    porCat.set(k, Math.round(((porCat.get(k) ?? 0) + s.amount) * 100) / 100);
+  }
+
+  const total = soma([...porCat.values()]);
+  const semCategoria = porCat.get(null) ?? 0;
+
+  const ordenadas = [...porCat.entries()]
+    .filter(([k]) => k !== null)
+    .sort((a, z) => z[1] - a[1] || String(a[0]).localeCompare(String(z[0]), "pt"));
+
+  const principais = ordenadas.slice(0, topN);
+  const resto = soma(ordenadas.slice(topN).map(([, v]) => v));
+
+  const fatias: FatiaCategoria[] = principais.map(([k, v]) => ({
+    categoria: rotularCategoria(k as string),
+    chave: k as string,
+    valor: v,
+    share: total > 0 ? Math.round((v / total) * 1000) / 1000 : 0,
+  }));
+
+  // «Outros» só existe se houver mesmo mais categorias por baixo do corte.
+  if (resto > 0) {
+    fatias.push({
+      categoria: "Outros",
+      chave: "__outros__",
+      valor: resto,
+      share: total > 0 ? Math.round((resto / total) * 1000) / 1000 : 0,
+    });
+  }
+  if (semCategoria > 0) {
+    fatias.push({
+      categoria: "Sem categoria",
+      chave: null,
+      valor: semCategoria,
+      share: total > 0 ? Math.round((semCategoria / total) * 1000) / 1000 : 0,
+    });
+  }
+
+  return { estado: "AVAILABLE", fatias, total, semCategoria };
+}
+
+/** Rótulos legíveis para as categorias que a base já usa. */
+const ROTULOS: Record<string, string> = {
+  salario: "Salários",
+  salarios: "Salários",
+  combustivel: "Combustível",
+  fornecedor: "Fornecedores",
+  despesa: "Despesas gerais",
+  material: "Materiais",
+  materiais: "Materiais",
+  manutencao: "Manutenção",
+  avaria: "Manutenção",
+  viatura: "Viaturas",
+  equipamento: "Equipamentos",
+  comunicacoes: "Comunicações",
+  seguro: "Seguros",
+  seguros: "Seguros",
+  instalacoes: "Instalações",
+  contabilidade: "Contabilidade",
+  impostos: "Impostos e taxas",
+  alimentacao: "Alimentação",
+  subcontratacao: "Subcontratação",
+  outro: "Outros",
+  outros: "Outros",
+};
+
+export function rotularCategoria(chave: string): string {
+  return ROTULOS[chave] ?? chave.charAt(0).toUpperCase() + chave.slice(1);
+}
+
+/**
+ * Cor por categoria, estável.
+ *
+ * 🔴 Determinística de propósito. Uma cor aleatória por render faria a mesma
+ * categoria mudar de cor entre carregamentos, e o donut deixaria de se poder
+ * comparar de um mês para o outro.
+ */
+const CORES_CATEGORIA: Record<string, string> = {
+  salario: "#6558F5", salarios: "#6558F5",
+  combustivel: "#FF7A1A",
+  material: "#16A35A", materiais: "#16A35A",
+  manutencao: "#6378D9", avaria: "#6378D9",
+  viatura: "#F04438",
+  equipamento: "#8B5CF6",
+  comunicacoes: "#06B6D4",
+  seguro: "#F59E0B", seguros: "#F59E0B",
+  fornecedor: "#6378D9",
+  despesa: "#06B6D4",
+  outro: "#94A3B8", outros: "#94A3B8",
+  __outros__: "#94A3B8",
+};
+
+export function corDaCategoria(chave: string | null): string {
+  if (chave === null) return "#CBD5E1";
+  return CORES_CATEGORIA[chave] ?? "#8B5CF6";
+}
