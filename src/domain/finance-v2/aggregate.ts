@@ -109,10 +109,45 @@ function soma(ns: number[]): number {
   return Math.round(ns.reduce((a, b) => a + b, 0) * 100) / 100;
 }
 
-function dentroDoPeriodo(data: string | null, ctx: FinanceReadContext): boolean {
+export function dentroDoPeriodo(data: string | null, ctx: FinanceReadContext): boolean {
   if (!data) return false;
   const d = data.slice(0, 10);
   return d >= ctx.periodStart && d <= ctx.periodEnd;
+}
+
+/**
+ * A que período pertence uma fatura.
+ *
+ * `period_start` é nullable, e as faturas mais antigas têm-no vazio. Sem o
+ * recurso ao vencimento, essas desapareciam de todos os meses — não é que
+ * fossem para o mês errado: não apareciam em lado nenhum.
+ */
+export function periodoDaFatura(f: FactoFatura): string | null {
+  return f.periodStart ?? f.dueDate;
+}
+
+/**
+ * Uma fatura está **por receber**?
+ *
+ * 🔴 Uma definição só, usada pelo KPI «Em aberto» do dashboard e pela lista
+ *    «A Receber» do separador Contas.
+ *
+ * Existiam duas, e não davam o mesmo número. O dashboard exigia `paid_at`
+ * vazio; a consulta das Contas olhava só para o estado. Uma fatura `pendente`
+ * com recebimento registado — que acontece quando o dinheiro entra e ninguém
+ * muda o estado — contava como dívida numa página e não na outra, e as duas
+ * estavam abertas ao lado uma da outra.
+ *
+ * Nenhuma das duas dava erro. Davam dois números, e quem os lia tinha de
+ * escolher em qual acreditar.
+ */
+export function estaPorReceber(f: FactoFatura, ctx: FinanceReadContext): boolean {
+  return (
+    (ESTADOS_FATURADO as readonly string[]).includes(f.status) &&
+    !(ESTADOS_PAGA as readonly string[]).includes(f.status) &&
+    f.paidAt == null &&
+    dentroDoPeriodo(periodoDaFatura(f), ctx)
+  );
 }
 
 // ─── KPIs ────────────────────────────────────────────────────────────────────
@@ -129,7 +164,7 @@ export function calcularKpis(
     faturado = medida.erro(faturas.erro);
   } else {
     const emitidas = faturas.factos.filter(
-      (f) => (ESTADOS_FATURADO as readonly string[]).includes(f.status) && dentroDoPeriodo(f.periodStart ?? f.dueDate, ctx),
+      (f) => (ESTADOS_FATURADO as readonly string[]).includes(f.status) && dentroDoPeriodo(periodoDaFatura(f), ctx),
     );
     // Zero real: carregou, e não há faturas emitidas. Isto é `0,00 €`, não
     // «Indisponível» — a diferença é entre "não faturámos" e "não sabemos".
@@ -194,13 +229,7 @@ export function calcularKpis(
   if (!faturas.ok) {
     emAberto = medida.erro(faturas.erro);
   } else {
-    const porReceber = faturas.factos.filter(
-      (f) =>
-        (ESTADOS_FATURADO as readonly string[]).includes(f.status) &&
-        !(ESTADOS_PAGA as readonly string[]).includes(f.status) &&
-        f.paidAt == null &&
-        dentroDoPeriodo(f.periodStart ?? f.dueDate, ctx),
-    );
+    const porReceber = faturas.factos.filter((f) => estaPorReceber(f, ctx));
     emAberto = medida.disponivel(soma(porReceber.map((f) => f.total)));
   }
 
@@ -359,7 +388,7 @@ export function calcularTopClientes(
   const porCliente = new Map<string, { nome: string; total: number }>();
   for (const f of faturas.factos) {
     if (!(ESTADOS_FATURADO as readonly string[]).includes(f.status)) continue;
-    if (!dentroDoPeriodo(f.periodStart ?? f.dueDate, ctx)) continue;
+    if (!dentroDoPeriodo(periodoDaFatura(f), ctx)) continue;
     if (!f.clientId) continue;
     const atual = porCliente.get(f.clientId) ?? { nome: f.clientName ?? "—", total: 0 };
     atual.total = Math.round((atual.total + f.total) * 100) / 100;

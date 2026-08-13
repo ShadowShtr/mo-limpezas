@@ -68,14 +68,25 @@ describe("os carregadores recebem o período, e usam-no", () => {
   it("🔴 getAccountsData filtra os três blocos", () => {
     const src = codigo("src/app/actions/cash-flow.ts");
     const i = src.indexOf("export async function getAccountsData");
-    const corpo = src.slice(i, i + 2600);
+    // Até ao fim da função, e não uma janela de N caracteres: a janela fixa
+    // encolhe sozinha sempre que alguém acrescenta um comentário, e o teste
+    // passa a medir o comprimento do texto em vez do comportamento.
+    const corpo = src.slice(i, src.indexOf("return { ok: true, toReceive, toPay, expenses };", i));
 
     expect(corpo, "assinatura sem período").toMatch(/input\?:\s*\{\s*year:\s*number;\s*month:\s*number\s*\}/);
     // Faturas pelo **período contabilístico**, salários pelo período da folha,
     // despesas pela data do movimento. As faturas filtravam por `due_date`, e
     // isso fazia Contas e o Resumo discordarem sobre o mês de uma fatura de
     // Julho que vence em Agosto.
-    expect(corpo).toMatch(/invoicesQ\.gte\("period_start"/);
+    //
+    // 🔴 O filtro das faturas deixou de ser um `gte("period_start")` em SQL: um
+    //    `period_start` nulo não satisfaz a comparação, e essas faturas
+    //    desapareciam de **todos** os meses das Contas enquanto o dashboard as
+    //    contava pelo vencimento. Agora o SQL é uma rede larga e quem decide é
+    //    `estaPorReceber`, partilhado com o motor.
+    expect(corpo).toMatch(/period_start\.is\.null/);
+    expect(corpo).toContain("estaPorReceber(");
+    expect(corpo, "o filtro fino não volta para o SQL").not.toMatch(/invoicesQ\.gte\("period_start"/);
     expect(corpo).toMatch(/payrollQ\.eq\("period_year"/);
     expect(corpo).toMatch(/expensesQ\.gte\("date"/);
   });
@@ -183,14 +194,20 @@ describe("🔴 os carregadores não engolem erros", () => {
     // Filtrar por `due_date` num lado e `period_start` no outro faz uma fatura
     // de Julho que vence a 5 de Agosto aparecer em meses diferentes nas duas
     // áreas — e nenhuma das duas está obviamente errada a olhar para ela.
+    // 🔴 Já não são dois critérios parecidos: é **um**. A TASK 12 mediu os dois
+    //    lado a lado e encontrou-os a discordar em dois casos reais — uma
+    //    fatura `pendente` com `paid_at` preenchido, e uma sem `period_start`.
+    //    A definição passou a viver num sítio só.
     const contas = codigo("src/app/actions/cash-flow.ts");
-    expect(contas).toMatch(/invoicesQ\.gte\("period_start"/);
+    expect(contas).toContain("estaPorReceber(");
     expect(contas, "due_date não é período contabilístico")
       .not.toMatch(/invoicesQ\.gte\("due_date"/);
 
-    // O motor usa `periodStart ?? dueDate` — o mesmo campo primário.
-    expect(codigo("src/domain/finance-v2/aggregate.ts"))
-      .toMatch(/dentroDoPeriodo\(f\.periodStart \?\? f\.dueDate, ctx\)/);
+    // E o motor usa a mesma função para o mesmo KPI.
+    const motor = codigo("src/domain/finance-v2/aggregate.ts");
+    expect(motor).toMatch(/export function periodoDaFatura/);
+    expect(motor).toMatch(/export function estaPorReceber/);
+    expect(motor).toMatch(/faturas\.factos\.filter\(\(f\) => estaPorReceber\(f, ctx\)\)/);
   });
 
   it("🔴 generateInvoices não transforma falha em «nada a faturar»", () => {

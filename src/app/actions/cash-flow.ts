@@ -4,6 +4,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { requireProfile } from "@/lib/auth-guard";
 import { isValidCashFlowAmount } from "@/lib/cash-flow-integrity";
+import { estaPorReceber } from "@/domain/finance-v2/aggregate";
+import { todayInLisbon } from "@/lib/lisbon-time";
 import { revalidatePath } from "next/cache";
 
 export type CashFlowType = "entrada" | "saida";
@@ -226,13 +228,34 @@ export async function getAccountsData(input?: { year: number; month: number }): 
       }
     : null;
 
+  // ───────────────────────────────────────────────────────────────────────────
+  // 🔴 A consulta é uma rede larga; quem decide é `estaPorReceber`
+  //
+  // O filtro fino vive numa função partilhada com o KPI «Em aberto» do
+  // dashboard, e não aqui. Havia duas definições de "por receber" e não davam
+  // o mesmo número:
+  //
+  //   · esta consulta olhava só para o estado, e contava como dívida uma
+  //     fatura `pendente` com `paid_at` preenchido — dinheiro que já entrou;
+  //   · e filtrava por `period_start` em SQL, o que **exclui** as faturas com
+  //     `period_start` nulo. Essas não iam para o mês errado: desapareciam de
+  //     todos os meses, enquanto no dashboard contavam pelo vencimento.
+  //
+  // Por isso o SQL só faz uma pré-selecção que nunca deixa de fora uma linha
+  // que o predicado incluiria — `period_start` nulo entra — e a decisão é uma
+  // só, no mesmo sítio para as duas páginas.
+  // ───────────────────────────────────────────────────────────────────────────
   let invoicesQ = admin
     .from("invoices")
-    .select("id, invoice_number, client_id, total, due_date, status, clients(name)")
+    .select("id, invoice_number, client_id, total, due_date, paid_at, period_start, status, clients(name)")
     .eq("company_id", companyId)
     .in("status", ["pendente", "vencido"]);
-  // 🔴 `period_start`, não `due_date` — o mesmo critério do motor do dashboard.
-  if (periodo) invoicesQ = invoicesQ.gte("period_start", periodo.inicio).lte("period_start", periodo.fim);
+  if (periodo) {
+    invoicesQ = invoicesQ.or(
+      `and(period_start.gte.${periodo.inicio},period_start.lte.${periodo.fim}),` +
+        `and(period_start.is.null,due_date.gte.${periodo.inicio},due_date.lte.${periodo.fim})`,
+    );
+  }
 
   let payrollQ = admin
     .from("payroll_records")
@@ -263,15 +286,36 @@ export async function getAccountsData(input?: { year: number; month: number }): 
   //    despesas nenhumas.
   if (expensesRes.error) return { ok: false, error: expensesRes.error.message };
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const toReceive = (invoicesRes.data ?? []).map((r: any) => ({
-    id: r.id,
-    invoice_number: r.invoice_number,
-    client_name: r.clients?.name ?? "—",
-    total: r.total,
-    due_date: r.due_date,
-    status: r.status,
-  }));
+  const ctxFatura = {
+    companyId,
+    year: input?.year ?? 0,
+    month: input?.month ?? 0,
+    periodStart: periodo?.inicio ?? "0000-01-01",
+    periodEnd: periodo?.fim ?? "9999-12-31",
+    todayLisbon: todayInLisbon(),
+  };
+
+  const toReceive = (invoicesRes.data ?? [])
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    .filter((r: any) =>
+      estaPorReceber(
+        {
+          id: r.id, status: r.status, total: r.total ?? 0, dueDate: r.due_date,
+          paidAt: r.paid_at, periodStart: r.period_start,
+          clientId: r.client_id, clientName: r.clients?.name ?? null,
+        },
+        ctxFatura,
+      ),
+    )
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    .map((r: any) => ({
+      id: r.id,
+      invoice_number: r.invoice_number,
+      client_name: r.clients?.name ?? "—",
+      total: r.total,
+      due_date: r.due_date,
+      status: r.status,
+    }));
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const toPay = (payrollRes.data ?? []).map((r: any) => ({

@@ -1,13 +1,13 @@
 {
   "generatedBy": "scripts/audit-file-inventory.mjs",
-  "totalFiles": 615,
+  "totalFiles": 616,
   "byStatus": {
-    "MANTER": 598,
+    "MANTER": 599,
     "STANDBY": 17
   },
   "byCategory": {
     "route-ui": 133,
-    "test": 93,
+    "test": 94,
     "migration": 75,
     "lib": 62,
     "script": 43,
@@ -29,7 +29,7 @@
     "src-other": 1
   },
   "byConfidence": {
-    "alta": 600,
+    "alta": 601,
     "média": 9,
     "baixa": 6
   },
@@ -4112,6 +4112,30 @@
       "sideEffects": [],
       "risks": [],
       "signals": {},
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/__tests__/finance-v2-mirror.test.ts",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "fallbackZero": 1
+      },
       "action": "nenhuma",
       "reason": "suite de testes — corre por convenção do vitest",
       "manualDecision": false,
@@ -9666,7 +9690,7 @@
       ],
       "risks": [
         "erro-de-query-ignorado(3)",
-        "any(2)",
+        "any(3)",
         "select-*(1)"
       ],
       "signals": {
@@ -9674,10 +9698,11 @@
         "serverAction": 1,
         "write": 3,
         "sqlWrite": 3,
-        "eslintDisable": 2,
-        "anyType": 2,
+        "eslintDisable": 3,
+        "anyType": 3,
         "selectStar": 1,
         "ignoredError": 3,
+        "fallbackZero": 3,
         "fallbackArray": 4,
         "revalidatePath": 6
       },
@@ -12739,11 +12764,11 @@
       "category": "domain",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 7,
+      "consumers": 9,
       "consumerSample": [
         "src/__tests__/finance-v2-client-history.test.ts",
         "src/__tests__/finance-v2-contract-chain.test.ts",
-        "src/__tests__/finance-v2-period-scope.test.ts"
+        "src/__tests__/finance-v2-mirror.test.ts"
       ],
       "autoLoaded": false,
       "referencedBy": [],
@@ -12753,7 +12778,7 @@
         "fallbackZero": 5
       },
       "action": "nenhuma",
-      "reason": "em uso: 7 consumidor(es)",
+      "reason": "em uso: 9 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -12767,11 +12792,11 @@
       "category": "domain",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 4,
+      "consumers": 5,
       "consumerSample": [
         "src/__tests__/finance-v2-client-history.test.ts",
         "src/__tests__/finance-v2-contract-chain.test.ts",
-        "src/app/(dashboard)/dashboard/cobrancas/_components/client-history-client.tsx"
+        "src/__tests__/finance-v2-mirror.test.ts"
       ],
       "autoLoaded": false,
       "referencedBy": [],
@@ -12779,7 +12804,7 @@
       "risks": [],
       "signals": {},
       "action": "nenhuma",
-      "reason": "em uso: 4 consumidor(es)",
+      "reason": "em uso: 5 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -12845,11 +12870,11 @@
       "category": "domain",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 6,
+      "consumers": 7,
       "consumerSample": [
         "src/__tests__/finance-v2-contract-chain.test.ts",
-        "src/__tests__/finance-v2-period-scope.test.ts",
-        "src/__tests__/finance-v2-read-model.test.ts"
+        "src/__tests__/finance-v2-mirror.test.ts",
+        "src/__tests__/finance-v2-period-scope.test.ts"
       ],
       "autoLoaded": false,
       "referencedBy": [
@@ -12860,7 +12885,7 @@
       "risks": [],
       "signals": {},
       "action": "nenhuma",
-      "reason": "em uso: 6 consumidor(es), configuração",
+      "reason": "em uso: 7 consumidor(es), configuração",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -14478,7 +14503,7 @@
       "category": "lib",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 31,
+      "consumers": 32,
       "consumerSample": [
         "src/__tests__/lisbon-time.test.ts",
         "src/app/(app)/app/ausencias/_components/ausencias-client.tsx",
@@ -14492,7 +14517,7 @@
       "risks": [],
       "signals": {},
       "action": "nenhuma",
-      "reason": "em uso: 31 consumidor(es)",
+      "reason": "em uso: 32 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
