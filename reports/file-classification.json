@@ -4098,7 +4098,9 @@
       "referencedBy": [],
       "sideEffects": [],
       "risks": [],
-      "signals": {},
+      "signals": {
+        "fallbackArray": 1
+      },
       "action": "nenhuma",
       "reason": "suite de testes — corre por convenção do vitest",
       "manualDecision": false,
@@ -9485,7 +9487,7 @@
       "sideEffects": [
         "supabase",
         "write",
-        "revalidatePath(7)"
+        "revalidatePath(10)"
       ],
       "risks": [
         "erro-de-query-ignorado(2)"
@@ -9499,7 +9501,7 @@
         "ignoredError": 2,
         "fallbackZero": 1,
         "fallbackArray": 2,
-        "revalidatePath": 7
+        "revalidatePath": 10
       },
       "action": "auditar atomicidade (T12/T13)",
       "reason": "em uso: 6 consumidor(es)",
@@ -10135,7 +10137,7 @@
         "revalidatePath(4)"
       ],
       "risks": [
-        "erro-de-query-ignorado(13)",
+        "erro-de-query-ignorado(6)",
         "any(3)"
       ],
       "signals": {
@@ -10145,7 +10147,7 @@
         "sqlWrite": 12,
         "eslintDisable": 3,
         "anyType": 3,
-        "ignoredError": 13,
+        "ignoredError": 6,
         "fallbackZero": 3,
         "fallbackArray": 14,
         "revalidatePath": 4
