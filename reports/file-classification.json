@@ -2969,7 +2969,7 @@
       ],
       "signals": {
         "serviceRole": 1,
-        "sqlWrite": 37,
+        "sqlWrite": 40,
         "consoleLog": 17,
         "consoleErr": 1
       },
