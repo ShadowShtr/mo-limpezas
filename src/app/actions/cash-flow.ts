@@ -187,7 +187,23 @@ export interface PendingExpense {
   notes: string | null;
 }
 
-export async function getAccountsData(_companyId?: string): Promise<{
+/**
+ * Contas a receber e a pagar, **do período pedido**.
+ *
+ * 🔴 Recebia só `_companyId` e devolvia tudo, de todos os meses. O seletor
+ *    dizia «Agosto 2026» e a página respondia sobre a história inteira — o
+ *    mesmo defeito que `getFinancialDashboard` tinha, no outro separador.
+ *
+ * Cada bloco filtra pelo que faz sentido para si, e não por uma data só:
+ *
+ *   faturas   `due_date` dentro do mês — é quando o dinheiro é esperado;
+ *   salários  `period_year`/`period_month` — a folha é de um mês, não de um dia;
+ *   despesas  `date` do movimento.
+ *
+ * Sem período (`undefined`), devolve tudo — o comportamento antigo, para quem
+ * ainda o chame assim.
+ */
+export async function getAccountsData(input?: { year: number; month: number }): Promise<{
   ok: true;
   toReceive: { id: string; invoice_number: string; client_name: string; total: number; due_date: string | null; status: string }[];
   toPay: { id: string; collaborator_name: string; net_salary: number; period: string; status: string }[];
@@ -198,28 +214,42 @@ export async function getAccountsData(_companyId?: string): Promise<{
   const { admin } = guard;
   const companyId = guard.profile.company_id;
 
+  const periodo = input
+    ? {
+        inicio: `${input.year}-${String(input.month).padStart(2, "0")}-01`,
+        fim: `${input.year}-${String(input.month).padStart(2, "0")}-${String(
+          new Date(Date.UTC(input.year, input.month, 0)).getUTCDate(),
+        ).padStart(2, "0")}`,
+      }
+    : null;
+
+  let invoicesQ = admin
+    .from("invoices")
+    .select("id, invoice_number, client_id, total, due_date, status, clients(name)")
+    .eq("company_id", companyId)
+    .in("status", ["pendente", "vencido"]);
+  if (periodo) invoicesQ = invoicesQ.gte("due_date", periodo.inicio).lte("due_date", periodo.fim);
+
+  let payrollQ = admin
+    .from("payroll_records")
+    .select("id, collaborator_id, net_salary, period_year, period_month, status, profiles!collaborator_id(full_name)")
+    .eq("company_id", companyId)
+    .eq("status", "aprovado");
+  if (input) payrollQ = payrollQ.eq("period_year", input.year).eq("period_month", input.month);
+
+  let expensesQ = admin
+    .from("cash_flow_entries")
+    .select("id, description, amount, category, date, notes")
+    .eq("company_id", companyId)
+    .eq("type", "saida")
+    .eq("status", "pendente")
+    .is("reference_type", null);
+  if (periodo) expensesQ = expensesQ.gte("date", periodo.inicio).lte("date", periodo.fim);
+
   const [invoicesRes, payrollRes, expensesRes] = await Promise.all([
-    admin
-      .from("invoices")
-      .select("id, invoice_number, client_id, total, due_date, status, clients(name)")
-      .eq("company_id", companyId)
-      .in("status", ["pendente", "vencido"])
-      .order("due_date", { ascending: true }),
-    admin
-      .from("payroll_records")
-      .select("id, collaborator_id, net_salary, period_year, period_month, status, profiles!collaborator_id(full_name)")
-      .eq("company_id", companyId)
-      .eq("status", "aprovado")
-      .order("period_year", { ascending: false })
-      .order("period_month", { ascending: false }),
-    admin
-      .from("cash_flow_entries")
-      .select("id, description, amount, category, date, notes")
-      .eq("company_id", companyId)
-      .eq("type", "saida")
-      .eq("status", "pendente")
-      .is("reference_type", null)
-      .order("date", { ascending: true }),
+    invoicesQ.order("due_date", { ascending: true }),
+    payrollQ.order("period_year", { ascending: false }).order("period_month", { ascending: false }),
+    expensesQ.order("date", { ascending: true }),
   ]);
 
   if (invoicesRes.error) return { ok: false, error: invoicesRes.error.message };

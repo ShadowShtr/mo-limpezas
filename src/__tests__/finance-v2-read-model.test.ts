@@ -23,6 +23,8 @@ import {
   calcularKpis,
   calcularTopClientes,
   calcularDespesasPorCategoria,
+  calcularPredios,
+  type FactoPredio,
   corDaCategoria,
   diasEntre,
   somarDias,
@@ -445,5 +447,104 @@ describe("despesas por categoria", () => {
       ctx(2026, 8),
     );
     expect(b.fatias.map((f) => f.chave)).toEqual(["salario", "combustivel", "viatura"]);
+  });
+});
+
+// ─── 12. Prédios ─────────────────────────────────────────────────────────────
+
+describe("prédios — cadeia própria, e um total que não mente", () => {
+  const predio = (o: Partial<FactoPredio>): FactoPredio => ({
+    id: "p1", name: "Edifício A", address: "Rua X", weekday: "mon",
+    sortOrder: 0, monthlyValue: 100, ...o,
+  });
+
+  it("ordena por sort_order e desempata pelo nome", () => {
+    const b = calcularPredios(ok([
+      predio({ id: "3", name: "Zeta", sortOrder: 1 }),
+      predio({ id: "1", name: "Beta", sortOrder: 0 }),
+      predio({ id: "2", name: "Alfa", sortOrder: 0 }),
+    ]));
+    expect(b.linhas.map((l) => l.nome)).toEqual(["Alfa", "Beta", "Zeta"]);
+  });
+
+  it("🔴 valor nulo é desconhecido, nunca zero", () => {
+    // A avença destes prédios ficou por preencher na importação, de propósito.
+    // Mostrar 0,00 € diria que não rendem nada.
+    const b = calcularPredios(ok([predio({ monthlyValue: null })]));
+    expect(b.linhas[0].valor).toBeNull();
+    expect(b.totalConhecido, "sem nenhum valor conhecido não há total").toBeNull();
+    expect(b.estado).toBe("PARTIAL");
+  });
+
+  it("🔴 o caso real: 146 prédios, nenhum com valor", () => {
+    const muitos = Array.from({ length: 146 }, (_, i) =>
+      predio({ id: `p${i}`, name: `Prédio ${i}`, sortOrder: i, monthlyValue: null }));
+    const b = calcularPredios(ok(muitos));
+    expect(b.contagem).toBe(146);
+    expect(b.comValor).toBe(0);
+    expect(b.semValor).toBe(146);
+    expect(b.totalConhecido).toBeNull();
+    expect(b.estado).toBe("PARTIAL");
+    expect(b.nota).toMatch(/Nenhum prédio tem avença/);
+  });
+
+  it("o total soma só os conhecidos, e diz quantos são", () => {
+    const b = calcularPredios(ok([
+      predio({ id: "a", name: "A", monthlyValue: 100 }),
+      predio({ id: "b", name: "B", monthlyValue: 50 }),
+      predio({ id: "c", name: "C", monthlyValue: null }),
+    ]));
+    expect(b.totalConhecido).toBe(150);
+    expect(b.comValor).toBe(2);
+    expect(b.semValor).toBe(1);
+    expect(b.estado, "faltam valores → parcial").toBe("PARTIAL");
+  });
+
+  it("todos conhecidos → AVAILABLE", () => {
+    const b = calcularPredios(ok([
+      predio({ id: "a", name: "A", monthlyValue: 100 }),
+      predio({ id: "b", name: "B", monthlyValue: 50 }),
+    ]));
+    expect(b.estado).toBe("AVAILABLE");
+    expect(b.totalConhecido).toBe(150);
+  });
+
+  it("zero prédios é zero real, não indisponível", () => {
+    const b = calcularPredios(ok([]));
+    expect(b.estado).toBe("AVAILABLE");
+    expect(b.totalConhecido).toBe(0);
+    expect(b.contagem).toBe(0);
+  });
+
+  it("🔴 consulta falhada é ERROR, nunca zero", () => {
+    const b = calcularPredios(falhou("timeout"));
+    expect(b.estado).toBe("ERROR");
+    expect(b.totalConhecido).toBeNull();
+    expect(b.linhas).toEqual([]);
+  });
+
+  it("🔴 duplicados entre dias são assinalados, não deduplicados", () => {
+    // Quatro prédios reais aparecem em dois dias — são duas visitas ao mesmo
+    // sítio. Agrupar por nome seria inferência sobre texto livre: dois prédios
+    // podem chamar-se «Pedrogão 14» e ser edifícios distintos.
+    const b = calcularPredios(ok([
+      predio({ id: "1", name: "Pedrogão 14", weekday: "mon", monthlyValue: null }),
+      predio({ id: "2", name: "Pedrogão 14", weekday: "thu", monthlyValue: null }),
+      predio({ id: "3", name: "Outro", monthlyValue: null }),
+    ]));
+    expect(b.contagem, "as três linhas continuam lá").toBe(3);
+    expect(b.linhas.filter((l) => l.repetido)).toHaveLength(2);
+    expect(b.repetidos).toBe(1);
+  });
+
+  it("🔴 duplicado COM valor força estado parcial e avisa", () => {
+    // Este é o caso perigoso: somar as duas contaria a mesma avença duas vezes.
+    const b = calcularPredios(ok([
+      predio({ id: "1", name: "Repetido", weekday: "mon", monthlyValue: 100 }),
+      predio({ id: "2", name: "Repetido", weekday: "thu", monthlyValue: 100 }),
+    ]));
+    expect(b.estado).toBe("PARTIAL");
+    expect(b.nota).toMatch(/vários dias/);
+    expect(b.totalConhecido, "o total é a soma bruta, e o aviso diz porquê").toBe(200);
   });
 });

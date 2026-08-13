@@ -18,6 +18,7 @@ import {
   type FaixaAgingDados,
   type FinanceAlert,
   type FinanceKpis,
+  type EstadoFonte,
   type FinanceReadContext,
   type Medida,
 } from "./types";
@@ -158,6 +159,13 @@ export function calcularKpis(
   // Faturado por receber. Deriva de faturas, não de `faturado − recebido`: o
   // caixa inclui entradas que não vêm de faturas, e a subtracção daria um
   // número que não é dívida de ninguém.
+  //
+  // 🔴 **Do período**, como os outros KPIs. Somava a carteira inteira, de
+  //    todos os meses, e não mudava ao trocar de mês — o cartão dizia o mesmo
+  //    em Julho e em Agosto, ao lado de um seletor que sugeria o contrário.
+  //
+  //    A carteira global continua a ter quem a mostre: é o `aging`, e lá é
+  //    uma decisão assumida.
   let emAberto: Medida;
   if (!faturas.ok) {
     emAberto = medida.erro(faturas.erro);
@@ -166,7 +174,8 @@ export function calcularKpis(
       (f) =>
         (ESTADOS_FATURADO as readonly string[]).includes(f.status) &&
         !(ESTADOS_PAGA as readonly string[]).includes(f.status) &&
-        f.paidAt == null,
+        f.paidAt == null &&
+        dentroDoPeriodo(f.periodStart ?? f.dueDate, ctx),
     );
     emAberto = medida.disponivel(soma(porReceber.map((f) => f.total)));
   }
@@ -267,6 +276,14 @@ export function diasEntre(de: string, ate: string): number {
  *
  * Serve para distinguir dívida de ontem de dívida de há três meses — «€ 3.420
  * vencido» não diz qual, e a acção é completamente diferente nos dois casos.
+ *
+ * 🔴 **Global por decisão, não por esquecimento.** Ao contrário dos KPIs, não
+ *    filtra pelo período: responde a «que dívida antiga existe hoje», e não a
+ *    «que dívida nasceu em Agosto». Filtrá-lo pelo mês esvaziaria os baldes de
+ *    +30 dias precisamente quando são mais úteis — uma fatura vencida há 45
+ *    dias não pertence ao mês que se está a ver, e é a que mais importa.
+ *
+ *    É a carteira vencida inteira, e há um teste que fixa esta escolha.
  *
  * Cada fatura entra em **exactamente um** balde; os testes provam que a soma
  * dos baldes é igual ao total vencido.
@@ -482,4 +499,143 @@ const CORES_CATEGORIA: Record<string, string> = {
 export function corDaCategoria(chave: string | null): string {
   if (chave === null) return "#CBD5E1";
   return CORES_CATEGORIA[chave] ?? "#8B5CF6";
+}
+
+// ─── Prédios ─────────────────────────────────────────────────────────────────
+
+export interface FactoPredio {
+  id: string;
+  name: string;
+  address: string | null;
+  weekday: string | null;
+  sortOrder: number;
+  monthlyValue: number | null;
+}
+
+export interface LinhaPredio {
+  id: string;
+  nome: string;
+  morada: string | null;
+  /** `null` = valor desconhecido. **Nunca** convertido em zero. */
+  valor: number | null;
+  /** Este prédio aparece noutras linhas, noutros dias. */
+  repetido: boolean;
+}
+
+export interface BlocoPredios {
+  estado: EstadoFonte;
+  linhas: LinhaPredio[];
+  /** Soma **apenas dos valores conhecidos**. `null` quando nenhum é conhecido. */
+  totalConhecido: number | null;
+  contagem: number;
+  comValor: number;
+  semValor: number;
+  /** Nomes que aparecem em mais do que uma linha — ver a nota abaixo. */
+  repetidos: number;
+  nota?: string;
+}
+
+/**
+ * Os prédios e o seu valor mensal.
+ *
+ * ---------------------------------------------------------------------------
+ * 🔴 Porque é que o total pode não existir
+ * ---------------------------------------------------------------------------
+ * `monthly_value` é nullable, e na base actual **os 146 prédios têm todos
+ * valor nulo** — os valores de avença ficaram por preencher de propósito na
+ * importação, porque a folha de origem não deu para casar com confiança.
+ *
+ * Somar nulos como zero daria «0,00 €», que se lê como «estes prédios não
+ * rendem nada». O que se sabe é o contrário: não se sabe quanto rendem. Por
+ * isso o total é `null` enquanto nenhum valor for conhecido, e passa a somar
+ * só os conhecidos assim que existirem.
+ *
+ * ---------------------------------------------------------------------------
+ * 🔴 Os duplicados entre dias
+ * ---------------------------------------------------------------------------
+ * Quatro prédios aparecem em duas linhas, em dias diferentes — o importador
+ * preservou-os deliberadamente, porque são duas **visitas** ao mesmo sítio.
+ *
+ * Se ambas as linhas vierem a ter valor mensal, somá-las contaria a mesma
+ * avença duas vezes. Mas **não se deduplica por nome nem por morada**: dois
+ * prédios podem chamar-se «Pedrogão 14» e ser edifícios distintos, e agrupar
+ * por texto livre é exactamente o tipo de inferência que este módulo recusa.
+ *
+ * Enquanto não existir uma identidade explícita de prédio, as linhas repetidas
+ * são **assinaladas** e contadas, e o bloco fica `PARTIAL` — a interface avisa
+ * em vez de apresentar um total que pode estar inflacionado.
+ */
+export function calcularPredios(predios: Fonte<FactoPredio>): BlocoPredios {
+  if (!predios.ok) {
+    return {
+      estado: "ERROR", linhas: [], totalConhecido: null,
+      contagem: 0, comValor: 0, semValor: 0, repetidos: 0, nota: predios.erro,
+    };
+  }
+
+  const porNome = new Map<string, number>();
+  for (const p of predios.factos) {
+    const k = p.name.trim().toLowerCase();
+    porNome.set(k, (porNome.get(k) ?? 0) + 1);
+  }
+
+  const linhas: LinhaPredio[] = [...predios.factos]
+    // Ordem determinística: pela ordem definida, depois pelo nome. Sem isto, a
+    // lista trocava de ordem entre carregamentos.
+    .sort((a, z) => a.sortOrder - z.sortOrder || a.name.localeCompare(z.name, "pt"))
+    .map((p) => ({
+      id: p.id,
+      nome: p.name,
+      morada: p.address,
+      valor: p.monthlyValue,
+      repetido: (porNome.get(p.name.trim().toLowerCase()) ?? 0) > 1,
+    }));
+
+  const conhecidos = linhas.filter((l) => l.valor !== null);
+  const comValor = conhecidos.length;
+  const semValor = linhas.length - comValor;
+  const repetidos = [...porNome.values()].filter((n) => n > 1).length;
+
+  let estado: EstadoFonte = "AVAILABLE";
+  let nota: string | undefined;
+
+  if (linhas.length === 0) {
+    // Zero prédios é um facto, e o total é zero de verdade.
+    return {
+      estado: "AVAILABLE", linhas: [], totalConhecido: 0,
+      contagem: 0, comValor: 0, semValor: 0, repetidos: 0,
+    };
+  }
+
+  if (comValor === 0) {
+    estado = "PARTIAL";
+    nota = "Nenhum prédio tem avença registada.";
+  } else if (semValor > 0) {
+    estado = "PARTIAL";
+    nota = `${semValor} ${semValor === 1 ? "prédio sem" : "prédios sem"} valor registado.`;
+  }
+
+  // Duplicados **entre linhas com valor** são o caso perigoso: o total podia
+  // estar a contar a mesma avença duas vezes.
+  const nomesComValor = new Map<string, number>();
+  for (const l of conhecidos) {
+    const k = l.nome.trim().toLowerCase();
+    nomesComValor.set(k, (nomesComValor.get(k) ?? 0) + 1);
+  }
+  const duplicadosComValor = [...nomesComValor.values()].filter((n) => n > 1).length;
+  if (duplicadosComValor > 0) {
+    estado = "PARTIAL";
+    nota = `${duplicadosComValor} ${duplicadosComValor === 1 ? "prédio aparece" : "prédios aparecem"} em vários dias — o total pode contar a mesma avença mais do que uma vez.`;
+  }
+
+  return {
+    estado,
+    linhas,
+    totalConhecido: comValor > 0 ? soma(conhecidos.map((l) => l.valor!)) : null,
+    contagem: linhas.length,
+    comValor,
+    semValor,
+    repetidos,
+    nota,
+  };
 }

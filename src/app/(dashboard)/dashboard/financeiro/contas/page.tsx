@@ -27,7 +27,9 @@ export default async function ContasPage({
   // leitura nenhuma. Integração do período nesta vista fica para o PR B.
   const period = parseFinancePeriod(params.mes);
 
-  const res = await getAccountsData(profile.company_id);
+  // 🔴 O período agora governa esta vista. Antes recebia `company_id` e
+  //    devolvia toda a história, enquanto o seletor dizia outro mês.
+  const res = await getAccountsData({ year: period.year, month: period.month });
 
   return (
     <FinanceShell

@@ -103,6 +103,14 @@ export async function createBankAccount(input: {
 export async function getBankReconciliationData(filters?: {
   status?: BankTransactionDTO["status"];
   accountId?: string;
+  /**
+   * 🔴 O mês seleccionado no módulo.
+   *
+   * Sem isto, a Conciliação mostrava os últimos 500 movimentos de sempre
+   * enquanto o cabeçalho dizia «Agosto 2026». Omitir devolve tudo — o
+   * comportamento antigo, para quem ainda chame assim.
+   */
+  period?: { year: number; month: number };
 }): Promise<
   | { ok: true; transactions: BankTransactionDTO[]; imports: ImportDTO[]; accounts: BankAccountDTO[] }
   | { ok: false; error: string }
@@ -126,6 +134,13 @@ export async function getBankReconciliationData(filters?: {
     .limit(500);
   if (filters?.status) txQuery = txQuery.eq("status", filters.status);
   if (filters?.accountId) txQuery = txQuery.eq("bank_account_id", filters.accountId);
+  if (filters?.period) {
+    const { year, month } = filters.period;
+    const inicio = `${year}-${String(month).padStart(2, "0")}-01`;
+    const ultimoDia = new Date(Date.UTC(year, month, 0)).getUTCDate();
+    const fim = `${year}-${String(month).padStart(2, "0")}-${String(ultimoDia).padStart(2, "0")}`;
+    txQuery = txQuery.gte("transaction_date", inicio).lte("transaction_date", fim);
+  }
 
   const [txRes, impRes, accRes] = await Promise.all([
     txQuery,

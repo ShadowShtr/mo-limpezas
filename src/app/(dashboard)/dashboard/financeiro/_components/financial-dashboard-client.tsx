@@ -16,9 +16,9 @@ import { FinanceKpiCard, FinanceKpiGrid } from "@/components/financeiro/v2/finan
 import { FinanceAlertStrip, type AlertaItem } from "@/components/financeiro/v2/finance-alert-strip";
 import { FinanceAttentionPanel, type AtencaoItem } from "@/components/financeiro/v2/finance-attention-panel";
 import { FinanceMainChart } from "@/components/financeiro/v2/finance-chart-card";
+import { FinanceBuildingsCard } from "@/components/financeiro/v2/finance-buildings-card";
 import {
   FinanceAging,
-  FinanceCashForecast,
   FinanceRevenueByService,
   FinanceTeamEfficiency,
   FinanceTopClients,
@@ -506,8 +506,32 @@ export function FinancialDashboardClient({
 
       {/* ── 5. PREVISÃO · AGING · TOP CLIENTES ────────────────────────────── */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <FinanceCashForecast
-          slot={{ estado: "indisponivel", porque: "Requer o pipeline canónico (PR B)" }}
+        {/*
+          A «Previsão de caixa» deu o lugar aos «Prédios».
+
+          A previsão continua bloqueada pelo incidente de periodicidade — usar
+          `fixed_variable_payments` para projectar projectaria as datas
+          esmagadas de Agosto. Os prédios têm fonte própria e imediata.
+
+          🔴 Nenhum valor deste card entra nos KPIs. Prédios são uma cadeia à
+             parte: `building_cards.monthly_value`, e mais nada.
+        */}
+        <FinanceBuildingsCard
+          slot={
+            snapshot?.buildings.estado === "ERROR" || !snapshot
+              ? { estado: "indisponivel", porque: snapshot?.buildings.nota }
+              : {
+                  estado: "pronto",
+                  dados: {
+                    linhas: snapshot.buildings.linhas,
+                    totalConhecido: snapshot.buildings.totalConhecido,
+                    contagem: snapshot.buildings.contagem,
+                    comValor: snapshot.buildings.comValor,
+                    semValor: snapshot.buildings.semValor,
+                    nota: snapshot.buildings.nota,
+                  },
+                }
+          }
         />
         <FinanceAging
           slot={

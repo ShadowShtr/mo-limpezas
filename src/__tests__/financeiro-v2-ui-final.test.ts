@@ -103,7 +103,7 @@ describe("Financeiro V2 — a hierarquia aprovada está montada", () => {
     "FinanceKpiGrid",
     "FinanceMainChart",
     "FinanceAttentionPanel",
-    "FinanceCashForecast",
+    "FinanceBuildingsCard",
     "FinanceAging",
     "FinanceTopClients",
     "FinanceRevenueByService",
@@ -153,16 +153,29 @@ describe("Financeiro V2 — a hierarquia aprovada está montada", () => {
 describe("Financeiro V2 — os painéis sem fonte não inventam", () => {
   const src = codigo(RESUMO);
 
-  it("🔴 previsão e eficiência continuam indisponíveis", () => {
-    // A lista encolhe à medida que as fontes existem. `FinanceAging` saiu
-    // quando o motor passou a repartir faturas vencidas por idade; o donut
-    // saiu quando deixou de mostrar receita por serviço e passou a mostrar
-    // despesas por categoria, que têm fonte real.
-    for (const bloco of ["FinanceCashForecast", "FinanceTeamEfficiency"]) {
-      const i = src.indexOf(`<${bloco}`);
-      const trecho = src.slice(i, i + 300);
-      expect(trecho, `${bloco} devia estar indisponível`).toMatch(/estado:\s*"indisponivel"/);
-    }
+  it("🔴 só a eficiência continua indisponível", () => {
+    // A lista encolhe à medida que as fontes existem. Saíram, por esta ordem:
+    // `FinanceAging` quando o motor passou a repartir vencidos por idade; o
+    // donut quando trocou receita por serviço por despesas por categoria; e a
+    // Previsão de caixa quando deu o lugar aos Prédios.
+    const i = src.indexOf("<FinanceTeamEfficiency");
+    expect(src.slice(i, i + 300)).toMatch(/estado:\s*"indisponivel"/);
+  });
+
+  it("🔴 os Prédios ocuparam o lugar da Previsão de caixa", () => {
+    // A previsão continua bloqueada pelo incidente de periodicidade: projectar
+    // com `fixed_variable_payments` usaria as datas esmagadas de Agosto.
+    expect(src).toContain("<FinanceBuildingsCard");
+    expect(src, "a previsão saiu do Resumo").not.toContain("<FinanceCashForecast");
+    // Mas o componente não foi apagado — volta quando a periodicidade existir.
+    expect(ler(`${V2}/finance-intelligence.tsx`)).toContain("FinanceCashForecast");
+  });
+
+  it("🔴 nenhum valor de prédio entra nos KPIs financeiros", () => {
+    // Prédios são uma cadeia à parte: `building_cards.monthly_value`. Somá-los
+    // a Faturado ou a Recebido misturaria avença contratada com dinheiro real.
+    const grid = src.slice(src.indexOf("<FinanceKpiGrid"), src.indexOf("</FinanceKpiGrid>"));
+    expect(grid).not.toMatch(/buildings|predio|Predio/i);
   });
 
   it("🔴 o donut mostra despesas por categoria, não receita por serviço", () => {

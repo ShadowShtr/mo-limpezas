@@ -218,6 +218,22 @@ export interface FinanceDashboardSnapshot {
     semCategoria: number;
     nota?: string;
   };
+  /**
+   * Prédios — cadeia própria, `building_cards.monthly_value`.
+   *
+   * 🔴 Nada daqui entra em Faturado, Recebido, Margem ou Fluxo de Caixa. Um
+   *    prédio não é um contrato, e ligá-los por nome ou morada seria
+   *    inferência sobre texto livre.
+   */
+  buildings: {
+    estado: EstadoFonte;
+    linhas: { id: string; nome: string; morada: string | null; valor: number | null; repetido: boolean }[];
+    totalConhecido: number | null;
+    contagem: number;
+    comValor: number;
+    semValor: number;
+    nota?: string;
+  };
   /** STANDBY — volta quando os serviços tiverem classificação real. */
   revenueByService: { estado: EstadoFonte; nota: string };
   teamEfficiency: { estado: EstadoFonte; nota: string };

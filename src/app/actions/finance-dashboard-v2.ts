@@ -32,11 +32,13 @@ import {
   calcularAlertas,
   calcularKpis,
   calcularDespesasPorCategoria,
+  calcularPredios,
   calcularTopClientes,
   corDaCategoria,
   type FactoCaixa,
   type FactoFatura,
   type FactoFolha,
+  type FactoPredio,
   type Fonte,
 } from "@/domain/finance-v2/aggregate";
 import {
@@ -143,6 +145,41 @@ async function loadServiceFacts(admin: AdminClient, ctx: FinanceReadContext) {
   return { ok: true as const, factos: (data ?? []) as unknown as Linha[] };
 }
 
+/**
+ * Os prédios da empresa.
+ *
+ * 🔴 Sem filtro de período, e é deliberado: `building_cards` descreve uma
+ *    avença **mensal recorrente**, não um movimento datado. Filtrar por mês
+ *    esvaziaria a lista sem nada ganhar.
+ */
+async function loadBuildingFacts(admin: AdminClient, ctx: FinanceReadContext): Promise<Fonte<FactoPredio>> {
+  const { data, error } = await admin
+    .from("building_cards")
+    .select("id, name, address, weekday, sort_order, monthly_value")
+    .eq("company_id", ctx.companyId);
+
+  if (error) return { ok: false, erro: error.message };
+
+  type Linha = {
+    id: string; name: string; address: string | null; weekday: string | null;
+    sort_order: number | null; monthly_value: number | null;
+  };
+  return {
+    ok: true,
+    factos: ((data ?? []) as unknown as Linha[]).map((r) => ({
+      id: r.id,
+      name: r.name,
+      address: r.address,
+      weekday: r.weekday,
+      sortOrder: Number(r.sort_order ?? 0),
+      // 🔴 Sem `?? 0`. Um valor por preencher continua desconhecido.
+      monthlyValue: r.monthly_value === null || r.monthly_value === undefined
+        ? null
+        : Number(r.monthly_value),
+    })),
+  };
+}
+
 // ─── A fotografia ────────────────────────────────────────────────────────────
 
 export async function getFinanceDashboardV2(
@@ -157,12 +194,13 @@ export async function getFinanceDashboardV2(
   // `allSettled`: um bloco em falha não derruba os outros. A página pode ter
   // KPIs disponíveis e a eficiência indisponível ao mesmo tempo — que é a
   // situação normal enquanto o domínio não estiver todo ligado.
-  const [faturasR, caixaR, folhaR, servicosR, porFaturarR] = await Promise.allSettled([
+  const [faturasR, caixaR, folhaR, servicosR, porFaturarR, prediosR] = await Promise.allSettled([
     loadInvoiceFacts(admin, ctx),
     loadCashFacts(admin, ctx),
     loadPayrollFacts(admin, ctx),
     loadServiceFacts(admin, ctx),
     getUnbilledServices(ctx.companyId),
+    loadBuildingFacts(admin, ctx),
   ]);
 
   const falhas: FalhaFonte[] = [];
@@ -178,6 +216,7 @@ export async function getFinanceDashboardV2(
   const faturas = desembrulhar(faturasR, "invoices");
   const caixa = desembrulhar(caixaR, "cash_flow_entries");
   const folha = desembrulhar(folhaR, "payroll_records");
+  const predios = desembrulhar(prediosR, "building_cards");
 
   const porFaturar: Fonte<{ value: number }> =
     porFaturarR.status === "fulfilled" && porFaturarR.value.ok
@@ -236,7 +275,22 @@ export async function getFinanceDashboardV2(
       // Previsão fica de fora enquanto a periodicidade dos pagamentos estiver
       // comprometida — usar `fixed_variable_payments` projectaria as datas
       // esmagadas do incidente de Agosto.
+      // A Previsão de caixa saiu do Resumo: continuava bloqueada pelo
+      // incidente de periodicidade, e o lugar foi para os Prédios, que têm
+      // fonte própria. O bloco fica no snapshot para quando voltar.
       forecast: { estado: "UNAVAILABLE", nota: "Bloqueada pelo incidente de periodicidade." },
+      buildings: (() => {
+        const b = calcularPredios(predios);
+        return {
+          estado: b.estado,
+          linhas: b.linhas,
+          totalConhecido: b.totalConhecido,
+          contagem: b.contagem,
+          comValor: b.comValor,
+          semValor: b.semValor,
+          nota: b.nota,
+        };
+      })(),
       expensesByCategory: (() => {
         const b = calcularDespesasPorCategoria(caixa, ctx);
         return {

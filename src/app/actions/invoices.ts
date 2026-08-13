@@ -94,10 +94,23 @@ export async function generateInvoices(
     .lt("scheduled_start", toLisbonTimestamp(addDaysToDateString(end, 1), "00:00"));
 
   if (sErr) return { ok: false, error: sErr.message };
-  if (!services?.length) return { ok: true, invoices: [] };
 
-  // Locais e clientes (incluindo locais com preço fixo que têm contratos activos)
-  const serviceLocationIds = [...new Set(services.map((s) => s.location_id).filter(Boolean))];
+  // 🔴 A guarda de saída antecipada mudou de sítio.
+  //
+  // Estava aqui um `if (!services?.length) return { ok: true, invoices: [] }`,
+  // **antes** de as avenças mensais serem sequer carregadas. Uma avença é uma
+  // linha mensal fixa que existe independentemente de haver serviços
+  // concluídos — é isso que a torna uma avença.
+  //
+  // O efeito era silencioso e caro: num mês sem nenhum serviço fechado,
+  // gerar cobranças devolvia «0 faturas» e ninguém era faturado, apesar de
+  // haver contratos ativos a render. E é exactamente a situação da base hoje:
+  // 1508 serviços, todos por concluir.
+  //
+  // A saída antecipada continua a existir — mas só quando não há **nada** para
+  // faturar, nem serviços nem avenças. Ver a guarda depois de
+  // `activeMonthlyContracts`.
+  const serviceLocationIds = [...new Set((services ?? []).map((s) => s.location_id).filter(Boolean))];
 
   // Locais com preço fixo que têm contratos activos no período
   const { data: fixedLocations } = await admin
@@ -137,6 +150,11 @@ export async function generateInvoices(
     (c) => c.fixed_price != null && c.fixed_price > 0,
   );
   const monthlyContractLocationIds = activeMonthlyContracts.map((c) => c.location_id);
+
+  // Agora sim: nada para faturar é nada em ambas as fontes.
+  if (!services?.length && activeMonthlyContracts.length === 0) {
+    return { ok: true, invoices: [] };
+  }
 
   const allLocationIds = [
     ...new Set([...serviceLocationIds, ...activeFixedLocationIds, ...monthlyContractLocationIds]),
@@ -197,8 +215,14 @@ export async function generateInvoices(
   const monthlyLocationSet = new Set(monthlyContractLocationIds);
 
   // Agrupar serviços por cliente (excluindo locais com preço fixo — tratados à parte)
-  const byClient = new Map<string, typeof services>();
-  for (const s of services) {
+  //
+  // `services` pode agora ser vazio: desde que a guarda de saída antecipada
+  // passou a exigir também zero avenças, um mês só com avenças chega aqui sem
+  // nenhum serviço concluído. O `?? []` é explícito de propósito — não quero
+  // que isto dependa de estreitamento de tipos em código que gera faturas.
+  const servicosDoPeriodo = services ?? [];
+  const byClient = new Map<string, typeof servicosDoPeriodo>();
+  for (const s of servicosDoPeriodo) {
     const loc = locationMap[s.location_id];
     if (!loc?.client_id) continue;
     if (loc.pricing_type === "fixed") continue; // preço fixo: linha separada
