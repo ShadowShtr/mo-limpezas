@@ -92,6 +92,7 @@
       "consumerSample": [],
       "autoLoaded": false,
       "referencedBy": [
+        "ci",
         "docs"
       ],
       "sideEffects": [
@@ -102,7 +103,7 @@
       ],
       "signals": {
         "supabase": 2,
-        "serviceRole": 1
+        "serviceRole": 2
       },
       "action": "nenhuma",
       "reason": "configuração/infra",
@@ -3118,6 +3119,7 @@
       "autoLoaded": false,
       "referencedBy": [
         "npm",
+        "ci",
         "docs"
       ],
       "sideEffects": [],
