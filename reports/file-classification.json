@@ -1,8 +1,8 @@
 {
   "generatedBy": "scripts/audit-file-inventory.mjs",
-  "totalFiles": 610,
+  "totalFiles": 611,
   "byStatus": {
-    "MANTER": 593,
+    "MANTER": 594,
     "STANDBY": 17
   },
   "byCategory": {
@@ -10,7 +10,7 @@
     "test": 92,
     "migration": 73,
     "lib": 61,
-    "script": 42,
+    "script": 43,
     "domain": 39,
     "doc": 37,
     "server-action": 37,
@@ -29,12 +29,12 @@
     "src-other": 1
   },
   "byConfidence": {
-    "alta": 595,
+    "alta": 596,
     "média": 9,
     "baixa": 6
   },
   "scriptRisk": {
-    "SAFE_OFFLINE": 22,
+    "SAFE_OFFLINE": 23,
     "ADMIN_GUARDED_WRITE": 11,
     "ADMIN_READ": 6,
     "WRITE_CAPABLE": 3
@@ -505,8 +505,11 @@
       "autoLoaded": false,
       "referencedBy": [],
       "sideEffects": [],
-      "risks": [],
+      "risks": [
+        "service-role"
+      ],
       "signals": {
+        "serviceRole": 1,
         "sqlWrite": 1
       },
       "action": "nenhuma",
@@ -2937,6 +2940,38 @@
       "signals": {
         "sqlWrite": 2,
         "consoleErr": 15
+      },
+      "action": "nenhuma",
+      "reason": "ferramenta offline, sem acesso à base",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": true,
+        "dynamicImport": true,
+        "allClosed": false
+      },
+      "scriptRisk": "SAFE_OFFLINE"
+    },
+    {
+      "path": "scripts/rehearse-071.mjs",
+      "category": "script",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [
+        "docs"
+      ],
+      "sideEffects": [],
+      "risks": [
+        "service-role"
+      ],
+      "signals": {
+        "serviceRole": 1,
+        "sqlWrite": 27,
+        "consoleLog": 16,
+        "consoleErr": 1
       },
       "action": "nenhuma",
       "reason": "ferramenta offline, sem acesso à base",
