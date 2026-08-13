@@ -1,15 +1,15 @@
 {
   "generatedBy": "scripts/audit-file-inventory.mjs",
-  "totalFiles": 613,
+  "totalFiles": 615,
   "byStatus": {
-    "MANTER": 596,
+    "MANTER": 598,
     "STANDBY": 17
   },
   "byCategory": {
     "route-ui": 133,
-    "test": 92,
+    "test": 93,
     "migration": 75,
-    "lib": 61,
+    "lib": 62,
     "script": 43,
     "domain": 39,
     "doc": 37,
@@ -29,7 +29,7 @@
     "src-other": 1
   },
   "byConfidence": {
-    "alta": 598,
+    "alta": 600,
     "média": 9,
     "baixa": 6
   },
@@ -4706,6 +4706,31 @@
       "sideEffects": [],
       "risks": [],
       "signals": {},
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/__tests__/payment-cashflow-rpc.test.ts",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "sqlWrite": 3,
+        "unknownCast": 1
+      },
       "action": "nenhuma",
       "reason": "suite de testes — corre por convenção do vitest",
       "manualDecision": false,
@@ -12792,10 +12817,11 @@
       "category": "domain",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 2,
+      "consumers": 3,
       "consumerSample": [
         "src/__tests__/finance-v2-money.test.ts",
-        "src/app/actions/building-cards.ts"
+        "src/app/actions/building-cards.ts",
+        "src/lib/finance-rpc/payment-cashflow.ts"
       ],
       "autoLoaded": false,
       "referencedBy": [
@@ -12805,7 +12831,7 @@
       "risks": [],
       "signals": {},
       "action": "nenhuma",
-      "reason": "em uso: 2 consumidor(es)",
+      "reason": "em uso: 3 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -14314,6 +14340,30 @@
       }
     },
     {
+      "path": "src/lib/finance-rpc/payment-cashflow.ts",
+      "category": "lib",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 1,
+      "consumerSample": [
+        "src/__tests__/payment-cashflow-rpc.test.ts"
+      ],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {},
+      "action": "nenhuma",
+      "reason": "em uso: 1 consumidor(es)",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
       "path": "src/lib/finance-write-surface.ts",
       "category": "lib",
       "status": "MANTER",
@@ -15179,7 +15229,7 @@
       "category": "lib",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 29,
+      "consumers": 30,
       "consumerSample": [
         "src/__tests__/utils.test.ts",
         "src/app/(app)/app/ausencias/_components/ausencias-client.tsx",
@@ -15194,7 +15244,7 @@
       "risks": [],
       "signals": {},
       "action": "nenhuma",
-      "reason": "em uso: 29 consumidor(es), configuração",
+      "reason": "em uso: 30 consumidor(es), configuração",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
