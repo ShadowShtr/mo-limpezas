@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // ============================================================================
-// GATE M1 — ensaio da migration 071 numa base descartável
+// GATE M1 — ensaio das migrations 071 e 072 numa base descartável
 // ============================================================================
 //
 // 🔴 SEM DOCKER. Usa PGlite: Postgres compilado para WASM, a correr dentro
@@ -137,6 +137,37 @@ CREATE TABLE public.fixed_variable_payments (
   created_at timestamptz NOT NULL DEFAULT now()
 );
 
+CREATE TABLE public.invoices (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  company_id uuid NOT NULL REFERENCES public.companies(id) ON DELETE CASCADE,
+  client_id uuid,
+  invoice_number text NOT NULL,
+  invoice_date date NOT NULL DEFAULT CURRENT_DATE,
+  due_date date,
+  period_start date,
+  period_end date,
+  subtotal numeric(12,2) NOT NULL DEFAULT 0,
+  vat_rate numeric(5,2) NOT NULL DEFAULT 23,
+  vat_amount numeric(12,2) NOT NULL DEFAULT 0,
+  total numeric(12,2) NOT NULL DEFAULT 0,
+  -- O CHECK real da 008. E esta lista que o dominio tem de usar - e foi por
+  -- nao a usar que os KPIs estiveram estruturalmente a zero.
+  status text DEFAULT 'rascunho'
+    CHECK (status IN ('rascunho', 'pendente', 'pago', 'vencido', 'cancelado')),
+  paid_at timestamptz,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TABLE public.invoice_items (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  invoice_id uuid NOT NULL REFERENCES public.invoices(id) ON DELETE CASCADE,
+  description text NOT NULL,
+  quantity numeric(10,2) NOT NULL DEFAULT 1,
+  unit_price numeric(12,2) NOT NULL DEFAULT 0,
+  total numeric(12,2) NOT NULL DEFAULT 0,
+  sort_order int NOT NULL DEFAULT 0
+);
+
 -- 🔴 O índice da 024. É por existir aqui que a 071 não precisa de o recriar.
 CREATE UNIQUE INDEX IF NOT EXISTS cash_flow_entries_reference_unique
   ON cash_flow_entries (company_id, reference_type, reference_id)
@@ -165,7 +196,7 @@ COMMIT;
 // ─── Ensaio ──────────────────────────────────────────────────────────────────
 
 async function main() {
-  console.log("\n═══ GATE M1 — ensaio da 071 em base descartável (PGlite, sem Docker) ═══\n");
+  console.log("\n═══ GATE M1 — ensaio das 071/072 em base descartável (PGlite, sem Docker) ═══\n");
 
   const db = await PGlite.create();
   const versao = (await db.query("select version()")).rows[0].version.split(",")[0];
@@ -362,6 +393,144 @@ async function main() {
       q.trim().length > 0 && w.trim().length > 0);
   }
 
+  // ── 6b. Migration 072 — faturas atómicas ───────────────────────────────────
+  console.log("\n── 6b. Migration 072 — criação atómica e numeração");
+
+  const sql072 = fs.readFileSync(
+    path.join(MIGRACOES, "072_invoice_atomic_creation.sql"), "utf8",
+  );
+  try {
+    await db.exec(sql072);
+    verificar("a 072 aplica sem erro", true);
+  } catch (e) {
+    verificar("a 072 aplica sem erro", false, e.message);
+    throw e;
+  }
+
+  verificar("índice único do número de fatura", await existeIndice(db, "uq_invoices_number_per_company"));
+  verificar("índice parcial do rascunho por cliente/período",
+    await existeIndice(db, "uq_invoices_draft_per_client_period"));
+
+  const CLI = "44444444-4444-4444-4444-444444444444";
+  const criar = (company, cliente, itens, inicio = "2026-08-01", fim = "2026-08-31") =>
+    db.query(
+      `select * from create_invoice_with_items(
+         $1::uuid, $2::uuid, 'F', 2026, '2026-08-31'::date, '2026-09-30'::date,
+         $3::date, $4::date, 100, 23, 23, 123, $5::jsonb)`,
+      [company, cliente, inicio, fim, JSON.stringify(itens)],
+    );
+
+  const UMA_LINHA = [{ description: "Avença mensal", quantity: 1, unit_price: 100, total: 100 }];
+
+  const r1 = await criar(A, CLI, UMA_LINHA);
+  verificar("a primeira fatura é F2026/001", r1.rows[0].invoice_number === "F2026/001",
+    r1.rows[0].invoice_number);
+
+  const nItens = (await db.query(
+    "select count(*)::int as n from invoice_items where invoice_id = $1", [r1.rows[0].invoice_id],
+  )).rows[0].n;
+  verificar("as linhas entraram com o cabeçalho", nItens === 1);
+
+  // ── Atomicidade ────────────────────────────────────────────────────────────
+  //
+  // Uma linha com `total` inválido faz o INSERT das linhas rebentar. Numa
+  // função plpgsql isso aborta a transacção inteira: o cabeçalho não fica.
+  const antesFaturas = (await db.query("select count(*)::int as n from invoices")).rows[0].n;
+  let abortou = false;
+  try {
+    await criar(A, CLI, [{ description: "Má", quantity: 1, unit_price: 1, total: "não-é-número" }]);
+  } catch { abortou = true; }
+  const depoisFaturas = (await db.query("select count(*)::int as n from invoices")).rows[0].n;
+  verificar("🔴 linhas inválidas abortam a operação inteira", abortou);
+  verificar("🔴 nenhum cabeçalho órfão ficou para trás", depoisFaturas === antesFaturas,
+    `${antesFaturas} → ${depoisFaturas}`);
+
+  let semLinhas = false;
+  try { await criar(A, CLI, []); } catch { semLinhas = true; }
+  verificar("uma fatura sem linhas é recusada", semLinhas);
+
+  // ── Numeração em sequência ─────────────────────────────────────────────────
+  //
+  // 🔴 PGlite tem uma só ligação, por isso **não há paralelismo verdadeiro**
+  //    aqui. O que se prova é o efeito — dez criações dão dez números
+  //    distintos e consecutivos — e que a base recusa qualquer repetição.
+  //
+  //    A serialização a sério vem do `pg_advisory_xact_lock` dentro da função,
+  //    e essa não é exercível numa ligação única. Fica dito, em vez de se
+  //    fingir que a concorrência foi provada.
+  const CLI2 = "55555555-5555-5555-5555-555555555555";
+  const numeros = [];
+  for (let i = 0; i < 10; i++) {
+    // Períodos distintos: o índice parcial recusa dois rascunhos do mesmo
+    // cliente para o mesmo período — e recusou mesmo, quando esta linha
+    // reciclava os meses ao fim de nove. O índice fez o que devia; a fixture
+    // é que estava errada.
+    const mes = String(i + 1).padStart(2, "0");
+    const r = await criar(A, CLI2, UMA_LINHA, `2026-${mes}-01`, `2026-${mes}-28`);
+    numeros.push(r.rows[0].invoice_number);
+  }
+  verificar("dez criações dão dez números distintos", new Set(numeros).size === 10,
+    numeros.join(" "));
+
+  let numeroRepetido = false;
+  try {
+    await db.query(
+      `insert into invoices (company_id, client_id, invoice_number, total)
+       values ($1, $2, 'F2026/001', 1)`, [A, CLI],
+    );
+  } catch { numeroRepetido = true; }
+  verificar("🔴 a base recusa um número repetido na mesma empresa", numeroRepetido);
+
+  let numeroNoutraEmpresa = true;
+  try {
+    await db.query(
+      `insert into invoices (company_id, client_id, invoice_number, total)
+       values ($1, $2, 'F2026/001', 1)`, [B, CLI],
+    );
+  } catch { numeroNoutraEmpresa = false; }
+  verificar("o mesmo número noutra empresa é permitido", numeroNoutraEmpresa);
+
+  // ── Não reutilizar número apagado ─────────────────────────────────────────
+  const maxAntes = (await db.query(
+    `select max((regexp_match(invoice_number, '/(\\d+)$'))[1]::int) as m
+       from invoices where company_id = $1`, [A],
+  )).rows[0].m;
+  await db.query(`delete from invoices where company_id = $1 and invoice_number = 'F2026/005'`, [A]);
+  const rDepois = await criar(A, CLI2, UMA_LINHA, "2026-10-01", "2026-10-31");
+  const esperado = `F2026/${String(Number(maxAntes) + 1).padStart(3, "0")}`;
+  verificar("🔴 apagar uma fatura não faz reutilizar o número",
+    rDepois.rows[0].invoice_number === esperado,
+    `apagou F2026/005 → seguinte ${rDepois.rows[0].invoice_number}`);
+
+  // ── Duplicado de geração ───────────────────────────────────────────────────
+  let rascunhoDuplicado = false;
+  try { await criar(A, CLI, UMA_LINHA, "2026-08-01", "2026-08-31"); } catch { rascunhoDuplicado = true; }
+  verificar("🔴 dois rascunhos para o mesmo cliente e período são recusados", rascunhoDuplicado);
+
+  // Emitir o primeiro liberta o período para uma fatura legítima seguinte —
+  // uma correcção, ou trabalho extra do mesmo mês.
+  await db.query(
+    `update invoices set status = 'pendente'
+      where company_id = $1 and client_id = $2 and period_start = '2026-08-01'`, [A, CLI],
+  );
+  let suplementarOk = true;
+  try { await criar(A, CLI, UMA_LINHA, "2026-08-01", "2026-08-31"); } catch { suplementarOk = false; }
+  verificar("uma fatura suplementar depois de emitida a primeira é permitida", suplementarOk);
+
+  // ── Rollback da 072 ────────────────────────────────────────────────────────
+  await db.exec(`
+    BEGIN;
+    DROP FUNCTION IF EXISTS public.create_invoice_with_items(
+      uuid, uuid, text, int, date, date, date, date, numeric, numeric, numeric, numeric, jsonb);
+    DROP INDEX IF EXISTS public.uq_invoices_draft_per_client_period;
+    DROP INDEX IF EXISTS public.uq_invoices_number_per_company;
+    COMMIT;
+  `);
+  verificar("rollback da 072: a função desapareceu",
+    (await db.query("select 1 from pg_proc where proname='create_invoice_with_items'")).rows.length === 0);
+  verificar("rollback da 072: os índices desapareceram",
+    !(await existeIndice(db, "uq_invoices_number_per_company"))
+    && !(await existeIndice(db, "uq_invoices_draft_per_client_period")));
   // ── 7. Rollback ────────────────────────────────────────────────────────────
   console.log("\n── 7. Rollback e equivalência");
   // Limpar as linhas criadas no ensaio: o rollback é do **esquema**, e as
