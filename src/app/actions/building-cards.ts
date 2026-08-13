@@ -18,6 +18,34 @@ export interface BuildingCard {
   notes: string | null;
 }
 
+/**
+ * Valida a avença mensal, **no servidor**.
+ *
+ * 🔴 A validação do formulário não conta. Uma server action é um endpoint: um
+ *    pedido feito à mão, um cliente antigo em cache ou um script chegam cá sem
+ *    passar pelo `<input>`. E este número alimenta o card financeiro do
+ *    Resumo — `NaN` propaga-se por qualquer soma que o toque, e um valor
+ *    negativo apareceria como uma avença que a empresa paga ao cliente.
+ *
+ * `null` e `undefined` são válidos e significam a mesma coisa: por preencher.
+ * Não se converte para zero, que diria que o prédio não rende nada.
+ */
+function validarAvenca(valor: number | null | undefined): { ok: true; valor: number | null } | { ok: false; error: string } {
+  if (valor === null || valor === undefined) return { ok: true, valor: null };
+  if (typeof valor !== "number" || !Number.isFinite(valor)) {
+    return { ok: false, error: "A avença mensal tem de ser um número." };
+  }
+  if (valor < 0) {
+    return { ok: false, error: "A avença mensal não pode ser negativa." };
+  }
+  // Um valor com mais de dois decimais não é dinheiro; arredondar em silêncio
+  // esconderia um erro de entrada.
+  if (Math.round(valor * 100) !== valor * 100) {
+    return { ok: false, error: "A avença mensal só pode ter dois decimais." };
+  }
+  return { ok: true, valor };
+}
+
 async function getCompanyId(): Promise<string> {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -90,6 +118,9 @@ export async function createBuildingCard(input: {
     const { companyId, userId } = await requireManager();
     const admin = createAdminClient();
 
+    const avenca = validarAvenca(input.monthlyValue);
+    if (!avenca.ok) return { ok: false, error: avenca.error };
+
     // Próxima posição na coluna. Falhando a leitura, `sort_order` recomeçava
     // em 1 e o cartão novo aterrava no meio da ordem já existente — sem erro
     // nenhum, só a coluna desarrumada.
@@ -110,7 +141,7 @@ export async function createBuildingCard(input: {
         weekday: input.weekday,
         name: input.name.trim(),
         address: input.address?.trim() || null,
-        monthly_value: input.monthlyValue ?? null,
+        monthly_value: avenca.valor,
         team_id: input.teamId || null,
         sort_order: sortOrder,
         notes: input.notes?.trim() || null,
@@ -143,6 +174,11 @@ export async function updateBuildingCard(id: string, input: {
   try {
     const { companyId } = await requireManager();
     const admin = createAdminClient();
+
+    if (input.monthlyValue !== undefined) {
+      const avenca = validarAvenca(input.monthlyValue);
+      if (!avenca.ok) return { ok: false, error: avenca.error };
+    }
 
     const patch: { name?: string; address?: string | null; team_id?: string | null; notes?: string | null; monthly_value?: number | null } = {};
     if (input.name !== undefined) patch.name = input.name.trim();

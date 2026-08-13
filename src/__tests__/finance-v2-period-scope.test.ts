@@ -219,8 +219,10 @@ describe("🔴 os carregadores não engolem erros", () => {
     // devolver sucesso e menos faturas do que devia.
     expect(src).not.toMatch(/if \(invErr \|\| !inv\) continue;/);
     expect(src).toMatch(/if \(invErr \|\| !inv\) \{/);
-    // E as linhas também contam: uma fatura sem itens é um documento a zero.
-    expect(src).toMatch(/if \(itemsErr\) return/);
+    // E as linhas também contam. A guarda deixou de ser um simples `return`:
+    // apaga o cabeçalho já gravado, para não ficar uma fatura sem itens. Ver
+    // o bloco «uma fatura nunca fica sem linhas».
+    expect(src).toMatch(/if \(itemsErr\) \{/);
   });
 
   it("um IVA errado não passa por omissão silenciosa", () => {
@@ -240,7 +242,9 @@ describe("🔴 o valor do prédio é introduzível", () => {
     const i = src.indexOf("export async function createBuildingCard");
     const corpo = src.slice(i, i + 1800);
     expect(corpo).toMatch(/monthlyValue\?: number \| null/);
-    expect(corpo).toMatch(/monthly_value: input\.monthlyValue \?\? null/);
+    // Passou a gravar o valor **já validado no servidor**, não o que veio no
+    // pedido: `NaN` e negativos não chegam à base.
+    expect(corpo).toMatch(/monthly_value: avenca\.valor/);
   });
 
   it("o formulário tem o campo, e vazio significa sem valor", () => {
@@ -255,5 +259,80 @@ describe("🔴 o valor do prédio é introduzível", () => {
     const src = codigo("src/app/actions/building-cards.ts");
     expect((src.match(/revalidatePath\("\/dashboard\/financeiro"\)/g) ?? []).length)
       .toBeGreaterThanOrEqual(2);
+  });
+});
+
+// ─── 7. Nenhuma escrita fica a meio, e nenhuma falha parcial passa ───────────
+
+describe("🔴 uma fatura nunca fica sem linhas", () => {
+  const src = codigo("src/app/actions/invoices.ts");
+
+  it("se os itens falharem, o cabeçalho é apagado", () => {
+    // A fatura já está gravada quando os itens falham. Sair sem mais deixava um
+    // documento sem linhas — e à segunda tentativa a guarda de duplicados
+    // encontrava-o, saltava o cliente, e ficava órfão para sempre.
+    const i = src.indexOf("if (itemsErr)");
+    expect(i, "a guarda tem de existir").toBeGreaterThan(-1);
+    const bloco = src.slice(i, i + 1200);
+    expect(bloco, "sem compensação").toMatch(/\.from\("invoices"\)\s*\.delete\(\)/);
+    expect(bloco).toMatch(/\.eq\("id", inv\.id\)/);
+    expect(bloco, "a compensação também tem de ser company-scoped").toMatch(/\.eq\("company_id", companyId\)/);
+  });
+
+  it("se a compensação falhar, diz qual é a fatura a apagar à mão", () => {
+    // Um documento incompleto que fica na base tem de ter nome. Descobri-lo
+    // meses depois numa conferência é o pior desfecho possível.
+    const i = src.indexOf("if (itemsErr)");
+    const bloco = src.slice(i, i + 1200);
+    expect(bloco).toMatch(/limpezaErr/);
+    expect(bloco).toMatch(/\$\{invoiceNumber\}/);
+  });
+});
+
+describe("🔴 a avença do prédio é validada no servidor", () => {
+  const src = codigo("src/app/actions/building-cards.ts");
+
+  it("existe um validador, e as duas actions usam-no", () => {
+    // Uma server action é um endpoint: um pedido feito à mão ou um cliente em
+    // cache chegam cá sem passar pelo `<input>`. E `NaN` propaga-se por
+    // qualquer soma que o toque.
+    expect(src).toMatch(/function validarAvenca/);
+    expect((src.match(/validarAvenca\(input\.monthlyValue\)/g) ?? []).length).toBe(2);
+  });
+
+  it("recusa NaN, negativos e mais de dois decimais", () => {
+    const i = src.indexOf("function validarAvenca");
+    const corpo = src.slice(i, i + 1000);
+    expect(corpo).toMatch(/Number\.isFinite/);
+    expect(corpo).toMatch(/valor < 0/);
+    expect(corpo).toMatch(/Math\.round\(valor \* 100\) !== valor \* 100/);
+  });
+
+  it("🔴 null continua a ser válido, e não vira zero", () => {
+    const i = src.indexOf("function validarAvenca");
+    const corpo = src.slice(i, i + 1000);
+    // `[\s\S]*` em vez da flag `/s`: o auditor compila com um alvo mais antigo
+    // do que o `tsc`, e o dotAll só existe a partir de es2018.
+    expect(corpo).toMatch(/valor === null \|\| valor === undefined[\s\S]*return \{ ok: true, valor: null \}/);
+    expect(corpo, "nunca converter ausência em zero").not.toMatch(/valor \?\? 0|: 0 \}/);
+  });
+});
+
+describe("🔴 a Conciliação falha de forma explícita", () => {
+  const src = codigo("src/app/actions/bank-reconciliation.ts");
+
+  it("as três consultas do carregamento são verificadas", () => {
+    // Sem contas e sem importações, a página lê-se como «esta empresa nunca
+    // importou nada» — e o utilizador reimporta o mesmo extrato.
+    for (const q of ["txRes", "impRes", "accRes"]) {
+      expect(src, `${q} sem verificação`).toContain(`if (${q}.error)`);
+    }
+  });
+
+  it("uma falha nas sugestões não vira «zero sugestões»", () => {
+    // Indistinguível de um extrato em que nada casa — e a conciliação passaria
+    // a ser toda manual sem ninguém perceber porquê.
+    expect(src).toMatch(/const \{ data: matches, error: matchesErr \}/);
+    expect(src).toMatch(/if \(matchesErr\) return/);
   });
 });

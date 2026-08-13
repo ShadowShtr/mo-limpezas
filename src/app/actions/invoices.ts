@@ -395,12 +395,53 @@ export async function generateInvoices(
       return { ok: false, error: invErr?.message ?? "Falha ao criar a fatura." };
     }
 
-    // E as linhas também não. Uma fatura sem itens é um documento a zero, que
-    // parece emitido e não cobra nada.
+    // ─────────────────────────────────────────────────────────────────────────
+    // 🔴 E as linhas também não — mas devolver o erro não chegava.
+    //
+    // A fatura já está gravada quando os itens falham. Sair aqui deixava um
+    // documento **sem linhas**: subtotal e total corretos no cabeçalho, zero
+    // itens por baixo. E o pior vinha a seguir: à segunda tentativa, a guarda
+    // de duplicados encontra essa fatura em `existingClientIds`, salta o
+    // cliente, e o documento fica órfão para sempre — sem ninguém dar por isso,
+    // porque na lista tem o ar de uma fatura normal.
+    //
+    // Não há transação disponível a partir daqui: o cliente do Supabase faz um
+    // pedido por operação. A alternativa honesta é a **compensação** — apagar o
+    // cabeçalho que acabou de ser criado, para o estado voltar ao que era e a
+    // repetição poder funcionar.
+    //
+    // Se a compensação também falhar, isso é dito: fica um documento
+    // incompleto na base e o utilizador tem de saber qual, em vez de descobrir
+    // meses depois numa conferência.
+    //
+    // A solução definitiva é uma RPC transacional, e vive na TASK 6, com a 071.
+    // ─────────────────────────────────────────────────────────────────────────
     const { error: itemsErr } = await admin
       .from("invoice_items")
       .insert(items.map((it) => ({ ...it, invoice_id: inv.id })));
-    if (itemsErr) return { ok: false, error: itemsErr.message };
+
+    if (itemsErr) {
+      const { error: limpezaErr } = await admin
+        .from("invoices")
+        .delete()
+        .eq("id", inv.id)
+        .eq("company_id", companyId);
+
+      if (limpezaErr) {
+        return {
+          ok: false,
+          error:
+            `As linhas da fatura ${invoiceNumber} não foram gravadas (${itemsErr.message}) ` +
+            `e o documento incompleto não pôde ser removido (${limpezaErr.message}). ` +
+            `Apague a fatura ${invoiceNumber} manualmente antes de gerar cobranças outra vez.`,
+        };
+      }
+
+      return {
+        ok: false,
+        error: `Falha ao gravar as linhas da fatura ${invoiceNumber}: ${itemsErr.message}`,
+      };
+    }
   }
 
   revalidatePath("/dashboard/cobrancas");

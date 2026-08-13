@@ -157,7 +157,15 @@ export async function getBankReconciliationData(filters?: {
       .order("created_at", { ascending: true }),
   ]);
 
+  // 🔴 As três consultas contam, não só a dos movimentos.
+  //
+  // `impRes` e `accRes` eram ignoradas. Uma falha em qualquer delas dava uma
+  // página com movimentos mas **sem contas e sem histórico de importações** —
+  // que se lê como «esta empresa nunca importou nada», e não como «não
+  // consegui carregar». O utilizador reimportaria o mesmo extrato.
   if (txRes.error) return { ok: false, error: txRes.error.message };
+  if (impRes.error) return { ok: false, error: impRes.error.message };
+  if (accRes.error) return { ok: false, error: accRes.error.message };
 
   const txs = txRes.data ?? [];
   const txIds = txs.map((t) => t.id);
@@ -165,13 +173,18 @@ export async function getBankReconciliationData(filters?: {
   // Sugestões + detalhe do lançamento associado
   let suggestionsByTx = new Map<string, SuggestionDTO[]>();
   if (txIds.length > 0) {
-    const { data: matches } = await admin
+    // Uma falha aqui mostrava **zero sugestões** — indistinguível de um
+    // extrato em que nada casa, e a conciliação passaria a ser toda manual sem
+    // ninguém perceber porquê.
+    const { data: matches, error: matchesErr } = await admin
       .from("bank_reconciliation_matches")
       .select("id, bank_transaction_id, cash_flow_entry_id, match_score, match_reason, status, cash_flow_entries(description, amount, date, type)")
       .eq("company_id", companyId)
       .in("bank_transaction_id", txIds)
       .neq("status", "rejected")
       .order("match_score", { ascending: false });
+
+    if (matchesErr) return { ok: false, error: matchesErr.message };
 
     suggestionsByTx = new Map();
     for (const m of matches ?? []) {
