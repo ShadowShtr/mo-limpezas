@@ -1,17 +1,17 @@
 {
   "generatedBy": "scripts/audit-file-inventory.mjs",
-  "totalFiles": 608,
+  "totalFiles": 610,
   "byStatus": {
-    "MANTER": 591,
+    "MANTER": 593,
     "STANDBY": 17
   },
   "byCategory": {
     "route-ui": 133,
-    "test": 91,
+    "test": 92,
     "migration": 73,
     "lib": 61,
     "script": 42,
-    "domain": 38,
+    "domain": 39,
     "doc": 37,
     "server-action": 37,
     "component": 26,
@@ -29,7 +29,7 @@
     "src-other": 1
   },
   "byConfidence": {
-    "alta": 593,
+    "alta": 595,
     "média": 9,
     "baixa": 6
   },
@@ -4077,6 +4077,31 @@
       "sideEffects": [],
       "risks": [],
       "signals": {},
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/__tests__/finance-v2-money.test.ts",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "unknownCast": 3,
+        "fallbackZero": 1
+      },
       "action": "nenhuma",
       "reason": "suite de testes — corre por convenção do vitest",
       "manualDecision": false,
@@ -10150,7 +10175,7 @@
         "anyType": 3,
         "ignoredError": 6,
         "fallbackZero": 3,
-        "fallbackArray": 14,
+        "fallbackArray": 15,
         "revalidatePath": 4
       },
       "action": "auditar atomicidade (T12/T13)",
@@ -12719,6 +12744,33 @@
       "signals": {},
       "action": "nenhuma",
       "reason": "em uso: 1 consumidor(es)",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/domain/finance-v2/money.ts",
+      "category": "domain",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 2,
+      "consumerSample": [
+        "src/__tests__/finance-v2-money.test.ts",
+        "src/app/actions/building-cards.ts"
+      ],
+      "autoLoaded": false,
+      "referencedBy": [
+        "docs"
+      ],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {},
+      "action": "nenhuma",
+      "reason": "em uso: 2 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
