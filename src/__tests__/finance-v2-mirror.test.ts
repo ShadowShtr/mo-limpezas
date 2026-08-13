@@ -345,3 +345,50 @@ describe("🔴 o separador Contas usa a definição partilhada, não uma sua", (
     }
   });
 });
+
+// ─── 7. 🔴 Uma regra, um sítio ───────────────────────────────────────────────
+
+describe("🔴 a regra do período da fatura não está escrita duas vezes", () => {
+  function varrerTs(dir: string, out: string[] = []): string[] {
+    for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+      const p = path.join(dir, e.name);
+      if (e.isDirectory()) varrerTs(p, out);
+      else if (/\.tsx?$/.test(e.name)) out.push(p);
+    }
+    return out;
+  }
+
+  it("só `aggregate.ts` escreve `periodStart ?? dueDate`", () => {
+    // O histórico do cliente tinha-a escrita à mão. Dava o mesmo valor — e era
+    // exactamente por isso que passava despercebida: ficaria a divergir em
+    // silêncio no dia em que a regra mudasse do outro lado, numa das três
+    // superfícies que estes testes existem para manter de acordo.
+    //
+    // A varredura é de todo o `src`, e não só do ficheiro corrigido: a próxima
+    // cópia não vai aparecer no sítio onde já se olhou.
+    const dono = path.join(process.cwd(), "src/domain/finance-v2/aggregate.ts");
+    const copias = varrerTs(path.join(process.cwd(), "src"))
+      .filter((f) => f !== dono && !f.includes("__tests__"))
+      .filter((f) => /periodStart\s*\?\?\s*(f\.)?dueDate/.test(fs.readFileSync(f, "utf8")))
+      .map((f) => path.relative(process.cwd(), f).split(path.sep).join("/"));
+
+    expect(copias, "usar periodoDaFatura() em vez de repetir a regra").toEqual([]);
+  });
+
+  it("o histórico do cliente chama a função partilhada", () => {
+    const fonte = fs.readFileSync(
+      path.join(process.cwd(), "src/domain/finance-v2/client-history.ts"), "utf8",
+    );
+    expect(fonte).toMatch(/periodoDaFatura[,\s}].*from "\.\/aggregate"|periodoDaFatura \} from "\.\/aggregate"/);
+    expect(fonte).toContain("mesNoAno(periodoDaFatura(f), year)");
+  });
+
+  it("🔴 e atribui ao mês certo uma fatura sem period_start", () => {
+    // Comportamento, não texto: f5 não tem `period_start` e vence a 28/08.
+    // Se o histórico deixasse de aplicar a regra, esta fatura sairia do ano
+    // inteiro do cliente — sem erro nenhum.
+    const historico = montarHistoricoCliente(ok(FATURAS), "c3", 2026);
+    expect(historico.months.find((m) => m.month === 8)?.invoiced).toBe(80);
+    expect(historico.yearInvoiced).toBe(80);
+  });
+});

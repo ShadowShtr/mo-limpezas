@@ -24,7 +24,7 @@
 // ============================================================================
 
 import type { FactoFatura, Fonte } from "./aggregate";
-import { ESTADOS_FATURADO, ESTADOS_PAGA } from "./aggregate";
+import { ESTADOS_FATURADO, ESTADOS_PAGA, periodoDaFatura } from "./aggregate";
 
 export interface MesCliente {
   /** 1–12. */
@@ -107,7 +107,10 @@ export function montarHistoricoCliente(
   for (const f of doCliente) {
     if (!(ESTADOS_FATURADO as readonly string[]).includes(f.status)) continue;
 
-    const mFat = mesNoAno(f.periodStart ?? f.dueDate, year);
+    // 🔴 A regra de a que período pertence uma fatura vive numa função só.
+    //    Escrita à mão aqui, dava o mesmo valor — e ficava a divergir em
+    //    silêncio no dia em que a regra mudasse do outro lado.
+    const mFat = mesNoAno(periodoDaFatura(f), year);
     if (mFat !== null) {
       const b = meses[mFat - 1];
       b.invoiced = cent(b.invoiced + f.total);
