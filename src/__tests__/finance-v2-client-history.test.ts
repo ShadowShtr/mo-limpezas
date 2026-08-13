@@ -25,7 +25,7 @@ import {
 import { createWriteCapabilityResolver, stripComments } from "@/lib/finance-write-surface";
 
 const fatura = (o: Partial<FactoFatura>): FactoFatura => ({
-  id: "f", status: "emitida", total: 100, dueDate: null, paidAt: null,
+  id: "f", status: "pendente", total: 100, dueDate: null, paidAt: null,
   periodStart: null, clientId: "A", clientName: "Cliente A", ...o,
 });
 const ok = <T,>(factos: T[]): Fonte<T> => ({ ok: true, factos });
@@ -118,7 +118,7 @@ describe("🔴 um rascunho não é faturação", () => {
     const h = montarHistoricoCliente(
       ok([
         fatura({ id: "1", total: 300, periodStart: "2026-06-01" }),
-        fatura({ id: "2", status: "paga", total: 200, periodStart: "2026-06-01", paidAt: "2026-06-10" }),
+        fatura({ id: "2", status: "pago", total: 200, periodStart: "2026-06-01", paidAt: "2026-06-10" }),
       ]),
       "A", 2026,
     );
@@ -132,7 +132,7 @@ describe("🔴 um rascunho não é faturação", () => {
 describe("recebido não vem de duas fontes ao mesmo tempo", () => {
   it("com fonte de caixa, o `paid_at` da fatura não é somado por cima", () => {
     const h = montarHistoricoCliente(
-      ok([fatura({ status: "paga", total: 500, periodStart: "2026-07-01", paidAt: "2026-07-10" })]),
+      ok([fatura({ status: "pago", total: 500, periodStart: "2026-07-01", paidAt: "2026-07-10" })]),
       "A", 2026,
       ok([{ date: "2026-07-10", amount: 500 }]),
     );
@@ -141,7 +141,7 @@ describe("recebido não vem de duas fontes ao mesmo tempo", () => {
 
   it("sem fonte de caixa, usa o `paid_at`", () => {
     const h = montarHistoricoCliente(
-      ok([fatura({ status: "paga", total: 500, periodStart: "2026-07-01", paidAt: "2026-07-10" })]),
+      ok([fatura({ status: "pago", total: 500, periodStart: "2026-07-01", paidAt: "2026-07-10" })]),
       "A", 2026,
     );
     expect(h.yearReceived).toBe(500);

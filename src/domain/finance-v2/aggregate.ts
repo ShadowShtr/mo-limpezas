@@ -61,15 +61,39 @@ export type Fonte<T> =
 /**
  * Que estados de fatura contam como **faturado**.
  *
- * 🔴 `rascunho` não conta. Um rascunho é um documento que ainda não foi
- * emitido: transformá-lo em receita seria contar dinheiro que o cliente nunca
- * viu pedido. Hoje isso faz a diferença entre 0 € e ~3 300 € — e a resposta
- * certa é 0 €, porque ninguém foi faturado.
+ * ---------------------------------------------------------------------------
+ * 🔴 Estes nomes têm de ser os da base, e não os que fariam sentido
+ * ---------------------------------------------------------------------------
+ * A primeira versão usava `emitida`, `enviada`, `paga`, `vencida` e `parcial`.
+ * Nenhum deles existe. A restrição em `008_financial.sql` é:
+ *
+ *     CHECK (status IN ('rascunho','pendente','pago','vencido','cancelado'))
+ *
+ * O efeito era silencioso e total: nenhuma fatura correspondia a nenhum
+ * estado, e `faturado`, `emAberto`, o aging, o top de clientes e o histórico
+ * do cliente ficavam **estruturalmente a zero**, para sempre, com qualquer
+ * dado. O sintoma esteve escondido porque as 11 faturas da base são todas
+ * `rascunho` — o resultado errado era igual ao resultado certo.
+ *
+ * Teria aparecido no dia em que alguém emitisse a primeira fatura, e o
+ * dashboard continuasse a zero sem nada a explicar porquê.
+ *
+ * Há um teste que confronta estas constantes com o `CHECK` da migration.
+ *
+ * ---------------------------------------------------------------------------
+ * `rascunho` não conta, e `cancelado` também não. Um rascunho é um documento
+ * que ainda não foi emitido: transformá-lo em receita seria contar dinheiro
+ * que o cliente nunca viu pedido.
  */
-export const ESTADOS_FATURADO = ["emitida", "enviada", "paga", "vencida", "parcial"] as const;
+export const ESTADOS_FATURADO = ["pendente", "pago", "vencido"] as const;
 
 /** Que estados contam como **recebido**. */
-export const ESTADOS_PAGA = ["paga"] as const;
+export const ESTADOS_PAGA = ["pago"] as const;
+
+/** Todos os estados que a base aceita — a fonte é a `008_financial.sql`. */
+export const ESTADOS_FATURA_VALIDOS = [
+  "rascunho", "pendente", "pago", "vencido", "cancelado",
+] as const;
 
 /**
  * Categorias de saída de caixa que representam salários.

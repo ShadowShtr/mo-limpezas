@@ -24,6 +24,9 @@ import {
   calcularTopClientes,
   calcularDespesasPorCategoria,
   calcularPredios,
+  ESTADOS_FATURADO,
+  ESTADOS_PAGA,
+  ESTADOS_FATURA_VALIDOS,
   type FactoPredio,
   corDaCategoria,
   diasEntre,
@@ -45,7 +48,7 @@ const ctx = (year: number, month: number, hoje = "2026-08-12"): FinanceReadConte
 });
 
 const fatura = (o: Partial<FactoFatura>): FactoFatura => ({
-  id: "f1", status: "emitida", total: 100, dueDate: null, paidAt: null,
+  id: "f1", status: "pendente", total: 100, dueDate: null, paidAt: null,
   periodStart: null, clientId: null, clientName: null, ...o,
 });
 
@@ -144,7 +147,7 @@ describe("um rascunho não é receita", () => {
 
   it("uma fatura emitida conta", () => {
     const k = calcularKpis(
-      ok([fatura({ status: "emitida", total: 3300, periodStart: "2026-08-01" })]),
+      ok([fatura({ status: "pendente", total: 3300, periodStart: "2026-08-01" })]),
       ok([]), semFolha, ctx(2026, 8),
     );
     expect(k.faturado.valor).toBe(3300);
@@ -195,7 +198,7 @@ describe("recebido não soma duas fontes", () => {
   it("conta entradas de caixa confirmadas, não `paid_at` das faturas", () => {
     // Se ambas representassem o mesmo recebimento, somá-las duplicava-o.
     const k = calcularKpis(
-      ok([fatura({ status: "paga", total: 500, paidAt: "2026-08-05", periodStart: "2026-08-01" })]),
+      ok([fatura({ status: "pago", total: 500, paidAt: "2026-08-05", periodStart: "2026-08-01" })]),
       ok([caixa({ tipo: "entrada", amount: 500, date: "2026-08-05" })]),
       semFolha,
       ctx(2026, 8),
@@ -546,5 +549,88 @@ describe("prédios — cadeia própria, e um total que não mente", () => {
     expect(b.estado).toBe("PARTIAL");
     expect(b.nota).toMatch(/vários dias/);
     expect(b.totalConhecido, "o total é a soma bruta, e o aviso diz porquê").toBe(200);
+  });
+});
+
+// ─── 13. Os estados do domínio existem mesmo na base ─────────────────────────
+
+describe("🔴 os estados de fatura são os da base, não os que fariam sentido", () => {
+  // O defeito mais consequente desta PR, e o mais silencioso.
+  //
+  // O agregador usava `emitida`, `enviada`, `paga`, `vencida` e `parcial`.
+  // Nenhum existe: a restrição em `008_financial.sql` só aceita
+  // `rascunho`, `pendente`, `pago`, `vencido` e `cancelado`.
+  //
+  // Nenhuma fatura correspondia a nenhum estado, e `faturado`, `emAberto`, o
+  // aging, o top de clientes e o histórico do cliente ficavam a zero **para
+  // sempre**, com qualquer dado. O sintoma esteve escondido porque as 11
+  // faturas da base são todas `rascunho`: o resultado errado era igual ao
+  // certo, e só apareceria no dia da primeira fatura emitida.
+
+  const migration = fs.readFileSync(
+    path.join(process.cwd(), "supabase/migrations/008_financial.sql"), "utf8",
+  );
+
+  /** Os estados que a base aceita, lidos do `CHECK` da migration. */
+  const permitidos = (() => {
+    // Há dois `CHECK (status IN (...))` nesta migration — o das faturas e o da
+    // folha de pagamento (`rascunho, aprovado, pago`). Identificar pela
+    // posição seria frágil; identifica-se pelo conteúdo, que é o que
+    // distingue os dois.
+    //
+    // Sem a flag `/s`: o auditor compila com um alvo anterior a es2018.
+    const blocos = [...migration.matchAll(/CHECK\s*\(status\s+IN\s*\(([^)]+)\)\)/gi)]
+      .map((x) => x[1].split(",").map((v) => v.trim().replace(/^'|'$/g, "")));
+
+    const daFatura = blocos.find((b) => b.includes("cancelado") && b.includes("vencido"));
+    expect(daFatura, "o CHECK dos estados de fatura tem de ser encontrável").toBeDefined();
+    return daFatura!;
+  })();
+
+  it("a leitura do CHECK encontrou os cinco estados", () => {
+    // Se a extracção falhar, tudo o resto passaria por vacuidade.
+    expect(permitidos.sort()).toEqual(
+      ["cancelado", "pago", "pendente", "rascunho", "vencido"],
+    );
+  });
+
+  it("🔴 todo o estado que o domínio usa existe na base", () => {
+    for (const e of ESTADOS_FATURADO) {
+      expect(permitidos, `"${e}" não existe no CHECK da base`).toContain(e);
+    }
+    for (const e of ESTADOS_PAGA) {
+      expect(permitidos, `"${e}" não existe no CHECK da base`).toContain(e);
+    }
+  });
+
+  it("o inventário do domínio cobre exactamente o CHECK", () => {
+    expect([...ESTADOS_FATURA_VALIDOS].sort()).toEqual(permitidos.sort());
+  });
+
+  it("rascunho e cancelado ficam de fora do faturado", () => {
+    expect(ESTADOS_FATURADO).not.toContain("rascunho");
+    expect(ESTADOS_FATURADO).not.toContain("cancelado");
+  });
+
+  it("recebido é um subconjunto de faturado", () => {
+    // Uma fatura paga é, necessariamente, uma fatura emitida.
+    for (const e of ESTADOS_PAGA) {
+      expect(ESTADOS_FATURADO as readonly string[]).toContain(e);
+    }
+  });
+
+  it("🔴 com os estados certos, uma fatura emitida conta mesmo", () => {
+    // A prova de que o defeito era real: com o estado antigo, isto dava 0.
+    const k = calcularKpis(
+      ok([fatura({ status: "pendente", total: 500, periodStart: "2026-08-01" })]),
+      ok([]), semFolha, ctx(2026, 8),
+    );
+    expect(k.faturado.valor).toBe(500);
+
+    const comEstadoInventado = calcularKpis(
+      ok([fatura({ status: "emitida", total: 500, periodStart: "2026-08-01" })]),
+      ok([]), semFolha, ctx(2026, 8),
+    );
+    expect(comEstadoInventado.faturado.valor, "um estado que a base não aceita não conta").toBe(0);
   });
 });

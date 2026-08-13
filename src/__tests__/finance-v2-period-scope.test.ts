@@ -105,7 +105,7 @@ describe("🔴 Julho 100, Agosto 200", () => {
   const ok = <T,>(f: T[]): Fonte<T> => ({ ok: true, factos: f });
   const semFolha: Fonte<FactoFolha> = ok([]);
   const fatura = (o: Partial<FactoFatura>): FactoFatura => ({
-    id: "f", status: "emitida", total: 0, dueDate: null, paidAt: null,
+    id: "f", status: "pendente", total: 0, dueDate: null, paidAt: null,
     periodStart: null, clientId: null, clientName: null, ...o,
   });
 

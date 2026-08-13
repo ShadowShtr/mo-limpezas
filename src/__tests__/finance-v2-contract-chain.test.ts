@@ -65,7 +65,7 @@ const COM_IVA = 123; // 100 × 1,23 — o valor que chega à fatura
 
 const faturaAvenca = (o: Partial<FactoFatura> = {}): FactoFatura => ({
   id: "inv-ago",
-  status: "emitida",
+  status: "pendente",
   total: COM_IVA,
   dueDate: "2026-08-31",
   paidAt: null,
@@ -134,7 +134,7 @@ describe("3. de emitida a recebida", () => {
   it("🔴 dada uma fatura paga e uma entrada, o Recebido não duplica", () => {
     // ⚠️ Regra de agregação, não execução. A escrita que cria a entrada ainda
     //    não existe de forma atómica — ver a nota no topo do ficheiro.
-    const paga = faturaAvenca({ status: "paga", paidAt: "2026-08-20" });
+    const paga = faturaAvenca({ status: "pago", paidAt: "2026-08-20" });
     const caixa: FactoCaixa[] = [
       { date: "2026-08-20", tipo: "entrada", status: "confirmado", amount: COM_IVA, categoria: null },
     ];
@@ -148,7 +148,7 @@ describe("3. de emitida a recebida", () => {
   it("🔴 o mesmo euro não é contado duas vezes", () => {
     // A fatura tem `paid_at` **e** existe a entrada de caixa. Se as duas
     // fontes fossem somadas, Recebido daria 246 € para um pagamento de 123 €.
-    const paga = faturaAvenca({ status: "paga", paidAt: "2026-08-20" });
+    const paga = faturaAvenca({ status: "pago", paidAt: "2026-08-20" });
     const k = calcularKpis(
       ok([paga]),
       ok([{ date: "2026-08-20", tipo: "entrada", status: "confirmado", amount: COM_IVA, categoria: null }]),
@@ -188,8 +188,8 @@ describe("4. nada atravessa", () => {
     // O filtro por empresa está na query, mas o histórico do cliente filtra
     // outra vez pelo cliente — e é isso que este teste fixa.
     const misto = ok([
-      faturaAvenca({ id: "a", clientId: "cli-A", total: 100, paidAt: "2026-08-10", status: "paga" }),
-      faturaAvenca({ id: "b", clientId: "cli-B", total: 999, paidAt: "2026-08-10", status: "paga" }),
+      faturaAvenca({ id: "a", clientId: "cli-A", total: 100, paidAt: "2026-08-10", status: "pago" }),
+      faturaAvenca({ id: "b", clientId: "cli-B", total: 999, paidAt: "2026-08-10", status: "pago" }),
     ]);
     const histA = montarHistoricoCliente(misto, "cli-A", 2026);
     expect(histA.yearReceived).toBe(100);
@@ -199,7 +199,7 @@ describe("4. nada atravessa", () => {
   it("o histórico do cliente bate com o KPI do mês", () => {
     // Duas leituras diferentes do mesmo facto têm de concordar. Quando
     // divergem, é sinal de que uma das duas tem uma regra a mais.
-    const f = ok([faturaAvenca({ status: "paga", paidAt: "2026-08-20" })]);
+    const f = ok([faturaAvenca({ status: "pago", paidAt: "2026-08-20" })]);
     const kpi = calcularKpis(f, ok([]), semFolha, ctx(2026, 8));
     const hist = montarHistoricoCliente(f, "cli-1", 2026);
     expect(hist.months[7].invoiced).toBe(kpi.faturado.valor);
