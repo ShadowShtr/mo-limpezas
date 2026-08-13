@@ -137,6 +137,13 @@ CREATE TABLE public.fixed_variable_payments (
   created_at timestamptz NOT NULL DEFAULT now()
 );
 
+CREATE TABLE public.services (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  company_id uuid NOT NULL REFERENCES public.companies(id) ON DELETE CASCADE,
+  status text NOT NULL DEFAULT 'agendado'
+);
+
+
 CREATE TABLE public.invoices (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   company_id uuid NOT NULL REFERENCES public.companies(id) ON DELETE CASCADE,
@@ -165,7 +172,8 @@ CREATE TABLE public.invoice_items (
   quantity numeric(10,2) NOT NULL DEFAULT 1,
   unit_price numeric(12,2) NOT NULL DEFAULT 0,
   total numeric(12,2) NOT NULL DEFAULT 0,
-  sort_order int NOT NULL DEFAULT 0
+  sort_order int NOT NULL DEFAULT 0,
+  service_id uuid
 );
 
 -- 🔴 O índice da 024. É por existir aqui que a 071 não precisa de o recriar.
@@ -516,6 +524,57 @@ async function main() {
   let suplementarOk = true;
   try { await criar(A, CLI, UMA_LINHA, "2026-08-01", "2026-08-31"); } catch { suplementarOk = false; }
   verificar("uma fatura suplementar depois de emitida a primeira é permitida", suplementarOk);
+  // ── service_id nas linhas ──────────────────────────────────────────────────
+  //
+  // 🔴 É por esta coluna que `getUnbilledServices` sabe o que já foi faturado.
+  //    Sem ela, as faturas nasciam certas e os serviços que elas cobravam
+  //    continuavam a aparecer como «por faturar» — até alguém os faturar
+  //    outra vez, ao cliente.
+  const SVC1 = "66666666-6666-6666-6666-666666666666";
+  const SVC2 = "77777777-7777-7777-7777-777777777777";
+  await db.query(
+    `insert into services (id, company_id, status) values ($1,$3,'concluido'), ($2,$3,'concluido')`,
+    [SVC1, SVC2, A],
+  );
+
+  const CLI3 = "88888888-8888-8888-8888-888888888888";
+  const rSvc = await criar(A, CLI3, [
+    { description: "Limpeza 12/08", quantity: 1, unit_price: 60, total: 60, service_id: SVC1, sort_order: 0 },
+    { description: "Limpeza 19/08", quantity: 1, unit_price: 40, total: 40, service_id: SVC2, sort_order: 1 },
+    // Linha de avença: cobre um contrato, não uma visita. Fica a null.
+    { description: "Avença mensal", quantity: 1, unit_price: 100, total: 100, sort_order: 2 },
+  ], "2026-11-01", "2026-11-30");
+
+  const itens = (await db.query(
+    `select description, service_id from invoice_items where invoice_id = $1 order by sort_order`,
+    [rSvc.rows[0].invoice_id],
+  )).rows;
+
+  verificar("🔴 a linha de um serviço guarda o seu service_id",
+    itens[0].service_id === SVC1 && itens[1].service_id === SVC2,
+    `${itens[0].service_id?.slice(0, 8)}… / ${itens[1].service_id?.slice(0, 8)}…`);
+
+  verificar("🔴 a linha de avença fica com service_id nulo",
+    itens[2].service_id === null,
+    "cobre um contrato, não uma visita");
+
+  // O cruzamento que `getUnbilledServices` faz, tal e qual.
+  const jaFaturados = (await db.query(
+    `select service_id from invoice_items where service_id = any($1::uuid[])`,
+    [[SVC1, SVC2]],
+  )).rows.map((r) => r.service_id);
+
+  verificar("🔴 os dois serviços deixam de estar «por faturar»",
+    jaFaturados.length === 2 && jaFaturados.includes(SVC1) && jaFaturados.includes(SVC2),
+    `${jaFaturados.length} de 2 reconhecidos`);
+
+  // Um serviço que não entrou em nenhuma fatura continua por faturar.
+  const SVC3 = "99999999-9999-9999-9999-999999999999";
+  await db.query(`insert into services (id, company_id, status) values ($1,$2,'concluido')`, [SVC3, A]);
+  const aindaPorFaturar = (await db.query(
+    `select 1 from invoice_items where service_id = $1`, [SVC3],
+  )).rows.length === 0;
+  verificar("um serviço não faturado continua por faturar", aindaPorFaturar);
 
   // ── Rollback da 072 ────────────────────────────────────────────────────────
   await db.exec(`

@@ -128,9 +128,28 @@ BEGIN
   )
   RETURNING id INTO v_id;
 
-  INSERT INTO public.invoice_items (invoice_id, description, quantity, unit_price, total, sort_order)
+  -- ───────────────────────────────────────────────────────────────────────────
+  -- 🔴 `service_id` tem de vir, e a razão não é óbvia
+  --
+  -- É por esta coluna que `getUnbilledServices` sabe o que já foi faturado:
+  -- cruza os serviços concluídos com os `invoice_items` que os referenciam.
+  --
+  -- Uma primeira versão desta função esquecia-a. O efeito seria discreto e
+  -- caro: as faturas nasciam certas, mas os serviços que elas cobravam
+  -- continuavam a aparecer como «por faturar» — e alguém acabaria por os
+  -- faturar outra vez, ao cliente.
+  --
+  -- É opcional porque nem toda a linha vem de um serviço. As linhas sintéticas
+  -- de avença mensal e de preço fixo cobrem um contrato, não uma visita, e
+  -- ficam a `NULL` de propósito: inventar-lhes um `service_id` marcaria como
+  -- faturado um serviço que aquela linha não cobre.
+  -- ───────────────────────────────────────────────────────────────────────────
+  INSERT INTO public.invoice_items (
+    invoice_id, service_id, description, quantity, unit_price, total, sort_order
+  )
   SELECT
     v_id,
+    NULLIF(item->>'service_id', '')::uuid,
     item->>'description',
     (item->>'quantity')::numeric,
     (item->>'unit_price')::numeric,
@@ -164,6 +183,9 @@ COMMIT;
 --  · não impede uma segunda fatura **emitida** para o mesmo cliente e período,
 --    porque isso é legítimo;
 --  · não toca em `cash_flow_entries` — pagamento → caixa é a 073;
+--  · não inventa `service_id` para linhas de avença: essas cobrem um contrato,
+--    não uma visita, e marcar um serviço como faturado por elas seria mentir
+--    ao `getUnbilledServices`;
 --  · não semeia nada.
 --
 -- ⚠️ Antes de aplicar: se já existirem dois números iguais na base, o índice
