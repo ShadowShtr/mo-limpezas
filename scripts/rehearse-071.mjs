@@ -29,9 +29,11 @@
 //     `service_role`/`authenticated`, extensões próprias). Reexecutá-las aqui
 //     falharia por razões que nada têm que ver com a 071;
 //   · o histórico de storage byte a byte — a divergência aceite do `022`;
-//   · o comportamento real do RLS sob os papéis do Supabase. As políticas são
-//     criadas e verificadas na sua **definição**, não exercidas com um
-//     utilizador autenticado a sério.
+//   · o comportamento real do RLS **em execução**. As expressões das políticas
+//     são inspeccionadas (`pg_policies.qual`) e verifica-se que ligam
+//     `company_id` ao `profiles` do utilizador e que a escrita exige
+//     `admin`/`gestor` — mas nenhuma consulta é feita como um utilizador
+//     autenticado. Aqui `auth.uid()` devolve sempre `NULL`.
 //
 // O baseline é construído para reproduzir **exactamente aquilo de que a 071
 // depende**: `companies`, `profiles`, `cash_flow_entries`,
@@ -317,11 +319,48 @@ async function main() {
     rls.rows.length === 2 && rls.rows.every((r) => r.relrowsecurity),
     rls.rows.map((r) => `${r.relname}=${r.relrowsecurity}`).join(", "));
 
+  // 🔴 Contar políticas não é verificá-las.
+  //
+  // A primeira versão desta secção contava quatro linhas em `pg_policies` e o
+  // cabeçalho do script dizia que as políticas eram verificadas «na sua
+  // definição». Não eram: quatro políticas vazias, ou quatro que deixassem
+  // passar toda a gente, davam o mesmo número.
+  //
+  // `pg_policies.qual` traz a expressão inteira. É isso que se verifica agora
+  // — que cada política liga `company_id` ao `profiles` do utilizador
+  // autenticado, e que a de escrita exige `admin` ou `gestor`.
   const pols = await db.query(
-    `select tablename, policyname from pg_policies
-      where schemaname='public' and tablename in ('expense_categories','financial_periods')`,
+    `select tablename, policyname, cmd, qual, with_check from pg_policies
+      where schemaname='public' and tablename in ('expense_categories','financial_periods')
+      order by tablename, cmd`,
   );
   verificar("as quatro políticas foram criadas", pols.rows.length === 4, `${pols.rows.length} políticas`);
+
+  for (const tabela of ["expense_categories", "financial_periods"]) {
+    const daTabela = pols.rows.filter((p) => p.tablename === tabela);
+    const leitura = daTabela.find((p) => p.cmd === "SELECT");
+    const escrita = daTabela.find((p) => p.cmd === "ALL");
+
+    verificar(`${tabela}: uma política de leitura e uma de escrita`,
+      !!leitura && !!escrita, daTabela.map((p) => p.cmd).join(", "));
+
+    const q = String(leitura?.qual ?? "");
+    verificar(`${tabela}: a leitura é company-scoped pelo perfil autenticado`,
+      q.includes("company_id") && q.includes("profiles") && q.includes("auth.uid()"),
+      q.replace(/\s+/g, " ").slice(0, 90));
+
+    const w = String(escrita?.qual ?? "");
+    verificar(`${tabela}: a escrita é company-scoped`,
+      w.includes("company_id") && w.includes("profiles") && w.includes("auth.uid()"));
+    verificar(`🔴 ${tabela}: a escrita exige admin ou gestor`,
+      w.includes("'admin'") && w.includes("'gestor'"),
+      w.replace(/\s+/g, " ").slice(0, 110));
+
+    // Uma política sem `qual` deixa passar tudo — o pior desfecho possível,
+    // porque o RLS aparece como activo.
+    verificar(`${tabela}: nenhuma política é permissiva por omissão`,
+      q.trim().length > 0 && w.trim().length > 0);
+  }
 
   // ── 7. Rollback ────────────────────────────────────────────────────────────
   console.log("\n── 7. Rollback e equivalência");

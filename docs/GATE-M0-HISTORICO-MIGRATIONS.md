@@ -270,7 +270,7 @@ saber qual é o verdadeiro.
 
 ### M1 — ensaio da 071
 
-**✅ EXECUTADO. 41 de 41 verificações passaram.**
+**✅ EXECUTADO. 51 de 51 verificações passaram.**
 
 `node scripts/rehearse-071.mjs`
 
@@ -293,7 +293,8 @@ alcance do projecto e não a procurei.
 | Duas despesas manuais sem origem | ✔ permitidas (índice parcial) |
 | `financial_periods` — mês 0, 13, duplicado, estado inválido | ✔ todos recusados |
 | Reabrir sem motivo / com motivo em branco | ✔ recusado |
-| RLS + 4 políticas | ✔ |
+| RLS activo | ✔ nas duas tabelas novas |
+| Expressões das políticas | ✔ leitura e escrita ligadas a `company_id`/`profiles`/`auth.uid()`; escrita exige `admin` ou `gestor`; nenhuma permissiva por omissão |
 | Rollback | ✔ esquema idêntico ao baseline, coluna a coluna |
 | Reaplicar depois do rollback | ✔ |
 
@@ -318,9 +319,11 @@ O que ficou de fora, e é deliberado:
   razões que nada têm que ver com a 071. O baseline reproduz **exactamente
   aquilo de que a 071 depende**, e nada mais, para o ensaio não passar a
   testar o andaime;
-- **o RLS não foi exercido com um utilizador autenticado.** As políticas são
-  criadas e a sua definição é verificada; `auth.uid()` é um esboço que devolve
-  `NULL`;
+- **o RLS não foi exercido em execução.** As expressões das políticas são
+  inspeccionadas em `pg_policies.qual` — verifica-se que ligam `company_id` ao
+  `profiles` do utilizador e que a escrita exige `admin`/`gestor` — mas nenhuma
+  consulta é feita como um utilizador autenticado, porque aqui `auth.uid()`
+  devolve sempre `NULL`;
 
 - o estado exacto do bucket `collaborator-documents` tal como está em
   produção — a 022 diverge, a 023 repõe o estado funcional, e nenhuma das
