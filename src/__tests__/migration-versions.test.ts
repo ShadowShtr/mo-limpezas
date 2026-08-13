@@ -133,13 +133,16 @@ describe("migration 071 — preparada, não aplicada", () => {
     expect(sql).not.toMatch(/expense_category_id uuid NOT NULL/);
   });
 
-  it("🔴 o índice de origem é único e parcial", () => {
-    // Único, porque é ele que torna «marcar como pago» idempotente na base —
-    // uma verificação em JavaScript perde a corrida contra dois pedidos
-    // concorrentes. Parcial, porque 439 das 444 linhas têm `reference_type`
-    // nulo e um índice total rejeitaria a segunda despesa manual.
-    expect(sql).toMatch(/CREATE UNIQUE INDEX IF NOT EXISTS uq_cash_flow_origin/);
-    expect(sql).toMatch(/WHERE reference_type IS NOT NULL AND reference_id IS NOT NULL/);
+  it("🔴 não recria o índice de origem — esse já vem da 024", () => {
+    // Correcção a um erro meu: a 071 criava `uq_cash_flow_origin`, e o
+    // relatório M0 afirmava que o índice não existia. A auditoria consultou o
+    // esquema vivo via REST — que não expõe índices — e nunca olhou para os
+    // ficheiros de migration. A 024 já o cria, e está aplicada.
+    //
+    // Dois índices equivalentes com nomes diferentes não acrescentam
+    // protecção: custam escrita em cada insert, para sempre, e deixam o
+    // próximo a mexer sem saber qual é o verdadeiro.
+    expect(sql).not.toMatch(/CREATE UNIQUE INDEX[^;]*uq_cash_flow_origin/);
   });
 
   it("reabrir um período exige motivo", () => {
@@ -151,6 +154,22 @@ describe("migration 071 — preparada, não aplicada", () => {
     for (const t of ["expense_categories", "financial_periods"]) {
       expect(sql, `${t} sem RLS`).toMatch(new RegExp(`ALTER TABLE public\\.${t} ENABLE ROW LEVEL SECURITY`));
     }
+  });
+
+  it("🔴 a protecção de idempotência existe no baseline, vinda da 024", () => {
+    // É isto que o `markPaymentPaid` vai precisar. Provar que existe é tão
+    // importante como não a duplicar — sem ela, um duplo clique cria duas
+    // saídas de caixa para o mesmo pagamento.
+    const m024 = fs.readFileSync(
+      path.join(DIR, "024_cash_flow_reference_integrity.sql"),
+      "utf8",
+    ).replace(/^\s*--.*$/gm, "");
+
+    expect(m024).toMatch(/CREATE UNIQUE INDEX IF NOT EXISTS cash_flow_entries_reference_unique/);
+    expect(m024).toMatch(/\(company_id, reference_type, reference_id\)/);
+    // Parcial: 439 das 444 linhas têm `reference_type` nulo, e um índice total
+    // rejeitaria a segunda despesa manual sem origem.
+    expect(m024).toMatch(/WHERE reference_type IS NOT NULL AND reference_id IS NOT NULL/);
   });
 
   it("não toca em due_date nem em source_id", () => {

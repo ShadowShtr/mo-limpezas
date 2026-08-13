@@ -69,6 +69,35 @@ export interface FinanceReadContext {
   todayLisbon: string;
 }
 
+/**
+ * Constrói o contexto de leitura.
+ *
+ * 🔴 Vive **aqui**, no domínio, e não na action. É pura — e num ficheiro
+ * `"use server"` só podem existir exportações assíncronas: cada export desses
+ * ficheiros torna-se um endpoint RPC, e o Next recusa exportar uma função
+ * síncrona como server action.
+ *
+ * Esta regra já mordeu este projecto antes (`CANCEL_TYPE_LABELS`, 2026-06-08,
+ * exportado de um ficheiro `"use server"` e a bloquear todas as notificações
+ * do calendário). Nem o `tsc` nem o ESLint a apanham — só o `npm run build`.
+ */
+export function construirContexto(
+  companyId: string,
+  year: number,
+  month: number,
+  todayLisbon: string,
+): FinanceReadContext {
+  const ultimoDia = new Date(Date.UTC(year, month, 0)).getUTCDate();
+  return {
+    companyId,
+    year,
+    month,
+    periodStart: `${year}-${String(month).padStart(2, "0")}-01`,
+    periodEnd: `${year}-${String(month).padStart(2, "0")}-${String(ultimoDia).padStart(2, "0")}`,
+    todayLisbon,
+  };
+}
+
 // ─── Avisos de qualidade de dados ────────────────────────────────────────────
 
 /**

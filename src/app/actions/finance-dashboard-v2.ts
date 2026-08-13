@@ -39,28 +39,15 @@ import {
   type FactoFolha,
   type Fonte,
 } from "@/domain/finance-v2/aggregate";
-import type {
-  AvisoSaude,
-  FalhaFonte,
-  FinanceDashboardSnapshot,
-  FinanceReadContext,
+import {
+  construirContexto,
+  type AvisoSaude,
+  type FalhaFonte,
+  type FinanceDashboardSnapshot,
+  type FinanceReadContext,
 } from "@/domain/finance-v2/types";
 
 type AdminClient = ReturnType<typeof createAdminClient>;
-
-// ─── Contexto ────────────────────────────────────────────────────────────────
-
-export function construirContexto(companyId: string, year: number, month: number): FinanceReadContext {
-  const ultimoDia = new Date(Date.UTC(year, month, 0)).getUTCDate();
-  return {
-    companyId,
-    year,
-    month,
-    periodStart: `${year}-${String(month).padStart(2, "0")}-01`,
-    periodEnd: `${year}-${String(month).padStart(2, "0")}-${String(ultimoDia).padStart(2, "0")}`,
-    todayLisbon: todayInLisbon(),
-  };
-}
 
 // ─── Adaptadores ─────────────────────────────────────────────────────────────
 //
@@ -165,7 +152,7 @@ export async function getFinanceDashboardV2(
   if (!guard.ok) return { ok: false, error: guard.error };
 
   const { admin } = guard;
-  const ctx = construirContexto(guard.profile.company_id, input.year, input.month);
+  const ctx = construirContexto(guard.profile.company_id, input.year, input.month, todayInLisbon());
 
   // `allSettled`: um bloco em falha não derruba os outros. A página pode ter
   // KPIs disponíveis e a eficiência indisponível ao mesmo tempo — que é a

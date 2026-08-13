@@ -27,12 +27,12 @@
 --   fixed_variable_payments  categoria          ❌ não existe
 --   expense_categories                          ❌ não existe
 --   financial_periods                           ❌ não existe
---   UNIQUE(company, reference_type, reference_id) ❌ não existe
+--   UNIQUE(company, reference_type, reference_id) ✅ existe — 024, aplicada
 --
--- A última é a mais importante: é o que torna «marcar como pago» idempotente
--- **na base**, e não apenas na aplicação. Um duplo clique, um retry de rede ou
--- dois separadores abertos deixam de conseguir criar duas saídas para o mesmo
--- pagamento — a base recusa a segunda.
+-- 🔴 Correcção a uma afirmação anterior: o relatório M0 e o corpo do PR #60
+-- diziam que o índice único de origem não existia. **Diziam mal.** A auditoria
+-- consultou o esquema vivo via REST, que não expõe índices, e não olhou para
+-- os ficheiros de migration. A `024` já o cria, e está aplicada — ver §3.
 -- ============================================================================
 
 BEGIN;
@@ -100,20 +100,24 @@ ALTER TABLE public.fixed_variable_payments
 CREATE INDEX IF NOT EXISTS idx_cash_flow_category
   ON public.cash_flow_entries (company_id, expense_category_id, date);
 
--- ─── 3. 🔴 Idempotência de origem ───────────────────────────────────────────
+-- ─── 3. 🔴 Idempotência de origem — JÁ EXISTE, NÃO SE RECRIA ────────────────
 --
--- Uma ocorrência económica, um movimento. Marcar um pagamento como pago cria
--- **uma** saída de caixa; clicar outra vez não cria a segunda.
+-- Esta migration criava aqui `uq_cash_flow_origin`. **Foi removido.**
 --
--- A garantia é da base, não da aplicação. Uma verificação em JavaScript perde
--- a corrida contra dois pedidos concorrentes — este índice não perde.
+-- A `024_cash_flow_reference_integrity.sql` já cria, e está aplicada:
 --
--- Parcial de propósito: `reference_type IS NULL` em 439 das 444 linhas
--- actuais, e um UNIQUE total rejeitaria a segunda despesa manual sem origem.
-
-CREATE UNIQUE INDEX IF NOT EXISTS uq_cash_flow_origin
-  ON public.cash_flow_entries (company_id, reference_type, reference_id)
-  WHERE reference_type IS NOT NULL AND reference_id IS NOT NULL;
+--     CREATE UNIQUE INDEX IF NOT EXISTS cash_flow_entries_reference_unique
+--       ON cash_flow_entries (company_id, reference_type, reference_id)
+--       WHERE reference_type IS NOT NULL AND reference_id IS NOT NULL;
+--
+-- Mesmas colunas, mesma condição parcial. Criar um segundo índice equivalente
+-- com outro nome não acrescentaria protecção nenhuma e custaria escrita em
+-- todos os inserts, para sempre — e deixaria dois objectos a manter em vez de
+-- um, com o próximo a mexer a ter de descobrir qual é o verdadeiro.
+--
+-- A garantia de idempotência de que o `markPaymentPaid` precisa **já está no
+-- baseline**. Um teste prova-o contra a base descartável, em vez de a exigir
+-- dentro desta migration.
 
 -- ─── 4. Fechamento mensal ───────────────────────────────────────────────────
 --

@@ -2,9 +2,12 @@
 
 **Data:** 2026-08-12 · **Base:** PR #60 · **Método:** só leitura
 
-> Atualizado depois da revisão do dono. Ver §3.1 — a divergência do `022` já
-> estava cercada por uma política de exceção, e o relatório original não a
-> mencionava.
+> Atualizado duas vezes depois da revisão do dono:
+>
+> - **§3.1** — a divergência do `022` já estava cercada por uma política de
+>   exceção, e o relatório original não a mencionava;
+> - **§5** — 🔴 este relatório afirmou que o índice único de origem não
+>   existia. **Afirmou mal.** A `024` já o cria e está aplicada.
 
 Objetivo: provar que o estado que precede a 071 é reconstruível, antes de a
 ensaiar contra uma base descartável.
@@ -195,6 +198,48 @@ BASELINE_REPRODUZIVEL_PARA_071 = SIM
 CERTIFICA_HISTORICO_DE_STORAGE = NAO
 EXCECAO_022                    = ACEITE E PINADA
 ```
+
+---
+
+## 5. 🔴 Correção — o índice único de origem já existia
+
+Este relatório e o corpo do PR #60 afirmaram, como achado de auditoria:
+
+> `UNIQUE(company, reference_type, reference_id)` ❌ não existe
+
+**Falso.** A `024_cash_flow_reference_integrity.sql` já o cria, e está
+aplicada no ledger:
+
+```sql
+CREATE UNIQUE INDEX IF NOT EXISTS cash_flow_entries_reference_unique
+  ON cash_flow_entries (company_id, reference_type, reference_id)
+  WHERE reference_type IS NOT NULL AND reference_id IS NOT NULL;
+```
+
+Mesmas colunas, mesma condição parcial que a 071 propunha recriar com o nome
+`uq_cash_flow_origin`.
+
+### Como é que a auditoria falhou
+
+Consultei o esquema vivo pela API REST, que devolve **colunas** e não
+**índices**. Vi que a coluna `reference_type` existia e concluí, sem prova, que
+a restrição de unicidade não existia — quando nunca cheguei a procurá-la. Não
+li os ficheiros de migration à procura dela.
+
+O erro tem uma forma reconhecível: **usar uma fonte que não consegue responder
+à pergunta e tratar o silêncio como resposta negativa.** É o mesmo padrão que
+transforma uma query falhada num zero.
+
+### O que foi corrigido
+
+- a 071 deixou de criar `uq_cash_flow_origin`;
+- o teste que exigia o índice dentro da 071 foi substituído por um que prova
+  que a protecção existe no baseline, vinda da 024;
+- o corpo do PR #60 foi corrigido.
+
+Dois índices equivalentes com nomes diferentes não acrescentam protecção:
+custam escrita em cada insert, para sempre, e deixam quem vier a seguir sem
+saber qual é o verdadeiro.
 
 ---
 
