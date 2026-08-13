@@ -4099,7 +4099,8 @@
       "sideEffects": [],
       "risks": [],
       "signals": {
-        "fallbackArray": 1
+        "sqlWrite": 1,
+        "fallbackArray": 2
       },
       "action": "nenhuma",
       "reason": "suite de testes — corre por convenção do vitest",
@@ -9445,7 +9446,7 @@
         "revalidatePath(9)"
       ],
       "risks": [
-        "erro-de-query-ignorado(7)",
+        "erro-de-query-ignorado(6)",
         "any(1)"
       ],
       "signals": {
@@ -9454,7 +9455,7 @@
         "sqlWrite": 14,
         "eslintDisable": 1,
         "anyType": 1,
-        "ignoredError": 7,
+        "ignoredError": 6,
         "fallbackZero": 1,
         "fallbackArray": 8,
         "revalidatePath": 9
@@ -10143,8 +10144,8 @@
       "signals": {
         "supabase": 9,
         "serverAction": 1,
-        "write": 6,
-        "sqlWrite": 12,
+        "write": 7,
+        "sqlWrite": 13,
         "eslintDisable": 3,
         "anyType": 3,
         "ignoredError": 6,
