@@ -1,14 +1,14 @@
 {
   "generatedBy": "scripts/audit-file-inventory.mjs",
-  "totalFiles": 611,
+  "totalFiles": 612,
   "byStatus": {
-    "MANTER": 594,
+    "MANTER": 595,
     "STANDBY": 17
   },
   "byCategory": {
     "route-ui": 133,
     "test": 92,
-    "migration": 73,
+    "migration": 74,
     "lib": 61,
     "script": 43,
     "domain": 39,
@@ -29,7 +29,7 @@
     "src-other": 1
   },
   "byConfidence": {
-    "alta": 596,
+    "alta": 597,
     "média": 9,
     "baixa": 6
   },
@@ -2969,8 +2969,8 @@
       ],
       "signals": {
         "serviceRole": 1,
-        "sqlWrite": 27,
-        "consoleLog": 16,
+        "sqlWrite": 37,
+        "consoleLog": 17,
         "consoleErr": 1
       },
       "action": "nenhuma",
@@ -16764,6 +16764,24 @@
       "risks": [],
       "signals": {
         "sqlWrite": 8
+      },
+      "action": "nenhuma",
+      "reason": "migration versionada — histórico do schema, nunca se apaga",
+      "manualDecision": false
+    },
+    {
+      "path": "supabase/migrations/072_invoice_atomic_creation.sql",
+      "category": "migration",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "sqlWrite": 2
       },
       "action": "nenhuma",
       "reason": "migration versionada — histórico do schema, nunca se apaga",
