@@ -250,7 +250,7 @@ saber qual é o verdadeiro.
 | `supabase migration list` | Não corrido. O runner deste projeto não escreve em `supabase_migrations.schema_migrations`; o histórico autoritativo é `public._migrations`, e esse foi lido. |
 | `supabase db pull` | Não corrido. Pode propor atualizar o histórico remoto, e um prompt aceite por engano seria irreversível. |
 | `supabase db dump` | Não corrido. Precisa de credenciais de base de dados que não estão disponíveis nesta sessão. |
-| `db reset` / base descartável | **Bloqueado.** Docker está instalado (29.6.1) mas o daemon não está a correr, e não há `psql`. |
+| `supabase db reset` | **Não usado.** Exige Docker. A base descartável foi feita de outra maneira — PGlite, Postgres em WASM dentro do Node. Ver o M1 abaixo. |
 | `migration repair` | Proibido, e não corrido. |
 
 ---
@@ -272,7 +272,17 @@ saber qual é o verdadeiro.
 
 **✅ EXECUTADO. 51 de 51 verificações passaram.**
 
-`node scripts/rehearse-071.mjs`
+`npm run rehearse:071`
+
+🔴 **Corre no CI**, dentro do check obrigatório
+(`typecheck · lint · testes · auditoria · migração · build`). Enquanto foi só
+uma corrida manual registada aqui, «CI verde» não provava nenhuma destas
+verificações — provava as outras, e esta ficava por conta de quem lesse o
+relatório.
+
+A migration ainda não está aplicada em lado nenhum, e é isso que torna o passo
+útil: prova a cada alteração que **continua** a aplicar limpa, que não semeia
+nada, e que o rollback funciona.
 
 Sem Docker: **PGlite**, Postgres 18.3 compilado para WASM, a correr dentro do
 processo do Node. Nasce vazia, morre no fim, não abre porta nem lê credenciais.

@@ -39,7 +39,7 @@ concurrency:
 
 jobs:
   qualidade:
-    name: typecheck · lint · testes · auditoria · build
+    name: typecheck · lint · testes · auditoria · migração · build
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
@@ -96,6 +96,21 @@ jobs:
         # destruir ou popular uma base real, `createAdminClient` num client
         # component, ou `auth.signUp` em código de produção.
         run: npm run audit:code:strict
+
+      - name: Ensaio da migration 071
+        # ─────────────────────────────────────────────────────────────────────
+        # A migration ainda não está aplicada em lado nenhum, e é isso que
+        # torna este passo útil: prova, a cada alteração, que **continua** a
+        # aplicar limpa, que não semeia nada, que as políticas RLS dizem o que
+        # devem dizer, e que o rollback devolve o esquema ao estado anterior.
+        #
+        # Sem isto, o ensaio era uma corrida manual num relatório, e "CI verde"
+        # não provava nenhuma das 51 verificações.
+        #
+        # Não precisa de segredos nem de Docker: PGlite é Postgres compilado
+        # para WASM e corre dentro do Node. A base nasce vazia e morre no fim.
+        # ─────────────────────────────────────────────────────────────────────
+        run: npm run rehearse:071
 
       - name: Build
         # ─────────────────────────────────────────────────────────────────────
