@@ -132,14 +132,33 @@ jobs:
         # As `NEXT_PUBLIC_*` ficam inlined com os valores falsos. Não faz mal —
         # este passo prova que o código compila, e quem implanta é a Vercel,
         # que constrói à parte com as variáveis verdadeiras.
+        #
+        # ─────────────────────────────────────────────────────────────────────
+        # Porque é que os segredos são literalmente a palavra «placeholder»
+        #
+        # O `scan-secrets` recusou a primeira versão disto:
+        #
+        #     [critico] quality.yml:138 — SUPABASE_SERVICE_ROLE_KEY
+        #               atribuída a um literal
+        #
+        # E fez bem. Num ficheiro versionado, essa forma é exactamente a que
+        # um dia recebe a chave verdadeira, colada por quem tinha pressa. O
+        # scanner não tem — nem deve ter — maneira de distinguir um valor falso
+        # descritivo de um real.
+        #
+        # A saída não é enfraquecer o scanner nem disfarçar o valor: é usar o
+        # mecanismo que ele já prevê. `VALOR_SINTETICO` aceita exactamente a
+        # palavra «placeholder», e é isso que está aqui. O `check-env` só
+        # verifica presença, por isso serve na mesma.
+        # ─────────────────────────────────────────────────────────────────────
         env:
-          NEXT_PUBLIC_SUPABASE_URL: https://ci-placeholder.supabase.co
-          NEXT_PUBLIC_SUPABASE_ANON_KEY: ci-placeholder-anon-key
-          SUPABASE_SERVICE_ROLE_KEY: ci-placeholder-service-role-key
-          NEXT_PUBLIC_MAPBOX_TOKEN: pk.ci-placeholder
-          RESEND_API_KEY: re_ci_placeholder
+          NEXT_PUBLIC_SUPABASE_URL: https://placeholder.supabase.co
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: placeholder
+          SUPABASE_SERVICE_ROLE_KEY: placeholder
+          NEXT_PUBLIC_MAPBOX_TOKEN: placeholder
+          RESEND_API_KEY: placeholder
           RESEND_FROM_EMAIL: CI <ci@example.invalid>
-          NEXT_PUBLIC_VAPID_PUBLIC_KEY: ci-placeholder-vapid-public
-          VAPID_PRIVATE_KEY: ci-placeholder-vapid-private
-          CRON_SECRET: ci-placeholder-cron-secret
+          NEXT_PUBLIC_VAPID_PUBLIC_KEY: placeholder
+          VAPID_PRIVATE_KEY: placeholder
+          CRON_SECRET: placeholder
         run: npm run build
