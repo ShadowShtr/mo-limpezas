@@ -167,9 +167,19 @@ export async function updateBuildingCard(id: string, input: {
     const { companyId } = await requireManager();
     const admin = createAdminClient();
 
+    // 🔴 O valor gravado é o **normalizado**, não o que veio no pedido.
+    //
+    //    Esta função validava e depois deitava fora o resultado, gravando
+    //    `input.monthlyValue` em bruto. Validar sem usar o valor validado é
+    //    quase pior do que não validar: dá a impressão de que o campo está
+    //    protegido, e 0,28999999999999998 entrava na base à mesma ao editar,
+    //    embora não entrasse ao criar. As duas metades do formulário
+    //    guardariam números diferentes para a mesma coisa.
+    let avencaNormalizada: number | null | undefined;
     if (input.monthlyValue !== undefined) {
       const avenca = validarAvenca(input.monthlyValue);
       if (!avenca.ok) return { ok: false, error: avenca.error };
+      avencaNormalizada = avenca.valor;
     }
 
     const patch: { name?: string; address?: string | null; team_id?: string | null; notes?: string | null; monthly_value?: number | null } = {};
@@ -177,7 +187,7 @@ export async function updateBuildingCard(id: string, input: {
     if (input.address !== undefined) patch.address = input.address?.trim() || null;
     if (input.teamId !== undefined) patch.team_id = input.teamId || null;
     if (input.notes !== undefined) patch.notes = input.notes?.trim() || null;
-    if (input.monthlyValue !== undefined) patch.monthly_value = input.monthlyValue;
+    if (input.monthlyValue !== undefined) patch.monthly_value = avencaNormalizada ?? null;
 
     const { error } = await admin
       .from("building_cards")

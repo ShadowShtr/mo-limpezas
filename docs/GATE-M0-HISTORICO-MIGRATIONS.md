@@ -270,11 +270,38 @@ saber qual é o verdadeiro.
 
 ### M1 — ensaio da 071
 
-**Não iniciado.** Bloqueado por falta de base descartável: o daemon do Docker
-não está a correr. Docker instalado (29.6.1), `psql` ausente, `supabase` CLI
-2.114.0 presente.
+**✅ EXECUTADO. 41 de 41 verificações passaram.**
 
-#### Âmbito declarado do ensaio, quando correr
+`node scripts/rehearse-071.mjs`
+
+Sem Docker: **PGlite**, Postgres 18.3 compilado para WASM, a correr dentro do
+processo do Node. Nasce vazia, morre no fim, não abre porta nem lê credenciais.
+
+Tratar o Docker como bloqueio era um erro meu — havia uma alternativa no
+alcance do projecto e não a procurei.
+
+| Fase | Resultado |
+|---|---|
+| Baseline pré-071 verificado | ✔ as duas tabelas, o índice da 024, e a ausência do que a 071 cria |
+| 071 aplica | ✔ sem erro |
+| Zero seed | ✔ `expense_categories` com 0 linhas |
+| Zero classificação automática | ✔ 3 de 3 linhas históricas ficaram sem categoria |
+| `expense_category_id` nullable | ✔ |
+| Não recria o índice de origem | ✔ e o da 024 continua lá |
+| Mesma origem duas vezes | ✔ recusada pela base |
+| Origens iguais, empresas diferentes | ✔ permitidas |
+| Duas despesas manuais sem origem | ✔ permitidas (índice parcial) |
+| `financial_periods` — mês 0, 13, duplicado, estado inválido | ✔ todos recusados |
+| Reabrir sem motivo / com motivo em branco | ✔ recusado |
+| RLS + 4 políticas | ✔ |
+| Rollback | ✔ esquema idêntico ao baseline, coluna a coluna |
+| Reaplicar depois do rollback | ✔ |
+
+O rollback é SQL explícito, e tinha de ser: a 071 termina com `COMMIT`, e um
+`ROLLBACK` depois disso não desfaz nada. Está no mesmo script, e foi ensaiado
+como o resto.
+
+#### Âmbito declarado do ensaio
 
 O ensaio prova uma coisa e não prova outra, e as duas ficam escritas antes de
 começar — para ninguém depois lhe atribuir uma garantia que ele não dá:
@@ -283,7 +310,17 @@ começar — para ninguém depois lhe atribuir uma garantia que ele não dá:
 > da 022. Este rehearsal não certifica byte-a-byte todo o histórico de
 > storage.**
 
-O que fica de fora, e é deliberado:
+O que ficou de fora, e é deliberado:
+
+- **as 71 migrações históricas não foram reexecutadas.** Muitas dependem de
+  coisas que só existem no Supabase — `auth.users`, `storage.objects`, os
+  papéis `service_role`/`authenticated`, extensões próprias — e falhariam por
+  razões que nada têm que ver com a 071. O baseline reproduz **exactamente
+  aquilo de que a 071 depende**, e nada mais, para o ensaio não passar a
+  testar o andaime;
+- **o RLS não foi exercido com um utilizador autenticado.** As políticas são
+  criadas e a sua definição é verificada; `auth.uid()` é um esboço que devolve
+  `NULL`;
 
 - o estado exacto do bucket `collaborator-documents` tal como está em
   produção — a 022 diverge, a 023 repõe o estado funcional, e nenhuma das

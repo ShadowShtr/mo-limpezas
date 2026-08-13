@@ -470,7 +470,9 @@ export async function generateInvoices(
     // incompleto na base e o utilizador tem de saber qual, em vez de descobrir
     // meses depois numa conferência.
     //
-    // A solução definitiva é uma RPC transacional, e vive na TASK 6, com a 071.
+    // A solução definitiva é uma RPC transacional — criação de fatura, linhas
+    // e idempotência concorrente numa só operação — e vive na **TASK 9**.
+    // (A TASK 6 é outra coisa: pagamento → movimento de caixa.)
     // ─────────────────────────────────────────────────────────────────────────
     const { error: itemsErr } = await admin
       .from("invoice_items")
