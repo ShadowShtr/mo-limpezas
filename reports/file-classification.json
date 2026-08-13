@@ -2961,7 +2961,7 @@
       "consumerSample": [],
       "autoLoaded": false,
       "referencedBy": [
-        "docs"
+        "npm"
       ],
       "sideEffects": [],
       "risks": [
