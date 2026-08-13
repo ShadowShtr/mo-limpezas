@@ -502,7 +502,9 @@
       "referencedBy": [],
       "sideEffects": [],
       "risks": [],
-      "signals": {},
+      "signals": {
+        "sqlWrite": 1
+      },
       "action": "nenhuma",
       "reason": "documentação",
       "manualDecision": false
@@ -4404,7 +4406,7 @@
       "sideEffects": [],
       "risks": [],
       "signals": {
-        "sqlWrite": 3,
+        "sqlWrite": 4,
         "fallbackArray": 1
       },
       "action": "nenhuma",
