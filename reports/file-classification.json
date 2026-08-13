@@ -1,14 +1,14 @@
 {
   "generatedBy": "scripts/audit-file-inventory.mjs",
-  "totalFiles": 612,
+  "totalFiles": 613,
   "byStatus": {
-    "MANTER": 595,
+    "MANTER": 596,
     "STANDBY": 17
   },
   "byCategory": {
     "route-ui": 133,
     "test": 92,
-    "migration": 74,
+    "migration": 75,
     "lib": 61,
     "script": 43,
     "domain": 39,
@@ -29,7 +29,7 @@
     "src-other": 1
   },
   "byConfidence": {
-    "alta": 597,
+    "alta": 598,
     "média": 9,
     "baixa": 6
   },
@@ -2969,8 +2969,8 @@
       ],
       "signals": {
         "serviceRole": 1,
-        "sqlWrite": 40,
-        "consoleLog": 17,
+        "sqlWrite": 46,
+        "consoleLog": 18,
         "consoleErr": 1
       },
       "action": "nenhuma",
@@ -4519,8 +4519,8 @@
       "sideEffects": [],
       "risks": [],
       "signals": {
-        "sqlWrite": 4,
-        "fallbackArray": 1
+        "sqlWrite": 11,
+        "fallbackArray": 2
       },
       "action": "nenhuma",
       "reason": "suite de testes — corre por convenção do vitest",
@@ -16782,6 +16782,24 @@
       "risks": [],
       "signals": {
         "sqlWrite": 2
+      },
+      "action": "nenhuma",
+      "reason": "migration versionada — histórico do schema, nunca se apaga",
+      "manualDecision": false
+    },
+    {
+      "path": "supabase/migrations/073_payment_to_cashflow.sql",
+      "category": "migration",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "sqlWrite": 7
       },
       "action": "nenhuma",
       "reason": "migration versionada — histórico do schema, nunca se apaga",
