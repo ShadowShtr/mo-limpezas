@@ -176,3 +176,58 @@ describe("migration 071 — preparada, não aplicada", () => {
     expect(sql).not.toMatch(/due_date|source_id/);
   });
 });
+
+describe("migration 073 — pagamento → caixa, preparada e não aplicada", () => {
+  const bruto = fs.readFileSync(path.join(DIR, "073_payment_to_cashflow.sql"), "utf8");
+  const sql = bruto.replace(/^\s*--.*$/gm, "");
+
+  it("🔴 o ON CONFLICT repete o predicado do índice parcial", () => {
+    // Defeito real, apanhado pelo ensaio: sem o `WHERE`, o Postgres não infere
+    // um índice **parcial** e recusa com «there is no unique or exclusion
+    // constraint matching the ON CONFLICT specification». A função aplicava-se
+    // sem erro; só rebentava na primeira vez que alguém pagasse.
+    const idx = sql.indexOf("ON CONFLICT (company_id, reference_type, reference_id)");
+    expect(idx, "ON CONFLICT pela identidade de origem").toBeGreaterThan(-1);
+    expect(sql.slice(idx, idx + 220)).toMatch(
+      /WHERE reference_type IS NOT NULL AND reference_id IS NOT NULL/,
+    );
+  });
+
+  it("🔴 a reversão apaga pela origem, nunca por valor e data", () => {
+    // Apagar por `(amount, date)` levaria à frente a despesa manual que alguém
+    // lançou no mesmo dia pelo mesmo montante — e essa não volta.
+    const del = sql.slice(sql.indexOf("DELETE FROM public.cash_flow_entries"));
+    expect(del).toMatch(/reference_type = 'fixed_variable_payment'/);
+    expect(del).toMatch(/reference_id = p_payment_id/);
+    expect(del.slice(0, del.indexOf(";"))).not.toMatch(/amount|c\.date|AND date/);
+  });
+
+  it("não faz backfill dos pagamentos já marcados como pagos", () => {
+    // Criar movimentos de caixa para pagamentos antigos seria inventar
+    // histórico de dinheiro a partir de um estado que ninguém verificou.
+    // O único INSERT em cash_flow_entries é por VALUES, com um pagamento de
+    // cada vez. Um `INSERT ... SELECT ... FROM fixed_variable_payments` varria
+    // a tabela toda e criava movimentos em massa.
+    //
+    // A primeira versão desta asserção varria o ficheiro inteiro e casava o
+    // INSERT de uma função com o SELECT da outra — mede-se dentro do comando,
+    // até ao `;`.
+    const inserts = sql.match(/INSERT INTO public\.cash_flow_entries[\s\S]*?;/gi) ?? [];
+    expect(inserts.length, "um só INSERT em cash_flow_entries").toBe(1);
+    expect(inserts[0]).toMatch(/VALUES/);
+    expect(inserts[0]).not.toMatch(/FROM public\.fixed_variable_payments/i);
+  });
+
+  it("a ausência de linha em financial_periods significa aberto", () => {
+    expect(sql).toMatch(/SELECT NOT EXISTS/);
+    expect(sql).toMatch(/fp\.status = 'closed'/);
+  });
+
+  it("tranca a linha do pagamento antes de decidir", () => {
+    expect(sql).toMatch(/FROM public\.fixed_variable_payments[\s\S]{0,200}FOR UPDATE/);
+  });
+
+  it("um pagamento de outra empresa não é alcançável", () => {
+    expect(sql).toMatch(/company_id = p_company_id/);
+  });
+});

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // ============================================================================
-// GATE M1 — ensaio das migrations 071 e 072 numa base descartável
+// GATE M1 — ensaio das migrations 071, 072 e 073 numa base descartável
 // ============================================================================
 //
 // 🔴 SEM DOCKER. Usa PGlite: Postgres compilado para WASM, a correr dentro
@@ -204,7 +204,7 @@ COMMIT;
 // ─── Ensaio ──────────────────────────────────────────────────────────────────
 
 async function main() {
-  console.log("\n═══ GATE M1 — ensaio das 071/072 em base descartável (PGlite, sem Docker) ═══\n");
+  console.log("\n═══ GATE M1 — ensaio das 071/072/073 em base descartável (PGlite, sem Docker) ═══\n");
 
   const db = await PGlite.create();
   const versao = (await db.query("select version()")).rows[0].version.split(",")[0];
@@ -590,6 +590,164 @@ async function main() {
   verificar("rollback da 072: os índices desapareceram",
     !(await existeIndice(db, "uq_invoices_number_per_company"))
     && !(await existeIndice(db, "uq_invoices_draft_per_client_period")));
+  // ── 6c. Migration 073 — pagamento → caixa ──────────────────────────────────
+  console.log("\n── 6c. Migration 073 — pagamento → caixa");
+
+  const sql073 = fs.readFileSync(
+    path.join(MIGRACOES, "073_payment_to_cashflow.sql"), "utf8",
+  );
+  try {
+    await db.exec(sql073);
+    verificar("a 073 aplica sem erro", true);
+  } catch (e) {
+    verificar("a 073 aplica sem erro", false, e.message);
+    throw e;
+  }
+
+  const novoPagamento = async (company, valor, ano = 2026, mes = 8) => {
+    const r = await db.query(
+      `insert into fixed_variable_payments
+         (company_id, kind, description, amount, period_year, period_month)
+       values ($1, 'fixo', 'Internet', $2, $3, $4) returning id`,
+      [company, valor, ano, mes],
+    );
+    return r.rows[0].id;
+  };
+
+  const movimentosDe = async (pagamento) =>
+    (await db.query(
+      `select id, amount, type, status from cash_flow_entries
+        where reference_type = 'fixed_variable_payment' and reference_id = $1`,
+      [pagamento],
+    )).rows;
+
+  // ── Pagar uma vez ──────────────────────────────────────────────────────────
+  const PAG1 = await novoPagamento(A, 49.9);
+  const r1p = await db.query(
+    `select * from mark_payment_paid($1::uuid, $2::uuid, '2026-08-12'::date)`, [A, PAG1],
+  );
+  verificar("pagar cria exactamente um movimento", (await movimentosDe(PAG1)).length === 1);
+  verificar("o movimento é uma saída confirmada com o valor do pagamento",
+    (await movimentosDe(PAG1))[0].type === "saida"
+    && Number((await movimentosDe(PAG1))[0].amount) === 49.9
+    && (await movimentosDe(PAG1))[0].status === "confirmado");
+  verificar("o pagamento ficou pago",
+    (await db.query("select status, paid_at from fixed_variable_payments where id=$1", [PAG1]))
+      .rows[0].status === "pago");
+  verificar("a primeira chamada diz que não estava pago", r1p.rows[0].ja_estava_pago === false);
+
+  // ── 🔴 Idempotência ────────────────────────────────────────────────────────
+  const r2p = await db.query(
+    `select * from mark_payment_paid($1::uuid, $2::uuid, '2026-08-13'::date)`, [A, PAG1],
+  );
+  verificar("🔴 pagar duas vezes não duplica o movimento", (await movimentosDe(PAG1)).length === 1);
+  verificar("a segunda chamada devolve o mesmo movimento",
+    r2p.rows[0].cash_entry_id === r1p.rows[0].cash_entry_id);
+  verificar("e diz que já estava pago", r2p.rows[0].ja_estava_pago === true);
+
+  let cincoVezes = true;
+  for (let i = 0; i < 5; i++) {
+    try {
+      await db.query(`select * from mark_payment_paid($1::uuid, $2::uuid, '2026-08-14'::date)`, [A, PAG1]);
+    } catch { cincoVezes = false; }
+  }
+  verificar("🔴 cinco repetições: nem erro nem duplicado",
+    cincoVezes && (await movimentosDe(PAG1)).length === 1);
+
+  // ── Isolamento entre empresas ──────────────────────────────────────────────
+  const PAG_B = await novoPagamento(B, 49.9);
+  await db.query(`select * from mark_payment_paid($1::uuid, $2::uuid, '2026-08-12'::date)`, [B, PAG_B]);
+  verificar("empresas diferentes não colidem",
+    (await movimentosDe(PAG_B)).length === 1 && (await movimentosDe(PAG1)).length === 1);
+
+  let doutraEmpresa = false;
+  try {
+    await db.query(`select * from mark_payment_paid($1::uuid, $2::uuid, '2026-08-12'::date)`, [B, PAG1]);
+  } catch { doutraEmpresa = true; }
+  verificar("🔴 pagar um pagamento de outra empresa é recusado", doutraEmpresa);
+
+  // ── Valor inválido ─────────────────────────────────────────────────────────
+  const PAG_SEM = await novoPagamento(A, null);
+  let semValor = false;
+  try {
+    await db.query(`select * from mark_payment_paid($1::uuid, $2::uuid, '2026-08-12'::date)`, [A, PAG_SEM]);
+  } catch { semValor = true; }
+  verificar("um pagamento sem valor não gera movimento", semValor);
+  verificar("e não ficou marcado como pago",
+    (await db.query("select status from fixed_variable_payments where id=$1", [PAG_SEM]))
+      .rows[0].status === "pendente");
+
+  // ── 🔴 Reversão não toca em movimentos manuais ─────────────────────────────
+  //
+  // Uma reversão por valor e data levaria à frente a despesa manual que alguém
+  // lançou no mesmo dia pelo mesmo montante — e essa não voltava.
+  await db.query(
+    `insert into cash_flow_entries (company_id, type, amount, description, date)
+     values ($1, 'saida', 49.90, 'Despesa manual do mesmo dia e valor', '2026-08-12')`, [A],
+  );
+  const manuaisAntes = (await db.query(
+    `select count(*)::int as n from cash_flow_entries
+      where company_id=$1 and reference_type is null and amount = 49.90`, [A],
+  )).rows[0].n;
+
+  const rev = await db.query(`select * from unmark_payment_paid($1::uuid, $2::uuid)`, [A, PAG1]);
+  verificar("desmarcar remove o movimento de origem", rev.rows[0].movimentos_removidos === 1);
+  verificar("o pagamento voltou a pendente, sem data",
+    (await db.query("select status, paid_at from fixed_variable_payments where id=$1", [PAG1]))
+      .rows[0].status === "pendente");
+
+  const manuaisDepois = (await db.query(
+    `select count(*)::int as n from cash_flow_entries
+      where company_id=$1 and reference_type is null and amount = 49.90`, [A],
+  )).rows[0].n;
+  verificar("🔴 a despesa manual do mesmo dia e valor sobreviveu",
+    manuaisDepois === manuaisAntes, `${manuaisAntes} → ${manuaisDepois}`);
+
+  verificar("desmarcar duas vezes não rebenta",
+    (await db.query(`select * from unmark_payment_paid($1::uuid, $2::uuid)`, [A, PAG1]))
+      .rows[0].movimentos_removidos === 0);
+
+  // Repagar depois de reverter volta a criar um movimento — e só um.
+  await db.query(`select * from mark_payment_paid($1::uuid, $2::uuid, '2026-08-20'::date)`, [A, PAG1]);
+  verificar("repagar depois de reverter cria um movimento novo",
+    (await movimentosDe(PAG1)).length === 1);
+
+  // ── 🔴 Período fechado ─────────────────────────────────────────────────────
+  const PAG_SET = await novoPagamento(A, 30, 2026, 9);
+  await db.query(
+    `insert into financial_periods (company_id, year, month, status, closed_at)
+     values ($1, 2026, 9, 'closed', now())`, [A],
+  );
+  verificar("um período sem linha está aberto",
+    (await db.query("select is_financial_period_open($1::uuid, 2026, 7) as o", [A])).rows[0].o === true);
+  verificar("um período fechado está fechado",
+    (await db.query("select is_financial_period_open($1::uuid, 2026, 9) as o", [A])).rows[0].o === false);
+
+  let mesFechado = false;
+  try {
+    await db.query(`select * from mark_payment_paid($1::uuid, $2::uuid, '2026-09-05'::date)`, [A, PAG_SET]);
+  } catch (e) { mesFechado = String(e.message).includes("FINANCIAL_PERIOD_CLOSED"); }
+  verificar("🔴 pagar num mês fechado é recusado", mesFechado);
+  verificar("e não deixou o pagamento pago nem criou movimento",
+    (await db.query("select status from fixed_variable_payments where id=$1", [PAG_SET]))
+      .rows[0].status === "pendente"
+    && (await movimentosDe(PAG_SET)).length === 0);
+
+  verificar("Agosto continua aberto e aceita pagamentos",
+    (await db.query("select is_financial_period_open($1::uuid, 2026, 8) as o", [A])).rows[0].o === true);
+
+  // ── Rollback da 073 ────────────────────────────────────────────────────────
+  await db.exec(`
+    BEGIN;
+    DROP FUNCTION IF EXISTS public.unmark_payment_paid(uuid, uuid);
+    DROP FUNCTION IF EXISTS public.mark_payment_paid(uuid, uuid, date);
+    DROP FUNCTION IF EXISTS public.is_financial_period_open(uuid, int, int);
+    COMMIT;
+  `);
+  verificar("rollback da 073: as três funções desapareceram",
+    (await db.query(
+      `select 1 from pg_proc where proname in
+       ('mark_payment_paid','unmark_payment_paid','is_financial_period_open')`)).rows.length === 0);
   // ── 7. Rollback ────────────────────────────────────────────────────────────
   console.log("\n── 7. Rollback e equivalência");
   // Limpar as linhas criadas no ensaio: o rollback é do **esquema**, e as
