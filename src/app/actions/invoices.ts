@@ -74,11 +74,22 @@ export async function generateInvoices(
   const { start, end } = monthRange(year, month);
 
   // Configurações
-  const { data: settings } = await admin
+  //
+  // 🔴 O erro conta. Uma falha aqui caía no `?? 23` e faturava tudo com a taxa
+  //    por omissão — que pode não ser a da empresa. Um IVA errado numa fatura
+  //    emitida é um problema fiscal, não um detalhe de apresentação.
+  //
+  //    `PGRST116` (nenhuma linha) continua a ser aceite: uma empresa sem
+  //    configurações usa as omissões de propósito. O que não se aceita é uma
+  //    consulta que rebentou.
+  const { data: settings, error: settingsErr } = await admin
     .from("company_settings")
     .select("vat_rate, invoice_prefix")
     .eq("company_id", companyId)
     .single();
+  if (settingsErr && settingsErr.code !== "PGRST116") {
+    return { ok: false, error: settingsErr.message };
+  }
 
   const vatRate     = settings?.vat_rate    ?? 23;
   const prefix      = settings?.invoice_prefix ?? "F";
@@ -113,18 +124,31 @@ export async function generateInvoices(
   const serviceLocationIds = [...new Set((services ?? []).map((s) => s.location_id).filter(Boolean))];
 
   // Locais com preço fixo que têm contratos activos no período
-  const { data: fixedLocations } = await admin
+  // ───────────────────────────────────────────────────────────────────────────
+  // 🔴 A partir daqui, **nenhum erro de consulta é ignorado**.
+  //
+  // Estas queries usavam `const { data } = await …` e deitavam o erro fora.
+  // Numa função que gera faturação, isso tem uma consequência muito concreta:
+  // se a consulta das avenças falhar, `activeMonthlyContracts` fica vazio e a
+  // função devolve **sucesso com zero faturas**. Ninguém é faturado nesse mês,
+  // e o ecrã diz que correu bem.
+  //
+  // É o mesmo padrão de «falha vira zero» que o motor de leitura passou meses
+  // a eliminar — aqui custava dinheiro por cobrar em vez de um número errado.
+  // ───────────────────────────────────────────────────────────────────────────
+  const { data: fixedLocations, error: fixedLocErr } = await admin
     .from("locations")
     .select("id, name, client_id, hourly_rate, fixed_price, pricing_type")
     .eq("company_id", companyId)
     .eq("pricing_type", "fixed")
     .eq("active", true);
+  if (fixedLocErr) return { ok: false, error: fixedLocErr.message };
 
   // Verificar quais têm contrato activo no período
   const fixedLocationIds = (fixedLocations ?? []).map((l) => l.id);
   let activeFixedLocationIds: string[] = [];
   if (fixedLocationIds.length > 0) {
-    const { data: activeContracts } = await admin
+    const { data: activeContracts, error: activeContractsErr } = await admin
       .from("contracts")
       .select("location_id")
       .eq("company_id", companyId)
@@ -132,12 +156,13 @@ export async function generateInvoices(
       .lte("starts_on", end)
       .or(`ends_on.is.null,ends_on.gte.${start}`)
       .in("location_id", fixedLocationIds);
+    if (activeContractsErr) return { ok: false, error: activeContractsErr.message };
     activeFixedLocationIds = [...new Set((activeContracts ?? []).map((c) => c.location_id))];
   }
 
   // Contratos com faturação por VALOR FIXO MENSAL (avença) ativos no período.
   // Cada um gera uma linha mensal única, independente do nº de serviços.
-  const { data: monthlyContracts } = await admin
+  const { data: monthlyContracts, error: monthlyErr } = await admin
     .from("contracts")
     .select("id, location_id, fixed_price, apply_vat")
     .eq("company_id", companyId)
@@ -145,6 +170,10 @@ export async function generateInvoices(
     .eq("fixed_monthly", true)
     .lte("starts_on", end)
     .or(`ends_on.is.null,ends_on.gte.${start}`);
+
+  // Se esta falhar, todas as avenças desaparecem e a função diria «zero
+  // faturas» com ar de sucesso. É o caso que mais custa dinheiro.
+  if (monthlyErr) return { ok: false, error: monthlyErr.message };
 
   const activeMonthlyContracts = (monthlyContracts ?? []).filter(
     (c) => c.fixed_price != null && c.fixed_price > 0,
@@ -159,20 +188,23 @@ export async function generateInvoices(
   const allLocationIds = [
     ...new Set([...serviceLocationIds, ...activeFixedLocationIds, ...monthlyContractLocationIds]),
   ];
-  const { data: locations } = await admin
+  const { data: locations, error: locErr } = await admin
     .from("locations")
     .select("id, name, client_id, hourly_rate, fixed_price, pricing_type")
     .in("id", allLocationIds);
+  if (locErr) return { ok: false, error: locErr.message };
 
   const locationMap = Object.fromEntries(
     (locations ?? []).map((l) => [l.id, l]),
   );
 
   const clientIds = [...new Set((locations ?? []).map((l) => l.client_id).filter(Boolean))];
-  const { data: clients } = await admin
+
+  const { data: clients, error: cliErr } = await admin
     .from("clients")
     .select("id, name, nif, email, vat_exempt")
     .in("id", clientIds);
+  if (cliErr) return { ok: false, error: cliErr.message };
 
   const clientMap = Object.fromEntries(
     (clients ?? []).map((c) => [c.id, c]),
@@ -201,12 +233,17 @@ export async function generateInvoices(
   }
 
   // Verificar faturas já existentes para este período (não duplicar)
-  const { data: existing } = await admin
+  //
+  // 🔴 Se esta falhar e o erro for ignorado, `existingClientIds` fica vazio e
+  //    a função gera **faturas duplicadas** para clientes que já as tinham.
+  const { data: existing, error: existingErr } = await admin
     .from("invoices")
     .select("id, client_id")
     .eq("company_id", companyId)
     .eq("period_start", start)
     .eq("period_end", end);
+
+  if (existingErr) return { ok: false, error: existingErr.message };
 
   const existingClientIds = new Set((existing ?? []).map((e) => e.client_id));
 
@@ -349,11 +386,21 @@ export async function generateInvoices(
       .select("id")
       .single();
 
-    if (invErr || !inv) continue;
+    // 🔴 Não se salta em silêncio.
+    //
+    // Estava aqui um `continue`: uma fatura que falhasse a gravar desaparecia
+    // sem deixar rasto, e a função devolvia sucesso com menos faturas do que
+    // devia. Ninguém conseguiria saber quais faltavam.
+    if (invErr || !inv) {
+      return { ok: false, error: invErr?.message ?? "Falha ao criar a fatura." };
+    }
 
-    await admin
+    // E as linhas também não. Uma fatura sem itens é um documento a zero, que
+    // parece emitido e não cobra nada.
+    const { error: itemsErr } = await admin
       .from("invoice_items")
       .insert(items.map((it) => ({ ...it, invoice_id: inv.id })));
+    if (itemsErr) return { ok: false, error: itemsErr.message };
   }
 
   revalidatePath("/dashboard/cobrancas");

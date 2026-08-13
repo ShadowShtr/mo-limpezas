@@ -2,12 +2,29 @@
 // Contrato → fatura → caixa → dashboard
 // ============================================================================
 //
-// A cadeia inteira, com valores conhecidos, provada passo a passo.
+// A cadeia inteira, com valores conhecidos, passo a passo.
 //
-// O que se está a defender aqui é uma coisa só: **o mesmo euro não pode ser
-// contado duas vezes, nem desaparecer entre dois módulos.** Cada passo da
-// cadeia é uma oportunidade para uma das duas coisas acontecer, e nenhuma dá
-// erro — dão só um número errado, que ninguém consegue distinguir de um certo.
+// O que se está a defender é uma coisa só: **o mesmo euro não pode ser contado
+// duas vezes, nem desaparecer entre dois módulos.** Cada passo é uma
+// oportunidade para uma das duas coisas acontecer, e nenhuma dá erro — dão só
+// um número errado, que ninguém distingue de um certo.
+//
+// ---------------------------------------------------------------------------
+// 🔴 O QUE ESTES TESTES **NÃO** PROVAM
+// ---------------------------------------------------------------------------
+// São fixtures do agregador e inspecção do código, **não execução real**. Não
+// criam um contrato na base, não emitem uma fatura, não marcam um pagamento,
+// não escrevem no caixa.
+//
+// Em concreto, «pagar cria uma entrada de caixa e só uma» está aqui provado
+// como **regra de agregação** — dadas uma fatura paga e uma entrada, o
+// Recebido não duplica. Não está provado em runtime, porque a escrita do
+// pagamento **ainda não é atómica**: `setPaymentStatus` só altera
+// `fixed_variable_payments` e não cria movimento nenhum.
+//
+// Isso é a TASK 6, e depende da 071 estar aplicada e revertida numa base
+// descartável. Até lá, não se deve afirmar que a cadeia foi provada de ponta a
+// ponta — só que as regras que a governam estão fixadas.
 //
 //     contrato 100 €  →  3 ocorrências  →  1 linha mensal  →  IVA uma vez
 //                     →  emitida  →  Faturado
@@ -114,7 +131,9 @@ describe("3. de emitida a recebida", () => {
     expect(k.recebido.valor, "ainda não entrou dinheiro").toBe(0);
   });
 
-  it("🔴 paga → uma única entrada de caixa, e sai de Em aberto", () => {
+  it("🔴 dada uma fatura paga e uma entrada, o Recebido não duplica", () => {
+    // ⚠️ Regra de agregação, não execução. A escrita que cria a entrada ainda
+    //    não existe de forma atómica — ver a nota no topo do ficheiro.
     const paga = faturaAvenca({ status: "paga", paidAt: "2026-08-20" });
     const caixa: FactoCaixa[] = [
       { date: "2026-08-20", tipo: "entrada", status: "confirmado", amount: COM_IVA, categoria: null },

@@ -73,6 +73,18 @@ export async function createBuildingCard(input: {
   address?: string | null;
   teamId?: string | null;
   notes?: string | null;
+  /**
+   * A avença mensal.
+   *
+   * 🔴 Faltava aqui. O card «Prédios» do Resumo mostra este valor, e os 146
+   *    prédios importados têm-no todos a `null` — mas não havia forma de o
+   *    preencher: `createBuildingCard` não o aceitava e o formulário não o
+   *    tinha. Um número que só se pode ler nunca deixa de ser desconhecido.
+   *
+   *    `undefined` e `null` significam o mesmo aqui: valor por preencher. Não
+   *    se converte para zero, que diria que o prédio não rende nada.
+   */
+  monthlyValue?: number | null;
 }): Promise<{ ok: boolean; error?: string; id?: string }> {
   try {
     const { companyId, userId } = await requireManager();
@@ -98,6 +110,7 @@ export async function createBuildingCard(input: {
         weekday: input.weekday,
         name: input.name.trim(),
         address: input.address?.trim() || null,
+        monthly_value: input.monthlyValue ?? null,
         team_id: input.teamId || null,
         sort_order: sortOrder,
         notes: input.notes?.trim() || null,
@@ -109,6 +122,9 @@ export async function createBuildingCard(input: {
     if (error) return { ok: false, error: error.message };
     revalidatePath("/dashboard/calendario");
     revalidatePath("/dashboard/clientes");
+    // O card «Prédios» do Resumo lê `building_cards` — sem isto, mudar uma
+    // avença não mexia no número que o dono estava a ver.
+    revalidatePath("/dashboard/financeiro");
     return { ok: true, id: data.id };
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Erro interno desconhecido";
@@ -144,6 +160,9 @@ export async function updateBuildingCard(id: string, input: {
     if (error) return { ok: false, error: error.message };
     revalidatePath("/dashboard/calendario");
     revalidatePath("/dashboard/clientes");
+    // O card «Prédios» do Resumo lê `building_cards` — sem isto, mudar uma
+    // avença não mexia no número que o dono estava a ver.
+    revalidatePath("/dashboard/financeiro");
     return { ok: true };
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Erro interno desconhecido";
@@ -166,6 +185,9 @@ export async function deleteBuildingCard(id: string): Promise<{ ok: boolean; err
     if (error) return { ok: false, error: error.message };
     revalidatePath("/dashboard/calendario");
     revalidatePath("/dashboard/clientes");
+    // O card «Prédios» do Resumo lê `building_cards` — sem isto, mudar uma
+    // avença não mexia no número que o dono estava a ver.
+    revalidatePath("/dashboard/financeiro");
     return { ok: true };
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Erro interno desconhecido";

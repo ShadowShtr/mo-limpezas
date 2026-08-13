@@ -71,9 +71,11 @@ describe("os carregadores recebem o período, e usam-no", () => {
     const corpo = src.slice(i, i + 2600);
 
     expect(corpo, "assinatura sem período").toMatch(/input\?:\s*\{\s*year:\s*number;\s*month:\s*number\s*\}/);
-    // Faturas por vencimento, salários por período contabilístico, despesas
-    // pela data do movimento — cada bloco pelo que faz sentido para si.
-    expect(corpo).toMatch(/invoicesQ\.gte\("due_date"/);
+    // Faturas pelo **período contabilístico**, salários pelo período da folha,
+    // despesas pela data do movimento. As faturas filtravam por `due_date`, e
+    // isso fazia Contas e o Resumo discordarem sobre o mês de uma fatura de
+    // Julho que vence em Agosto.
+    expect(corpo).toMatch(/invoicesQ\.gte\("period_start"/);
     expect(corpo).toMatch(/payrollQ\.eq\("period_year"/);
     expect(corpo).toMatch(/expensesQ\.gte\("date"/);
   });
@@ -161,5 +163,97 @@ describe("aging — global por decisão explícita", () => {
     const i = src.indexOf("export function calcularAging");
     const corpo = src.slice(Math.max(i - 900, 0), i + 400);
     expect(corpo, "a decisão tem de estar documentada").toMatch(/carteira|global|idade/i);
+  });
+});
+
+// ─── 5. Falha nunca vira zero, nas escritas também ───────────────────────────
+
+describe("🔴 os carregadores não engolem erros", () => {
+  it("getAccountsData verifica as três consultas", () => {
+    // A das despesas faltava: uma falha devolvia lista vazia e o cartão
+    // «A Pagar (Despesas)» mostrava 0,00 € — indistinguível de um mês sem
+    // despesas nenhumas.
+    const src = codigo("src/app/actions/cash-flow.ts");
+    for (const q of ["invoicesRes", "payrollRes", "expensesRes"]) {
+      expect(src, `${q} sem verificação de erro`).toContain(`if (${q}.error)`);
+    }
+  });
+
+  it("🔴 Contas e o dashboard usam o mesmo critério de período para faturas", () => {
+    // Filtrar por `due_date` num lado e `period_start` no outro faz uma fatura
+    // de Julho que vence a 5 de Agosto aparecer em meses diferentes nas duas
+    // áreas — e nenhuma das duas está obviamente errada a olhar para ela.
+    const contas = codigo("src/app/actions/cash-flow.ts");
+    expect(contas).toMatch(/invoicesQ\.gte\("period_start"/);
+    expect(contas, "due_date não é período contabilístico")
+      .not.toMatch(/invoicesQ\.gte\("due_date"/);
+
+    // O motor usa `periodStart ?? dueDate` — o mesmo campo primário.
+    expect(codigo("src/domain/finance-v2/aggregate.ts"))
+      .toMatch(/dentroDoPeriodo\(f\.periodStart \?\? f\.dueDate, ctx\)/);
+  });
+
+  it("🔴 generateInvoices não transforma falha em «nada a faturar»", () => {
+    // Se a consulta das avenças falhar e o erro for ignorado, a função devolve
+    // sucesso com zero faturas: ninguém é faturado nesse mês e o ecrã diz que
+    // correu bem. Custa dinheiro por cobrar, em silêncio.
+    const src = codigo("src/app/actions/invoices.ts");
+    const i = src.indexOf("export async function _generateInvoices");
+    const corpo = src.slice(i > -1 ? i : 0, (i > -1 ? i : 0) + 12000);
+
+    for (const guarda of [
+      /if \(monthlyErr\) return/,
+      /if \(fixedLocErr\) return/,
+      /if \(locErr\) return/,
+      /if \(cliErr\) return/,
+      /if \(existingErr\) return/,
+      /if \(activeContractsErr\) return/,
+    ]) {
+      expect(corpo, `guarda em falta: ${guarda}`).toMatch(guarda);
+    }
+  });
+
+  it("🔴 uma fatura que falha a gravar não é saltada em silêncio", () => {
+    const src = codigo("src/app/actions/invoices.ts");
+    // O `continue` fazia a fatura desaparecer sem rasto, com a função a
+    // devolver sucesso e menos faturas do que devia.
+    expect(src).not.toMatch(/if \(invErr \|\| !inv\) continue;/);
+    expect(src).toMatch(/if \(invErr \|\| !inv\) \{/);
+    // E as linhas também contam: uma fatura sem itens é um documento a zero.
+    expect(src).toMatch(/if \(itemsErr\) return/);
+  });
+
+  it("um IVA errado não passa por omissão silenciosa", () => {
+    const src = codigo("src/app/actions/invoices.ts");
+    expect(src).toMatch(/settingsErr && settingsErr\.code !== "PGRST116"/);
+  });
+});
+
+// ─── 6. Os prédios podem mesmo receber valor ─────────────────────────────────
+
+describe("🔴 o valor do prédio é introduzível", () => {
+  it("createBuildingCard aceita a avença", () => {
+    // O card do Resumo mostra `monthly_value`, e os 146 prédios têm-no todos a
+    // null — mas não havia forma de o preencher. Um número que só se pode ler
+    // nunca deixa de ser desconhecido.
+    const src = codigo("src/app/actions/building-cards.ts");
+    const i = src.indexOf("export async function createBuildingCard");
+    const corpo = src.slice(i, i + 1800);
+    expect(corpo).toMatch(/monthlyValue\?: number \| null/);
+    expect(corpo).toMatch(/monthly_value: input\.monthlyValue \?\? null/);
+  });
+
+  it("o formulário tem o campo, e vazio significa sem valor", () => {
+    const form = codigo("src/app/(dashboard)/dashboard/clientes/_components/predios-table.tsx");
+    expect(form).toMatch(/monthlyValue/);
+    expect(form, "vazio → null, nunca zero").toMatch(/bruto === ""\s*\?\s*null/);
+    expect(form).toMatch(/monthlyValue: valorMensal/);
+  });
+
+  it("🔴 alterar um prédio revalida o Resumo financeiro", () => {
+    // Sem isto, mudar uma avença não mexia no número que o dono estava a ver.
+    const src = codigo("src/app/actions/building-cards.ts");
+    expect((src.match(/revalidatePath\("\/dashboard\/financeiro"\)/g) ?? []).length)
+      .toBeGreaterThanOrEqual(2);
   });
 });

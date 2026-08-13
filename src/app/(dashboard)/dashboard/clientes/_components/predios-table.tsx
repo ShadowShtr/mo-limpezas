@@ -35,9 +35,11 @@ interface FormState {
   weekday: BuildingCardWeekday;
   teamId: string;
   notes: string;
+  /** Texto livre no formulário; convertido no submit. Vazio = sem valor. */
+  monthlyValue: string;
 }
 
-const EMPTY_FORM: FormState = { name: "", address: "", weekday: "mon", teamId: "", notes: "" };
+const EMPTY_FORM: FormState = { name: "", address: "", weekday: "mon", teamId: "", notes: "", monthlyValue: "" };
 
 export function PrediosTable({ buildingCards, teams }: Props) {
   const router = useRouter();
@@ -73,6 +75,7 @@ export function PrediosTable({ buildingCards, teams }: Props) {
     setForm({
       name: card.name, address: card.address ?? "", weekday: card.weekday,
       teamId: card.team_id ?? "", notes: card.notes ?? "",
+      monthlyValue: card.monthly_value === null || card.monthly_value === undefined ? "" : String(card.monthly_value),
     });
     setShowForm(true);
     setError(null);
@@ -87,6 +90,15 @@ export function PrediosTable({ buildingCards, teams }: Props) {
 
   async function handleSubmit() {
     if (!form.name.trim()) { setError("O nome do prédio é obrigatório."); return; }
+
+    // 🔴 Campo vazio é **sem valor**, não zero. Zero diria que o prédio não
+    //    rende nada; vazio diz que ainda não se sabe quanto rende.
+    const bruto = form.monthlyValue.trim().replace(",", ".");
+    const valorMensal = bruto === "" ? null : Number(bruto);
+    if (valorMensal !== null && (!Number.isFinite(valorMensal) || valorMensal < 0)) {
+      setError("A avença mensal tem de ser um número igual ou maior que zero.");
+      return;
+    }
     setSaving(true);
     setError(null);
     try {
@@ -94,10 +106,12 @@ export function PrediosTable({ buildingCards, teams }: Props) {
         ? await updateBuildingCard(editingId, {
             name: form.name, address: form.address || null,
             teamId: form.teamId || null, notes: form.notes || null,
+            monthlyValue: valorMensal,
           })
         : await createBuildingCard({
             weekday: form.weekday, name: form.name, address: form.address || null,
             teamId: form.teamId || null, notes: form.notes || null,
+            monthlyValue: valorMensal,
           });
 
       if (!result.ok) { setError(result.error ?? "Erro ao guardar."); return; }
@@ -152,6 +166,14 @@ export function PrediosTable({ buildingCards, teams }: Props) {
               onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} autoFocus />
             <input className={INPUT_CLS} placeholder="Morada (opcional)" value={form.address}
               onChange={(e) => setForm((f) => ({ ...f, address: e.target.value }))} />
+            <input
+              className={INPUT_CLS}
+              type="text"
+              inputMode="decimal"
+              placeholder="Avença mensal € (deixar vazio se não souber)"
+              value={form.monthlyValue}
+              onChange={(e) => setForm((f) => ({ ...f, monthlyValue: e.target.value }))}
+            />
             <select className={SELECT_CLS} value={form.weekday} disabled={!!editingId}
               onChange={(e) => setForm((f) => ({ ...f, weekday: e.target.value as BuildingCardWeekday }))}>
               {WEEKDAY_ORDER.map((d) => <option key={d} value={d}>{WEEKDAY_LABELS[d]}</option>)}

@@ -196,7 +196,10 @@ export interface PendingExpense {
  *
  * Cada bloco filtra pelo que faz sentido para si, e não por uma data só:
  *
- *   faturas   `due_date` dentro do mês — é quando o dinheiro é esperado;
+ *   faturas   `period_start` — o **período contabilístico**, o mesmo critério
+ *             que o dashboard usa. Filtrar por `due_date` faria uma fatura de
+ *             Julho que vence a 5 de Agosto aparecer em Agosto aqui e em Julho
+ *             no Resumo, e as duas áreas discordariam sobre o mesmo documento;
  *   salários  `period_year`/`period_month` — a folha é de um mês, não de um dia;
  *   despesas  `date` do movimento.
  *
@@ -228,7 +231,8 @@ export async function getAccountsData(input?: { year: number; month: number }): 
     .select("id, invoice_number, client_id, total, due_date, status, clients(name)")
     .eq("company_id", companyId)
     .in("status", ["pendente", "vencido"]);
-  if (periodo) invoicesQ = invoicesQ.gte("due_date", periodo.inicio).lte("due_date", periodo.fim);
+  // 🔴 `period_start`, não `due_date` — o mesmo critério do motor do dashboard.
+  if (periodo) invoicesQ = invoicesQ.gte("period_start", periodo.inicio).lte("period_start", periodo.fim);
 
   let payrollQ = admin
     .from("payroll_records")
@@ -254,6 +258,10 @@ export async function getAccountsData(input?: { year: number; month: number }): 
 
   if (invoicesRes.error) return { ok: false, error: invoicesRes.error.message };
   if (payrollRes.error)  return { ok: false, error: payrollRes.error.message };
+  // 🔴 Faltava. Uma falha a carregar despesas devolvia lista vazia e o cartão
+  //    "A Pagar (Despesas)" mostrava 0,00 € — indistinguível de um mês sem
+  //    despesas nenhumas.
+  if (expensesRes.error) return { ok: false, error: expensesRes.error.message };
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const toReceive = (invoicesRes.data ?? []).map((r: any) => ({
