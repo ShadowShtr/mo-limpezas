@@ -1,6 +1,7 @@
 "use server";
 
 import { createAdminClient } from "@/lib/supabase/admin";
+import { validarValorMonetario } from "@/domain/finance-v2/money";
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import type { BuildingCardWeekday } from "@/types/database";
@@ -27,23 +28,14 @@ export interface BuildingCard {
  *    Resumo — `NaN` propaga-se por qualquer soma que o toque, e um valor
  *    negativo apareceria como uma avença que a empresa paga ao cliente.
  *
- * `null` e `undefined` são válidos e significam a mesma coisa: por preencher.
- * Não se converte para zero, que diria que o prédio não rende nada.
+ * A regra vive em `@/domain/finance-v2/money`, importável e testada a
+ * executar. A primeira versão estava aqui dentro, num ficheiro `"use server"`
+ * que não se pode importar — e por isso só era "testada" por inspecção do
+ * texto. O teste confirmava que a linha existia; não que ela funcionava. E não
+ * funcionava: recusava 0,29 €, 10,12 € e 19,99 €.
  */
-function validarAvenca(valor: number | null | undefined): { ok: true; valor: number | null } | { ok: false; error: string } {
-  if (valor === null || valor === undefined) return { ok: true, valor: null };
-  if (typeof valor !== "number" || !Number.isFinite(valor)) {
-    return { ok: false, error: "A avença mensal tem de ser um número." };
-  }
-  if (valor < 0) {
-    return { ok: false, error: "A avença mensal não pode ser negativa." };
-  }
-  // Um valor com mais de dois decimais não é dinheiro; arredondar em silêncio
-  // esconderia um erro de entrada.
-  if (Math.round(valor * 100) !== valor * 100) {
-    return { ok: false, error: "A avença mensal só pode ter dois decimais." };
-  }
-  return { ok: true, valor };
+function validarAvenca(valor: number | null | undefined) {
+  return validarValorMonetario(valor, { nome: "A avença mensal" });
 }
 
 async function getCompanyId(): Promise<string> {

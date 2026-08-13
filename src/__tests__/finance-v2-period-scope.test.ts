@@ -300,22 +300,21 @@ describe("🔴 a avença do prédio é validada no servidor", () => {
     expect((src.match(/validarAvenca\(input\.monthlyValue\)/g) ?? []).length).toBe(2);
   });
 
-  it("recusa NaN, negativos e mais de dois decimais", () => {
-    const i = src.indexOf("function validarAvenca");
-    const corpo = src.slice(i, i + 1000);
-    expect(corpo).toMatch(/Number\.isFinite/);
-    expect(corpo).toMatch(/valor < 0/);
-    expect(corpo).toMatch(/Math\.round\(valor \* 100\) !== valor \* 100/);
+  it("delega no validador partilhado, que é testado a executar", () => {
+    // 🔴 Havia aqui dois testes que liam o texto do validador e confirmavam que
+    //    as linhas certas existiam. As linhas existiam — e a regra estava
+    //    errada: `Math.round(v * 100) !== v * 100` recusava 0,29 €, 10,12 € e
+    //    19,99 €, porque o binário não representa esses valores exactamente.
+    //
+    //    Um teste que verifica que o código existe não verifica que o código
+    //    está certo. A regra passou para `@/domain/finance-v2/money`, que é
+    //    importável, e as provas estão em `finance-v2-money.test.ts` — a
+    //    correr, com esses valores.
+    expect(src).toMatch(/validarValorMonetario/);
+    expect(src, "a regra não pode voltar para dentro da action")
+      .not.toMatch(/Math\.round\(valor \* 100\) !== valor \* 100/);
   });
 
-  it("🔴 null continua a ser válido, e não vira zero", () => {
-    const i = src.indexOf("function validarAvenca");
-    const corpo = src.slice(i, i + 1000);
-    // `[\s\S]*` em vez da flag `/s`: o auditor compila com um alvo mais antigo
-    // do que o `tsc`, e o dotAll só existe a partir de es2018.
-    expect(corpo).toMatch(/valor === null \|\| valor === undefined[\s\S]*return \{ ok: true, valor: null \}/);
-    expect(corpo, "nunca converter ausência em zero").not.toMatch(/valor \?\? 0|: 0 \}/);
-  });
 });
 
 describe("🔴 a Conciliação falha de forma explícita", () => {

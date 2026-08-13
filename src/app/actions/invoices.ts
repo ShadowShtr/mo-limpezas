@@ -49,15 +49,69 @@ function monthRange(year: number, month: number) {
   return { start, end };
 }
 
-async function nextInvoiceNumber(companyId: string, prefix: string, year: number): Promise<string> {
+/**
+ * O próximo número de fatura da empresa, no ano.
+ *
+ * ---------------------------------------------------------------------------
+ * 🔴 Era `count + 1`, e tinha dois defeitos
+ * ---------------------------------------------------------------------------
+ *
+ *  1. **O erro da contagem era ignorado.** `count ?? 0` transformava uma query
+ *     falhada em zero, e a fatura seguinte nascia como `F2026/001` — por cima
+ *     de uma que já existia.
+ *
+ *  2. **Contar não é numerar.** Apagar uma fatura faz a contagem descer, e a
+ *     seguinte reutiliza um número que já foi emitido. Isto deixou de ser
+ *     hipotético: a compensação que apaga cabeçalhos órfãos torna as remoções
+ *     parte do funcionamento normal.
+ *
+ * Passa a derivar do **maior número já usado**, que só sobe.
+ *
+ * ---------------------------------------------------------------------------
+ * ⚠️ O que isto ainda não resolve: concorrência
+ * ---------------------------------------------------------------------------
+ * Duas execuções simultâneas podem ler o mesmo máximo e escolher o mesmo
+ * número. Não há aqui como o evitar — a garantia tem de ser da base, com um
+ * índice único em `(company_id, invoice_number)`, e uma verificação em
+ * JavaScript perde sempre a corrida contra dois pedidos ao mesmo tempo.
+ *
+ * Esse índice fica para uma migration **posterior à 071**, depois do ensaio na
+ * base descartável. Até lá, o risco é conhecido e está aqui escrito, em vez de
+ * parecer resolvido.
+ */
+async function nextInvoiceNumber(
+  companyId: string,
+  prefix: string,
+  year: number,
+): Promise<{ ok: true; numero: string } | { ok: false; error: string }> {
   const admin = createAdminClient();
-  const { count } = await admin
+
+  // Todos os números do ano, e o máximo calculado **numericamente**.
+  //
+  // 🔴 Ordenar por texto e ficar com o primeiro parecia mais barato, e está
+  //    errado a partir da milésima fatura: `"F2026/999" > "F2026/1000"` em
+  //    ordem lexicográfica, e a seguinte repetiria o 1000. Improvável nesta
+  //    empresa, mas é o tipo de mina que rebenta anos depois e sem sintoma.
+  const { data, error } = await admin
     .from("invoices")
-    .select("id", { count: "exact", head: true })
+    .select("invoice_number")
     .eq("company_id", companyId)
     .like("invoice_number", `${prefix}${year}/%`);
-  const seq = (count ?? 0) + 1;
-  return `${prefix}${year}/${String(seq).padStart(3, "0")}`;
+
+  if (error) return { ok: false, error: error.message };
+
+  // `F2026/007` → 7. Um número fora do formato é ignorado, em vez de partir a
+  // sequência inteira com um `NaN`.
+  let maior = 0;
+  for (const linha of data ?? []) {
+    const m = /\/(\d+)$/.exec(linha.invoice_number ?? "");
+    if (!m) continue;
+    const n = Number(m[1]);
+    if (Number.isFinite(n) && n > maior) maior = n;
+  }
+  const seq = maior + 1;
+
+  return { ok: true, numero: `${prefix}${year}/${String(seq).padStart(3, "0")}` };
 }
 
 // ─── Gerar documentos de cobrança ─────────────────────────────────────────────
@@ -316,7 +370,9 @@ export async function generateInvoices(
   const dueDate     = addDaysToDateString(invoiceDate, 30);
 
   for (const [clientId, svcs] of byClient) {
-    const invoiceNumber = await nextInvoiceNumber(companyId, prefix, year);
+    const numeroRes = await nextInvoiceNumber(companyId, prefix, year);
+    if (!numeroRes.ok) return { ok: false, error: numeroRes.error };
+    const invoiceNumber = numeroRes.numero;
 
     const clientData = clientMap[clientId];
     const isVatExempt = (clientData as { vat_exempt?: boolean })?.vat_exempt === true;
