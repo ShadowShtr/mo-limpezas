@@ -5,6 +5,10 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { revalidatePath } from "next/cache";
 import { todayInLisbon } from "@/lib/lisbon-time";
 import {
+  desmarcarPagamentoPago,
+  marcarPagamentoPago,
+} from "@/lib/finance-rpc/payment-cashflow";
+import {
   PAYMENT_ATTACHMENTS_BUCKET,
   MAX_PAYMENT_ATTACHMENT_BYTES,
   buildPaymentAttachmentPath,
@@ -178,6 +182,19 @@ function revalidate() {
   revalidatePath("/dashboard");
 }
 
+/**
+ * Marcar um pagamento como pago mexe em duas tabelas — e em quatro ecrãs.
+ *
+ * Sem as Contas e o Fluxo de Caixa aqui, a saída de caixa nova só apareceria
+ * ao fim de uma navegação completa, e quem acabou de marcar o pagamento
+ * concluiria que não tinha funcionado.
+ */
+function revalidateCaixa() {
+  revalidate();
+  revalidatePath("/dashboard/financeiro/contas");
+  revalidatePath("/dashboard/financeiro/fluxo-caixa");
+}
+
 export interface PaymentInput {
   kind: PaymentKind;
   description: string;
@@ -247,13 +264,64 @@ export async function updatePayment(
   return { ok: true };
 }
 
+// ============================================================================
+// Marcar como pago — e o dinheiro sair do caixa, na mesma transacção
+// ============================================================================
+//
+// 🔴 O que estava errado, e esteve errado durante todo o tempo em que este
+//    sistema esteve em uso real:
+//
+//    Isto alterava `fixed_variable_payments` e **mais nada**. O dinheiro saía
+//    da conta da empresa e o Fluxo de Caixa não sabia — os Custos do mês
+//    ficavam por baixo do real e a Margem por cima. E é a Margem que se usa
+//    para decidir.
+//
+// A escrita passou para a base (`mark_payment_paid`, migration 073): ou entram
+// o estado do pagamento e o movimento de caixa, ou não entra nada. Fazê-lo em
+// dois pedidos daqui resolveria metade — o primeiro passa, o segundo falha, e
+// fica um pagamento pago sem movimento nenhum, que é exactamente a divergência
+// que se queria evitar.
+//
+// Nada nesta função escreve em `cash_flow_entries`. Se a RPC não existir, isto
+// falha fechado a dizer que falta a migration, em vez de seguir pelo caminho
+// antigo — um fallback silencioso faria a aplicação parecer actualizada e
+// continuar a produzir o mesmo erro, sem ninguém notar.
+// ============================================================================
+
 export async function setPaymentStatus(id: string, status: PaymentStatus): Promise<{ ok: boolean; error?: string }> {
   const guard = await requireProfile({ roles: ["admin", "gestor"] });
   if (!guard.ok) return { ok: false, error: guard.error };
   const { admin, profile } = guard;
+
+  if (status === "pago") {
+    const r = await marcarPagamentoPago(admin, {
+      companyId: profile.company_id,
+      paymentId: id,
+      // A data do movimento é hoje **em Lisboa**. O processo corre em UTC na
+      // Vercel, e `new Date()` na primeira hora do dia dava o dia anterior.
+      paidOn: todayInLisbon(),
+    });
+    if (!r.ok) return { ok: false, error: r.error };
+    revalidateCaixa();
+    return { ok: true };
+  }
+
+  if (status === "pendente") {
+    const r = await desmarcarPagamentoPago(admin, {
+      companyId: profile.company_id,
+      paymentId: id,
+    });
+    if (!r.ok) return { ok: false, error: r.error };
+    revalidateCaixa();
+    return { ok: true };
+  }
+
+  // Outros estados (`cancelado`, …) não geram nem removem caixa: mudam só o
+  // estado do pagamento. Um cancelamento depois de pago teria de decidir o que
+  // fazer ao movimento, e essa decisão não se toma por omissão.
   const { error } = await admin
     .from("fixed_variable_payments")
-    .update({ status, paid_at: status === "pago" ? new Date().toISOString() : null, updated_at: new Date().toISOString() })
+    .update({ status, updated_at: new Date().toISOString() })
     .eq("id", id)
     .eq("company_id", profile.company_id);
   if (error) return { ok: false, error: error.message };

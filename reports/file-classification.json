@@ -4798,11 +4798,14 @@
       "consumerSample": [],
       "autoLoaded": false,
       "referencedBy": [],
-      "sideEffects": [],
+      "sideEffects": [
+        "revalidatePath(1)"
+      ],
       "risks": [],
       "signals": {
-        "sqlWrite": 3,
-        "unknownCast": 1
+        "sqlWrite": 5,
+        "unknownCast": 1,
+        "revalidatePath": 1
       },
       "action": "nenhuma",
       "reason": "suite de testes — corre por convenção do vitest",
@@ -10580,7 +10583,7 @@
       "sideEffects": [
         "supabase",
         "write",
-        "revalidatePath(3)"
+        "revalidatePath(5)"
       ],
       "risks": [
         "erro-de-query-ignorado(4)"
@@ -10593,7 +10596,7 @@
         "ignoredError": 4,
         "fallbackZero": 4,
         "fallbackArray": 2,
-        "revalidatePath": 3
+        "revalidatePath": 5
       },
       "action": "auditar atomicidade (T12/T13)",
       "reason": "em uso: 4 consumidor(es)",
@@ -14486,9 +14489,10 @@
       "category": "lib",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 1,
+      "consumers": 2,
       "consumerSample": [
-        "src/__tests__/payment-cashflow-rpc.test.ts"
+        "src/__tests__/payment-cashflow-rpc.test.ts",
+        "src/app/actions/payments.ts"
       ],
       "autoLoaded": false,
       "referencedBy": [],
@@ -14496,7 +14500,7 @@
       "risks": [],
       "signals": {},
       "action": "nenhuma",
-      "reason": "em uso: 1 consumidor(es)",
+      "reason": "em uso: 2 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,

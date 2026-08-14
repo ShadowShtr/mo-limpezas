@@ -1,16 +1,22 @@
 // ============================================================================
-// Contrato da RPC de pagamento → caixa — preparado, não ligado
+// Pagamento → caixa: o contrato da RPC, e a ligação a ela
 // ============================================================================
 //
-// Estes testes provam duas coisas independentes:
+// As 071/072/073 foram aplicadas em 2026-08-14. Até aí, este ficheiro
+// garantia que **nada** importava o módulo; agora garante o contrário — que
+// `setPaymentStatus` o usa, e que mais ninguém escreve por fora dele.
 //
-//   1. o payload que sai daqui corresponde **exactamente** à assinatura da
-//      073, incluindo os nomes dos parâmetros;
-//   2. nenhuma action importa este módulo — a ligação continua por fazer, e
-//      é isso que está combinado enquanto as migrations não estiverem
-//      aplicadas.
+// Três coisas provadas aqui:
 //
-// O ponto 2 é o que impede este ficheiro de se tornar uma ligação acidental.
+//   1. o payload corresponde à assinatura da 073, nomes dos parâmetros
+//      incluídos (o PostgREST casa argumentos **por nome**);
+//   2. uma falha nunca é dada como sucesso, e a RPC em falta falha fechada;
+//   3. a saída de caixa do pagamento tem **um só** sítio que a escreve.
+//
+// O ponto 3 é o que substitui o antigo «não está ligado»: a identidade de
+// origem `(company, 'fixed_variable_payment', payment_id)` é o que torna a
+// operação idempotente, e um segundo sítio a escrevê-la partiria essa
+// garantia sem dar erro nenhum.
 // ============================================================================
 
 import fs from "node:fs";
@@ -271,9 +277,79 @@ describe("pré-voo do valor", () => {
   });
 });
 
-// ─── 6. 🔴 Ainda não está ligado ─────────────────────────────────────────────
+// ─── 6. 🔴 Ligado, e sem caminho antigo por baixo ────────────────────────────
+//
+// Estes testes eram o inverso: garantiam que **nada** importava este módulo,
+// enquanto as 071/072/073 não estivessem aplicadas. Estão aplicadas desde
+// 2026-08-14, e o que era preciso provar mudou de lado.
+//
+// O que **não** mudou é o que se está a defender: uma escrita financeira ou é
+// atómica ou não é. O que antes se garantia pela ausência, garante-se agora
+// pela forma da chamada.
 
-describe("🔴 preparado, não ligado", () => {
+describe("🔴 setPaymentStatus usa a RPC, e só a RPC", () => {
+  const fonte = fs.readFileSync(path.join(RAIZ, "src/app/actions/payments.ts"), "utf8");
+  const corpo = fonte.slice(
+    fonte.indexOf("export async function setPaymentStatus"),
+    fonte.indexOf("export async function deletePayment"),
+  );
+
+  it("marcar como pago chama mark_payment_paid", () => {
+    expect(fonte).toMatch(/from "@\/lib\/finance-rpc\/payment-cashflow"/);
+    expect(corpo).toContain("marcarPagamentoPago(admin");
+  });
+
+  it("voltar a pendente chama unmark_payment_paid", () => {
+    expect(corpo).toContain("desmarcarPagamentoPago(admin");
+  });
+
+  it("🔴 a action não escreve em cash_flow_entries", () => {
+    // A transacção é da 073. Um insert daqui — ainda que «só para garantir» —
+    // criaria um segundo caminho para o mesmo movimento, e os dois divergiriam
+    // à primeira alteração de um deles.
+    const semComentarios = corpo.replace(/^\s*(\/\/|\*|\/\*).*$/gm, "");
+    expect(semComentarios).not.toContain("cash_flow_entries");
+    expect(semComentarios).not.toMatch(/\.insert\(/);
+  });
+
+  it("🔴 nem escreve `paid_at` por fora da RPC", () => {
+    // Era o que fazia antes. Se ficasse, o estado do pagamento passava a ter
+    // duas origens: a RPC e esta linha.
+    const semComentarios = corpo.replace(/^\s*(\/\/|\*|\/\*).*$/gm, "");
+    expect(semComentarios).not.toContain("paid_at");
+  });
+
+  it("a data do movimento é hoje em Lisboa, não em UTC", () => {
+    // O processo corre em UTC na Vercel: `new Date()` na primeira hora do dia
+    // dava o dia anterior, e o movimento caía no mês errado no dia 1.
+    expect(corpo).toContain("paidOn: todayInLisbon()");
+  });
+
+  it("🔴 um erro da RPC chega ao utilizador, e nada é dado como feito", () => {
+    expect(corpo).toMatch(/if \(!r\.ok\) return \{ ok: false, error: r\.error \}/);
+  });
+
+  it("revalida as vistas onde o movimento novo aparece", () => {
+    // Sem as Contas e o Fluxo de Caixa, a saída de caixa só aparecia depois de
+    // uma navegação completa — e quem marcou o pagamento concluiria que não
+    // tinha resultado.
+    for (const rota of [
+      "/dashboard/financeiro/pagamentos", "/dashboard/financeiro",
+      "/dashboard/financeiro/contas", "/dashboard/financeiro/fluxo-caixa",
+    ]) {
+      expect(fonte).toContain(`revalidatePath("${rota}")`);
+    }
+  });
+
+  it("cancelar não mexe no caixa por omissão", () => {
+    // Um cancelamento depois de pago teria de decidir o que fazer ao
+    // movimento. Essa decisão não se toma por omissão, num `else`.
+    expect(corpo).toMatch(/status === "pago"/);
+    expect(corpo).toMatch(/status === "pendente"/);
+  });
+});
+
+describe("🔴 nenhuma outra superfície cria a saída de caixa do pagamento", () => {
   function varrer(dir: string, out: string[] = []): string[] {
     for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
       const p = path.join(dir, e.name);
@@ -283,76 +359,19 @@ describe("🔴 preparado, não ligado", () => {
     return out;
   }
 
-  /** Resolve um especificador de import para um ficheiro do repositório. */
-  function resolver(spec: string, deQual: string): string | null {
-    const base = spec.startsWith("@/")
-      ? path.join(RAIZ, "src", spec.slice(2))
-      : spec.startsWith(".")
-        ? path.resolve(path.dirname(deQual), spec)
-        : null;
-    if (!base) return null; // pacote externo
-    for (const c of [`${base}.ts`, `${base}.tsx`, path.join(base, "index.ts"), path.join(base, "index.tsx")]) {
-      if (fs.existsSync(c) && fs.statSync(c).isFile()) return c;
-    }
-    return null;
-  }
+  it("só a 073 escreve um movimento com origem `fixed_variable_payment`", () => {
+    // O guarda que substitui o «não está ligado»: a identidade de origem é o
+    // que torna a operação idempotente, e um segundo sítio a escrevê-la
+    // partiria essa garantia sem dar erro nenhum.
+    const culpados = varrer(path.join(RAIZ, "src"))
+      .filter((f) => !f.includes("__tests__"))
+      .filter((f) => {
+        const codigo = fs.readFileSync(f, "utf8").replace(/^\s*(\/\/|\*|\/\*).*$/gm, "");
+        return codigo.includes("fixed_variable_payment'")
+          || codigo.includes('"fixed_variable_payment"');
+      })
+      .map((f) => path.relative(RAIZ, f).split(path.sep).join("/"));
 
-  it("🔴 nenhuma action ou componente lhe chega, nem por módulo intermédio", () => {
-    // Enquanto as 071/072/073 não estiverem aplicadas, ligar isto faria a
-    // aplicação chamar uma função que não existe. O teste falha no momento em
-    // que alguém liga — que é quando se quer a conversa, não depois.
-    //
-    // 🔴 Segue os imports em cadeia, e a razão é experiência própria: a
-    //    primeira versão só procurava o import **directo**, e uma ponte de
-    //    uma linha (`export { x } from "@/lib/finance-rpc/payment-cashflow"`)
-    //    num módulo qualquer atravessava-a sem falhar nada. É a mesma
-    //    armadilha que o detector de escrita já apanhou em cheio — reconhecer
-    //    só o caminho conhecido dá um seguro falso.
-    const alvo = path.join(RAIZ, "src/lib/finance-rpc/payment-cashflow.ts");
-    const entradas = [
-      ...varrer(path.join(RAIZ, "src/app")),
-      ...varrer(path.join(RAIZ, "src/components")),
-    ];
-
-    const visto = new Set<string>();
-    /** ficheiro → quem o trouxe, para conseguir mostrar a cadeia. */
-    const veioDe = new Map<string, string>();
-    const fila = [...entradas];
-    entradas.forEach((f) => visto.add(f));
-
-    while (fila.length) {
-      const atual = fila.shift()!;
-      const fonte = fs.readFileSync(atual, "utf8");
-      for (const m of fonte.matchAll(/from\s+["']([^"']+)["']/g)) {
-        const destino = resolver(m[1], atual);
-        if (!destino || visto.has(destino)) continue;
-        visto.add(destino);
-        veioDe.set(destino, atual);
-        if (destino === alvo) break;
-        fila.push(destino);
-      }
-    }
-
-    if (visto.has(alvo)) {
-      const cadeia: string[] = [alvo];
-      let cur: string | undefined = veioDe.get(alvo);
-      while (cur) { cadeia.unshift(cur); cur = veioDe.get(cur); }
-      const caminhos = cadeia.map((f) => path.relative(RAIZ, f).split(path.sep).join("/"));
-      expect.fail(`o módulo já está ligado:\n  ${caminhos.join("\n  → ")}`);
-    }
-  });
-
-  it("🔴 setPaymentStatus continua a escrever só na tabela do pagamento", () => {
-    // O estado actual, dito em voz alta. Quando este teste falhar, é porque a
-    // ligação foi feita — e aí confirma-se a ordem: migrations aplicadas,
-    // ledger conferido, ensaio corrido, funções verificadas na base real.
-    const fonte = fs.readFileSync(path.join(RAIZ, "src/app/actions/payments.ts"), "utf8");
-    const corpo = fonte.slice(
-      fonte.indexOf("export async function setPaymentStatus"),
-      fonte.indexOf("export async function deletePayment"),
-    );
-    expect(corpo).toContain('.from("fixed_variable_payments")');
-    expect(corpo).not.toContain(".rpc(");
-    expect(corpo).not.toContain("cash_flow_entries");
+    expect(culpados).toEqual([]);
   });
 });

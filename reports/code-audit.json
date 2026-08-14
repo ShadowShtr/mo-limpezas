@@ -4,10 +4,10 @@
     "repositoryFiles": 616,
     "textFiles": 604,
     "sourceFiles": 429,
-    "textLines": 141939,
+    "textLines": 142034,
     "typescriptDiagnostics": 0,
     "productionEntries": 70,
-    "unreachableProductionModules": 39,
+    "unreachableProductionModules": 38,
     "exactDuplicateFileGroups": 0
   },
   "highConfidence": {
@@ -52,7 +52,6 @@
       "src/domain/scheduling/recurrence-compat.ts",
       "src/lib/bank-import/pdf.ts",
       "src/lib/bank-import/xlsx.ts",
-      "src/lib/finance-rpc/payment-cashflow.ts",
       "src/lib/finance-write-surface.ts",
       "src/lib/payments-month-materialization.ts",
       "src/types/supabase.ts"
@@ -90,7 +89,6 @@
       "src/domain/scheduling/occurrence-repair.ts",
       "src/domain/scheduling/reconciliation.ts",
       "src/domain/scheduling/recurrence-compat.ts",
-      "src/lib/finance-rpc/payment-cashflow.ts",
       "src/lib/finance-write-surface.ts"
     ],
     "testSignupCalls": [
@@ -99,6 +97,7 @@
     "exactDuplicateFiles": [],
     "directRevalidatePath": [
       "src/__tests__/expense-categories-runtime.test.ts",
+      "src/__tests__/payment-cashflow-rpc.test.ts",
       "src/__tests__/predios-edicao-por-link.test.ts",
       "src/app/(dashboard)/dashboard/calendario/_actions/create-service.ts",
       "src/app/actions/absences.ts",

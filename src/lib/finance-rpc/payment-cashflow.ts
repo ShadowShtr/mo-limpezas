@@ -93,12 +93,20 @@ export type MotivoFalha =
   | "recusadoPelaBase"
   | "respostaInesperada";
 
-/** Só o que este módulo precisa de um cliente Supabase. */
+/**
+ * Só o que este módulo precisa de um cliente Supabase.
+ *
+ * 🔴 `PromiseLike`, e não `Promise`. O `.rpc()` do supabase-js devolve um
+ *    *query builder* que é «thenable» mas não é uma `Promise` — exigir
+ *    `Promise` fazia o cliente real não caber neste tipo, e a única saída
+ *    seria um cast no sítio da chamada. Um cast ali apagaria a verificação
+ *    exactamente onde ela vale a pena.
+ */
 export type ClienteRpc = {
   rpc: (
     nome: string,
     args: Record<string, unknown>,
-  ) => Promise<{ data: unknown; error: { message: string; code?: string } | null }>;
+  ) => PromiseLike<{ data: unknown; error: { message: string; code?: string } | null }>;
 };
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
