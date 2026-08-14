@@ -820,3 +820,52 @@ describe("🔴 o Fluxo de Caixa classifica, e recebe o clique do donut", () => {
     expect(painel).not.toMatch(/financeiro\/contas\?mes=/);
   });
 });
+
+// ─── 15. Classificar o que já lá está, sem backfill ──────────────────────────
+//
+// As quatro despesas que nasceram sem categoria não se corrigem sozinhas — e
+// não devem. Um backfill que as classificasse pela descrição inventaria
+// contabilidade. O que faltava era o caminho manual: quem sabe o que cada uma
+// foi, classifica-a.
+
+describe("🔴 editar um movimento do Fluxo de Caixa", () => {
+  const fonte = ler(CAIXA);
+
+  it("qualquer movimento pode ser classificado, mesmo com origem", () => {
+    // Uma saída gerada por um pagamento também precisa de categoria — e o
+    // botão de apagar, esse, continua reservado aos manuais.
+    expect(fonte).toContain("abrirEdicao(e)");
+    const i = fonte.indexOf("onClick={() => abrirEdicao(e)}");
+    const antes = fonte.slice(Math.max(0, i - 400), i);
+    expect(antes, "editar não pode estar dentro do !reference_type").not.toMatch(/\{!e\.reference_type && \($/);
+  });
+
+  it("🔴 mas o valor de um movimento com origem não se altera aqui", () => {
+    // Viria a discordar da fatura ou do pagamento que o gerou, e as duas
+    // versões ficariam plausíveis.
+    expect(fonte).toMatch(/disabled=\{!!editando\.reference_type\}/);
+    // E a guarda que conta é a do handler: o ecrã é uma sugestão, a action é
+    // um endpoint que se pode chamar à mão.
+    expect(fonte).toMatch(/editando\.reference_type \? \{\} : \{ amount: val \}/);
+  });
+
+  it("e explica porquê, em vez de ficar apenas cinzento", () => {
+    expect(fonte).toMatch(/discordar da origem/);
+  });
+
+  it("🔴 «Sem categoria» desfaz uma escolha errada", () => {
+    expect(fonte).toMatch(/expenseCategoryId: editCat \|\| null/);
+  });
+
+  it("a data é validada, como em todo o lado", () => {
+    // O ano corrompido de Julho entrou por um `<input type="date">`.
+    const i = fonte.indexOf("value={editDate}");
+    expect(fonte.slice(i, i + 300)).toMatch(/isValidIsoDateString/);
+  });
+
+  it("nada aqui classifica por descrição", () => {
+    const codigo = fonte.replace(/^\s*(\/\/|\*|\/\*).*$/gm, "");
+    expect(codigo).not.toMatch(/galp/i);
+    expect(codigo).not.toMatch(/description.*(includes|match|test)\(/i);
+  });
+});

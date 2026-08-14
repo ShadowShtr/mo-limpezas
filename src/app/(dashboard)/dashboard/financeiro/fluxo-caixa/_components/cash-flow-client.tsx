@@ -4,7 +4,7 @@ import { useState, useTransition } from "react";
 import { Kpi } from "@/components/financeiro/v2/primitives";
 import {
   TrendingUp, TrendingDown, Clock, Plus, Trash2,
-  ArrowUpRight, ArrowDownRight, Loader2, AlertCircle, X,
+  ArrowUpRight, ArrowDownRight, Loader2, AlertCircle, X, Pencil,
 } from "lucide-react";
 import {
   getCashFlowEntries,
@@ -86,6 +86,21 @@ export function CashFlowClient({
    * e a descrição não classifica nada.
    */
   const [newExpenseCat, setNewExpenseCat] = useState("");
+
+  /**
+   * Movimento em edição.
+   *
+   * 🔴 Existe para as despesas que já estão na base sem categoria — as quatro
+   *    que nasceram pelo Fluxo de Caixa antes de o campo existir aqui. É a
+   *    alternativa honesta ao backfill: quem sabe o que cada uma foi
+   *    classifica-a à mão, uma a uma.
+   */
+  const [editando, setEditando] = useState<CashFlowEntry | null>(null);
+  const [editCat, setEditCat] = useState("");
+  const [editDesc, setEditDesc] = useState("");
+  const [editAmount, setEditAmount] = useState("");
+  const [editDate, setEditDate] = useState(todayInLisbon());
+  const [editErr, setEditErr] = useState("");
   const [newDate, setNewDate] = useState(todayInLisbon());
   const [newStatus, setNewStatus] = useState<CashFlowStatus>("confirmado");
   const [newNotes, setNewNotes] = useState("");
@@ -141,6 +156,42 @@ export function CashFlowClient({
   async function handleMarkPending(id: string) {
     startTransition(async () => {
       await updateCashFlowEntry(id, { status: "pendente" });
+      reload(year, month);
+    });
+  }
+
+  function abrirEdicao(e: CashFlowEntry) {
+    setEditando(e);
+    setEditCat(e.expense_category_id ?? "");
+    setEditDesc(e.description);
+    setEditAmount(String(e.amount));
+    setEditDate(e.date);
+    setEditErr("");
+  }
+
+  function guardarEdicao() {
+    if (!editando) return;
+    setEditErr("");
+    const val = parseFloat(editAmount);
+    if (!editDesc.trim()) { setEditErr("Descrição obrigatória."); return; }
+    if (!val || val <= 0) { setEditErr("Valor inválido."); return; }
+
+    startTransition(async () => {
+      const res = await updateCashFlowEntry(editando.id, {
+        description: editDesc.trim(),
+        date: editDate,
+        // 🔴 O valor de um movimento **com origem** não se altera aqui: viria
+        //    a discordar da fatura ou do pagamento que o gerou, e as duas
+        //    versões ficariam plausíveis. O campo está desativado no ecrã, e
+        //    esta guarda é a que conta — o ecrã é uma sugestão, a action é
+        //    um endpoint.
+        ...(editando.reference_type ? {} : { amount: val }),
+        // `null` retira a categoria: escolher «Sem categoria» tem de poder
+        // desfazer uma escolha errada.
+        expenseCategoryId: editCat || null,
+      });
+      if (!res.ok) { setEditErr(res.error ?? "Erro ao guardar."); return; }
+      setEditando(null);
       reload(year, month);
     });
   }
@@ -330,6 +381,17 @@ export function CashFlowClient({
                       )}
                     </td>
                     <td className="px-4 py-3">
+                      <div className="flex items-center justify-end gap-1">
+                      {/* Editar existe para **todos**, com ou sem origem: é
+                          assim que se classifica um movimento que nasceu sem
+                          categoria, incluindo os que vieram de um pagamento. */}
+                      <button
+                        onClick={() => abrirEdicao(e)}
+                        className="p-1 rounded text-[var(--color-text-muted)] hover:text-[var(--finance-primary)] hover:bg-[var(--finance-primary-soft)] transition-colors"
+                        title="Editar categoria e detalhes"
+                      >
+                        <Pencil className="w-3.5 h-3.5" />
+                      </button>
                       {!e.reference_type && (
                         <button
                           onClick={() => handleDelete(e.id)}
@@ -339,6 +401,7 @@ export function CashFlowClient({
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
                       )}
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -452,6 +515,107 @@ export function CashFlowClient({
             </form>
           </div>
         </div>
+      )}
+
+      {/* ── Editar movimento ──────────────────────────────────────────────────
+          Existe sobretudo por uma razão: classificar movimentos que já estão na
+          base sem categoria. É a alternativa ao backfill — quem sabe o que cada
+          um foi classifica-o, em vez de o sistema adivinhar pela descrição. */}
+      {editando && (
+        <>
+          <div className="fixed inset-0 bg-black/40 z-40" onClick={() => setEditando(null)} />
+          <div className="fixed inset-y-0 right-0 z-50 w-full max-w-md bg-white shadow-xl flex flex-col">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-[var(--color-border)]">
+              <div className="min-w-0">
+                <h2 className="text-base font-semibold text-[var(--color-text-main)]">Editar movimento</h2>
+                <p className="text-xs text-[var(--color-text-muted)] truncate">{editando.description}</p>
+              </div>
+              <button onClick={() => setEditando(null)} className="p-2 rounded-lg text-[var(--color-text-muted)] hover:bg-[var(--color-background)]">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-6 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-[var(--color-text-main)] mb-1.5">Descrição *</label>
+                <input value={editDesc} onChange={(e) => setEditDesc(e.target.value)} className={inputCls} />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-medium text-[var(--color-text-main)] mb-1.5">Valor (€)</label>
+                  <input
+                    type="number" step="0.01" min="0.01"
+                    value={editAmount}
+                    disabled={!!editando.reference_type}
+                    onChange={(e) => setEditAmount(e.target.value)}
+                    className={`${inputCls} ${editando.reference_type ? "opacity-60 cursor-not-allowed bg-[var(--color-background)]" : ""}`}
+                  />
+                  {editando.reference_type && (
+                    <p className="mt-1 text-[11px] leading-snug text-[var(--color-text-muted)]">
+                      Este movimento veio de {ORIGIN_BADGE[editando.reference_type]?.label ?? editando.reference_type}.
+                      Alterar aqui o valor fá-lo-ia discordar da origem, e as duas
+                      versões ficariam plausíveis.
+                    </p>
+                  )}
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-[var(--color-text-main)] mb-1.5">Data</label>
+                  <input
+                    type="date"
+                    value={editDate}
+                    onChange={(e) => { if (isValidIsoDateString(e.target.value)) setEditDate(e.target.value); }}
+                    className={inputCls}
+                  />
+                </div>
+              </div>
+
+              {expenseCatalog.available && expenseCatalog.categories.length > 0 ? (
+                <div>
+                  <label className="block text-sm font-medium text-[var(--color-text-main)] mb-1.5">
+                    Categoria de despesa
+                  </label>
+                  <select value={editCat} onChange={(e) => setEditCat(e.target.value)} className={inputCls}>
+                    <option value="">Sem categoria</option>
+                    {expenseCatalog.categories.map((c: ExpenseCategory) => (
+                      <option key={c.id} value={c.id}>{c.name}</option>
+                    ))}
+                  </select>
+                  <p className="mt-1 text-[11px] text-[var(--color-text-muted)]">
+                    É esta que o gráfico «Despesas por categoria» usa.
+                  </p>
+                </div>
+              ) : (
+                <p className="text-xs text-[var(--color-text-muted)]">
+                  Categorias indisponíveis nesta base.
+                </p>
+              )}
+
+              {editErr && (
+                <p role="alert" className="text-xs text-red-600 px-3 py-2 rounded-lg bg-red-50 border border-red-200">
+                  {editErr}
+                </p>
+              )}
+            </div>
+
+            <div className="flex gap-3 px-6 py-4 border-t border-[var(--color-border)]">
+              <button
+                onClick={() => setEditando(null)}
+                className="flex-1 px-4 py-2 rounded-lg border border-[var(--color-border)] text-sm font-medium text-[var(--color-text-sub)] hover:bg-[var(--color-background)]"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={guardarEdicao}
+                disabled={isPending}
+                className="flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-[var(--finance-primary)] text-white text-sm font-semibold hover:bg-[var(--finance-primary-hover)] disabled:opacity-50"
+              >
+                {isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                Guardar
+              </button>
+            </div>
+          </div>
+        </>
       )}
     </div>
   );

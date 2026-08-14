@@ -8679,7 +8679,7 @@
       "risks": [],
       "signals": {
         "clientComponent": 1,
-        "sqlWrite": 2,
+        "sqlWrite": 3,
         "fallbackArray": 1
       },
       "action": "nenhuma",
