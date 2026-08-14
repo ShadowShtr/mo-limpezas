@@ -9775,8 +9775,7 @@
       ],
       "risks": [
         "erro-de-query-ignorado(3)",
-        "any(3)",
-        "select-*(1)"
+        "any(3)"
       ],
       "signals": {
         "supabase": 11,
@@ -9785,9 +9784,8 @@
         "sqlWrite": 6,
         "eslintDisable": 3,
         "anyType": 3,
-        "unknownCast": 3,
-        "consoleErr": 1,
-        "selectStar": 1,
+        "unknownCast": 4,
+        "consoleErr": 2,
         "ignoredError": 3,
         "fallbackZero": 3,
         "fallbackArray": 4,
@@ -10207,10 +10205,11 @@
       "category": "server-action",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 2,
+      "consumers": 4,
       "consumerSample": [
         "src/app/(dashboard)/dashboard/financeiro/contas/_components/contas-client.tsx",
-        "src/app/(dashboard)/dashboard/financeiro/contas/page.tsx"
+        "src/app/(dashboard)/dashboard/financeiro/contas/page.tsx",
+        "src/app/(dashboard)/dashboard/financeiro/fluxo-caixa/_components/cash-flow-client.tsx"
       ],
       "autoLoaded": false,
       "referencedBy": [],
@@ -10230,7 +10229,7 @@
         "revalidatePath": 3
       },
       "action": "auditar atomicidade (T12/T13)",
-      "reason": "em uso: 2 consumidor(es)",
+      "reason": "em uso: 4 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -12944,7 +12943,7 @@
       "category": "domain",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 4,
+      "consumers": 5,
       "consumerSample": [
         "src/__tests__/expense-categories-runtime.test.ts",
         "src/__tests__/finance-v2-client-history.test.ts",
@@ -12956,7 +12955,7 @@
       "risks": [],
       "signals": {},
       "action": "nenhuma",
-      "reason": "em uso: 4 consumidor(es)",
+      "reason": "em uso: 5 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,

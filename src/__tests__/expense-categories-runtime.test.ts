@@ -389,7 +389,7 @@ describe("🔴 o donut leva às despesas, e as despesas editam-se", () => {
 
   it("cada fatia leva às despesas dessa categoria", () => {
     expect(ler(DONUT)).toMatch(/hrefDe\?\.\(a\) \?\? null/);
-    expect(ler(PAINEL)).toMatch(/dashboard\/financeiro\/contas\?mes=.*categoria=/);
+    expect(ler(PAINEL)).toMatch(/dashboard\/financeiro\/fluxo-caixa\?mes=.*categoria=/);
   });
 
   it("e o mês vai com o link — a categoria de Agosto abre Agosto", () => {
@@ -748,5 +748,75 @@ describe("🔴 o filtro por categoria, visto de perto", () => {
 
   it("sem filtro, o vazio continua a ser o de sempre", () => {
     expect(fonte).toMatch(/Sem despesas pendentes\./);
+  });
+});
+
+// ─── 14. O donut leva a uma lista com o mesmo âmbito ─────────────────────────
+//
+// 🔴 Achado no ecrã, com dados reais.
+//
+// Clicar em «combustível» abria as Contas vazias. O filtro estava certo: as
+// Contas listam só despesas **pendentes**, e este gráfico conta pendentes e
+// confirmadas. As despesas de Combustível já estavam confirmadas, e por isso
+// não estavam ali.
+//
+// A causa a montante era outra, e pior: elas nasceram **sem categoria**. Foram
+// registadas pelo Fluxo de Caixa, cujo formulário não tinha o selector — só
+// Contas o tinha. «COMBUSTIVEL» estava na descrição, e a descrição não
+// classifica nada.
+
+const CAIXA = "src/app/(dashboard)/dashboard/financeiro/fluxo-caixa/_components/cash-flow-client.tsx";
+const CAIXA_PAGE = "src/app/(dashboard)/dashboard/financeiro/fluxo-caixa/page.tsx";
+
+describe("🔴 o Fluxo de Caixa classifica, e recebe o clique do donut", () => {
+  it("o formulário tem o selector de categoria estruturada", () => {
+    const fonte = ler(CAIXA);
+    expect(fonte).toContain("expenseCategoryId: newExpenseCat || null");
+    expect(fonte).toMatch(/expenseCatalog\.categories\.map/);
+  });
+
+  it("🔴 e diz que a descrição não classifica nada", () => {
+    // Era a suposição que estava a falhar em silêncio: escrever «COMBUSTIVEL»
+    // na descrição não punha a despesa em Combustível.
+    expect(ler(CAIXA)).toMatch(/n[ãa]o classifica nada/);
+  });
+
+  it("a lista mostra a categoria estruturada quando existe", () => {
+    const fonte = ler(CAIXA);
+    expect(fonte).toMatch(/e\.expense_category_name \?/);
+    expect(fonte).toMatch(/CATEGORY_LABELS\[e\.category\]/);
+  });
+
+  it("🔴 o carregador traz o nome, e recua só se a 071 faltar", () => {
+    const fonte = ler(CASHFLOW);
+    const i = fonte.indexOf("export async function getCashFlowEntries");
+    const corpo = fonte.slice(i, fonte.indexOf("export async function createCashFlowEntry"));
+    expect(corpo).toContain("expense_categories(name, color_token)");
+    expect(corpo).toMatch(/categoriaAindaNaoExiste\(error\)/);
+    // E o recuo é dito nos logs — foi o silêncio que tornou isto difícil de ver.
+    expect(corpo).toMatch(/console\.error/);
+  });
+
+  it("a página aceita ?categoria= e o catálogo", () => {
+    const fonte = ler(CAIXA_PAGE);
+    expect(fonte).toMatch(/categoria\?: string/);
+    expect(fonte).toContain("getExpenseCategoryCatalog()");
+  });
+
+  it("🔴 e filtra sem depender de acentos", () => {
+    expect(ler(CAIXA)).toContain("normalizarNomeCategoria(categoriaInicial)");
+  });
+
+  it("vazio por filtro diz que foi por filtro", () => {
+    const fonte = ler(CAIXA);
+    expect(fonte).toMatch(/Nenhum movimento na categoria/);
+    expect(fonte).toMatch(/Ver todos os movimentos/);
+  });
+
+  it("🔴 o donut já não liga às Contas", () => {
+    // O link para uma lista de âmbito mais estreito é o defeito que isto
+    // corrige. Se voltar, volta o ecrã vazio.
+    const painel = ler("src/app/(dashboard)/dashboard/financeiro/_components/financial-dashboard-client.tsx");
+    expect(painel).not.toMatch(/financeiro\/contas\?mes=/);
   });
 });

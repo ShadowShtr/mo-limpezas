@@ -25,6 +25,10 @@ export interface CashFlowEntry {
   status: CashFlowStatus;
   notes: string | null;
   created_at: string;
+  /** Categoria estruturada da 071, quando o movimento tem uma. */
+  expense_category_id?: string | null;
+  expense_category_name?: string | null;
+  expense_category_color?: string | null;
 }
 
 export interface CashFlowFilters {
@@ -48,22 +52,43 @@ export async function getCashFlowEntries(
   const monthEndDay = new Date(filters.year, filters.month, 0).getDate();
   const end = `${filters.year}-${String(filters.month).padStart(2, "0")}-${String(monthEndDay).padStart(2, "0")}`;
 
-  let query = admin
-    .from("cash_flow_entries")
-    .select("*")
-    .eq("company_id", companyId)
-    .gte("date", start)
-    .lte("date", end)
-    .order("date", { ascending: false })
-    .order("created_at", { ascending: false });
+  // Mesmo padrão das Contas: pede-se a categoria estruturada e recua-se sem
+  // ela **só** quando a base ainda não a tem.
+  const consulta = (colunas: string) => {
+    let q = admin
+      .from("cash_flow_entries")
+      .select(colunas)
+      .eq("company_id", companyId)
+      .gte("date", start)
+      .lte("date", end)
+      .order("date", { ascending: false })
+      .order("created_at", { ascending: false });
+    if (filters.type) q = q.eq("type", filters.type);
+    if (filters.status) q = q.eq("status", filters.status);
+    return q;
+  };
 
-  if (filters.type) query = query.eq("type", filters.type);
-  if (filters.status) query = query.eq("status", filters.status);
-
-  const { data, error } = await query;
+  let { data, error } = await consulta("*, expense_categories(name, color_token)");
+  if (error && categoriaAindaNaoExiste(error)) {
+    console.error(
+      "[fluxo-caixa] categoria estruturada indisponível.", error.code, error.message,
+    );
+    ({ data, error } = await consulta("*"));
+  }
   if (error) return { ok: false, error: error.message };
 
-  const entries = (data ?? []) as CashFlowEntry[];
+  type LinhaCaixa = CashFlowEntry & {
+    expense_categories?: { name: string; color_token: string | null }
+      | { name: string; color_token: string | null }[] | null;
+  };
+  const entries: CashFlowEntry[] = ((data ?? []) as unknown as LinhaCaixa[]).map((r) => {
+    const cat = Array.isArray(r.expense_categories) ? r.expense_categories[0] : r.expense_categories;
+    return {
+      ...r,
+      expense_category_name: cat?.name ?? null,
+      expense_category_color: cat?.color_token ?? null,
+    };
+  });
   const confirmed = entries.filter((e) => e.status === "confirmado");
   const entradas  = confirmed.filter((e) => e.type === "entrada").reduce((s, e) => s + e.amount, 0);
   const saidas    = confirmed.filter((e) => e.type === "saida").reduce((s, e) => s + e.amount, 0);

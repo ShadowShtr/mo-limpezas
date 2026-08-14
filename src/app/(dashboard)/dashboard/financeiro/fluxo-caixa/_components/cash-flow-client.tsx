@@ -15,7 +15,10 @@ import {
   type CashFlowCategory,
   type CashFlowStatus,
 } from "@/app/actions/cash-flow";
+import Link from "next/link";
 import { usePagination, Pagination } from "@/components/ui/pagination";
+import { normalizarNomeCategoria } from "@/domain/finance-v2/expense-categories";
+import type { ExpenseCategory, ExpenseCategoryCatalog } from "@/app/actions/expense-categories";
 import { todayInLisbon } from "@/lib/lisbon-time";
 import { isValidIsoDateString } from "@/lib/utils";
 
@@ -53,9 +56,15 @@ interface Props {
   companyId: string;
   year: number;
   month: number;
+  expenseCatalog: ExpenseCategoryCatalog;
+  /** Categoria por que filtrar à chegada, vinda do donut do Resumo. */
+  categoriaInicial?: string | null;
 }
 
-export function CashFlowClient({ initialData, error: initErr, companyId, year, month }: Props) {
+export function CashFlowClient({
+  initialData, error: initErr, companyId, year, month,
+  expenseCatalog, categoriaInicial = null,
+}: Props) {
   const [data, setData] = useState<DataShape | null>(initialData);
   const [error, setError] = useState(initErr);
   const [filterType, setFilterType] = useState<"" | "entrada" | "saida">("");
@@ -68,6 +77,15 @@ export function CashFlowClient({ initialData, error: initErr, companyId, year, m
   const [newAmount, setNewAmount] = useState("");
   const [newDesc, setNewDesc] = useState("");
   const [newCat, setNewCat] = useState<CashFlowCategory>("outro");
+  /**
+   * 🔴 Faltava aqui, e foi por isso que despesas reais nasceram sem categoria.
+   *
+   * O seletor estruturado só existia em Contas. Quem registava pelo Fluxo de
+   * Caixa — que é por onde estas entraram — ficava com a categoria legada, e
+   * depois não aparecia no donut por nome. «COMBUSTIVEL» estava na descrição,
+   * e a descrição não classifica nada.
+   */
+  const [newExpenseCat, setNewExpenseCat] = useState("");
   const [newDate, setNewDate] = useState(todayInLisbon());
   const [newStatus, setNewStatus] = useState<CashFlowStatus>("confirmado");
   const [newNotes, setNewNotes] = useState("");
@@ -92,13 +110,14 @@ export function CashFlowClient({ initialData, error: initErr, companyId, year, m
         amount: parseFloat(newAmount),
         description: newDesc.trim(),
         category: newCat,
+        expenseCategoryId: newExpenseCat || null,
         date: newDate,
         status: newStatus,
         notes: newNotes || undefined,
       });
       if (!res.ok) { setFormError(res.error ?? "Erro."); return; }
       setShowNew(false);
-      setNewAmount(""); setNewDesc(""); setNewCat("outro"); setNewNotes("");
+      setNewAmount(""); setNewDesc(""); setNewCat("outro"); setNewNotes(""); setNewExpenseCat("");
       reload(year, month);
     });
   }
@@ -132,7 +151,23 @@ export function CashFlowClient({ initialData, error: initErr, companyId, year, m
     return true;
   });
 
-  const pag = usePagination(filtered, 10);
+  // ───────────────────────────────────────────────────────────────────────────
+  // Filtro vindo do donut
+  //
+  // 🔴 O donut liga para **aqui**, e não para as Contas. As Contas listam só
+  //    despesas **pendentes**; o donut conta pendentes e confirmadas. Clicar
+  //    numa categoria cujas despesas já estavam confirmadas abria uma lista
+  //    vazia — o link mandava para um sítio com âmbito mais estreito do que o
+  //    número em que se tinha carregado.
+  // ───────────────────────────────────────────────────────────────────────────
+  const chaveDa = (e: CashFlowEntry) =>
+    normalizarNomeCategoria(e.expense_category_name ?? e.category ?? "");
+
+  const visiveis = categoriaInicial
+    ? filtered.filter((e) => chaveDa(e) === normalizarNomeCategoria(categoriaInicial))
+    : filtered;
+
+  const pag = usePagination(visiveis, 10);
 
   const inputCls = "w-full px-3 py-2 rounded-lg border border-[var(--color-border)] text-sm text-[var(--color-text-main)] focus:outline-none focus:ring-2 focus:ring-[var(--finance-primary)] bg-white";
 
@@ -203,7 +238,21 @@ export function CashFlowClient({ initialData, error: initErr, companyId, year, m
             <Loader2 className="w-4 h-4 animate-spin mr-2" /> A carregar…
           </div>
         )}
-        {!isPending && filtered.length === 0 ? (
+        {!isPending && visiveis.length === 0 && categoriaInicial ? (
+          // Vazio por filtro é diferente de vazio por não haver nada, e a
+          // saída tem de estar à mão.
+          <div className="py-14 text-center">
+            <p className="text-sm text-[var(--color-text-muted)]">
+              Nenhum movimento na categoria <strong>{categoriaInicial}</strong> neste mês.
+            </p>
+            <Link
+              href="/dashboard/financeiro/fluxo-caixa"
+              className="inline-block mt-2 text-sm font-medium text-[var(--finance-primary)] hover:underline"
+            >
+              Ver todos os movimentos ({filtered.length})
+            </Link>
+          </div>
+        ) : !isPending && visiveis.length === 0 ? (
           <div className="py-14 text-center">
             <TrendingUp className="w-8 h-8 mx-auto mb-3 text-[var(--color-border)]" />
             <p className="text-sm text-[var(--color-text-muted)]">Sem registos neste período.</p>
@@ -228,7 +277,25 @@ export function CashFlowClient({ initialData, error: initErr, companyId, year, m
                   <tr key={e.id} className={`hover:bg-[var(--color-background)] transition-colors ${e.status === "pendente" ? "opacity-60" : ""}`}>
                     <td className="px-4 py-3 text-sm text-[var(--color-text-sub)]">{fmtDate(e.date)}</td>
                     <td className="px-4 py-3 text-sm text-[var(--color-text-main)] max-w-xs truncate">{e.description}</td>
-                    <td className="px-4 py-3 text-xs text-[var(--color-text-muted)]">{e.category ? CATEGORY_LABELS[e.category] : "—"}</td>
+                    <td className="px-4 py-3">
+                      {/* A estruturada manda; a legada é o que resta. */}
+                      {e.expense_category_name ? (
+                        <span
+                          className="text-xs px-2 py-0.5 rounded-full font-medium"
+                          style={
+                            e.expense_category_color
+                              ? { backgroundColor: `${e.expense_category_color}1A`, color: e.expense_category_color }
+                              : undefined
+                          }
+                        >
+                          {e.expense_category_name}
+                        </span>
+                      ) : (
+                        <span className="text-xs text-[var(--color-text-muted)]">
+                          {e.category ? CATEGORY_LABELS[e.category] : "—"}
+                        </span>
+                      )}
+                    </td>
                     <td className="px-4 py-3">
                       {e.reference_type ? (
                         <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${ORIGIN_BADGE[e.reference_type]?.cls ?? ""}`}>
@@ -334,6 +401,23 @@ export function CashFlowClient({ initialData, error: initErr, companyId, year, m
                     <option value="outro">Outro</option>
                   </select>
                 </div>
+                {expenseCatalog.available && expenseCatalog.categories.length > 0 && (
+                  <div className="col-span-2">
+                    <label className="block text-sm font-medium text-[var(--color-text-main)] mb-1.5">
+                      Categoria de despesa
+                    </label>
+                    <select value={newExpenseCat} onChange={(e) => setNewExpenseCat(e.target.value)} className={inputCls}>
+                      <option value="">Sem categoria</option>
+                      {expenseCatalog.categories.map((c: ExpenseCategory) => (
+                        <option key={c.id} value={c.id}>{c.name}</option>
+                      ))}
+                    </select>
+                    <p className="mt-1 text-[11px] text-[var(--color-text-muted)]">
+                      É esta que o gráfico «Despesas por categoria» usa. Escrever
+                      «combustível» na descrição não classifica nada.
+                    </p>
+                  </div>
+                )}
                 <div>
                   <label className="block text-sm font-medium text-[var(--color-text-main)] mb-1.5">Estado</label>
                   <select value={newStatus} onChange={(e) => setNewStatus(e.target.value as CashFlowStatus)} className={inputCls}>

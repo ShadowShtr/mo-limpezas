@@ -595,9 +595,13 @@ export function FinancialDashboardClient({
                 }
               : { estado: "indisponivel", porque: snapshot?.expensesByCategory.nota ?? "Sem despesas neste período." }
           }
-          // Clicar numa categoria abre as despesas dessa categoria em Contas,
-          // já filtradas e prontas a corrigir. Um número no donut deixa de ser
-          // o fim da linha.
+          // 🔴 Para o Fluxo de Caixa, e não para as Contas.
+          //
+          //    As Contas listam só despesas **pendentes**; este gráfico conta
+          //    pendentes e confirmadas. Clicar numa categoria cujas despesas já
+          //    estavam confirmadas abria uma lista vazia — o link mandava para
+          //    um sítio com âmbito mais estreito do que o número em que se
+          //    tinha carregado. O Fluxo de Caixa mostra as duas.
           /*
             🔴 O que o gráfico NÃO mostra, dito em voz alta.
 
@@ -619,7 +623,7 @@ export function FinancialDashboardClient({
           }
           hrefDe={(f) =>
             f.chave && snapshot
-              ? `/dashboard/financeiro/contas?mes=${snapshot.period.year}-${String(snapshot.period.month).padStart(2, "0")}&categoria=${encodeURIComponent(f.chave)}`
+              ? `/dashboard/financeiro/fluxo-caixa?mes=${snapshot.period.year}-${String(snapshot.period.month).padStart(2, "0")}&categoria=${encodeURIComponent(f.chave)}`
               : null
           }
         />

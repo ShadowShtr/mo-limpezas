@@ -2,6 +2,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { getCashFlowEntries } from "@/app/actions/cash-flow";
+import { getExpenseCategoryCatalog, type ExpenseCategoryCatalog } from "@/app/actions/expense-categories";
 import { FinanceShell } from "@/components/financeiro/finance-shell";
 import { parseFinancePeriod } from "@/lib/finance-period";
 import { CashFlowClient } from "./_components/cash-flow-client";
@@ -11,7 +12,7 @@ export const metadata = { title: "Fluxo de Caixa — Escala" };
 export default async function FluxoCaixaPage({
   searchParams,
 }: {
-  searchParams: Promise<{ mes?: string }>;
+  searchParams: Promise<{ mes?: string; categoria?: string }>;
 }) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -24,7 +25,14 @@ export default async function FluxoCaixaPage({
   const params = await searchParams;
   const period = parseFinancePeriod(params.mes);
 
-  const res = await getCashFlowEntries(profile.company_id, { year: period.year, month: period.month });
+  const [res, categoriesRes] = await Promise.all([
+    getCashFlowEntries(profile.company_id, { year: period.year, month: period.month }),
+    getExpenseCategoryCatalog(),
+  ]);
+
+  const catalogoIndisponivel: ExpenseCategoryCatalog = {
+    available: false, categories: [], suggestions: [], missingSuggestions: [],
+  };
 
   return (
     <FinanceShell
@@ -38,6 +46,9 @@ export default async function FluxoCaixaPage({
         companyId={profile.company_id}
         year={period.year}
         month={period.month}
+        expenseCatalog={categoriesRes.ok ? categoriesRes.catalog : catalogoIndisponivel}
+        // Chega assim do donut do Resumo — o mesmo âmbito, a mesma lista.
+        categoriaInicial={params.categoria ?? null}
       />
     </FinanceShell>
   );
