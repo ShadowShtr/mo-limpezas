@@ -4,6 +4,7 @@ import { useState, useEffect, useTransition } from "react";
 import { Kpi } from "@/components/financeiro/v2/primitives";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { normalizarNomeCategoria } from "@/domain/finance-v2/expense-categories";
 import { AlertCircle, ArrowUpRight, ArrowDownRight, ShoppingBag, Plus, Pencil, Save, X, Loader2, CheckCircle2, Trash2 } from "lucide-react";
 import {
   createSuggestedExpenseCategories,
@@ -108,11 +109,16 @@ export function ContasClient({
   // legada) — a mesma que o agregador usa para agrupar. Compara-se pelas duas,
   // porque uma despesa pode ter só a legada.
   // ───────────────────────────────────────────────────────────────────────────
+  // 🔴 A mesma normalização da tabela de categorias — acentos incluídos.
+  //
+  //    Comparar com `toLowerCase()` sozinho fazia «Combustível» e
+  //    «combustivel» serem chaves diferentes, e a lista chegava vazia sem
+  //    explicação nenhuma.
   const chaveDa = (e: PendingExpense) =>
-    (e.expense_category_name ?? e.category ?? "").trim().toLowerCase();
+    normalizarNomeCategoria(e.expense_category_name ?? e.category ?? "");
 
   const expensesVisiveis = categoriaInicial
-    ? expenses.filter((e) => chaveDa(e) === categoriaInicial.trim().toLowerCase())
+    ? expenses.filter((e) => chaveDa(e) === normalizarNomeCategoria(categoriaInicial))
     : expenses;
 
   const totalReceive  = toReceive.reduce((s, r) => s + r.total, 0);
@@ -279,7 +285,12 @@ export function ContasClient({
           value={fmtEur(totalExpenses)}
           tone="warning"
           icon={<ShoppingBag className="w-4 h-4" />}
-          sub={`${expenses.length} despesa${expenses.length !== 1 ? "s" : ""} pendente${expenses.length !== 1 ? "s" : ""}`}
+          // 🔴 Filtrada, como o total. Contar todas e somar só as visíveis
+          //    dava «4 despesas pendentes · 0,00 €» — dois números do mesmo
+          //    cartão a discordar.
+          sub={`${expensesVisiveis.length} despesa${expensesVisiveis.length !== 1 ? "s" : ""} pendente${expensesVisiveis.length !== 1 ? "s" : ""}${
+            categoriaInicial ? ` em ${categoriaInicial}` : ""
+          }`}
         />
       </div>
 
@@ -412,7 +423,24 @@ export function ContasClient({
           </button>
         </div>
 
-        {expenses.length === 0 ? (
+        {expensesVisiveis.length === 0 && categoriaInicial ? (
+          /*
+            🔴 Uma tabela com zero linhas parece avariada. Filtrei por uma
+            categoria e não há nada nela — isso tem de se ler, e a saída tem de
+            estar à mão.
+          */
+          <div className="px-5 py-10 text-center">
+            <p className="text-sm text-[var(--color-text-muted)]">
+              Nenhuma despesa pendente na categoria <strong>{categoriaInicial}</strong> neste mês.
+            </p>
+            <Link
+              href="/dashboard/financeiro/contas"
+              className="inline-block mt-2 text-sm font-medium text-[var(--color-primary)] hover:underline"
+            >
+              Ver todas as despesas pendentes ({expenses.length})
+            </Link>
+          </div>
+        ) : expensesVisiveis.length === 0 ? (
           <div className="py-10 text-center space-y-2">
             <ShoppingBag className="w-8 h-8 mx-auto text-[var(--color-border)]" />
             <p className="text-sm text-[var(--color-text-muted)]">Sem despesas pendentes.</p>

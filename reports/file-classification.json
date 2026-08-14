@@ -1722,7 +1722,7 @@
       ],
       "sideEffects": [
         "supabase",
-        "revalidatePath(32)"
+        "revalidatePath(34)"
       ],
       "risks": [
         "debugger"
@@ -1731,7 +1731,7 @@
         "supabase": 1,
         "sqlWrite": 7,
         "debugger": 6,
-        "revalidatePath": 32
+        "revalidatePath": 34
       },
       "action": "nenhuma",
       "reason": "configuração/infra",
@@ -9786,6 +9786,7 @@
         "eslintDisable": 3,
         "anyType": 3,
         "unknownCast": 3,
+        "consoleErr": 1,
         "selectStar": 1,
         "ignoredError": 3,
         "fallbackZero": 3,
@@ -10260,6 +10261,7 @@
         "serverAction": 1,
         "sqlWrite": 3,
         "unknownCast": 5,
+        "consoleErr": 1,
         "fallbackZero": 9,
         "fallbackArray": 6
       },
@@ -12942,11 +12944,11 @@
       "category": "domain",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 3,
+      "consumers": 4,
       "consumerSample": [
         "src/__tests__/expense-categories-runtime.test.ts",
         "src/__tests__/finance-v2-client-history.test.ts",
-        "src/app/actions/expense-categories.ts"
+        "src/app/(dashboard)/dashboard/financeiro/contas/_components/contas-client.tsx"
       ],
       "autoLoaded": false,
       "referencedBy": [],
@@ -12954,7 +12956,7 @@
       "risks": [],
       "signals": {},
       "action": "nenhuma",
-      "reason": "em uso: 3 consumidor(es)",
+      "reason": "em uso: 4 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,

@@ -108,6 +108,12 @@ async function loadCashFacts(admin: AdminClient, ctx: FinanceReadContext): Promi
 
   let { data, error } = await consulta(`${COLUNAS}, expense_categories(name, color_token)`);
   if (error && categoriaEstruturadaEmFalta(error)) {
+    // Dito nos logs: sem isto, o donut agrupa tudo pelas categorias legadas e
+    // ninguém sabe que a estruturada não chegou.
+    console.error(
+      "[resumo] categoria estruturada indisponível no caixa.",
+      error.code, error.message,
+    );
     ({ data, error } = await consulta(COLUNAS));
   }
 

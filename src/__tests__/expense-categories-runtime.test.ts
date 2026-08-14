@@ -712,3 +712,41 @@ describe("🔴 despesas por confirmar não desaparecem em silêncio", () => {
     expect(painel).toMatch(/Custos, que só contam/);
   });
 });
+
+// ─── 13. O filtro que chega do donut ─────────────────────────────────────────
+//
+// Achado no ecrã: clicar em «combustível» abria as Contas com o filtro posto e
+// a tabela vazia — «4 despesas pendentes» ao lado de «0,00 €», e nem uma linha.
+
+describe("🔴 o filtro por categoria, visto de perto", () => {
+  const fonte = ler(CLIENT);
+
+  it("compara sem depender de acentos", () => {
+    // «Combustível» e «combustivel» são a mesma categoria — é para isso que a
+    // 071 guarda `normalized_name`. Comparar com `toLowerCase()` sozinho
+    // fazia-as diferentes, e a lista chegava vazia sem explicação.
+    expect(fonte).toContain("normalizarNomeCategoria(e.expense_category_name");
+    expect(fonte).toContain("normalizarNomeCategoria(categoriaInicial)");
+    expect(normalizarNomeCategoria("Combustível")).toBe(normalizarNomeCategoria("combustivel"));
+  });
+
+  it("🔴 a contagem e o total falam do mesmo conjunto", () => {
+    // «4 despesas pendentes · 0,00 €»: a contagem era de todas e o total só
+    // das visíveis. Dois números do mesmo cartão a discordar.
+    const i = fonte.indexOf("A Pagar (Despesas)");
+    const cartao = fonte.slice(Math.max(0, i - 600), i + 600);
+    expect(cartao).toContain("expensesVisiveis.length");
+    expect(cartao).not.toMatch(/expenses\.length/);
+  });
+
+  it("🔴 zero resultados por filtro diz que foi por filtro", () => {
+    // Uma tabela com zero linhas parece avariada. E a saída tem de estar à mão.
+    expect(fonte).toMatch(/expensesVisiveis\.length === 0 && categoriaInicial/);
+    expect(fonte).toMatch(/Nenhuma despesa pendente na categoria/);
+    expect(fonte).toMatch(/Ver todas as despesas pendentes/);
+  });
+
+  it("sem filtro, o vazio continua a ser o de sempre", () => {
+    expect(fonte).toMatch(/Sem despesas pendentes\./);
+  });
+});

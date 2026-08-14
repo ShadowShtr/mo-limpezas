@@ -411,6 +411,20 @@ export async function getAccountsData(input?: { year: number; month: number }): 
     if (!categoriaAindaNaoExiste(expensesRes.error)) {
       return { ok: false, error: expensesRes.error.message };
     }
+    // 🔴 O recuo deixa de ser silencioso.
+    //
+    //    Quando isto acontece, as despesas chegam **sem** nome de categoria, o
+    //    donut e o filtro deixam de as encontrar, e não há nada no ecrã a
+    //    explicar porquê. Já custou uma sessão de diagnóstico: a lista
+    //    aparecia vazia e a suspeita caiu sobre o filtro, que estava certo.
+    //
+    //    A causa mais provável não é a migration em falta — é o cache de
+    //    esquema do PostgREST, que não conhece a relação nova até recarregar
+    //    (`NOTIFY pgrst, 'reload schema'`).
+    console.error(
+      "[contas] categoria estruturada indisponível; despesas carregadas sem ela.",
+      expensesRes.error.code, expensesRes.error.message,
+    );
     const semCategoria = await consultaDespesas(COLUNAS_BASE);
     if (semCategoria.error) return { ok: false, error: semCategoria.error.message };
     despesasCruas = semCategoria.data;
