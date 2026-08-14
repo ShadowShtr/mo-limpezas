@@ -443,15 +443,11 @@ export interface BlocoCategorias {
   total: number;
   semCategoria: number;
   /**
-   * 🔴 Despesas do período ainda por confirmar.
+   * Quanto do `total` ainda está por confirmar.
    *
-   * O donut conta só `confirmado`, tal como os Custos — se contasse pendentes,
-   * o total do gráfico deixaria de bater com o KPI ao lado, e ninguém saberia
-   * qual dos dois acreditar.
-   *
-   * Mas ficar em silêncio é pior: quem acabou de registar uma despesa de
-   * Combustível procura-a no gráfico, não a encontra e conclui que a categoria
-   * não funcionou. Contam-se à parte, e diz-se que existem.
+   * 🔴 Faz parte do total, ao contrário dos Custos. É esta diferença que o
+   *    card tem de dizer em voz alta — senão são dois números a discordar sem
+   *    razão aparente.
    */
   pendentes: { total: number; contagem: number };
   nota?: string;
@@ -484,14 +480,28 @@ export function calcularDespesasPorCategoria(
     };
   }
 
-  const saidas = caixa.factos.filter(
-    (c) => c.tipo === "saida" && c.status === "confirmado" && dentroDoPeriodo(c.date, ctx),
+  // ───────────────────────────────────────────────────────────────────────────
+  // 🔴 Este gráfico conta confirmadas **e** pendentes. O KPI «Custos» não.
+  //
+  // Foi uma decisão do dono, depois de eu levantar a objecção. A pergunta que
+  // o gráfico responde é «em que é que a empresa está a gastar», e uma despesa
+  // registada já é um gasto conhecido — esperar pela confirmação para a
+  // mostrar fazia com que quem acabou de a lançar não a encontrasse em lado
+  // nenhum.
+  //
+  // O preço é real e não se esconde: o total daqui **não bate** com os Custos,
+  // que continuam a contar só o dinheiro que saiu mesmo. Por isso o card diz
+  // quanto do total ainda está por confirmar — dois números diferentes com uma
+  // explicação são utilizáveis; sem explicação, são um erro à espera de ser
+  // reportado.
+  // ───────────────────────────────────────────────────────────────────────────
+  const noPeriodo = caixa.factos.filter(
+    (c) => c.tipo === "saida" && dentroDoPeriodo(c.date, ctx)
+      && (c.status === "confirmado" || c.status === "pendente"),
   );
+  const saidas = noPeriodo;
 
-  // Registadas mas ainda não confirmadas. Não entram no gráfico; são ditas.
-  const porConfirmar = caixa.factos.filter(
-    (c) => c.tipo === "saida" && c.status === "pendente" && dentroDoPeriodo(c.date, ctx),
-  );
+  const porConfirmar = noPeriodo.filter((c) => c.status === "pendente");
   const pendentes = {
     total: soma(porConfirmar.map((c) => c.amount)),
     contagem: porConfirmar.length,

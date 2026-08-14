@@ -417,17 +417,40 @@ describe("despesas por categoria", () => {
     expect(poucas.fatias.some((f) => f.chave === "__outros__")).toBe(false);
   });
 
-  it("só conta saídas confirmadas do período", () => {
+  it("só conta saídas do período — mas confirmadas e pendentes", () => {
+    // 🔴 Mudou de propósito. Este gráfico responde a «em que estamos a
+    //    gastar», e uma despesa registada já é um gasto conhecido; esperar
+    //    pela confirmação fazia com que quem acabou de a lançar não a
+    //    encontrasse em lado nenhum.
+    //
+    //    O KPI «Custos» **não** mudou: continua a contar só o dinheiro que
+    //    saiu. A divergência é real, é conhecida, e o card explica-a.
     const b = calcularDespesasPorCategoria(
       ok([
         saida(100, "salario"),
         { date: "2026-07-10", tipo: "saida", status: "confirmado", amount: 999, categoria: "salario" },
-        { date: "2026-08-10", tipo: "saida", status: "pendente", amount: 999, categoria: "salario" },
+        { date: "2026-08-10", tipo: "saida", status: "pendente", amount: 50, categoria: "salario" },
         { date: "2026-08-10", tipo: "entrada", status: "confirmado", amount: 999, categoria: null },
       ]),
       ctx(2026, 8),
     );
-    expect(b.total).toBe(100);
+    expect(b.total).toBe(150);
+    expect(b.pendentes).toEqual({ total: 50, contagem: 1 });
+  });
+
+  it("🔴 o KPI «Custos» continua a contar só o que saiu", () => {
+    // A prova de que a mudança ficou confinada ao gráfico. Se os Custos
+    // passassem também a incluir pendentes, a Margem do mês mudava sozinha.
+    const k = calcularKpis(
+      ok([]),
+      ok([
+        saida(100, "salario"),
+        { date: "2026-08-10", tipo: "saida", status: "pendente", amount: 50, categoria: "salario" },
+      ]),
+      ok([]),
+      ctx(2026, 8),
+    );
+    expect(k.custos.valor).toBe(100);
   });
 
   it("a fonte falhou → ERROR, não um donut vazio", () => {

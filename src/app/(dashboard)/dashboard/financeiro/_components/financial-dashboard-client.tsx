@@ -609,11 +609,11 @@ export function FinancialDashboardClient({
           rodape={
             snapshot && snapshot.expensesByCategory.pendentes.contagem > 0 ? (
               <p className="w-full mt-1 text-[11.5px] leading-snug text-[var(--finance-orange)]">
-                Mais {fmtEur(snapshot.expensesByCategory.pendentes.total)} em{" "}
+                Inclui {fmtEur(snapshot.expensesByCategory.pendentes.total)} em{" "}
                 {snapshot.expensesByCategory.pendentes.contagem}{" "}
                 {snapshot.expensesByCategory.pendentes.contagem === 1 ? "despesa registada" : "despesas registadas"}
-                {" "}por confirmar. Entram no gráfico quando forem marcadas como
-                pagas em Contas.
+                {" "}ainda por confirmar — por isso este total é maior do que os
+                Custos, que só contam o dinheiro que já saiu.
               </p>
             ) : null
           }

@@ -649,33 +649,45 @@ describe("🔴 despesas por confirmar não desaparecem em silêncio", () => {
     categoria: null, categoriaEstruturada: cat,
   });
 
-  it("uma despesa pendente não entra no gráfico", () => {
-    // E é correcto que não entre: se entrasse, o total do donut deixava de
-    // bater com o KPI «Custos» ao lado, e ninguém saberia em qual acreditar.
+  it("🔴 uma despesa pendente entra no gráfico", () => {
+    // Decisão do dono, depois de eu levantar a objecção do total divergir dos
+    // Custos. A pergunta que o gráfico responde é «em que estamos a gastar», e
+    // uma despesa registada já é um gasto conhecido.
     const b = calcularDespesasPorCategoria(ok([desp(50, "pendente")]), CTX);
-    expect(b.total).toBe(0);
-    expect(b.fatias).toEqual([]);
+    expect(b.total).toBe(50);
+    expect(b.fatias[0].categoria).toBe("Combustível");
   });
 
-  it("🔴 mas é contada e anunciada", () => {
+  it("🔴 e continua a ser contada à parte", () => {
+    // É esta contagem que permite ao card explicar porque é que o total não
+    // bate com os Custos. Sem ela, dois números a discordar sem razão.
     const b = calcularDespesasPorCategoria(ok([desp(50, "pendente")]), CTX);
     expect(b.pendentes).toEqual({ total: 50, contagem: 1 });
   });
 
-  it("confirmada, entra no gráfico e sai dos pendentes", () => {
+  it("confirmada, deixa de contar como pendente mas continua no gráfico", () => {
     const b = calcularDespesasPorCategoria(ok([desp(50, "confirmado")]), CTX);
     expect(b.total).toBe(50);
-    expect(b.fatias[0].categoria).toBe("Combustível");
     expect(b.pendentes.contagem).toBe(0);
   });
 
-  it("as duas contas não se misturam", () => {
+  it("🔴 as duas somam-se no total, e a parte pendente é conhecida", () => {
     const b = calcularDespesasPorCategoria(
       ok([desp(100, "confirmado"), desp(50, "pendente"), desp(25, "pendente", "Viaturas")]),
       CTX,
     );
-    expect(b.total).toBe(100);
+    expect(b.total).toBe(175);
     expect(b.pendentes).toEqual({ total: 75, contagem: 2 });
+    // A mesma categoria junta os dois estados numa fatia só.
+    expect(b.fatias.find((f) => f.categoria === "Combustível")?.valor).toBe(150);
+  });
+
+  it("🔴 um estado que não é nem pago nem pendente fica de fora", () => {
+    // `cancelado` não é um gasto. Aceitar tudo o que não seja `confirmado`
+    // seria mais simples e traria lixo para dentro do gráfico.
+    const b = calcularDespesasPorCategoria(ok([desp(999, "cancelado")]), CTX);
+    expect(b.total).toBe(0);
+    expect(b.pendentes.contagem).toBe(0);
   });
 
   it("pendentes de outro mês não contam", () => {
@@ -695,6 +707,8 @@ describe("🔴 despesas por confirmar não desaparecem em silêncio", () => {
     const painel = ler("src/app/(dashboard)/dashboard/financeiro/_components/financial-dashboard-client.tsx");
     expect(painel).toMatch(/pendentes\.contagem > 0/);
     expect(painel).toMatch(/por confirmar/);
-    expect(painel).toMatch(/marcadas como\s+pagas/);
+    // O card tem de explicar a divergência, não só mencioná-la.
+    expect(painel).toMatch(/maior do que os/);
+    expect(painel).toMatch(/Custos, que só contam/);
   });
 });
