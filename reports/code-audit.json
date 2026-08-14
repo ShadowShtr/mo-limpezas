@@ -1,10 +1,10 @@
 {
   "inventorySource": "git ls-files",
   "summary": {
-    "repositoryFiles": 616,
-    "textFiles": 604,
-    "sourceFiles": 429,
-    "textLines": 142034,
+    "repositoryFiles": 617,
+    "textFiles": 605,
+    "sourceFiles": 430,
+    "textLines": 142174,
     "typescriptDiagnostics": 0,
     "productionEntries": 70,
     "unreachableProductionModules": 38,
@@ -97,6 +97,8 @@
     "exactDuplicateFiles": [],
     "directRevalidatePath": [
       "src/__tests__/expense-categories-runtime.test.ts",
+      "src/__tests__/finance-v2-money.test.ts",
+      "src/__tests__/finance-v2-period-scope.test.ts",
       "src/__tests__/payment-cashflow-rpc.test.ts",
       "src/__tests__/predios-edicao-por-link.test.ts",
       "src/app/(dashboard)/dashboard/calendario/_actions/create-service.ts",

@@ -147,10 +147,10 @@ describe("paraCentimos", () => {
 
 // ─── 6. Numeração de faturas ─────────────────────────────────────────────────
 //
-// A lógica vive dentro de `nextInvoiceNumber`, num ficheiro `"use server"` que
-// não se importa. Estes testes replicam a **regra** e verificam que o ficheiro
-// a implementa — o que é menos do que executá-la, e é dito aqui em vez de
-// ficar implícito.
+// A regra mudou de sítio: vivia em `nextInvoiceNumber`, e vive agora dentro da
+// 072. Os primeiros testes replicam a **aritmética** (o que é menos do que
+// executá-la, e é dito aqui em vez de ficar implícito); os últimos verificam
+// que é o SQL que a implementa, e que não sobrou uma cópia no código.
 
 describe("🔴 numeração de faturas", () => {
   /** A mesma derivação que `nextInvoiceNumber` faz. */
@@ -190,28 +190,51 @@ describe("🔴 numeração de faturas", () => {
     expect(proximo([])).toBe(1);
   });
 
-  it("o ficheiro implementa esta regra, e verifica o erro da consulta", () => {
-    const src = fs.readFileSync(path.join(process.cwd(), "src/app/actions/invoices.ts"), "utf8");
-    const i = src.indexOf("async function nextInvoiceNumber");
-    const corpo = src.slice(i, i + 2200);
+  it("🔴 a regra vive no SQL da 072, e é o máximo numérico", () => {
+    // Mudou de sítio. `nextInvoiceNumber` foi removida: a numeração passou
+    // para dentro da RPC, e é lá que estes testes têm de olhar — testar uma
+    // cópia da regra que já ninguém executa é pior do que não testar nada.
+    const sql = fs.readFileSync(
+      path.join(process.cwd(), "supabase/migrations/072_invoice_atomic_creation.sql"),
+      "utf8",
+    ).replace(/^\s*--.*$/gm, "");
 
-    // `count ?? 0` transformava uma consulta falhada em zero, e a fatura
-    // seguinte nascia por cima de uma que já existia.
-    expect(corpo, "a contagem voltou").not.toMatch(/count: "exact"/);
-    expect(corpo, "erro da consulta ignorado").toMatch(/if \(error\) return \{ ok: false/);
-    expect(corpo, "máximo numérico").toMatch(/if \(Number\.isFinite\(n\) && n > maior\) maior = n;/);
-    // Ordenar por texto voltaria a partir aos 1000.
-    expect(corpo).not.toMatch(/\.order\("invoice_number"/);
+    // MAX sobre o número extraído, e não `count`: contar reutilizava números
+    // de faturas apagadas.
+    expect(sql).toMatch(/COALESCE\(MAX\(\(regexp_match\(i\.invoice_number/);
+    expect(sql).toMatch(/\)\[1\]::int/);
+    expect(sql).not.toMatch(/count\(\*\)[\s\S]{0,80}invoice_number/i);
   });
 
-  it("🔴 a concorrência continua por resolver, e está escrita", () => {
-    // Duas execuções simultâneas podem ler o mesmo máximo. A garantia tem de
-    // ser da base — índice único em (company_id, invoice_number) — e essa
-    // migration vem depois da 071, a seguir ao ensaio.
+  it("🔴 e a concorrência deixou de estar por resolver", () => {
+    // Duas execuções simultâneas liam o mesmo máximo. Nenhuma verificação em
+    // JavaScript ganha essa corrida — serializa-se na base, com um índice
+    // único por baixo como rede.
+    const sql = fs.readFileSync(
+      path.join(process.cwd(), "supabase/migrations/072_invoice_atomic_creation.sql"),
+      "utf8",
+    ).replace(/^\s*--.*$/gm, "");
+
+    expect(sql).toMatch(/pg_advisory_xact_lock/);
+    expect(sql).toMatch(/CREATE UNIQUE INDEX IF NOT EXISTS uq_invoices_number_per_company/);
+    // `xact`: liberta-se sozinho se a transacção abortar. Um lock de sessão
+    // ficava pendurado num erro e trancava a faturação da empresa.
+    expect(sql).not.toMatch(/pg_advisory_lock\(/);
+  });
+
+  it("🔴 a aplicação já não escolhe números", () => {
+    // Enquanto restasse uma cópia da lógica no código, alguém a usaria — e
+    // teríamos duas fontes para o mesmo número.
     const src = fs.readFileSync(path.join(process.cwd(), "src/app/actions/invoices.ts"), "utf8");
-    const i = src.indexOf("async function nextInvoiceNumber");
-    const cabecalho = src.slice(Math.max(i - 2000, 0), i);
-    expect(cabecalho, "o risco tem de estar documentado").toMatch(/concorr[êe]ncia/i);
-    expect(cabecalho).toMatch(/índice único|indice unico/i);
+    expect(src).not.toMatch(/async function nextInvoiceNumber/);
+    const semComentarios = src.replace(/^\s*(\/\/|\*|\/\*).*$/gm, "");
+    // A geração não insere na tabela: chama a RPC. `invoice_number` ainda
+    // aparece no ficheiro — a **ler** e no tipo —, e proibir a palavra seria
+    // medir texto em vez de comportamento.
+    const i = semComentarios.indexOf("for (const [clientId, svcs] of byClient)");
+    const geracao = semComentarios.slice(i, semComentarios.indexOf("revalidatePath(", i));
+    expect(geracao).toContain("criarFaturaComLinhas(admin");
+    expect(geracao).not.toMatch(/\.from\("invoices"\)[\s\S]{0,80}\.insert\(/);
+    expect(geracao).not.toMatch(/\.from\("invoice_items"\)/);
   });
 });

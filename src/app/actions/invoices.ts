@@ -3,6 +3,7 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { requireProfile } from "@/lib/auth-guard";
+import { criarFaturaComLinhas } from "@/lib/finance-rpc/invoice-creation";
 import { getMissingCashFlowReferenceIds, isValidCashFlowAmount } from "@/lib/cash-flow-integrity";
 import { findDuplicateMonthlyContractsByLocation } from "@/lib/invoice-duplicates";
 import { revalidatePath } from "next/cache";
@@ -41,78 +42,26 @@ export interface Invoice {
   items: InvoiceItem[];
 }
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
 function monthRange(year: number, month: number) {
   const start = `${year}-${String(month).padStart(2, "0")}-01`;
   const end   = new Date(Date.UTC(year, month, 0)).toISOString().split("T")[0];
   return { start, end };
 }
 
-/**
- * O próximo número de fatura da empresa, no ano.
- *
- * ---------------------------------------------------------------------------
- * 🔴 Era `count + 1`, e tinha dois defeitos
- * ---------------------------------------------------------------------------
- *
- *  1. **O erro da contagem era ignorado.** `count ?? 0` transformava uma query
- *     falhada em zero, e a fatura seguinte nascia como `F2026/001` — por cima
- *     de uma que já existia.
- *
- *  2. **Contar não é numerar.** Apagar uma fatura faz a contagem descer, e a
- *     seguinte reutiliza um número que já foi emitido. Isto deixou de ser
- *     hipotético: a compensação que apaga cabeçalhos órfãos torna as remoções
- *     parte do funcionamento normal.
- *
- * Passa a derivar do **maior número já usado**, que só sobe.
- *
- * ---------------------------------------------------------------------------
- * ⚠️ O que isto ainda não resolve: concorrência
- * ---------------------------------------------------------------------------
- * Duas execuções simultâneas podem ler o mesmo máximo e escolher o mesmo
- * número. Não há aqui como o evitar — a garantia tem de ser da base, com um
- * índice único em `(company_id, invoice_number)`, e uma verificação em
- * JavaScript perde sempre a corrida contra dois pedidos ao mesmo tempo.
- *
- * Esse índice fica para uma migration **posterior à 071**, depois do ensaio na
- * base descartável. Até lá, o risco é conhecido e está aqui escrito, em vez de
- * parecer resolvido.
- */
-async function nextInvoiceNumber(
-  companyId: string,
-  prefix: string,
-  year: number,
-): Promise<{ ok: true; numero: string } | { ok: false; error: string }> {
-  const admin = createAdminClient();
-
-  // Todos os números do ano, e o máximo calculado **numericamente**.
-  //
-  // 🔴 Ordenar por texto e ficar com o primeiro parecia mais barato, e está
-  //    errado a partir da milésima fatura: `"F2026/999" > "F2026/1000"` em
-  //    ordem lexicográfica, e a seguinte repetiria o 1000. Improvável nesta
-  //    empresa, mas é o tipo de mina que rebenta anos depois e sem sintoma.
-  const { data, error } = await admin
-    .from("invoices")
-    .select("invoice_number")
-    .eq("company_id", companyId)
-    .like("invoice_number", `${prefix}${year}/%`);
-
-  if (error) return { ok: false, error: error.message };
-
-  // `F2026/007` → 7. Um número fora do formato é ignorado, em vez de partir a
-  // sequência inteira com um `NaN`.
-  let maior = 0;
-  for (const linha of data ?? []) {
-    const m = /\/(\d+)$/.exec(linha.invoice_number ?? "");
-    if (!m) continue;
-    const n = Number(m[1]);
-    if (Number.isFinite(n) && n > maior) maior = n;
-  }
-  const seq = maior + 1;
-
-  return { ok: true, numero: `${prefix}${year}/${String(seq).padStart(3, "0")}` };
-}
+// ─── Numeração de faturas ─────────────────────────────────────────────────────
+//
+// 🔴 `nextInvoiceNumber` foi removida. A numeração passou para dentro da 072
+//    (`create_invoice_with_items`), sob `pg_advisory_xact_lock` por empresa e
+//    ano, com `UNIQUE(company_id, invoice_number)` por baixo como rede.
+//
+//    A versão que aqui estava lia o maior número e somava um. Estava certa
+//    quanto ao maior — contar em vez de olhar para o máximo reutilizava
+//    números de faturas apagadas — mas duas execuções simultâneas lêem o mesmo
+//    máximo e escolhem o mesmo número. Nenhuma verificação feita em JavaScript
+//    ganha essa corrida; a garantia tem de ser da base.
+//
+//    Os testes desta regra vivem agora sobre o SQL da 072, que é onde a regra
+//    está.
 
 // ─── Gerar documentos de cobrança ─────────────────────────────────────────────
 
@@ -370,10 +319,12 @@ export async function generateInvoices(
   const dueDate     = addDaysToDateString(invoiceDate, 30);
 
   for (const [clientId, svcs] of byClient) {
-    const numeroRes = await nextInvoiceNumber(companyId, prefix, year);
-    if (!numeroRes.ok) return { ok: false, error: numeroRes.error };
-    const invoiceNumber = numeroRes.numero;
-
+    // 🔴 O número deixou de ser escolhido aqui.
+    //
+    // Era lido o máximo e somado um. Duas gerações simultâneas lêem o mesmo
+    // máximo e escolhem o mesmo número — nenhuma verificação em JavaScript
+    // ganha essa corrida. Passou para dentro da 072, sob lock consultivo por
+    // empresa e ano, com um índice único por baixo como rede.
     const clientData = clientMap[clientId];
     const isVatExempt = (clientData as { vat_exempt?: boolean })?.vat_exempt === true;
 
@@ -423,82 +374,33 @@ export async function generateInvoices(
     const vatAmount = Math.round(taxedBase * vatFactor * 100) / 100;
     const total     = Math.round((subtotal + vatAmount) * 100) / 100;
 
-    const { data: inv, error: invErr } = await admin
-      .from("invoices")
-      .insert({
-        company_id:     companyId,
-        client_id:      clientId,
-        invoice_number: invoiceNumber,
-        invoice_date:   invoiceDate,
-        due_date:       dueDate,
-        period_start:   start,
-        period_end:     end,
-        subtotal,
-        vat_rate:       vatAmount > 0 ? vatRate : 0,
-        vat_amount:     vatAmount,
-        total,
-        status:         "rascunho",
-      })
-      .select("id")
-      .single();
-
-    // 🔴 Não se salta em silêncio.
-    //
-    // Estava aqui um `continue`: uma fatura que falhasse a gravar desaparecia
-    // sem deixar rasto, e a função devolvia sucesso com menos faturas do que
-    // devia. Ninguém conseguiria saber quais faltavam.
-    if (invErr || !inv) {
-      return { ok: false, error: invErr?.message ?? "Falha ao criar a fatura." };
-    }
-
     // ─────────────────────────────────────────────────────────────────────────
-    // 🔴 E as linhas também não — mas devolver o erro não chegava.
+    // Cabeçalho e linhas, numa só transacção (072)
     //
-    // A fatura já está gravada quando os itens falham. Sair aqui deixava um
-    // documento **sem linhas**: subtotal e total corretos no cabeçalho, zero
-    // itens por baixo. E o pior vinha a seguir: à segunda tentativa, a guarda
-    // de duplicados encontra essa fatura em `existingClientIds`, salta o
-    // cliente, e o documento fica órfão para sempre — sem ninguém dar por isso,
-    // porque na lista tem o ar de uma fatura normal.
+    // Antes eram dois pedidos com compensação: se as linhas falhassem, apagava-
+    // -se o cabeçalho. Funcionava enquanto a compensação corresse — e se o
+    // processo morresse entre os dois, ficava um documento sem linhas, com
+    // subtotal e total certos e o ar de uma fatura normal na lista.
     //
-    // Não há transação disponível a partir daqui: o cliente do Supabase faz um
-    // pedido por operação. A alternativa honesta é a **compensação** — apagar o
-    // cabeçalho que acabou de ser criado, para o estado voltar ao que era e a
-    // repetição poder funcionar.
-    //
-    // Se a compensação também falhar, isso é dito: fica um documento
-    // incompleto na base e o utilizador tem de saber qual, em vez de descobrir
-    // meses depois numa conferência.
-    //
-    // A solução definitiva é uma RPC transacional — criação de fatura, linhas
-    // e idempotência concorrente numa só operação — e vive na **TASK 9**.
-    // (A TASK 6 é outra coisa: pagamento → movimento de caixa.)
+    // A transacção é da base. Ou entram os dois, ou não entra nada.
     // ─────────────────────────────────────────────────────────────────────────
-    const { error: itemsErr } = await admin
-      .from("invoice_items")
-      .insert(items.map((it) => ({ ...it, invoice_id: inv.id })));
+    const criada = await criarFaturaComLinhas(admin, {
+      companyId, clientId, prefix, year,
+      invoiceDate, dueDate,
+      periodStart: start, periodEnd: end,
+      subtotal,
+      vatRate: vatAmount > 0 ? vatRate : 0,
+      vatAmount,
+      total,
+      items,
+    });
 
-    if (itemsErr) {
-      const { error: limpezaErr } = await admin
-        .from("invoices")
-        .delete()
-        .eq("id", inv.id)
-        .eq("company_id", companyId);
-
-      if (limpezaErr) {
-        return {
-          ok: false,
-          error:
-            `As linhas da fatura ${invoiceNumber} não foram gravadas (${itemsErr.message}) ` +
-            `e o documento incompleto não pôde ser removido (${limpezaErr.message}). ` +
-            `Apague a fatura ${invoiceNumber} manualmente antes de gerar cobranças outra vez.`,
-        };
-      }
-
-      return {
-        ok: false,
-        error: `Falha ao gravar as linhas da fatura ${invoiceNumber}: ${itemsErr.message}`,
-      };
+    // 🔴 Não se salta em silêncio. Estava aqui um `continue`: uma fatura que
+    //    falhasse desaparecia sem rasto e a função devolvia sucesso com menos
+    //    faturas do que devia, sem ninguém saber quais faltavam.
+    if (!criada.ok) {
+      const nome = clientMap[clientId]?.name ?? "cliente";
+      return { ok: false, error: `${nome}: ${criada.error}` };
     }
   }
 

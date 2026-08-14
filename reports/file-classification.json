@@ -1,15 +1,15 @@
 {
   "generatedBy": "scripts/audit-file-inventory.mjs",
-  "totalFiles": 620,
+  "totalFiles": 621,
   "byStatus": {
-    "MANTER": 603,
+    "MANTER": 604,
     "STANDBY": 17
   },
   "byCategory": {
     "route-ui": 133,
     "test": 96,
     "migration": 75,
-    "lib": 62,
+    "lib": 63,
     "script": 43,
     "domain": 39,
     "doc": 38,
@@ -29,7 +29,7 @@
     "src-other": 1
   },
   "byConfidence": {
-    "alta": 605,
+    "alta": 606,
     "média": 9,
     "baixa": 6
   },
@@ -1722,7 +1722,7 @@
       ],
       "sideEffects": [
         "supabase",
-        "revalidatePath(31)"
+        "revalidatePath(32)"
       ],
       "risks": [
         "debugger"
@@ -1731,7 +1731,7 @@
         "supabase": 1,
         "sqlWrite": 7,
         "debugger": 6,
-        "revalidatePath": 31
+        "revalidatePath": 32
       },
       "action": "nenhuma",
       "reason": "configuração/infra",
@@ -4204,11 +4204,14 @@
       "consumerSample": [],
       "autoLoaded": false,
       "referencedBy": [],
-      "sideEffects": [],
+      "sideEffects": [
+        "revalidatePath(1)"
+      ],
       "risks": [],
       "signals": {
+        "sqlWrite": 1,
         "unknownCast": 3,
-        "fallbackZero": 1
+        "revalidatePath": 1
       },
       "action": "nenhuma",
       "reason": "suite de testes — corre por convenção do vitest",
@@ -4229,11 +4232,14 @@
       "consumerSample": [],
       "autoLoaded": false,
       "referencedBy": [],
-      "sideEffects": [],
+      "sideEffects": [
+        "revalidatePath(2)"
+      ],
       "risks": [],
       "signals": {
-        "sqlWrite": 1,
-        "fallbackArray": 2
+        "sqlWrite": 3,
+        "fallbackArray": 2,
+        "revalidatePath": 2
       },
       "action": "nenhuma",
       "reason": "suite de testes — corre por convenção do vitest",
@@ -10369,15 +10375,15 @@
         "any(3)"
       ],
       "signals": {
-        "supabase": 9,
+        "supabase": 8,
         "serverAction": 1,
-        "write": 7,
-        "sqlWrite": 13,
+        "write": 4,
+        "sqlWrite": 10,
         "eslintDisable": 3,
         "anyType": 3,
         "ignoredError": 6,
-        "fallbackZero": 3,
-        "fallbackArray": 15,
+        "fallbackZero": 2,
+        "fallbackArray": 14,
         "revalidatePath": 4
       },
       "action": "auditar atomicidade (T12/T13)",
@@ -14485,14 +14491,13 @@
       }
     },
     {
-      "path": "src/lib/finance-rpc/payment-cashflow.ts",
+      "path": "src/lib/finance-rpc/invoice-creation.ts",
       "category": "lib",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 2,
+      "consumers": 1,
       "consumerSample": [
-        "src/__tests__/payment-cashflow-rpc.test.ts",
-        "src/app/actions/payments.ts"
+        "src/app/actions/invoices.ts"
       ],
       "autoLoaded": false,
       "referencedBy": [],
@@ -14500,7 +14505,33 @@
       "risks": [],
       "signals": {},
       "action": "nenhuma",
-      "reason": "em uso: 2 consumidor(es)",
+      "reason": "em uso: 1 consumidor(es)",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/lib/finance-rpc/payment-cashflow.ts",
+      "category": "lib",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 3,
+      "consumerSample": [
+        "src/__tests__/payment-cashflow-rpc.test.ts",
+        "src/app/actions/payments.ts",
+        "src/lib/finance-rpc/invoice-creation.ts"
+      ],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {},
+      "action": "nenhuma",
+      "reason": "em uso: 3 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,

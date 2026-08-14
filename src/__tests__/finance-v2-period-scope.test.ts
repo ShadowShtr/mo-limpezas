@@ -237,12 +237,18 @@ describe("🔴 os carregadores não engolem erros", () => {
     const src = codigo("src/app/actions/invoices.ts");
     // O `continue` fazia a fatura desaparecer sem rasto, com a função a
     // devolver sucesso e menos faturas do que devia.
-    expect(src).not.toMatch(/if \(invErr \|\| !inv\) continue;/);
-    expect(src).toMatch(/if \(invErr \|\| !inv\) \{/);
-    // E as linhas também contam. A guarda deixou de ser um simples `return`:
-    // apaga o cabeçalho já gravado, para não ficar uma fatura sem itens. Ver
-    // o bloco «uma fatura nunca fica sem linhas».
-    expect(src).toMatch(/if \(itemsErr\) \{/);
+    //
+    // A guarda mudou de forma com a 072: já não há dois pedidos para guardar,
+    // há um. O que se exige continua a ser o mesmo — a falha aborta a geração
+    // e nomeia o cliente, em vez de saltar para o seguinte.
+    // Só dentro do ciclo que cria as faturas: os `continue` que filtram
+    // serviços antes disso são legítimos, e proibir a palavra em todo o
+    // ficheiro media texto em vez de comportamento.
+    const i = src.indexOf("for (const [clientId, svcs] of byClient)");
+    const geracao = src.slice(i, src.indexOf("revalidatePath(", i));
+    expect(geracao).not.toMatch(/continue;/);
+    expect(geracao).toMatch(/if \(!criada\.ok\) \{/);
+    expect(geracao).toMatch(/return \{ ok: false, error: `\$\{nome\}: \$\{criada\.error\}` \}/);
   });
 
   it("um IVA errado não passa por omissão silenciosa", () => {
@@ -287,25 +293,44 @@ describe("🔴 o valor do prédio é introduzível", () => {
 describe("🔴 uma fatura nunca fica sem linhas", () => {
   const src = codigo("src/app/actions/invoices.ts");
 
-  it("se os itens falharem, o cabeçalho é apagado", () => {
-    // A fatura já está gravada quando os itens falham. Sair sem mais deixava um
-    // documento sem linhas — e à segunda tentativa a guarda de duplicados
-    // encontrava-o, saltava o cliente, e ficava órfão para sempre.
-    const i = src.indexOf("if (itemsErr)");
-    expect(i, "a guarda tem de existir").toBeGreaterThan(-1);
-    const bloco = src.slice(i, i + 1200);
-    expect(bloco, "sem compensação").toMatch(/\.from\("invoices"\)\s*\.delete\(\)/);
-    expect(bloco).toMatch(/\.eq\("id", inv\.id\)/);
-    expect(bloco, "a compensação também tem de ser company-scoped").toMatch(/\.eq\("company_id", companyId\)/);
+  it("🔴 deixou de haver dois pedidos para compensar", () => {
+    // O que aqui estava era uma compensação: gravava-se o cabeçalho, gravavam-
+    // -se as linhas e, se as linhas falhassem, apagava-se o cabeçalho.
+    // Funcionava enquanto a compensação corresse — e se o processo morresse
+    // entre os dois, ficava um documento sem linhas, com subtotal e total
+    // certos e o ar de uma fatura normal na lista.
+    //
+    // Com a 072 aplicada, a transacção é da base. Não há janela entre os dois
+    // pedidos porque não há dois pedidos.
+    const i = src.indexOf("for (const [clientId, svcs] of byClient)");
+    const geracao = src.slice(i, src.indexOf("revalidatePath(", i));
+    expect(geracao).toContain("criarFaturaComLinhas(admin");
+    expect(geracao, "insert directo de volta").not.toMatch(/\.from\("invoices"\)[\s\S]{0,80}\.insert\(/);
+    expect(geracao, "linhas em pedido separado").not.toMatch(/\.from\("invoice_items"\)/);
+    expect(geracao, "compensação já não é precisa").not.toMatch(/\.delete\(\)/);
   });
 
-  it("se a compensação falhar, diz qual é a fatura a apagar à mão", () => {
-    // Um documento incompleto que fica na base tem de ter nome. Descobri-lo
-    // meses depois numa conferência é o pior desfecho possível.
-    const i = src.indexOf("if (itemsErr)");
-    const bloco = src.slice(i, i + 1200);
-    expect(bloco).toMatch(/limpezaErr/);
-    expect(bloco).toMatch(/\$\{invoiceNumber\}/);
+  it("🔴 e a base recusa uma fatura sem linhas", () => {
+    // A garantia mudou de sítio, não desapareceu. Um documento a zero com o
+    // aspecto de emitido é pior do que um erro.
+    const sql = codigo("supabase/migrations/072_invoice_atomic_creation.sql");
+    expect(sql).toMatch(/jsonb_array_length\(p_items\) = 0/);
+    expect(sql).toMatch(/RAISE EXCEPTION 'Uma fatura sem linhas/);
+    // E confere que gravou tantas linhas quantas recebeu.
+    expect(sql).toMatch(/v_itens <> jsonb_array_length\(p_items\)/);
+  });
+
+  it("a aplicação nem chega a pedir uma fatura vazia", () => {
+    const helper = codigo("src/lib/finance-rpc/invoice-creation.ts");
+    expect(helper).toMatch(/entrada\.items\.length === 0/);
+  });
+
+  it("uma falha diz de que cliente é", () => {
+    // «Falha ao criar a fatura» sozinho obriga a adivinhar qual dos clientes
+    // do lote é que ficou por faturar.
+    const i = src.indexOf("if (!criada.ok)");
+    expect(i).toBeGreaterThan(-1);
+    expect(src.slice(i, i + 400)).toMatch(/clientMap\[clientId\]\?\.name/);
   });
 });
 
