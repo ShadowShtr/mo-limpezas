@@ -34,7 +34,6 @@ import {
   calcularDespesasPorCategoria,
   calcularPredios,
   calcularTopClientes,
-  corDaCategoria,
   type FactoCaixa,
   type FactoFatura,
   type FactoFolha,
@@ -107,7 +106,7 @@ async function loadCashFacts(admin: AdminClient, ctx: FinanceReadContext): Promi
       .gte("date", ctx.periodStart)
       .lte("date", ctx.periodEnd);
 
-  let { data, error } = await consulta(`${COLUNAS}, expense_categories(name)`);
+  let { data, error } = await consulta(`${COLUNAS}, expense_categories(name, color_token)`);
   if (error && categoriaEstruturadaEmFalta(error)) {
     ({ data, error } = await consulta(COLUNAS));
   }
@@ -116,7 +115,8 @@ async function loadCashFacts(admin: AdminClient, ctx: FinanceReadContext): Promi
 
   type Linha = {
     date: string; type: string; status: string; amount: number | null; category: string | null;
-    expense_categories?: { name: string } | { name: string }[] | null;
+    expense_categories?: { name: string; color_token: string | null }
+      | { name: string; color_token: string | null }[] | null;
   };
   return {
     ok: true,
@@ -129,6 +129,7 @@ async function loadCashFacts(admin: AdminClient, ctx: FinanceReadContext): Promi
         amount: Number(r.amount ?? 0),
         categoria: r.category,
         categoriaEstruturada: cat?.name ?? null,
+        categoriaEstruturadaCor: cat?.color_token ?? null,
       };
     }),
   };
@@ -320,7 +321,10 @@ export async function getFinanceDashboardV2(
         const b = calcularDespesasPorCategoria(caixa, ctx);
         return {
           estado: b.estado,
-          fatias: b.fatias.map((f) => ({ ...f, cor: corDaCategoria(f.chave) })),
+          // A cor é decidida no agregador, que é quem sabe se duas fatias
+          // colidiram. Recalculá-la aqui desfaria o desempate.
+          fatias: b.fatias,
+          pendentes: b.pendentes,
           total: b.total,
           semCategoria: b.semCategoria,
           nota: b.nota,

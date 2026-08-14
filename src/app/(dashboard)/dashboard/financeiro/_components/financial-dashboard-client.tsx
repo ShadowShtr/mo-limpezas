@@ -590,9 +590,37 @@ export function FinancialDashboardClient({
                     nome: f.categoria,
                     valor: f.valor,
                     cor: f.cor,
+                    chave: f.chave,
                   })),
                 }
               : { estado: "indisponivel", porque: snapshot?.expensesByCategory.nota ?? "Sem despesas neste período." }
+          }
+          // Clicar numa categoria abre as despesas dessa categoria em Contas,
+          // já filtradas e prontas a corrigir. Um número no donut deixa de ser
+          // o fim da linha.
+          /*
+            🔴 O que o gráfico NÃO mostra, dito em voz alta.
+
+            O donut conta só movimentos `confirmado`, como os Custos. Uma
+            despesa acabada de registar em Contas nasce `pendente` — e quem a
+            registou vem procurá-la aqui, não a encontra, e conclui que a
+            categoria não funcionou. Aconteceu mesmo.
+          */
+          rodape={
+            snapshot && snapshot.expensesByCategory.pendentes.contagem > 0 ? (
+              <p className="w-full mt-1 text-[11.5px] leading-snug text-[var(--finance-orange)]">
+                Mais {fmtEur(snapshot.expensesByCategory.pendentes.total)} em{" "}
+                {snapshot.expensesByCategory.pendentes.contagem}{" "}
+                {snapshot.expensesByCategory.pendentes.contagem === 1 ? "despesa registada" : "despesas registadas"}
+                {" "}por confirmar. Entram no gráfico quando forem marcadas como
+                pagas em Contas.
+              </p>
+            ) : null
+          }
+          hrefDe={(f) =>
+            f.chave && snapshot
+              ? `/dashboard/financeiro/contas?mes=${snapshot.period.year}-${String(snapshot.period.month).padStart(2, "0")}&categoria=${encodeURIComponent(f.chave)}`
+              : null
           }
         />
         <FinanceTeamEfficiency

@@ -6,6 +6,7 @@ import { requireProfile } from "@/lib/auth-guard";
 import { isValidCashFlowAmount } from "@/lib/cash-flow-integrity";
 import { estaPorReceber } from "@/domain/finance-v2/aggregate";
 import { todayInLisbon } from "@/lib/lisbon-time";
+import { isValidIsoDateString } from "@/lib/utils";
 import { revalidatePath } from "next/cache";
 
 export type CashFlowType = "entrada" | "saida";
@@ -154,7 +155,16 @@ export async function createCashFlowEntry(
 
 export async function updateCashFlowEntry(
   id: string,
-  data: { status?: CashFlowStatus; description?: string; amount?: number; notes?: string | null },
+  data: {
+    status?: CashFlowStatus;
+    description?: string;
+    amount?: number;
+    notes?: string | null;
+    /** Data do movimento. Corrigi-la é metade das correcções reais. */
+    date?: string;
+    /** Categoria estruturada. `null` remove-a — «Sem categoria» é uma escolha. */
+    expenseCategoryId?: string | null;
+  },
 ): Promise<{ ok: boolean; error?: string }> {
   const supabase = await createClient();
   const admin    = createAdminClient();
@@ -177,10 +187,24 @@ export async function updateCashFlowEntry(
   if (data.description !== undefined && !data.description.trim()) {
     return { ok: false, error: "Descricao invalida." };
   }
+  // 🔴 A mesma validação de data do resto da aplicação. Foi um `starts_on`
+  //    corrompido (`"72026-01-01"`, ano com um dígito a mais) que rebentou a
+  //    ficha de um cliente real em Julho.
+  if (data.date !== undefined && !isValidIsoDateString(data.date)) {
+    return { ok: false, error: "Data inválida." };
+  }
+
+  // O nome camelCase não existe na base — separa-se, como no create.
+  // `null` é enviado de propósito: é assim que se **retira** a categoria.
+  const { expenseCategoryId, ...colunas } = data;
+  const patch = {
+    ...colunas,
+    ...(expenseCategoryId !== undefined ? { expense_category_id: expenseCategoryId } : {}),
+  };
 
   const { error } = await admin
     .from("cash_flow_entries")
-    .update(data)
+    .update(patch as unknown as never)
     .eq("id", id)
     .eq("company_id", profile.company_id);
   if (error) return { ok: false, error: error.message };

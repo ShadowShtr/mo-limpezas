@@ -1,8 +1,8 @@
 {
   "generatedBy": "scripts/audit-file-inventory.mjs",
-  "totalFiles": 619,
+  "totalFiles": 620,
   "byStatus": {
-    "MANTER": 602,
+    "MANTER": 603,
     "STANDBY": 17
   },
   "byCategory": {
@@ -12,8 +12,8 @@
     "lib": 62,
     "script": 43,
     "domain": 39,
+    "doc": 38,
     "server-action": 38,
-    "doc": 37,
     "component": 26,
     "doc-historico": 16,
     "api-route": 16,
@@ -29,7 +29,7 @@
     "src-other": 1
   },
   "byConfidence": {
-    "alta": 604,
+    "alta": 605,
     "média": 9,
     "baixa": 6
   },
@@ -289,6 +289,24 @@
       "signals": {},
       "action": "nenhuma",
       "reason": "configuração/infra",
+      "manualDecision": false
+    },
+    {
+      "path": "docs/APLICAR-071-072-073.md",
+      "category": "doc",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "sqlWrite": 12
+      },
+      "action": "nenhuma",
+      "reason": "documentação",
       "manualDecision": false
     },
     {
@@ -1704,7 +1722,7 @@
       ],
       "sideEffects": [
         "supabase",
-        "revalidatePath(29)"
+        "revalidatePath(31)"
       ],
       "risks": [
         "debugger"
@@ -1713,7 +1731,7 @@
         "supabase": 1,
         "sqlWrite": 7,
         "debugger": 6,
-        "revalidatePath": 29
+        "revalidatePath": 31
       },
       "action": "nenhuma",
       "reason": "configuração/infra",
@@ -9758,7 +9776,7 @@
         "sqlWrite": 6,
         "eslintDisable": 3,
         "anyType": 3,
-        "unknownCast": 2,
+        "unknownCast": 3,
         "selectStar": 1,
         "ignoredError": 3,
         "fallbackZero": 3,
@@ -15353,7 +15371,7 @@
       "category": "lib",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 30,
+      "consumers": 31,
       "consumerSample": [
         "src/__tests__/utils.test.ts",
         "src/app/(app)/app/ausencias/_components/ausencias-client.tsx",
@@ -15368,7 +15386,7 @@
       "risks": [],
       "signals": {},
       "action": "nenhuma",
-      "reason": "em uso: 30 consumidor(es), configuração",
+      "reason": "em uso: 31 consumidor(es), configuração",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -16933,7 +16951,9 @@
       "consumers": 0,
       "consumerSample": [],
       "autoLoaded": false,
-      "referencedBy": [],
+      "referencedBy": [
+        "docs"
+      ],
       "sideEffects": [],
       "risks": [],
       "signals": {
@@ -16951,7 +16971,9 @@
       "consumers": 0,
       "consumerSample": [],
       "autoLoaded": false,
-      "referencedBy": [],
+      "referencedBy": [
+        "docs"
+      ],
       "sideEffects": [],
       "risks": [],
       "signals": {
@@ -16969,7 +16991,9 @@
       "consumers": 0,
       "consumerSample": [],
       "autoLoaded": false,
-      "referencedBy": [],
+      "referencedBy": [
+        "docs"
+      ],
       "sideEffects": [],
       "risks": [],
       "signals": {

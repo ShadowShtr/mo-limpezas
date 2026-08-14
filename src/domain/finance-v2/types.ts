@@ -216,6 +216,8 @@ export interface FinanceDashboardSnapshot {
     fatias: { categoria: string; chave: string | null; valor: number; share: number; cor: string }[];
     total: number;
     semCategoria: number;
+    /** Registadas no período mas ainda por confirmar — não entram no gráfico. */
+    pendentes: { total: number; contagem: number };
     nota?: string;
   };
   /**

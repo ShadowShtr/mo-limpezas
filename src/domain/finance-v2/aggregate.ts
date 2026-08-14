@@ -51,6 +51,8 @@ export interface FactoCaixa {
    * inventar contabilidade a partir de texto livre.
    */
   categoriaEstruturada?: string | null;
+  /** `color_token` da categoria. A cor que a empresa escolheu manda. */
+  categoriaEstruturadaCor?: string | null;
 }
 
 export interface FactoFolha {
@@ -430,6 +432,9 @@ export interface FatiaCategoria {
   chave: string | null;
   valor: number;
   share: number;
+  /** Decidida aqui, e não na camada que desenha: o donut e a lista de Contas
+   *  têm de mostrar a mesma cor para a mesma categoria. */
+  cor: string;
 }
 
 export interface BlocoCategorias {
@@ -437,6 +442,18 @@ export interface BlocoCategorias {
   fatias: FatiaCategoria[];
   total: number;
   semCategoria: number;
+  /**
+   * 🔴 Despesas do período ainda por confirmar.
+   *
+   * O donut conta só `confirmado`, tal como os Custos — se contasse pendentes,
+   * o total do gráfico deixaria de bater com o KPI ao lado, e ninguém saberia
+   * qual dos dois acreditar.
+   *
+   * Mas ficar em silêncio é pior: quem acabou de registar uma despesa de
+   * Combustível procura-a no gráfico, não a encontra e conclui que a categoria
+   * não funcionou. Contam-se à parte, e diz-se que existem.
+   */
+  pendentes: { total: number; contagem: number };
   nota?: string;
 }
 
@@ -455,13 +472,30 @@ export interface BlocoCategorias {
 export function calcularDespesasPorCategoria(
   caixa: Fonte<FactoCaixa>,
   ctx: FinanceReadContext,
-  topN = 5,
+  // Com catorze categorias possíveis, cortar às cinco mandaria quase tudo para
+  // «Outros» — e «Outros» não é uma categoria: é uma resposta que não se pode
+  // usar para decidir nada.
+  topN = 9,
 ): BlocoCategorias {
-  if (!caixa.ok) return { estado: "ERROR", fatias: [], total: 0, semCategoria: 0, nota: caixa.erro };
+  if (!caixa.ok) {
+    return {
+      estado: "ERROR", fatias: [], total: 0, semCategoria: 0,
+      pendentes: { total: 0, contagem: 0 }, nota: caixa.erro,
+    };
+  }
 
   const saidas = caixa.factos.filter(
     (c) => c.tipo === "saida" && c.status === "confirmado" && dentroDoPeriodo(c.date, ctx),
   );
+
+  // Registadas mas ainda não confirmadas. Não entram no gráfico; são ditas.
+  const porConfirmar = caixa.factos.filter(
+    (c) => c.tipo === "saida" && c.status === "pendente" && dentroDoPeriodo(c.date, ctx),
+  );
+  const pendentes = {
+    total: soma(porConfirmar.map((c) => c.amount)),
+    contagem: porConfirmar.length,
+  };
 
   // ───────────────────────────────────────────────────────────────────────────
   // 🔴 A categoria estruturada manda; a legada é o que resta
@@ -477,6 +511,7 @@ export function calcularDespesasPorCategoria(
   // ───────────────────────────────────────────────────────────────────────────
   const porCat = new Map<string | null, number>();
   const rotulos = new Map<string, string>();
+  const cores = new Map<string, string>();
   for (const s of saidas) {
     const estruturada = s.categoriaEstruturada?.trim();
     const legada = s.categoria?.trim();
@@ -484,7 +519,10 @@ export function calcularDespesasPorCategoria(
     const k = bruto === null ? null : bruto.toLowerCase();
     // Guarda-se o nome tal como foi escrito: «Materiais e produtos» não deve
     // chegar ao ecrã em minúsculas por causa de uma chave de agrupamento.
-    if (k !== null && estruturada) rotulos.set(k, estruturada);
+    if (k !== null && estruturada) {
+      rotulos.set(k, estruturada);
+      if (s.categoriaEstruturadaCor) cores.set(k, s.categoriaEstruturadaCor);
+    }
     porCat.set(k, Math.round(((porCat.get(k) ?? 0) + s.amount) * 100) / 100);
   }
 
@@ -503,6 +541,7 @@ export function calcularDespesasPorCategoria(
     chave: k as string,
     valor: v,
     share: total > 0 ? Math.round((v / total) * 1000) / 1000 : 0,
+    cor: corDaCategoria(k as string, cores.get(k as string)),
   }));
 
   // «Outros» só existe se houver mesmo mais categorias por baixo do corte.
@@ -512,6 +551,7 @@ export function calcularDespesasPorCategoria(
       chave: "__outros__",
       valor: resto,
       share: total > 0 ? Math.round((resto / total) * 1000) / 1000 : 0,
+      cor: "#94A3B8",
     });
   }
   if (semCategoria > 0) {
@@ -520,10 +560,12 @@ export function calcularDespesasPorCategoria(
       chave: null,
       valor: semCategoria,
       share: total > 0 ? Math.round((semCategoria / total) * 1000) / 1000 : 0,
+      cor: "#CBD5E1",
     });
   }
 
-  return { estado: "AVAILABLE", fatias, total, semCategoria };
+  // 🔴 Duas fatias com a mesma cor lêem-se como uma só.
+  return { estado: "AVAILABLE", fatias: distinguirCores(fatias), total, semCategoria, pendentes };
 }
 
 /** Rótulos legíveis para as categorias que a base já usa. */
@@ -571,15 +613,89 @@ const CORES_CATEGORIA: Record<string, string> = {
   equipamento: "#8B5CF6",
   comunicacoes: "#06B6D4",
   seguro: "#F59E0B", seguros: "#F59E0B",
-  fornecedor: "#6378D9",
+  fornecedor: "#3B82F6",
   despesa: "#06B6D4",
   outro: "#94A3B8", outros: "#94A3B8",
   __outros__: "#94A3B8",
+
+  // 🔴 As catorze sugeridas, pela chave que o agrupamento produz — o **nome
+  //    em minúsculas**. Sem estas entradas, as de várias palavras
+  //    («materiais e produtos», «impostos e taxas») não encontravam nada no
+  //    mapa e caíam todas na mesma cor de recurso.
+  "materiais e produtos": "#16A35A",
+  "impostos e taxas": "#DC2626",
+  equipamentos: "#8B5CF6",
+  viaturas: "#F04438",
+  instalacoes: "#0EA5E9", "instalações": "#0EA5E9",
+  contabilidade: "#64748B",
+  alimentacao: "#84CC16", "alimentação": "#84CC16",
+  "subcontratação": "#A855F7", subcontratacao: "#A855F7",
+  "comunicações": "#06B6D4",
+  "combustível": "#FF7A1A",
+  "manutenção": "#6378D9",
+  "salários": "#6558F5",
 };
 
-export function corDaCategoria(chave: string | null): string {
+/**
+ * Paleta de recurso, para categorias que ninguém previu.
+ *
+ * 🔴 O `?? "#8B5CF6"` que aqui estava dava **a mesma cor** a tudo o que não
+ *    estivesse no mapa — e o mapa só tinha chaves de uma palavra. «Materiais e
+ *    produtos», «Impostos e taxas» e qualquer categoria criada pela empresa
+ *    saíam todas roxas, e o donut deixava de se conseguir ler.
+ *
+ * Doze cores distinguíveis entre si, escolhidas pelo hash do nome: a mesma
+ * categoria fica sempre com a mesma cor, de um mês para o outro e entre
+ * carregamentos. Uma cor aleatória por render tornaria o donut incomparável.
+ */
+const PALETA_RECURSO = [
+  "#6558F5", "#FF7A1A", "#16A35A", "#06B6D4", "#F04438", "#8B5CF6",
+  "#F59E0B", "#0EA5E9", "#84CC16", "#A855F7", "#EC4899", "#14B8A6",
+];
+
+function indiceEstavel(texto: string, modulo: number): number {
+  let h = 0;
+  for (let i = 0; i < texto.length; i++) h = (h * 31 + texto.charCodeAt(i)) >>> 0;
+  return h % modulo;
+}
+
+export function corDaCategoria(chave: string | null, corGuardada?: string | null): string {
+  // 1. A cor que a empresa guardou na categoria manda. É configurável, e uma
+  //    cor definida por quem usa não deve ser sobreposta por uma tabela nossa.
+  if (corGuardada && /^#[0-9a-f]{6}$/i.test(corGuardada)) return corGuardada;
+  // 2. «Sem categoria» é cinzento, sempre. Não é uma categoria: é a ausência.
   if (chave === null) return "#CBD5E1";
-  return CORES_CATEGORIA[chave] ?? "#8B5CF6";
+  // 3. O mapa conhecido.
+  const conhecida = CORES_CATEGORIA[chave];
+  if (conhecida) return conhecida;
+  // 4. E, em último caso, uma cor estável em vez de roxo para todos.
+  return PALETA_RECURSO[indiceEstavel(chave, PALETA_RECURSO.length)];
+}
+
+/**
+ * Garante que duas fatias do mesmo gráfico não saem com a mesma cor.
+ *
+ * As regras acima são boas por categoria mas cegas ao conjunto: duas
+ * categorias diferentes podem cair na mesma cor, e num donut isso lê-se como
+ * uma fatia só. Aqui, a segunda a repetir muda para a primeira cor livre.
+ *
+ * A ordem é a das fatias (maior primeiro), por isso a categoria com mais peso
+ * fica sempre com a sua cor própria — quem muda é a mais pequena.
+ */
+export function distinguirCores<T extends { cor: string; chave: string | null }>(fatias: T[]): T[] {
+  const usadas = new Set<string>();
+  return fatias.map((f) => {
+    // O cinzento de «Sem categoria» pode repetir-se com o que for: é o único
+    // que significa alguma coisa por si.
+    if (f.chave === null || !usadas.has(f.cor)) {
+      usadas.add(f.cor);
+      return f;
+    }
+    const livre = PALETA_RECURSO.find((c) => !usadas.has(c));
+    if (!livre) return f; // mais fatias do que cores: fica como está
+    usadas.add(livre);
+    return { ...f, cor: livre };
+  });
 }
 
 // ─── Prédios ─────────────────────────────────────────────────────────────────

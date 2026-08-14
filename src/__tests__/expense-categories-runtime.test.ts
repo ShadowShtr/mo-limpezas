@@ -33,6 +33,8 @@ import {
 } from "@/domain/finance-v2/expense-categories";
 import {
   calcularDespesasPorCategoria,
+  corDaCategoria,
+  distinguirCores,
   type FactoCaixa,
   type Fonte,
 } from "@/domain/finance-v2/aggregate";
@@ -347,7 +349,7 @@ describe("🔴 o donut usa a categoria estruturada", () => {
 
   it("o carregador pede o nome, e recua se a 071 faltar", () => {
     const fonte = ler(LOADER);
-    expect(fonte).toContain("expense_categories(name)");
+    expect(fonte).toContain("expense_categories(name, color_token)");
     expect(fonte).toMatch(/categoriaEstruturadaEmFalta\(error\)/);
   });
 });
@@ -372,5 +374,327 @@ describe("🔴 não há classificação automática em lado nenhum", () => {
       expect(codigo, `${rel} faz UPDATE em massa`)
         .not.toMatch(/UPDATE\s+(public\.)?cash_flow_entries\s+SET\s+expense_category_id/i);
     }
+  });
+});
+
+// ─── 9. Do donut até à correcção da despesa ──────────────────────────────────
+//
+// O donut mostrava percentagens e mais nada: 50 % de quê, e de que despesas?
+// Um número que não leva a lado nenhum obriga a ir procurar à mão o movimento
+// que se quer corrigir.
+
+describe("🔴 o donut leva às despesas, e as despesas editam-se", () => {
+  const DONUT = "src/components/financeiro/v2/finance-intelligence.tsx";
+  const PAINEL = "src/app/(dashboard)/dashboard/financeiro/_components/financial-dashboard-client.tsx";
+
+  it("cada fatia leva às despesas dessa categoria", () => {
+    expect(ler(DONUT)).toMatch(/hrefDe\?\.\(a\) \?\? null/);
+    expect(ler(PAINEL)).toMatch(/dashboard\/financeiro\/contas\?mes=.*categoria=/);
+  });
+
+  it("e o mês vai com o link — a categoria de Agosto abre Agosto", () => {
+    // Sem o mês, clicar numa fatia de Julho abriria as despesas do mês
+    // corrente, e os números não bateriam com a fatia de onde se veio.
+    expect(ler(PAINEL)).toMatch(/snapshot\.period\.year/);
+  });
+
+  it("o donut mostra valores, não só percentagens", () => {
+    // «50 %» sem base não diz se são 50 € ou 5 000 €.
+    const fonte = ler(DONUT);
+    expect(fonte).toMatch(/fmtEur\(a\.valor\)/);
+    expect(fonte).toMatch(/fmtEur\(total\)/);
+  });
+
+  it("🔴 Contas avisa quando a lista chega filtrada", () => {
+    // Sem o aviso, quem chega do donut vê três despesas onde havia doze e
+    // conclui que se perderam.
+    const fonte = ler(CLIENT);
+    expect(fonte).toMatch(/categoriaInicial && \(/);
+    expect(fonte).toMatch(/href="\/dashboard\/financeiro\/contas"/);
+  });
+
+  it("o filtro compara pela categoria real e pela legada", () => {
+    // Uma despesa antiga só tem a legada. Comparar só pela estruturada faria
+    // a fatia «Fornecedores» abrir uma lista vazia.
+    const fonte = ler(CLIENT);
+    expect(fonte).toMatch(/e\.expense_category_name \?\? e\.category/);
+  });
+
+  it("uma despesa pode ser editada, e não só marcada como paga", () => {
+    const fonte = ler(CLIENT);
+    expect(fonte).toContain("abrirEdicao");
+    expect(fonte).toContain("handleUpdate");
+    expect(fonte).toMatch(/editando \? "Editar despesa" : "Registar despesa"/);
+  });
+
+  it("🔴 editar pode retirar a categoria, não só trocá-la", () => {
+    // `|| null`: escolher «Sem categoria» tem de reverter uma categoria posta
+    // por engano. Se o `null` não fosse enviado, ficava lá para sempre.
+    const fonte = ler(CLIENT);
+    const i = fonte.indexOf("function handleUpdate");
+    const corpo = fonte.slice(i, fonte.indexOf("function handleCreate", i));
+    expect(corpo).toMatch(/expenseCategoryId: expenseCategoryId \|\| null/);
+  });
+
+  it("a action aceita data e categoria, e valida a data", () => {
+    const fonte = ler(CASHFLOW);
+    const i = fonte.indexOf("export async function updateCashFlowEntry");
+    const corpo = fonte.slice(i, i + 3000);
+    expect(corpo).toMatch(/date\?:\s*string/);
+    expect(corpo).toMatch(/expenseCategoryId\?:\s*string \| null/);
+    // A mesma validação que fechou a corrupção `"72026-01-01"` de Julho.
+    expect(corpo).toMatch(/isValidIsoDateString\(data\.date\)/);
+  });
+
+  it("🔴 `undefined` não apaga a categoria; `null` apaga", () => {
+    // Se o patch enviasse sempre a chave, uma actualização só do valor punha
+    // a categoria a `null` sem ninguém pedir.
+    const fonte = ler(CASHFLOW);
+    expect(fonte).toMatch(/expenseCategoryId !== undefined \? \{ expense_category_id: expenseCategoryId \} : \{\}/);
+  });
+});
+
+// ─── 10. Cada categoria com a sua cor ────────────────────────────────────────
+//
+// O donut mostrava tudo roxo fora das treze chaves de uma palavra que o mapa
+// conhecia. Um gráfico onde três fatias têm a mesma cor não é um gráfico.
+
+describe("🔴 as cores distinguem as categorias", () => {
+  const saida = (amount: number, estruturada: string | null, cor?: string | null): FactoCaixa => ({
+    date: "2026-08-10", tipo: "saida", status: "confirmado", amount,
+    categoria: null, categoriaEstruturada: estruturada, categoriaEstruturadaCor: cor,
+  });
+
+  it("as sugeridas têm cada uma a sua cor", () => {
+    const b = calcularDespesasPorCategoria(ok([
+      saida(10, "Combustível"), saida(20, "Materiais e produtos"),
+      saida(30, "Viaturas"), saida(40, "Impostos e taxas"),
+      saida(50, "Subcontratação"), saida(60, "Alimentação"),
+    ]), CTX);
+    const cores = b.fatias.map((f) => f.cor);
+    expect(new Set(cores).size).toBe(cores.length);
+  });
+
+  it("🔴 nomes de várias palavras deixaram de cair todos na mesma cor", () => {
+    // Era este o defeito: o mapa só tinha chaves de uma palavra, e o resto
+    // apanhava o mesmo `#8B5CF6`.
+    const b = calcularDespesasPorCategoria(ok([
+      saida(10, "Materiais e produtos"), saida(20, "Impostos e taxas"),
+    ]), CTX);
+    expect(b.fatias[0].cor).not.toBe(b.fatias[1].cor);
+  });
+
+  it("Combustível é laranja e Fornecedores é azul", () => {
+    const laranja = calcularDespesasPorCategoria(ok([saida(10, "Combustível")]), CTX);
+    expect(laranja.fatias[0].cor).toBe("#FF7A1A");
+
+    const azul = calcularDespesasPorCategoria(
+      ok([{ date: "2026-08-10", tipo: "saida", status: "confirmado", amount: 10, categoria: "fornecedor" }]),
+      CTX,
+    );
+    expect(azul.fatias[0].cor).toBe("#3B82F6");
+  });
+
+  it("a cor guardada na categoria manda sobre a nossa tabela", () => {
+    // É configurável na base. Uma cor escolhida por quem usa não deve ser
+    // sobreposta por um mapa nosso.
+    const b = calcularDespesasPorCategoria(ok([saida(10, "Combustível", "#123456")]), CTX);
+    expect(b.fatias[0].cor).toBe("#123456");
+  });
+
+  it("uma cor inválida na base não passa para o ecrã", () => {
+    const b = calcularDespesasPorCategoria(ok([saida(10, "Combustível", "vermelho")]), CTX);
+    expect(b.fatias[0].cor).toBe("#FF7A1A");
+  });
+
+  it("🔴 duas categorias nunca saem com a mesma cor no mesmo gráfico", () => {
+    // Duas categorias inventadas que calhem no mesmo índice da paleta lêem-se
+    // como uma fatia só. A segunda muda para a primeira cor livre.
+    const nomes = Array.from({ length: 9 }, (_, i) => `Categoria ${i}`);
+    const b = calcularDespesasPorCategoria(ok(nomes.map((n, i) => saida(10 + i, n))), CTX);
+    const cores = b.fatias.filter((f) => f.chave !== null).map((f) => f.cor);
+    expect(new Set(cores).size).toBe(cores.length);
+  });
+
+  it("a maior fatia fica com a sua cor própria; quem muda é a menor", () => {
+    const b = calcularDespesasPorCategoria(ok([saida(1000, "Combustível"), saida(1, "Outra")]), CTX);
+    expect(b.fatias[0].cor).toBe("#FF7A1A");
+  });
+
+  it("«Sem categoria» é sempre cinzento", () => {
+    const b = calcularDespesasPorCategoria(
+      ok([saida(10, "Combustível"), { date: "2026-08-10", tipo: "saida", status: "confirmado", amount: 5, categoria: null }]),
+      CTX,
+    );
+    expect(b.fatias.find((f) => f.chave === null)?.cor).toBe("#CBD5E1");
+  });
+
+  it("a mesma categoria tem sempre a mesma cor", () => {
+    // Uma cor aleatória por render tornaria o donut incomparável de um mês
+    // para o outro.
+    const uma = calcularDespesasPorCategoria(ok([saida(10, "Portagens")]), CTX).fatias[0].cor;
+    const outra = calcularDespesasPorCategoria(ok([saida(99, "Portagens")]), CTX).fatias[0].cor;
+    expect(uma).toBe(outra);
+  });
+
+  it("nove categorias cabem no gráfico antes de haver «Outros»", () => {
+    // Com catorze possíveis, cortar às cinco mandava quase tudo para «Outros»
+    // — e «Outros» não é uma categoria com que se decida alguma coisa.
+    const nomes = Array.from({ length: 9 }, (_, i) => `Cat ${i}`);
+    const b = calcularDespesasPorCategoria(ok(nomes.map((n, i) => saida(10 + i, n))), CTX);
+    expect(b.fatias.map((f) => f.categoria)).not.toContain("Outros");
+  });
+});
+
+// ─── 11. As duas defesas da cor, testadas em separado ────────────────────────
+//
+// 🔴 Escrito depois de uma mutação as apanhar as duas vivas.
+//
+// Os testes acima passavam com o `?? "#8B5CF6"` de volta **e** com o desempate
+// removido — cada defesa mascarava a falha da outra: o desempate corrigia o
+// roxo repetido, e os nomes que escolhi nunca colidiam no hash, por isso o
+// desempate nunca chegava a ser exercido.
+//
+// Duas defesas só estão provadas se forem medidas uma a uma.
+
+describe("🔴 a paleta de recurso, sozinha", () => {
+  it("nomes desconhecidos recebem cores diferentes", () => {
+    // Sem `distinguirCores` pelo meio. Se voltar o `?? "#8B5CF6"`, estas
+    // quatro saem iguais e o teste falha aqui, onde tem de falhar.
+    const cores = ["Portagens", "Uniformes", "Publicidade", "Rendas"]
+      .map((n) => corDaCategoria(n.toLowerCase()));
+    expect(new Set(cores).size).toBeGreaterThan(1);
+  });
+
+  it("e nunca a mesma cor para todos", () => {
+    const cores = Array.from({ length: 24 }, (_, i) => corDaCategoria(`categoria inventada ${i}`));
+    expect(new Set(cores).size).toBeGreaterThanOrEqual(8);
+  });
+
+  it("a cor de um nome desconhecido é estável", () => {
+    expect(corDaCategoria("portagens")).toBe(corDaCategoria("portagens"));
+  });
+});
+
+describe("🔴 o desempate, sozinho", () => {
+  it("duas fatias com a mesma cor deixam de a ter", () => {
+    // Entrada com colisão deliberada, em vez de esperar que o hash colida por
+    // acaso — que foi o que fez este guarda passar despercebido.
+    const saida = distinguirCores([
+      { chave: "a", cor: "#FF7A1A" },
+      { chave: "b", cor: "#FF7A1A" },
+      { chave: "c", cor: "#FF7A1A" },
+    ]);
+    expect(new Set(saida.map((f) => f.cor)).size).toBe(3);
+  });
+
+  it("a primeira fica com a cor que trazia", () => {
+    const saida = distinguirCores([
+      { chave: "a", cor: "#FF7A1A" },
+      { chave: "b", cor: "#FF7A1A" },
+    ]);
+    expect(saida[0].cor).toBe("#FF7A1A");
+    expect(saida[1].cor).not.toBe("#FF7A1A");
+  });
+
+  it("«Sem categoria» pode repetir a cor de quem for", () => {
+    // O cinzento significa ausência, e é o único que não se troca.
+    const saida = distinguirCores([
+      { chave: "a", cor: "#CBD5E1" },
+      { chave: null, cor: "#CBD5E1" },
+    ]);
+    expect(saida[1].cor).toBe("#CBD5E1");
+  });
+
+  it("🔴 e o agregador usa-o mesmo", () => {
+    // Testar a função e não a sua utilização é a armadilha «mencionar ≠ usar»,
+    // que já apanhou este projecto várias vezes. Remover a chamada em
+    // `calcularDespesasPorCategoria` passava por todos os outros testes.
+    //
+    // «Publicidade» e «Ferramentas» colidem mesmo na paleta de recurso —
+    // procurados de propósito, em vez de esperar que o hash colidisse por
+    // acaso, que foi o erro da primeira versão destes testes.
+    const saida = (nome: string, amount: number): FactoCaixa => ({
+      date: "2026-08-10", tipo: "saida", status: "confirmado", amount,
+      categoria: null, categoriaEstruturada: nome,
+    });
+    expect(corDaCategoria("publicidade")).toBe(corDaCategoria("ferramentas"));
+
+    const b = calcularDespesasPorCategoria(ok([saida("Publicidade", 100), saida("Ferramentas", 50)]), CTX);
+    expect(b.fatias).toHaveLength(2);
+    expect(b.fatias[0].cor).not.toBe(b.fatias[1].cor);
+  });
+
+  it("cores já distintas passam intactas", () => {
+    const entrada = [{ chave: "a", cor: "#FF7A1A" }, { chave: "b", cor: "#16A35A" }];
+    expect(distinguirCores(entrada)).toEqual(entrada);
+  });
+
+  it("mais fatias do que cores não rebenta", () => {
+    const entrada = Array.from({ length: 30 }, (_, i) => ({ chave: `c${i}`, cor: "#FF7A1A" }));
+    expect(() => distinguirCores(entrada)).not.toThrow();
+    expect(distinguirCores(entrada)).toHaveLength(30);
+  });
+});
+
+// ─── 12. O que o donut não mostra, e diz que não mostra ──────────────────────
+//
+// Achado real: registou-se uma despesa de Combustível e ela não apareceu no
+// gráfico. Não era das cores nem das categorias — o donut conta só movimentos
+// `confirmado`, e as despesas registadas em Contas nascem `pendente`.
+
+describe("🔴 despesas por confirmar não desaparecem em silêncio", () => {
+  const desp = (amount: number, status: string, cat: string | null = "Combustível"): FactoCaixa => ({
+    date: "2026-08-10", tipo: "saida", status, amount,
+    categoria: null, categoriaEstruturada: cat,
+  });
+
+  it("uma despesa pendente não entra no gráfico", () => {
+    // E é correcto que não entre: se entrasse, o total do donut deixava de
+    // bater com o KPI «Custos» ao lado, e ninguém saberia em qual acreditar.
+    const b = calcularDespesasPorCategoria(ok([desp(50, "pendente")]), CTX);
+    expect(b.total).toBe(0);
+    expect(b.fatias).toEqual([]);
+  });
+
+  it("🔴 mas é contada e anunciada", () => {
+    const b = calcularDespesasPorCategoria(ok([desp(50, "pendente")]), CTX);
+    expect(b.pendentes).toEqual({ total: 50, contagem: 1 });
+  });
+
+  it("confirmada, entra no gráfico e sai dos pendentes", () => {
+    const b = calcularDespesasPorCategoria(ok([desp(50, "confirmado")]), CTX);
+    expect(b.total).toBe(50);
+    expect(b.fatias[0].categoria).toBe("Combustível");
+    expect(b.pendentes.contagem).toBe(0);
+  });
+
+  it("as duas contas não se misturam", () => {
+    const b = calcularDespesasPorCategoria(
+      ok([desp(100, "confirmado"), desp(50, "pendente"), desp(25, "pendente", "Viaturas")]),
+      CTX,
+    );
+    expect(b.total).toBe(100);
+    expect(b.pendentes).toEqual({ total: 75, contagem: 2 });
+  });
+
+  it("pendentes de outro mês não contam", () => {
+    const b = calcularDespesasPorCategoria(
+      ok([{ ...desp(50, "pendente"), date: "2026-07-10" }]), CTX,
+    );
+    expect(b.pendentes.contagem).toBe(0);
+  });
+
+  it("uma leitura falhada não inventa pendentes a zero", () => {
+    const b = calcularDespesasPorCategoria({ ok: false, erro: "timeout" }, CTX);
+    expect(b.estado).toBe("ERROR");
+    expect(b.pendentes).toEqual({ total: 0, contagem: 0 });
+  });
+
+  it("🔴 o painel mostra o aviso, e só quando há pendentes", () => {
+    const painel = ler("src/app/(dashboard)/dashboard/financeiro/_components/financial-dashboard-client.tsx");
+    expect(painel).toMatch(/pendentes\.contagem > 0/);
+    expect(painel).toMatch(/por confirmar/);
+    expect(painel).toMatch(/marcadas como\s+pagas/);
   });
 });

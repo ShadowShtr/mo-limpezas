@@ -12,7 +12,7 @@ export const metadata = { title: "Contas — Escala" };
 export default async function ContasPage({
   searchParams,
 }: {
-  searchParams: Promise<{ mes?: string }>;
+  searchParams: Promise<{ mes?: string; categoria?: string }>;
 }) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -57,6 +57,9 @@ export default async function ContasPage({
         toPay={res.ok ? res.toPay : []}
         expenses={res.ok ? res.expenses : []}
         expenseCatalog={categoriesRes.ok ? categoriesRes.catalog : catalogoIndisponivel}
+        // Chega assim vinda do donut do Resumo: as despesas abrem já filtradas
+        // pela categoria em que a pessoa clicou.
+        categoriaInicial={params.categoria ?? null}
         companyId={profile.company_id}
         error={res.ok ? null : res.error}
       />
