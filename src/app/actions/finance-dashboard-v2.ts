@@ -86,26 +86,51 @@ async function loadInvoiceFacts(admin: AdminClient, ctx: FinanceReadContext): Pr
   };
 }
 
+/** Mesma distinção que nas Contas: «falta a 071» não é «a consulta falhou». */
+function categoriaEstruturadaEmFalta(erro: { code?: string; message?: string } | null): boolean {
+  if (!erro) return false;
+  if (["42P01", "42703", "PGRST200", "PGRST205"].includes(erro.code ?? "")) return true;
+  return /expense_categor/i.test(erro.message ?? "")
+    && /does not exist|could not find|no relationship/i.test(erro.message ?? "");
+}
+
 async function loadCashFacts(admin: AdminClient, ctx: FinanceReadContext): Promise<Fonte<FactoCaixa>> {
-  const { data, error } = await admin
-    .from("cash_flow_entries")
-    .select("date, type, status, amount, category")
-    .eq("company_id", ctx.companyId)
-    .gte("date", ctx.periodStart)
-    .lte("date", ctx.periodEnd);
+  // A categoria estruturada só existe depois da 071. Pede-se, e se a base
+  // ainda não a tiver repete-se sem ela — mas só nesse caso: um erro de outra
+  // natureza continua a ser erro, e não «mês sem movimentos».
+  const COLUNAS = "date, type, status, amount, category";
+  const consulta = (colunas: string) =>
+    admin
+      .from("cash_flow_entries")
+      .select(colunas)
+      .eq("company_id", ctx.companyId)
+      .gte("date", ctx.periodStart)
+      .lte("date", ctx.periodEnd);
+
+  let { data, error } = await consulta(`${COLUNAS}, expense_categories(name)`);
+  if (error && categoriaEstruturadaEmFalta(error)) {
+    ({ data, error } = await consulta(COLUNAS));
+  }
 
   if (error) return { ok: false, erro: error.message };
 
-  type Linha = { date: string; type: string; status: string; amount: number | null; category: string | null };
+  type Linha = {
+    date: string; type: string; status: string; amount: number | null; category: string | null;
+    expense_categories?: { name: string } | { name: string }[] | null;
+  };
   return {
     ok: true,
-    factos: ((data ?? []) as unknown as Linha[]).map((r) => ({
-      date: r.date,
-      tipo: r.type === "entrada" ? "entrada" : "saida",
-      status: r.status,
-      amount: Number(r.amount ?? 0),
-      categoria: r.category,
-    })),
+    factos: ((data ?? []) as unknown as Linha[]).map((r) => {
+      const cat = Array.isArray(r.expense_categories) ? r.expense_categories[0] : r.expense_categories;
+      return {
+        date: r.date,
+        tipo: (r.type === "entrada" ? "entrada" : "saida") as "entrada" | "saida",
+        status: r.status,
+        amount: Number(r.amount ?? 0),
+        categoria: r.category,
+        categoriaEstruturada: cat?.name ?? null,
+      };
+    }),
   };
 }
 

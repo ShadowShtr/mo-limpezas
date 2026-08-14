@@ -20,7 +20,8 @@
 // texto livre — o mesmo erro que este módulo recusa em todo o lado.
 // ============================================================================
 
-import { Building2 } from "lucide-react";
+import Link from "next/link";
+import { Building2, Pencil } from "lucide-react";
 
 import { FinanceCard, SectionHeader } from "./finance-card";
 import { RenderSlot, Skeleton, VazioCompacto, type Slot } from "./visual-contract";
@@ -42,6 +43,20 @@ export interface PrediosDados {
   comValor: number;
   semValor: number;
   nota?: string;
+}
+
+/**
+ * Onde se edita um prédio.
+ *
+ * 🔴 Aponta para o sítio onde a edição **já existe** — `Clientes > Prédios` —
+ *    em vez de duplicar o formulário aqui. Dois formulários para a mesma
+ *    tabela divergem: um ganha um campo, o outro não, e a partir daí depende
+ *    de onde se entrou.
+ *
+ * O `predio=<id>` faz a tabela do outro lado abrir a linha certa já em edição.
+ */
+export function hrefEditarPredio(id: string): string {
+  return `/dashboard/clientes?tab=predios&predio=${encodeURIComponent(id)}`;
 }
 
 export function FinanceBuildingsCard({ slot }: { slot: Slot<PrediosDados> }) {
@@ -74,7 +89,20 @@ export function FinanceBuildingsCard({ slot }: { slot: Slot<PrediosDados> }) {
               <div className="flex-1 overflow-y-auto px-5" style={{ maxHeight: 232 }}>
                 <ul className="divide-y divide-[var(--finance-divider)]">
                   {d.linhas.map((l) => (
-                    <li key={l.id} className="flex items-center gap-3 py-2.5">
+                    <li key={l.id}>
+                     {/*
+                       A linha toda é o alvo: nome, morada e valor. Um link só
+                       no nome obrigaria a acertar num texto de 12px, e o valor
+                       — que é o que a pessoa vem cá corrigir — não era
+                       clicável de todo.
+                     */}
+                     <Link
+                       href={hrefEditarPredio(l.id)}
+                       title={`Editar ${l.nome}`}
+                       className="group flex items-center gap-3 py-2.5 -mx-2 px-2 rounded-lg
+                                  hover:bg-[var(--finance-surface-soft)] focus-visible:outline-none
+                                  focus-visible:ring-2 focus-visible:ring-[var(--finance-primary)]"
+                     >
                       <div className="min-w-0 flex-1">
                         <p className="text-[12.5px] text-[var(--finance-text)] truncate">
                           {l.nome}
@@ -105,6 +133,20 @@ export function FinanceBuildingsCard({ slot }: { slot: Slot<PrediosDados> }) {
                       >
                         {l.valor === null ? "Sem valor" : fmtEur(l.valor)}
                       </span>
+                      {/*
+                        Afordância explícita. O contraste do hover sozinho não
+                        diz que a linha leva a algum lado — quem não passa o
+                        rato por cima nunca descobre.
+                      */}
+                      <span
+                        className="shrink-0 inline-flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-medium
+                                   border border-[var(--finance-divider)] text-[var(--finance-text-secondary)]
+                                   group-hover:border-[var(--finance-primary)] group-hover:text-[var(--finance-primary)]"
+                      >
+                        <Pencil className="w-3 h-3" aria-hidden />
+                        Editar
+                      </span>
+                     </Link>
                     </li>
                   ))}
                 </ul>

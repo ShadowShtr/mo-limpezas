@@ -82,6 +82,12 @@ export async function createCashFlowEntry(
     date: string;
     status: CashFlowStatus;
     notes?: string;
+    /**
+     * Categoria estruturada. Opcional de propósito: o histórico não tem, e
+     * obrigar aqui impediria de registar uma despesa numa base onde a 071
+     * ainda não foi aplicada.
+     */
+    expenseCategoryId?: string | null;
   },
 ): Promise<{ ok: boolean; error?: string }> {
   const supabase = await createClient();
@@ -101,11 +107,44 @@ export async function createCashFlowEntry(
     return { ok: false, error: "Dados invÃ¡lidos." };
   }
 
-  const { error } = await admin.from("cash_flow_entries").insert({
+  // 🔴 `expenseCategoryId` tem de sair do spread.
+  //
+  // `...data` copia as chaves tal como estão, e a base não tem nenhuma coluna
+  // com esse nome — o insert seria recusado inteiro por um campo que só existe
+  // no vocabulário do TypeScript.
+  //
+  // E só se envia `expense_category_id` quando **há** categoria: enquanto a
+  // 071 não estiver aplicada a coluna não existe, e mandá-la a `null` faria
+  // falhar todas as despesas manuais, incluindo as que não querem categoria
+  // nenhuma.
+  const { expenseCategoryId, ...colunas } = data;
+
+  const linha = {
     company_id: profile.company_id,
-    ...data,
+    ...colunas,
+    ...(expenseCategoryId ? { expense_category_id: expenseCategoryId } : {}),
     created_by: user.id,
-  });
+  };
+
+  // 🔴 O cast é por a 071 não estar aplicada, e é deliberadamente estreito.
+  //
+  //    `database.ts` é gerado do esquema **real**, onde `expense_category_id`
+  //    ainda não existe. Acrescentá-lo à mão faria os tipos afirmarem que a
+  //    coluna existe — e o resto do código deixava de ter como saber que não.
+  //    Quando a coluna faltar, é a base que recusa, com o erro verdadeiro.
+  // 🔴 O cast fica no argumento, e a chamada continua a **parecer** o que é.
+  //
+  //    A primeira versão embrulhava o `.insert` numa variável para lhe mudar o
+  //    tipo — e com isso o detector de capacidade de escrita deixou de
+  //    reconhecer esta action como escrita. O cliquet acusou duas capacidades
+  //    «removidas» que estavam bem vivas.
+  //
+  //    Uma escrita que se disfarça de outra coisa é exactamente o que aquele
+  //    inventário existe para impedir. `as never` mantém a forma `.insert(...)`
+  //    à vista de quem lê e de quem analisa.
+  const { error } = await admin
+    .from("cash_flow_entries")
+    .insert(linha as unknown as never);
 
   if (error) return { ok: false, error: error.message };
   revalidatePath("/dashboard/financeiro/fluxo-caixa");
@@ -180,11 +219,49 @@ export async function deleteCashFlowEntry(id: string): Promise<{ ok: boolean; er
   return { ok: true };
 }
 
+/** A forma crua de uma despesa, com ou sem a parte que a 071 acrescenta. */
+type LinhaDespesaCrua = {
+  id: string;
+  description: string;
+  amount: number;
+  category: string | null;
+  date: string;
+  notes: string | null;
+  expense_category_id?: string | null;
+  expense_categories?: { name: string; color_token: string | null }
+    | { name: string; color_token: string | null }[]
+    | null;
+};
+
+/**
+ * O erro diz que a 071 falta — ou diz outra coisa?
+ *
+ * 🔴 Só os códigos de objecto inexistente contam. Um erro de RLS, de rede ou
+ *    de timeout tratado como «falta migrar» esconderia um problema real atrás
+ *    de uma explicação tranquilizadora, e a lista de despesas apareceria
+ *    incompleta sem ninguém saber porquê.
+ */
+function categoriaAindaNaoExiste(erro: { code?: string; message?: string } | null): boolean {
+  if (!erro) return false;
+  if (["42P01", "42703", "PGRST200", "PGRST205"].includes(erro.code ?? "")) return true;
+  return /expense_categor/i.test(erro.message ?? "")
+    && /does not exist|could not find|no relationship/i.test(erro.message ?? "");
+}
+
 export interface PendingExpense {
   id: string;
   description: string;
   amount: number;
+  /** Categoria legada (`despesa`/`fornecedor`/`avaria`). Continua a existir. */
   category: string;
+  /**
+   * Categoria estruturada da 071. `null` para tudo o que foi lançado antes —
+   * e continua `null`, porque adivinhar a categoria de 444 movimentos antigos
+   * a partir da descrição seria inventar contabilidade.
+   */
+  expense_category_id: string | null;
+  expense_category_name: string | null;
+  expense_category_color: string | null;
   date: string;
   notes: string | null;
 }
@@ -264,19 +341,38 @@ export async function getAccountsData(input?: { year: number; month: number }): 
     .eq("status", "aprovado");
   if (input) payrollQ = payrollQ.eq("period_year", input.year).eq("period_month", input.month);
 
-  let expensesQ = admin
-    .from("cash_flow_entries")
-    .select("id, description, amount, category, date, notes")
-    .eq("company_id", companyId)
-    .eq("type", "saida")
-    .eq("status", "pendente")
-    .is("reference_type", null);
-  if (periodo) expensesQ = expensesQ.gte("date", periodo.inicio).lte("date", periodo.fim);
+  // ───────────────────────────────────────────────────────────────────────────
+  // Despesas — com a categoria estruturada quando a base já a tem
+  //
+  // A 071 não está aplicada. Pedir `expense_categories(...)` numa base que não
+  // a tem devolve erro, e este bloco tem de distinguir dois casos que se
+  // parecem: «a coluna ainda não existe» e «a consulta falhou».
+  //
+  // 🔴 O recuo é **só** para o primeiro. O segundo devolve erro — devolver
+  //    lista vazia mostraria «A Pagar (Despesas): 0,00 €», que é
+  //    indistinguível de um mês sem despesas nenhumas.
+  // ───────────────────────────────────────────────────────────────────────────
+  const COLUNAS_BASE = "id, description, amount, category, date, notes";
+  const COLUNAS_COM_CATEGORIA = `${COLUNAS_BASE}, expense_category_id, expense_categories(name, color_token)`;
+
+  const consultaDespesas = (colunas: string) => {
+    let q = admin
+      .from("cash_flow_entries")
+      .select(colunas)
+      .eq("company_id", companyId)
+      .eq("type", "saida")
+      .eq("status", "pendente")
+      .is("reference_type", null);
+    if (periodo) q = q.gte("date", periodo.inicio).lte("date", periodo.fim);
+    return q.order("date", { ascending: true });
+  };
+
+  const expensesQ = consultaDespesas(COLUNAS_COM_CATEGORIA);
 
   const [invoicesRes, payrollRes, expensesRes] = await Promise.all([
     invoicesQ.order("due_date", { ascending: true }),
     payrollQ.order("period_year", { ascending: false }).order("period_month", { ascending: false }),
-    expensesQ.order("date", { ascending: true }),
+    expensesQ,
   ]);
 
   if (invoicesRes.error) return { ok: false, error: invoicesRes.error.message };
@@ -284,7 +380,17 @@ export async function getAccountsData(input?: { year: number; month: number }): 
   // 🔴 Faltava. Uma falha a carregar despesas devolvia lista vazia e o cartão
   //    "A Pagar (Despesas)" mostrava 0,00 € — indistinguível de um mês sem
   //    despesas nenhumas.
-  if (expensesRes.error) return { ok: false, error: expensesRes.error.message };
+  // A coluna/tabela da 071 ainda não existe: repete-se sem ela. Qualquer outro
+  // erro continua a ser erro.
+  let despesasCruas = expensesRes.data;
+  if (expensesRes.error) {
+    if (!categoriaAindaNaoExiste(expensesRes.error)) {
+      return { ok: false, error: expensesRes.error.message };
+    }
+    const semCategoria = await consultaDespesas(COLUNAS_BASE);
+    if (semCategoria.error) return { ok: false, error: semCategoria.error.message };
+    despesasCruas = semCategoria.data;
+  }
 
   const ctxFatura = {
     companyId,
@@ -326,14 +432,23 @@ export async function getAccountsData(input?: { year: number; month: number }): 
     status: r.status,
   }));
 
-  const expenses: PendingExpense[] = (expensesRes.data ?? []).map((r) => ({
-    id: r.id,
-    description: r.description,
-    amount: r.amount,
-    category: r.category ?? "outro",
-    date: r.date,
-    notes: r.notes ?? null,
-  }));
+  const expenses: PendingExpense[] = ((despesasCruas ?? []) as unknown as LinhaDespesaCrua[]).map((r) => {
+    // O PostgREST devolve a relação como objecto ou como lista de um, conforme
+    // a cardinalidade que infere. Aceitam-se as duas formas — assumir uma
+    // delas dava categoria `null` sem erro nenhum a dizer porquê.
+    const cat = Array.isArray(r.expense_categories) ? r.expense_categories[0] : r.expense_categories;
+    return {
+      id: r.id,
+      description: r.description,
+      amount: r.amount,
+      category: r.category ?? "outro",
+      expense_category_id: r.expense_category_id ?? null,
+      expense_category_name: cat?.name ?? null,
+      expense_category_color: cat?.color_token ?? null,
+      date: r.date,
+      notes: r.notes ?? null,
+    };
+  });
 
   return { ok: true, toReceive, toPay, expenses };
 }

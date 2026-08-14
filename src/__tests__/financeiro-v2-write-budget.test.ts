@@ -133,8 +133,14 @@ const CAPABILITY_CEILING: Record<string, string[]> = {
   // nenhuma capacidade de escrita — só chama `getPayments`.
 
   // ── Contas e Fluxo de Caixa (mesma fonte, mesmas actions) ─────────────────
+  // `createSuggestedExpenseCategories` entra aqui **de propósito**: é escrita
+  // nova, deliberada e só a pedido de quem clica. Cria as categorias de despesa
+  // sugeridas que ainda faltem — nunca por render, nunca por omissão, e nunca
+  // dentro de uma migration, que transformaria uma proposta nossa em dado
+  // contabilístico de toda a empresa.
   "src/app/(dashboard)/dashboard/financeiro/contas/_components/contas-client.tsx": [
-    "createCashFlowEntry", "deleteCashFlowEntry", "updateCashFlowEntry",
+    "createCashFlowEntry", "createSuggestedExpenseCategories",
+    "deleteCashFlowEntry", "updateCashFlowEntry",
   ],
   "src/app/(dashboard)/dashboard/financeiro/fluxo-caixa/_components/cash-flow-client.tsx": [
     "createCashFlowEntry", "deleteCashFlowEntry", "updateCashFlowEntry",

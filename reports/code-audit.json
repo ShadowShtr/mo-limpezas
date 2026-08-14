@@ -1,13 +1,13 @@
 {
   "inventorySource": "git ls-files",
   "summary": {
-    "repositoryFiles": 612,
-    "textFiles": 600,
-    "sourceFiles": 426,
-    "textLines": 139521,
+    "repositoryFiles": 615,
+    "textFiles": 603,
+    "sourceFiles": 429,
+    "textLines": 140969,
     "typescriptDiagnostics": 0,
     "productionEntries": 70,
-    "unreachableProductionModules": 40,
+    "unreachableProductionModules": 39,
     "exactDuplicateFileGroups": 0
   },
   "highConfidence": {
@@ -33,7 +33,6 @@
       "src/domain/dashboard/legacy-dashboard.ts",
       "src/domain/dashboard/period-selection.ts",
       "src/domain/dashboard/projection.ts",
-      "src/domain/finance-v2/expense-categories.ts",
       "src/domain/realtime/event-reconciler.ts",
       "src/domain/reports/absence-metrics.ts",
       "src/domain/reports/export-adapter.ts",
@@ -74,7 +73,6 @@
       "src/domain/dashboard/legacy-dashboard.ts",
       "src/domain/dashboard/period-selection.ts",
       "src/domain/dashboard/projection.ts",
-      "src/domain/finance-v2/expense-categories.ts",
       "src/domain/realtime/event-reconciler.ts",
       "src/domain/reports/absence-metrics.ts",
       "src/domain/reports/export-adapter.ts",
@@ -100,6 +98,8 @@
     ],
     "exactDuplicateFiles": [],
     "directRevalidatePath": [
+      "src/__tests__/expense-categories-runtime.test.ts",
+      "src/__tests__/predios-edicao-por-link.test.ts",
       "src/app/(dashboard)/dashboard/calendario/_actions/create-service.ts",
       "src/app/actions/absences.ts",
       "src/app/actions/auth.ts",
@@ -113,6 +113,7 @@
       "src/app/actions/csv-import.ts",
       "src/app/actions/daily-billing.ts",
       "src/app/actions/equipas.ts",
+      "src/app/actions/expense-categories.ts",
       "src/app/actions/intervencoes.ts",
       "src/app/actions/invoices.ts",
       "src/app/actions/locations.ts",

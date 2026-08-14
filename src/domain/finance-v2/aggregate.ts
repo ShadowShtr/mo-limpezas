@@ -41,7 +41,16 @@ export interface FactoCaixa {
   tipo: "entrada" | "saida";
   status: string;
   amount: number;
+  /** Categoria legada (`despesa`, `fornecedor`, `salario`, …). */
   categoria: string | null;
+  /**
+   * Nome da categoria estruturada da 071, quando a despesa tem uma.
+   *
+   * Opcional porque a 071 não está aplicada e porque as 444 linhas existentes
+   * não têm nenhuma — e vão continuar sem, já que classificá-las agora seria
+   * inventar contabilidade a partir de texto livre.
+   */
+  categoriaEstruturada?: string | null;
 }
 
 export interface FactoFolha {
@@ -454,9 +463,28 @@ export function calcularDespesasPorCategoria(
     (c) => c.tipo === "saida" && c.status === "confirmado" && dentroDoPeriodo(c.date, ctx),
   );
 
+  // ───────────────────────────────────────────────────────────────────────────
+  // 🔴 A categoria estruturada manda; a legada é o que resta
+  //
+  // Uma despesa com `expense_category_id` conta pelo nome real («Combustível»)
+  // e **não** pela legada («fornecedor»). Somar as duas dimensões na mesma
+  // volta partiria o mesmo euro por duas fatias, e o total do donut deixava de
+  // bater com os Custos.
+  //
+  // O que não tem nenhuma das duas fica em «Sem categoria» — e fica lá. Nada
+  // aqui olha para a descrição: «Galp» não vira Combustível sozinho, porque
+  // adivinhar a partir de texto livre é como se erra em silêncio.
+  // ───────────────────────────────────────────────────────────────────────────
   const porCat = new Map<string | null, number>();
+  const rotulos = new Map<string, string>();
   for (const s of saidas) {
-    const k = s.categoria && s.categoria.trim() !== "" ? s.categoria.trim().toLowerCase() : null;
+    const estruturada = s.categoriaEstruturada?.trim();
+    const legada = s.categoria?.trim();
+    const bruto = estruturada && estruturada !== "" ? estruturada : (legada && legada !== "" ? legada : null);
+    const k = bruto === null ? null : bruto.toLowerCase();
+    // Guarda-se o nome tal como foi escrito: «Materiais e produtos» não deve
+    // chegar ao ecrã em minúsculas por causa de uma chave de agrupamento.
+    if (k !== null && estruturada) rotulos.set(k, estruturada);
     porCat.set(k, Math.round(((porCat.get(k) ?? 0) + s.amount) * 100) / 100);
   }
 
@@ -471,7 +499,7 @@ export function calcularDespesasPorCategoria(
   const resto = soma(ordenadas.slice(topN).map(([, v]) => v));
 
   const fatias: FatiaCategoria[] = principais.map(([k, v]) => ({
-    categoria: rotularCategoria(k as string),
+    categoria: rotulos.get(k as string) ?? rotularCategoria(k as string),
     chave: k as string,
     valor: v,
     share: total > 0 ? Math.round((v / total) * 1000) / 1000 : 0,

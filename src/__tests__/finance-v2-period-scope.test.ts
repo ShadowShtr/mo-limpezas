@@ -88,7 +88,10 @@ describe("os carregadores recebem o período, e usam-no", () => {
     expect(corpo).toContain("estaPorReceber(");
     expect(corpo, "o filtro fino não volta para o SQL").not.toMatch(/invoicesQ\.gte\("period_start"/);
     expect(corpo).toMatch(/payrollQ\.eq\("period_year"/);
-    expect(corpo).toMatch(/expensesQ\.gte\("date"/);
+    // A consulta das despesas passou a ser uma função, para poder ser repetida
+    // sem o `join` de `expense_categories` quando a 071 ainda não existe. O
+    // filtro pela data do movimento é o mesmo.
+    expect(corpo).toMatch(/q\.gte\("date", periodo\.inicio\)\.lte\("date", periodo\.fim\)/);
   });
 
   it("🔴 getBankReconciliationData filtra os movimentos", () => {

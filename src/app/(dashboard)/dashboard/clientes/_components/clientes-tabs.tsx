@@ -24,10 +24,17 @@ interface Props {
   buildingCards: BuildingCard[];
   teams: Team[];
   companyId: string;
+  /** Aba pedida pelo URL — `?tab=predios` vem do card do Financeiro. */
+  initialTab?: "clientes" | "predios";
+  /** Prédio a abrir já em edição, quando se chega por link directo. */
+  initialEditBuildingId?: string | null;
 }
 
-export function ClientesTabs({ clientes, buildingCards, teams, companyId }: Props) {
-  const [tab, setTab] = useState<"clientes" | "predios">("clientes");
+export function ClientesTabs({
+  clientes, buildingCards, teams, companyId,
+  initialTab = "clientes", initialEditBuildingId = null,
+}: Props) {
+  const [tab, setTab] = useState<"clientes" | "predios">(initialTab);
 
   return (
     <div>
@@ -68,7 +75,7 @@ export function ClientesTabs({ clientes, buildingCards, teams, companyId }: Prop
       {tab === "clientes" ? (
         <ClientesTable clientes={clientes} companyId={companyId} />
       ) : (
-        <PrediosTable buildingCards={buildingCards} teams={teams} />
+        <PrediosTable buildingCards={buildingCards} teams={teams} initialEditId={initialEditBuildingId} />
       )}
     </div>
   );

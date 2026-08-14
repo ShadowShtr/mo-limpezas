@@ -5,6 +5,10 @@ import { Kpi } from "@/components/financeiro/v2/primitives";
 import { useRouter } from "next/navigation";
 import { AlertCircle, ArrowUpRight, ArrowDownRight, ShoppingBag, Plus, X, Loader2, CheckCircle2, Trash2 } from "lucide-react";
 import {
+  createSuggestedExpenseCategories,
+  type ExpenseCategoryCatalog,
+} from "@/app/actions/expense-categories";
+import {
   createCashFlowEntry,
   updateCashFlowEntry,
   deleteCashFlowEntry,
@@ -58,13 +62,16 @@ interface Props {
   toReceive: ToReceive[];
   toPay: ToPay[];
   expenses: PendingExpense[];
+  expenseCatalog: ExpenseCategoryCatalog;
   companyId: string;
   error: string | null;
 }
 
 const inputCls = "w-full px-3 py-2 rounded-lg border border-[var(--color-border)] text-sm text-[var(--color-text-main)] focus:outline-none focus:ring-2 focus:ring-[var(--finance-primary)] focus:border-transparent bg-white";
 
-export function ContasClient({ toReceive, toPay, expenses: initialExpenses, companyId, error }: Props) {
+export function ContasClient({
+  toReceive, toPay, expenses: initialExpenses, expenseCatalog, companyId, error,
+}: Props) {
   const [expenses, setExpenses] = useState<PendingExpense[]>(initialExpenses);
   const [showSheet, setShowSheet] = useState(false);
   const [isPending, startTransition] = useTransition();
@@ -84,6 +91,9 @@ export function ContasClient({ toReceive, toPay, expenses: initialExpenses, comp
   const [date,     setDate]     = useState(todayInLisbon());
   const [notes,    setNotes]    = useState("");
   const [formErr,  setFormErr]  = useState("");
+  /** Categoria estruturada da 071. Vazio = sem categoria, e fica assim. */
+  const [expenseCategoryId, setExpenseCategoryId] = useState("");
+  const [criandoCategorias, setCriandoCategorias] = useState(false);
 
   const totalReceive  = toReceive.reduce((s, r) => s + r.total, 0);
   const totalPay      = toPay.reduce((s, r) => s + r.net_salary, 0);
@@ -96,7 +106,29 @@ export function ContasClient({ toReceive, toPay, expenses: initialExpenses, comp
   function resetForm() {
     setDesc(""); setAmount(""); setCategory("despesa");
     setDate(todayInLisbon());
-    setNotes(""); setFormErr("");
+    setNotes(""); setFormErr(""); setExpenseCategoryId("");
+  }
+
+  /**
+   * Cria as catorze sugeridas que faltarem.
+   *
+   * 🔴 Idempotente: só se inserem as que faltam, e a base tem
+   *    `UNIQUE(company_id, normalized_name)` por baixo. Clicar duas vezes não
+   *    duplica — e não dá erro, que seria uma péssima forma de dizer
+   *    «já estava feito».
+   */
+  function handleCreateSuggestions() {
+    setFormErr("");
+    setCriandoCategorias(true);
+    startTransition(async () => {
+      try {
+        const res = await createSuggestedExpenseCategories();
+        if (!res.ok) { setFormErr(res.error); return; }
+        router.refresh();
+      } finally {
+        setCriandoCategorias(false);
+      }
+    });
   }
 
   function handleCreate(e: React.FormEvent) {
@@ -112,6 +144,7 @@ export function ContasClient({ toReceive, toPay, expenses: initialExpenses, comp
         amount: val,
         description: desc.trim(),
         category,
+        expenseCategoryId: expenseCategoryId || null,
         date,
         status: "pendente",
         notes: notes.trim() || undefined,
@@ -122,7 +155,18 @@ export function ContasClient({ toReceive, toPay, expenses: initialExpenses, comp
       // recarregar a página à mão.
       setExpenses((prev) => [
         ...prev,
-        { id: `temp-${Date.now()}`, description: desc.trim(), amount: val, category, date, notes: notes || null },
+        {
+          id: `temp-${Date.now()}`,
+          description: desc.trim(), amount: val, category, date, notes: notes || null,
+          expense_category_id: expenseCategoryId || null,
+          // A linha otimista mostra a categoria escolhida — mas só a que
+          // existe mesmo no catálogo. Inventar um nome aqui faria a linha
+          // mudar sozinha no refresh seguinte.
+          expense_category_name:
+            expenseCatalog.categories.find((c) => c.id === expenseCategoryId)?.name ?? null,
+          expense_category_color:
+            expenseCatalog.categories.find((c) => c.id === expenseCategoryId)?.color_token ?? null,
+        },
       ].sort((a, b) => a.date.localeCompare(b.date)));
       setShowSheet(false);
       resetForm();
@@ -329,9 +373,25 @@ export function ContasClient({ toReceive, toPay, expenses: initialExpenses, comp
                       {e.notes && <span className="text-xs text-[var(--color-text-muted)] block truncate">{e.notes}</span>}
                     </td>
                     <td className="px-4 py-3">
-                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${CATEGORY_COLORS[e.category] ?? "bg-gray-100 text-gray-600"}`}>
-                        {CATEGORY_LABELS[e.category] ?? e.category}
-                      </span>
+                      {/* A categoria estruturada manda, quando existe. Sem
+                          ela, mostra-se a legada — e nunca se inventa uma
+                          categoria real para uma despesa que não a tem. */}
+                      {e.expense_category_name ? (
+                        <span
+                          className="text-xs px-2 py-0.5 rounded-full font-medium"
+                          style={
+                            e.expense_category_color
+                              ? { backgroundColor: `${e.expense_category_color}1A`, color: e.expense_category_color }
+                              : undefined
+                          }
+                        >
+                          {e.expense_category_name}
+                        </span>
+                      ) : (
+                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${CATEGORY_COLORS[e.category] ?? "bg-gray-100 text-gray-600"}`}>
+                          {CATEGORY_LABELS[e.category] ?? e.category}
+                        </span>
+                      )}
                     </td>
                     <td className="px-4 py-3 text-sm font-semibold text-right text-amber-600">{fmtEur(e.amount)}</td>
                     <td className="px-4 py-3">
@@ -426,14 +486,75 @@ export function ContasClient({ toReceive, toPay, expenses: initialExpenses, comp
                 </div>
               </div>
 
-              <div>
-                <label className="block text-xs font-medium text-[var(--color-text-sub)] mb-1.5">Categoria</label>
-                <select value={category} onChange={(e) => setCategory(e.target.value as CashFlowCategory)} className={inputCls}>
-                  <option value="despesa">Despesa geral</option>
-                  <option value="fornecedor">Fornecedor</option>
-                  <option value="outro">Dano / Avaria / Outro</option>
-                </select>
-              </div>
+              {/*
+                Duas versões deste campo, e a escolha entre elas não é
+                cosmética: enquanto a 071 não estiver aplicada, a tabela
+                `expense_categories` não existe. Mostrar «Combustível» num
+                select que não pode gravar seria prometer o que a base não
+                aceita.
+              */}
+              {expenseCatalog.available ? (
+                <div>
+                  <label className="block text-xs font-medium text-[var(--color-text-sub)] mb-1.5">Categoria</label>
+
+                  {expenseCatalog.categories.length > 0 ? (
+                    <select
+                      value={expenseCategoryId}
+                      onChange={(ev) => setExpenseCategoryId(ev.target.value)}
+                      className={inputCls}
+                    >
+                      {/* 🔴 «Sem categoria» é uma escolha legítima e fica a
+                          `null`. Nada aqui adivinha a categoria pela
+                          descrição — «Galp» não vira Combustível sozinho. */}
+                      <option value="">Sem categoria</option>
+                      {expenseCatalog.categories.map((c) => (
+                        <option key={c.id} value={c.id}>{c.name}</option>
+                      ))}
+                    </select>
+                  ) : (
+                    <p className="text-xs text-[var(--color-text-muted)] px-3 py-2 rounded-lg bg-[var(--color-background)] border border-[var(--color-border)]">
+                      Ainda não há categorias criadas para esta empresa.
+                    </p>
+                  )}
+
+                  {expenseCatalog.missingSuggestions.length > 0 && (
+                    <div className="mt-2">
+                      <button
+                        type="button"
+                        onClick={handleCreateSuggestions}
+                        disabled={criandoCategorias || isPending}
+                        className="text-xs font-medium px-3 py-1.5 rounded-lg border border-[var(--color-primary)]
+                                   text-[var(--color-primary)] hover:bg-[var(--color-primary)]/5 disabled:opacity-50"
+                      >
+                        {criandoCategorias
+                          ? "A criar..."
+                          : `Criar categorias sugeridas (${expenseCatalog.missingSuggestions.length})`}
+                      </button>
+                      <p className="mt-1 text-[11px] text-[var(--color-text-muted)]">
+                        {expenseCatalog.missingSuggestions.slice(0, 4).map((c) => c.name).join(", ")}
+                        {expenseCatalog.missingSuggestions.length > 4 && "…"}
+                        {" "}· clicar duas vezes não duplica.
+                      </p>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div>
+                  <label className="block text-xs font-medium text-[var(--color-text-sub)] mb-1.5">Categoria</label>
+                  <select value={category} onChange={(ev) => setCategory(ev.target.value as CashFlowCategory)} className={inputCls}>
+                    <option value="despesa">Despesa geral</option>
+                    <option value="fornecedor">Fornecedor</option>
+                    <option value="outro">Dano / Avaria / Outro</option>
+                  </select>
+                  <p className="mt-1.5 text-[11px] leading-snug text-[var(--color-text-muted)]">
+                    Combustível, materiais, viaturas e as restantes categorias ficam
+                    disponíveis quando a migration 071 for aplicada.
+                  </p>
+                  {expenseCatalog.error && (
+                    <p className="mt-1 text-[11px] text-amber-600">{expenseCatalog.error}</p>
+                  )}
+                </div>
+              )}
 
               <div>
                 <label className="block text-xs font-medium text-[var(--color-text-sub)] mb-1.5">Notas</label>
