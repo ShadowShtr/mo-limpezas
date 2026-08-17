@@ -493,6 +493,97 @@ describe("§40 — READ_ONLY_SQL_ONLY", () => {
   });
 });
 
+// ─── Revisão pré-live: overloads, ordem, erro ≠ ausente ──────────────────────
+
+describe("revisão pré-live", () => {
+  it("🔴 overload extra não esconde a assinatura certa", async () => {
+    // Duas funções com o mesmo nome e assinaturas diferentes. A query não
+    // filtra por assinatura — devolve as duas — e a comparação procura a certa
+    // entre elas. Um overload legítimo não pode virar MISMATCH.
+    const r = await inspecionarSchema(
+      fakeCatalog({
+        funcoes: [
+          { schema: "public", name: "unmark_payment_paid", args: "p_company_id uuid" }, // overload antigo
+          { schema: "public", name: "unmark_payment_paid", args: "p_company_id uuid, p_payment_id uuid" }, // a certa
+          { schema: "public", name: "mark_payment_paid", args: "p_company_id uuid, p_payment_id uuid, p_paid_on date" },
+          { schema: "public", name: "is_financial_period_open", args: "p_company_id uuid, p_year integer, p_month integer" },
+        ],
+      }),
+      M073,
+    );
+    expect(r.estado).toBe(SCHEMA.PRESENT);
+  });
+
+  it("🔴 só overloads errados → MISMATCH, e o detalhe lista os que existem", async () => {
+    const r = await inspecionarSchema(
+      fakeCatalog({
+        funcoes: [
+          { schema: "public", name: "unmark_payment_paid", args: "p_company_id uuid" },
+          { schema: "public", name: "unmark_payment_paid", args: "p_id uuid, p_outro text" },
+          { schema: "public", name: "mark_payment_paid", args: "p_company_id uuid, p_payment_id uuid, p_paid_on date" },
+          { schema: "public", name: "is_financial_period_open", args: "p_company_id uuid, p_year integer, p_month integer" },
+        ],
+      }),
+      M073,
+    );
+    expect(r.estado).toBe(SCHEMA.PARTIAL);
+    const mau = r.objectos.find(
+      (o: { alvo: string }) => o.alvo.includes("unmark_payment_paid"),
+    ) as { estado: string; detalhe: string | null } | undefined;
+    expect(mau?.estado).toBe("MISMATCH");
+    // O detalhe tem de mostrar o que lá está, para a revisão humana decidir.
+    expect(mau?.detalhe).toContain("p_id uuid");
+  });
+
+  it("🔴 falha a meio da introspecção → ERROR, nunca ABSENT", async () => {
+    // O caso perigoso: algumas leituras passam, uma falha. Se isto devolvesse
+    // ABSENT, um timeout no meio da verificação lia-se como «a migration não
+    // está aplicada» — e uma reaplicação sobre dados reais parecia justificada.
+    let n = 0;
+    const client = {
+      async query(sql: string, params: unknown[] = []) {
+        n += 1;
+        if (n > 2) throw new Error("connection reset");
+        if (sql.includes("information_schema.tables")) {
+          const [s, t] = params as string[];
+          return { rows: `${s}.${t}` === "public.expense_categories" ? [{ ok: 1 }] : [] };
+        }
+        return { rows: [] };
+      },
+    };
+    const r = await inspecionarSchema(client, M071);
+    expect(r.estado).toBe(SCHEMA.ERROR);
+    expect(r.estado).not.toBe(SCHEMA.ABSENT);
+    expect(r.estado).not.toBe(SCHEMA.PARTIAL);
+  });
+
+  it("ERROR de schema → BLOCKED, e correspondência UNPROVABLE", () => {
+    expect(
+      recomendar({
+        ledgerEstado: LEDGER.ABSENT,
+        schemaEstado: SCHEMA.ERROR,
+        correspondencia: CORRESPONDENCE.UNPROVABLE,
+      }),
+    ).toBe(RECOMMENDATION.BLOCKED);
+    expect(avaliarCorrespondencia({ ledgerEstado: LEDGER.ABSENT, schemaEstado: SCHEMA.ERROR }))
+      .toBe(CORRESPONDENCE.UNPROVABLE);
+  });
+
+  it("🔴 ABSENT só quando a base respondeu e não tinha nada", async () => {
+    // Distinção que importa: aqui a base respondeu a tudo, e respondeu «não
+    // existe». Isso é ABSENT legítimo — diferente de não ter conseguido ler.
+    const r = await inspecionarSchema(fakeCatalog(), M071);
+    expect(r.estado).toBe(SCHEMA.ABSENT);
+    expect(
+      recomendar({
+        ledgerEstado: LEDGER.ABSENT,
+        schemaEstado: r.estado,
+        correspondencia: CORRESPONDENCE.UNPROVABLE,
+      }),
+    ).toBe(RECOMMENDATION.NOT_CANDIDATE);
+  });
+});
+
 // ─── Manifesto completo ──────────────────────────────────────────────────────
 
 describe("manifesto", () => {
