@@ -18,13 +18,17 @@
 //
 // Em concreto, «pagar cria uma entrada de caixa e só uma» está aqui provado
 // como **regra de agregação** — dadas uma fatura paga e uma entrada, o
-// Recebido não duplica. Não está provado em runtime, porque a escrita do
-// pagamento **ainda não é atómica**: `setPaymentStatus` só altera
-// `fixed_variable_payments` e não cria movimento nenhum.
+// Recebido não duplica.
 //
-// Isso é a TASK 6, e depende da 071 estar aplicada e revertida numa base
-// descartável. Até lá, não se deve afirmar que a cadeia foi provada de ponta a
-// ponta — só que as regras que a governam estão fixadas.
+// ⚠️ Actualização (2026-08-17): a escrita do pagamento **já é atómica**.
+//    `setPaymentStatus` chama `mark_payment_paid` (commit `9a5f130`), e a 073
+//    está aplicada em produção — verificado read-only. O comentário anterior
+//    aqui dizia que `setPaymentStatus` «só altera fixed_variable_payments e não
+//    cria movimento nenhum», e isso ficou obsoleto.
+//
+//    O que continua verdade é o âmbito **deste** ficheiro: as fixturas abaixo
+//    provam a regra de agregação, não a execução. A prova de runtime da TASK 6
+//    vive em `payment-cashflow-rpc.test.ts`.
 //
 //     contrato 100 €  →  3 ocorrências  →  1 linha mensal  →  IVA uma vez
 //                     →  emitida  →  Faturado

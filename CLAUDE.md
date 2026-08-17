@@ -80,6 +80,60 @@ não instrução a repetir.
 
 ## ⚡ PRÓXIMA TASK A EXECUTAR
 
+## 📍 PONTO DE PARAGEM — 2026-08-17 (estado real das migrations 070–073 + drift guard)
+
+**Verificação read-only contra a base de produção.** Nenhuma escrita, nenhuma
+migration aplicada, nenhuma linha de ledger tocada.
+
+| Migration | Schema | Ledger `public._migrations` |
+|---|---|---|
+| 070 | **UNVERIFIED** | ABSENT |
+| 071 | **VERIFIED_APPLIED_OUTSIDE_LEDGER** | ABSENT |
+| 072 | **VERIFIED_APPLIED_OUTSIDE_LEDGER** | ABSENT |
+| 073 | **VERIFIED_APPLIED_OUTSIDE_LEDGER** | ABSENT |
+
+As três foram aplicadas pelo SQL Editor, que não escreve no ledger — o mesmo
+padrão já registado para 021/022/027/043/049/051/052. Última entrada do ledger:
+069, a 2026-08-05.
+
+**A 070 fica `UNVERIFIED`, e não «aplicada».** Cria uma função de trigger sobre
+`profiles` que dá curto-circuito para `service_role` — provar presença exigiria
+escrever em `profiles` de produção sob identidade não-admin. Não se faz uma
+escrita em produção para satisfazer um fingerprint.
+
+**Correcções a afirmações obsoletas** (todas datavam de quando as migrations
+ainda não estavam aplicadas):
+- `payment-cashflow.ts` dizia «PREPARADO, NÃO LIGADO» — está ligado desde `9a5f130`
+- `finance-v2-contract-chain.test.ts` dizia que `setPaymentStatus` não cria movimento
+- `docs/APLICAR-071-072-073.md` marcado ⛔ EXECUTADO (o Passo 0 espera quatro
+  `NULL`; hoje devolve quatro valores)
+
+**Drift guard novo** — `scripts/lib/migration-drift-guard.mjs`. Detecta por
+introspecção do catálogo (`to_regclass`, `information_schema.columns`,
+`pg_proc`) quando o ledger diz «pendente» mas o schema já tem os objectos, e
+aborta com `MIGRATION_LEDGER_SCHEMA_DRIFT` **antes da primeira escrita** — nada
+fica a meio. Materialização parcial dá `MIGRATION_PARTIALLY_MATERIALIZED`.
+
+> 🔴 A detecção **nunca** escreve no ledger. Não se auto-reconcilia: isso
+> apagaria a prova de que algo correu fora do runner. `--baseline` continua a
+> funcionar mas passou a avisar quando vai registar migrations já
+> materializadas.
+
+**Consequência operacional:** `run-migrations --apply` está bloqueado por
+desenho até o ledger ser reconciliado. `supabase db push`/`migration repair` não
+são o mecanismo deste projeto (usam outro ledger). A aplicação e o
+`--dry-run` continuam a funcionar. Ver `docs/LEDGER-RECONCILIATION-PENDING.md`.
+
+**072 — estado da prova:** `ATOMIC_EFFECT = PROVEN` (PGlite, ensaio no CI);
+`CONCURRENT_SERIALIZATION = NOT_PROVEN` (PGlite não dá duas ligações
+simultâneas). Por isso `generateInvoices` **continua sem chamar**
+`create_invoice_with_items` — decisão deliberada, não esquecimento.
+
+**Próxima task:** fechamento mensal (`financial_periods` existe e está vazia) —
+mês aberto → checklist → fechar → bloquear mutations → reabrir com motivo →
+auditoria. Trabalho isolado, a seguir a este.
+
+
 ## 📍 PONTO DE PARAGEM — 2026-08-05 (incidente de produção — deploy indevido + loop de login)
 
 **Resumo do incidente (produção, `molimpezas.pt`, sistema em uso real por pessoas):**

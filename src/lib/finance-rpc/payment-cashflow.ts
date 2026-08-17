@@ -2,19 +2,34 @@
 // Contrato da RPC de pagamento → caixa (073)
 // ============================================================================
 //
-// 🔴 PREPARADO, NÃO LIGADO.
-//
-// Nada em `src/app/actions/**` importa este módulo, e há um teste que falha se
-// alguém o importar (`payment-cashflow-rpc.test.ts`). `setPaymentStatus`
-// continua exactamente como estava.
+// ✅ LIGADO. `setPaymentStatus` (`src/app/actions/payments.ts`) chama
+//    `marcarPagamentoPago`/`desmarcarPagamentoPago` desde o commit `9a5f130`
+//    ("TASK B — marcar um pagamento como pago passa a sair do caixa").
 //
 // ---------------------------------------------------------------------------
-// Porque é que isto não está ligado
+// Estado da 073 em produção (verificado 2026-08-17, read-only)
 // ---------------------------------------------------------------------------
-// As migrations 071, 072 e 073 **não estão aplicadas** em produção. Ligar
-// agora obrigaria a uma de duas coisas, e ambas são piores do que esperar:
+// `mark_payment_paid`, `unmark_payment_paid` e `is_financial_period_open`
+// **existem na base real**. A verificação foi por chamada com a assinatura
+// correcta: as funções responderam com as mensagens de negócio escritas na
+// própria 073 (`"Pagamento inexistente ou de outra empresa."`), que só podem
+// vir do código aplicado.
 //
-//   · chamar a RPC e ver a aplicação rebentar em produção;
+// ⚠️ Mas a 073 **não está registada em `public._migrations`** — foi aplicada
+//    pelo SQL Editor, que não escreve no ledger. Isso não afecta este módulo
+//    (a função existe, a chamada funciona), mas bloqueia o runner de
+//    migrations. Ver `docs/LEDGER-RECONCILIATION-PENDING.md`.
+//
+// ⚠️ Histórico: este ficheiro dizia "PREPARADO, NÃO LIGADO" e que as
+//    migrations não estavam aplicadas. As duas afirmações ficaram obsoletas —
+//    a primeira com o `9a5f130`, a segunda com a verificação de 2026-08-17.
+//
+// ---------------------------------------------------------------------------
+// O fallback que continua proibido
+// ---------------------------------------------------------------------------
+// Ligar isto obrigava a escolher entre duas coisas:
+//
+//   · chamar a RPC e falhar fechado se ela não existir;
 //   · detectar se a função existe e, se não existir, seguir pelo caminho
 //     antigo.
 //
@@ -30,13 +45,13 @@
 // alternativo neste ficheiro. Não deve passar a haver.
 //
 // ---------------------------------------------------------------------------
-// Ordem de activação
+// Activação — feita
 // ---------------------------------------------------------------------------
-//   1. aplicar 071, 072 e 073 (autorização explícita, nunca por iniciativa);
-//   2. confirmar ledger e checksum das três em `public._migrations`;
-//   3. correr `npm run rehearse:071`;
-//   4. confirmar que as funções existem na base real;
-//   5. só então trocar `setPaymentStatus` para chamar `marcarPagamentoPago`.
+//   ✅ 073 aplicada em produção (SQL Editor, antes de 2026-08-17)
+//   ✅ funções confirmadas na base real (verificação read-only, 2026-08-17)
+//   ✅ `setPaymentStatus` liga a `marcarPagamentoPago` (commit `9a5f130`)
+//   ⚠️ ledger `public._migrations` **não** registra a 073 — pendente, e é uma
+//      operação separada: `docs/LEDGER-RECONCILIATION-PENDING.md`
 //
 // ⚠️ Nome das funções: o pedido falava em `mark_payment_paid_atomic`. A
 //    migration 073 define-as como `mark_payment_paid` / `unmark_payment_paid`.

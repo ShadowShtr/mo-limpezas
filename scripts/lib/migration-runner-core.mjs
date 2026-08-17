@@ -27,6 +27,7 @@ import {
   findKnownException,
   knownExceptionMatches,
 } from "./migration-checksum.mjs";
+import { detectarDrift, formatarRelatorioDrift } from "./migration-drift-guard.mjs";
 
 /** SELECT puro — nunca CREATE. */
 export async function tableExists(client, schemaDotTable) {
@@ -192,6 +193,24 @@ export async function runMigrations({
 
   if (baseline) {
     const toBaseline = files.filter((f) => !applied.has(f));
+
+    // ⚠️ `--baseline` é a única via legítima para o ledger ganhar linhas sem
+    //    executar SQL, e é exactamente por isso que precisa de dizer o que
+    //    está a fazer. Marcar a 071/072/073 por aqui *é* reconciliar o ledger
+    //    — a operação que docs/LEDGER-RECONCILIATION-PENDING.md diz ser
+    //    separada e autorizada. Não se bloqueia (baseline tem usos legítimos,
+    //    como adoptar uma base existente), mas não pode passar em silêncio:
+    //    sem este aviso, a divergência desaparecia sem ninguém a ter decidido.
+    const driftBaseline = await detectarDrift({ client, pendentes: toBaseline });
+    if (driftBaseline.bloqueiam.length > 0) {
+      logWarn("⚠ ATENÇÃO — este baseline vai registar migrations já materializadas no schema:");
+      for (const a of driftBaseline.bloqueiam) {
+        logWarn(`   ${a.migration} — schema: ${a.schema}`);
+      }
+      logWarn("   Isto É a reconciliação do ledger. Confirma que é isso que queres,");
+      logWarn("   e que os checksums foram comparados — ver docs/LEDGER-RECONCILIATION-PENDING.md.");
+    }
+
     if (apply) {
       log(`📋 ${toBaseline.length} migração(ões) a marcar como aplicada(s) (baseline, sem executar): ${toBaseline.join(", ") || "(nenhuma)"}`);
       for (const f of files) {
@@ -217,6 +236,38 @@ export async function runMigrations({
   const pending = files.filter((f) => !applied.has(f));
   log(`📋 ${pending.length} migração(ões) pendente(s)${pending.length > 0 ? ": " + pending.join(", ") : ""}`);
   if (pending.length === 0) log("✅ Nenhuma migração pendente.");
+
+  // ── Drift ledger↔schema — SEMPRE, e antes da primeira escrita. ──────────
+  //
+  // 🔴 A ordem aqui é o ponto todo. Isto corre antes do ciclo de `pending`,
+  //    por isso um apply bloqueado nunca chega a executar a primeira
+  //    migration: não fica nada a meio. Correr depois da primeira iteração
+  //    seria pior do que não correr — daria a ideia de proteção e deixava a
+  //    base num estado intermédio.
+  //
+  // Corre nos dois modos. Em dry-run é informação (é o que o `--dry-run` deve
+  // dizer); em apply é um travão.
+  if (pending.length > 0) {
+    const drift = await detectarDrift({ client, pendentes: pending });
+
+    if (drift.achados.length > 0) {
+      const checksumEsperado = {};
+      for (const a of drift.achados) {
+        checksumEsperado[a.migration] = checksumForNewMigration(
+          readFileSync(join(migrationsDir, a.migration), "utf8"),
+        );
+      }
+      const relatorio = formatarRelatorioDrift(drift, { checksumEsperado });
+      const emitir = drift.deveAbortar ? logError : log;
+      emitir("🔎 Estado ledger↔schema das migrations pendentes conhecidas:");
+      for (const linha of relatorio) emitir(linha);
+    }
+
+    if (drift.deveAbortar) {
+      return { exitCode: 1, driftCode: drift.codigo };
+    }
+  }
+
   for (const file of pending) {
     if (!apply) { log(`(dry-run) aplicaria: ${file}`); continue; }
     const sql = readFileSync(join(migrationsDir, file), "utf8");
