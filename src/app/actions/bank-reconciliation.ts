@@ -1,6 +1,7 @@
 "use server";
 
 import { requireProfile } from "@/lib/auth-guard";
+import { assertFinancialPeriodOpen, type ClientePeriodo } from "@/lib/finance-period-guard";
 import { auditLog } from "@/lib/audit";
 import { isValidCashFlowAmount } from "@/lib/cash-flow-integrity";
 import { generateSuggestions } from "@/lib/bank-import/reconcile-db";
@@ -103,6 +104,14 @@ export async function createBankAccount(input: {
 export async function getBankReconciliationData(filters?: {
   status?: BankTransactionDTO["status"];
   accountId?: string;
+  /**
+   * 🔴 O mês seleccionado no módulo.
+   *
+   * Sem isto, a Conciliação mostrava os últimos 500 movimentos de sempre
+   * enquanto o cabeçalho dizia «Agosto 2026». Omitir devolve tudo — o
+   * comportamento antigo, para quem ainda chame assim.
+   */
+  period?: { year: number; month: number };
 }): Promise<
   | { ok: true; transactions: BankTransactionDTO[]; imports: ImportDTO[]; accounts: BankAccountDTO[] }
   | { ok: false; error: string }
@@ -126,6 +135,13 @@ export async function getBankReconciliationData(filters?: {
     .limit(500);
   if (filters?.status) txQuery = txQuery.eq("status", filters.status);
   if (filters?.accountId) txQuery = txQuery.eq("bank_account_id", filters.accountId);
+  if (filters?.period) {
+    const { year, month } = filters.period;
+    const inicio = `${year}-${String(month).padStart(2, "0")}-01`;
+    const ultimoDia = new Date(Date.UTC(year, month, 0)).getUTCDate();
+    const fim = `${year}-${String(month).padStart(2, "0")}-${String(ultimoDia).padStart(2, "0")}`;
+    txQuery = txQuery.gte("transaction_date", inicio).lte("transaction_date", fim);
+  }
 
   const [txRes, impRes, accRes] = await Promise.all([
     txQuery,
@@ -142,7 +158,15 @@ export async function getBankReconciliationData(filters?: {
       .order("created_at", { ascending: true }),
   ]);
 
+  // 🔴 As três consultas contam, não só a dos movimentos.
+  //
+  // `impRes` e `accRes` eram ignoradas. Uma falha em qualquer delas dava uma
+  // página com movimentos mas **sem contas e sem histórico de importações** —
+  // que se lê como «esta empresa nunca importou nada», e não como «não
+  // consegui carregar». O utilizador reimportaria o mesmo extrato.
   if (txRes.error) return { ok: false, error: txRes.error.message };
+  if (impRes.error) return { ok: false, error: impRes.error.message };
+  if (accRes.error) return { ok: false, error: accRes.error.message };
 
   const txs = txRes.data ?? [];
   const txIds = txs.map((t) => t.id);
@@ -150,13 +174,18 @@ export async function getBankReconciliationData(filters?: {
   // Sugestões + detalhe do lançamento associado
   let suggestionsByTx = new Map<string, SuggestionDTO[]>();
   if (txIds.length > 0) {
-    const { data: matches } = await admin
+    // Uma falha aqui mostrava **zero sugestões** — indistinguível de um
+    // extrato em que nada casa, e a conciliação passaria a ser toda manual sem
+    // ninguém perceber porquê.
+    const { data: matches, error: matchesErr } = await admin
       .from("bank_reconciliation_matches")
       .select("id, bank_transaction_id, cash_flow_entry_id, match_score, match_reason, status, cash_flow_entries(description, amount, date, type)")
       .eq("company_id", companyId)
       .in("bank_transaction_id", txIds)
       .neq("status", "rejected")
       .order("match_score", { ascending: false });
+
+    if (matchesErr) return { ok: false, error: matchesErr.message };
 
     suggestionsByTx = new Map();
     for (const m of matches ?? []) {
@@ -417,6 +446,27 @@ export async function createEntryFromTransaction(bankTransactionId: string, opts
   if (!tx) return { ok: false, error: "Movimento não encontrado." };
   if (tx.status === "reconciled") return { ok: false, error: "Movimento já conciliado." };
   if (!isValidCashFlowAmount(tx.amount)) return { ok: false, error: "Valor inválido." };
+
+  // ─── A única action de conciliação com guarda de período ────────────────────
+  //
+  // Esta cria um `cash_flow_entries` — um facto económico novo, que entra nos
+  // totais do mês. Por isso o lock aplica-se, com a data do movimento bancário
+  // como data autoritativa (é a data que a linha de caixa vai ter).
+  //
+  // 🔴 `confirmMatch`, `rejectMatch`, `manualMatch` e `ignoreTransaction`
+  //    **não** têm guarda, deliberadamente: escrevem metadados de
+  //    correspondência (`bank_reconciliation_matches`, `bank_transactions.status`)
+  //    e não criam nem alteram nenhum movimento de caixa. Bloqueá-las seria
+  //    travar operação por a action viver na pasta do Financeiro — o critério é
+  //    o efeito económico, não a localização.
+  //
+  //    Se alguma delas passar a escrever em `cash_flow_entries`, entra no lock.
+  const periodo = await assertFinancialPeriodOpen({
+    cliente: admin as unknown as ClientePeriodo,
+    companyId,
+    data: String(tx.transaction_date),
+  });
+  if (!periodo.ok) return { ok: false, error: periodo.error };
 
   const category = (opts?.category ?? (tx.direction === "credit" ? "faturacao" : "despesa")) as
     "faturacao" | "salario" | "despesa" | "fornecedor" | "outro";

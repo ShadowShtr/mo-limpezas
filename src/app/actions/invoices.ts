@@ -3,10 +3,17 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { requireProfile } from "@/lib/auth-guard";
+import { criarFaturaComLinhas } from "@/lib/finance-rpc/invoice-creation";
 import { getMissingCashFlowReferenceIds, isValidCashFlowAmount } from "@/lib/cash-flow-integrity";
 import { findDuplicateMonthlyContractsByLocation } from "@/lib/invoice-duplicates";
 import { revalidatePath } from "next/cache";
 import { todayInLisbon, addDaysToDateString, toLisbonTimestamp } from "@/lib/lisbon-time";
+import {
+  assertFinancialPeriodOpen,
+  lerEstadoPeriodo,
+  type ClientePeriodo,
+} from "@/lib/finance-period-guard";
+import { mensagemPeriodoFechado } from "@/domain/finance-v2/financial-period";
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 
@@ -41,24 +48,26 @@ export interface Invoice {
   items: InvoiceItem[];
 }
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
 function monthRange(year: number, month: number) {
   const start = `${year}-${String(month).padStart(2, "0")}-01`;
   const end   = new Date(Date.UTC(year, month, 0)).toISOString().split("T")[0];
   return { start, end };
 }
 
-async function nextInvoiceNumber(companyId: string, prefix: string, year: number): Promise<string> {
-  const admin = createAdminClient();
-  const { count } = await admin
-    .from("invoices")
-    .select("id", { count: "exact", head: true })
-    .eq("company_id", companyId)
-    .like("invoice_number", `${prefix}${year}/%`);
-  const seq = (count ?? 0) + 1;
-  return `${prefix}${year}/${String(seq).padStart(3, "0")}`;
-}
+// ─── Numeração de faturas ─────────────────────────────────────────────────────
+//
+// 🔴 `nextInvoiceNumber` foi removida. A numeração passou para dentro da 072
+//    (`create_invoice_with_items`), sob `pg_advisory_xact_lock` por empresa e
+//    ano, com `UNIQUE(company_id, invoice_number)` por baixo como rede.
+//
+//    A versão que aqui estava lia o maior número e somava um. Estava certa
+//    quanto ao maior — contar em vez de olhar para o máximo reutilizava
+//    números de faturas apagadas — mas duas execuções simultâneas lêem o mesmo
+//    máximo e escolhem o mesmo número. Nenhuma verificação feita em JavaScript
+//    ganha essa corrida; a garantia tem de ser da base.
+//
+//    Os testes desta regra vivem agora sobre o SQL da 072, que é onde a regra
+//    está.
 
 // ─── Gerar documentos de cobrança ─────────────────────────────────────────────
 
@@ -73,12 +82,41 @@ export async function generateInvoices(
   const companyId = guard.profile.company_id;
   const { start, end } = monthRange(year, month);
 
+  // Gerar cobranças cria documentos financeiros do mês pedido — aqui o período
+  // vem directamente do argumento, sem ambiguidade.
+  //
+  // ⚠️ Isto **não** liga a RPC da 072 (`create_invoice_with_items`). A criação
+  //    atómica continua por activar até haver prova de serialização concorrente
+  //    — ver `src/lib/finance-rpc/invoice-creation.ts`.
+  const estadoPeriodo = await lerEstadoPeriodo(
+    admin as unknown as ClientePeriodo,
+    companyId,
+    { year, month },
+  );
+  if (!estadoPeriodo.ok) {
+    return { ok: false, error: "Não foi possível confirmar se o período está aberto. Nada foi gerado." };
+  }
+  if (estadoPeriodo.estado.status === "closed") {
+    return { ok: false, error: mensagemPeriodoFechado({ year, month }) };
+  }
+
   // Configurações
-  const { data: settings } = await admin
+  //
+  // 🔴 O erro conta. Uma falha aqui caía no `?? 23` e faturava tudo com a taxa
+  //    por omissão — que pode não ser a da empresa. Um IVA errado numa fatura
+  //    emitida é um problema fiscal, não um detalhe de apresentação.
+  //
+  //    `PGRST116` (nenhuma linha) continua a ser aceite: uma empresa sem
+  //    configurações usa as omissões de propósito. O que não se aceita é uma
+  //    consulta que rebentou.
+  const { data: settings, error: settingsErr } = await admin
     .from("company_settings")
     .select("vat_rate, invoice_prefix")
     .eq("company_id", companyId)
     .single();
+  if (settingsErr && settingsErr.code !== "PGRST116") {
+    return { ok: false, error: settingsErr.message };
+  }
 
   const vatRate     = settings?.vat_rate    ?? 23;
   const prefix      = settings?.invoice_prefix ?? "F";
@@ -94,24 +132,50 @@ export async function generateInvoices(
     .lt("scheduled_start", toLisbonTimestamp(addDaysToDateString(end, 1), "00:00"));
 
   if (sErr) return { ok: false, error: sErr.message };
-  if (!services?.length) return { ok: true, invoices: [] };
 
-  // Locais e clientes (incluindo locais com preço fixo que têm contratos activos)
-  const serviceLocationIds = [...new Set(services.map((s) => s.location_id).filter(Boolean))];
+  // 🔴 A guarda de saída antecipada mudou de sítio.
+  //
+  // Estava aqui um `if (!services?.length) return { ok: true, invoices: [] }`,
+  // **antes** de as avenças mensais serem sequer carregadas. Uma avença é uma
+  // linha mensal fixa que existe independentemente de haver serviços
+  // concluídos — é isso que a torna uma avença.
+  //
+  // O efeito era silencioso e caro: num mês sem nenhum serviço fechado,
+  // gerar cobranças devolvia «0 faturas» e ninguém era faturado, apesar de
+  // haver contratos ativos a render. E é exactamente a situação da base hoje:
+  // 1508 serviços, todos por concluir.
+  //
+  // A saída antecipada continua a existir — mas só quando não há **nada** para
+  // faturar, nem serviços nem avenças. Ver a guarda depois de
+  // `activeMonthlyContracts`.
+  const serviceLocationIds = [...new Set((services ?? []).map((s) => s.location_id).filter(Boolean))];
 
   // Locais com preço fixo que têm contratos activos no período
-  const { data: fixedLocations } = await admin
+  // ───────────────────────────────────────────────────────────────────────────
+  // 🔴 A partir daqui, **nenhum erro de consulta é ignorado**.
+  //
+  // Estas queries usavam `const { data } = await …` e deitavam o erro fora.
+  // Numa função que gera faturação, isso tem uma consequência muito concreta:
+  // se a consulta das avenças falhar, `activeMonthlyContracts` fica vazio e a
+  // função devolve **sucesso com zero faturas**. Ninguém é faturado nesse mês,
+  // e o ecrã diz que correu bem.
+  //
+  // É o mesmo padrão de «falha vira zero» que o motor de leitura passou meses
+  // a eliminar — aqui custava dinheiro por cobrar em vez de um número errado.
+  // ───────────────────────────────────────────────────────────────────────────
+  const { data: fixedLocations, error: fixedLocErr } = await admin
     .from("locations")
     .select("id, name, client_id, hourly_rate, fixed_price, pricing_type")
     .eq("company_id", companyId)
     .eq("pricing_type", "fixed")
     .eq("active", true);
+  if (fixedLocErr) return { ok: false, error: fixedLocErr.message };
 
   // Verificar quais têm contrato activo no período
   const fixedLocationIds = (fixedLocations ?? []).map((l) => l.id);
   let activeFixedLocationIds: string[] = [];
   if (fixedLocationIds.length > 0) {
-    const { data: activeContracts } = await admin
+    const { data: activeContracts, error: activeContractsErr } = await admin
       .from("contracts")
       .select("location_id")
       .eq("company_id", companyId)
@@ -119,12 +183,13 @@ export async function generateInvoices(
       .lte("starts_on", end)
       .or(`ends_on.is.null,ends_on.gte.${start}`)
       .in("location_id", fixedLocationIds);
+    if (activeContractsErr) return { ok: false, error: activeContractsErr.message };
     activeFixedLocationIds = [...new Set((activeContracts ?? []).map((c) => c.location_id))];
   }
 
   // Contratos com faturação por VALOR FIXO MENSAL (avença) ativos no período.
   // Cada um gera uma linha mensal única, independente do nº de serviços.
-  const { data: monthlyContracts } = await admin
+  const { data: monthlyContracts, error: monthlyErr } = await admin
     .from("contracts")
     .select("id, location_id, fixed_price, apply_vat")
     .eq("company_id", companyId)
@@ -133,28 +198,40 @@ export async function generateInvoices(
     .lte("starts_on", end)
     .or(`ends_on.is.null,ends_on.gte.${start}`);
 
+  // Se esta falhar, todas as avenças desaparecem e a função diria «zero
+  // faturas» com ar de sucesso. É o caso que mais custa dinheiro.
+  if (monthlyErr) return { ok: false, error: monthlyErr.message };
+
   const activeMonthlyContracts = (monthlyContracts ?? []).filter(
     (c) => c.fixed_price != null && c.fixed_price > 0,
   );
   const monthlyContractLocationIds = activeMonthlyContracts.map((c) => c.location_id);
 
+  // Agora sim: nada para faturar é nada em ambas as fontes.
+  if (!services?.length && activeMonthlyContracts.length === 0) {
+    return { ok: true, invoices: [] };
+  }
+
   const allLocationIds = [
     ...new Set([...serviceLocationIds, ...activeFixedLocationIds, ...monthlyContractLocationIds]),
   ];
-  const { data: locations } = await admin
+  const { data: locations, error: locErr } = await admin
     .from("locations")
     .select("id, name, client_id, hourly_rate, fixed_price, pricing_type")
     .in("id", allLocationIds);
+  if (locErr) return { ok: false, error: locErr.message };
 
   const locationMap = Object.fromEntries(
     (locations ?? []).map((l) => [l.id, l]),
   );
 
   const clientIds = [...new Set((locations ?? []).map((l) => l.client_id).filter(Boolean))];
-  const { data: clients } = await admin
+
+  const { data: clients, error: cliErr } = await admin
     .from("clients")
     .select("id, name, nif, email, vat_exempt")
     .in("id", clientIds);
+  if (cliErr) return { ok: false, error: cliErr.message };
 
   const clientMap = Object.fromEntries(
     (clients ?? []).map((c) => [c.id, c]),
@@ -183,12 +260,17 @@ export async function generateInvoices(
   }
 
   // Verificar faturas já existentes para este período (não duplicar)
-  const { data: existing } = await admin
+  //
+  // 🔴 Se esta falhar e o erro for ignorado, `existingClientIds` fica vazio e
+  //    a função gera **faturas duplicadas** para clientes que já as tinham.
+  const { data: existing, error: existingErr } = await admin
     .from("invoices")
     .select("id, client_id")
     .eq("company_id", companyId)
     .eq("period_start", start)
     .eq("period_end", end);
+
+  if (existingErr) return { ok: false, error: existingErr.message };
 
   const existingClientIds = new Set((existing ?? []).map((e) => e.client_id));
 
@@ -197,8 +279,14 @@ export async function generateInvoices(
   const monthlyLocationSet = new Set(monthlyContractLocationIds);
 
   // Agrupar serviços por cliente (excluindo locais com preço fixo — tratados à parte)
-  const byClient = new Map<string, typeof services>();
-  for (const s of services) {
+  //
+  // `services` pode agora ser vazio: desde que a guarda de saída antecipada
+  // passou a exigir também zero avenças, um mês só com avenças chega aqui sem
+  // nenhum serviço concluído. O `?? []` é explícito de propósito — não quero
+  // que isto dependa de estreitamento de tipos em código que gera faturas.
+  const servicosDoPeriodo = services ?? [];
+  const byClient = new Map<string, typeof servicosDoPeriodo>();
+  for (const s of servicosDoPeriodo) {
     const loc = locationMap[s.location_id];
     if (!loc?.client_id) continue;
     if (loc.pricing_type === "fixed") continue; // preço fixo: linha separada
@@ -255,8 +343,12 @@ export async function generateInvoices(
   const dueDate     = addDaysToDateString(invoiceDate, 30);
 
   for (const [clientId, svcs] of byClient) {
-    const invoiceNumber = await nextInvoiceNumber(companyId, prefix, year);
-
+    // 🔴 O número deixou de ser escolhido aqui.
+    //
+    // Era lido o máximo e somado um. Duas gerações simultâneas lêem o mesmo
+    // máximo e escolhem o mesmo número — nenhuma verificação em JavaScript
+    // ganha essa corrida. Passou para dentro da 072, sob lock consultivo por
+    // empresa e ano, com um índice único por baixo como rede.
     const clientData = clientMap[clientId];
     const isVatExempt = (clientData as { vat_exempt?: boolean })?.vat_exempt === true;
 
@@ -306,30 +398,34 @@ export async function generateInvoices(
     const vatAmount = Math.round(taxedBase * vatFactor * 100) / 100;
     const total     = Math.round((subtotal + vatAmount) * 100) / 100;
 
-    const { data: inv, error: invErr } = await admin
-      .from("invoices")
-      .insert({
-        company_id:     companyId,
-        client_id:      clientId,
-        invoice_number: invoiceNumber,
-        invoice_date:   invoiceDate,
-        due_date:       dueDate,
-        period_start:   start,
-        period_end:     end,
-        subtotal,
-        vat_rate:       vatAmount > 0 ? vatRate : 0,
-        vat_amount:     vatAmount,
-        total,
-        status:         "rascunho",
-      })
-      .select("id")
-      .single();
+    // ─────────────────────────────────────────────────────────────────────────
+    // Cabeçalho e linhas, numa só transacção (072)
+    //
+    // Antes eram dois pedidos com compensação: se as linhas falhassem, apagava-
+    // -se o cabeçalho. Funcionava enquanto a compensação corresse — e se o
+    // processo morresse entre os dois, ficava um documento sem linhas, com
+    // subtotal e total certos e o ar de uma fatura normal na lista.
+    //
+    // A transacção é da base. Ou entram os dois, ou não entra nada.
+    // ─────────────────────────────────────────────────────────────────────────
+    const criada = await criarFaturaComLinhas(admin, {
+      companyId, clientId, prefix, year,
+      invoiceDate, dueDate,
+      periodStart: start, periodEnd: end,
+      subtotal,
+      vatRate: vatAmount > 0 ? vatRate : 0,
+      vatAmount,
+      total,
+      items,
+    });
 
-    if (invErr || !inv) continue;
-
-    await admin
-      .from("invoice_items")
-      .insert(items.map((it) => ({ ...it, invoice_id: inv.id })));
+    // 🔴 Não se salta em silêncio. Estava aqui um `continue`: uma fatura que
+    //    falhasse desaparecia sem rasto e a função devolvia sucesso com menos
+    //    faturas do que devia, sem ninguém saber quais faltavam.
+    if (!criada.ok) {
+      const nome = clientMap[clientId]?.name ?? "cliente";
+      return { ok: false, error: `${nome}: ${criada.error}` };
+    }
   }
 
   revalidatePath("/dashboard/cobrancas");
@@ -419,12 +515,22 @@ export async function updateInvoiceStatus(
 
   const { data: inv } = await admin
     .from("invoices")
-    .select("company_id, total, invoice_number, client_id, status, paid_at")
+    .select("company_id, total, invoice_number, client_id, status, paid_at, invoice_date")
     .eq("id", id)
     .eq("company_id", profile.company_id)
     .single();
 
   if (!inv) return { ok: false, error: "Fatura nao encontrada." };
+
+  // 🔴 A data autoritativa é `invoice_date` — a data de emissão do documento,
+  //    que é o que o determina o mês a que a fatura pertence. Não `period_start`
+  //    (o período de serviço facturado pode atravessar meses) e não hoje.
+  const periodo = await assertFinancialPeriodOpen({
+    cliente: admin as unknown as ClientePeriodo,
+    companyId: profile.company_id,
+    data: String(inv.invoice_date),
+  });
+  if (!periodo.ok) return { ok: false, error: periodo.error };
 
   const update: { status: string; paid_at?: string | null; payment_method?: string | null } = { status };
   if (status === "pago") {
@@ -502,6 +608,26 @@ export async function deleteInvoice(
   if (!profile || !["admin", "gestor"].includes(profile.role)) {
     return { ok: false, error: "Sem permissão." };
   }
+
+  // Apagar um rascunho altera o que o mês tem por facturar.
+  const { data: inv, error: erroInv } = await admin
+    .from("invoices")
+    .select("invoice_date")
+    .eq("id", id)
+    .eq("company_id", profile.company_id)
+    .maybeSingle();
+
+  if (erroInv) {
+    return { ok: false, error: "Não foi possível confirmar o período da fatura. Nada foi apagado." };
+  }
+  if (!inv) return { ok: true }; // já não existe
+
+  const periodo = await assertFinancialPeriodOpen({
+    cliente: admin as unknown as ClientePeriodo,
+    companyId: profile.company_id,
+    data: String(inv.invoice_date),
+  });
+  if (!periodo.ok) return { ok: false, error: periodo.error };
 
   const { error } = await admin
     .from("invoices")

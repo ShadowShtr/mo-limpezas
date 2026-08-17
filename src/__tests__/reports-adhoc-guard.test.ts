@@ -115,7 +115,14 @@ const IGNORED_ERROR_CEILING: Record<string, number> = {
   "src/app/actions/cash-flow.ts": 3,
   "src/app/actions/daily-billing.ts": 8,
   "src/app/actions/financial-dashboard.ts": 2,
-  "src/app/actions/invoices.ts": 13,
+  // 13 → 6. Sete erros de consulta deixaram de ser ignorados em
+  // `generateInvoices`: avenças, contratos ativos, locais de preço fixo,
+  // locais, clientes, faturas existentes e as definições de IVA.
+  //
+  // O que estava em jogo não era um número errado: se a consulta das avenças
+  // falhasse, a função devolvia **sucesso com zero faturas** e ninguém era
+  // faturado nesse mês, com o ecrã a dizer que correu bem.
+  "src/app/actions/invoices.ts": 6,
   "src/app/actions/payroll.ts": 9,
   "src/app/actions/reports.ts": 10,
 };

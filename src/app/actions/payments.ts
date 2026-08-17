@@ -5,6 +5,16 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { revalidatePath } from "next/cache";
 import { todayInLisbon } from "@/lib/lisbon-time";
 import {
+  assertFinancialPeriodOpen,
+  lerEstadoPeriodo,
+  type ClientePeriodo,
+} from "@/lib/finance-period-guard";
+import { mensagemPeriodoFechado } from "@/domain/finance-v2/financial-period";
+import {
+  desmarcarPagamentoPago,
+  marcarPagamentoPago,
+} from "@/lib/finance-rpc/payment-cashflow";
+import {
   PAYMENT_ATTACHMENTS_BUCKET,
   MAX_PAYMENT_ATTACHMENT_BYTES,
   buildPaymentAttachmentPath,
@@ -178,6 +188,19 @@ function revalidate() {
   revalidatePath("/dashboard");
 }
 
+/**
+ * Marcar um pagamento como pago mexe em duas tabelas — e em quatro ecrãs.
+ *
+ * Sem as Contas e o Fluxo de Caixa aqui, a saída de caixa nova só apareceria
+ * ao fim de uma navegação completa, e quem acabou de marcar o pagamento
+ * concluiria que não tinha funcionado.
+ */
+function revalidateCaixa() {
+  revalidate();
+  revalidatePath("/dashboard/financeiro/contas");
+  revalidatePath("/dashboard/financeiro/fluxo-caixa");
+}
+
 export interface PaymentInput {
   kind: PaymentKind;
   description: string;
@@ -247,13 +270,129 @@ export async function updatePayment(
   return { ok: true };
 }
 
+// ============================================================================
+// Marcar como pago — e o dinheiro sair do caixa, na mesma transacção
+// ============================================================================
+//
+// 🔴 O que estava errado, e esteve errado durante todo o tempo em que este
+//    sistema esteve em uso real:
+//
+//    Isto alterava `fixed_variable_payments` e **mais nada**. O dinheiro saía
+//    da conta da empresa e o Fluxo de Caixa não sabia — os Custos do mês
+//    ficavam por baixo do real e a Margem por cima. E é a Margem que se usa
+//    para decidir.
+//
+// A escrita passou para a base (`mark_payment_paid`, migration 073): ou entram
+// o estado do pagamento e o movimento de caixa, ou não entra nada. Fazê-lo em
+// dois pedidos daqui resolveria metade — o primeiro passa, o segundo falha, e
+// fica um pagamento pago sem movimento nenhum, que é exactamente a divergência
+// que se queria evitar.
+//
+// Nada nesta função escreve em `cash_flow_entries`. Se a RPC não existir, isto
+// falha fechado a dizer que falta a migration, em vez de seguir pelo caminho
+// antigo — um fallback silencioso faria a aplicação parecer actualizada e
+// continuar a produzir o mesmo erro, sem ninguém notar.
+// ============================================================================
+
+/**
+ * Período de um pagamento, a partir do próprio registo.
+ *
+ * Um pagamento não tem data civil única — tem `period_year`/`period_month`, que
+ * é o mês a que pertence. É esse que decide, e não o mês que está no ecrã.
+ *
+ * Devolve `null` quando pode prosseguir. Falha fechada.
+ */
+async function bloquearSePagamentoEmPeriodoFechado(
+  admin: AdminClient,
+  companyId: string,
+  paymentId: string,
+): Promise<{ ok: false; error: string } | null> {
+  const { data, error } = await admin
+    .from("fixed_variable_payments")
+    .select("period_year, period_month")
+    .eq("id", paymentId)
+    .eq("company_id", companyId)
+    .maybeSingle();
+
+  if (error) {
+    return { ok: false, error: "Não foi possível confirmar o período do pagamento. Nada foi alterado." };
+  }
+  if (!data) return { ok: false, error: "Pagamento não encontrado." };
+
+  const periodo = { year: Number(data.period_year), month: Number(data.period_month) };
+  const estado = await lerEstadoPeriodo(admin as unknown as ClientePeriodo, companyId, periodo);
+  if (!estado.ok) {
+    return {
+      ok: false,
+      error: "Não foi possível confirmar se o período financeiro está aberto. Nada foi alterado.",
+    };
+  }
+  if (estado.estado.status === "closed") {
+    return { ok: false, error: mensagemPeriodoFechado(periodo) };
+  }
+  return null;
+}
+
 export async function setPaymentStatus(id: string, status: PaymentStatus): Promise<{ ok: boolean; error?: string }> {
   const guard = await requireProfile({ roles: ["admin", "gestor"] });
   if (!guard.ok) return { ok: false, error: guard.error };
   const { admin, profile } = guard;
+
+  // ─── Guarda de período ──────────────────────────────────────────────────────
+  //
+  // A 073 já recusa um mês fechado do lado da base (levanta
+  // `FINANCIAL_PERIOD_CLOSED`, e `interpretarErro` traduz isso). Esta guarda
+  // corre **antes** para dar a mensagem com o nome do mês em vez de a deduzir
+  // de um erro de plpgsql — a garantia continua a ser da base, e nada aqui
+  // substitui a RPC.
+  //
+  // 🔴 A data autoritativa difere entre marcar e desmarcar:
+  //
+  //    · marcar como pago → a data do movimento que vai nascer, `todayInLisbon()`;
+  //    · voltar a pendente → o período do pagamento em si (`period_year`/
+  //      `period_month`), porque o movimento a remover é o que lá está, não um
+  //      que se crie hoje. Usar hoje aqui deixava reverter um pagamento de
+  //      Julho fechado só porque Agosto está aberto.
+  if (status === "pago") {
+    const hoje = todayInLisbon();
+    const p = await assertFinancialPeriodOpen({
+      cliente: admin as unknown as ClientePeriodo,
+      companyId: profile.company_id,
+      data: hoje,
+    });
+    if (!p.ok) return { ok: false, error: p.error };
+
+    const r = await marcarPagamentoPago(admin, {
+      companyId: profile.company_id,
+      paymentId: id,
+      // A data do movimento é hoje **em Lisboa**. O processo corre em UTC na
+      // Vercel, e `new Date()` na primeira hora do dia dava o dia anterior.
+      paidOn: hoje,
+    });
+    if (!r.ok) return { ok: false, error: r.error };
+    revalidateCaixa();
+    return { ok: true };
+  }
+
+  if (status === "pendente") {
+    const bloqueio = await bloquearSePagamentoEmPeriodoFechado(admin, profile.company_id, id);
+    if (bloqueio) return bloqueio;
+
+    const r = await desmarcarPagamentoPago(admin, {
+      companyId: profile.company_id,
+      paymentId: id,
+    });
+    if (!r.ok) return { ok: false, error: r.error };
+    revalidateCaixa();
+    return { ok: true };
+  }
+
+  // Outros estados (`cancelado`, …) não geram nem removem caixa: mudam só o
+  // estado do pagamento. Um cancelamento depois de pago teria de decidir o que
+  // fazer ao movimento, e essa decisão não se toma por omissão.
   const { error } = await admin
     .from("fixed_variable_payments")
-    .update({ status, paid_at: status === "pago" ? new Date().toISOString() : null, updated_at: new Date().toISOString() })
+    .update({ status, updated_at: new Date().toISOString() })
     .eq("id", id)
     .eq("company_id", profile.company_id);
   if (error) return { ok: false, error: error.message };

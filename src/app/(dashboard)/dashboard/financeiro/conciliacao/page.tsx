@@ -30,7 +30,9 @@ export default async function ConciliacaoPage({
   const params = await searchParams;
   const period = parseFinancePeriod(params.mes);
 
-  const res = await getBankReconciliationData();
+  // O mês do módulo governa também esta vista — antes mostrava os últimos
+  // 500 movimentos de sempre, com o cabeçalho a dizer outro mês.
+  const res = await getBankReconciliationData({ period: { year: period.year, month: period.month } });
 
   return (
     <FinanceShell

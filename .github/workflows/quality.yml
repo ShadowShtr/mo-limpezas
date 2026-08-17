@@ -8,8 +8,10 @@
 # O que este workflow NÃO faz, deliberadamente:
 #   - não usa segredos;
 #   - não liga ao Supabase, à Vercel ou a qualquer serviço externo;
-#   - não corre `npm run build` (o `prebuild` valida variáveis de ambiente
-#     reais, que este workflow não tem e não deve ter);
+#   - não usa variáveis de ambiente reais. O `npm run build` **passou a
+#     correr**, com placeholders óbvios: o `prebuild` só verifica que as
+#     variáveis existem, não que são válidas, e a compilação não liga a
+#     serviço nenhum;
 #   - não corre `npm run audit:code:json` — o relatório versionado é escrito
 #     pelo autor da alteração, com `git add` antes, e nunca regenerado
 #     automaticamente aqui;
@@ -37,7 +39,7 @@ concurrency:
 
 jobs:
   qualidade:
-    name: typecheck · lint · testes · auditoria
+    name: typecheck · lint · testes · auditoria · migração · build
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
@@ -94,3 +96,84 @@ jobs:
         # destruir ou popular uma base real, `createAdminClient` num client
         # component, ou `auth.signUp` em código de produção.
         run: npm run audit:code:strict
+
+      - name: Ensaio da migration 071
+        # ─────────────────────────────────────────────────────────────────────
+        # A migration ainda não está aplicada em lado nenhum, e é isso que
+        # torna este passo útil: prova, a cada alteração, que **continua** a
+        # aplicar limpa, que não semeia nada, que as políticas RLS dizem o que
+        # devem dizer, e que o rollback devolve o esquema ao estado anterior.
+        #
+        # Sem isto, o ensaio era uma corrida manual num relatório, e "CI verde"
+        # não provava nenhuma das 51 verificações.
+        #
+        # Não precisa de segredos nem de Docker: PGlite é Postgres compilado
+        # para WASM e corre dentro do Node. A base nasce vazia e morre no fim.
+        # ─────────────────────────────────────────────────────────────────────
+        run: npm run rehearse:071
+
+      - name: Build
+        # ─────────────────────────────────────────────────────────────────────
+        # 🔴 Porque é que isto passou a ser obrigatório
+        #
+        # Há erros que só a compilação apanha. O mais recente:
+        #
+        #     Server Actions must be async functions.
+        #       src/app/actions/finance-dashboard-v2.ts
+        #       export function construirContexto(...)
+        #
+        # Num ficheiro `"use server"` cada export torna-se um endpoint RPC, e o
+        # Next recusa exportar uma função síncrona. Nem o `tsc` nem o ESLint
+        # vêem isto — e o CI ficou verde num commit que não compilava.
+        #
+        # É a segunda vez que a mesma regra morde o projecto. A primeira foi
+        # `CANCEL_TYPE_LABELS`, em 2026-06-08: um objecto exportado de um
+        # ficheiro `"use server"` bloqueou todas as notificações do calendário,
+        # e só se descobriu em runtime.
+        #
+        # ─────────────────────────────────────────────────────────────────────
+        # Porque é que os valores abaixo são falsos, e têm de ser
+        #
+        # O `prebuild` (`scripts/check-env.ts`) verifica que as variáveis
+        # **existem**, não que são válidas. A compilação não liga ao Supabase,
+        # à Vercel nem a nada.
+        #
+        # Estes placeholders são deliberadamente reconhecíveis como falsos, e o
+        # workflow continua sem segredos — que é uma propriedade a manter, não
+        # uma limitação a contornar. Pôr aqui as chaves reais daria a este
+        # workflow acesso à base de produção para ganhar exactamente nada.
+        #
+        # Consequência aceite: o artefacto que sai daqui **não é implantável**.
+        # As `NEXT_PUBLIC_*` ficam inlined com os valores falsos. Não faz mal —
+        # este passo prova que o código compila, e quem implanta é a Vercel,
+        # que constrói à parte com as variáveis verdadeiras.
+        #
+        # ─────────────────────────────────────────────────────────────────────
+        # Porque é que os segredos são literalmente a palavra «placeholder»
+        #
+        # O `scan-secrets` recusou a primeira versão disto:
+        #
+        #     [critico] quality.yml:138 — SUPABASE_SERVICE_ROLE_KEY
+        #               atribuída a um literal
+        #
+        # E fez bem. Num ficheiro versionado, essa forma é exactamente a que
+        # um dia recebe a chave verdadeira, colada por quem tinha pressa. O
+        # scanner não tem — nem deve ter — maneira de distinguir um valor falso
+        # descritivo de um real.
+        #
+        # A saída não é enfraquecer o scanner nem disfarçar o valor: é usar o
+        # mecanismo que ele já prevê. `VALOR_SINTETICO` aceita exactamente a
+        # palavra «placeholder», e é isso que está aqui. O `check-env` só
+        # verifica presença, por isso serve na mesma.
+        # ─────────────────────────────────────────────────────────────────────
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: https://placeholder.supabase.co
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: placeholder
+          SUPABASE_SERVICE_ROLE_KEY: placeholder
+          NEXT_PUBLIC_MAPBOX_TOKEN: placeholder
+          RESEND_API_KEY: placeholder
+          RESEND_FROM_EMAIL: CI <ci@example.invalid>
+          NEXT_PUBLIC_VAPID_PUBLIC_KEY: placeholder
+          VAPID_PRIVATE_KEY: placeholder
+          CRON_SECRET: placeholder
+        run: npm run build

@@ -20,6 +20,7 @@ import type { FinancePeriod } from "@/lib/finance-period";
 
 import { FinanceNav } from "./finance-nav";
 import { FinancePeriodPicker } from "./finance-period-picker";
+import { PeriodCloseControls } from "./period-close-controls";
 
 export function FinanceShell({
   period,
@@ -27,6 +28,7 @@ export function FinanceShell({
   subtitle,
   actions,
   periodIsolated = false,
+  periodStatus,
   children,
 }: {
   period: FinancePeriod;
@@ -43,6 +45,22 @@ export function FinanceShell({
    * período tornaria isso um clique. Ver `PERIOD_ISOLATED_VIEWS`.
    */
   periodIsolated?: boolean;
+  /**
+   * Estado do fechamento mensal, já lido por quem chama.
+   *
+   * 🔴 A casca **não** o vai buscar. Continua a ser um componente de servidor
+   *    sem efeitos: renderizá-la não lê nem escreve nada. Quem passa isto é a
+   *    página, que já faz as suas leituras.
+   *
+   * `undefined` desenha a casca como antes — nenhuma pastilha, nenhum botão.
+   */
+  periodStatus?: {
+    status: "open" | "closed";
+    podeGerir: boolean;
+    closedByName: string | null;
+    reopenReason: string | null;
+    nomePeriodo: string;
+  };
   children: ReactNode;
 }) {
   return (
@@ -103,6 +121,17 @@ export function FinanceShell({
           <FinanceNav period={period} />
           <div className="flex items-center gap-2 shrink-0">
             {actions}
+            {periodStatus && (
+              <PeriodCloseControls
+                year={period.year}
+                month={period.month}
+                nomePeriodo={periodStatus.nomePeriodo}
+                status={periodStatus.status}
+                podeGerir={periodStatus.podeGerir}
+                closedByName={periodStatus.closedByName}
+                reopenReason={periodStatus.reopenReason}
+              />
+            )}
             {periodIsolated ? (
               <p className="text-[12px] text-[var(--finance-text-secondary)] px-3 py-2 rounded-[10px] bg-[var(--finance-surface-soft)] border border-[var(--finance-border)]">
                 Período gerido pela própria vista

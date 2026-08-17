@@ -58,8 +58,22 @@ export function countDirectDbMutations(src: string): number {
   for (const statement of code.split(";")) {
     const mutations = statement.match(/\.(insert|update|upsert|delete|rpc)\s*\(/g) ?? [];
     if (mutations.length === 0) continue;
+    // 🔴 Um `.rpc(` conta sempre, seja qual for o nome do receptor.
+    //
+    //    A regra abaixo exige `.from("tabela")` ou um receptor chamado
+    //    `admin`/`supabase`/`sb`. Isso deixava de fora as escritas por RPC
+    //    feitas a partir de um cliente com outro nome — `cliente.rpc(...)`,
+    //    nos módulos de `finance-rpc/` — e foi assim que `generateInvoices`
+    //    desapareceu do inventário no dia em que passou a criar faturas pela
+    //    072.
+    //
+    //    O problema ia piorar, não melhorar: mover escritas para dentro da
+    //    base é a direcção deste trabalho, e um detector cego precisamente aí
+    //    não protege nada. `.rpc(` não tem outro significado plausível neste
+    //    código — todas as ocorrências são chamadas ao Postgres.
+    const ehRpc = /\.rpc\s*\(/.test(statement);
     // A cadeia tem de ser reconhecidamente da base.
-    if (!/\.from\s*\(\s*["'`][\w.]+["'`]\s*\)|\b(?:admin|supabase|sb)\s*\./.test(statement)) continue;
+    if (!ehRpc && !/\.from\s*\(\s*["'`][\w.]+["'`]\s*\)|\b(?:admin|supabase|sb)\s*\./.test(statement)) continue;
     total += mutations.length;
   }
   return total;

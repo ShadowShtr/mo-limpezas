@@ -16,7 +16,8 @@
     "audit:code": "node scripts/audit-codebase.mjs",
     "audit:code:json": "node scripts/audit-codebase.mjs --output reports/code-audit.json",
     "audit:code:strict": "node scripts/audit-codebase.mjs --fail-on-high-confidence",
-    "quality": "npm run typecheck && npm run lint:strict && npm test && npm run build"
+    "quality": "npm run typecheck && npm run lint:strict && npm test && npm run rehearse:071 && npm run build",
+    "rehearse:071": "node scripts/rehearse-071.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.5.0",
@@ -48,6 +49,7 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "^0.5.4",
     "@tailwindcss/postcss": "^4",
     "@types/jsdom": "^28.0.3",
     "@types/jszip": "^3.4.0",

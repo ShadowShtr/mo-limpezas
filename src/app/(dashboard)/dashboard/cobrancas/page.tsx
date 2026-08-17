@@ -9,7 +9,7 @@ import { CobrancasTabs } from "./_components/cobrancas-tabs";
 
 export const metadata = { title: "Cobranças — Escala" };
 
-interface SearchParams { mes?: string }
+interface SearchParams { mes?: string; cliente?: string }
 
 export default async function CobrancastPage({
   searchParams,
@@ -53,6 +53,7 @@ export default async function CobrancastPage({
         initialInvoices={invoices}
         unbilledServices={unbilledServices}
         companyId={companyId}
+        clienteInicial={params.cliente}
         mesParam={period.key}
         year={period.year}
         month={period.month}

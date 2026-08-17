@@ -1,20 +1,20 @@
 {
   "generatedBy": "scripts/audit-file-inventory.mjs",
-  "totalFiles": 593,
+  "totalFiles": 631,
   "byStatus": {
-    "MANTER": 576,
+    "MANTER": 614,
     "STANDBY": 17
   },
   "byCategory": {
-    "route-ui": 132,
-    "test": 86,
-    "migration": 72,
-    "lib": 61,
-    "script": 42,
-    "doc": 36,
-    "server-action": 35,
-    "domain": 34,
-    "component": 25,
+    "route-ui": 133,
+    "test": 99,
+    "migration": 75,
+    "lib": 64,
+    "script": 44,
+    "doc": 40,
+    "domain": 40,
+    "server-action": 39,
+    "component": 27,
     "doc-historico": 16,
     "api-route": 16,
     "config": 12,
@@ -29,12 +29,12 @@
     "src-other": 1
   },
   "byConfidence": {
-    "alta": 578,
+    "alta": 616,
     "média": 9,
     "baixa": 6
   },
   "scriptRisk": {
-    "SAFE_OFFLINE": 22,
+    "SAFE_OFFLINE": 24,
     "ADMIN_GUARDED_WRITE": 11,
     "ADMIN_READ": 6,
     "WRITE_CAPABLE": 3
@@ -92,14 +92,18 @@
       "consumerSample": [],
       "autoLoaded": false,
       "referencedBy": [
+        "ci",
         "docs"
       ],
       "sideEffects": [
         "supabase"
       ],
-      "risks": [],
+      "risks": [
+        "service-role"
+      ],
       "signals": {
-        "supabase": 1
+        "supabase": 2,
+        "serviceRole": 2
       },
       "action": "nenhuma",
       "reason": "configuração/infra",
@@ -259,7 +263,7 @@
       ],
       "signals": {
         "supabase": 2,
-        "serviceRole": 1,
+        "serviceRole": 2,
         "sqlWrite": 10,
         "todo": 1,
         "anyType": 1
@@ -285,6 +289,26 @@
       "signals": {},
       "action": "nenhuma",
       "reason": "configuração/infra",
+      "manualDecision": false
+    },
+    {
+      "path": "docs/APLICAR-071-072-073.md",
+      "category": "doc",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [
+        "docs"
+      ],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "sqlWrite": 12
+      },
+      "action": "nenhuma",
+      "reason": "documentação",
       "manualDecision": false
     },
     {
@@ -486,6 +510,43 @@
       "signals": {
         "write": 2,
         "sqlWrite": 2
+      },
+      "action": "nenhuma",
+      "reason": "documentação",
+      "manualDecision": false
+    },
+    {
+      "path": "docs/FINANCIAL-PERIOD-CLOSE-RUNTIME.md",
+      "category": "doc",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {},
+      "action": "nenhuma",
+      "reason": "documentação",
+      "manualDecision": false
+    },
+    {
+      "path": "docs/GATE-M0-HISTORICO-MIGRATIONS.md",
+      "category": "doc",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [
+        "service-role"
+      ],
+      "signals": {
+        "serviceRole": 1,
+        "sqlWrite": 1
       },
       "action": "nenhuma",
       "reason": "documentação",
@@ -889,6 +950,29 @@
       "risks": [],
       "signals": {
         "sqlWrite": 8
+      },
+      "action": "nenhuma",
+      "reason": "documentação",
+      "manualDecision": false
+    },
+    {
+      "path": "docs/LEDGER-RECONCILIATION-PENDING.md",
+      "category": "doc",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [
+        "docs"
+      ],
+      "sideEffects": [],
+      "risks": [
+        "service-role"
+      ],
+      "signals": {
+        "serviceRole": 2,
+        "sqlWrite": 1
       },
       "action": "nenhuma",
       "reason": "documentação",
@@ -1679,7 +1763,7 @@
       ],
       "sideEffects": [
         "supabase",
-        "revalidatePath(28)"
+        "revalidatePath(35)"
       ],
       "risks": [
         "debugger"
@@ -1688,7 +1772,7 @@
         "supabase": 1,
         "sqlWrite": 7,
         "debugger": 6,
-        "revalidatePath": 28
+        "revalidatePath": 35
       },
       "action": "nenhuma",
       "reason": "configuração/infra",
@@ -2034,6 +2118,7 @@
       "autoLoaded": false,
       "referencedBy": [
         "npm",
+        "ci",
         "docs"
       ],
       "sideEffects": [
@@ -2806,12 +2891,47 @@
       "scriptRisk": "SAFE_OFFLINE"
     },
     {
+      "path": "scripts/lib/migration-drift-guard.mjs",
+      "category": "script",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 3,
+      "consumerSample": [
+        "scripts/lib/migration-runner-core.mjs",
+        "src/__tests__/migration-drift-guard.test.ts",
+        "src/__tests__/migration-runner-drift-abort.test.ts"
+      ],
+      "autoLoaded": false,
+      "referencedBy": [
+        "docs"
+      ],
+      "sideEffects": [],
+      "risks": [
+        "service-role"
+      ],
+      "signals": {
+        "serviceRole": 2,
+        "sqlWrite": 6
+      },
+      "action": "nenhuma",
+      "reason": "ferramenta offline, sem acesso à base",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": true,
+        "dynamicImport": true,
+        "allClosed": false
+      },
+      "scriptRisk": "SAFE_OFFLINE"
+    },
+    {
       "path": "scripts/lib/migration-runner-core.mjs",
       "category": "script",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 2,
+      "consumers": 4,
       "consumerSample": [
+        "scripts/lib/migration-drift-guard.mjs",
         "scripts/run-migrations.mjs",
         "src/__tests__/migration-runner-core.test.ts"
       ],
@@ -2914,6 +3034,38 @@
       "signals": {
         "sqlWrite": 2,
         "consoleErr": 15
+      },
+      "action": "nenhuma",
+      "reason": "ferramenta offline, sem acesso à base",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": true,
+        "dynamicImport": true,
+        "allClosed": false
+      },
+      "scriptRisk": "SAFE_OFFLINE"
+    },
+    {
+      "path": "scripts/rehearse-071.mjs",
+      "category": "script",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [
+        "npm"
+      ],
+      "sideEffects": [],
+      "risks": [
+        "service-role"
+      ],
+      "signals": {
+        "serviceRole": 1,
+        "sqlWrite": 46,
+        "consoleLog": 18,
+        "consoleErr": 1
       },
       "action": "nenhuma",
       "reason": "ferramenta offline, sem acesso à base",
@@ -3096,6 +3248,7 @@
       "autoLoaded": false,
       "referencedBy": [
         "npm",
+        "ci",
         "docs"
       ],
       "sideEffects": [],
@@ -4015,6 +4168,196 @@
       }
     },
     {
+      "path": "src/__tests__/expense-categories-runtime.test.ts",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [
+        "supabase",
+        "write",
+        "revalidatePath(1)"
+      ],
+      "risks": [],
+      "signals": {
+        "supabase": 2,
+        "write": 1,
+        "sqlWrite": 12,
+        "revalidatePath": 1
+      },
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/__tests__/finance-v2-client-history.test.ts",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [
+        "supabase"
+      ],
+      "risks": [],
+      "signals": {
+        "supabase": 1,
+        "sqlWrite": 3
+      },
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/__tests__/finance-v2-contract-chain.test.ts",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [
+        "docs"
+      ],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {},
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/__tests__/finance-v2-mirror.test.ts",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "fallbackZero": 1
+      },
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/__tests__/finance-v2-money.test.ts",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [
+        "revalidatePath(1)"
+      ],
+      "risks": [],
+      "signals": {
+        "sqlWrite": 1,
+        "unknownCast": 3,
+        "revalidatePath": 1
+      },
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/__tests__/finance-v2-period-scope.test.ts",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [
+        "revalidatePath(2)"
+      ],
+      "risks": [],
+      "signals": {
+        "sqlWrite": 3,
+        "fallbackArray": 2,
+        "revalidatePath": 2
+      },
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/__tests__/finance-v2-read-model.test.ts",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [
+        "supabase"
+      ],
+      "risks": [],
+      "signals": {
+        "supabase": 2,
+        "sqlWrite": 3,
+        "fallbackArray": 1
+      },
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
       "path": "src/__tests__/financeiro-pipeline.test.ts",
       "category": "test",
       "status": "MANTER",
@@ -4109,7 +4452,7 @@
       "signals": {
         "supabase": 2,
         "fallbackZero": 1,
-        "fallbackArray": 1
+        "fallbackArray": 2
       },
       "action": "nenhuma",
       "reason": "suite de testes — corre por convenção do vitest",
@@ -4163,6 +4506,33 @@
       "sideEffects": [],
       "risks": [],
       "signals": {},
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/__tests__/financial-period.test.ts",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [
+        "docs"
+      ],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "sqlWrite": 6,
+        "dynamicImport": 2
+      },
       "action": "nenhuma",
       "reason": "suite de testes — corre por convenção do vitest",
       "manualDecision": false,
@@ -4251,12 +4621,44 @@
       "consumers": 0,
       "consumerSample": [],
       "autoLoaded": false,
-      "referencedBy": [],
+      "referencedBy": [
+        "docs"
+      ],
       "sideEffects": [],
       "risks": [],
       "signals": {
         "unknownCast": 2,
         "fallbackArray": 1,
+        "dynamicImport": 2
+      },
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/__tests__/migration-drift-guard.test.ts",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [
+        "docs"
+      ],
+      "sideEffects": [],
+      "risks": [
+        "service-role"
+      ],
+      "signals": {
+        "serviceRole": 2,
+        "sqlWrite": 9,
         "dynamicImport": 2
       },
       "action": "nenhuma",
@@ -4294,6 +4696,35 @@
       }
     },
     {
+      "path": "src/__tests__/migration-runner-drift-abort.test.ts",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [
+        "docs"
+      ],
+      "sideEffects": [],
+      "risks": [
+        "service-role"
+      ],
+      "signals": {
+        "serviceRole": 1,
+        "sqlWrite": 7
+      },
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
       "path": "src/__tests__/migration-runner-guards.test.ts",
       "category": "test",
       "status": "MANTER",
@@ -4308,6 +4739,31 @@
       "risks": [],
       "signals": {
         "supabase": 29
+      },
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/__tests__/migration-versions.test.ts",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "sqlWrite": 11,
+        "fallbackArray": 2
       },
       "action": "nenhuma",
       "reason": "suite de testes — corre por convenção do vitest",
@@ -4504,6 +4960,34 @@
       }
     },
     {
+      "path": "src/__tests__/payment-cashflow-rpc.test.ts",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [
+        "revalidatePath(1)"
+      ],
+      "risks": [],
+      "signals": {
+        "sqlWrite": 5,
+        "unknownCast": 1,
+        "revalidatePath": 1
+      },
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
       "path": "src/__tests__/payments-no-implicit-materialization.test.ts",
       "category": "test",
       "status": "MANTER",
@@ -4566,6 +5050,33 @@
       "sideEffects": [],
       "risks": [],
       "signals": {},
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/__tests__/predios-edicao-por-link.test.ts",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [
+        "revalidatePath(2)"
+      ],
+      "risks": [],
+      "signals": {
+        "fallbackArray": 1,
+        "revalidatePath": 2
+      },
       "action": "nenhuma",
       "reason": "suite de testes — corre por convenção do vitest",
       "manualDecision": false,
@@ -6959,7 +7470,7 @@
       "risks": [],
       "signals": {
         "clientComponent": 1,
-        "sqlWrite": 1
+        "sqlWrite": 2
       },
       "action": "nenhuma",
       "reason": "em uso: 1 consumidor(es)",
@@ -7180,6 +7691,33 @@
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": true,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/app/(dashboard)/dashboard/cobrancas/_components/client-history-client.tsx",
+      "category": "route-ui",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 1,
+      "consumerSample": [
+        "src/app/(dashboard)/dashboard/cobrancas/_components/cobrancas-tabs.tsx"
+      ],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "clientComponent": 1,
+        "eslintDisable": 1
+      },
+      "action": "nenhuma",
+      "reason": "em uso: 1 consumidor(es)",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
         "cliEntrypoint": false,
         "dynamicImport": true,
         "allClosed": false
@@ -8151,6 +8689,7 @@
         "supabase": 3,
         "clientComponent": 1,
         "sqlWrite": 4,
+        "fallbackArray": 1,
         "realtime": 2
       },
       "action": "nenhuma",
@@ -8304,7 +8843,7 @@
       "risks": [],
       "signals": {
         "clientComponent": 1,
-        "sqlWrite": 2,
+        "sqlWrite": 3,
         "fallbackArray": 1
       },
       "action": "nenhuma",
@@ -9265,7 +9804,7 @@
         "revalidatePath(9)"
       ],
       "risks": [
-        "erro-de-query-ignorado(7)",
+        "erro-de-query-ignorado(6)",
         "any(1)"
       ],
       "signals": {
@@ -9274,7 +9813,8 @@
         "sqlWrite": 14,
         "eslintDisable": 1,
         "anyType": 1,
-        "ignoredError": 7,
+        "unknownCast": 1,
+        "ignoredError": 6,
         "fallbackZero": 1,
         "fallbackArray": 8,
         "revalidatePath": 9
@@ -9307,7 +9847,7 @@
       "sideEffects": [
         "supabase",
         "write",
-        "revalidatePath(7)"
+        "revalidatePath(10)"
       ],
       "risks": [
         "erro-de-query-ignorado(2)"
@@ -9321,7 +9861,7 @@
         "ignoredError": 2,
         "fallbackZero": 1,
         "fallbackArray": 2,
-        "revalidatePath": 7
+        "revalidatePath": 10
       },
       "action": "auditar atomicidade (T12/T13)",
       "reason": "em uso: 6 consumidor(es)",
@@ -9400,23 +9940,53 @@
       ],
       "risks": [
         "erro-de-query-ignorado(3)",
-        "any(2)",
-        "select-*(1)"
+        "any(3)"
       ],
       "signals": {
         "supabase": 11,
         "serverAction": 1,
-        "write": 3,
-        "sqlWrite": 3,
-        "eslintDisable": 2,
-        "anyType": 2,
-        "selectStar": 1,
+        "write": 4,
+        "sqlWrite": 6,
+        "eslintDisable": 3,
+        "anyType": 3,
+        "unknownCast": 8,
+        "consoleErr": 2,
         "ignoredError": 3,
+        "fallbackZero": 3,
         "fallbackArray": 4,
         "revalidatePath": 6
       },
       "action": "auditar atomicidade (T12/T13)",
       "reason": "em uso: 4 consumidor(es)",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/app/actions/client-financial-history.ts",
+      "category": "server-action",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 1,
+      "consumerSample": [
+        "src/app/(dashboard)/dashboard/cobrancas/_components/client-history-client.tsx"
+      ],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "serverAction": 1,
+        "sqlWrite": 3,
+        "fallbackZero": 1,
+        "fallbackArray": 3
+      },
+      "action": "nenhuma",
+      "reason": "em uso: 1 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -9796,6 +10366,80 @@
       }
     },
     {
+      "path": "src/app/actions/expense-categories.ts",
+      "category": "server-action",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 4,
+      "consumerSample": [
+        "src/app/(dashboard)/dashboard/financeiro/contas/_components/contas-client.tsx",
+        "src/app/(dashboard)/dashboard/financeiro/contas/page.tsx",
+        "src/app/(dashboard)/dashboard/financeiro/fluxo-caixa/_components/cash-flow-client.tsx"
+      ],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [
+        "write",
+        "revalidatePath(3)"
+      ],
+      "risks": [],
+      "signals": {
+        "serverAction": 1,
+        "write": 1,
+        "sqlWrite": 2,
+        "unknownCast": 2,
+        "consoleErr": 1,
+        "fallbackZero": 1,
+        "fallbackArray": 2,
+        "revalidatePath": 3
+      },
+      "action": "auditar atomicidade (T12/T13)",
+      "reason": "em uso: 4 consumidor(es)",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/app/actions/finance-dashboard-v2.ts",
+      "category": "server-action",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 1,
+      "consumerSample": [
+        "src/app/(dashboard)/dashboard/financeiro/page.tsx"
+      ],
+      "autoLoaded": false,
+      "referencedBy": [
+        "ci"
+      ],
+      "sideEffects": [
+        "supabase"
+      ],
+      "risks": [],
+      "signals": {
+        "supabase": 2,
+        "serverAction": 1,
+        "sqlWrite": 3,
+        "unknownCast": 5,
+        "consoleErr": 1,
+        "fallbackZero": 9,
+        "fallbackArray": 6
+      },
+      "action": "nenhuma",
+      "reason": "em uso: 1 consumidor(es), CI",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": true,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
       "path": "src/app/actions/financial-dashboard.ts",
       "category": "server-action",
       "status": "MANTER",
@@ -9824,6 +10468,43 @@
         "fallbackArray": 10
       },
       "action": "nenhuma",
+      "reason": "em uso: 2 consumidor(es)",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/app/actions/financial-periods.ts",
+      "category": "server-action",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 2,
+      "consumerSample": [
+        "src/app/(dashboard)/dashboard/financeiro/page.tsx",
+        "src/components/financeiro/period-close-controls.tsx"
+      ],
+      "autoLoaded": false,
+      "referencedBy": [
+        "docs"
+      ],
+      "sideEffects": [
+        "write",
+        "revalidatePath(1)"
+      ],
+      "risks": [],
+      "signals": {
+        "serverAction": 1,
+        "write": 2,
+        "sqlWrite": 1,
+        "unknownCast": 3,
+        "fallbackZero": 1,
+        "revalidatePath": 1
+      },
+      "action": "auditar atomicidade (T12/T13)",
       "reason": "em uso: 2 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
@@ -9877,7 +10558,7 @@
       "category": "server-action",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 5,
+      "consumers": 6,
       "consumerSample": [
         "src/app/(dashboard)/dashboard/cobrancas/_components/cobrancas-tabs.tsx",
         "src/app/(dashboard)/dashboard/cobrancas/_components/invoice-detail-sheet.tsx",
@@ -9893,23 +10574,24 @@
         "revalidatePath(4)"
       ],
       "risks": [
-        "erro-de-query-ignorado(13)",
+        "erro-de-query-ignorado(6)",
         "any(3)"
       ],
       "signals": {
-        "supabase": 9,
+        "supabase": 8,
         "serverAction": 1,
-        "write": 6,
-        "sqlWrite": 12,
+        "write": 4,
+        "sqlWrite": 10,
         "eslintDisable": 3,
         "anyType": 3,
-        "ignoredError": 13,
-        "fallbackZero": 3,
-        "fallbackArray": 11,
+        "unknownCast": 3,
+        "ignoredError": 6,
+        "fallbackZero": 2,
+        "fallbackArray": 14,
         "revalidatePath": 4
       },
       "action": "auditar atomicidade (T12/T13)",
-      "reason": "em uso: 5 consumidor(es)",
+      "reason": "em uso: 6 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -10111,7 +10793,7 @@
       "sideEffects": [
         "supabase",
         "write",
-        "revalidatePath(3)"
+        "revalidatePath(5)"
       ],
       "risks": [
         "erro-de-query-ignorado(4)"
@@ -10121,10 +10803,11 @@
         "serverAction": 1,
         "write": 6,
         "sqlWrite": 6,
+        "unknownCast": 2,
         "ignoredError": 4,
         "fallbackZero": 4,
         "fallbackArray": 2,
-        "revalidatePath": 3
+        "revalidatePath": 5
       },
       "action": "auditar atomicidade (T12/T13)",
       "reason": "em uso: 4 consumidor(es)",
@@ -10164,10 +10847,10 @@
         "serverAction": 1,
         "write": 5,
         "sqlWrite": 4,
-        "unknownCast": 2,
+        "unknownCast": 5,
         "ignoredError": 9,
         "fallbackZero": 27,
-        "fallbackArray": 7,
+        "fallbackArray": 8,
         "revalidatePath": 5
       },
       "action": "auditar atomicidade (T12/T13)",
@@ -11299,6 +11982,34 @@
       }
     },
     {
+      "path": "src/components/financeiro/period-close-controls.tsx",
+      "category": "component",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 1,
+      "consumerSample": [
+        "src/components/financeiro/finance-shell.tsx"
+      ],
+      "autoLoaded": false,
+      "referencedBy": [
+        "docs"
+      ],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "clientComponent": 1
+      },
+      "action": "nenhuma",
+      "reason": "em uso: 1 consumidor(es)",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
       "path": "src/components/financeiro/v2/finance-alert-strip.tsx",
       "category": "component",
       "status": "MANTER",
@@ -11353,15 +12064,43 @@
       }
     },
     {
+      "path": "src/components/financeiro/v2/finance-buildings-card.tsx",
+      "category": "component",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 2,
+      "consumerSample": [
+        "src/__tests__/predios-edicao-por-link.test.ts",
+        "src/app/(dashboard)/dashboard/financeiro/_components/financial-dashboard-client.tsx"
+      ],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "clientComponent": 1,
+        "sqlWrite": 2
+      },
+      "action": "nenhuma",
+      "reason": "em uso: 2 consumidor(es)",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
       "path": "src/components/financeiro/v2/finance-card.tsx",
       "category": "component",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 6,
+      "consumers": 8,
       "consumerSample": [
+        "src/app/(dashboard)/dashboard/cobrancas/_components/client-history-client.tsx",
         "src/app/(dashboard)/dashboard/financeiro/_components/financial-dashboard-client.tsx",
-        "src/components/financeiro/v2/finance-alert-strip.tsx",
-        "src/components/financeiro/v2/finance-attention-panel.tsx"
+        "src/components/financeiro/v2/finance-alert-strip.tsx"
       ],
       "autoLoaded": false,
       "referencedBy": [],
@@ -11371,7 +12110,7 @@
         "sqlWrite": 1
       },
       "action": "nenhuma",
-      "reason": "em uso: 6 consumidor(es)",
+      "reason": "em uso: 8 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -11439,11 +12178,11 @@
       "category": "component",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 3,
+      "consumers": 4,
       "consumerSample": [
+        "src/app/(dashboard)/dashboard/cobrancas/_components/client-history-client.tsx",
         "src/app/(dashboard)/dashboard/financeiro/_components/financial-dashboard-client.tsx",
-        "src/components/financeiro/v2/finance-alert-strip.tsx",
-        "src/components/financeiro/v2/finance-attention-panel.tsx"
+        "src/components/financeiro/v2/finance-alert-strip.tsx"
       ],
       "autoLoaded": false,
       "referencedBy": [],
@@ -11454,7 +12193,7 @@
         "sqlWrite": 2
       },
       "action": "nenhuma",
-      "reason": "em uso: 3 consumidor(es)",
+      "reason": "em uso: 4 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -11497,11 +12236,11 @@
       "category": "component",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 5,
+      "consumers": 7,
       "consumerSample": [
+        "src/app/(dashboard)/dashboard/cobrancas/_components/client-history-client.tsx",
         "src/app/(dashboard)/dashboard/financeiro/_components/financial-dashboard-client.tsx",
-        "src/components/financeiro/v2/finance-attention-panel.tsx",
-        "src/components/financeiro/v2/finance-chart-card.tsx"
+        "src/components/financeiro/v2/finance-attention-panel.tsx"
       ],
       "autoLoaded": false,
       "referencedBy": [],
@@ -11511,7 +12250,7 @@
         "clientComponent": 1
       },
       "action": "nenhuma",
-      "reason": "em uso: 5 consumidor(es)",
+      "reason": "em uso: 7 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -12378,6 +13117,171 @@
       }
     },
     {
+      "path": "src/domain/finance-v2/aggregate.ts",
+      "category": "domain",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 10,
+      "consumerSample": [
+        "src/__tests__/expense-categories-runtime.test.ts",
+        "src/__tests__/finance-v2-client-history.test.ts",
+        "src/__tests__/finance-v2-contract-chain.test.ts"
+      ],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "fallbackZero": 5
+      },
+      "action": "nenhuma",
+      "reason": "em uso: 10 consumidor(es)",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/domain/finance-v2/client-history.ts",
+      "category": "domain",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 5,
+      "consumerSample": [
+        "src/__tests__/finance-v2-client-history.test.ts",
+        "src/__tests__/finance-v2-contract-chain.test.ts",
+        "src/__tests__/finance-v2-mirror.test.ts"
+      ],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {},
+      "action": "nenhuma",
+      "reason": "em uso: 5 consumidor(es)",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/domain/finance-v2/expense-categories.ts",
+      "category": "domain",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 5,
+      "consumerSample": [
+        "src/__tests__/expense-categories-runtime.test.ts",
+        "src/__tests__/finance-v2-client-history.test.ts",
+        "src/app/(dashboard)/dashboard/financeiro/contas/_components/contas-client.tsx"
+      ],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {},
+      "action": "nenhuma",
+      "reason": "em uso: 5 consumidor(es)",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/domain/finance-v2/financial-period.ts",
+      "category": "domain",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 8,
+      "consumerSample": [
+        "src/__tests__/financial-period.test.ts",
+        "src/app/(dashboard)/dashboard/financeiro/page.tsx",
+        "src/app/actions/financial-periods.ts"
+      ],
+      "autoLoaded": false,
+      "referencedBy": [
+        "docs"
+      ],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {},
+      "action": "nenhuma",
+      "reason": "em uso: 8 consumidor(es)",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/domain/finance-v2/money.ts",
+      "category": "domain",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 3,
+      "consumerSample": [
+        "src/__tests__/finance-v2-money.test.ts",
+        "src/app/actions/building-cards.ts",
+        "src/lib/finance-rpc/payment-cashflow.ts"
+      ],
+      "autoLoaded": false,
+      "referencedBy": [
+        "docs"
+      ],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {},
+      "action": "nenhuma",
+      "reason": "em uso: 3 consumidor(es)",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/domain/finance-v2/types.ts",
+      "category": "domain",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 8,
+      "consumerSample": [
+        "src/__tests__/expense-categories-runtime.test.ts",
+        "src/__tests__/finance-v2-contract-chain.test.ts",
+        "src/__tests__/finance-v2-mirror.test.ts"
+      ],
+      "autoLoaded": false,
+      "referencedBy": [
+        "config",
+        "docs"
+      ],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {},
+      "action": "nenhuma",
+      "reason": "em uso: 8 consumidor(es), configuração",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": true,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
       "path": "src/domain/realtime/event-reconciler.ts",
       "category": "domain",
       "status": "MANTER",
@@ -12974,7 +13878,7 @@
       "category": "lib",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 18,
+      "consumers": 19,
       "consumerSample": [
         "src/__tests__/audit.test.ts",
         "src/app/(dashboard)/dashboard/calendario/_actions/reschedule.ts",
@@ -13002,7 +13906,7 @@
         "consoleErr": 2
       },
       "action": "nenhuma",
-      "reason": "em uso: 18 consumidor(es), script npm, CI, configuração",
+      "reason": "em uso: 19 consumidor(es), script npm, CI, configuração",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -13016,7 +13920,7 @@
       "category": "lib",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 16,
+      "consumers": 20,
       "consumerSample": [
         "src/__tests__/auth-revalidation-central.test.ts",
         "src/app/actions/bank-reconciliation.ts",
@@ -13037,7 +13941,7 @@
         "ignoredError": 1
       },
       "action": "nenhuma",
-      "reason": "em uso: 16 consumidor(es)",
+      "reason": "em uso: 20 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -13798,11 +14702,11 @@
       "category": "lib",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 3,
+      "consumers": 5,
       "consumerSample": [
+        "src/app/(dashboard)/dashboard/cobrancas/_components/client-history-client.tsx",
         "src/app/(dashboard)/dashboard/financeiro/_components/financial-dashboard-client.tsx",
-        "src/components/financeiro/v2/finance-chart-card.tsx",
-        "src/components/financeiro/v2/finance-intelligence.tsx"
+        "src/components/financeiro/v2/finance-buildings-card.tsx"
       ],
       "autoLoaded": false,
       "referencedBy": [],
@@ -13810,7 +14714,35 @@
       "risks": [],
       "signals": {},
       "action": "nenhuma",
-      "reason": "em uso: 3 consumidor(es)",
+      "reason": "em uso: 5 consumidor(es)",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/lib/finance-period-guard.ts",
+      "category": "lib",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 7,
+      "consumerSample": [
+        "src/__tests__/financial-period.test.ts",
+        "src/app/actions/bank-reconciliation.ts",
+        "src/app/actions/cash-flow.ts"
+      ],
+      "autoLoaded": false,
+      "referencedBy": [
+        "docs"
+      ],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {},
+      "action": "nenhuma",
+      "reason": "em uso: 7 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -13848,15 +14780,67 @@
       }
     },
     {
+      "path": "src/lib/finance-rpc/invoice-creation.ts",
+      "category": "lib",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 1,
+      "consumerSample": [
+        "src/app/actions/invoices.ts"
+      ],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {},
+      "action": "nenhuma",
+      "reason": "em uso: 1 consumidor(es)",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/lib/finance-rpc/payment-cashflow.ts",
+      "category": "lib",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 3,
+      "consumerSample": [
+        "src/__tests__/payment-cashflow-rpc.test.ts",
+        "src/app/actions/payments.ts",
+        "src/lib/finance-rpc/invoice-creation.ts"
+      ],
+      "autoLoaded": false,
+      "referencedBy": [
+        "docs"
+      ],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {},
+      "action": "nenhuma",
+      "reason": "em uso: 3 consumidor(es)",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
       "path": "src/lib/finance-write-surface.ts",
       "category": "lib",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 4,
+      "consumers": 7,
       "consumerSample": [
-        "src/__tests__/financeiro-v2-presentation.test.ts",
-        "src/__tests__/financeiro-v2-ui-final.test.ts",
-        "src/__tests__/financeiro-v2-write-budget.test.ts"
+        "src/__tests__/finance-v2-client-history.test.ts",
+        "src/__tests__/finance-v2-period-scope.test.ts",
+        "src/__tests__/finance-v2-read-model.test.ts"
       ],
       "autoLoaded": false,
       "referencedBy": [],
@@ -13870,7 +14854,7 @@
         "fallbackArray": 1
       },
       "action": "nenhuma",
-      "reason": "em uso: 4 consumidor(es)",
+      "reason": "em uso: 7 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -13962,7 +14946,7 @@
       "category": "lib",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 30,
+      "consumers": 32,
       "consumerSample": [
         "src/__tests__/lisbon-time.test.ts",
         "src/app/(app)/app/ausencias/_components/ausencias-client.tsx",
@@ -13976,7 +14960,7 @@
       "risks": [],
       "signals": {},
       "action": "nenhuma",
-      "reason": "em uso: 30 consumidor(es)",
+      "reason": "em uso: 32 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -14519,7 +15503,7 @@
       "category": "lib",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 78,
+      "consumers": 79,
       "consumerSample": [
         "src/app/(app)/app/perfil/page.tsx",
         "src/app/(app)/app/servico/[id]/page.tsx",
@@ -14542,7 +15526,7 @@
         "serviceRole": 1
       },
       "action": "nenhuma",
-      "reason": "em uso: 78 consumidor(es)",
+      "reason": "em uso: 79 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -14635,6 +15619,7 @@
       ],
       "autoLoaded": false,
       "referencedBy": [
+        "ci",
         "config",
         "docs"
       ],
@@ -14648,7 +15633,7 @@
         "env": 2
       },
       "action": "nenhuma",
-      "reason": "em uso: 68 consumidor(es), configuração",
+      "reason": "em uso: 68 consumidor(es), CI, configuração",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -14712,7 +15697,7 @@
       "category": "lib",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 29,
+      "consumers": 32,
       "consumerSample": [
         "src/__tests__/utils.test.ts",
         "src/app/(app)/app/ausencias/_components/ausencias-client.tsx",
@@ -14727,7 +15712,7 @@
       "risks": [],
       "signals": {},
       "action": "nenhuma",
-      "reason": "em uso: 29 consumidor(es), configuração",
+      "reason": "em uso: 32 consumidor(es), configuração",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -14808,7 +15793,7 @@
       "risks": [],
       "signals": {
         "supabase": 1,
-        "sqlWrite": 74
+        "sqlWrite": 78
       },
       "action": "nenhuma",
       "reason": "em uso: 25 consumidor(es)",
@@ -14829,6 +15814,7 @@
       "consumerSample": [],
       "autoLoaded": false,
       "referencedBy": [
+        "ci",
         "config",
         "docs"
       ],
@@ -14841,7 +15827,7 @@
         "sqlWrite": 56
       },
       "action": "nenhuma",
-      "reason": "em uso: configuração",
+      "reason": "em uso: CI, configuração",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -16219,7 +17205,9 @@
       "consumers": 0,
       "consumerSample": [],
       "autoLoaded": false,
-      "referencedBy": [],
+      "referencedBy": [
+        "docs"
+      ],
       "sideEffects": [],
       "risks": [
         "service-role"
@@ -16240,7 +17228,9 @@
       "consumers": 0,
       "consumerSample": [],
       "autoLoaded": false,
-      "referencedBy": [],
+      "referencedBy": [
+        "docs"
+      ],
       "sideEffects": [],
       "risks": [
         "service-role"
@@ -16274,6 +17264,66 @@
         "supabase": 1,
         "serviceRole": 5,
         "sqlWrite": 15
+      },
+      "action": "nenhuma",
+      "reason": "migration versionada — histórico do schema, nunca se apaga",
+      "manualDecision": false
+    },
+    {
+      "path": "supabase/migrations/071_finance_periods_and_expense_categories.sql",
+      "category": "migration",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [
+        "docs"
+      ],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "sqlWrite": 8
+      },
+      "action": "nenhuma",
+      "reason": "migration versionada — histórico do schema, nunca se apaga",
+      "manualDecision": false
+    },
+    {
+      "path": "supabase/migrations/072_invoice_atomic_creation.sql",
+      "category": "migration",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [
+        "docs"
+      ],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "sqlWrite": 2
+      },
+      "action": "nenhuma",
+      "reason": "migration versionada — histórico do schema, nunca se apaga",
+      "manualDecision": false
+    },
+    {
+      "path": "supabase/migrations/073_payment_to_cashflow.sql",
+      "category": "migration",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [
+        "docs"
+      ],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "sqlWrite": 7
       },
       "action": "nenhuma",
       "reason": "migration versionada — histórico do schema, nunca se apaga",

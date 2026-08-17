@@ -103,7 +103,7 @@ describe("Financeiro V2 — a hierarquia aprovada está montada", () => {
     "FinanceKpiGrid",
     "FinanceMainChart",
     "FinanceAttentionPanel",
-    "FinanceCashForecast",
+    "FinanceBuildingsCard",
     "FinanceAging",
     "FinanceTopClients",
     "FinanceRevenueByService",
@@ -153,31 +153,90 @@ describe("Financeiro V2 — a hierarquia aprovada está montada", () => {
 describe("Financeiro V2 — os painéis sem fonte não inventam", () => {
   const src = codigo(RESUMO);
 
-  it("🔴 previsão, aging, receita por serviço e eficiência estão indisponíveis", () => {
-    // Estruturalmente prontos, sem números. Quando a PR B ligar a fonte,
-    // muda-se a fonte e não o desenho.
-    for (const bloco of ["FinanceCashForecast", "FinanceAging", "FinanceRevenueByService", "FinanceTeamEfficiency"]) {
+  it("🔴 só a eficiência continua indisponível", () => {
+    // A lista encolhe à medida que as fontes existem. Saíram, por esta ordem:
+    // `FinanceAging` quando o motor passou a repartir vencidos por idade; o
+    // donut quando trocou receita por serviço por despesas por categoria; e a
+    // Previsão de caixa quando deu o lugar aos Prédios.
+    const i = src.indexOf("<FinanceTeamEfficiency");
+    expect(src.slice(i, i + 300)).toMatch(/estado:\s*"indisponivel"/);
+  });
+
+  it("🔴 os Prédios ocuparam o lugar da Previsão de caixa", () => {
+    // A previsão continua bloqueada pelo incidente de periodicidade: projectar
+    // com `fixed_variable_payments` usaria as datas esmagadas de Agosto.
+    expect(src).toContain("<FinanceBuildingsCard");
+    expect(src, "a previsão saiu do Resumo").not.toContain("<FinanceCashForecast");
+    // Mas o componente não foi apagado — volta quando a periodicidade existir.
+    expect(ler(`${V2}/finance-intelligence.tsx`)).toContain("FinanceCashForecast");
+  });
+
+  it("🔴 nenhum valor de prédio entra nos KPIs financeiros", () => {
+    // Prédios são uma cadeia à parte: `building_cards.monthly_value`. Somá-los
+    // a Faturado ou a Recebido misturaria avença contratada com dinheiro real.
+    const grid = src.slice(src.indexOf("<FinanceKpiGrid"), src.indexOf("</FinanceKpiGrid>"));
+    expect(grid).not.toMatch(/buildings|predio|Predio/i);
+  });
+
+  it("🔴 o donut mostra despesas por categoria, não receita por serviço", () => {
+    // Classificar receita por serviço exigiria adivinhar pela descrição. A
+    // classificação de despesas existe desde sempre em `category`.
+    const i = src.indexOf("<FinanceRevenueByService");
+    const trecho = src.slice(i, i + 700);
+    expect(trecho).toMatch(/titulo="Despesas por categoria"/);
+    expect(trecho).toMatch(/snapshot\?\.expensesByCategory\.estado === "AVAILABLE"/);
+    expect(trecho, "e tem saída para indisponível").toMatch(/estado:\s*"indisponivel"/);
+  });
+
+  it("o componente de receita por serviço fica em STANDBY, não apagado", () => {
+    // Volta quando os serviços tiverem classificação verdadeira. Apagá-lo
+    // obrigaria a reescrevê-lo do zero nessa altura.
+    const prim = ler(`${V2}/finance-intelligence.tsx`);
+    expect(prim).toContain("FinanceRevenueByService");
+    expect(prim, "o título tem de ser configurável").toMatch(/titulo\s*=\s*"Receita por serviço"/);
+  });
+
+  it("aging e top clientes vêm do snapshot, com estado", () => {
+    // O padrão importa: `estado === "AVAILABLE"` antes de desenhar, e
+    // `indisponivel` em qualquer outro caso. Sem o teste do estado, um bloco
+    // em ERROR desenharia barras vazias que se leriam como "nada vencido".
+    for (const bloco of ["FinanceAging", "FinanceTopClients"]) {
       const i = src.indexOf(`<${bloco}`);
-      const trecho = src.slice(i, i + 300);
-      expect(trecho, `${bloco} devia estar indisponível`).toMatch(/estado:\s*"indisponivel"/);
+      const trecho = src.slice(i, i + 700);
+      expect(trecho, `${bloco} não consulta o snapshot`).toMatch(/snapshot\?\.\w+\.estado === "AVAILABLE"/);
+      expect(trecho, `${bloco} não tem saída para indisponível`).toMatch(/estado:\s*"indisponivel"/);
     }
   });
 
-  it("«Recebido» não é preenchido com a receita faturada", () => {
+  it("🔴 «Recebido» tem fonte própria — nunca a receita faturada", () => {
+    // Preenchê-lo com o faturado seria afirmar que está tudo cobrado. Vem das
+    // entradas de caixa confirmadas, e de mais lado nenhum.
     const i = src.indexOf('label="Recebido"');
     expect(i).toBeGreaterThan(-1);
     const trecho = src.slice(i, i + 260);
-    expect(trecho).toMatch(/estado:\s*"indisponivel"/);
-    expect(trecho).not.toMatch(/currentMonthRevenue/);
+    expect(trecho).toMatch(/slotDeMedida\(snapshot\?\.kpis\.recebido\)/);
+    expect(trecho).not.toMatch(/currentMonthRevenue|faturado/);
+  });
+
+  it("🔴 os cinco KPIs vêm todos do motor, nenhum do legado", () => {
+    // `getFinancialDashboard` ignora o período: se um KPI ainda o lesse, o
+    // seletor de mês voltaria a mentir sobre esse número.
+    const grid = src.slice(src.indexOf("<FinanceKpiGrid"), src.indexOf("</FinanceKpiGrid>"));
+    expect((grid.match(/slotDeMedida\(snapshot\?\.kpis\./g) ?? []).length).toBe(5);
+    expect(grid, "nenhum KPI pode ler o loader legado").not.toMatch(/data\.currentMonth|data\.pendingRevenue/);
   });
 
   it("a série «recebido» do gráfico é null, não zero", () => {
     expect(src).toMatch(/recebido:\s*null/);
   });
 
-  it("os rótulos legados não foram promovidos a canónicos sem fonte", () => {
-    // "Custos" sozinho faria a folha passar por custo total.
-    expect(src).toContain('label="Custos (Salários)"');
+  it("os rótulos acompanham a fonte, e não o contrário", () => {
+    // "Custos (Salários)" era honesto enquanto a fonte era só a folha. Agora
+    // cobre saídas de caixa — fornecedores, despesas, avarias — e manter o
+    // parêntesis passaria a ser a mentira oposta.
+    expect(src).toContain('label="Custos"');
+    expect(src).toContain('label="Faturado"');
+    expect(src).not.toContain('label="Receita"');
   });
 
   it("não existe Meta mensal nem Atividade recente inventadas", () => {

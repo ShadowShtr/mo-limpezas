@@ -5,7 +5,22 @@ import { ClientesTabs } from "./_components/clientes-tabs";
 import { CLIENTE_SHEET_SELECT } from "@/lib/cliente-sheet-fields";
 import { getBuildingCards } from "@/app/actions/building-cards";
 
-export default async function ClientesPage() {
+/**
+ * `?tab=predios&predio=<id>` — de onde vem, e porquê pelo URL
+ *
+ * O card «Prédios» do Financeiro liga para aqui em vez de ter formulário
+ * próprio. Passar o destino pelo URL faz com que o link seja partilhável e
+ * sobreviva a um refresh, o que um estado só em memória não daria.
+ *
+ * Um `predio` que não exista é ignorado em silêncio: a aba abre na mesma, sem
+ * formulário. Um id velho num favorito não deve dar erro a quem clica.
+ */
+export default async function ClientesPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ tab?: string; predio?: string }>;
+}) {
+  const params = await searchParams;
   const supabase = await createClient();
   const admin = createAdminClient();
 
@@ -46,6 +61,10 @@ export default async function ClientesPage() {
           buildingCards={buildingCards}
           teams={teams ?? []}
           companyId={companyId}
+          initialTab={params.tab === "predios" ? "predios" : "clientes"}
+          initialEditBuildingId={
+            params.predio && buildingCards.some((c) => c.id === params.predio) ? params.predio : null
+          }
         />
       </div>
     </div>

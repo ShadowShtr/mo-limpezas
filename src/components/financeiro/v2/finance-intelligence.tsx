@@ -19,6 +19,7 @@
 "use client";
 
 import type { ReactNode } from "react";
+import Link from "next/link";
 import { Gauge, PieChart, ReceiptText, UsersRound } from "lucide-react";
 
 import { FinanceCard, IconCircle, SectionHeader } from "./finance-card";
@@ -166,7 +167,22 @@ export interface ClienteRank {
   valor: number;
 }
 
-export function FinanceTopClients({ slot, metrica }: { slot: Slot<ClienteRank[]>; metrica?: string }) {
+export function FinanceTopClients({
+  slot,
+  metrica,
+  hrefDe,
+}: {
+  slot: Slot<ClienteRank[]>;
+  metrica?: string;
+  /**
+   * Para onde vai um clique num cliente.
+   *
+   * Sem isto, o ranking é informação morta: mostra quem fatura mais e obriga a
+   * ir procurar o detalhe noutro sítio. Com isto, leva ao histórico desse
+   * cliente — sem duplicar informação nenhuma.
+   */
+  hrefDe?: (c: ClienteRank) => string;
+}) {
   return (
     <FinanceCard className="h-full">
       <SectionHeader title="Top clientes" hint={metrica} />
@@ -176,8 +192,9 @@ export function FinanceTopClients({ slot, metrica }: { slot: Slot<ClienteRank[]>
           const max = Math.max(...cs.map((c) => c.valor), 1);
           return (
             <div className="space-y-3">
-              {cs.map((c, i) => (
-                <div key={c.id} className="flex items-center gap-3">
+              {cs.map((c, i) => {
+                const conteudo = (
+                <div className="flex items-center gap-3">
                   <span
                     className="w-[22px] h-[22px] shrink-0 rounded-full inline-flex items-center justify-center text-[11px] font-semibold tabular-nums"
                     style={{ background: "var(--finance-primary-soft)", color: "var(--finance-primary)" }}
@@ -199,7 +216,21 @@ export function FinanceTopClients({ slot, metrica }: { slot: Slot<ClienteRank[]>
                     </span>
                   </div>
                 </div>
-              ))}
+                );
+
+                const href = hrefDe?.(c);
+                return href ? (
+                  <a
+                    key={c.id}
+                    href={href}
+                    className="block -mx-2 px-2 py-1 rounded-[10px] transition-colors hover:bg-[var(--finance-surface-soft)]"
+                  >
+                    {conteudo}
+                  </a>
+                ) : (
+                  <div key={c.id}>{conteudo}</div>
+                );
+              })}
             </div>
           );
         }}
@@ -214,18 +245,39 @@ export interface FatiaServico {
   nome: string;
   valor: number;
   cor: string;
+  /**
+   * Chave da categoria, quando existe. É o que permite ao donut levar a algum
+   * lado — sem ela, um número no ecrã é o fim da linha e quem quer corrigir a
+   * despesa tem de a ir procurar à mão.
+   */
+  chave?: string | null;
 }
 
-export function FinanceRevenueByService({ slot }: { slot: Slot<FatiaServico[]> }) {
+export function FinanceRevenueByService({
+  slot,
+  titulo = "Receita por serviço",
+  hrefDe,
+  rodape,
+}: {
+  slot: Slot<FatiaServico[]>;
+  /** O mesmo donut serve receita por serviço e despesas por categoria. */
+  titulo?: string;
+  /** Para onde leva clicar numa fatia. Sem isto, as linhas não são clicáveis. */
+  hrefDe?: (f: FatiaServico) => string | null;
+  /** Uma linha por baixo do gráfico — o que ficou de fora, e porquê. */
+  rodape?: ReactNode;
+}) {
   return (
     <FinanceCard className="h-full">
-      <SectionHeader title="Receita por serviço" />
-      <RenderSlot slot={slot} esqueleto={<Skeleton h={150} />}>
+      <SectionHeader title={titulo} />
+      <RenderSlot slot={slot} esqueleto={<Skeleton h={190} />}>
         {(fatias) => {
           const total = fatias.reduce((s, f) => s + f.valor, 0);
           if (total <= 0) return <VazioCompacto texto="Sem receita classificada." />;
 
-          const R = 54, r = 33, C = 64;
+          // Maior do que era: com sete ou oito categorias, um donut de 128px
+          // dava fatias que não se distinguiam umas das outras.
+          const R = 72, r = 44, C = 84;
           let acc = 0;
           const arcos = fatias.map((f) => {
             const frac = f.valor / total;
@@ -243,23 +295,62 @@ export function FinanceRevenueByService({ slot }: { slot: Slot<FatiaServico[]> }
           });
 
           return (
-            <div className="flex items-center gap-5 flex-wrap">
-              <svg viewBox="0 0 128 128" style={{ width: 128, height: 128 }} className="shrink-0" aria-hidden>
-                {arcos.map((a) => (
-                  <path key={a.nome} d={a.d} fill={a.cor} stroke="#fff" strokeWidth="2" />
-                ))}
-              </svg>
-              <div className="flex-1 min-w-[150px] space-y-2">
-                {arcos.map((a) => (
-                  <div key={a.nome} className="flex items-center gap-2">
-                    <span className="w-2 h-2 rounded-full shrink-0" style={{ background: a.cor }} />
-                    <span className="flex-1 text-[12.5px] text-[var(--finance-text-secondary)] truncate">{a.nome}</span>
-                    <span className="text-[12.5px] font-semibold text-[var(--finance-text)] tabular-nums">
-                      {(a.frac * 100).toLocaleString("pt-PT", { maximumFractionDigits: 0 })}%
-                    </span>
-                  </div>
-                ))}
+            <div className="flex items-center gap-6 flex-wrap">
+              <div className="relative shrink-0">
+                <svg viewBox="0 0 168 168" style={{ width: 168, height: 168 }} aria-hidden>
+                  {arcos.map((a) => (
+                    <path key={a.nome} d={a.d} fill={a.cor} stroke="#fff" strokeWidth="2" />
+                  ))}
+                </svg>
+                {/* O total ao centro. O donut mostrava só percentagens, e uma
+                    percentagem sem base não diz se são 50 € ou 5 000 €. */}
+                <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                  <span className="text-[10px] uppercase tracking-wide text-[var(--finance-text-muted)]">Total</span>
+                  <span className="text-[15px] font-bold text-[var(--finance-text)] tabular-nums">
+                    {fmtEur(total)}
+                  </span>
+                </div>
               </div>
+
+              <div className="flex-1 min-w-[200px] space-y-0.5">
+                {arcos.map((a) => {
+                  const href = hrefDe?.(a) ?? null;
+                  const conteudo = (
+                    <>
+                      <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: a.cor }} />
+                      <span className="flex-1 text-[12.5px] text-[var(--finance-text-secondary)] truncate">
+                        {a.nome}
+                      </span>
+                      {/* Valor **e** percentagem. Ver «50 %» sem saber de quê
+                          obriga a ir à outra página fazer a conta. */}
+                      <span className="text-[12.5px] font-semibold text-[var(--finance-text)] tabular-nums">
+                        {fmtEur(a.valor)}
+                      </span>
+                      <span className="w-10 text-right text-[11.5px] text-[var(--finance-text-muted)] tabular-nums">
+                        {(a.frac * 100).toLocaleString("pt-PT", { maximumFractionDigits: 0 })}%
+                      </span>
+                    </>
+                  );
+
+                  return href ? (
+                    <Link
+                      key={a.nome}
+                      href={href}
+                      title={`Ver despesas de ${a.nome}`}
+                      className="flex items-center gap-2.5 py-1.5 px-2 -mx-2 rounded-lg
+                                 hover:bg-[var(--finance-surface-soft)] focus-visible:outline-none
+                                 focus-visible:ring-2 focus-visible:ring-[var(--finance-primary)]"
+                    >
+                      {conteudo}
+                    </Link>
+                  ) : (
+                    <div key={a.nome} className="flex items-center gap-2.5 py-1.5 px-2 -mx-2">
+                      {conteudo}
+                    </div>
+                  );
+                })}
+              </div>
+              {rodape}
             </div>
           );
         }}

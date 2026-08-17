@@ -1,10 +1,10 @@
 {
   "inventorySource": "git ls-files",
   "summary": {
-    "repositoryFiles": 589,
-    "textFiles": 577,
-    "sourceFiles": 408,
-    "textLines": 132106,
+    "repositoryFiles": 627,
+    "textFiles": 615,
+    "sourceFiles": 438,
+    "textLines": 146190,
     "typescriptDiagnostics": 0,
     "productionEntries": 70,
     "unreachableProductionModules": 38,
@@ -96,6 +96,11 @@
     ],
     "exactDuplicateFiles": [],
     "directRevalidatePath": [
+      "src/__tests__/expense-categories-runtime.test.ts",
+      "src/__tests__/finance-v2-money.test.ts",
+      "src/__tests__/finance-v2-period-scope.test.ts",
+      "src/__tests__/payment-cashflow-rpc.test.ts",
+      "src/__tests__/predios-edicao-por-link.test.ts",
       "src/app/(dashboard)/dashboard/calendario/_actions/create-service.ts",
       "src/app/actions/absences.ts",
       "src/app/actions/auth.ts",
@@ -109,6 +114,8 @@
       "src/app/actions/csv-import.ts",
       "src/app/actions/daily-billing.ts",
       "src/app/actions/equipas.ts",
+      "src/app/actions/expense-categories.ts",
+      "src/app/actions/financial-periods.ts",
       "src/app/actions/intervencoes.ts",
       "src/app/actions/invoices.ts",
       "src/app/actions/locations.ts",
@@ -126,6 +133,7 @@
       "src/app/(app)/app/escala/page.tsx",
       "src/app/actions/invoices.ts",
       "src/app/actions/payroll.ts",
+      "src/domain/finance-v2/aggregate.ts",
       "src/domain/scheduling/civil-date.ts",
       "src/lib/bank-import/reconcile-db.ts",
       "src/lib/payroll-calc.ts"
