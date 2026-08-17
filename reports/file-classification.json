@@ -1,18 +1,18 @@
 {
   "generatedBy": "scripts/audit-file-inventory.mjs",
-  "totalFiles": 621,
+  "totalFiles": 625,
   "byStatus": {
-    "MANTER": 604,
+    "MANTER": 608,
     "STANDBY": 17
   },
   "byCategory": {
     "route-ui": 133,
-    "test": 96,
+    "test": 98,
     "migration": 75,
     "lib": 63,
-    "script": 43,
+    "script": 44,
+    "doc": 39,
     "domain": 39,
-    "doc": 38,
     "server-action": 38,
     "component": 26,
     "doc-historico": 16,
@@ -29,12 +29,12 @@
     "src-other": 1
   },
   "byConfidence": {
-    "alta": 606,
+    "alta": 610,
     "média": 9,
     "baixa": 6
   },
   "scriptRisk": {
-    "SAFE_OFFLINE": 23,
+    "SAFE_OFFLINE": 24,
     "ADMIN_GUARDED_WRITE": 11,
     "ADMIN_READ": 6,
     "WRITE_CAPABLE": 3
@@ -263,7 +263,7 @@
       ],
       "signals": {
         "supabase": 2,
-        "serviceRole": 1,
+        "serviceRole": 2,
         "sqlWrite": 10,
         "todo": 1,
         "anyType": 1
@@ -299,7 +299,9 @@
       "consumers": 0,
       "consumerSample": [],
       "autoLoaded": false,
-      "referencedBy": [],
+      "referencedBy": [
+        "docs"
+      ],
       "sideEffects": [],
       "risks": [],
       "signals": {
@@ -932,6 +934,29 @@
       "risks": [],
       "signals": {
         "sqlWrite": 8
+      },
+      "action": "nenhuma",
+      "reason": "documentação",
+      "manualDecision": false
+    },
+    {
+      "path": "docs/LEDGER-RECONCILIATION-PENDING.md",
+      "category": "doc",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [
+        "docs"
+      ],
+      "sideEffects": [],
+      "risks": [
+        "service-role"
+      ],
+      "signals": {
+        "serviceRole": 2,
+        "sqlWrite": 1
       },
       "action": "nenhuma",
       "reason": "documentação",
@@ -2850,12 +2875,47 @@
       "scriptRisk": "SAFE_OFFLINE"
     },
     {
+      "path": "scripts/lib/migration-drift-guard.mjs",
+      "category": "script",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 3,
+      "consumerSample": [
+        "scripts/lib/migration-runner-core.mjs",
+        "src/__tests__/migration-drift-guard.test.ts",
+        "src/__tests__/migration-runner-drift-abort.test.ts"
+      ],
+      "autoLoaded": false,
+      "referencedBy": [
+        "docs"
+      ],
+      "sideEffects": [],
+      "risks": [
+        "service-role"
+      ],
+      "signals": {
+        "serviceRole": 2,
+        "sqlWrite": 6
+      },
+      "action": "nenhuma",
+      "reason": "ferramenta offline, sem acesso à base",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": true,
+        "dynamicImport": true,
+        "allClosed": false
+      },
+      "scriptRisk": "SAFE_OFFLINE"
+    },
+    {
       "path": "scripts/lib/migration-runner-core.mjs",
       "category": "script",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 2,
+      "consumers": 4,
       "consumerSample": [
+        "scripts/lib/migration-drift-guard.mjs",
         "scripts/run-migrations.mjs",
         "src/__tests__/migration-runner-core.test.ts"
       ],
@@ -4157,7 +4217,9 @@
       "consumers": 0,
       "consumerSample": [],
       "autoLoaded": false,
-      "referencedBy": [],
+      "referencedBy": [
+        "docs"
+      ],
       "sideEffects": [],
       "risks": [],
       "signals": {},
@@ -4537,6 +4599,36 @@
       }
     },
     {
+      "path": "src/__tests__/migration-drift-guard.test.ts",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [
+        "docs"
+      ],
+      "sideEffects": [],
+      "risks": [
+        "service-role"
+      ],
+      "signals": {
+        "serviceRole": 2,
+        "sqlWrite": 9,
+        "dynamicImport": 2
+      },
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
       "path": "src/__tests__/migration-runner-core.test.ts",
       "category": "test",
       "status": "MANTER",
@@ -4549,6 +4641,35 @@
       "risks": [],
       "signals": {
         "sqlWrite": 26
+      },
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/__tests__/migration-runner-drift-abort.test.ts",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [
+        "docs"
+      ],
+      "sideEffects": [],
+      "risks": [
+        "service-role"
+      ],
+      "signals": {
+        "serviceRole": 1,
+        "sqlWrite": 7
       },
       "action": "nenhuma",
       "reason": "suite de testes — corre por convenção do vitest",
@@ -14527,7 +14648,9 @@
         "src/lib/finance-rpc/invoice-creation.ts"
       ],
       "autoLoaded": false,
-      "referencedBy": [],
+      "referencedBy": [
+        "docs"
+      ],
       "sideEffects": [],
       "risks": [],
       "signals": {},

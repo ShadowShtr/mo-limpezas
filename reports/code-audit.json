@@ -1,13 +1,13 @@
 {
   "inventorySource": "git ls-files",
   "summary": {
-    "repositoryFiles": 617,
-    "textFiles": 605,
-    "sourceFiles": 433,
-    "textLines": 142814,
-    "typescriptDiagnostics": 0,
+    "repositoryFiles": 621,
+    "textFiles": 609,
+    "sourceFiles": 437,
+    "textLines": 143794,
+    "typescriptDiagnostics": 15,
     "productionEntries": 70,
-    "unreachableProductionModules": 38,
+    "unreachableProductionModules": 41,
     "exactDuplicateFileGroups": 0
   },
   "highConfidence": {
@@ -17,6 +17,7 @@
   },
   "reviewRequired": {
     "unreachableProductionModules": [
+      "src/app/actions/financial-periods.ts",
       "src/app/actions/whatsapp.ts",
       "src/domain/billing/billing-compat.ts",
       "src/domain/billing/consumer-parity.ts",
@@ -33,6 +34,7 @@
       "src/domain/dashboard/legacy-dashboard.ts",
       "src/domain/dashboard/period-selection.ts",
       "src/domain/dashboard/projection.ts",
+      "src/domain/finance-v2/financial-period.ts",
       "src/domain/realtime/event-reconciler.ts",
       "src/domain/reports/absence-metrics.ts",
       "src/domain/reports/export-adapter.ts",
@@ -52,6 +54,7 @@
       "src/domain/scheduling/recurrence-compat.ts",
       "src/lib/bank-import/pdf.ts",
       "src/lib/bank-import/xlsx.ts",
+      "src/lib/finance-period-guard.ts",
       "src/lib/finance-write-surface.ts",
       "src/lib/payments-month-materialization.ts",
       "src/types/supabase.ts"
@@ -72,6 +75,7 @@
       "src/domain/dashboard/legacy-dashboard.ts",
       "src/domain/dashboard/period-selection.ts",
       "src/domain/dashboard/projection.ts",
+      "src/domain/finance-v2/financial-period.ts",
       "src/domain/realtime/event-reconciler.ts",
       "src/domain/reports/absence-metrics.ts",
       "src/domain/reports/export-adapter.ts",
@@ -89,6 +93,7 @@
       "src/domain/scheduling/occurrence-repair.ts",
       "src/domain/scheduling/reconciliation.ts",
       "src/domain/scheduling/recurrence-compat.ts",
+      "src/lib/finance-period-guard.ts",
       "src/lib/finance-write-surface.ts"
     ],
     "testSignupCalls": [
@@ -115,6 +120,7 @@
       "src/app/actions/daily-billing.ts",
       "src/app/actions/equipas.ts",
       "src/app/actions/expense-categories.ts",
+      "src/app/actions/financial-periods.ts",
       "src/app/actions/intervencoes.ts",
       "src/app/actions/invoices.ts",
       "src/app/actions/locations.ts",
@@ -138,5 +144,141 @@
       "src/lib/payroll-calc.ts"
     ]
   },
-  "diagnostics": []
+  "diagnostics": [
+    {
+      "code": 6133,
+      "category": "Error",
+      "message": "'Periodo' is declared but its value is never read.",
+      "location": {
+        "file": "src/app/actions/financial-periods.ts",
+        "line": 46
+      }
+    },
+    {
+      "code": 2589,
+      "category": "Error",
+      "message": "Type instantiation is excessively deep and possibly infinite.",
+      "location": {
+        "file": "src/app/actions/financial-periods.ts",
+        "line": 97
+      }
+    },
+    {
+      "code": 2769,
+      "category": "Error",
+      "message": "No overload matches this call.\n  Overload 1 of 2, '(relation: \"services\" | \"timesheets\" | \"profiles\" | \"clients\" | \"locations\" | \"teams\" | \"invoices\" | \"contracts\" | \"invoice_items\" | \"cash_flow_entries\" | \"payroll_records\" | \"absences\" | ... 24 more ... | \"service_price_audit\"): PostgrestQueryBuilder<...>', gave the following error.\n    Argument of type '\"financial_periods\"' is not assignable to parameter of type '\"services\" | \"timesheets\" | \"profiles\" | \"clients\" | \"locations\" | \"teams\" | \"invoices\" | \"contracts\" | \"invoice_items\" | \"cash_flow_entries\" | \"payroll_records\" | \"absences\" | ... 24 more ... | \"service_price_audit\"'.\n  Overload 2 of 2, '(relation: \"services_full\" | \"monthly_hours_summary\" | \"teams_with_members\"): PostgrestQueryBuilder<{ PostgrestVersion: \"12\"; }, { Tables: { companies: { Row: { id: string; name: string; slug: string; created_at: string; updated_at: string; }; Insert: { ...; }; Update: { ...; }; Relationships: []; }; ... 35 more ...; service_price_audit: { ...; }; }; Views: { ...; }; Functions: { ...; }; Enums: Record<...>; }, { ...; } | ... 1 more ... | { ...; }, \"services_full\" | ... 1 more ... | \"teams_with_members\", []>', gave the following error.\n    Argument of type '\"financial_periods\"' is not assignable to parameter of type '\"services_full\" | \"monthly_hours_summary\" | \"teams_with_members\"'.",
+      "location": {
+        "file": "src/app/actions/financial-periods.ts",
+        "line": 304
+      }
+    },
+    {
+      "code": 2345,
+      "category": "Error",
+      "message": "Argument of type '{ company_id: string; year: number; month: number; status: \"closed\"; closed_at: string; closed_by: string; reopened_at: null; reopened_by: null; reopen_reason: null; updated_at: string; }' is not assignable to parameter of type 'RejectExcessProperties<{ name: string; slug: string; id?: string | undefined; } | { company_id: string; hourly_rate?: number | undefined; meal_allowance_day?: number | undefined; overtime_rate_pct?: number | undefined; ... 9 more ...; kanban_columns?: { ...; }[] | ... 1 more ... | undefined; } | ... 34 more ... | { ...'.\n  Type '{ company_id: string; year: number; month: number; status: \"closed\"; closed_at: string; closed_by: string; reopened_at: null; reopened_by: null; reopen_reason: null; updated_at: string; }' is not assignable to type 'RejectExcessProperties<{ name: string; slug: string; id?: string | undefined; } | { company_id: string; hourly_rate?: number | undefined; meal_allowance_day?: number | undefined; overtime_rate_pct?: number | undefined; ... 9 more ...; kanban_columns?: { ...; }[] | ... 1 more ... | undefined; } | ... 34 more ... | { ...'.\n    Type '{ company_id: string; year: number; month: number; status: \"closed\"; closed_at: string; closed_by: string; reopened_at: null; reopened_by: null; reopen_reason: null; updated_at: string; }' is not assignable to type '{ company_id: never; year: never; month: never; status: never; updated_at: never; closed_at: never; closed_by: never; reopened_at: never; reopen_reason: never; reopened_by: never; }'.\n      Types of property 'company_id' are incompatible.\n        Type 'string' is not assignable to type 'never'.",
+      "location": {
+        "file": "src/app/actions/financial-periods.ts",
+        "line": 305
+      }
+    },
+    {
+      "code": 2345,
+      "category": "Error",
+      "message": "Argument of type 'SelectQueryError<\"column 'status' does not exist on 'services'.\"> | SelectQueryError<\"column 'status' does not exist on 'timesheets'.\"> | ... 35 more ... | null' is not assignable to parameter of type '{ status?: unknown; closed_at?: unknown; closed_by?: unknown; reopened_at?: unknown; reopen_reason?: unknown; } | null'.\n  Type 'SelectQueryError<\"column 'status' does not exist on 'services'.\">' is not assignable to type '{ status?: unknown; closed_at?: unknown; closed_by?: unknown; reopened_at?: unknown; reopen_reason?: unknown; } | null'.",
+      "location": {
+        "file": "src/app/actions/financial-periods.ts",
+        "line": 311
+      }
+    },
+    {
+      "code": 2769,
+      "category": "Error",
+      "message": "No overload matches this call.\n  Overload 1 of 2, '(relation: \"services\" | \"timesheets\" | \"profiles\" | \"clients\" | \"locations\" | \"teams\" | \"invoices\" | \"contracts\" | \"invoice_items\" | \"cash_flow_entries\" | \"payroll_records\" | \"absences\" | ... 24 more ... | \"service_price_audit\"): PostgrestQueryBuilder<...>', gave the following error.\n    Argument of type '\"financial_periods\"' is not assignable to parameter of type '\"services\" | \"timesheets\" | \"profiles\" | \"clients\" | \"locations\" | \"teams\" | \"invoices\" | \"contracts\" | \"invoice_items\" | \"cash_flow_entries\" | \"payroll_records\" | \"absences\" | ... 24 more ... | \"service_price_audit\"'.\n  Overload 2 of 2, '(relation: \"services_full\" | \"monthly_hours_summary\" | \"teams_with_members\"): PostgrestQueryBuilder<{ PostgrestVersion: \"12\"; }, { Tables: { companies: { Row: { id: string; name: string; slug: string; created_at: string; updated_at: string; }; Insert: { ...; }; Update: { ...; }; Relationships: []; }; ... 35 more ...; service_price_audit: { ...; }; }; Views: { ...; }; Functions: { ...; }; Enums: Record<...>; }, { ...; } | ... 1 more ... | { ...; }, \"services_full\" | ... 1 more ... | \"teams_with_members\", []>', gave the following error.\n    Argument of type '\"financial_periods\"' is not assignable to parameter of type '\"services_full\" | \"monthly_hours_summary\" | \"teams_with_members\"'.",
+      "location": {
+        "file": "src/app/actions/financial-periods.ts",
+        "line": 371
+      }
+    },
+    {
+      "code": 2322,
+      "category": "Error",
+      "message": "Type 'string' is not assignable to type 'never'.",
+      "location": {
+        "file": "src/app/actions/financial-periods.ts",
+        "line": 373
+      }
+    },
+    {
+      "code": 2322,
+      "category": "Error",
+      "message": "Type 'string' is not assignable to type 'never'.",
+      "location": {
+        "file": "src/app/actions/financial-periods.ts",
+        "line": 374
+      }
+    },
+    {
+      "code": 2322,
+      "category": "Error",
+      "message": "Type 'string' is not assignable to type 'never'.",
+      "location": {
+        "file": "src/app/actions/financial-periods.ts",
+        "line": 375
+      }
+    },
+    {
+      "code": 2322,
+      "category": "Error",
+      "message": "Type 'string' is not assignable to type 'never'.",
+      "location": {
+        "file": "src/app/actions/financial-periods.ts",
+        "line": 376
+      }
+    },
+    {
+      "code": 2322,
+      "category": "Error",
+      "message": "Type 'string' is not assignable to type 'never'.",
+      "location": {
+        "file": "src/app/actions/financial-periods.ts",
+        "line": 377
+      }
+    },
+    {
+      "code": 2345,
+      "category": "Error",
+      "message": "Argument of type '\"company_id\"' is not assignable to parameter of type '\"id\"'.",
+      "location": {
+        "file": "src/app/actions/financial-periods.ts",
+        "line": 379
+      }
+    },
+    {
+      "code": 2345,
+      "category": "Error",
+      "message": "Argument of type '\"year\"' is not assignable to parameter of type '\"id\"'.",
+      "location": {
+        "file": "src/app/actions/financial-periods.ts",
+        "line": 380
+      }
+    },
+    {
+      "code": 2345,
+      "category": "Error",
+      "message": "Argument of type '\"month\"' is not assignable to parameter of type '\"id\"'.",
+      "location": {
+        "file": "src/app/actions/financial-periods.ts",
+        "line": 381
+      }
+    },
+    {
+      "code": 2345,
+      "category": "Error",
+      "message": "Argument of type 'SelectQueryError<\"column 'status' does not exist on 'services'.\"> | SelectQueryError<\"column 'status' does not exist on 'timesheets'.\"> | ... 35 more ... | null' is not assignable to parameter of type '{ status?: unknown; closed_at?: unknown; closed_by?: unknown; reopened_at?: unknown; reopen_reason?: unknown; } | null'.\n  Type 'SelectQueryError<\"column 'status' does not exist on 'services'.\">' is not assignable to type '{ status?: unknown; closed_at?: unknown; closed_by?: unknown; reopened_at?: unknown; reopen_reason?: unknown; } | null'.",
+      "location": {
+        "file": "src/app/actions/financial-periods.ts",
+        "line": 387
+      }
+    }
+  ]
 }
