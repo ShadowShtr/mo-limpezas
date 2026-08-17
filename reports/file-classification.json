@@ -1,20 +1,20 @@
 {
   "generatedBy": "scripts/audit-file-inventory.mjs",
-  "totalFiles": 625,
+  "totalFiles": 631,
   "byStatus": {
-    "MANTER": 608,
+    "MANTER": 614,
     "STANDBY": 17
   },
   "byCategory": {
     "route-ui": 133,
-    "test": 98,
+    "test": 99,
     "migration": 75,
-    "lib": 63,
+    "lib": 64,
     "script": 44,
-    "doc": 39,
-    "domain": 39,
-    "server-action": 38,
-    "component": 26,
+    "doc": 40,
+    "domain": 40,
+    "server-action": 39,
+    "component": 27,
     "doc-historico": 16,
     "api-route": 16,
     "config": 12,
@@ -29,7 +29,7 @@
     "src-other": 1
   },
   "byConfidence": {
-    "alta": 610,
+    "alta": 616,
     "média": 9,
     "baixa": 6
   },
@@ -511,6 +511,22 @@
         "write": 2,
         "sqlWrite": 2
       },
+      "action": "nenhuma",
+      "reason": "documentação",
+      "manualDecision": false
+    },
+    {
+      "path": "docs/FINANCIAL-PERIOD-CLOSE-RUNTIME.md",
+      "category": "doc",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {},
       "action": "nenhuma",
       "reason": "documentação",
       "manualDecision": false
@@ -1747,7 +1763,7 @@
       ],
       "sideEffects": [
         "supabase",
-        "revalidatePath(34)"
+        "revalidatePath(35)"
       ],
       "risks": [
         "debugger"
@@ -1756,7 +1772,7 @@
         "supabase": 1,
         "sqlWrite": 7,
         "debugger": 6,
-        "revalidatePath": 34
+        "revalidatePath": 35
       },
       "action": "nenhuma",
       "reason": "configuração/infra",
@@ -4490,6 +4506,33 @@
       "sideEffects": [],
       "risks": [],
       "signals": {},
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/__tests__/financial-period.test.ts",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [
+        "docs"
+      ],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "sqlWrite": 6,
+        "dynamicImport": 2
+      },
       "action": "nenhuma",
       "reason": "suite de testes — corre por convenção do vitest",
       "manualDecision": false,
@@ -10435,6 +10478,43 @@
       }
     },
     {
+      "path": "src/app/actions/financial-periods.ts",
+      "category": "server-action",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 2,
+      "consumerSample": [
+        "src/app/(dashboard)/dashboard/financeiro/page.tsx",
+        "src/components/financeiro/period-close-controls.tsx"
+      ],
+      "autoLoaded": false,
+      "referencedBy": [
+        "docs"
+      ],
+      "sideEffects": [
+        "write",
+        "revalidatePath(1)"
+      ],
+      "risks": [],
+      "signals": {
+        "serverAction": 1,
+        "write": 2,
+        "sqlWrite": 1,
+        "unknownCast": 3,
+        "fallbackZero": 1,
+        "revalidatePath": 1
+      },
+      "action": "auditar atomicidade (T12/T13)",
+      "reason": "em uso: 2 consumidor(es)",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
       "path": "src/app/actions/intervencoes.ts",
       "category": "server-action",
       "status": "MANTER",
@@ -11902,6 +11982,34 @@
       }
     },
     {
+      "path": "src/components/financeiro/period-close-controls.tsx",
+      "category": "component",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 1,
+      "consumerSample": [
+        "src/components/financeiro/finance-shell.tsx"
+      ],
+      "autoLoaded": false,
+      "referencedBy": [
+        "docs"
+      ],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "clientComponent": 1
+      },
+      "action": "nenhuma",
+      "reason": "em uso: 1 consumidor(es)",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
       "path": "src/components/financeiro/v2/finance-alert-strip.tsx",
       "category": "component",
       "status": "MANTER",
@@ -13089,6 +13197,34 @@
       }
     },
     {
+      "path": "src/domain/finance-v2/financial-period.ts",
+      "category": "domain",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 8,
+      "consumerSample": [
+        "src/__tests__/financial-period.test.ts",
+        "src/app/(dashboard)/dashboard/financeiro/page.tsx",
+        "src/app/actions/financial-periods.ts"
+      ],
+      "autoLoaded": false,
+      "referencedBy": [
+        "docs"
+      ],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {},
+      "action": "nenhuma",
+      "reason": "em uso: 8 consumidor(es)",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
       "path": "src/domain/finance-v2/money.ts",
       "category": "domain",
       "status": "MANTER",
@@ -13742,7 +13878,7 @@
       "category": "lib",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 18,
+      "consumers": 19,
       "consumerSample": [
         "src/__tests__/audit.test.ts",
         "src/app/(dashboard)/dashboard/calendario/_actions/reschedule.ts",
@@ -13770,7 +13906,7 @@
         "consoleErr": 2
       },
       "action": "nenhuma",
-      "reason": "em uso: 18 consumidor(es), script npm, CI, configuração",
+      "reason": "em uso: 19 consumidor(es), script npm, CI, configuração",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -13784,7 +13920,7 @@
       "category": "lib",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 19,
+      "consumers": 20,
       "consumerSample": [
         "src/__tests__/auth-revalidation-central.test.ts",
         "src/app/actions/bank-reconciliation.ts",
@@ -13805,7 +13941,7 @@
         "ignoredError": 1
       },
       "action": "nenhuma",
-      "reason": "em uso: 19 consumidor(es)",
+      "reason": "em uso: 20 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -14579,6 +14715,34 @@
       "signals": {},
       "action": "nenhuma",
       "reason": "em uso: 5 consumidor(es)",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/lib/finance-period-guard.ts",
+      "category": "lib",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 7,
+      "consumerSample": [
+        "src/__tests__/financial-period.test.ts",
+        "src/app/actions/bank-reconciliation.ts",
+        "src/app/actions/cash-flow.ts"
+      ],
+      "autoLoaded": false,
+      "referencedBy": [
+        "docs"
+      ],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {},
+      "action": "nenhuma",
+      "reason": "em uso: 7 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -15533,7 +15697,7 @@
       "category": "lib",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 31,
+      "consumers": 32,
       "consumerSample": [
         "src/__tests__/utils.test.ts",
         "src/app/(app)/app/ausencias/_components/ausencias-client.tsx",
@@ -15548,7 +15712,7 @@
       "risks": [],
       "signals": {},
       "action": "nenhuma",
-      "reason": "em uso: 31 consumidor(es), configuração",
+      "reason": "em uso: 32 consumidor(es), configuração",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
