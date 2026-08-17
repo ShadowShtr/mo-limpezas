@@ -1,6 +1,7 @@
 "use server";
 
 import { requireProfile } from "@/lib/auth-guard";
+import { assertFinancialPeriodOpen, type ClientePeriodo } from "@/lib/finance-period-guard";
 import { auditLog } from "@/lib/audit";
 import { isValidCashFlowAmount } from "@/lib/cash-flow-integrity";
 import { generateSuggestions } from "@/lib/bank-import/reconcile-db";
@@ -445,6 +446,27 @@ export async function createEntryFromTransaction(bankTransactionId: string, opts
   if (!tx) return { ok: false, error: "Movimento não encontrado." };
   if (tx.status === "reconciled") return { ok: false, error: "Movimento já conciliado." };
   if (!isValidCashFlowAmount(tx.amount)) return { ok: false, error: "Valor inválido." };
+
+  // ─── A única action de conciliação com guarda de período ────────────────────
+  //
+  // Esta cria um `cash_flow_entries` — um facto económico novo, que entra nos
+  // totais do mês. Por isso o lock aplica-se, com a data do movimento bancário
+  // como data autoritativa (é a data que a linha de caixa vai ter).
+  //
+  // 🔴 `confirmMatch`, `rejectMatch`, `manualMatch` e `ignoreTransaction`
+  //    **não** têm guarda, deliberadamente: escrevem metadados de
+  //    correspondência (`bank_reconciliation_matches`, `bank_transactions.status`)
+  //    e não criam nem alteram nenhum movimento de caixa. Bloqueá-las seria
+  //    travar operação por a action viver na pasta do Financeiro — o critério é
+  //    o efeito económico, não a localização.
+  //
+  //    Se alguma delas passar a escrever em `cash_flow_entries`, entra no lock.
+  const periodo = await assertFinancialPeriodOpen({
+    cliente: admin as unknown as ClientePeriodo,
+    companyId,
+    data: String(tx.transaction_date),
+  });
+  if (!periodo.ok) return { ok: false, error: periodo.error };
 
   const category = (opts?.category ?? (tx.direction === "credit" ? "faturacao" : "despesa")) as
     "faturacao" | "salario" | "despesa" | "fornecedor" | "outro";

@@ -214,6 +214,23 @@ export type Database = {
         Update: { status?: "suggested" | "confirmed" | "rejected"; match_score?: number; match_reason?: string | null; cash_flow_entry_id?: string | null; confirmed_by?: string | null; confirmed_at?: string | null };
         Relationships: [];
       };
+      // ─── migration 071 ─────────────────────────────────────────────────────
+      // Aplicadas em produção pelo SQL Editor (verificado read-only,
+      // 2026-08-17) mas ausentes destes tipos até agora — o que fazia
+      // `.from("financial_periods")` não compilar. Ver
+      // docs/LEDGER-RECONCILIATION-PENDING.md.
+      expense_categories: {
+        Row: { id: string; company_id: string; name: string; normalized_name: string; color_token: string | null; icon: string | null; active: boolean; sort_order: number; created_at: string; updated_at: string };
+        Insert: { company_id: string; name: string; normalized_name: string; color_token?: string | null; icon?: string | null; active?: boolean; sort_order?: number };
+        Update: { name?: string; normalized_name?: string; color_token?: string | null; icon?: string | null; active?: boolean; sort_order?: number; updated_at?: string };
+        Relationships: [];
+      };
+      financial_periods: {
+        Row: { id: string; company_id: string; year: number; month: number; status: "open" | "closed"; closed_at: string | null; closed_by: string | null; reopened_at: string | null; reopened_by: string | null; reopen_reason: string | null; created_at: string; updated_at: string };
+        Insert: { company_id: string; year: number; month: number; status?: "open" | "closed"; closed_at?: string | null; closed_by?: string | null; reopened_at?: string | null; reopened_by?: string | null; reopen_reason?: string | null; updated_at?: string };
+        Update: { status?: "open" | "closed"; closed_at?: string | null; closed_by?: string | null; reopened_at?: string | null; reopened_by?: string | null; reopen_reason?: string | null; updated_at?: string };
+        Relationships: [];
+      };
       fixed_variable_payments: {
         Row: { id: string; company_id: string; kind: "fixo" | "variavel"; description: string; amount: number | null; due_date: string | null; direct_debit: boolean | null; status: "pago" | "pendente"; recurring: boolean; period_year: number; period_month: number; paid_at: string | null; notes: string | null; sort_order: number; source_id: string | null; created_by: string | null; created_at: string; updated_at: string; attachment_url: string | null; attachment_name: string | null; attachment_size: number | null; attachment_mime: string | null };
         Insert: { company_id: string; kind: "fixo" | "variavel"; description: string; amount?: number | null; due_date?: string | null; direct_debit?: boolean | null; status?: "pago" | "pendente"; recurring?: boolean; period_year: number; period_month: number; paid_at?: string | null; notes?: string | null; sort_order?: number; source_id?: string | null; created_by?: string | null };

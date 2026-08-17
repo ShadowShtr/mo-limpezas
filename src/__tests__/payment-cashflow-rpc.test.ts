@@ -322,7 +322,21 @@ describe("🔴 setPaymentStatus usa a RPC, e só a RPC", () => {
   it("a data do movimento é hoje em Lisboa, não em UTC", () => {
     // O processo corre em UTC na Vercel: `new Date()` na primeira hora do dia
     // dava o dia anterior, e o movimento caía no mês errado no dia 1.
-    expect(corpo).toContain("paidOn: todayInLisbon()");
+    //
+    // ⚠️ A asserção verifica a **origem** da data, não a escrita exacta. Desde
+    //    a guarda de período financeiro (2026-08-17) o valor é calculado uma vez
+    //    (`const hoje = todayInLisbon()`) e reutilizado nas duas chamadas — a
+    //    guarda e a RPC têm de concordar sobre que dia é hoje. Uma asserção
+    //    sobre a literal `paidOn: todayInLisbon()` falhava por causa da
+    //    variável, sem que o invariante tivesse mudado.
+    const semComentarios = corpo.replace(/^\s*(\/\/|\*|\/\*).*$/gm, "");
+
+    // A data vem de `todayInLisbon()`, e vai para `paidOn`.
+    expect(semComentarios).toMatch(/todayInLisbon\(\)/);
+    expect(semComentarios).toMatch(/paidOn:\s*(hoje|todayInLisbon\(\))/);
+
+    // E o que não pode aparecer: a data do movimento derivada do relógio UTC.
+    expect(semComentarios).not.toMatch(/paidOn:\s*new Date\(/);
   });
 
   it("🔴 um erro da RPC chega ao utilizador, e nada é dado como feito", () => {

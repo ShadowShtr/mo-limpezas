@@ -5,6 +5,12 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { revalidatePath } from "next/cache";
 import { todayInLisbon } from "@/lib/lisbon-time";
 import {
+  assertFinancialPeriodOpen,
+  lerEstadoPeriodo,
+  type ClientePeriodo,
+} from "@/lib/finance-period-guard";
+import { mensagemPeriodoFechado } from "@/domain/finance-v2/financial-period";
+import {
   desmarcarPagamentoPago,
   marcarPagamentoPago,
 } from "@/lib/finance-rpc/payment-cashflow";
@@ -288,18 +294,80 @@ export async function updatePayment(
 // continuar a produzir o mesmo erro, sem ninguém notar.
 // ============================================================================
 
+/**
+ * Período de um pagamento, a partir do próprio registo.
+ *
+ * Um pagamento não tem data civil única — tem `period_year`/`period_month`, que
+ * é o mês a que pertence. É esse que decide, e não o mês que está no ecrã.
+ *
+ * Devolve `null` quando pode prosseguir. Falha fechada.
+ */
+async function bloquearSePagamentoEmPeriodoFechado(
+  admin: AdminClient,
+  companyId: string,
+  paymentId: string,
+): Promise<{ ok: false; error: string } | null> {
+  const { data, error } = await admin
+    .from("fixed_variable_payments")
+    .select("period_year, period_month")
+    .eq("id", paymentId)
+    .eq("company_id", companyId)
+    .maybeSingle();
+
+  if (error) {
+    return { ok: false, error: "Não foi possível confirmar o período do pagamento. Nada foi alterado." };
+  }
+  if (!data) return { ok: false, error: "Pagamento não encontrado." };
+
+  const periodo = { year: Number(data.period_year), month: Number(data.period_month) };
+  const estado = await lerEstadoPeriodo(admin as unknown as ClientePeriodo, companyId, periodo);
+  if (!estado.ok) {
+    return {
+      ok: false,
+      error: "Não foi possível confirmar se o período financeiro está aberto. Nada foi alterado.",
+    };
+  }
+  if (estado.estado.status === "closed") {
+    return { ok: false, error: mensagemPeriodoFechado(periodo) };
+  }
+  return null;
+}
+
 export async function setPaymentStatus(id: string, status: PaymentStatus): Promise<{ ok: boolean; error?: string }> {
   const guard = await requireProfile({ roles: ["admin", "gestor"] });
   if (!guard.ok) return { ok: false, error: guard.error };
   const { admin, profile } = guard;
 
+  // ─── Guarda de período ──────────────────────────────────────────────────────
+  //
+  // A 073 já recusa um mês fechado do lado da base (levanta
+  // `FINANCIAL_PERIOD_CLOSED`, e `interpretarErro` traduz isso). Esta guarda
+  // corre **antes** para dar a mensagem com o nome do mês em vez de a deduzir
+  // de um erro de plpgsql — a garantia continua a ser da base, e nada aqui
+  // substitui a RPC.
+  //
+  // 🔴 A data autoritativa difere entre marcar e desmarcar:
+  //
+  //    · marcar como pago → a data do movimento que vai nascer, `todayInLisbon()`;
+  //    · voltar a pendente → o período do pagamento em si (`period_year`/
+  //      `period_month`), porque o movimento a remover é o que lá está, não um
+  //      que se crie hoje. Usar hoje aqui deixava reverter um pagamento de
+  //      Julho fechado só porque Agosto está aberto.
   if (status === "pago") {
+    const hoje = todayInLisbon();
+    const p = await assertFinancialPeriodOpen({
+      cliente: admin as unknown as ClientePeriodo,
+      companyId: profile.company_id,
+      data: hoje,
+    });
+    if (!p.ok) return { ok: false, error: p.error };
+
     const r = await marcarPagamentoPago(admin, {
       companyId: profile.company_id,
       paymentId: id,
       // A data do movimento é hoje **em Lisboa**. O processo corre em UTC na
       // Vercel, e `new Date()` na primeira hora do dia dava o dia anterior.
-      paidOn: todayInLisbon(),
+      paidOn: hoje,
     });
     if (!r.ok) return { ok: false, error: r.error };
     revalidateCaixa();
@@ -307,6 +375,9 @@ export async function setPaymentStatus(id: string, status: PaymentStatus): Promi
   }
 
   if (status === "pendente") {
+    const bloqueio = await bloquearSePagamentoEmPeriodoFechado(admin, profile.company_id, id);
+    if (bloqueio) return bloqueio;
+
     const r = await desmarcarPagamentoPago(admin, {
       companyId: profile.company_id,
       paymentId: id,

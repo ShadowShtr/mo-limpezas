@@ -8,6 +8,11 @@ import { estaPorReceber } from "@/domain/finance-v2/aggregate";
 import { todayInLisbon } from "@/lib/lisbon-time";
 import { isValidIsoDateString } from "@/lib/utils";
 import { revalidatePath } from "next/cache";
+import {
+  assertFinancialPeriodOpen,
+  assertPeriodosAbertosParaMudancaDeData,
+  type ClientePeriodo,
+} from "@/lib/finance-period-guard";
 
 export type CashFlowType = "entrada" | "saida";
 export type CashFlowCategory = "faturacao" | "salario" | "despesa" | "fornecedor" | "outro";
@@ -133,6 +138,16 @@ export async function createCashFlowEntry(
     return { ok: false, error: "Dados invÃ¡lidos." };
   }
 
+  // 🔴 A data autoritativa é `data.date` — a data do movimento, não hoje. Um
+  //    movimento lançado hoje com data de Julho pertence a Julho, e é Julho que
+  //    tem de estar aberto.
+  const periodo = await assertFinancialPeriodOpen({
+    cliente: admin as unknown as ClientePeriodo,
+    companyId: profile.company_id,
+    data: data.date,
+  });
+  if (!periodo.ok) return { ok: false, error: periodo.error };
+
   // 🔴 `expenseCategoryId` tem de sair do spread.
   //
   // `...data` copia as chaves tal como estão, e a base não tem nenhuma coluna
@@ -219,6 +234,42 @@ export async function updateCashFlowEntry(
     return { ok: false, error: "Data inválida." };
   }
 
+  // ─── Guarda de período, com o caso da mudança de data ──────────────────────
+  //
+  // 🔴 Os **dois** períodos têm de estar abertos quando a data muda.
+  //
+  //    Mover um movimento de Julho para Agosto retira dinheiro de Julho e
+  //    põe-no em Agosto. Validar só o destino deixava um caminho aberto para
+  //    alterar um mês fechado: bastava editar a data de uma linha de Julho
+  //    fechado para Setembro aberto, e os totais de Julho mudavam.
+  const { data: atual, error: erroAtual } = await admin
+    .from("cash_flow_entries")
+    .select("date")
+    .eq("id", id)
+    .eq("company_id", profile.company_id)
+    .maybeSingle();
+
+  if (erroAtual) {
+    return { ok: false, error: "Não foi possível confirmar o período do movimento. Nada foi alterado." };
+  }
+  if (!atual) return { ok: false, error: "Movimento não encontrado." };
+
+  const dataAntiga = String(atual.date);
+  const periodo =
+    data.date !== undefined && data.date !== dataAntiga
+      ? await assertPeriodosAbertosParaMudancaDeData({
+          cliente: admin as unknown as ClientePeriodo,
+          companyId: profile.company_id,
+          dataAntiga,
+          dataNova: data.date,
+        })
+      : await assertFinancialPeriodOpen({
+          cliente: admin as unknown as ClientePeriodo,
+          companyId: profile.company_id,
+          data: dataAntiga,
+        });
+  if (!periodo.ok) return { ok: false, error: periodo.error };
+
   // O nome camelCase não existe na base — separa-se, como no create.
   // `null` é enviado de propósito: é assim que se **retira** a categoria.
   const { expenseCategoryId, ...colunas } = data;
@@ -253,6 +304,27 @@ export async function deleteCashFlowEntry(id: string): Promise<{ ok: boolean; er
   if (!profile || !["admin", "gestor"].includes(profile.role)) {
     return { ok: false, error: "Sem permissão." };
   }
+
+  // Apagar um movimento altera os totais do mês a que ele pertence — a data
+  // autoritativa é a da própria linha.
+  const { data: atual, error: erroAtual } = await admin
+    .from("cash_flow_entries")
+    .select("date")
+    .eq("id", id)
+    .eq("company_id", profile.company_id)
+    .maybeSingle();
+
+  if (erroAtual) {
+    return { ok: false, error: "Não foi possível confirmar o período do movimento. Nada foi apagado." };
+  }
+  if (!atual) return { ok: true }; // já não existe — nada a apagar
+
+  const periodo = await assertFinancialPeriodOpen({
+    cliente: admin as unknown as ClientePeriodo,
+    companyId: profile.company_id,
+    data: String(atual.date),
+  });
+  if (!periodo.ok) return { ok: false, error: periodo.error };
 
   // Só apagar entradas manuais (sem reference_type)
   const { error } = await admin

@@ -146,6 +146,22 @@ const CAPABILITY_CEILING: Record<string, string[]> = {
     "createCashFlowEntry", "deleteCashFlowEntry", "updateCashFlowEntry",
   ],
 
+  // ── Fechamento mensal ─────────────────────────────────────────────────────
+  //
+  // Escrita nova, deliberada, e só a pedido de quem clica: fechar ou reabrir um
+  // período é sempre um acto explícito de admin/gestor, com confirmação em modal.
+  //
+  // 🔴 Este componente é `"use client"`, e é o que o mantém fora do invariante 3
+  //    (o grafo de render não escreve): as actions vivem em `onClick`, não no
+  //    render. Montá-lo na casca não fecha mês nenhum.
+  //
+  //    Abrir o modal de fecho chama `getFinancialCloseChecklist`, que é leitura
+  //    pura — não entra nesta lista porque não escreve. Cancelar não escreve
+  //    nada. Só o botão de confirmação chama `closeFinancialPeriod`.
+  "src/components/financeiro/period-close-controls.tsx": [
+    "closeFinancialPeriod", "reopenFinancialPeriod",
+  ],
+
   // ── Cobranças ─────────────────────────────────────────────────────────────
   "src/app/(dashboard)/dashboard/cobrancas/_components/invoices-client.tsx": [
     "deleteInvoice", "generateInvoices", "updateInvoiceStatus",

@@ -9,6 +9,97 @@ import { getMissingCashFlowReferenceIds, isValidCashFlowAmount } from "@/lib/cas
 import { isValidFiniteNumber } from "@/lib/utils";
 import { revalidatePath } from "next/cache";
 
+import { criarContextoPeriodo, lerEstadoPeriodo, type ClientePeriodo } from "@/lib/finance-period-guard";
+import {
+  mensagemPeriodoFechado,
+  PAYROLL_PERIOD_CLOSED_NO_MATERIALIZATION,
+} from "@/domain/finance-v2/financial-period";
+
+/**
+ * Guarda dura para as mutações da folha. A data autoritativa do período é o
+ * par `period_year`/`period_month` do próprio registo — não uma data civil,
+ * porque uma folha é do mês, não de um dia.
+ *
+ * Devolve `null` quando pode prosseguir, ou o erro a devolver ao chamador.
+ * Falha fechada: se não se souber o estado, recusa.
+ */
+async function bloquearSePeriodoFechado(
+  year: number,
+  month: number,
+): Promise<{ ok: false; error: string } | null> {
+  const guard = await requireProfile({ roles: ["admin", "gestor"] });
+  if (!guard.ok) return { ok: false, error: guard.error };
+
+  const estado = await lerEstadoPeriodo(
+    guard.admin as unknown as ClientePeriodo,
+    guard.profile.company_id,
+    { year, month },
+  );
+  if (!estado.ok) {
+    return {
+      ok: false,
+      error: "Não foi possível confirmar se o período financeiro está aberto. Nada foi alterado.",
+    };
+  }
+  if (estado.estado.status === "closed") {
+    return { ok: false, error: mensagemPeriodoFechado({ year, month }) };
+  }
+  return null;
+}
+
+/**
+ * Como `bloquearSePeriodoFechado`, mas para as mutações que recebem **ids de
+ * registo** em vez de ano/mês.
+ *
+ * 🔴 O período vem do próprio registo (`period_year`/`period_month`), nunca do
+ *    mês seleccionado no ecrã. Aprovar uma linha de Julho enquanto se olha
+ *    para Agosto tem de validar Julho — usar o mês da UI deixava passar
+ *    escritas em meses fechados a partir de qualquer vista.
+ *
+ * Um lote com linhas de meses diferentes exige que **todos** estejam abertos:
+ * uma operação em bloco não deve ficar meia-feita.
+ */
+async function bloquearSePeriodoFechadoPorIds(
+  ids: string[],
+): Promise<{ ok: false; error: string } | null> {
+  const guard = await requireProfile({ roles: ["admin", "gestor"] });
+  if (!guard.ok) return { ok: false, error: guard.error };
+  const unicos = [...new Set(ids)];
+  if (unicos.length === 0) return null;
+
+  const { data, error } = await guard.admin
+    .from("payroll_records")
+    .select("period_year, period_month")
+    .eq("company_id", guard.profile.company_id)
+    .in("id", unicos);
+
+  if (error) {
+    return { ok: false, error: "Não foi possível confirmar o período dos registos. Nada foi alterado." };
+  }
+
+  const periodos = new Map<string, { year: number; month: number }>();
+  for (const r of data ?? []) {
+    const year = Number(r.period_year);
+    const month = Number(r.period_month);
+    periodos.set(`${year}-${month}`, { year, month });
+  }
+
+  const contexto = criarContextoPeriodo(guard.admin as unknown as ClientePeriodo);
+  for (const p of periodos.values()) {
+    const estado = await contexto.ler(guard.profile.company_id, p);
+    if (!estado.ok) {
+      return {
+        ok: false,
+        error: "Não foi possível confirmar se o período financeiro está aberto. Nada foi alterado.",
+      };
+    }
+    if (estado.estado.status === "closed") {
+      return { ok: false, error: mensagemPeriodoFechado(p) };
+    }
+  }
+  return null;
+}
+
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 
 export interface PayrollRecord {
@@ -64,7 +155,29 @@ type PayrollPaidProfileJoin = {
 async function runPayrollCalculation(
   year: number,
   month: number,
-): Promise<{ ok: true; records: PayrollRecord[] } | { ok: false; error: string }> {
+  // ─── Período financeiro fechado ────────────────────────────────────────────
+  //
+  // `permitirMaterializacao: false` é o modo usado pelo render da página. A
+  // folha é calculada e devolvida, mas **não é gravada**.
+  //
+  // 🔴 Porque é que isto não é uma guarda normal que devolve erro:
+  //
+  //    `ensurePayrollCalculated` corre dentro do render de um Server Component
+  //    — foi a correcção de Julho para o crash da Folha de Pagamento. Se
+  //    devolvesse erro num mês fechado, abrir a folha de Agosto depois de
+  //    fechar Agosto mostrava o error boundary em vez dos números. Uma leitura
+  //    tem de continuar a ser uma leitura.
+  //
+  //    Mas o inverso também não serve: deixar o render gravar num mês fechado
+  //    criava a pior excepção possível — «render é read-only, excepto quando
+  //    recalcula financeiramente um período fechado». As duas regras
+  //    coexistem por aqui: calcula, mostra, e não escreve.
+  opcoes: { permitirMaterializacao?: boolean } = {},
+): Promise<
+  | { ok: true; records: PayrollRecord[]; materializado: boolean; motivo?: string }
+  | { ok: false; error: string }
+> {
+  const permitirMaterializacao = opcoes.permitirMaterializacao ?? true;
   const guard = await requireProfile({ roles: ["admin", "gestor"] });
   if (!guard.ok) return { ok: false, error: guard.error };
   const { admin } = guard;
@@ -81,7 +194,7 @@ async function runPayrollCalculation(
     .order("full_name");
 
   if (pErr) return { ok: false, error: pErr.message };
-  if (!profiles?.length) return { ok: true, records: [] };
+  if (!profiles?.length) return { ok: true, records: [], materializado: false };
 
   // 2. Configurações da empresa (salário/hora e sub. alimentação por defeito)
   const { data: settings } = await admin
@@ -196,33 +309,81 @@ async function runPayrollCalculation(
     };
   });
 
+  // 🔴 Mês fechado: calcula-se e devolve-se, mas não se grava. Os registos que
+  //    já existem são lidos como estão — o que a gestora vê é o que ficou
+  //    fixado no fecho, não um recálculo por cima.
+  if (!permitirMaterializacao) {
+    const existentes = await getPayrollRecords(companyId, year, month);
+    if (!existentes.ok) return existentes;
+    return {
+      ok: true,
+      records: existentes.records,
+      materializado: false,
+      motivo: PAYROLL_PERIOD_CLOSED_NO_MATERIALIZATION,
+    };
+  }
+
   const { error: uErr } = await admin
     .from("payroll_records")
     .upsert(upserts, { onConflict: "company_id,collaborator_id,period_year,period_month" });
 
   if (uErr) return { ok: false, error: uErr.message };
 
-  return getPayrollRecords(companyId, year, month);
+  const gravados = await getPayrollRecords(companyId, year, month);
+  if (!gravados.ok) return gravados;
+  return { ok: true, records: gravados.records, materializado: true };
 }
 
 /**
  * Usada por páginas Server Component para garantir que a folha do mês está
  * calculada. NUNCA chama revalidatePath — revalidar dentro do render de uma
  * página não é suportado pelo Next.js (rebenta para o error boundary).
+ *
+ * 🔴 Num mês **fechado** não materializa: devolve o que existe, com
+ *    `materializado: false`. Não devolve erro — abrir a página de um mês
+ *    fechado continua a mostrar os números. Ver a nota em
+ *    `runPayrollCalculation`.
+ *
+ * 🔴 Se não conseguir determinar o estado do período, **não materializa**. A
+ *    falha fecha para o lado seguro: mostrar sem gravar é sempre recuperável,
+ *    gravar por engano num mês fechado não é.
  */
 export async function ensurePayrollCalculated(
   year: number,
   month: number,
-): Promise<{ ok: true; records: PayrollRecord[] } | { ok: false; error: string }> {
-  return runPayrollCalculation(year, month);
+): Promise<
+  | { ok: true; records: PayrollRecord[]; materializado: boolean; motivo?: string }
+  | { ok: false; error: string }
+> {
+  const guard = await requireProfile({ roles: ["admin", "gestor"] });
+  if (!guard.ok) return { ok: false, error: guard.error };
+
+  const estado = await lerEstadoPeriodo(
+    guard.admin as unknown as ClientePeriodo,
+    guard.profile.company_id,
+    { year, month },
+  );
+
+  const podeMaterializar = estado.ok && estado.estado.status === "open";
+  return runPayrollCalculation(year, month, { permitirMaterializacao: podeMaterializar });
 }
 
-/** Usada pelo botão "Calcular"/"Recalcular" no cliente — aqui revalidar é válido. */
+/**
+ * Usada pelo botão "Calcular"/"Recalcular" no cliente — aqui revalidar é
+ * válido, e aqui a guarda é dura: recalcular é um acto deliberado, e num mês
+ * fechado a resposta certa é dizer que não, com a razão.
+ */
 export async function calculateAndSavePayroll(
   _companyId: string,
   year: number,
   month: number,
-): Promise<{ ok: true; records: PayrollRecord[] } | { ok: false; error: string }> {
+): Promise<
+  | { ok: true; records: PayrollRecord[]; materializado: boolean; motivo?: string }
+  | { ok: false; error: string }
+> {
+  const bloqueio = await bloquearSePeriodoFechado(year, month);
+  if (bloqueio) return bloqueio;
+
   const result = await runPayrollCalculation(year, month);
   if (result.ok) revalidatePath("/dashboard/folha-pagamento");
   return result;
@@ -296,6 +457,11 @@ export async function adjustPayrollRecord(
       return { ok: false, error: `Valor inválido em "${field}".` };
     }
   }
+
+  // Período do próprio registo — ajustar um salário altera o custo do mês a que
+  // ele pertence, e é esse mês que tem de estar aberto.
+  const bloqueio = await bloquearSePeriodoFechadoPorIds([id]);
+  if (bloqueio) return bloqueio;
 
   const supabase = await createClient();
   const admin    = createAdminClient();
@@ -398,6 +564,10 @@ export async function adjustPayrollRecord(
 export async function approvePayrollRecords(
   ids: string[],
 ): Promise<{ ok: boolean; error?: string }> {
+  // Aprovar fixa o valor a pagar. Num mês fechado isso já não se mexe.
+  const bloqueio = await bloquearSePeriodoFechadoPorIds(ids);
+  if (bloqueio) return bloqueio;
+
   const supabase = await createClient();
   const admin    = createAdminClient();
 
@@ -434,6 +604,11 @@ export async function markPayrollPaid(
 
   const uniqueIds = [...new Set(ids)];
   if (uniqueIds.length === 0) return { ok: true };
+
+  // Marcar como paga cria a saída de caixa do salário — é o facto económico
+  // mais directo desta página.
+  const bloqueio = await bloquearSePeriodoFechadoPorIds(uniqueIds);
+  if (bloqueio) return bloqueio;
 
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { ok: false, error: "Nao autenticado." };

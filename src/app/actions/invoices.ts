@@ -8,6 +8,12 @@ import { getMissingCashFlowReferenceIds, isValidCashFlowAmount } from "@/lib/cas
 import { findDuplicateMonthlyContractsByLocation } from "@/lib/invoice-duplicates";
 import { revalidatePath } from "next/cache";
 import { todayInLisbon, addDaysToDateString, toLisbonTimestamp } from "@/lib/lisbon-time";
+import {
+  assertFinancialPeriodOpen,
+  lerEstadoPeriodo,
+  type ClientePeriodo,
+} from "@/lib/finance-period-guard";
+import { mensagemPeriodoFechado } from "@/domain/finance-v2/financial-period";
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 
@@ -75,6 +81,24 @@ export async function generateInvoices(
   const { admin } = guard;
   const companyId = guard.profile.company_id;
   const { start, end } = monthRange(year, month);
+
+  // Gerar cobranças cria documentos financeiros do mês pedido — aqui o período
+  // vem directamente do argumento, sem ambiguidade.
+  //
+  // ⚠️ Isto **não** liga a RPC da 072 (`create_invoice_with_items`). A criação
+  //    atómica continua por activar até haver prova de serialização concorrente
+  //    — ver `src/lib/finance-rpc/invoice-creation.ts`.
+  const estadoPeriodo = await lerEstadoPeriodo(
+    admin as unknown as ClientePeriodo,
+    companyId,
+    { year, month },
+  );
+  if (!estadoPeriodo.ok) {
+    return { ok: false, error: "Não foi possível confirmar se o período está aberto. Nada foi gerado." };
+  }
+  if (estadoPeriodo.estado.status === "closed") {
+    return { ok: false, error: mensagemPeriodoFechado({ year, month }) };
+  }
 
   // Configurações
   //
@@ -491,12 +515,22 @@ export async function updateInvoiceStatus(
 
   const { data: inv } = await admin
     .from("invoices")
-    .select("company_id, total, invoice_number, client_id, status, paid_at")
+    .select("company_id, total, invoice_number, client_id, status, paid_at, invoice_date")
     .eq("id", id)
     .eq("company_id", profile.company_id)
     .single();
 
   if (!inv) return { ok: false, error: "Fatura nao encontrada." };
+
+  // 🔴 A data autoritativa é `invoice_date` — a data de emissão do documento,
+  //    que é o que o determina o mês a que a fatura pertence. Não `period_start`
+  //    (o período de serviço facturado pode atravessar meses) e não hoje.
+  const periodo = await assertFinancialPeriodOpen({
+    cliente: admin as unknown as ClientePeriodo,
+    companyId: profile.company_id,
+    data: String(inv.invoice_date),
+  });
+  if (!periodo.ok) return { ok: false, error: periodo.error };
 
   const update: { status: string; paid_at?: string | null; payment_method?: string | null } = { status };
   if (status === "pago") {
@@ -574,6 +608,26 @@ export async function deleteInvoice(
   if (!profile || !["admin", "gestor"].includes(profile.role)) {
     return { ok: false, error: "Sem permissão." };
   }
+
+  // Apagar um rascunho altera o que o mês tem por facturar.
+  const { data: inv, error: erroInv } = await admin
+    .from("invoices")
+    .select("invoice_date")
+    .eq("id", id)
+    .eq("company_id", profile.company_id)
+    .maybeSingle();
+
+  if (erroInv) {
+    return { ok: false, error: "Não foi possível confirmar o período da fatura. Nada foi apagado." };
+  }
+  if (!inv) return { ok: true }; // já não existe
+
+  const periodo = await assertFinancialPeriodOpen({
+    cliente: admin as unknown as ClientePeriodo,
+    companyId: profile.company_id,
+    data: String(inv.invoice_date),
+  });
+  if (!periodo.ok) return { ok: false, error: periodo.error };
 
   const { error } = await admin
     .from("invoices")
