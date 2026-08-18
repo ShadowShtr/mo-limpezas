@@ -377,12 +377,23 @@ describe("🔴 nenhuma outra superfície cria a saída de caixa do pagamento", (
     // O guarda que substitui o «não está ligado»: a identidade de origem é o
     // que torna a operação idempotente, e um segundo sítio a escrevê-la
     // partiria essa garantia sem dar erro nenhum.
+    // 🔴 O que se procura é a identidade usada como ORIGEM DE MOVIMENTO DE
+    //    CAIXA — `reference_type`/`origem` em `cash_flow_entries`. Desde a 074
+    //    a mesma string é também o `parent_type` de um anexo
+    //    (`src/lib/attachments.ts`), num contexto que não toca em caixa: esses
+    //    ficheiros não são superfícies de escrita de movimento, e incluí-los
+    //    aqui seria um falso positivo que acabaria por ser silenciado.
+    const CONTEXTO_CAIXA = /(reference_type|origem|source)\s*[:=]\s*["']fixed_variable_payment["']/;
+
     const culpados = varrer(path.join(RAIZ, "src"))
       .filter((f) => !f.includes("__tests__"))
       .filter((f) => {
         const codigo = fs.readFileSync(f, "utf8").replace(/^\s*(\/\/|\*|\/\*).*$/gm, "");
-        return codigo.includes("fixed_variable_payment'")
+        const mencao = codigo.includes("fixed_variable_payment'")
           || codigo.includes('"fixed_variable_payment"');
+        if (!mencao) return false;
+        // Menção fora de contexto de caixa (ex.: parent_type de anexo) não conta.
+        return CONTEXTO_CAIXA.test(codigo);
       })
       .map((f) => path.relative(RAIZ, f).split(path.sep).join("/"));
 

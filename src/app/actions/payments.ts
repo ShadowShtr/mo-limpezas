@@ -456,16 +456,16 @@ export async function uploadPaymentAttachment(
     .upload(path, file, { contentType: file.type, upsert: false });
   if (uploadError) return { ok: false, error: uploadError.message };
 
-  // Substitui um anexo anterior — remove o ficheiro antigo do storage.
-  if (payment.attachment_url) {
-    const bucketPrefix = `/${PAYMENT_ATTACHMENTS_BUCKET}/`;
-    const oldPath = payment.attachment_url.includes(bucketPrefix)
-      ? decodeURIComponent(payment.attachment_url.split(bucketPrefix)[1])
-      : null;
-    if (oldPath && isPaymentAttachmentPathInCompany(oldPath, profile.company_id)) {
-      await admin.storage.from(PAYMENT_ATTACHMENTS_BUCKET).remove([oldPath]);
-    }
-  }
+  // 🔴 NÃO remover aqui o anexo anterior.
+  //
+  // Até 2026-08-18 este bloco apagava do storage o ficheiro que já estivesse
+  // anexado, antes de gravar o novo — sem recuperação. Desde a 074 um registo
+  // aceita N anexos (`src/app/actions/attachments.ts`), e adicionar nunca
+  // remove: a remoção só acontece por acção explícita do utilizador, ou como
+  // compensação do upload que acabou de falhar.
+  //
+  // Esta action mantém-se para o caminho legado da coluna `attachment_url`; o
+  // ficheiro anterior, se existir, fica no bucket e continua acessível.
 
   const { data: urlData } = admin.storage.from(PAYMENT_ATTACHMENTS_BUCKET).getPublicUrl(path);
 

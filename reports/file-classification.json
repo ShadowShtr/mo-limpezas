@@ -1,20 +1,20 @@
 {
   "generatedBy": "scripts/audit-file-inventory.mjs",
-  "totalFiles": 637,
+  "totalFiles": 643,
   "byStatus": {
-    "MANTER": 619,
-    "STANDBY": 18
+    "MANTER": 624,
+    "STANDBY": 19
   },
   "byCategory": {
     "route-ui": 133,
-    "test": 101,
-    "migration": 75,
-    "lib": 64,
+    "test": 102,
+    "migration": 76,
+    "lib": 65,
     "script": 46,
-    "doc": 42,
+    "doc": 43,
+    "server-action": 40,
     "domain": 40,
-    "server-action": 39,
-    "component": 27,
+    "component": 28,
     "doc-historico": 16,
     "api-route": 16,
     "config": 12,
@@ -29,8 +29,8 @@
     "src-other": 1
   },
   "byConfidence": {
-    "alta": 621,
-    "média": 10,
+    "alta": 626,
+    "média": 11,
     "baixa": 6
   },
   "scriptRisk": {
@@ -385,6 +385,24 @@
       "risks": [],
       "signals": {
         "sqlWrite": 2
+      },
+      "action": "nenhuma",
+      "reason": "documentação",
+      "manualDecision": false
+    },
+    {
+      "path": "docs/ATTACHMENTS-MULTIPLE.md",
+      "category": "doc",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "sqlWrite": 8
       },
       "action": "nenhuma",
       "reason": "documentação",
@@ -1807,7 +1825,7 @@
       ],
       "sideEffects": [
         "supabase",
-        "revalidatePath(35)"
+        "revalidatePath(36)"
       ],
       "risks": [
         "debugger"
@@ -1816,7 +1834,7 @@
         "supabase": 1,
         "sqlWrite": 7,
         "debugger": 6,
-        "revalidatePath": 35
+        "revalidatePath": 36
       },
       "action": "nenhuma",
       "reason": "configuração/infra",
@@ -3561,6 +3579,34 @@
         "serviceRole": 1,
         "sqlWrite": 4,
         "fallbackArray": 1
+      },
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/__tests__/attachments.test.ts",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [
+        "docs"
+      ],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "sqlWrite": 13,
+        "unknownCast": 1,
+        "fallbackArray": 2
       },
       "action": "nenhuma",
       "reason": "suite de testes — corre por convenção do vitest",
@@ -9915,6 +9961,46 @@
       }
     },
     {
+      "path": "src/app/actions/attachments.ts",
+      "category": "server-action",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 1,
+      "consumerSample": [
+        "src/components/attachments/attachments-field.tsx"
+      ],
+      "autoLoaded": false,
+      "referencedBy": [
+        "docs"
+      ],
+      "sideEffects": [
+        "write",
+        "revalidatePath(5)"
+      ],
+      "risks": [
+        "erro-de-query-ignorado(3)"
+      ],
+      "signals": {
+        "serverAction": 1,
+        "write": 3,
+        "sqlWrite": 4,
+        "unknownCast": 1,
+        "ignoredError": 3,
+        "fallbackZero": 1,
+        "fallbackArray": 1,
+        "revalidatePath": 5
+      },
+      "action": "auditar atomicidade (T12/T13)",
+      "reason": "em uso: 1 consumidor(es)",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
       "path": "src/app/actions/auth.ts",
       "category": "server-action",
       "status": "MANTER",
@@ -12070,6 +12156,33 @@
       }
     },
     {
+      "path": "src/components/attachments/attachments-field.tsx",
+      "category": "component",
+      "status": "STANDBY",
+      "confidence": "média",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [
+        "docs"
+      ],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "clientComponent": 1,
+        "sqlWrite": 2
+      },
+      "action": "porta(s) ainda abertas (import dinâmico não resolúvel) — não remover",
+      "reason": "sem consumidor no código, mas referido na documentação",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
       "path": "src/components/financeiro/finance-nav.tsx",
       "category": "component",
       "status": "MANTER",
@@ -12831,11 +12944,11 @@
       "category": "component",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 3,
+      "consumers": 4,
       "consumerSample": [
         "src/app/(dashboard)/dashboard/financeiro/conciliacao/_components/reconciliation-client.tsx",
         "src/app/layout.tsx",
-        "src/components/layout/notifications-bell.tsx"
+        "src/components/attachments/attachments-field.tsx"
       ],
       "autoLoaded": false,
       "referencedBy": [
@@ -12847,7 +12960,7 @@
         "clientComponent": 1
       },
       "action": "nenhuma",
-      "reason": "em uso: 3 consumidor(es)",
+      "reason": "em uso: 4 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -14045,6 +14158,34 @@
       }
     },
     {
+      "path": "src/lib/attachments.ts",
+      "category": "lib",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 3,
+      "consumerSample": [
+        "src/__tests__/attachments.test.ts",
+        "src/app/actions/attachments.ts",
+        "src/components/attachments/attachments-field.tsx"
+      ],
+      "autoLoaded": false,
+      "referencedBy": [
+        "docs"
+      ],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {},
+      "action": "nenhuma",
+      "reason": "em uso: 3 consumidor(es)",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
       "path": "src/lib/audit.ts",
       "category": "lib",
       "status": "MANTER",
@@ -14091,11 +14232,11 @@
       "category": "lib",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 20,
+      "consumers": 21,
       "consumerSample": [
         "src/__tests__/auth-revalidation-central.test.ts",
-        "src/app/actions/bank-reconciliation.ts",
-        "src/app/actions/cash-flow.ts"
+        "src/app/actions/attachments.ts",
+        "src/app/actions/bank-reconciliation.ts"
       ],
       "autoLoaded": false,
       "referencedBy": [
@@ -14112,7 +14253,7 @@
         "ignoredError": 1
       },
       "action": "nenhuma",
-      "reason": "em uso: 20 consumidor(es)",
+      "reason": "em uso: 21 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -15824,7 +15965,9 @@
         "src/app/actions/management-tasks.ts"
       ],
       "autoLoaded": false,
-      "referencedBy": [],
+      "referencedBy": [
+        "docs"
+      ],
       "sideEffects": [],
       "risks": [],
       "signals": {},
@@ -15964,7 +16107,7 @@
       "risks": [],
       "signals": {
         "supabase": 1,
-        "sqlWrite": 78
+        "sqlWrite": 81
       },
       "action": "nenhuma",
       "reason": "em uso: 25 consumidor(es)",
@@ -17495,6 +17638,26 @@
       "risks": [],
       "signals": {
         "sqlWrite": 7
+      },
+      "action": "nenhuma",
+      "reason": "migration versionada — histórico do schema, nunca se apaga",
+      "manualDecision": false
+    },
+    {
+      "path": "supabase/migrations/074_attachments.sql",
+      "category": "migration",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [
+        "docs"
+      ],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "sqlWrite": 14
       },
       "action": "nenhuma",
       "reason": "migration versionada — histórico do schema, nunca se apaga",

@@ -1,13 +1,13 @@
 {
   "inventorySource": "git ls-files",
   "summary": {
-    "repositoryFiles": 633,
-    "textFiles": 621,
-    "sourceFiles": 441,
-    "textLines": 148951,
+    "repositoryFiles": 639,
+    "textFiles": 627,
+    "sourceFiles": 445,
+    "textLines": 150524,
     "typescriptDiagnostics": 0,
     "productionEntries": 70,
-    "unreachableProductionModules": 38,
+    "unreachableProductionModules": 41,
     "exactDuplicateFileGroups": 0
   },
   "highConfidence": {
@@ -17,7 +17,9 @@
   },
   "reviewRequired": {
     "unreachableProductionModules": [
+      "src/app/actions/attachments.ts",
       "src/app/actions/whatsapp.ts",
+      "src/components/attachments/attachments-field.tsx",
       "src/domain/billing/billing-compat.ts",
       "src/domain/billing/consumer-parity.ts",
       "src/domain/billing/financial-model.ts",
@@ -50,6 +52,7 @@
       "src/domain/scheduling/occurrence-repair.ts",
       "src/domain/scheduling/reconciliation.ts",
       "src/domain/scheduling/recurrence-compat.ts",
+      "src/lib/attachments.ts",
       "src/lib/bank-import/pdf.ts",
       "src/lib/bank-import/xlsx.ts",
       "src/lib/finance-write-surface.ts",
@@ -89,6 +92,7 @@
       "src/domain/scheduling/occurrence-repair.ts",
       "src/domain/scheduling/reconciliation.ts",
       "src/domain/scheduling/recurrence-compat.ts",
+      "src/lib/attachments.ts",
       "src/lib/finance-write-surface.ts"
     ],
     "testSignupCalls": [
@@ -103,6 +107,7 @@
       "src/__tests__/predios-edicao-por-link.test.ts",
       "src/app/(dashboard)/dashboard/calendario/_actions/create-service.ts",
       "src/app/actions/absences.ts",
+      "src/app/actions/attachments.ts",
       "src/app/actions/auth.ts",
       "src/app/actions/bank-reconciliation.ts",
       "src/app/actions/building-cards.ts",

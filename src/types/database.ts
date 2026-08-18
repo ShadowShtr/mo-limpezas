@@ -118,6 +118,13 @@ export type Database = {
         Update: { status?: string; uploaded_at?: string | null; compressed_size_bytes?: number | null; failed_at?: string | null; failure_reason?: string | null; kind?: string };
         Relationships: [];
       };
+      // Anexos 1:N (migration 074). Imutáveis: cria, lê, remove — sem Update.
+      attachments: {
+        Row: { id: string; company_id: string; parent_type: string; parent_id: string; storage_bucket: string; storage_path: string; original_name: string; mime_type: string | null; size_bytes: number | null; client_event_id: string | null; created_at: string; created_by: string | null };
+        Insert: { company_id: string; parent_type: string; parent_id: string; storage_bucket: string; storage_path: string; original_name: string; mime_type?: string | null; size_bytes?: number | null; client_event_id?: string | null; created_by?: string | null; id?: string; created_at?: string };
+        Update: never;
+        Relationships: [];
+      };
       absences: {
         Row: { id: string; company_id: string; collaborator_id: string; absence_type: string; starts_on: string; ends_on: string; notes: string | null; document_url: string | null; replaced_by: string | null; approved_by: string | null; created_by: string | null; created_at: string };
         Insert: { company_id: string; collaborator_id: string; absence_type: string; starts_on: string; ends_on: string; notes?: string | null; document_url?: string | null; replaced_by?: string | null; approved_by?: string | null; created_by?: string | null };
