@@ -3,14 +3,16 @@
 import { useState, useTransition } from "react";
 import {
   Plus, Trash2, Loader2, AlertCircle, X, Check, Clock, CheckCircle2,
-  Repeat, Calendar, Zap, Pencil, Paperclip, Upload,
+  Repeat, Calendar, Zap, Pencil,
 } from "lucide-react";
 import {
   getPayments, createPayment, updatePayment, setPaymentStatus, deletePayment,
-  uploadPaymentAttachment, deletePaymentAttachment, getSignedPaymentAttachmentUrl,
   type PaymentsData, type Payment, type PaymentKind,
 } from "@/app/actions/payments";
 import { LocalTabs, Kpi as V2Kpi, RowMenu, type KpiTone } from "@/components/financeiro/v2/primitives";
+import { AttachmentsField } from "@/components/attachments/attachments-field";
+import { listAttachments } from "@/app/actions/attachments";
+import type { AttachmentView } from "@/lib/attachments";
 import { todayInLisbon } from "@/lib/lisbon-time";
 import { isValidIsoDateString } from "@/lib/utils";
 
@@ -64,8 +66,8 @@ export function PaymentsClient({ initialData, error: initErr, year, month }: Pro
   const [isPending, startTransition] = useTransition();
   const [form, setForm] = useState<FormState | null>(null);
   const [formError, setFormError] = useState("");
-  const [attachUploading, setAttachUploading] = useState(false);
   const [attachError, setAttachError] = useState("");
+  const [attachments, setAttachments] = useState<AttachmentView[]>([]);
   // Filtro **local**, sobre os dados já carregados. Trocar de aba não vai à
   // base, não muda o mês e não dispara mutação nenhuma.
   const [aba, setAba] = useState<"fixos" | "variaveis">("fixos");
@@ -85,6 +87,15 @@ export function PaymentsClient({ initialData, error: initErr, year, month }: Pro
   function openEdit(p: Payment) {
     setFormError("");
     setAttachError("");
+    // Os anexos vêm do servidor, que junta o legado deste pagamento com as
+    // linhas de `attachments`. Enquanto carrega, a lista fica vazia — o
+    // componente mostra "Sem anexos" e não perde nada: a fonte autoritativa
+    // chega logo a seguir.
+    setAttachments([]);
+    listAttachments("fixed_variable_payment", p.id).then((res) => {
+      if (res.ok) setAttachments(res.attachments);
+      else setAttachError(res.error);
+    });
     setForm({
       id: p.id, kind: p.kind, description: p.description,
       amount: p.amount === null ? "" : String(p.amount),
@@ -117,53 +128,45 @@ export function PaymentsClient({ initialData, error: initErr, year, month }: Pro
     });
   }
 
+  // 🔴 O resultado da action TEM de ser lido.
+  //
+  // Até 2026-08-18 este handler fazia `await setPaymentStatus(...)` e chamava
+  // `reload()` a seguir, sem olhar para a resposta. A action é fail-closed e
+  // devolve `{ ok: false, error }` — período fechado, sem permissão, erro da
+  // RPC — mas o erro era descartado. O `reload()` relia o estado real (que não
+  // tinha mudado) e a linha voltava a aparecer como estava, sem mensagem
+  // nenhuma. Para quem clicava: «marquei como pago e não atualizou».
+  //
+  // O caso mais provável em uso real é o mês fechado: a 073 recusa a escrita,
+  // a action traduz o erro, e ninguém o via.
   function toggleStatus(p: Payment) {
+    setError("");
     startTransition(async () => {
-      await setPaymentStatus(p.id, p.status === "pago" ? "pendente" : "pago");
+      const res = await setPaymentStatus(p.id, p.status === "pago" ? "pendente" : "pago");
+      if (!res.ok) {
+        setError(res.error ?? "Não foi possível alterar o estado do pagamento.");
+        return;
+      }
       reload();
     });
   }
   function handleDelete(p: Payment) {
     if (!confirm(`Eliminar "${p.description}"?`)) return;
+    setError("");
     startTransition(async () => {
-      await deletePayment(p.id);
+      const res = await deletePayment(p.id);
+      if (!res.ok) {
+        setError(res.error ?? "Não foi possível eliminar o pagamento.");
+        return;
+      }
       reload();
     });
   }
 
-  function handleAttachmentChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    e.target.value = "";
-    if (!file || !form?.id) return;
-    setAttachError("");
-    setAttachUploading(true);
-    const paymentId = form.id;
-    const fd = new FormData();
-    fd.append("file", file);
-    uploadPaymentAttachment(paymentId, fd).then((res) => {
-      setAttachUploading(false);
-      if (!res.ok) { setAttachError(res.error); return; }
-      setForm((f) => (f ? { ...f, attachment_url: res.url, attachment_name: res.name } : f));
-      reload();
-    });
-  }
-
-  async function handleAttachmentDownload() {
-    if (!form?.attachment_url) return;
-    const res = await getSignedPaymentAttachmentUrl(form.attachment_url);
-    window.open(res.ok ? res.url : form.attachment_url, "_blank");
-  }
-
-  function handleAttachmentRemove() {
-    if (!form?.id) return;
-    if (!confirm("Remover o anexo?")) return;
-    const paymentId = form.id;
-    deletePaymentAttachment(paymentId).then((res) => {
-      if (!res.ok) { setAttachError(res.error ?? "Erro ao remover."); return; }
-      setForm((f) => (f ? { ...f, attachment_url: null, attachment_name: null } : f));
-      reload();
-    });
-  }
+  // Os handlers de anexo único (upload/download/remove) saíram daqui: o
+  // AttachmentsField trata dos três, através de src/app/actions/attachments.ts.
+  // As actions legadas de payments.ts continuam a existir para o caminho antigo,
+  // mas já não são chamadas por esta página.
 
   const today = todayInLisbon();
 
@@ -278,26 +281,24 @@ export function PaymentsClient({ initialData, error: initErr, year, month }: Pro
               <Field label="Notas">
                 <textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} rows={2} className={inputCls + " resize-none"} />
               </Field>
+              {/*
+                Anexos múltiplos (migration 074). O campo de ficheiro único
+                saiu: anexar um segundo sobrescrevia as colunas e apagava o
+                ficheiro anterior do storage. O anexo legado deste pagamento,
+                se existir, aparece na mesma lista — o read model junta as duas
+                fontes. Ver docs/ATTACHMENTS-MULTIPLE.md.
+              */}
               {form.id && (
-                <Field label="Anexo (fatura/recibo)">
-                  {form.attachment_url ? (
-                    <div className="flex items-center gap-2 px-3 py-2 rounded-lg border border-[var(--color-border)] bg-white text-sm">
-                      <Paperclip className="w-4 h-4 text-[var(--color-text-muted)] shrink-0" />
-                      <button type="button" onClick={handleAttachmentDownload} className="flex-1 text-left truncate text-[var(--finance-primary)] hover:underline">
-                        {form.attachment_name ?? "Ficheiro anexado"}
-                      </button>
-                      <button type="button" onClick={handleAttachmentRemove} title="Remover anexo" className="text-[var(--color-text-muted)] hover:text-red-600 shrink-0">
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-                  ) : (
-                    <label className="flex items-center justify-center gap-2 px-3 py-2 rounded-lg border border-dashed border-[var(--color-border)] text-sm text-[var(--color-text-sub)] hover:bg-[var(--color-background)] cursor-pointer transition-colors">
-                      {attachUploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
-                      {attachUploading ? "A carregar..." : "Anexar ficheiro (PDF ou imagem)"}
-                      <input type="file" accept=".pdf,image/jpeg,image/png,image/webp" className="hidden" onChange={handleAttachmentChange} disabled={attachUploading} />
-                    </label>
-                  )}
-                  {attachError && <p className="text-xs text-red-600 mt-1">{attachError}</p>}
+                <Field label="Anexos (faturas/recibos)">
+                  {/* Falhar a ler a lista tem de ser visível: sem isto, um
+                      pagamento com anexos apareceria como se não tivesse. */}
+                  {attachError && <p className="text-xs text-red-600 mb-2">{attachError}</p>}
+                  <AttachmentsField
+                    key={form.id}
+                    parentType="fixed_variable_payment"
+                    parentId={form.id}
+                    initialAttachments={attachments}
+                  />
                 </Field>
               )}
               {formError && <p className="text-sm text-red-600">{formError}</p>}

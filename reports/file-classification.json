@@ -1,13 +1,13 @@
 {
   "generatedBy": "scripts/audit-file-inventory.mjs",
-  "totalFiles": 643,
+  "totalFiles": 644,
   "byStatus": {
-    "MANTER": 624,
-    "STANDBY": 19
+    "MANTER": 626,
+    "STANDBY": 18
   },
   "byCategory": {
     "route-ui": 133,
-    "test": 102,
+    "test": 103,
     "migration": 76,
     "lib": 65,
     "script": 46,
@@ -29,8 +29,8 @@
     "src-other": 1
   },
   "byConfidence": {
-    "alta": 626,
-    "média": 11,
+    "alta": 628,
+    "média": 10,
     "baixa": 6
   },
   "scriptRisk": {
@@ -5203,6 +5203,30 @@
       }
     },
     {
+      "path": "src/__tests__/payments-client-error-propagation.test.ts",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "consoleErr": 1
+      },
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
       "path": "src/__tests__/payments-no-implicit-materialization.test.ts",
       "category": "test",
       "status": "MANTER",
@@ -9119,7 +9143,7 @@
       "risks": [],
       "signals": {
         "clientComponent": 1,
-        "sqlWrite": 3
+        "sqlWrite": 2
       },
       "action": "nenhuma",
       "reason": "em uso: 1 consumidor(es)",
@@ -9762,7 +9786,7 @@
         "supabase": 3,
         "clientComponent": 1,
         "write": 1,
-        "sqlWrite": 8
+        "sqlWrite": 7
       },
       "action": "nenhuma",
       "reason": "em uso: 1 consumidor(es)",
@@ -9965,9 +9989,11 @@
       "category": "server-action",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 1,
+      "consumers": 4,
       "consumerSample": [
-        "src/components/attachments/attachments-field.tsx"
+        "src/app/(dashboard)/dashboard/faltas/_components/substitution-panel.tsx",
+        "src/app/(dashboard)/dashboard/financeiro/pagamentos/_components/payments-client.tsx",
+        "src/app/(dashboard)/dashboard/tarefas/_components/tasks-client.tsx"
       ],
       "autoLoaded": false,
       "referencedBy": [
@@ -9991,7 +10017,7 @@
         "revalidatePath": 5
       },
       "action": "auditar atomicidade (T12/T13)",
-      "reason": "em uso: 1 consumidor(es)",
+      "reason": "em uso: 4 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -12158,10 +12184,14 @@
     {
       "path": "src/components/attachments/attachments-field.tsx",
       "category": "component",
-      "status": "STANDBY",
-      "confidence": "média",
-      "consumers": 0,
-      "consumerSample": [],
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 3,
+      "consumerSample": [
+        "src/app/(dashboard)/dashboard/faltas/_components/substitution-panel.tsx",
+        "src/app/(dashboard)/dashboard/financeiro/pagamentos/_components/payments-client.tsx",
+        "src/app/(dashboard)/dashboard/tarefas/_components/tasks-client.tsx"
+      ],
       "autoLoaded": false,
       "referencedBy": [
         "docs"
@@ -12172,8 +12202,8 @@
         "clientComponent": 1,
         "sqlWrite": 2
       },
-      "action": "porta(s) ainda abertas (import dinâmico não resolúvel) — não remover",
-      "reason": "sem consumidor no código, mas referido na documentação",
+      "action": "nenhuma",
+      "reason": "em uso: 3 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -14162,11 +14192,11 @@
       "category": "lib",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 3,
+      "consumers": 6,
       "consumerSample": [
         "src/__tests__/attachments.test.ts",
-        "src/app/actions/attachments.ts",
-        "src/components/attachments/attachments-field.tsx"
+        "src/app/(dashboard)/dashboard/faltas/_components/substitution-panel.tsx",
+        "src/app/(dashboard)/dashboard/financeiro/pagamentos/_components/payments-client.tsx"
       ],
       "autoLoaded": false,
       "referencedBy": [
@@ -14176,7 +14206,7 @@
       "risks": [],
       "signals": {},
       "action": "nenhuma",
-      "reason": "em uso: 3 consumidor(es)",
+      "reason": "em uso: 6 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,

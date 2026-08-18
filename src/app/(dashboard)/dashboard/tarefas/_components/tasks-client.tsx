@@ -2,9 +2,12 @@
 
 import { useEffect, useRef, useState, useTransition } from "react";
 import { createPortal } from "react-dom";
+import { AttachmentsField } from "@/components/attachments/attachments-field";
+import { listAttachments } from "@/app/actions/attachments";
+import type { AttachmentView } from "@/lib/attachments";
 import {
   AlertTriangle, Building2, Calendar, ChevronDown, FolderKanban,
-  Loader2, Paperclip, Plus, Search, Trash2, Upload, User, Users, X,
+  Loader2, Paperclip, Plus, Search, Trash2, User, Users, X,
 } from "lucide-react";
 import {
   createManagementTask,
@@ -302,6 +305,7 @@ export function TasksClient({ initialTasks, initialColumns, companyId, members, 
   const [savingDetail, startSaveDetail] = useTransition();
   const [attachUploading, setAttachUploading] = useState(false);
   const [attachError, setAttachError] = useState<string | null>(null);
+  const [attachments, setAttachments] = useState<AttachmentView[]>([]);
 
   // ── Nova coluna ──
   const [addingColumn, setAddingColumn] = useState(false);
@@ -393,8 +397,21 @@ export function TasksClient({ initialTasks, initialColumns, companyId, members, 
     setEditPriority(task.priority as TaskPriority); setEditAssigned(task.assigned_to ?? "");
     setEditDue(task.due_date ?? ""); setEditStatus(task.status); setEditTab("detalhes");
     setAttachError(null); setAttachUploading(false);
+    // A lista vem do servidor, que junta o anexo legado desta tarefa com as
+    // linhas de `attachments`.
+    setAttachments([]);
+    listAttachments("management_task", task.id).then((res) => {
+      if (res.ok) setAttachments(res.attachments);
+      else setAttachError(res.error);
+    });
   }
 
+  // 🔴 Estes três handlers de anexo ÚNICO já não são usados pela UI: o
+  //    AttachmentsField trata upload, abertura e remoção de N anexos, via
+  //    src/app/actions/attachments.ts. Ficam aqui — sem chamadas — enquanto as
+  //    actions legadas de management-tasks.ts existirem, para o caminho antigo
+  //    continuar disponível se for preciso reverter a UI.
+  //    Ver docs/ATTACHMENTS-MULTIPLE.md.
   function handleAttachmentChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     e.target.value = "";
@@ -428,6 +445,13 @@ export function TasksClient({ initialTasks, initialColumns, companyId, members, 
       setTasks((prev) => prev.map((t) => t.id === taskId ? { ...t, attachment_url: null, attachment_name: null } : t));
     });
   }
+
+  // Mantidos deliberadamente (ver a nota acima), mas não referenciados pela
+  // UI. Sem isto, `noUnusedLocals` e o lint estrito recusariam o ficheiro.
+  void attachUploading;
+  void handleAttachmentChange;
+  void handleAttachmentDownload;
+  void handleAttachmentRemove;
 
   function saveDetail() {
     if (!openTask) return;
@@ -871,26 +895,20 @@ export function TasksClient({ initialTasks, initialColumns, companyId, members, 
                       className="w-full px-3 py-2 border border-[var(--color-border)] rounded-lg text-sm outline-none focus:border-[var(--color-primary)]" />
                   </div>
                 </div>
+                {/*
+                  Anexos múltiplos (migration 074). O anexo legado desta
+                  tarefa, se existir, aparece na mesma lista — o read model
+                  junta as duas fontes. Ver docs/ATTACHMENTS-MULTIPLE.md.
+                */}
                 <div>
-                  <label className="block text-xs font-medium text-[var(--color-text-sub)] mb-1">Anexo</label>
-                  {openTask.attachment_url ? (
-                    <div className="flex items-center gap-2 px-3 py-2 rounded-lg border border-[var(--color-border)] bg-white text-sm">
-                      <Paperclip className="w-4 h-4 text-[var(--color-text-muted)] shrink-0" />
-                      <button type="button" onClick={handleAttachmentDownload} className="flex-1 text-left truncate text-[var(--color-primary)] hover:underline">
-                        {openTask.attachment_name ?? "Ficheiro anexado"}
-                      </button>
-                      <button type="button" onClick={handleAttachmentRemove} title="Remover anexo" className="text-[var(--color-text-muted)] hover:text-red-600 shrink-0">
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-                  ) : (
-                    <label className="flex items-center justify-center gap-2 px-3 py-2 rounded-lg border border-dashed border-[var(--color-border)] text-sm text-[var(--color-text-sub)] hover:bg-[var(--color-background)] cursor-pointer transition-colors">
-                      {attachUploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
-                      {attachUploading ? "A carregar..." : "Anexar ficheiro"}
-                      <input type="file" className="hidden" onChange={handleAttachmentChange} disabled={attachUploading} />
-                    </label>
-                  )}
-                  {attachError && <p className="text-xs text-red-600 mt-1">{attachError}</p>}
+                  <label className="block text-xs font-medium text-[var(--color-text-sub)] mb-1">Anexos</label>
+                  {attachError && <p className="text-xs text-red-600 mb-2">{attachError}</p>}
+                  <AttachmentsField
+                    key={openTask.id}
+                    parentType="management_task"
+                    parentId={openTask.id}
+                    initialAttachments={attachments}
+                  />
                 </div>
               </div>
             ) : (

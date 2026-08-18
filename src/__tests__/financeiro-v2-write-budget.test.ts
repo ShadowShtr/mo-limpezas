@@ -125,9 +125,22 @@ const CAPABILITY_CEILING: Record<string, string[]> = {
   // `getPayments` saiu desta lista nesta PR: deixou de chamar `ensureMonth` e
   // passou a ser mesmo leitura. O tecto desce com ele — se voltasse a escrever,
   // `compareToCeiling` acusaria capacidade nova e este teste falharia.
+  // 2026-08-18: `uploadPaymentAttachment`/`deletePaymentAttachment` saíram
+  // desta vista com a migration 074 — o anexo único deu lugar a N anexos.
+  //
+  // 🔴 A capacidade de escrita NÃO desapareceu: mudou de sítio. Anexar e
+  //    remover vivem agora em `src/app/actions/attachments.ts`, chamadas pelo
+  //    `AttachmentsField`. Este inventário segue imports a partir de cada
+  //    vista, e um componente noutro ficheiro fica fora do alcance — por isso
+  //    a escrita de anexos está inventariada na entrada do próprio
+  //    AttachmentsField, mais abaixo, e não aqui.
+  //
+  //    Escrita de anexo é metadata: não toca em `status`, `paid_at`, período
+  //    financeiro nem fluxo de caixa. Fixado em
+  //    `src/__tests__/payments-client-error-propagation.test.ts`.
   "src/app/(dashboard)/dashboard/financeiro/pagamentos/_components/payments-client.tsx": [
-    "createPayment", "deletePayment", "deletePaymentAttachment",
-    "setPaymentStatus", "updatePayment", "uploadPaymentAttachment",
+    "createPayment", "deletePayment",
+    "setPaymentStatus", "updatePayment",
   ],
   // `pagamentos/page.tsx` desapareceu deste inventário por não lhe restar
   // nenhuma capacidade de escrita — só chama `getPayments`.

@@ -72,8 +72,14 @@ describe("Financeiro V2 — as sete vistas continuam de pé", () => {
 // que chamava. Cada linha desta tabela é uma funcionalidade que já existia.
 
 const ACCOES: [keyof typeof V, string[]][] = [
+  // 2026-08-18: `uploadPaymentAttachment`/`deletePaymentAttachment` saíram da
+  // vista, substituídas por `listAttachments` + o AttachmentsField (que chama
+  // `addAttachment`/`removeAttachment`). Não é uma acção arrumada num
+  // redesenho: é a mesma capacidade a passar de um anexo para N, pela
+  // migration 074. As actions legadas continuam a existir em payments.ts para
+  // o caminho antigo. Ver docs/ATTACHMENTS-MULTIPLE.md.
   ["pagamentos", ["createPayment", "updatePayment", "deletePayment", "setPaymentStatus",
-                  "uploadPaymentAttachment", "deletePaymentAttachment", "getPayments"]],
+                  "listAttachments", "getPayments"]],
   ["contas", ["createCashFlowEntry", "updateCashFlowEntry", "deleteCashFlowEntry"]],
   ["fluxo", ["createCashFlowEntry", "updateCashFlowEntry", "deleteCashFlowEntry"]],
   ["cobrancas", ["generateInvoices", "updateInvoiceStatus", "deleteInvoice"]],
@@ -98,7 +104,15 @@ describe("Financeiro V2 — nenhuma acção ficou decorativa", () => {
     // 28, não 26: a contagem inclui `recalcSuggestions` (que só foi
     // reconhecida como escrita quando o detector passou a seguir imports) e
     // `getPayments`, que a vista continua a chamar — agora como leitura pura.
-    expect(VISIBLE_ACTION_BINDINGS).toBe(28);
+    //
+    // 2026-08-18: 27, não 28. Pagamentos trocou duas actions de anexo único
+    // (`uploadPaymentAttachment`, `deletePaymentAttachment`) por uma —
+    // `listAttachments` —, porque o upload e a remoção passaram a viver no
+    // AttachmentsField, que é um componente e não uma chamada directa nesta
+    // vista. Nenhuma capacidade foi perdida: anexar e remover continuam
+    // disponíveis, agora para N ficheiros em vez de um. Ver
+    // docs/ATTACHMENTS-MULTIPLE.md e a nota em ACCOES.
+    expect(VISIBLE_ACTION_BINDINGS).toBe(27);
   });
 
   for (const [vista, actions] of ACCOES) {

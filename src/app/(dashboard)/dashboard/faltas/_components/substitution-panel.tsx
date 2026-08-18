@@ -3,6 +3,9 @@
 import { useState, useEffect } from "react";
 import { X, Loader2, UserCheck, CheckCircle2, Users } from "lucide-react";
 import { getSubstituteSuggestions, updateAbsenceSubstitute, type SubstituteSuggestion } from "@/app/actions/absences";
+import { AttachmentsField } from "@/components/attachments/attachments-field";
+import { listAttachments } from "@/app/actions/attachments";
+import type { AttachmentView } from "@/lib/attachments";
 import type { AbsenceRow } from "./absence-table";
 
 interface Props {
@@ -17,6 +20,8 @@ export function SubstitutionPanel({ absence, onClose }: Props) {
   const [selected, setSelected] = useState<string | null>(absence.replaced_by);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
+  const [attachments, setAttachments] = useState<AttachmentView[]>([]);
+  const [attachError, setAttachError] = useState<string | null>(null);
 
   useEffect(() => {
     async function load() {
@@ -35,6 +40,28 @@ export function SubstitutionPanel({ absence, onClose }: Props) {
     }
     load();
   }, [absence]);
+
+  useEffect(() => {
+    // A lista vem do servidor, que junta o `document_url` legado desta falta
+    // com as linhas de `attachments`.
+    //
+    // `cancelado` evita escrever estado de uma falta que já não está aberta:
+    // trocar de falta antes da resposta chegar aplicaria a lista errada.
+    let cancelado = false;
+    async function carregarAnexos() {
+      const res = await listAttachments("absence", absence.id);
+      if (cancelado) return;
+      if (res.ok) {
+        setAttachments(res.attachments);
+        setAttachError(null);
+      } else {
+        setAttachments([]);
+        setAttachError(res.error);
+      }
+    }
+    carregarAnexos();
+    return () => { cancelado = true; };
+  }, [absence.id]);
 
   async function handleConfirm() {
     setSaving(true);
@@ -169,6 +196,24 @@ export function SubstitutionPanel({ absence, onClose }: Props) {
               ))}
             </div>
           )}
+          {/*
+            Anexos da falta (migration 074) — justificativos: baixa médica,
+            declaração, comprovativo. Esta é a única superfície onde uma falta
+            já criada é aberta, por isso é aqui que o campo vive.
+
+            A coluna legada `absences.document_url` existe desde a 007 mas
+            nunca teve UI: se algum registo antigo a tiver preenchida, aparece
+            nesta lista como primeiro anexo. Ver docs/ATTACHMENTS-MULTIPLE.md.
+          */}
+          <div className="border-t border-[var(--color-border)] pt-4 mt-4">
+            {attachError && <p className="text-xs text-red-600 mb-2">{attachError}</p>}
+            <AttachmentsField
+              key={absence.id}
+              parentType="absence"
+              parentId={absence.id}
+              initialAttachments={attachments}
+            />
+          </div>
         </div>
 
         {/* Footer */}
