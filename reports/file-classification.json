@@ -1,13 +1,13 @@
 {
   "generatedBy": "scripts/audit-file-inventory.mjs",
-  "totalFiles": 644,
+  "totalFiles": 645,
   "byStatus": {
-    "MANTER": 626,
+    "MANTER": 627,
     "STANDBY": 18
   },
   "byCategory": {
     "route-ui": 133,
-    "test": 103,
+    "test": 104,
     "migration": 76,
     "lib": 65,
     "script": 46,
@@ -29,7 +29,7 @@
     "src-other": 1
   },
   "byConfidence": {
-    "alta": 628,
+    "alta": 629,
     "média": 10,
     "baixa": 6
   },
@@ -4347,6 +4347,28 @@
         "sqlWrite": 12,
         "revalidatePath": 1
       },
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/__tests__/finance-unhandled-mutation-result.test.ts",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {},
       "action": "nenhuma",
       "reason": "suite de testes — corre por convenção do vitest",
       "manualDecision": false,

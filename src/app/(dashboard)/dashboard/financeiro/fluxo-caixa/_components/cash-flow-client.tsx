@@ -137,25 +137,48 @@ export function CashFlowClient({
     });
   }
 
+  // 🔴 O resultado da action TEM de ser lido.
+  //
+  // Estes três handlers descartavam-no e chamavam `reload()` a seguir. As
+  // actions são fail-closed — período fechado, sem permissão, erro de base —
+  // mas o erro morria aqui: o `reload()` relia o estado real (inalterado) e a
+  // linha voltava a aparecer como estava, sem mensagem nenhuma. É a mesma
+  // classe de defeito que em Pagamentos deu origem a «marquei como pago e não
+  // atualizou». Ver src/__tests__/finance-unhandled-mutation-result.test.ts.
   async function handleDelete(id: string) {
     if (!confirm("Eliminar este registo manual?")) return;
+    setError("");
     startTransition(async () => {
-      await deleteCashFlowEntry(id);
+      const res = await deleteCashFlowEntry(id);
+      if (!res.ok) {
+        setError(res.error ?? "Não foi possível eliminar o movimento.");
+        return;
+      }
       reload(year, month);
     });
   }
 
   async function handleConfirm(id: string) {
+    setError("");
     startTransition(async () => {
-      await updateCashFlowEntry(id, { status: "confirmado" });
+      const res = await updateCashFlowEntry(id, { status: "confirmado" });
+      if (!res.ok) {
+        setError(res.error ?? "Não foi possível confirmar o movimento.");
+        return;
+      }
       reload(year, month);
     });
   }
 
   // Reverter um registo manual confirmado para pendente (enganos acontecem).
   async function handleMarkPending(id: string) {
+    setError("");
     startTransition(async () => {
-      await updateCashFlowEntry(id, { status: "pendente" });
+      const res = await updateCashFlowEntry(id, { status: "pendente" });
+      if (!res.ok) {
+        setError(res.error ?? "Não foi possível repor o movimento como pendente.");
+        return;
+      }
       reload(year, month);
     });
   }
