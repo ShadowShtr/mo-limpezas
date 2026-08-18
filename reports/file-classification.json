@@ -1,17 +1,17 @@
 {
   "generatedBy": "scripts/audit-file-inventory.mjs",
-  "totalFiles": 631,
+  "totalFiles": 637,
   "byStatus": {
-    "MANTER": 614,
-    "STANDBY": 17
+    "MANTER": 619,
+    "STANDBY": 18
   },
   "byCategory": {
     "route-ui": 133,
-    "test": 99,
+    "test": 101,
     "migration": 75,
     "lib": 64,
-    "script": 44,
-    "doc": 40,
+    "script": 46,
+    "doc": 42,
     "domain": 40,
     "server-action": 39,
     "component": 27,
@@ -29,15 +29,15 @@
     "src-other": 1
   },
   "byConfidence": {
-    "alta": 616,
-    "média": 9,
+    "alta": 621,
+    "média": 10,
     "baixa": 6
   },
   "scriptRisk": {
-    "SAFE_OFFLINE": 24,
+    "SAFE_OFFLINE": 25,
     "ADMIN_GUARDED_WRITE": 11,
     "ADMIN_READ": 6,
-    "WRITE_CAPABLE": 3
+    "WRITE_CAPABLE": 4
   },
   "files": [
     {
@@ -973,6 +973,50 @@
       "signals": {
         "serviceRole": 2,
         "sqlWrite": 1
+      },
+      "action": "nenhuma",
+      "reason": "documentação",
+      "manualDecision": false
+    },
+    {
+      "path": "docs/LEDGER-RECONCILIATION-R0.md",
+      "category": "doc",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [
+        "docs"
+      ],
+      "sideEffects": [
+        "supabase"
+      ],
+      "risks": [
+        "service-role"
+      ],
+      "signals": {
+        "supabase": 1,
+        "serviceRole": 1,
+        "sqlWrite": 2
+      },
+      "action": "nenhuma",
+      "reason": "documentação",
+      "manualDecision": false
+    },
+    {
+      "path": "docs/LEDGER-RECONCILIATION-R1.md",
+      "category": "doc",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "sqlWrite": 8
       },
       "action": "nenhuma",
       "reason": "documentação",
@@ -2860,11 +2904,11 @@
       "category": "script",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 4,
+      "consumers": 7,
       "consumerSample": [
+        "scripts/lib/migration-reconciliation.mjs",
         "scripts/lib/migration-runner-core.mjs",
-        "scripts/run-migrations.mjs",
-        "src/__tests__/migration-checksum.test.ts"
+        "scripts/run-migrations.mjs"
       ],
       "autoLoaded": false,
       "referencedBy": [
@@ -2895,11 +2939,11 @@
       "category": "script",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 3,
+      "consumers": 4,
       "consumerSample": [
         "scripts/lib/migration-runner-core.mjs",
         "src/__tests__/migration-drift-guard.test.ts",
-        "src/__tests__/migration-runner-drift-abort.test.ts"
+        "src/__tests__/migration-ledger-gap.test.ts"
       ],
       "autoLoaded": false,
       "referencedBy": [
@@ -2910,8 +2954,42 @@
         "service-role"
       ],
       "signals": {
-        "serviceRole": 2,
-        "sqlWrite": 6
+        "serviceRole": 1,
+        "sqlWrite": 6,
+        "fallbackArray": 1
+      },
+      "action": "nenhuma",
+      "reason": "ferramenta offline, sem acesso à base",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": true,
+        "dynamicImport": true,
+        "allClosed": false
+      },
+      "scriptRisk": "SAFE_OFFLINE"
+    },
+    {
+      "path": "scripts/lib/migration-reconciliation.mjs",
+      "category": "script",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 2,
+      "consumerSample": [
+        "scripts/reconcile-migrations.mjs",
+        "src/__tests__/migration-reconciliation.test.ts"
+      ],
+      "autoLoaded": false,
+      "referencedBy": [
+        "docs"
+      ],
+      "sideEffects": [],
+      "risks": [
+        "service-role"
+      ],
+      "signals": {
+        "serviceRole": 1,
+        "fallbackArray": 2
       },
       "action": "nenhuma",
       "reason": "ferramenta offline, sem acesso à base",
@@ -2929,14 +3007,16 @@
       "category": "script",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 4,
+      "consumers": 5,
       "consumerSample": [
         "scripts/lib/migration-drift-guard.mjs",
         "scripts/run-migrations.mjs",
-        "src/__tests__/migration-runner-core.test.ts"
+        "src/__tests__/migration-ledger-gap.test.ts"
       ],
       "autoLoaded": false,
-      "referencedBy": [],
+      "referencedBy": [
+        "docs"
+      ],
       "sideEffects": [],
       "risks": [],
       "signals": {
@@ -3045,6 +3125,39 @@
         "allClosed": false
       },
       "scriptRisk": "SAFE_OFFLINE"
+    },
+    {
+      "path": "scripts/reconcile-migrations.mjs",
+      "category": "script",
+      "status": "STANDBY",
+      "confidence": "média",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [
+        "npm",
+        "docs"
+      ],
+      "sideEffects": [
+        "env"
+      ],
+      "risks": [],
+      "signals": {
+        "env": 2,
+        "consoleLog": 8,
+        "consoleErr": 24,
+        "dynamicImport": 2
+      },
+      "action": "T17-B: confirmar se ainda é preciso",
+      "reason": "capaz de escrever na base",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": true,
+        "dynamicImport": true,
+        "allClosed": false
+      },
+      "scriptRisk": "WRITE_CAPABLE"
     },
     {
       "path": "scripts/rehearse-071.mjs",
@@ -4657,9 +4770,65 @@
         "service-role"
       ],
       "signals": {
-        "serviceRole": 2,
+        "serviceRole": 1,
         "sqlWrite": 9,
         "dynamicImport": 2
+      },
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/__tests__/migration-ledger-gap.test.ts",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [
+        "docs"
+      ],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "sqlWrite": 8,
+        "fallbackArray": 1
+      },
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/__tests__/migration-reconciliation.test.ts",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [
+        "docs"
+      ],
+      "sideEffects": [],
+      "risks": [
+        "service-role"
+      ],
+      "signals": {
+        "serviceRole": 1,
+        "sqlWrite": 10
       },
       "action": "nenhuma",
       "reason": "suite de testes — corre por convenção do vitest",
@@ -5209,7 +5378,9 @@
       "consumers": 0,
       "consumerSample": [],
       "autoLoaded": false,
-      "referencedBy": [],
+      "referencedBy": [
+        "docs"
+      ],
       "sideEffects": [],
       "risks": [],
       "signals": {

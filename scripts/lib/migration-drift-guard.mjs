@@ -7,7 +7,7 @@
 // O SQL Editor não escreve em `public._migrations`, por isso o ledger ficou
 // parado na 069. Estado provado:
 //
-//   SCHEMA:  071 presente   072 presente   073 presente   070 NÃO VERIFICADO
+//   SCHEMA:  071 presente   072 presente   073 presente   070 AUSENTE (R0, 2026-08-18)
 //   LEDGER:  071 ausente    072 ausente    073 ausente    070 ausente
 //
 // Para o runner, "ausente do ledger" significa "pendente". Um `--apply` hoje
@@ -35,13 +35,16 @@
 //    `EXPECTED_FILE_CHECKSUM`, para quem reconciliar poder comparar, e fica
 //    nisso.
 //
-// 3. **Não transforma ausência de prova em prova de ausência.** A 070 cria uma
-//    função de guarda e um trigger sobre `profiles`. A função dá curto-circuito
-//    para `service_role`, que é o único contexto disponível às ferramentas
-//    automáticas — provar que está aplicada exigiria uma escrita em `profiles`
-//    de produção sob uma identidade não-admin. Isso não se faz para satisfazer
-//    um fingerprint. A 070 fica `UNKNOWN`, e `UNKNOWN` nunca autoriza um apply
-//    nem o bloqueia por si só.
+// 3. **Não transforma ausência de prova em prova de ausência.** `UNKNOWN` nunca
+//    autoriza um apply nem o bloqueia por si só — é a ausência de prova
+//    registada como ausência de prova, não uma conclusão sobre o schema.
+//
+//    Correcção de 2026-08-18: a 070 esteve `UNKNOWN` por se assumir que provar
+//    a presença exigiria uma escrita em `profiles` sob identidade não-admin. O
+//    R0 mostrou que não: `pg_proc` + `pg_trigger` dão função, trigger, tabela
+//    alvo, função alvo e `tgenabled` por leitura pura de catálogo. O live run
+//    respondeu **ABSENT** — e `ABSENT` com ledger ausente é uma migration
+//    genuinamente pendente, não drift.
 //
 // ---------------------------------------------------------------------------
 // Porque é que os fingerprints são só de objectos, e não de HTTP
@@ -68,11 +71,24 @@ import { columnExists, tableExists } from "./migration-runner-core.mjs";
  * cria: índices e políticas RLS são mais frágeis de introspeccionar e não
  * acrescentam certeza a uma prova que as tabelas e funções já dão.
  *
- * A 070 **não tem entrada**, e a ausência é intencional — ver o ponto 3 no
- * cabeçalho. Não adicionar uma sem uma forma de prova que não passe por
- * escrever em `profiles` de produção.
+ * A 070 ganhou entrada a 2026-08-18, depois de o R0 provar que `pg_proc` +
+ * `pg_trigger` respondem sem escrever em `profiles` — função, trigger, tabela
+ * alvo, função alvo e estado de activação, tudo por leitura de catálogo.
  */
 export const FINGERPRINTS = Object.freeze({
+  "070_guard_profile_managed_fields.sql": Object.freeze({
+    tables: Object.freeze([]),
+    columns: Object.freeze([]),
+    functions: Object.freeze(["fn_guard_profile_managed_fields"]),
+    triggers: Object.freeze([
+      {
+        schema: "public",
+        table: "profiles",
+        name: "trg_guard_profile_managed_fields",
+        functionName: "fn_guard_profile_managed_fields",
+      },
+    ]),
+  }),
   "071_finance_periods_and_expense_categories.sql": Object.freeze({
     tables: Object.freeze(["public.expense_categories", "public.financial_periods"]),
     columns: Object.freeze([
@@ -93,13 +109,20 @@ export const FINGERPRINTS = Object.freeze({
   }),
 });
 
-/** Migrations sem fingerprint seguro. Estado permanente: UNKNOWN. */
-export const SEM_FINGERPRINT = Object.freeze({
-  "070_guard_profile_managed_fields.sql":
-    "A guarda da 070 é uma função + trigger sobre profiles que dá curto-circuito " +
-    "para service_role. Provar presença exigiria escrever em profiles de produção " +
-    "sob uma identidade não-admin — não se faz por um fingerprint.",
-});
+/**
+ * Migrations sem fingerprint seguro. Estado permanente: UNKNOWN.
+ *
+ * 🔴 Vazio desde 2026-08-18. A 070 esteve aqui, com o motivo de que provar a
+ *    presença exigiria escrever em `profiles` sob identidade não-admin. O R0
+ *    refutou isso: `pg_proc` + `pg_trigger` (com função alvo e `tgenabled`)
+ *    respondem por leitura pura de catálogo, e no live run responderam
+ *    **ausente**. Ver `docs/LEDGER-RECONCILIATION-R0.md`.
+ *
+ *    Mantém-se a estrutura porque o caso genérico continua a existir: uma
+ *    migration cujo efeito só se observa provocando-o não deve ganhar um
+ *    fingerprint inventado só para o manifesto ficar preenchido.
+ */
+export const SEM_FINGERPRINT = Object.freeze({});
 
 export const CODIGO_DRIFT = "MIGRATION_LEDGER_SCHEMA_DRIFT";
 export const CODIGO_PARCIAL = "MIGRATION_PARTIALLY_MATERIALIZED";
@@ -115,6 +138,39 @@ export async function functionExists(client, schema, name) {
     [schema, name],
   );
   return rows.length > 0;
+}
+
+/**
+ * SELECT puro contra `pg_trigger`. Devolve o trigger com a função alvo e o
+ * estado de activação, ou `null` se não existir.
+ *
+ * É isto que permite verificar a 070 **sem escrever em `profiles`**: a guarda
+ * dá curto-circuito para `service_role`, por isso provocá-la exigiria uma
+ * escrita real sob identidade não-admin — mas o catálogo responde sem tocar em
+ * nenhuma linha de dados.
+ *
+ * `tgenabled`: 'O' = origin (activo), 'D' = disabled, 'R'/'A' = replica/always.
+ * Um trigger desactivado existe e não corre — e isso tem de aparecer.
+ */
+export async function triggerEstado(client, schema, tabela, nome) {
+  const { rows } = await client.query(
+    `SELECT t.tgenabled,
+            fn.proname AS function_name
+       FROM pg_trigger t
+       JOIN pg_class c ON c.oid = t.tgrelid
+       JOIN pg_namespace n ON n.oid = c.relnamespace
+       JOIN pg_proc fn ON fn.oid = t.tgfoid
+      WHERE n.nspname = $1 AND c.relname = $2 AND t.tgname = $3
+        AND NOT t.tgisinternal
+      LIMIT 1`,
+    [schema, tabela, nome],
+  );
+  if (rows.length === 0) return null;
+  return {
+    enabled: String(rows[0].tgenabled ?? "") === "O",
+    enabledRaw: String(rows[0].tgenabled ?? ""),
+    functionName: String(rows[0].function_name),
+  };
 }
 
 /**
@@ -150,6 +206,15 @@ export async function inspecionarSchema(client, migration) {
   for (const f of fp.functions) {
     const rotulo = `public.${f}()`;
     ((await functionExists(client, "public", f)) ? presentes : ausentes).push(rotulo);
+  }
+  // Um trigger só conta como presente se existir, apontar para a função certa
+  // e estar activo. Existir apontando para outra função, ou desactivado, é uma
+  // guarda que não corre — não é o objecto que a migration declara.
+  for (const tg of fp.triggers ?? []) {
+    const rotulo = `${tg.schema}.${tg.table} → ${tg.name}`;
+    const achado = await triggerEstado(client, tg.schema, tg.table, tg.name);
+    const conforme = achado !== null && achado.enabled && achado.functionName === tg.functionName;
+    (conforme ? presentes : ausentes).push(rotulo);
   }
 
   const total = presentes.length + ausentes.length;
