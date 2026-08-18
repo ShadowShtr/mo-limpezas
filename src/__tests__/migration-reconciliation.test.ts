@@ -27,6 +27,8 @@ import {
   RECOMMENDATION,
   SCHEMA,
   avaliarCorrespondencia,
+  avaliarChecksumLedger,
+  LEDGER_CHECKSUM,
   avaliarLedger,
   construirManifesto,
   formatarManifesto,
@@ -369,9 +371,35 @@ describe("§38 — schema completo + ledger ausente → UNPROVABLE, nunca PROVEN
     expect(c).not.toBe(CORRESPONDENCE.PROVEN);
   });
 
-  it("só um ledger com checksum a bater dá PROVEN", () => {
-    expect(avaliarCorrespondencia({ ledgerEstado: LEDGER.PRESENT, schemaEstado: SCHEMA.PRESENT }))
-      .toBe(CORRESPONDENCE.PROVEN);
+  // 🔴 Regra invertida a 2026-08-18, depois do R1. Antes esperava-se `PROVEN`
+  //    aqui, porque só o runner escrevia no ledger. O R1 escreveu três linhas
+  //    administrativamente, à mão, sem executar nada — a implicação
+  //    "linha no ledger ⇒ o runner aplicou isto" deixou de valer.
+  it("🔴 ledger com checksum a bater NÃO dá PROVEN — só LEDGER_CHECKSUM_MATCH", () => {
+    const c = avaliarCorrespondencia({ ledgerEstado: LEDGER.PRESENT, schemaEstado: SCHEMA.PRESENT });
+    expect(c).toBe(CORRESPONDENCE.UNPROVABLE);
+    expect(c).not.toBe(CORRESPONDENCE.PROVEN);
+
+    // O facto sobre o checksum continua a ser afirmado — noutra dimensão.
+    expect(avaliarChecksumLedger({ ledgerEstado: LEDGER.PRESENT }))
+      .toBe(LEDGER_CHECKSUM.PROVEN);
+  });
+
+  it("checksum divergente continua a dar CONTRADICTED e MISMATCH", () => {
+    expect(avaliarCorrespondencia({ ledgerEstado: LEDGER.CHECKSUM_MISMATCH, schemaEstado: SCHEMA.PRESENT }))
+      .toBe(CORRESPONDENCE.CONTRADICTED);
+    expect(avaliarChecksumLedger({ ledgerEstado: LEDGER.CHECKSUM_MISMATCH }))
+      .toBe(LEDGER_CHECKSUM.MISMATCH);
+  });
+
+  it("ledger ausente → LEDGER_CHECKSUM_MATCH = UNKNOWN", () => {
+    expect(avaliarChecksumLedger({ ledgerEstado: LEDGER.ABSENT }))
+      .toBe(LEDGER_CHECKSUM.UNKNOWN);
+  });
+
+  it("linha no ledger sem checksum guardado → UNKNOWN, não PROVEN", () => {
+    expect(avaliarChecksumLedger({ ledgerEstado: LEDGER.PRESENT, semChecksum: true }))
+      .toBe(LEDGER_CHECKSUM.UNKNOWN);
   });
 
   it("o manifesto carrega a assunção por escrito", async () => {

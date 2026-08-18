@@ -270,9 +270,11 @@ describe("R0.1 — ledger com buraco na 070", () => {
 
     expect(drift.deveAbortar).toBe(true);
     expect(drift.bloqueiam.map((a: { migration: string }) => a.migration).sort()).toEqual([M071, M072, M073]);
-    // A 070 aparece no relatório como UNKNOWN, mas não é ela que bloqueia.
+    // A 070 aparece no relatório como ABSENT — provado por catálogo desde
+    // 2026-08-18 (antes era UNKNOWN, por falta de fingerprint). Não é ela que
+    // bloqueia: ABSENT com ledger ausente é uma migration genuinamente pendente.
     const a070 = drift.achados.find((a: { migration: string }) => a.migration === M070);
-    expect(a070?.schema).toBe("UNKNOWN");
+    expect(a070?.schema).toBe("ABSENT");
   });
 
   it("G3. drift: com 071-073 já no ledger, só a 070 é inspeccionada e nada bloqueia", async () => {

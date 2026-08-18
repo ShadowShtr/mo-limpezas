@@ -2954,8 +2954,9 @@
         "service-role"
       ],
       "signals": {
-        "serviceRole": 2,
-        "sqlWrite": 6
+        "serviceRole": 1,
+        "sqlWrite": 6,
+        "fallbackArray": 1
       },
       "action": "nenhuma",
       "reason": "ferramenta offline, sem acesso à base",
@@ -4769,7 +4770,7 @@
         "service-role"
       ],
       "signals": {
-        "serviceRole": 2,
+        "serviceRole": 1,
         "sqlWrite": 9,
         "dynamicImport": 2
       },

@@ -81,9 +81,40 @@ export const SCHEMA = Object.freeze({
 
 /** O nível 3 da evidência. Ver o cabeçalho. */
 export const CORRESPONDENCE = Object.freeze({
+  // 🔴 `PROVEN` continua no enum e é **inatingível a partir do checksum**.
+  //
+  //    Até ao R1 (2026-08-18) este valor saía de `LEDGER.PRESENT`, partindo do
+  //    princípio de que só o runner escrevia no ledger — logo, linha presente
+  //    com checksum a bater significava "o runner aplicou isto e registou o que
+  //    aplicou". O R1 quebrou essa implicação: as linhas de 071–073 foram
+  //    escritas administrativamente, à mão, com o checksum do ficheiro actual,
+  //    sem que o runner tenha executado uma única instrução.
+  //
+  //    Um checksum coincidente prova que o **ficheiro não mudou desde que a
+  //    linha foi escrita** — e isso agora chama-se `LEDGER_CHECKSUM_MATCH`.
+  //    Não prova que o texto executado na base foi aquele.
+  //
+  //    Atingir `PROVEN` exigiria evidência independente da execução real — um
+  //    registo do SQL efectivamente executado, produzido no momento em que
+  //    correu. Uma linha administrativa no ledger não é isso, e nenhuma
+  //    migration deste projecto tem essa evidência hoje.
   PROVEN: "PROVEN",
   UNPROVABLE: "UNPROVABLE",
   CONTRADICTED: "CONTRADICTED",
+});
+
+/**
+ * O que o checksum do ledger realmente estabelece — separado da correspondência
+ * forense, que é outra afirmação.
+ *
+ *   · `PROVEN`   — há linha no ledger e o checksum bate com o ficheiro actual;
+ *   · `MISMATCH` — há linha e o checksum **não** bate (ficheiro editado depois);
+ *   · `UNKNOWN`  — não há linha, ou a linha não tem checksum guardado.
+ */
+export const LEDGER_CHECKSUM = Object.freeze({
+  PROVEN: "PROVEN",
+  MISMATCH: "MISMATCH",
+  UNKNOWN: "UNKNOWN",
 });
 
 export const RECOMMENDATION = Object.freeze({
@@ -543,18 +574,35 @@ export function avaliarLedger(linhaLedger, conteudoFicheiro) {
 /**
  * O nível 3 da evidência.
  *
- * 🔴 `PROVEN` só é possível quando o ledger tem um checksum que bate com o
- *    ficheiro — ou seja, quando o runner aplicou a migration e registou o que
- *    aplicou. Para tudo o que correu no SQL Editor, a resposta é
- *    `UNPROVABLE`, **mesmo que todos os objectos coincidam**: objectos iguais
- *    provam que o schema é compatível com o ficheiro, não que o texto
- *    executado foi aquele.
+ * 🔴 Nunca devolve `PROVEN`. Ver o comentário no enum `CORRESPONDENCE`: um
+ *    checksum coincidente prova que o ficheiro não mudou desde que a linha do
+ *    ledger foi escrita, não que o texto executado na base foi aquele. Desde o
+ *    R1 (2026-08-18) o ledger pode conter linhas escritas administrativamente,
+ *    sem qualquer execução pelo runner — a implicação
+ *    "linha presente ⇒ o runner aplicou isto" deixou de valer.
+ *
+ *    `CONTRADICTED` continua a sair de um checksum divergente: aí sabe-se
+ *    positivamente que o ficheiro actual **não** é o que foi registado.
+ *
+ *    Para o facto sobre o checksum, ver `avaliarChecksumLedger`.
  */
 export function avaliarCorrespondencia({ ledgerEstado, schemaEstado }) {
   if (ledgerEstado === LEDGER.CHECKSUM_MISMATCH) return CORRESPONDENCE.CONTRADICTED;
-  if (ledgerEstado === LEDGER.PRESENT) return CORRESPONDENCE.PROVEN;
   if (schemaEstado === SCHEMA.ERROR || schemaEstado === SCHEMA.UNKNOWN) return CORRESPONDENCE.UNPROVABLE;
   return CORRESPONDENCE.UNPROVABLE;
+}
+
+/**
+ * O facto que o checksum do ledger estabelece — e só esse.
+ *
+ * Separado de `avaliarCorrespondencia` de propósito: são duas afirmações
+ * diferentes sobre coisas diferentes, e juntá-las foi exactamente o erro que o
+ * R1 expôs.
+ */
+export function avaliarChecksumLedger({ ledgerEstado, semChecksum = false }) {
+  if (ledgerEstado === LEDGER.CHECKSUM_MISMATCH) return LEDGER_CHECKSUM.MISMATCH;
+  if (ledgerEstado === LEDGER.PRESENT && !semChecksum) return LEDGER_CHECKSUM.PROVEN;
+  return LEDGER_CHECKSUM.UNKNOWN;
 }
 
 export function recomendar({ ledgerEstado, schemaEstado, correspondencia, semChecksum = false }) {
@@ -639,6 +687,11 @@ export async function construirManifesto({
       schemaEstado: schema.estado,
     });
 
+    const ledgerChecksumMatch = avaliarChecksumLedger({
+      ledgerEstado: ledger.estado,
+      semChecksum: Boolean(ledger.semChecksum),
+    });
+
     const recommendation = recomendar({
       ledgerEstado: ledger.estado,
       schemaEstado: schema.estado,
@@ -651,6 +704,8 @@ export async function construirManifesto({
       ledger: {
         state: ledger.estado,
         storedChecksum: ledger.storedChecksum,
+        // O que o checksum estabelece — e nada mais do que isso.
+        LEDGER_CHECKSUM_MATCH: ledgerChecksumMatch,
         error: ledgerErro,
       },
       schema: {
@@ -701,6 +756,7 @@ export function formatarManifesto(manifesto) {
     }
     if (e.schema.note) linhas.push(`      nota: ${e.schema.note}`);
     linhas.push(`   CURRENT_FILE_CHECKSUM: ${e.currentFile.CURRENT_FILE_CHECKSUM ?? "(sem ficheiro)"}`);
+    linhas.push(`   LEDGER_CHECKSUM_MATCH: ${e.ledger.LEDGER_CHECKSUM_MATCH}`);
     linhas.push(`   CORRESPONDENCE_TO_EXECUTED_SQL: ${e.correspondence.CORRESPONDENCE_TO_EXECUTED_SQL}`);
     for (const n of e.evidence.notes) linhas.push(`   · ${n}`);
     if (e.correspondence.assumption) {

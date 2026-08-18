@@ -47,7 +47,13 @@ function fakeClient({
   tabelas = new Set<string>(),
   colunas = new Set<string>(),
   funcoes = new Set<string>(),
-}: { tabelas?: Set<string>; colunas?: Set<string>; funcoes?: Set<string> } = {}) {
+  triggers = new Map<string, { enabled: boolean; functionName: string }>(),
+}: {
+  tabelas?: Set<string>;
+  colunas?: Set<string>;
+  funcoes?: Set<string>;
+  triggers?: Map<string, { enabled: boolean; functionName: string }>;
+} = {}) {
   const queries: { sql: string; params: unknown }[] = [];
   return {
     queries,
@@ -61,6 +67,14 @@ function fakeClient({
       if (sql.includes("information_schema.columns")) {
         const [schema, tabela, coluna] = params as string[];
         return { rows: colunas.has(`${schema}.${tabela}.${coluna}`) ? [{ "1": 1 }] : [] };
+      }
+      // pg_trigger antes de pg_proc: a query de triggers faz JOIN a pg_proc e
+      // conteria ambas as strings.
+      if (sql.includes("pg_trigger")) {
+        const [schema, tabela, nome] = params as string[];
+        const achado = triggers.get(`${schema}.${tabela}.${nome}`);
+        if (!achado) return { rows: [] };
+        return { rows: [{ tgenabled: achado.enabled ? "O" : "D", function_name: achado.functionName }] };
       }
       if (sql.includes("pg_proc")) {
         const [schema, nome] = params as string[];
@@ -147,33 +161,86 @@ describe("C) ledger present → applied, sem drift a reportar", () => {
   });
 });
 
-// ─── D) 070 → UNKNOWN, nunca PRESENT ─────────────────────────────────────────
+// ─── D) 070 → ABSENT por catálogo, já não UNKNOWN ────────────────────────────
+//
+// 🔴 Bloco invertido a 2026-08-18. Antes fixava que a 070 era `UNKNOWN` por não
+//    ter fingerprint, com o motivo de que provar a presença exigiria escrever em
+//    `profiles` sob identidade não-admin. O R0 refutou isso: `pg_proc` +
+//    `pg_trigger` respondem por leitura pura de catálogo, e no live run
+//    responderam ABSENT. `UNKNOWN` era um estado da ferramenta, não da base.
 
-describe("D) 070 ledger missing + schema unknown → UNKNOWN", () => {
-  it("não tem fingerprint, e isso é intencional", () => {
-    // Indexação via Record: o próprio tipo de FINGERPRINTS não declara a 070 —
-    // o que já é meia prova. Esta asserção fixa o comportamento em runtime.
-    expect((FINGERPRINTS as Record<string, unknown>)[M070]).toBeUndefined();
-    expect((SEM_FINGERPRINT as Record<string, string>)[M070]).toContain("service_role");
+const TRG070 = "public.profiles.trg_guard_profile_managed_fields";
+const FN070 = "fn_guard_profile_managed_fields";
+
+/** A 070 materializada e correcta: função + trigger activo a apontar para ela. */
+function schema070Presente() {
+  return fakeClient({
+    funcoes: new Set([`public.${FN070}`]),
+    triggers: new Map([[TRG070, { enabled: true, functionName: FN070 }]]),
+  });
+}
+
+describe("D) 070 é verificável por catálogo", () => {
+  it("tem fingerprint estrutural, e já não está em SEM_FINGERPRINT", () => {
+    expect((FINGERPRINTS as Record<string, unknown>)[M070]).toBeDefined();
+    expect((SEM_FINGERPRINT as Record<string, string>)[M070]).toBeUndefined();
   });
 
-  it("nunca é classificada PRESENT, mesmo com o schema todo lá", async () => {
-    const r = await inspecionarSchema(schemaCompleto(), M070);
-    expect(r.estado).toBe("UNKNOWN");
+  // Teste 4 do contrato: sem função e sem trigger → ABSENT, não UNKNOWN.
+  it("🔴 sem função e sem trigger → ABSENT (o estado real de produção)", async () => {
+    const r = await inspecionarSchema(fakeClient(), M070);
+    expect(r.estado).toBe("ABSENT");
+    expect(r.estado).not.toBe("UNKNOWN");
+  });
+
+  // Teste 5: função + trigger correctos → PRESENT.
+  it("com função e trigger activo a apontar para ela → PRESENT", async () => {
+    const r = await inspecionarSchema(schema070Presente(), M070);
+    expect(r.estado).toBe("PRESENT");
+  });
+
+  // Teste 6: trigger desactivado ou a apontar para outra função não é PRESENT.
+  it("🔴 trigger desactivado → não conta como presente", async () => {
+    const client = fakeClient({
+      funcoes: new Set([`public.${FN070}`]),
+      triggers: new Map([[TRG070, { enabled: false, functionName: FN070 }]]),
+    });
+    const r = await inspecionarSchema(client, M070);
+    expect(r.estado).toBe("PARTIAL"); // função existe, trigger não conforme
     expect(r.estado).not.toBe("PRESENT");
   });
 
-  it("UNKNOWN não bloqueia — falta de prova não é prova", async () => {
-    const r = await detectarDrift({ client: schemaCompleto(), pendentes: [M070] });
-    expect(r.achados[0].schema).toBe("UNKNOWN");
-    expect(r.deveAbortar).toBe(false);
+  it("🔴 trigger a apontar para outra função → não conta como presente", async () => {
+    const client = fakeClient({
+      funcoes: new Set([`public.${FN070}`]),
+      triggers: new Map([[TRG070, { enabled: true, functionName: "outra_funcao_qualquer" }]]),
+    });
+    const r = await inspecionarSchema(client, M070);
+    expect(r.estado).not.toBe("PRESENT");
   });
 
-  it("mas aparece no relatório, com o motivo", async () => {
+  // Teste 7: ABSENT + ledger ausente não é drift.
+  it("🔴 070 ABSENT com ledger ausente NÃO produz drift", async () => {
+    const r = await detectarDrift({ client: fakeClient(), pendentes: [M070] });
+    expect(r.achados[0].schema).toBe("ABSENT");
+    expect(r.deveAbortar).toBe(false);
+    expect(r.codigo).toBeNull();
+    expect(r.bloqueiam).toHaveLength(0);
+  });
+
+  it("aparece no relatório com o estado real", async () => {
     const r = await detectarDrift({ client: fakeClient(), pendentes: [M070] });
     const txt = formatarRelatorioDrift(r).join("\n");
     expect(txt).toContain(M070);
-    expect(txt).toContain("UNKNOWN");
+    expect(txt).toContain("ABSENT");
+  });
+
+  // Se algum dia a 070 for aplicada por fora, aí sim é drift — e tem de parar.
+  it("070 materializada mas ausente do ledger → bloqueia", async () => {
+    const r = await detectarDrift({ client: schema070Presente(), pendentes: [M070] });
+    expect(r.achados[0].schema).toBe("PRESENT");
+    expect(r.deveAbortar).toBe(true);
+    expect(r.codigo).toBe(CODIGO_DRIFT);
   });
 });
 
