@@ -66,10 +66,14 @@ falhe de uma maneira reconhecível.
 
 ---
 
-## A 070 já não precisa de escrita
+## A 070 — o que o catálogo podia provar, e o que provou
+
+> **Resultado do live run de 2026-08-18: a 070 está `ABSENT`.** Esta secção
+> descreve o método de verificação, que se manteve válido; a conclusão está na
+> secção «Conclusão do live R0» mais abaixo.
 
 Corrigindo o que este projecto assumiu antes: **`pg_trigger` + `pg_proc` provam
-a presença da 070 sem tocar em `profiles`.**
+a presença *ou a ausência* da 070 sem tocar em `profiles`.**
 
 A guarda dá curto-circuito para `service_role`, por isso *provocá-la* exigiria
 uma escrita real sob identidade não-admin. Mas verificar que a função e o
@@ -169,7 +173,155 @@ Salvaguardas:
    deixa quem o escreveu convencido de que algo aconteceu.
 
 **O manifesto JSON não se versiona** — envelhece com a base. As fixturas
-versionadas são os testes.
+versionadas são os testes. `/tmp/` está no `.gitignore`.
+
+### 🔴 A regra da primeira execução
+
+**Preservar o resultado bruto antes de tocar em seja o que for.**
+
+A tentação, ao ver um `MISMATCH`, é ajustar o fingerprint e voltar a correr até
+ficar tudo verde. Isso destrói a única coisa que a execução produziu: a
+evidência do que a base tinha naquele momento. Um manifesto verde obtido por
+edições sucessivas não diz nada — só prova que o fingerprint acabou por
+descrever o schema, o que é verdade por construção.
+
+Guardar o primeiro output, e só depois analisar. Para cada `MISMATCH`, decidir
+qual dos quatro casos é:
+
+| Causa | Como se reconhece | O que fazer |
+|---|---|---|
+| **a) Normalização do Postgres** | `integer` vs `int4`, `timestamptz` vs `timestamp with time zone` | Corrigir o fingerprint, **explicando** a equivalência |
+| **b) Fingerprint incorrecto** | O ficheiro da migration diz outra coisa do que eu escrevi | Corrigir o fingerprint contra o SQL |
+| **c) Schema diferente** | A base tem mesmo outra coisa | **Descoberta.** Não corrigir nada — investigar porquê |
+| **d) Materialização parcial** | Parte dos objectos existe | `BLOCKED`. Análise objecto a objecto, à mão |
+
+Só (a) e (b) justificam editar um fingerprint. (c) e (d) são resultados sobre a
+base, não defeitos da ferramenta — e são exactamente aquilo para que o R0 existe.
+
+### 🔴 A regra do ERROR de leitura
+
+Se o live run der `ERROR` de leitura em **qualquer** objecto de uma migration,
+essa migration fica `INCONCLUSIVE`.
+
+**Nunca `ABSENT`, nunca `PARTIAL`, nunca `PRESENT`.**
+
+Falha de observação não é evidência de estado. Não saber se um objecto existe é
+diferente de saber que não existe, e a única classificação honesta para o
+primeiro caso é a que diz que não se sabe.
+
+### A 070 depois do live run
+
+Hipótese antes da execução — se função + trigger + alvo + activação batessem:
+
+```
+SCHEMA_STATE                   = PRESENT
+OBJECT_PRESENCE                = PROVEN
+FUNCTION_DEFINITION_MATCH      = UNKNOWN
+CORRESPONDENCE_TO_EXECUTED_SQL = UNPROVABLE
+```
+
+Ou seja: deixaria de ser `UNVERIFIED` para passar a **estruturalmente
+verificada**, sem passar a «historicamente comprovada». São afirmações
+diferentes, e a segunda continua fora do alcance da evidência disponível.
+
+**Não foi o que aconteceu.** O catálogo devolveu ausência da função e do
+trigger — ver a conclusão abaixo.
+
+---
+
+## Conclusão do live R0 (2026-08-18)
+
+Primeira execução com leitura efectiva da base, via *session pooler*
+(`aws-1-eu-central-2.pooler.supabase.com:5432`, utilizador
+`postgres.ceqzxgizhgmvcniapyla`). Output bruto preservado em
+`tmp/r0-live-session-pooler-final-2026-08-18.txt`, não editado e não versionado.
+
+> As quatro tentativas anteriores desse dia falharam **na ligação**
+> (autenticação recusada e um `ETIMEDOUT` sobre IPv6), sem chegar a ler o
+> catálogo. Não produziram manifesto e não constituem evidência sobre o schema.
+
+### 070 — `guard_profile_managed_fields`
+
+```
+LEDGER                         = ABSENT
+SCHEMA_STATE                   = ABSENT
+OBJECT_PRESENCE                = PROVEN_ABSENT
+CORRESPONDENCE_TO_EXECUTED_SQL = UNPROVABLE
+RECOMMENDATION                 = NOT_CANDIDATE
+```
+
+Ausentes no catálogo: a função `public.fn_guard_profile_managed_fields()` e o
+trigger `trg_guard_profile_managed_fields` em `public.profiles`.
+
+### 071 — `finance_periods_and_expense_categories`
+
+```
+LEDGER                         = ABSENT
+SCHEMA_STATE                   = PRESENT
+CORRESPONDENCE_TO_EXECUTED_SQL = UNPROVABLE
+RECOMMENDATION                 = CANDIDATE_WITH_ASSUMPTION
+```
+
+`expense_categories` e `financial_periods` presentes coluna a coluna, mais
+`expense_category_id` em `cash_flow_entries` e `fixed_variable_payments`.
+
+### 072 — `invoice_atomic_creation`
+
+```
+LEDGER                         = ABSENT
+SCHEMA_STATE                   = PRESENT
+ATOMIC_EFFECT                  = PROVEN        (ensaio em PGlite, no CI)
+CONCURRENT_SERIALIZATION       = NOT_PROVEN    (PGlite não dá duas ligações simultâneas)
+CORRESPONDENCE_TO_EXECUTED_SQL = UNPROVABLE
+RECOMMENDATION                 = CANDIDATE_WITH_ASSUMPTION
+```
+
+`create_invoice_with_items` presente, com os índices
+`uq_invoices_number_per_company` e `uq_invoices_draft_per_client_period`.
+
+### 073 — `payment_to_cashflow`
+
+```
+LEDGER                         = ABSENT
+SCHEMA_STATE                   = PRESENT
+CORRESPONDENCE_TO_EXECUTED_SQL = UNPROVABLE
+RECOMMENDATION                 = CANDIDATE_WITH_ASSUMPTION
+```
+
+`is_financial_period_open`, `mark_payment_paid` e `unmark_payment_paid`
+presentes, cada uma com assinatura verificada.
+
+### Leitura do conjunto
+
+**A 070 foi definitivamente observada como não materializada:** função ausente,
+trigger ausente, ledger ausente. Logo, **a 070 não deve ser reconciliada no
+ledger** — não é uma migration aplicada fora do registo, é uma migration
+genuinamente por aplicar. Reconciliá-la escreveria no ledger a afirmação falsa
+de que a guarda existe.
+
+**071–073 estão materializadas no schema e ausentes do ledger.** São candidatas
+à adopção administrativa no R1, sempre sob a assunção — não estabelecida pelo
+checksum — de que o ficheiro versionado representa o SQL que foi executado.
+
+Nenhuma migration apresentou `PARTIAL`, `MISMATCH`, `ERROR` ou `INCONCLUSIVE`.
+**Nenhum fingerprint foi alterado nesta ronda**, e não havia motivo legítimo
+para o fazer: a regra da primeira execução só autoriza edição nos casos (a) e
+(b), e nenhum ocorreu.
+
+### Consequência para o R1
+
+```
+R1 TARGET   : 071, 072, 073
+R1 EXCLUDED : 070
+```
+
+A 070 fica para tratamento separado, como migration real a aplicar, com outra
+autorização e outro gate. Não entra na ronda de reconciliação.
+
+Isto cria um **buraco deliberado na numeração** do ledger: 071–073 registadas
+com a 070 ausente. Antes de qualquer R1 é preciso confirmar, em código e teste,
+que o runner tolera essa descontinuidade — que não assume sequência contínua nem
+recusa arrancar por causa do intervalo. Verificação de código, sem tocar na base.
 
 ---
 
