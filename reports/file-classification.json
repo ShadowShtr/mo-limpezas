@@ -1,13 +1,13 @@
 {
   "generatedBy": "scripts/audit-file-inventory.mjs",
-  "totalFiles": 635,
+  "totalFiles": 636,
   "byStatus": {
-    "MANTER": 617,
+    "MANTER": 618,
     "STANDBY": 18
   },
   "byCategory": {
     "route-ui": 133,
-    "test": 100,
+    "test": 101,
     "migration": 75,
     "lib": 64,
     "script": 46,
@@ -29,7 +29,7 @@
     "src-other": 1
   },
   "byConfidence": {
-    "alta": 619,
+    "alta": 620,
     "média": 10,
     "baixa": 6
   },
@@ -987,11 +987,14 @@
       "consumerSample": [],
       "autoLoaded": false,
       "referencedBy": [],
-      "sideEffects": [],
+      "sideEffects": [
+        "supabase"
+      ],
       "risks": [
         "service-role"
       ],
       "signals": {
+        "supabase": 1,
         "serviceRole": 1,
         "sqlWrite": 2
       },
@@ -2881,7 +2884,7 @@
       "category": "script",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 6,
+      "consumers": 7,
       "consumerSample": [
         "scripts/lib/migration-reconciliation.mjs",
         "scripts/lib/migration-runner-core.mjs",
@@ -2916,11 +2919,11 @@
       "category": "script",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 3,
+      "consumers": 4,
       "consumerSample": [
         "scripts/lib/migration-runner-core.mjs",
         "src/__tests__/migration-drift-guard.test.ts",
-        "src/__tests__/migration-runner-drift-abort.test.ts"
+        "src/__tests__/migration-ledger-gap.test.ts"
       ],
       "autoLoaded": false,
       "referencedBy": [
@@ -2983,11 +2986,11 @@
       "category": "script",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 4,
+      "consumers": 5,
       "consumerSample": [
         "scripts/lib/migration-drift-guard.mjs",
         "scripts/run-migrations.mjs",
-        "src/__tests__/migration-runner-core.test.ts"
+        "src/__tests__/migration-ledger-gap.test.ts"
       ],
       "autoLoaded": false,
       "referencedBy": [],
@@ -4747,6 +4750,33 @@
         "serviceRole": 2,
         "sqlWrite": 9,
         "dynamicImport": 2
+      },
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/__tests__/migration-ledger-gap.test.ts",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [
+        "docs"
+      ],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "sqlWrite": 8,
+        "fallbackArray": 1
       },
       "action": "nenhuma",
       "reason": "suite de testes — corre por convenção do vitest",
