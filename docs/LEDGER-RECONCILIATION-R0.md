@@ -319,9 +319,31 @@ A 070 fica para tratamento separado, como migration real a aplicar, com outra
 autorização e outro gate. Não entra na ronda de reconciliação.
 
 Isto cria um **buraco deliberado na numeração** do ledger: 071–073 registadas
-com a 070 ausente. Antes de qualquer R1 é preciso confirmar, em código e teste,
-que o runner tolera essa descontinuidade — que não assume sequência contínua nem
-recusa arrancar por causa do intervalo. Verificação de código, sem tocar na base.
+com a 070 ausente.
+
+**CONFIRMADO (R0.1): o runner aceita gaps no ledger por desenho.** A decisão de
+pendência é feita por *membership individual* no nome completo da migration
+(`applied.has(file)`), não por sequência contínua nem por maior número aplicado.
+Ver `src/__tests__/migration-ledger-gap.test.ts` — verificação de código, sem
+tocar na base.
+
+Estado pós-R1 esperado:
+
+```
+070 = PENDING
+071 = APPLIED
+072 = APPLIED
+073 = APPLIED
+```
+
+O drift guard inspecciona **apenas migrations pendentes**; portanto, depois da
+adopção de 071–073 no ledger, a 070 permanece genuinamente pendente e não
+constitui drift.
+
+> 🔴 O runner ficar destravado não é autorização para aplicar a 070. O R1 não
+> «resolve» a 070 — só faz o ledger representar correctamente 071–073. A 070
+> continua a ser uma migration real e pendente, para uma ronda independente com
+> autorização própria.
 
 ---
 
