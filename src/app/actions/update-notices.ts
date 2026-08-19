@@ -78,86 +78,94 @@ export async function isPlatformAdmin(): Promise<boolean> {
  *    página. Um erro devolve lista vazia — a aplicação continua utilizável e o
  *    aviso aparece na próxima. O erro é registado, não engolido em silêncio.
  */
+/**
+ * O ciclo actual, **sem rede de segurança**.
+ *
+ * 🔴 A mesma lógica de `getPendingNotices`, mas propaga erros em vez de
+ *    devolver lista vazia. É a diferença entre «não há nada para mostrar» e
+ *    «não consegui saber»: para pintar um dashboard, o primeiro serve; para
+ *    autorizar uma escrita, não.
+ *
+ *    `markNoticeAsRead` usa esta versão — se a leitura falhar, recusa em vez
+ *    de gravar uma confirmação sobre um aviso que não conseguiu verificar.
+ */
+async function resolverCicloEstrito(
+  admin: Admin,
+  profileId: string,
+  companyId: string,
+): Promise<NoticeForDisplay[]> {
+  const { data: lidos, error: lidosErro } = await admin
+    .from("app_notice_reads")
+    .select("notice_key")
+    .eq("profile_id", profileId);
+  if (lidosErro) throw lidosErro;
+
+  const jaLidas = new Set((lidos ?? []).map((r) => r.notice_key));
+
+  const { data: perfilRow, error: perfilErro } = await admin
+    .from("profiles")
+    .select("created_at")
+    .eq("id", profileId)
+    .maybeSingle();
+  if (perfilErro) throw perfilErro;
+  if (!perfilRow) throw new Error("Perfil não encontrado.");
+
+  const releases = releasesPorMostrar(RELEASE_NOTES, perfilRow.created_at, jaLidas);
+
+  const { data: manuaisRaw, error: manuaisErro } = await admin
+    .from("app_notices")
+    .select("id, notice_key, kind, title, message, audience, published_at")
+    .not("published_at", "is", null)
+    .is("archived_at", null);
+  if (manuaisErro) throw manuaisErro;
+
+  const candidatos = (manuaisRaw ?? []).filter((n) => !jaLidas.has(n.notice_key));
+
+  const dirigidos = candidatos.filter((n) => n.audience !== "all").map((n) => n.id);
+  const alvosPorAviso = new Map<string, { company_id: string | null; profile_id: string | null }[]>();
+  if (dirigidos.length > 0) {
+    const { data: alvos, error: alvosErro } = await admin
+      .from("app_notice_targets")
+      .select("notice_id, company_id, profile_id")
+      .in("notice_id", dirigidos);
+    if (alvosErro) throw alvosErro;
+    for (const a of alvos ?? []) {
+      alvosPorAviso.set(a.notice_id, [...(alvosPorAviso.get(a.notice_id) ?? []), a]);
+    }
+  }
+
+  const manuais: NoticeForDisplay[] = candidatos
+    .filter((n) => {
+      if (n.audience === "all") return true;
+      const alvos = alvosPorAviso.get(n.id) ?? [];
+      return alvos.some((a) => a.profile_id === profileId || a.company_id === companyId);
+    })
+    .map((n) => ({
+      key: n.notice_key,
+      kind: n.kind as NoticeKind,
+      title: n.title,
+      message: n.message,
+      publishedAt: n.published_at as string,
+      source: "manual" as const,
+    }));
+
+  return selecionarCiclo([...manuais, ...releases]);
+}
+
 export async function getPendingNotices(): Promise<NoticeForDisplay[]> {
   try {
     const guard = await requireProfile();
     if (!guard.ok) return [];
-    const { admin, profile } = guard;
 
-    const { data: lidos, error: lidosErro } = await admin
-      .from("app_notice_reads")
-      .select("notice_key")
-      .eq("profile_id", profile.id);
-    if (lidosErro) throw lidosErro;
-
-    const jaLidas = new Set((lidos ?? []).map((r) => r.notice_key));
-
-    // `created_at` não vem no guard partilhado (`AuthedProfile` só traz id,
-    // company_id e role) — lê-se aqui em vez de alargar um tipo que dezenas de
-    // actions usam.
-    const { data: perfilRow, error: perfilErro } = await admin
-      .from("profiles")
-      .select("created_at")
-      .eq("id", profile.id)
-      .maybeSingle();
-    // Sem a data de criação, a elegibilidade não pode ser decidida: cair no
-    // epoch entregaria todo o histórico. O `catch` devolve lista vazia — o
-    // aviso volta na próxima abertura.
-    if (perfilErro) throw perfilErro;
-
-    // ── Notas de release (código) ──
-    const releases = releasesPorMostrar(
-      RELEASE_NOTES,
-      perfilRow?.created_at ?? new Date(0).toISOString(),
-      jaLidas,
-    );
-
-    // ── Avisos manuais (base) ──
-    const { data: manuaisRaw, error: manuaisErro } = await admin
-      .from("app_notices")
-      .select("id, notice_key, kind, title, message, audience, published_at")
-      .not("published_at", "is", null)
-      .is("archived_at", null);
-    if (manuaisErro) throw manuaisErro;
-
-    const candidatos = (manuaisRaw ?? []).filter((n) => !jaLidas.has(n.notice_key));
-
-    // Quem é alvo de quê. `audience = 'all'` não tem linhas — não se
-    // materializa a lista de toda a gente.
-    const dirigidos = candidatos.filter((n) => n.audience !== "all").map((n) => n.id);
-    const alvosPorAviso = new Map<string, { company_id: string | null; profile_id: string | null }[]>();
-    if (dirigidos.length > 0) {
-      const { data: alvos, error: alvosErro } = await admin
-        .from("app_notice_targets")
-        .select("notice_id, company_id, profile_id")
-        .in("notice_id", dirigidos);
-      if (alvosErro) throw alvosErro;
-      for (const a of alvos ?? []) {
-        alvosPorAviso.set(a.notice_id, [...(alvosPorAviso.get(a.notice_id) ?? []), a]);
-      }
-    }
-
-    const manuais: NoticeForDisplay[] = candidatos
-      .filter((n) => {
-        if (n.audience === "all") return true;
-        const alvos = alvosPorAviso.get(n.id) ?? [];
-        return alvos.some(
-          (a) => a.profile_id === profile.id || a.company_id === profile.company_id,
-        );
-      })
-      .map((n) => ({
-        key: n.notice_key,
-        kind: n.kind as NoticeKind,
-        title: n.title,
-        message: n.message,
-        publishedAt: n.published_at as string,
-        source: "manual" as const,
-      }));
-
-    return selecionarCiclo([...manuais, ...releases]);
+    return await resolverCicloEstrito(guard.admin, guard.profile.id, guard.profile.company_id);
   } catch (e) {
-    // A camada de avisos não é essencial ao dashboard. Falhar aqui deixa a
-    // página utilizável; mascarar o erro deixaria o defeito invisível.
+    // A camada de avisos não é essencial ao dashboard: falhar aqui deixa a
+    // página utilizável, e o aviso volta na próxima abertura. O erro é
+    // registado — mascará-lo deixaria o defeito invisível.
+    //
+    // 🔴 Só esta função engole o erro. `markNoticeAsRead` usa o resolver
+    //    directamente, porque autorizar uma escrita sobre «não consegui
+    //    saber» é diferente de pintar um dashboard sem avisos.
     console.error("[update-notices] getPendingNotices falhou:", e);
     return [];
   }
@@ -166,9 +174,22 @@ export async function getPendingNotices(): Promise<NoticeForDisplay[]> {
 /**
  * Marca um aviso como lido pelo perfil da sessão.
  *
- * Idempotente pela chave primária `(profile_id, notice_key)`: dois cliques ou
- * dois separadores não criam duas linhas, e a segunda tentativa devolve
- * sucesso em vez de erro — o utilizador leu, e é isso que interessa.
+ * 🔴 A chave é VALIDADA contra o ciclo actual daquele perfil.
+ *
+ *    A versão anterior aceitava qualquer string. Alguém que chamasse esta
+ *    action directamente podia marcar como lida:
+ *
+ *      · uma release ainda fora do lote — que desaparecia sem nunca ter sido
+ *        mostrada, e o utilizador nunca sabia o que mudou;
+ *      · um aviso manual dirigido a outra empresa;
+ *      · uma chave inventada, poluindo a tabela.
+ *
+ *    Uma leitura tem de significar «esta pessoa confirmou um aviso que lhe foi
+ *    entregue», não «esta pessoa enviou uma string».
+ *
+ * Idempotente: a segunda chamada devolve sucesso sem criar segunda linha. E
+ * uma chave já lida passa mesmo que já não esteja no ciclo — o dois cliques
+ * seguidos é o caso normal, não um ataque.
  */
 export async function markNoticeAsRead(
   noticeKey: string,
@@ -179,6 +200,33 @@ export async function markNoticeAsRead(
 
   if (!noticeKey || typeof noticeKey !== "string") {
     return { ok: false, error: "Aviso inválido." };
+  }
+
+  // Já lido: idempotência antes de tudo. Sai do ciclo assim que é marcado, e
+  // exigir que ainda lá estivesse faria o segundo clique falhar.
+  const { data: jaLido, error: jaLidoErro } = await admin
+    .from("app_notice_reads")
+    .select("notice_key")
+    .eq("profile_id", profile.id)
+    .eq("notice_key", noticeKey)
+    .maybeSingle();
+  if (jaLidoErro) return { ok: false, error: jaLidoErro.message };
+  if (jaLido) return { ok: true };
+
+  // Resolver estrito: se a leitura falhar, recusa — não grava uma confirmação
+  // sobre um aviso que não conseguiu verificar.
+  let ciclo: NoticeForDisplay[];
+  try {
+    ciclo = await resolverCicloEstrito(admin, profile.id, profile.company_id);
+  } catch (e) {
+    console.error("[update-notices] markNoticeAsRead: ciclo indisponível:", e);
+    return { ok: false, error: "Não foi possível confirmar a leitura. Tenta outra vez." };
+  }
+
+  if (!ciclo.some((n) => n.key === noticeKey)) {
+    // Mensagem igual para chave inexistente, fora do lote ou de outro tenant:
+    // distingui-las revelaria a existência de avisos alheios.
+    return { ok: false, error: "Este aviso não está disponível para este perfil." };
   }
 
   // 🔴 `profile_id` da sessão, nunca de argumento: ninguém marca por outro.
@@ -339,36 +387,27 @@ export async function publishNotice(
   if (title.length > NOTICE_TITLE_MAX) return { ok: false, error: `Título com mais de ${NOTICE_TITLE_MAX} caracteres.` };
   if (message.length > NOTICE_MESSAGE_MAX) return { ok: false, error: `Mensagem com mais de ${NOTICE_MESSAGE_MAX} caracteres.` };
 
-  // 🔴 Deduplicar antes de tudo. O selector do cliente não é garantia de
-  //    unicidade — e IDs repetidos inflavam a contagem de destinatários.
-  const companyIds = [...new Set(input.companyIds ?? [])];
-  const profileIds = [...new Set(input.profileIds ?? [])];
-
-  if (input.audience === "companies" && companyIds.length === 0) {
-    return { ok: false, error: "Escolhe pelo menos uma empresa." };
-  }
-  if (input.audience === "profiles" && profileIds.length === 0) {
-    return { ok: false, error: "Escolhe pelo menos um perfil." };
-  }
-
-  // Os IDs vêm do cliente: confirmar que existem antes de os gravar. Um id
-  // inventado criaria um alvo que nunca corresponde a ninguém, e o aviso
-  // apareceria no histórico como enviado.
-  if (companyIds.length > 0) {
-    const { data: existem, error } = await admin
-      .from("companies").select("id").in("id", companyIds);
-    if (error) return { ok: false, error: error.message };
-    if ((existem ?? []).length !== companyIds.length) {
-      return { ok: false, error: "Uma das empresas seleccionadas não existe." };
-    }
-  }
-  if (profileIds.length > 0) {
-    const { data: existem, error } = await admin
-      .from("profiles").select("id").in("id", profileIds);
-    if (error) return { ok: false, error: error.message };
-    if ((existem ?? []).length !== profileIds.length) {
-      return { ok: false, error: "Um dos perfis seleccionados não existe." };
-    }
+  // 🔴 VALIDAR E CONTAR ANTES DE QUALQUER ESCRITA.
+  //
+  //    A versão anterior publicava e só depois tentava contar, devolvendo
+  //    `recipients = -1` com `ok: true` se a contagem falhasse. Isso é publicar
+  //    sem saber para quem — e apresentar isso como sucesso. O número de
+  //    destinatários é determinável antes de escrever, portanto é antes de
+  //    escrever que se determina.
+  //
+  //    Se isto falhar, não nasce nem o rascunho.
+  let recipients: number;
+  let companyIds: string[];
+  let profileIds: string[];
+  try {
+    const r = await validarEContarDestinatarios(
+      admin, input.audience, input.companyIds ?? [], input.profileIds ?? [],
+    );
+    recipients = r.count;
+    companyIds = r.companyIds;
+    profileIds = r.profileIds;
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Não foi possível apurar os destinatários." };
   }
 
   const noticeKey = `manual-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -432,16 +471,7 @@ export async function publishNotice(
     return { ok: false, error: publicarErro.message };
   }
 
-  // O aviso já está publicado. Se a contagem falhar aqui, não se desfaz a
-  // publicação por causa de um número — regista-se `-1` para o histórico
-  // mostrar que não foi possível apurar, em vez de um zero que parece real.
-  let recipients = -1;
-  try {
-    recipients = await contarDestinatarios(admin, input.audience, companyIds, profileIds);
-  } catch (e) {
-    console.error("[update-notices] contagem pós-publicação falhou:", e);
-  }
-
+  // `recipients` já é conhecido desde antes da primeira escrita.
   await auditLog({
     companyId: profile.company_id,
     actorId: profile.id,
@@ -471,7 +501,10 @@ export async function countRecipients(
   if (!isNoticeAudience(audience)) return { ok: false, error: "Destinatários inválidos." };
 
   try {
-    return { ok: true, count: await contarDestinatarios(admin, audience, companyIds, profileIds) };
+    // A MESMA função que a publicação usa: o número mostrado no preview é o
+    // número que a publicação revalida. Duas regras separadas divergiriam.
+    const { count } = await validarEContarDestinatarios(admin, audience, companyIds, profileIds);
+    return { ok: true, count };
   } catch (e) {
     // O painel esconde a contagem em vez de mostrar um zero inventado.
     return { ok: false, error: e instanceof Error ? e.message : "Não foi possível contar os destinatários." };
@@ -479,33 +512,63 @@ export async function countRecipients(
 }
 
 /**
- * 🔴 Lança em erro, não devolve zero.
+ * 🔴 A ÚNICA fonte de verdade sobre destinatários — valida e conta de uma vez.
  *
- * «Este aviso será enviado para 0 perfis» quando a query falhou é uma frase
- * falsa mostrada mesmo antes de alguém carregar em publicar. Quem chama
- * traduz a excepção num erro visível.
+ * O preview («será enviado para N perfis») e a publicação usam esta mesma
+ * função. Duas regras separadas divergiriam, e o número mostrado antes de
+ * publicar deixaria de corresponder ao que acontece.
  *
- * Os ids chegam já deduplicados de `publishNotice` — contar `profileIds.length`
- * com repetições inflaria o número.
+ * Lança em erro em vez de devolver zero: «0 perfis» sobre uma query falhada é
+ * uma frase falsa apresentada como facto. Quem chama traduz num erro visível —
+ * e `publishNotice` chama isto **antes** de escrever, para que uma contagem
+ * impossível de apurar não produza sequer um rascunho.
  */
-async function contarDestinatarios(
+async function validarEContarDestinatarios(
   admin: Admin,
   audience: NoticeAudience,
-  companyIds: string[],
-  profileIds: string[],
-): Promise<number> {
-  if (audience === "profiles") return new Set(profileIds).size;
+  companyIdsIn: string[],
+  profileIdsIn: string[],
+): Promise<{ count: number; companyIds: string[]; profileIds: string[] }> {
+  // Deduplicar primeiro: o selector do cliente não é garantia de unicidade, e
+  // ids repetidos inflavam a contagem.
+  const companyIds = [...new Set(companyIdsIn)];
+  const profileIds = [...new Set(profileIdsIn)];
+
+  if (audience === "profiles") {
+    if (profileIds.length === 0) throw new Error("Escolhe pelo menos um perfil.");
+
+    // 🔴 Só perfis ACTIVOS. Validar apenas «o id existe» deixava passar um
+    //    perfil inactivo: cinco ids seleccionados, três pessoas alcançáveis, e
+    //    o painel dizia cinco.
+    const { data, error } = await admin
+      .from("profiles")
+      .select("id")
+      .in("id", profileIds)
+      .eq("status", "ativo");
+    if (error) throw error;
+    if ((data ?? []).length !== profileIds.length) {
+      throw new Error("Um dos perfis seleccionados não existe ou não está activo.");
+    }
+    return { count: profileIds.length, companyIds: [], profileIds };
+  }
 
   if (audience === "companies") {
-    const unicas = [...new Set(companyIds)];
-    if (unicas.length === 0) return 0;
+    if (companyIds.length === 0) throw new Error("Escolhe pelo menos uma empresa.");
+
+    const { data: existem, error: existemErro } = await admin
+      .from("companies").select("id").in("id", companyIds);
+    if (existemErro) throw existemErro;
+    if ((existem ?? []).length !== companyIds.length) {
+      throw new Error("Uma das empresas seleccionadas não existe.");
+    }
+
     const { count, error } = await admin
       .from("profiles")
       .select("id", { count: "exact", head: true })
-      .in("company_id", unicas)
+      .in("company_id", companyIds)
       .eq("status", "ativo");
     if (error) throw error;
-    return count ?? 0;
+    return { count: count ?? 0, companyIds, profileIds: [] };
   }
 
   const { count, error } = await admin
@@ -513,7 +576,7 @@ async function contarDestinatarios(
     .select("id", { count: "exact", head: true })
     .eq("status", "ativo");
   if (error) throw error;
-  return count ?? 0;
+  return { count: count ?? 0, companyIds: [], profileIds: [] };
 }
 
 /** Empresas e perfis para o selector de destinatários. */

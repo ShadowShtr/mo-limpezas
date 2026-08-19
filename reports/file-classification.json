@@ -1,13 +1,13 @@
 {
   "generatedBy": "scripts/audit-file-inventory.mjs",
-  "totalFiles": 662,
+  "totalFiles": 663,
   "byStatus": {
-    "MANTER": 644,
+    "MANTER": 645,
     "STANDBY": 18
   },
   "byCategory": {
     "route-ui": 135,
-    "test": 109,
+    "test": 110,
     "migration": 78,
     "lib": 65,
     "script": 47,
@@ -29,7 +29,7 @@
     "other": 1
   },
   "byConfidence": {
-    "alta": 646,
+    "alta": 647,
     "média": 10,
     "baixa": 6
   },
@@ -1833,7 +1833,7 @@
       ],
       "signals": {
         "supabase": 1,
-        "sqlWrite": 25,
+        "sqlWrite": 26,
         "debugger": 6,
         "revalidatePath": 37
       },
@@ -6169,6 +6169,31 @@
       "risks": [],
       "signals": {
         "sqlWrite": 4
+      },
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/__tests__/update-notices-read-integrity.test.ts",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "sqlWrite": 8,
+        "fallbackArray": 1
       },
       "action": "nenhuma",
       "reason": "suite de testes — corre por convenção do vitest",

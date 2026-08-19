@@ -168,15 +168,25 @@ CREATE POLICY "read own platform admin row" ON public.platform_admins
 DROP POLICY IF EXISTS "read published notices" ON public.app_notices;
 DROP POLICY IF EXISTS "read own targets" ON public.app_notice_targets;
 
--- 🔴 Ler e marcar apenas as próprias leituras. Sem o `WITH CHECK`, um perfil
---    podia marcar um aviso como lido em nome de outro.
+-- Ler as próprias leituras é inofensivo e útil.
 DROP POLICY IF EXISTS "read own reads" ON public.app_notice_reads;
 CREATE POLICY "read own reads" ON public.app_notice_reads
   FOR SELECT USING (profile_id = auth.uid());
 
+-- 🔴 ESCRITA DE LEITURAS: FAIL CLOSED.
+--
+--    A primeira versão tinha `FOR INSERT WITH CHECK (profile_id = auth.uid())`,
+--    o que parecia seguro — ninguém marcava por outra pessoa. Mas o `WITH
+--    CHECK` só valida a **coluna do perfil**: qualquer sessão autenticada podia
+--    gravar `(o meu profile_id, uma notice_key à escolha)` e assim marcar como
+--    lido um aviso que nunca lhe foi entregue — uma release ainda fora do lote,
+--    ou um aviso manual dirigido a outra empresa. O aviso desaparecia sem
+--    nunca ter sido mostrado.
+--
+--    A validação de que a chave pertence ao ciclo actual daquele perfil vive
+--    em `markNoticeAsRead`, e uma policy de INSERT permitia contorná-la por
+--    completo. Sem policy, o único caminho é a server action.
 DROP POLICY IF EXISTS "insert own reads" ON public.app_notice_reads;
-CREATE POLICY "insert own reads" ON public.app_notice_reads
-  FOR INSERT WITH CHECK (profile_id = auth.uid());
 
 COMMIT;
 
