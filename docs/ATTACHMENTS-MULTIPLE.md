@@ -178,3 +178,61 @@ O legado continua a funcionar em qualquer das fases, porque nunca foi tocado.
 - `src/components/attachments/attachments-field.tsx` — o campo, um só
 - `src/__tests__/attachments.test.ts` — 38 testes
 - `AGENTS.md` — REGRA ZERO
+
+---
+
+## Correcção de 2026-08-19 — o anexo que parecia desaparecer
+
+Relato: «anexo o ficheiro, guardo, reabro o registo e ele desapareceu».
+
+**Nada era apagado.** A linha continuava em `public.attachments` e o ficheiro
+no bucket. O que falhava era a apresentação.
+
+`AttachmentsField` fazia `useState(initialAttachments)` — e `useState` só
+consome o valor inicial **na montagem**. As três superfícies abriam o registo
+com a lista vazia, disparavam `listAttachments()` de forma assíncrona e
+montavam o componente imediatamente. Quando a resposta chegava, a prop mudava e
+o estado interno não acompanhava.
+
+Havia um segundo defeito, no Kanban: o cartão mostrava o ícone de anexo olhando
+só para `task.attachment_url` — a coluna legada. Um anexo novo não a preenche,
+por isso a tarefa tinha ficheiros e o cartão dizia que não.
+
+### O que mudou
+
+**O campo passou a ser dono da própria leitura.** `initialAttachments` deixou de
+existir: o componente recebe `parentType` + `parentId` e chama
+`listAttachments` sozinho. Três pais a repetir o mesmo carregamento assíncrono
+era a origem do problema, não um detalhe de implementação.
+
+Com isso vieram três garantias que antes não existiam:
+
+- **estado de carregamento** — «Sem anexos» é uma afirmação sobre a base, e só
+  se faz depois de a ler. Antes aparecia enquanto a lista carregava;
+- **erro de leitura visível** — falhar a ler não é o mesmo que não haver nada;
+- **resposta atrasada descartada** — abrir A, saltar para B e receber a resposta
+  de A depois mostrava os anexos do registo errado.
+
+E `getManagementTasks` passou a devolver `has_attachments`, calculado em lote
+(uma consulta para todas as tarefas, não uma por tarefa) sobre o legado **e** a
+tabela nova.
+
+### Prova
+
+`src/__tests__/attachments-async-hydration.test.tsx` monta o componente a sério
+(react-dom + jsdom). Um teste estático não distinguiria `useState(prop)` de uma
+sincronização correcta — e foi por não haver teste de comportamento que o
+defeito passou despercebido.
+
+Verificado por mutação: removida a hidratação, 4 testes falham com
+`'Anexos Sem anexos.Adicionar ficheiro'` — literalmente o ecrã que o utilizador
+descreveu.
+
+### Nota de actualização para os utilizadores
+
+Copy a usar quando o sistema de avisos existir:
+
+> **Financeiro e anexos mais estáveis**
+>
+> Corrigimos a marcação de pagamentos e a permanência dos anexos.
+> Também adicionámos múltiplos anexos em Pagamentos, Tarefas e Faltas.

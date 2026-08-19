@@ -11,8 +11,6 @@ import {
 } from "@/app/actions/payments";
 import { LocalTabs, Kpi as V2Kpi, RowMenu, type KpiTone } from "@/components/financeiro/v2/primitives";
 import { AttachmentsField } from "@/components/attachments/attachments-field";
-import { listAttachments } from "@/app/actions/attachments";
-import type { AttachmentView } from "@/lib/attachments";
 import { todayInLisbon } from "@/lib/lisbon-time";
 import { isValidIsoDateString } from "@/lib/utils";
 
@@ -66,8 +64,6 @@ export function PaymentsClient({ initialData, error: initErr, year, month }: Pro
   const [isPending, startTransition] = useTransition();
   const [form, setForm] = useState<FormState | null>(null);
   const [formError, setFormError] = useState("");
-  const [attachError, setAttachError] = useState("");
-  const [attachments, setAttachments] = useState<AttachmentView[]>([]);
   // Filtro **local**, sobre os dados já carregados. Trocar de aba não vai à
   // base, não muda o mês e não dispara mutação nenhuma.
   const [aba, setAba] = useState<"fixos" | "variaveis">("fixos");
@@ -86,16 +82,6 @@ export function PaymentsClient({ initialData, error: initErr, year, month }: Pro
   }
   function openEdit(p: Payment) {
     setFormError("");
-    setAttachError("");
-    // Os anexos vêm do servidor, que junta o legado deste pagamento com as
-    // linhas de `attachments`. Enquanto carrega, a lista fica vazia — o
-    // componente mostra "Sem anexos" e não perde nada: a fonte autoritativa
-    // chega logo a seguir.
-    setAttachments([]);
-    listAttachments("fixed_variable_payment", p.id).then((res) => {
-      if (res.ok) setAttachments(res.attachments);
-      else setAttachError(res.error);
-    });
     setForm({
       id: p.id, kind: p.kind, description: p.description,
       amount: p.amount === null ? "" : String(p.amount),
@@ -290,14 +276,15 @@ export function PaymentsClient({ initialData, error: initErr, year, month }: Pro
               */}
               {form.id && (
                 <Field label="Anexos (faturas/recibos)">
-                  {/* Falhar a ler a lista tem de ser visível: sem isto, um
-                      pagamento com anexos apareceria como se não tivesse. */}
-                  {attachError && <p className="text-xs text-red-600 mb-2">{attachError}</p>}
+                  {/* O campo carrega e mostra a própria lista — incluindo o
+                      estado de carregamento e o erro de leitura. Passar a lista
+                      por prop era o que fazia o anexo «desaparecer» ao reabrir:
+                      `useState(prop)` só lê o valor na montagem, e a resposta
+                      assíncrona chegava depois. */}
                   <AttachmentsField
                     key={form.id}
                     parentType="fixed_variable_payment"
                     parentId={form.id}
-                    initialAttachments={attachments}
                   />
                 </Field>
               )}

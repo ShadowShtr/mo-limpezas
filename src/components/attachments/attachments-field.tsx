@@ -16,17 +16,16 @@
 //     caminho diferente (ver `source` em AttachmentView).
 // ============================================================================
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Paperclip, Trash2, ExternalLink, Loader2, AlertCircle } from "lucide-react";
 import type { AttachmentView } from "@/lib/attachments";
 import { MAX_ATTACHMENTS_PER_PARENT } from "@/lib/attachments";
-import { addAttachment, getAttachmentUrl, removeAttachment } from "@/app/actions/attachments";
+import { addAttachment, getAttachmentUrl, listAttachments, removeAttachment } from "@/app/actions/attachments";
 import { useToast } from "@/components/ui/toast";
 
 interface Props {
   parentType: string;
   parentId: string;
-  initialAttachments: AttachmentView[];
   /** Sem permissão, a lista continua visível e legível — só não se altera. */
   canEdit?: boolean;
 }
@@ -44,12 +43,50 @@ function formatSize(bytes: number | null): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-export function AttachmentsField({ parentType, parentId, initialAttachments, canEdit = true }: Props) {
-  const [attachments, setAttachments] = useState<AttachmentView[]>(initialAttachments);
+export function AttachmentsField({ parentType, parentId, canEdit = true }: Props) {
+  const [attachments, setAttachments] = useState<AttachmentView[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [pending, setPending] = useState<PendingUpload[]>([]);
   const [removing, setRemoving] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
+
+  // 🔴 O campo é dono da própria leitura.
+  //
+  // Antes, os três pais faziam `setAttachments([])` + `listAttachments()` e
+  // passavam o resultado por prop. Como o estado interno saía de
+  // `useState(initialAttachments)`, e `useState` só lê o valor inicial na
+  // montagem, a lista que chegava depois nunca aparecia: o anexo existia na
+  // base e no bucket, e o utilizador via um registo vazio.
+  //
+  // Centralizar aqui elimina a classe inteira — não há prop para dessincronizar,
+  // e os três fluxos passam a ter exactamente o mesmo comportamento de leitura.
+  useEffect(() => {
+    // `cancelado` impede que uma resposta atrasada escreva no registo errado:
+    // abrir A, saltar para B e receber a resposta de A depois mostraria os
+    // anexos de A dentro de B.
+    let cancelado = false;
+
+    async function carregar() {
+      const res = await listAttachments(parentType, parentId);
+      if (cancelado) return;
+
+      if (res.ok) {
+        setAttachments(res.attachments);
+        setLoadError(null);
+      } else {
+        // Falhar a ler não é o mesmo que não haver nada. Sem isto, um erro de
+        // leitura apareceria como «Sem anexos» — a afirmação oposta à verdade.
+        setAttachments([]);
+        setLoadError(res.error);
+      }
+      setLoading(false);
+    }
+
+    carregar();
+    return () => { cancelado = true; };
+  }, [parentType, parentId]);
 
   // Um id por ficheiro escolhido, não por tentativa: é o que permite ao
   // servidor reconhecer um retry do mesmo ficheiro e devolver o anexo já
@@ -123,7 +160,25 @@ export function AttachmentsField({ parentType, parentId, initialAttachments, can
         </span>
       </div>
 
-      {attachments.length === 0 && pending.length === 0 && (
+      {/* 🔴 «Sem anexos» é uma afirmação sobre a base, e só se faz depois de a
+          ler. Enquanto carrega diz-se que está a carregar; se a leitura falhar
+          diz-se o erro. Afirmar ausência sem ter verificado foi metade da
+          confusão do relato «o anexo desapareceu». */}
+      {loading && (
+        <p className="flex items-center gap-2 text-sm text-[var(--color-muted-foreground)]">
+          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          A carregar anexos…
+        </p>
+      )}
+
+      {!loading && loadError && (
+        <p className="flex items-center gap-2 text-sm text-red-600">
+          <AlertCircle className="h-4 w-4 shrink-0" />
+          {loadError}
+        </p>
+      )}
+
+      {!loading && !loadError && attachments.length === 0 && pending.length === 0 && (
         <p className="text-sm text-[var(--color-muted-foreground)]">Sem anexos.</p>
       )}
 

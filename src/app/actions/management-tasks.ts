@@ -47,6 +47,13 @@ export interface ManagementTask {
   completed_at: string | null;
   attachment_url: string | null;
   attachment_name: string | null;
+  /**
+   * Tem anexos — legado **ou** na tabela `attachments` (074).
+   *
+   * O cartão do Kanban usava `attachment_url` directamente, e por isso não via
+   * os anexos novos: a tarefa tinha ficheiros e o cartão dizia que não.
+   */
+  has_attachments: boolean;
   created_at: string;
 }
 
@@ -106,6 +113,26 @@ export async function getManagementTasks(
     for (const c of clients ?? []) clientNames[c.id] = c.name;
   }
 
+  // 🔴 O cartão mostrava o ícone de anexo olhando só para `attachment_url` — a
+  //    coluna legada. Desde a 074 um anexo novo vive em `public.attachments` e
+  //    não preenche essa coluna: a tarefa tinha anexo e o cartão dizia que não.
+  //
+  //    Uma consulta em lote, não uma por tarefa: `parent_id IN (…)` sobre as
+  //    tarefas já carregadas.
+  const taskIds = (data ?? []).map((t) => t.id);
+  const comAnexoNovo = new Set<string>();
+  if (taskIds.length > 0) {
+    const { data: anexos, error: anexosError } = await admin
+      .from("attachments")
+      .select("parent_id")
+      .eq("company_id", companyId)
+      .eq("parent_type", "management_task")
+      .in("parent_id", taskIds);
+    // Auxiliar: sem isto o cartão perde o ícone, mas a lista continua correcta.
+    logQueryFailure("getManagementTasks:attachments", anexosError);
+    for (const a of anexos ?? []) comAnexoNovo.add(a.parent_id);
+  }
+
   const tasks: ManagementTask[] = (data ?? []).map((t) => ({
     id: t.id,
     title: t.title,
@@ -123,6 +150,7 @@ export async function getManagementTasks(
     completed_at: t.completed_at,
     attachment_url: t.attachment_url,
     attachment_name: t.attachment_name,
+    has_attachments: Boolean(t.attachment_url) || comAnexoNovo.has(t.id),
     created_at: t.created_at,
   }));
 
@@ -206,6 +234,9 @@ export async function createManagementTask(
     completed_at: row.completed_at,
     attachment_url: row.attachment_url,
     attachment_name: row.attachment_name,
+    // Tarefa acabada de criar: não pode ter anexos ainda — só se anexa depois
+    // de o registo existir, porque o anexo precisa do `parent_id`.
+    has_attachments: Boolean(row.attachment_url),
     created_at: row.created_at,
   };
 

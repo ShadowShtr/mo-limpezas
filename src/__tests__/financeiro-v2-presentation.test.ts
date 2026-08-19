@@ -78,8 +78,14 @@ const ACCOES: [keyof typeof V, string[]][] = [
   // redesenho: é a mesma capacidade a passar de um anexo para N, pela
   // migration 074. As actions legadas continuam a existir em payments.ts para
   // o caminho antigo. Ver docs/ATTACHMENTS-MULTIPLE.md.
+  // 2026-08-19: `listAttachments` também saiu. O AttachmentsField passou a ser
+  // dono da própria leitura — os pais deixaram de a carregar e de a passar por
+  // prop, que era o que fazia o anexo desaparecer ao reabrir o registo
+  // (`useState(prop)` só lê na montagem). A capacidade continua: anexar, abrir
+  // e remover vivem no componente, em `src/app/actions/attachments.ts`.
+  // Ver docs/ATTACHMENTS-MULTIPLE.md e attachments-async-hydration.test.tsx.
   ["pagamentos", ["createPayment", "updatePayment", "deletePayment", "setPaymentStatus",
-                  "listAttachments", "getPayments"]],
+                  "getPayments"]],
   ["contas", ["createCashFlowEntry", "updateCashFlowEntry", "deleteCashFlowEntry"]],
   ["fluxo", ["createCashFlowEntry", "updateCashFlowEntry", "deleteCashFlowEntry"]],
   ["cobrancas", ["generateInvoices", "updateInvoiceStatus", "deleteInvoice"]],
@@ -112,7 +118,11 @@ describe("Financeiro V2 — nenhuma acção ficou decorativa", () => {
     // vista. Nenhuma capacidade foi perdida: anexar e remover continuam
     // disponíveis, agora para N ficheiros em vez de um. Ver
     // docs/ATTACHMENTS-MULTIPLE.md e a nota em ACCOES.
-    expect(VISIBLE_ACTION_BINDINGS).toBe(27);
+    // 2026-08-19: 26, não 27. `listAttachments` saiu da vista de Pagamentos —
+    // o AttachmentsField passou a carregar a própria lista. Nenhuma capacidade
+    // foi perdida: ler, anexar e remover continuam disponíveis, agora todas
+    // dentro do componente partilhado. Ver a nota em ACCOES.
+    expect(VISIBLE_ACTION_BINDINGS).toBe(26);
   });
 
   for (const [vista, actions] of ACCOES) {

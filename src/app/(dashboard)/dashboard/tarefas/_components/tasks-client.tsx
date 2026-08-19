@@ -3,8 +3,6 @@
 import { useEffect, useRef, useState, useTransition } from "react";
 import { createPortal } from "react-dom";
 import { AttachmentsField } from "@/components/attachments/attachments-field";
-import { listAttachments } from "@/app/actions/attachments";
-import type { AttachmentView } from "@/lib/attachments";
 import {
   AlertTriangle, Building2, Calendar, ChevronDown, FolderKanban,
   Loader2, Paperclip, Plus, Search, Trash2, User, Users, X,
@@ -253,7 +251,10 @@ function TaskCard({ task, column, deleting, dragging, onDelete, onPointerDown, o
             <User className="w-3 h-3" />{task.assigned_to_name}
           </span>
         )}
-        {task.attachment_url && (
+        {/* `has_attachments` cobre o legado E a tabela `attachments` (074).
+            Usar `attachment_url` aqui fazia uma tarefa com anexo novo parecer
+            sem anexo nenhum. */}
+        {task.has_attachments && (
           <span className="flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-600 font-medium" title={task.attachment_name ?? "Anexo"}>
             <Paperclip className="w-3 h-3" />Anexo
           </span>
@@ -305,7 +306,6 @@ export function TasksClient({ initialTasks, initialColumns, companyId, members, 
   const [savingDetail, startSaveDetail] = useTransition();
   const [attachUploading, setAttachUploading] = useState(false);
   const [attachError, setAttachError] = useState<string | null>(null);
-  const [attachments, setAttachments] = useState<AttachmentView[]>([]);
 
   // ── Nova coluna ──
   const [addingColumn, setAddingColumn] = useState(false);
@@ -397,13 +397,6 @@ export function TasksClient({ initialTasks, initialColumns, companyId, members, 
     setEditPriority(task.priority as TaskPriority); setEditAssigned(task.assigned_to ?? "");
     setEditDue(task.due_date ?? ""); setEditStatus(task.status); setEditTab("detalhes");
     setAttachError(null); setAttachUploading(false);
-    // A lista vem do servidor, que junta o anexo legado desta tarefa com as
-    // linhas de `attachments`.
-    setAttachments([]);
-    listAttachments("management_task", task.id).then((res) => {
-      if (res.ok) setAttachments(res.attachments);
-      else setAttachError(res.error);
-    });
   }
 
   // 🔴 Estes três handlers de anexo ÚNICO já não são usados pela UI: o
@@ -449,6 +442,7 @@ export function TasksClient({ initialTasks, initialColumns, companyId, members, 
   // Mantidos deliberadamente (ver a nota acima), mas não referenciados pela
   // UI. Sem isto, `noUnusedLocals` e o lint estrito recusariam o ficheiro.
   void attachUploading;
+  void attachError;
   void handleAttachmentChange;
   void handleAttachmentDownload;
   void handleAttachmentRemove;
@@ -902,12 +896,10 @@ export function TasksClient({ initialTasks, initialColumns, companyId, members, 
                 */}
                 <div>
                   <label className="block text-xs font-medium text-[var(--color-text-sub)] mb-1">Anexos</label>
-                  {attachError && <p className="text-xs text-red-600 mb-2">{attachError}</p>}
                   <AttachmentsField
                     key={openTask.id}
                     parentType="management_task"
                     parentId={openTask.id}
-                    initialAttachments={attachments}
                   />
                 </div>
               </div>

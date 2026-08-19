@@ -1,13 +1,13 @@
 {
   "generatedBy": "scripts/audit-file-inventory.mjs",
-  "totalFiles": 647,
+  "totalFiles": 648,
   "byStatus": {
-    "MANTER": 629,
+    "MANTER": 630,
     "STANDBY": 18
   },
   "byCategory": {
     "route-ui": 133,
-    "test": 105,
+    "test": 106,
     "migration": 77,
     "lib": 65,
     "script": 46,
@@ -29,7 +29,7 @@
     "src-other": 1
   },
   "byConfidence": {
-    "alta": 631,
+    "alta": 632,
     "média": 10,
     "baixa": 6
   },
@@ -3579,6 +3579,32 @@
         "serviceRole": 1,
         "sqlWrite": 4,
         "fallbackArray": 1
+      },
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/__tests__/attachments-async-hydration.test.tsx",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [
+        "docs"
+      ],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "dynamicImport": 1
       },
       "action": "nenhuma",
       "reason": "suite de testes — corre por convenção do vitest",
@@ -10036,11 +10062,9 @@
       "category": "server-action",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 4,
+      "consumers": 1,
       "consumerSample": [
-        "src/app/(dashboard)/dashboard/faltas/_components/substitution-panel.tsx",
-        "src/app/(dashboard)/dashboard/financeiro/pagamentos/_components/payments-client.tsx",
-        "src/app/(dashboard)/dashboard/tarefas/_components/tasks-client.tsx"
+        "src/components/attachments/attachments-field.tsx"
       ],
       "autoLoaded": false,
       "referencedBy": [
@@ -10064,7 +10088,7 @@
         "revalidatePath": 5
       },
       "action": "auditar atomicidade (T12/T13)",
-      "reason": "em uso: 4 consumidor(es)",
+      "reason": "em uso: 1 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -11005,7 +11029,7 @@
         "anyType": 6,
         "selectStar": 2,
         "ignoredError": 2,
-        "fallbackArray": 7,
+        "fallbackArray": 9,
         "revalidatePath": 6
       },
       "action": "auditar atomicidade (T12/T13)",
@@ -12233,11 +12257,11 @@
       "category": "component",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 3,
+      "consumers": 4,
       "consumerSample": [
+        "src/__tests__/attachments-async-hydration.test.tsx",
         "src/app/(dashboard)/dashboard/faltas/_components/substitution-panel.tsx",
-        "src/app/(dashboard)/dashboard/financeiro/pagamentos/_components/payments-client.tsx",
-        "src/app/(dashboard)/dashboard/tarefas/_components/tasks-client.tsx"
+        "src/app/(dashboard)/dashboard/financeiro/pagamentos/_components/payments-client.tsx"
       ],
       "autoLoaded": false,
       "referencedBy": [
@@ -12250,7 +12274,7 @@
         "sqlWrite": 2
       },
       "action": "nenhuma",
-      "reason": "em uso: 3 consumidor(es)",
+      "reason": "em uso: 4 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -14239,11 +14263,11 @@
       "category": "lib",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 6,
+      "consumers": 4,
       "consumerSample": [
+        "src/__tests__/attachments-async-hydration.test.tsx",
         "src/__tests__/attachments.test.ts",
-        "src/app/(dashboard)/dashboard/faltas/_components/substitution-panel.tsx",
-        "src/app/(dashboard)/dashboard/financeiro/pagamentos/_components/payments-client.tsx"
+        "src/app/actions/attachments.ts"
       ],
       "autoLoaded": false,
       "referencedBy": [
@@ -14253,7 +14277,7 @@
       "risks": [],
       "signals": {},
       "action": "nenhuma",
-      "reason": "em uso: 6 consumidor(es)",
+      "reason": "em uso: 4 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
