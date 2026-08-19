@@ -1,14 +1,14 @@
 {
   "generatedBy": "scripts/audit-file-inventory.mjs",
-  "totalFiles": 645,
+  "totalFiles": 647,
   "byStatus": {
-    "MANTER": 627,
+    "MANTER": 629,
     "STANDBY": 18
   },
   "byCategory": {
     "route-ui": 133,
-    "test": 104,
-    "migration": 76,
+    "test": 105,
+    "migration": 77,
     "lib": 65,
     "script": 46,
     "doc": 43,
@@ -29,7 +29,7 @@
     "src-other": 1
   },
   "byConfidence": {
-    "alta": 629,
+    "alta": 631,
     "média": 10,
     "baixa": 6
   },
@@ -3827,6 +3827,31 @@
       "sideEffects": [],
       "risks": [],
       "signals": {},
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/__tests__/cash-flow-reference-type-schema.test.ts",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "sqlWrite": 10,
+        "fallbackArray": 1
+      },
       "action": "nenhuma",
       "reason": "suite de testes — corre por convenção do vitest",
       "manualDecision": false,
@@ -17710,6 +17735,24 @@
       "risks": [],
       "signals": {
         "sqlWrite": 14
+      },
+      "action": "nenhuma",
+      "reason": "migration versionada — histórico do schema, nunca se apaga",
+      "manualDecision": false
+    },
+    {
+      "path": "supabase/migrations/075_cash_flow_fixed_variable_payment_reference.sql",
+      "category": "migration",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "sqlWrite": 7
       },
       "action": "nenhuma",
       "reason": "migration versionada — histórico do schema, nunca se apaga",
