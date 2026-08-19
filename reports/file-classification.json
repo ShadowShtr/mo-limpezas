@@ -1,20 +1,20 @@
 {
   "generatedBy": "scripts/audit-file-inventory.mjs",
-  "totalFiles": 648,
+  "totalFiles": 660,
   "byStatus": {
-    "MANTER": 630,
+    "MANTER": 642,
     "STANDBY": 18
   },
   "byCategory": {
-    "route-ui": 133,
-    "test": 106,
-    "migration": 77,
+    "route-ui": 135,
+    "test": 109,
+    "migration": 78,
     "lib": 65,
     "script": 46,
     "doc": 43,
-    "server-action": 40,
-    "domain": 40,
-    "component": 28,
+    "domain": 42,
+    "server-action": 41,
+    "component": 30,
     "doc-historico": 16,
     "api-route": 16,
     "config": 12,
@@ -22,14 +22,14 @@
     "report": 4,
     "script-historico": 4,
     "ci": 2,
+    "src-other": 2,
     "types": 2,
     "sql-frozen": 2,
     "supabase-other": 2,
-    "other": 1,
-    "src-other": 1
+    "other": 1
   },
   "byConfidence": {
-    "alta": 632,
+    "alta": 644,
     "média": 10,
     "baixa": 6
   },
@@ -1806,7 +1806,8 @@
       ],
       "risks": [],
       "signals": {
-        "supabase": 1
+        "supabase": 1,
+        "sqlWrite": 1
       },
       "action": "nenhuma",
       "reason": "configuração/infra",
@@ -1825,16 +1826,16 @@
       ],
       "sideEffects": [
         "supabase",
-        "revalidatePath(36)"
+        "revalidatePath(37)"
       ],
       "risks": [
         "debugger"
       ],
       "signals": {
         "supabase": 1,
-        "sqlWrite": 7,
+        "sqlWrite": 25,
         "debugger": 6,
-        "revalidatePath": 36
+        "revalidatePath": 37
       },
       "action": "nenhuma",
       "reason": "configuração/infra",
@@ -5613,6 +5614,30 @@
       }
     },
     {
+      "path": "src/__tests__/release-note-guard.test.ts",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [
+        "docs"
+      ],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {},
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
       "path": "src/__tests__/report-absences.test.ts",
       "category": "test",
       "status": "MANTER",
@@ -6062,6 +6087,55 @@
         "supabase": 2,
         "serviceRole": 6,
         "sqlWrite": 3
+      },
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/__tests__/update-notice-modal.test.tsx",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "sqlWrite": 4,
+        "dynamicImport": 1
+      },
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/__tests__/update-notices-eligibility.test.ts",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "sqlWrite": 4
       },
       "action": "nenhuma",
       "reason": "suite de testes — corre por convenção do vitest",
@@ -7102,6 +7176,59 @@
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/app/(dashboard)/dashboard/admin/atualizacoes/_components/atualizacoes-client.tsx",
+      "category": "route-ui",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 1,
+      "consumerSample": [
+        "src/app/(dashboard)/dashboard/admin/atualizacoes/page.tsx"
+      ],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "clientComponent": 1,
+        "sqlWrite": 6
+      },
+      "action": "nenhuma",
+      "reason": "em uso: 1 consumidor(es)",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/app/(dashboard)/dashboard/admin/atualizacoes/page.tsx",
+      "category": "route-ui",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": true,
+      "referencedBy": [
+        "docs"
+      ],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "sqlWrite": 1
+      },
+      "action": "nenhuma",
+      "reason": "em uso: convenção do Next",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": true,
         "cliEntrypoint": false,
         "dynamicImport": true,
         "allClosed": false
@@ -10001,7 +10128,7 @@
       "risks": [],
       "signals": {
         "supabase": 6,
-        "sqlWrite": 1,
+        "sqlWrite": 4,
         "consoleErr": 1
       },
       "action": "nenhuma",
@@ -11383,6 +11510,46 @@
       },
       "action": "auditar atomicidade (T12/T13)",
       "reason": "em uso: 3 consumidor(es)",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/app/actions/update-notices.ts",
+      "category": "server-action",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 4,
+      "consumerSample": [
+        "src/app/(dashboard)/dashboard/admin/atualizacoes/_components/atualizacoes-client.tsx",
+        "src/app/(dashboard)/dashboard/admin/atualizacoes/page.tsx",
+        "src/app/(dashboard)/layout.tsx"
+      ],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [
+        "write",
+        "revalidatePath(2)"
+      ],
+      "risks": [
+        "erro-de-query-ignorado(6)"
+      ],
+      "signals": {
+        "serverAction": 1,
+        "write": 5,
+        "sqlWrite": 7,
+        "consoleErr": 1,
+        "ignoredError": 6,
+        "fallbackZero": 9,
+        "fallbackArray": 17,
+        "revalidatePath": 2
+      },
+      "action": "auditar atomicidade (T12/T13)",
+      "reason": "em uso: 4 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -13071,6 +13238,62 @@
       }
     },
     {
+      "path": "src/components/update-notices/update-notice-card.tsx",
+      "category": "component",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 2,
+      "consumerSample": [
+        "src/app/(dashboard)/dashboard/admin/atualizacoes/_components/atualizacoes-client.tsx",
+        "src/components/update-notices/update-notice-modal.tsx"
+      ],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "clientComponent": 1,
+        "sqlWrite": 1
+      },
+      "action": "nenhuma",
+      "reason": "em uso: 2 consumidor(es)",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/components/update-notices/update-notice-modal.tsx",
+      "category": "component",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 2,
+      "consumerSample": [
+        "src/__tests__/update-notice-modal.test.tsx",
+        "src/app/(dashboard)/layout.tsx"
+      ],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "clientComponent": 1,
+        "sqlWrite": 5
+      },
+      "action": "nenhuma",
+      "reason": "em uso: 2 consumidor(es)",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
       "path": "src/domain/billing/billing-compat.ts",
       "category": "domain",
       "status": "MANTER",
@@ -14230,6 +14453,60 @@
       }
     },
     {
+      "path": "src/domain/update-notices/eligibility.ts",
+      "category": "domain",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 2,
+      "consumerSample": [
+        "src/__tests__/update-notices-eligibility.test.ts",
+        "src/app/actions/update-notices.ts"
+      ],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {},
+      "action": "nenhuma",
+      "reason": "em uso: 2 consumidor(es)",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/domain/update-notices/types.ts",
+      "category": "domain",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 8,
+      "consumerSample": [
+        "src/__tests__/update-notice-modal.test.tsx",
+        "src/__tests__/update-notices-eligibility.test.ts",
+        "src/app/(dashboard)/dashboard/admin/atualizacoes/_components/atualizacoes-client.tsx"
+      ],
+      "autoLoaded": false,
+      "referencedBy": [
+        "config",
+        "docs"
+      ],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {},
+      "action": "nenhuma",
+      "reason": "em uso: 8 consumidor(es), configuração",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": true,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
       "path": "src/lib/action-result.ts",
       "category": "lib",
       "status": "MANTER",
@@ -14291,7 +14568,7 @@
       "category": "lib",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 19,
+      "consumers": 20,
       "consumerSample": [
         "src/__tests__/audit.test.ts",
         "src/app/(dashboard)/dashboard/calendario/_actions/reschedule.ts",
@@ -14319,7 +14596,7 @@
         "consoleErr": 2
       },
       "action": "nenhuma",
-      "reason": "em uso: 19 consumidor(es), script npm, CI, configuração",
+      "reason": "em uso: 20 consumidor(es), script npm, CI, configuração",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -14333,7 +14610,7 @@
       "category": "lib",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 21,
+      "consumers": 22,
       "consumerSample": [
         "src/__tests__/auth-revalidation-central.test.ts",
         "src/app/actions/attachments.ts",
@@ -14354,7 +14631,7 @@
         "ignoredError": 1
       },
       "action": "nenhuma",
-      "reason": "em uso: 21 consumidor(es)",
+      "reason": "em uso: 22 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -16188,6 +16465,36 @@
       }
     },
     {
+      "path": "src/release-notes/index.ts",
+      "category": "src-other",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 3,
+      "consumerSample": [
+        "src/__tests__/release-note-guard.test.ts",
+        "src/__tests__/update-notices-eligibility.test.ts",
+        "src/app/actions/update-notices.ts"
+      ],
+      "autoLoaded": false,
+      "referencedBy": [
+        "docs"
+      ],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "sqlWrite": 1
+      },
+      "action": "nenhuma",
+      "reason": "em uso: 3 consumidor(es)",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
       "path": "src/types/database.ts",
       "category": "types",
       "status": "MANTER",
@@ -16208,7 +16515,7 @@
       "risks": [],
       "signals": {
         "supabase": 1,
-        "sqlWrite": 81
+        "sqlWrite": 89
       },
       "action": "nenhuma",
       "reason": "em uso: 25 consumidor(es)",
@@ -17777,6 +18084,24 @@
       "risks": [],
       "signals": {
         "sqlWrite": 7
+      },
+      "action": "nenhuma",
+      "reason": "migration versionada — histórico do schema, nunca se apaga",
+      "manualDecision": false
+    },
+    {
+      "path": "supabase/migrations/076_update_notices.sql",
+      "category": "migration",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "sqlWrite": 24
       },
       "action": "nenhuma",
       "reason": "migration versionada — histórico do schema, nunca se apaga",

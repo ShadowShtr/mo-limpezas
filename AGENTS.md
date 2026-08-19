@@ -80,6 +80,28 @@ Antes do merge, mostrar:
 
 Se qualquer item estiver incerto, o merge fica bloqueado.
 
+### Alteração visível exige release note
+
+Toda a alteração que muda o que as pessoas veem — em `src/app/**` ou
+`src/components/**` — leva uma nota em `src/release-notes/`.
+
+Uma alteração visível sem nota é uma alteração que ninguém sabe que aconteceu:
+quem usa o sistema descobre-a pela diferença, e quem dá apoio não tem como
+explicar o que mudou.
+
+A nota é escrita na linguagem de quem usa, não na de quem construiu — sem
+migrations, RPCs, constraints ou nomes de ficheiros. Uma ou duas frases.
+
+Publicada, é **imutável**: a `key` liga ao registo de leitura de cada perfil.
+Mudá-la faz o aviso reaparecer a quem já o viu; reescrever o texto muda aquilo
+que alguém confirmou ter lido.
+
+Excluídas por não terem superfície de utilizador: `src/__tests__/**`, `docs/**`,
+`reports/**`. Não existe forma genérica de dispensar a regra — uma excepção tem
+de ser explícita e auditável.
+
+Ver `src/__tests__/release-note-guard.test.ts`.
+
 ## 4. Código e banco devem ser compatíveis
 
 É proibido publicar código que chame tabelas, colunas, views, triggers ou RPCs

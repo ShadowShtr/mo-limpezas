@@ -118,6 +118,32 @@ export type Database = {
         Update: { status?: string; uploaded_at?: string | null; compressed_size_bytes?: number | null; failed_at?: string | null; failure_reason?: string | null; kind?: string };
         Relationships: [];
       };
+      // Avisos de atualização (migration 076).
+      platform_admins: {
+        Row: { profile_id: string; granted_at: string; granted_by: string | null; note: string | null };
+        Insert: { profile_id: string; granted_by?: string | null; note?: string | null };
+        Update: { note?: string | null };
+        Relationships: [];
+      };
+      app_notices: {
+        Row: { id: string; notice_key: string; kind: string; title: string; message: string; audience: string; published_at: string | null; archived_at: string | null; created_by: string | null; created_at: string };
+        Insert: { notice_key: string; kind: string; title: string; message: string; audience?: string; published_at?: string | null; archived_at?: string | null; created_by?: string | null; id?: string };
+        Update: { archived_at?: string | null; published_at?: string | null };
+        Relationships: [];
+      };
+      app_notice_targets: {
+        Row: { id: string; notice_id: string; company_id: string | null; profile_id: string | null };
+        Insert: { notice_id: string; company_id?: string | null; profile_id?: string | null; id?: string };
+        Update: never;
+        Relationships: [];
+      };
+      // PK composta `(profile_id, notice_key)` — a idempotência da leitura.
+      app_notice_reads: {
+        Row: { profile_id: string; notice_key: string; read_at: string };
+        Insert: { profile_id: string; notice_key: string; read_at?: string };
+        Update: never;
+        Relationships: [];
+      };
       // Anexos 1:N (migration 074). Imutáveis: cria, lê, remove — sem Update.
       attachments: {
         Row: { id: string; company_id: string; parent_type: string; parent_id: string; storage_bucket: string; storage_path: string; original_name: string; mime_type: string | null; size_bytes: number | null; client_event_id: string | null; created_at: string; created_by: string | null };

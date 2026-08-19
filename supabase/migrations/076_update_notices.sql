@@ -1,0 +1,176 @@
+-- ============================================================
+-- MIGRATION 076: Avisos de atualização por perfil
+--
+-- Duas coisas que este projecto não tinha:
+--
+--   1. **Administração de plataforma.** `profiles.role` só conhece `admin`,
+--      `gestor` e `colaboradora` — todos dentro de um tenant
+--      (`profiles.company_id`). Um `admin` é administrador *da sua empresa*,
+--      não da plataforma. Publicar um aviso para várias empresas é uma
+--      operação acima do tenant, e não havia primitiva para isso.
+--
+--   2. **Registo de que alguém leu um aviso.** As notas de versão vivem em
+--      código (`src/release-notes/`), mas «o João já viu» é estado por perfil.
+--
+-- 🔴 A identidade de administrador de plataforma é por `profile_id`, nunca por
+--    nome, email ou slug. Um mecanismo de autorização que reconheça alguém
+--    pelo nome é um mecanismo que se contorna mudando o nome.
+-- ============================================================
+
+BEGIN;
+
+-- ── Administração de plataforma ─────────────────────────────────────────────
+--
+-- Deliberadamente uma tabela, e não uma coluna em `profiles`: um papel que
+-- atravessa tenants não pertence a uma linha que é, ela própria, de um tenant.
+-- Ficar visível numa listagem separada também torna a pergunta «quem tem este
+-- poder?» respondível com um SELECT.
+
+CREATE TABLE IF NOT EXISTS public.platform_admins (
+  profile_id uuid        PRIMARY KEY REFERENCES public.profiles(id) ON DELETE CASCADE,
+  granted_at timestamptz NOT NULL DEFAULT now(),
+  granted_by uuid        REFERENCES public.profiles(id) ON DELETE SET NULL,
+  note       text
+);
+
+COMMENT ON TABLE public.platform_admins IS
+  'Administração ACIMA do tenant: publica avisos para várias empresas. '
+  'Distinto de profiles.role = admin, que é administrador de UMA empresa.';
+
+-- ── Avisos ──────────────────────────────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS public.app_notices (
+  id           uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
+
+  -- Identidade estável do aviso. Para as notas automáticas é a chave do
+  -- ficheiro em `src/release-notes/`; para os manuais, um valor gerado.
+  -- É por aqui que `app_notice_reads` liga, e é o que permite às duas fontes
+  -- — código e base — partilharem o mesmo contrato de leitura.
+  notice_key   text        NOT NULL UNIQUE,
+
+  kind         text        NOT NULL
+               CHECK (kind IN ('correcao', 'novidade', 'aviso', 'manutencao')),
+  title        text        NOT NULL CHECK (length(trim(title)) > 0),
+  message      text        NOT NULL CHECK (length(trim(message)) > 0),
+
+  -- 'all' | 'companies' | 'profiles' — quem recebe. Os dois últimos leem
+  -- `app_notice_targets`.
+  audience     text        NOT NULL DEFAULT 'all'
+               CHECK (audience IN ('all', 'companies', 'profiles')),
+
+  -- `NULL` = rascunho. Publicar é definir isto, **no servidor**.
+  published_at timestamptz,
+  archived_at  timestamptz,
+
+  created_by   uuid        REFERENCES public.profiles(id) ON DELETE SET NULL,
+  created_at   timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_app_notices_published
+  ON public.app_notices (published_at)
+  WHERE published_at IS NOT NULL AND archived_at IS NULL;
+
+-- ── Destinatários ───────────────────────────────────────────────────────────
+--
+-- Uma linha por empresa ou por perfil. `audience = 'all'` não tem linhas —
+-- não se materializa a lista de toda a gente, que envelheceria mal quando
+-- entrasse uma empresa nova.
+
+CREATE TABLE IF NOT EXISTS public.app_notice_targets (
+  id         uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  notice_id  uuid NOT NULL REFERENCES public.app_notices(id) ON DELETE CASCADE,
+  company_id uuid REFERENCES public.companies(id) ON DELETE CASCADE,
+  profile_id uuid REFERENCES public.profiles(id)  ON DELETE CASCADE,
+
+  -- Exactamente um dos dois. Uma linha com ambos, ou com nenhum, não
+  -- significa nada.
+  CONSTRAINT app_notice_targets_um_alvo CHECK (
+    (company_id IS NOT NULL AND profile_id IS NULL)
+    OR (company_id IS NULL AND profile_id IS NOT NULL)
+  )
+);
+
+CREATE INDEX IF NOT EXISTS idx_app_notice_targets_notice
+  ON public.app_notice_targets (notice_id);
+CREATE INDEX IF NOT EXISTS idx_app_notice_targets_company
+  ON public.app_notice_targets (company_id) WHERE company_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_app_notice_targets_profile
+  ON public.app_notice_targets (profile_id) WHERE profile_id IS NOT NULL;
+
+-- ── Leituras ────────────────────────────────────────────────────────────────
+--
+-- 🔴 A chave primária composta É a idempotência. Dois cliques no «Entendi», ou
+--    dois separadores abertos, não podem criar duas linhas — e com esta chave
+--    a segunda tentativa é um conflito que se ignora, não um duplicado.
+--
+--    `notice_key` em vez de `notice_id`: as notas automáticas vivem em código
+--    e não têm linha em `app_notices`. Ligar pela chave textual deixa as duas
+--    fontes usarem exactamente o mesmo registo de leitura.
+
+CREATE TABLE IF NOT EXISTS public.app_notice_reads (
+  profile_id uuid        NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+  notice_key text        NOT NULL,
+  read_at    timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (profile_id, notice_key)
+);
+
+CREATE INDEX IF NOT EXISTS idx_app_notice_reads_profile
+  ON public.app_notice_reads (profile_id);
+
+-- ── RLS ─────────────────────────────────────────────────────────────────────
+--
+-- As server actions usam service-role, que faz bypass de RLS — a verificação
+-- real é feita no servidor, como em todo o resto do projecto. Estas policies
+-- são a segunda camada: se algum dia algo chegar aqui com a chave anónima,
+-- não pode ler avisos de outros nem marcar leituras por outra pessoa.
+
+ALTER TABLE public.platform_admins   ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.app_notices       ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.app_notice_targets ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.app_notice_reads  ENABLE ROW LEVEL SECURITY;
+
+-- Saber se é administrador de plataforma: só sobre si próprio.
+DROP POLICY IF EXISTS "read own platform admin row" ON public.platform_admins;
+CREATE POLICY "read own platform admin row" ON public.platform_admins
+  FOR SELECT USING (profile_id = auth.uid());
+
+-- Avisos publicados são legíveis; rascunhos não saem do servidor.
+DROP POLICY IF EXISTS "read published notices" ON public.app_notices;
+CREATE POLICY "read published notices" ON public.app_notices
+  FOR SELECT USING (published_at IS NOT NULL AND archived_at IS NULL);
+
+-- Alvos: só os que dizem respeito a quem pergunta.
+DROP POLICY IF EXISTS "read own targets" ON public.app_notice_targets;
+CREATE POLICY "read own targets" ON public.app_notice_targets
+  FOR SELECT USING (
+    profile_id = auth.uid()
+    OR company_id IN (SELECT company_id FROM public.profiles WHERE id = auth.uid())
+  );
+
+-- 🔴 Ler e marcar apenas as próprias leituras. Sem o `WITH CHECK`, um perfil
+--    podia marcar um aviso como lido em nome de outro.
+DROP POLICY IF EXISTS "read own reads" ON public.app_notice_reads;
+CREATE POLICY "read own reads" ON public.app_notice_reads
+  FOR SELECT USING (profile_id = auth.uid());
+
+DROP POLICY IF EXISTS "insert own reads" ON public.app_notice_reads;
+CREATE POLICY "insert own reads" ON public.app_notice_reads
+  FOR INSERT WITH CHECK (profile_id = auth.uid());
+
+COMMIT;
+
+-- ---------------------------------------------------------------------------
+-- ROLLBACK
+-- ---------------------------------------------------------------------------
+--
+-- PRE-USE — enquanto não houver avisos publicados nem leituras registadas:
+--
+--   DROP TABLE IF EXISTS public.app_notice_reads   CASCADE;
+--   DROP TABLE IF EXISTS public.app_notice_targets CASCADE;
+--   DROP TABLE IF EXISTS public.app_notices        CASCADE;
+--   DROP TABLE IF EXISTS public.platform_admins    CASCADE;
+--
+-- POST-USE — depois de pessoas terem lido avisos, **nunca `DROP`**: as
+-- leituras são o que impede um aviso já visto de reaparecer. Reverter o
+-- runtime/UI para o deploy anterior preserva as linhas e a feature fica
+-- invisível, mas recuperável.

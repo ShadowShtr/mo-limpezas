@@ -3,6 +3,8 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { DashboardShell } from "@/components/layout/dashboard-shell";
 import { SwUpdatePrompt } from "@/components/pwa/sw-update-prompt";
+import { UpdateNoticeModal } from "@/components/update-notices/update-notice-modal";
+import { getPendingNotices } from "@/app/actions/update-notices";
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient();
@@ -31,6 +33,10 @@ export default async function DashboardLayout({ children }: { children: React.Re
   }
   if (profile.role === "colaborador") redirect("/app");
 
+  // Avisos por ler. `getPendingNotices` nunca lança: um erro devolve lista
+  // vazia e regista em log — a camada de avisos não pode derrubar o dashboard.
+  const notices = await getPendingNotices();
+
   return (
     <DashboardShell
       userName={profile.full_name}
@@ -39,6 +45,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
     >
       {children}
       <SwUpdatePrompt />
+      {notices.length > 0 && <UpdateNoticeModal notices={notices} />}
     </DashboardShell>
   );
 }
