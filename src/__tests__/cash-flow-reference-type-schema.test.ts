@@ -104,6 +104,66 @@ async function inserirComoA073(db: PGlite) {
   );
 }
 
+/**
+ * A mesma base, mas com a **RPC real** da 073 instalada a partir do ficheiro
+ * versionado — não uma reimplementação.
+ *
+ * 🔴 Porque isto importa: `inserirComoA073` acima é um INSERT reduzido. Prova
+ *    o conflito com o CHECK e o índice da 024, mas não exercita o
+ *    `ON CONFLICT … DO NOTHING` + `SELECT` de recuperação que torna a RPC
+ *    idempotente. Uma unique violation não é idempotência da RPC — é o
+ *    contrário do que ela faz.
+ */
+async function baseComRpcReal() {
+  const db = await baseAntesDa075();
+
+  // Dependência mínima da 071 para a 073: `is_financial_period_open` lê daqui.
+  await db.exec(`
+    CREATE TABLE public.financial_periods (
+      id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+      company_id uuid NOT NULL,
+      year smallint NOT NULL,
+      month smallint NOT NULL CHECK (month BETWEEN 1 AND 12),
+      status text NOT NULL DEFAULT 'open' CHECK (status IN ('open','closed')),
+      CONSTRAINT financial_periods_unique UNIQUE (company_id, year, month)
+    );
+  `);
+
+  // A 073 REAL, do ficheiro versionado.
+  await db.exec(sql("073_payment_to_cashflow.sql"));
+  return db;
+}
+
+interface MarkRow {
+  payment_id: string;
+  cash_entry_id: string | null;
+  ja_estava_pago: boolean;
+}
+
+function marcarPago(db: PGlite) {
+  return db.query<MarkRow>(
+    "SELECT * FROM public.mark_payment_paid($1, $2, $3)",
+    [COMPANY, PAYMENT, "2026-08-18"],
+  );
+}
+
+async function estadoPagamento(db: PGlite) {
+  const { rows } = await db.query<{ status: string; paid_at: string | null }>(
+    "SELECT status, paid_at FROM public.fixed_variable_payments WHERE id = $1",
+    [PAYMENT],
+  );
+  return rows[0];
+}
+
+async function contarMovimentos(db: PGlite) {
+  const { rows } = await db.query<{ n: number }>(
+    `SELECT count(*)::int AS n FROM public.cash_flow_entries
+      WHERE reference_type = 'fixed_variable_payment' AND reference_id = $1`,
+    [PAYMENT],
+  );
+  return rows[0].n;
+}
+
 describe("🔴 a causa provada — antes da 075", () => {
   it("a 073 escreve `fixed_variable_payment`", () => {
     const s = sql("073_payment_to_cashflow.sql");
@@ -161,20 +221,92 @@ describe("depois da 075", () => {
     });
   });
 
-  // A idempotência continua a ser garantida pelo índice da 024, não pela RPC.
-  it("🔴 marcar duas vezes não duplica o movimento", async () => {
+  // 🔴 A protecção do índice da 024 — um INSERT cru repetido é rejeitado.
+  //    Isto NÃO é a idempotência da RPC: ver o bloco da RPC real abaixo.
+  it("UNIQUE_INDEX_PROTECTION: um INSERT cru repetido é rejeitado", async () => {
     await expect(inserirComoA073(db)).rejects.toThrow(/duplicate key|unique/i);
+    expect(await contarMovimentos(db)).toBe(1);
+  });
+});
 
-    const { rows } = await db.query(
-      `SELECT count(*)::int AS n FROM public.cash_flow_entries
-        WHERE reference_type = 'fixed_variable_payment' AND reference_id = $1`,
-      [PAYMENT],
-    );
-    expect(rows[0]).toEqual({ n: 1 });
+// ── A RPC REAL, contra o schema acumulado ───────────────────────────────────
+//
+// O que os blocos acima não provam: que `public.mark_payment_paid()` — o
+// ficheiro versionado da 073, não uma reimplementação — se comporta como
+// declarado. É a diferença entre «testámos algo equivalente à RPC» e
+// «executámos a RPC».
+
+describe("🔴 a RPC real ANTES da 075", () => {
+  it("mark_payment_paid falha pelo CHECK e reverte tudo", async () => {
+    const db = await baseComRpcReal();
+
+    await expect(marcarPago(db)).rejects.toThrow(/check constraint|violates/i);
+
+    // ATOMIC_ROLLBACK: o UPDATE do pagamento acontece ANTES do INSERT dentro da
+    // mesma função. Se o rollback não fosse total, o pagamento ficaria "pago"
+    // sem movimento nenhum — o pior estado possível.
+    const p = await estadoPagamento(db);
+    expect(p.status).toBe("pendente");
+    expect(p.paid_at).toBeNull();
+    expect(await contarMovimentos(db)).toBe(0);
+  });
+});
+
+describe("a RPC real DEPOIS da 075", () => {
+  let db: PGlite;
+  let primeiroCashEntryId: string | null = null;
+
+  beforeAll(async () => {
+    db = await baseComRpcReal();
+    await db.exec(sql(M075));
   });
 
-  it("remover por identidade não apaga movimentos manuais parecidos", async () => {
-    // Um movimento manual com o mesmo valor, data e descrição — sem origem.
+  it("mark_payment_paid marca o pagamento e cria um movimento", async () => {
+    const { rows } = await marcarPago(db);
+    expect(rows).toHaveLength(1);
+    primeiroCashEntryId = rows[0].cash_entry_id;
+    expect(primeiroCashEntryId).toBeTruthy();
+    // Primeira marcação: não estava pago antes.
+    expect(rows[0].ja_estava_pago).toBe(false);
+
+    const p = await estadoPagamento(db);
+    expect(p.status).toBe("pago");
+    expect(p.paid_at).not.toBeNull();
+    expect(await contarMovimentos(db)).toBe(1);
+  });
+
+  it("o movimento tem a forma que a 073 declara", async () => {
+    const { rows } = await db.query(
+      `SELECT type, category, status, reference_type, reference_id, amount::text AS amount
+         FROM public.cash_flow_entries WHERE reference_id = $1`,
+      [PAYMENT],
+    );
+    expect(rows[0]).toMatchObject({
+      type: "saida",
+      category: "despesa",
+      status: "confirmado",
+      reference_type: "fixed_variable_payment",
+      reference_id: PAYMENT,
+      amount: "250.00",
+    });
+  });
+
+  // 🔴 RPC_IDEMPOTENCY — distinto de UNIQUE_INDEX_PROTECTION.
+  //    O índice garante unicidade; o `ON CONFLICT DO NOTHING` + `SELECT` da
+  //    RPC transforma essa unicidade em idempotência funcional: a segunda
+  //    chamada devolve o mesmo movimento em vez de um erro.
+  it("🔴 RPC_IDEMPOTENCY: a segunda chamada NÃO falha e devolve o mesmo movimento", async () => {
+    const { rows } = await marcarPago(db);
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0].cash_entry_id).toBe(primeiroCashEntryId);
+    expect(rows[0].ja_estava_pago).toBe(true);
+    expect(await contarMovimentos(db)).toBe(1);
+  });
+
+  it("🔴 unmark_payment_paid remove só o movimento com esta origem", async () => {
+    // Um movimento manual gémeo: mesma empresa, valor, data e descrição, mas
+    // sem origem. Apagar por semelhança levá-lo-ia à frente.
     await db.query(
       `INSERT INTO public.cash_flow_entries
          (company_id, type, category, description, amount, date, status)
@@ -182,16 +314,29 @@ describe("depois da 075", () => {
       [COMPANY],
     );
 
-    await db.query(
-      `DELETE FROM public.cash_flow_entries
-        WHERE company_id = $1 AND reference_type = 'fixed_variable_payment' AND reference_id = $2`,
+    const { rows } = await db.query<{ movimentos_removidos: number }>(
+      "SELECT * FROM public.unmark_payment_paid($1, $2)",
       [COMPANY, PAYMENT],
     );
+    expect(rows[0].movimentos_removidos).toBe(1);
 
-    const { rows } = await db.query("SELECT count(*)::int AS n FROM public.cash_flow_entries");
-    // O manual sobrevive: é a diferença entre apagar por identidade e apagar
-    // por semelhança.
-    expect(rows[0]).toEqual({ n: 1 });
+    const p = await estadoPagamento(db);
+    expect(p.status).toBe("pendente");
+    expect(p.paid_at).toBeNull();
+
+    // O movimento com origem saiu…
+    expect(await contarMovimentos(db)).toBe(0);
+    // …e o manual sobreviveu.
+    const { rows: total } = await db.query<{ n: number }>(
+      "SELECT count(*)::int AS n FROM public.cash_flow_entries",
+    );
+    expect(total[0].n).toBe(1);
+  });
+
+  it("depois de desmarcar, marcar de novo volta a criar exactamente um", async () => {
+    const { rows } = await marcarPago(db);
+    expect(rows[0].ja_estava_pago).toBe(false);
+    expect(await contarMovimentos(db)).toBe(1);
   });
 });
 

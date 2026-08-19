@@ -3849,7 +3849,7 @@
       "sideEffects": [],
       "risks": [],
       "signals": {
-        "sqlWrite": 10,
+        "sqlWrite": 14,
         "fallbackArray": 1
       },
       "action": "nenhuma",
