@@ -92,10 +92,18 @@ CREATE TABLE IF NOT EXISTS public.app_notice_targets (
 
 CREATE INDEX IF NOT EXISTS idx_app_notice_targets_notice
   ON public.app_notice_targets (notice_id);
-CREATE INDEX IF NOT EXISTS idx_app_notice_targets_company
-  ON public.app_notice_targets (company_id) WHERE company_id IS NOT NULL;
-CREATE INDEX IF NOT EXISTS idx_app_notice_targets_profile
-  ON public.app_notice_targets (profile_id) WHERE profile_id IS NOT NULL;
+
+-- 🔴 A mesma empresa (ou o mesmo perfil) não pode ser alvo duas vezes do mesmo
+--    aviso. Sem isto, um duplicado no selector do cliente inflava a contagem
+--    de destinatários — o painel dizia «enviado para 12 perfis» quando eram 8.
+--
+--    Parciais porque exactamente uma das colunas é `NULL` em cada linha (ver
+--    `app_notice_targets_um_alvo`), e `NULL` não colide com `NULL` num índice
+--    único normal.
+CREATE UNIQUE INDEX IF NOT EXISTS uq_app_notice_targets_company
+  ON public.app_notice_targets (notice_id, company_id) WHERE company_id IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS uq_app_notice_targets_profile
+  ON public.app_notice_targets (notice_id, profile_id) WHERE profile_id IS NOT NULL;
 
 -- ── Leituras ────────────────────────────────────────────────────────────────
 --
@@ -119,10 +127,31 @@ CREATE INDEX IF NOT EXISTS idx_app_notice_reads_profile
 
 -- ── RLS ─────────────────────────────────────────────────────────────────────
 --
--- As server actions usam service-role, que faz bypass de RLS — a verificação
--- real é feita no servidor, como em todo o resto do projecto. Estas policies
--- são a segunda camada: se algum dia algo chegar aqui com a chave anónima,
--- não pode ler avisos de outros nem marcar leituras por outra pessoa.
+-- 🔴 SERVICE_ROLE_BYPASSES_RLS = YES · SERVER_AUTHORIZATION_REQUIRED = YES
+--
+--    As server actions usam service-role, que ignora RLS por completo. Toda a
+--    autorização real — sessão, tenant, `platform_admins` — é feita no
+--    servidor, em `src/app/actions/update-notices.ts`.
+--
+--    Estas policies são a **segunda** camada, independente da primeira. Uma
+--    não justifica a ausência da outra: a verificação manual no servidor não
+--    torna aceitável uma RLS permissiva, e a RLS não substitui a verificação.
+--
+-- 🔴 CONTEÚDO E ALVOS: FAIL CLOSED.
+--
+--    A primeira versão desta migration tinha
+--    `FOR SELECT USING (published_at IS NOT NULL AND archived_at IS NULL)`
+--    sobre `app_notices` — o que deixava qualquer sessão autenticada ler
+--    **todos** os avisos publicados, incluindo os dirigidos a outra empresa ou
+--    a um perfil específico. Proteger `app_notice_targets` não protegia o
+--    conteúdo: o texto do aviso está em `app_notices`.
+--
+--    Não há policy de SELECT em `app_notices` nem em `app_notice_targets`. Sem
+--    policy, RLS activa nega tudo — e um `select()` acidental a partir do
+--    cliente falha em vez de vazar avisos de outros tenants.
+--
+--    O caminho legítimo é `getPendingNotices`, onde o perfil da sessão decide
+--    o que sai.
 
 ALTER TABLE public.platform_admins   ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.app_notices       ENABLE ROW LEVEL SECURITY;
@@ -134,18 +163,10 @@ DROP POLICY IF EXISTS "read own platform admin row" ON public.platform_admins;
 CREATE POLICY "read own platform admin row" ON public.platform_admins
   FOR SELECT USING (profile_id = auth.uid());
 
--- Avisos publicados são legíveis; rascunhos não saem do servidor.
+-- Remove explicitamente a policy permissiva, caso uma base já a tenha da
+-- versão anterior deste ficheiro.
 DROP POLICY IF EXISTS "read published notices" ON public.app_notices;
-CREATE POLICY "read published notices" ON public.app_notices
-  FOR SELECT USING (published_at IS NOT NULL AND archived_at IS NULL);
-
--- Alvos: só os que dizem respeito a quem pergunta.
 DROP POLICY IF EXISTS "read own targets" ON public.app_notice_targets;
-CREATE POLICY "read own targets" ON public.app_notice_targets
-  FOR SELECT USING (
-    profile_id = auth.uid()
-    OR company_id IN (SELECT company_id FROM public.profiles WHERE id = auth.uid())
-  );
 
 -- 🔴 Ler e marcar apenas as próprias leituras. Sem o `WITH CHECK`, um perfil
 --    podia marcar um aviso como lido em nome de outro.

@@ -59,6 +59,15 @@ jobs:
           # comportamento normal.
           ref: ${{ github.event.pull_request.head.sha }}
 
+          # 🔴 Histórico completo, para o guard de release notes conseguir
+          #    comparar com a base do PR. A árvore continua a ser exactamente o
+          #    HEAD do autor — `fetch-depth` traz commits, não muda o checkout.
+          #
+          #    Sem isto, `git diff base...head` falha com «ambiguous argument»
+          #    num clone de profundidade 1, e o guard passaria a ser decoração:
+          #    verde por não conseguir verificar nada.
+          fetch-depth: 0
+
       - name: Node
         uses: actions/setup-node@v7
         with:
@@ -81,6 +90,14 @@ jobs:
         # sentido gastar minutos a compilar antes de o reportar.
         # O scanner nunca imprime o valor encontrado — só ficheiro, linha e tipo.
         run: npm run secrets:scan
+
+      - name: Release note para alteração visível
+        # Só em PR: em `push` para master não há base com que comparar, e a
+        # verificação já correu no PR que lá pôs o commit.
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: node scripts/check-release-note.mjs "$BASE_SHA" HEAD
 
       - name: Verificar tipos
         run: npm run typecheck

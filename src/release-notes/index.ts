@@ -1,30 +1,24 @@
 // ============================================================================
-// NOTAS DE VERSÃO — versionadas com o código que descrevem
+// NOTAS DE VERSÃO — uma release, um ficheiro
 // ============================================================================
-// Cada alteração visível para quem usa o sistema traz uma nota aqui. O guard
-// em `src/__tests__/release-note-guard.test.ts` recusa um PR que mexa em
-// `src/app/**` ou `src/components/**` sem tocar nesta pasta.
+// Cada alteração visível para quem usa o sistema traz um ficheiro novo nesta
+// pasta. Este `index.ts` apenas agrega — mexer nele não conta como escrever
+// uma nota, e `scripts/check-release-note.mjs` sabe disso.
 //
-// 🔴 Uma nota publicada é imutável. A `key` é o que liga à leitura de cada
-//    perfil: mudá-la faria o aviso reaparecer a quem já o viu, e reescrever o
-//    texto mudaria aquilo que alguém confirmou ter lido.
+// 🔴 Uma nota publicada é imutável. A `key` liga ao registo de leitura de cada
+//    perfil: mudá-la faz o aviso reaparecer a quem já o viu, e reescrever o
+//    texto muda aquilo que alguém confirmou ter lido. O guard recusa `M` ou
+//    `D` sobre ficheiros de nota.
 //
 // Linguagem de quem usa, não de quem construiu. Sem migrations, RPCs,
 // constraints ou nomes de ficheiros.
 // ============================================================================
 
 import type { ReleaseNote } from "@/domain/update-notices/types";
+import { nota as financeiroEAnexos } from "./2026-08-19-financeiro-e-anexos";
 
 export const RELEASE_NOTES: ReleaseNote[] = [
-  {
-    key: "2026-08-19-financeiro-e-anexos",
-    publishedAt: "2026-08-19T12:00:00.000Z",
-    kind: "correcao",
-    title: "Financeiro e anexos mais estáveis",
-    message:
-      "Corrigimos a marcação de pagamentos e a permanência dos anexos. " +
-      "Também adicionámos múltiplos anexos em Pagamentos, Tarefas e Faltas.",
-  },
+  financeiroEAnexos,
 ];
 
 /** As chaves têm de ser únicas — duas notas com a mesma key partilhariam a leitura. */

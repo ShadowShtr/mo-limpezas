@@ -1,8 +1,8 @@
 {
   "generatedBy": "scripts/audit-file-inventory.mjs",
-  "totalFiles": 660,
+  "totalFiles": 662,
   "byStatus": {
-    "MANTER": 642,
+    "MANTER": 644,
     "STANDBY": 18
   },
   "byCategory": {
@@ -10,7 +10,7 @@
     "test": 109,
     "migration": 78,
     "lib": 65,
-    "script": 46,
+    "script": 47,
     "doc": 43,
     "domain": 42,
     "server-action": 41,
@@ -21,20 +21,20 @@
     "asset": 8,
     "report": 4,
     "script-historico": 4,
+    "src-other": 3,
     "ci": 2,
-    "src-other": 2,
     "types": 2,
     "sql-frozen": 2,
     "supabase-other": 2,
     "other": 1
   },
   "byConfidence": {
-    "alta": 644,
+    "alta": 646,
     "média": 10,
     "baixa": 6
   },
   "scriptRisk": {
-    "SAFE_OFFLINE": 25,
+    "SAFE_OFFLINE": 26,
     "ADMIN_GUARDED_WRITE": 11,
     "ADMIN_READ": 6,
     "WRITE_CAPABLE": 4
@@ -2197,6 +2197,39 @@
         "serviceRole": 1,
         "consoleLog": 1,
         "consoleErr": 8
+      },
+      "action": "nenhuma",
+      "reason": "ferramenta offline, sem acesso à base",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": true,
+        "dynamicImport": true,
+        "allClosed": false
+      },
+      "scriptRisk": "SAFE_OFFLINE"
+    },
+    {
+      "path": "scripts/check-release-note.mjs",
+      "category": "script",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 1,
+      "consumerSample": [
+        "src/__tests__/release-note-guard.test.ts"
+      ],
+      "autoLoaded": false,
+      "referencedBy": [
+        "ci"
+      ],
+      "sideEffects": [
+        "env"
+      ],
+      "risks": [],
+      "signals": {
+        "env": 1,
+        "consoleLog": 3,
+        "consoleErr": 4
       },
       "action": "nenhuma",
       "reason": "ferramenta offline, sem acesso à base",
@@ -11535,17 +11568,14 @@
         "write",
         "revalidatePath(2)"
       ],
-      "risks": [
-        "erro-de-query-ignorado(6)"
-      ],
+      "risks": [],
       "signals": {
         "serverAction": 1,
-        "write": 5,
-        "sqlWrite": 7,
-        "consoleErr": 1,
-        "ignoredError": 6,
+        "write": 6,
+        "sqlWrite": 12,
+        "consoleErr": 3,
         "fallbackZero": 9,
-        "fallbackArray": 17,
+        "fallbackArray": 19,
         "revalidatePath": 2
       },
       "action": "auditar atomicidade (T12/T13)",
@@ -14482,7 +14512,7 @@
       "category": "domain",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 8,
+      "consumers": 9,
       "consumerSample": [
         "src/__tests__/update-notice-modal.test.tsx",
         "src/__tests__/update-notices-eligibility.test.ts",
@@ -14497,7 +14527,7 @@
       "risks": [],
       "signals": {},
       "action": "nenhuma",
-      "reason": "em uso: 8 consumidor(es), configuração",
+      "reason": "em uso: 9 consumidor(es), configuração",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -16465,6 +16495,32 @@
       }
     },
     {
+      "path": "src/release-notes/2026-08-19-financeiro-e-anexos.ts",
+      "category": "src-other",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 1,
+      "consumerSample": [
+        "src/release-notes/index.ts"
+      ],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "sqlWrite": 1
+      },
+      "action": "nenhuma",
+      "reason": "em uso: 1 consumidor(es)",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
       "path": "src/release-notes/index.ts",
       "category": "src-other",
       "status": "MANTER",
@@ -18099,9 +18155,12 @@
       "autoLoaded": false,
       "referencedBy": [],
       "sideEffects": [],
-      "risks": [],
+      "risks": [
+        "service-role"
+      ],
       "signals": {
-        "sqlWrite": 24
+        "serviceRole": 1,
+        "sqlWrite": 25
       },
       "action": "nenhuma",
       "reason": "migration versionada — histórico do schema, nunca se apaga",

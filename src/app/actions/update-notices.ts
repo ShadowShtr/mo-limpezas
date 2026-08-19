@@ -49,11 +49,19 @@ type Admin = Extract<Guard, { ok: true }>["admin"];
  * argumento: o id vem sempre de quem está autenticado.
  */
 async function ehPlatformAdmin(admin: Admin, profileId: string): Promise<boolean> {
-  const { data } = await admin
+  const { data, error } = await admin
     .from("platform_admins")
     .select("profile_id")
     .eq("profile_id", profileId)
     .maybeSingle();
+
+  // 🔴 FAIL CLOSED, e deliberadamente. Falhar a ler não é prova de que a
+  //    pessoa é administradora — na dúvida, não é. O erro é registado para não
+  //    ficar invisível se a tabela desaparecer ou a chave expirar.
+  if (error) {
+    console.error("[update-notices] verificação de platform_admin falhou:", error.message);
+    return false;
+  }
   return Boolean(data);
 }
 
@@ -87,11 +95,15 @@ export async function getPendingNotices(): Promise<NoticeForDisplay[]> {
     // `created_at` não vem no guard partilhado (`AuthedProfile` só traz id,
     // company_id e role) — lê-se aqui em vez de alargar um tipo que dezenas de
     // actions usam.
-    const { data: perfilRow } = await admin
+    const { data: perfilRow, error: perfilErro } = await admin
       .from("profiles")
       .select("created_at")
       .eq("id", profile.id)
       .maybeSingle();
+    // Sem a data de criação, a elegibilidade não pode ser decidida: cair no
+    // epoch entregaria todo o histórico. O `catch` devolve lista vazia — o
+    // aviso volta na próxima abertura.
+    if (perfilErro) throw perfilErro;
 
     // ── Notas de release (código) ──
     const releases = releasesPorMostrar(
@@ -220,38 +232,47 @@ export async function listNotices(): Promise<
 
   // Contagem de leituras em lote — carregar todas as linhas para o cliente só
   // para as contar seria um problema no dia em que houver milhares.
+  // 🔴 A partir daqui, um erro de query NÃO pode virar zero.
+  //
+  //    «3 de 40 leram» construído sobre uma leitura falhada é pior do que um
+  //    erro: o painel afirmaria um número que ninguém pode verificar, e a
+  //    decisão de republicar um aviso sairia dele.
   const leiturasPorChave = new Map<string, number>();
   if (chaves.length > 0) {
-    const { data: reads } = await admin
+    const { data: reads, error: readsErro } = await admin
       .from("app_notice_reads")
       .select("notice_key")
       .in("notice_key", chaves);
+    if (readsErro) return { ok: false, error: readsErro.message };
     for (const r of reads ?? []) {
       leiturasPorChave.set(r.notice_key, (leiturasPorChave.get(r.notice_key) ?? 0) + 1);
     }
   }
 
-  const { count: totalPerfis } = await admin
+  const { count: totalPerfis, error: totalErro } = await admin
     .from("profiles")
     .select("id", { count: "exact", head: true })
     .eq("status", "ativo");
+  if (totalErro) return { ok: false, error: totalErro.message };
 
   const alvosPorAviso = new Map<string, number>();
   const dirigidos = (notices ?? []).filter((n) => n.audience !== "all").map((n) => n.id);
   if (dirigidos.length > 0) {
-    const { data: alvos } = await admin
+    const { data: alvos, error: alvosErro } = await admin
       .from("app_notice_targets")
       .select("notice_id, company_id, profile_id")
       .in("notice_id", dirigidos);
+    if (alvosErro) return { ok: false, error: alvosErro.message };
 
     const empresas = [...new Set((alvos ?? []).map((a) => a.company_id).filter(Boolean) as string[])];
     const perfisPorEmpresa = new Map<string, number>();
     if (empresas.length > 0) {
-      const { data: perfis } = await admin
+      const { data: perfis, error: perfisErro } = await admin
         .from("profiles")
         .select("company_id")
         .in("company_id", empresas)
         .eq("status", "ativo");
+      if (perfisErro) return { ok: false, error: perfisErro.message };
       for (const p of perfis ?? []) {
         perfisPorEmpresa.set(p.company_id, (perfisPorEmpresa.get(p.company_id) ?? 0) + 1);
       }
@@ -318,8 +339,11 @@ export async function publishNotice(
   if (title.length > NOTICE_TITLE_MAX) return { ok: false, error: `Título com mais de ${NOTICE_TITLE_MAX} caracteres.` };
   if (message.length > NOTICE_MESSAGE_MAX) return { ok: false, error: `Mensagem com mais de ${NOTICE_MESSAGE_MAX} caracteres.` };
 
-  const companyIds = input.companyIds ?? [];
-  const profileIds = input.profileIds ?? [];
+  // 🔴 Deduplicar antes de tudo. O selector do cliente não é garantia de
+  //    unicidade — e IDs repetidos inflavam a contagem de destinatários.
+  const companyIds = [...new Set(input.companyIds ?? [])];
+  const profileIds = [...new Set(input.profileIds ?? [])];
+
   if (input.audience === "companies" && companyIds.length === 0) {
     return { ok: false, error: "Escolhe pelo menos uma empresa." };
   }
@@ -327,9 +351,43 @@ export async function publishNotice(
     return { ok: false, error: "Escolhe pelo menos um perfil." };
   }
 
-  const noticeKey = `manual-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-  const publishedAt = new Date().toISOString();
+  // Os IDs vêm do cliente: confirmar que existem antes de os gravar. Um id
+  // inventado criaria um alvo que nunca corresponde a ninguém, e o aviso
+  // apareceria no histórico como enviado.
+  if (companyIds.length > 0) {
+    const { data: existem, error } = await admin
+      .from("companies").select("id").in("id", companyIds);
+    if (error) return { ok: false, error: error.message };
+    if ((existem ?? []).length !== companyIds.length) {
+      return { ok: false, error: "Uma das empresas seleccionadas não existe." };
+    }
+  }
+  if (profileIds.length > 0) {
+    const { data: existem, error } = await admin
+      .from("profiles").select("id").in("id", profileIds);
+    if (error) return { ok: false, error: error.message };
+    if ((existem ?? []).length !== profileIds.length) {
+      return { ok: false, error: "Um dos perfis seleccionados não existe." };
+    }
+  }
 
+  const noticeKey = `manual-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
+  // ── Publicação em duas fases ──────────────────────────────────────────────
+  //
+  // 🔴 Nasce como RASCUNHO (`published_at = NULL`), invisível para toda a
+  //    gente. Só depois de os destinatários estarem gravados é que passa a
+  //    publicado.
+  //
+  //    A versão anterior gravava `published_at` no primeiro INSERT e
+  //    compensava com um DELETE se os alvos falhassem. Isso deixava uma janela
+  //    real: entre os dois passos, um aviso dirigido a uma empresa estava
+  //    publicado **sem alvos** — e um aviso publicado sem alvos ou não chega a
+  //    ninguém, ou chega a toda a gente, conforme quem o lê. Um crash entre os
+  //    dois passos deixava-o assim para sempre, e a compensação era ela própria
+  //    uma operação que podia falhar.
+  //
+  //    Agora o pior caso é um rascunho invisível.
   const { data: criado, error: criarErro } = await admin
     .from("app_notices")
     .insert({
@@ -338,14 +396,14 @@ export async function publishNotice(
       title,
       message,
       audience: input.audience,
-      published_at: publishedAt,
+      published_at: null,
       created_by: profile.id,
     })
     .select("id")
     .single();
 
   if (criarErro || !criado) {
-    return { ok: false, error: criarErro?.message ?? "Não foi possível publicar o aviso." };
+    return { ok: false, error: criarErro?.message ?? "Não foi possível criar o aviso." };
   }
 
   if (input.audience !== "all") {
@@ -356,14 +414,33 @@ export async function publishNotice(
 
     const { error: alvosErro } = await admin.from("app_notice_targets").insert(linhas);
     if (alvosErro) {
-      // Compensação: um aviso publicado sem destinatários chegaria a ninguém
-      // e ficaria no histórico como se tivesse chegado.
+      // Limpeza do rascunho. Se falhar, fica um rascunho órfão — invisível
+      // para os utilizadores, ao contrário de um publicado sem destinatários.
       await admin.from("app_notices").delete().eq("id", criado.id);
       return { ok: false, error: alvosErro.message };
     }
   }
 
-  const recipients = await contarDestinatarios(admin, input.audience, companyIds, profileIds);
+  // Só agora se torna visível. `published_at` é definido no servidor.
+  const { error: publicarErro } = await admin
+    .from("app_notices")
+    .update({ published_at: new Date().toISOString() })
+    .eq("id", criado.id);
+
+  if (publicarErro) {
+    // Continua rascunho: não chegou a ninguém, e o painel mostra-o como tal.
+    return { ok: false, error: publicarErro.message };
+  }
+
+  // O aviso já está publicado. Se a contagem falhar aqui, não se desfaz a
+  // publicação por causa de um número — regista-se `-1` para o histórico
+  // mostrar que não foi possível apurar, em vez de um zero que parece real.
+  let recipients = -1;
+  try {
+    recipients = await contarDestinatarios(admin, input.audience, companyIds, profileIds);
+  } catch (e) {
+    console.error("[update-notices] contagem pós-publicação falhou:", e);
+  }
 
   await auditLog({
     companyId: profile.company_id,
@@ -393,31 +470,49 @@ export async function countRecipients(
   }
   if (!isNoticeAudience(audience)) return { ok: false, error: "Destinatários inválidos." };
 
-  return { ok: true, count: await contarDestinatarios(admin, audience, companyIds, profileIds) };
+  try {
+    return { ok: true, count: await contarDestinatarios(admin, audience, companyIds, profileIds) };
+  } catch (e) {
+    // O painel esconde a contagem em vez de mostrar um zero inventado.
+    return { ok: false, error: e instanceof Error ? e.message : "Não foi possível contar os destinatários." };
+  }
 }
 
+/**
+ * 🔴 Lança em erro, não devolve zero.
+ *
+ * «Este aviso será enviado para 0 perfis» quando a query falhou é uma frase
+ * falsa mostrada mesmo antes de alguém carregar em publicar. Quem chama
+ * traduz a excepção num erro visível.
+ *
+ * Os ids chegam já deduplicados de `publishNotice` — contar `profileIds.length`
+ * com repetições inflaria o número.
+ */
 async function contarDestinatarios(
   admin: Admin,
   audience: NoticeAudience,
   companyIds: string[],
   profileIds: string[],
 ): Promise<number> {
-  if (audience === "profiles") return profileIds.length;
+  if (audience === "profiles") return new Set(profileIds).size;
 
   if (audience === "companies") {
-    if (companyIds.length === 0) return 0;
-    const { count } = await admin
+    const unicas = [...new Set(companyIds)];
+    if (unicas.length === 0) return 0;
+    const { count, error } = await admin
       .from("profiles")
       .select("id", { count: "exact", head: true })
-      .in("company_id", companyIds)
+      .in("company_id", unicas)
       .eq("status", "ativo");
+    if (error) throw error;
     return count ?? 0;
   }
 
-  const { count } = await admin
+  const { count, error } = await admin
     .from("profiles")
     .select("id", { count: "exact", head: true })
     .eq("status", "ativo");
+  if (error) throw error;
   return count ?? 0;
 }
 
@@ -434,12 +529,18 @@ export async function getAudienceOptions(): Promise<
     return { ok: false, error: "Sem permissão." };
   }
 
-  const { data: companies } = await admin.from("companies").select("id, name").order("name");
-  const { data: profiles } = await admin
+  // Falhar aqui daria um selector vazio, indistinguível de «não há empresas
+  // nem perfis» — e alguém publicaria para «Todos» por não encontrar o alvo.
+  const { data: companies, error: companiesErro } = await admin
+    .from("companies").select("id, name").order("name");
+  if (companiesErro) return { ok: false, error: companiesErro.message };
+
+  const { data: profiles, error: profilesErro } = await admin
     .from("profiles")
     .select("id, full_name, company_id")
     .eq("status", "ativo")
     .order("full_name");
+  if (profilesErro) return { ok: false, error: profilesErro.message };
 
   const nomeEmpresa = new Map((companies ?? []).map((c) => [c.id, c.name]));
 
