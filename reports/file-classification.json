@@ -1,8 +1,8 @@
 {
   "generatedBy": "scripts/audit-file-inventory.mjs",
-  "totalFiles": 666,
+  "totalFiles": 667,
   "byStatus": {
-    "MANTER": 647,
+    "MANTER": 648,
     "STANDBY": 19
   },
   "byCategory": {
@@ -11,7 +11,7 @@
     "migration": 78,
     "lib": 65,
     "script": 48,
-    "doc": 43,
+    "doc": 44,
     "domain": 42,
     "server-action": 41,
     "component": 30,
@@ -29,7 +29,7 @@
     "other": 1
   },
   "byConfidence": {
-    "alta": 649,
+    "alta": 650,
     "média": 11,
     "baixa": 6
   },
@@ -508,6 +508,24 @@
       "sideEffects": [],
       "risks": [],
       "signals": {},
+      "action": "nenhuma",
+      "reason": "documentação",
+      "manualDecision": false
+    },
+    {
+      "path": "docs/FINANCEIRO-PENDENTE.md",
+      "category": "doc",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "sqlWrite": 1
+      },
       "action": "nenhuma",
       "reason": "documentação",
       "manualDecision": false
@@ -3253,7 +3271,9 @@
         "src/__tests__/repair-historical-cashflow.test.ts"
       ],
       "autoLoaded": false,
-      "referencedBy": [],
+      "referencedBy": [
+        "docs"
+      ],
       "sideEffects": [
         "env"
       ],
@@ -5710,7 +5730,9 @@
       "consumers": 0,
       "consumerSample": [],
       "autoLoaded": false,
-      "referencedBy": [],
+      "referencedBy": [
+        "docs"
+      ],
       "sideEffects": [],
       "risks": [],
       "signals": {
@@ -18244,7 +18266,9 @@
       "consumers": 0,
       "consumerSample": [],
       "autoLoaded": false,
-      "referencedBy": [],
+      "referencedBy": [
+        "docs"
+      ],
       "sideEffects": [],
       "risks": [],
       "signals": {
