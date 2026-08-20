@@ -1,16 +1,16 @@
 {
   "generatedBy": "scripts/audit-file-inventory.mjs",
-  "totalFiles": 664,
+  "totalFiles": 666,
   "byStatus": {
-    "MANTER": 646,
-    "STANDBY": 18
+    "MANTER": 647,
+    "STANDBY": 19
   },
   "byCategory": {
     "route-ui": 135,
-    "test": 110,
+    "test": 111,
     "migration": 78,
     "lib": 65,
-    "script": 47,
+    "script": 48,
     "doc": 43,
     "domain": 42,
     "server-action": 41,
@@ -29,15 +29,15 @@
     "other": 1
   },
   "byConfidence": {
-    "alta": 648,
-    "média": 10,
+    "alta": 649,
+    "média": 11,
     "baixa": 6
   },
   "scriptRisk": {
     "SAFE_OFFLINE": 26,
     "ADMIN_GUARDED_WRITE": 11,
     "ADMIN_READ": 6,
-    "WRITE_CAPABLE": 4
+    "WRITE_CAPABLE": 5
   },
   "files": [
     {
@@ -3244,6 +3244,38 @@
       "scriptRisk": "SAFE_OFFLINE"
     },
     {
+      "path": "scripts/repair-fixed-variable-payment-cashflow.mjs",
+      "category": "script",
+      "status": "STANDBY",
+      "confidence": "média",
+      "consumers": 1,
+      "consumerSample": [
+        "src/__tests__/repair-historical-cashflow.test.ts"
+      ],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [
+        "env"
+      ],
+      "risks": [],
+      "signals": {
+        "env": 2,
+        "sqlWrite": 3,
+        "consoleLog": 10,
+        "consoleErr": 6
+      },
+      "action": "T17-B: confirmar se ainda é preciso",
+      "reason": "capaz de escrever na base",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": true,
+        "dynamicImport": true,
+        "allClosed": false
+      },
+      "scriptRisk": "WRITE_CAPABLE"
+    },
+    {
       "path": "scripts/restore-backup.mjs",
       "category": "script",
       "status": "MANTER",
@@ -5660,6 +5692,31 @@
       "sideEffects": [],
       "risks": [],
       "signals": {},
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/__tests__/repair-historical-cashflow.test.ts",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "sqlWrite": 11,
+        "dynamicImport": 4
+      },
       "action": "nenhuma",
       "reason": "suite de testes — corre por convenção do vitest",
       "manualDecision": false,
