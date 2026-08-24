@@ -7,5 +7,12 @@
       "reason": "divergência histórica documentada; estado final garantido pela 023.",
       "evidence": "docs/atomicidade-audit/migration-checksum-map-2026-08-05.md"
     }
+  ],
+  "blockedMigrations": [
+    {
+      "migration": "070_guard_profile_managed_fields.sql",
+      "reason": "Congelada por decisão do proprietário: aguarda revisão e autorização explícitas, isoladas de qualquer outra aplicação. Nunca aplicar por arrasto do --apply normal.",
+      "evidence": "CLAUDE.md — ponto de paragem 2026-08-17 (070 = UNVERIFIED, ausente do ledger)"
+    }
   ]
 }
