@@ -17,10 +17,12 @@
 import type { ReleaseNote } from "@/domain/update-notices/types";
 import { nota as financeiroEAnexos } from "./2026-08-19-financeiro-e-anexos";
 import { nota as avisosDeAtualizacao } from "./2026-08-20-avisos-de-atualizacao";
+import { nota as documentosMaisProtegidos } from "./2026-08-24-documentos-mais-protegidos";
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   financeiroEAnexos,
   avisosDeAtualizacao,
+  documentosMaisProtegidos,
 ];
 
 /** As chaves têm de ser únicas — duas notas com a mesma key partilhariam a leitura. */

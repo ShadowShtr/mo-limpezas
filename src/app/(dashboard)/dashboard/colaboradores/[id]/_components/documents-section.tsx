@@ -66,11 +66,15 @@ function isBackupWarning(expiresAt: string | null): boolean {
 
 interface Props {
   collaboratorId: string;
-  companyId: string;
+  /**
+   * A empresa deixou de fazer parte do pedido: era um valor do browser a
+   * decidir de quem é o documento. Agora o servidor resolve-a a partir de
+   * quem está autenticado.
+   */
   initialDocuments: CollaboratorDocument[];
 }
 
-export function DocumentsSection({ collaboratorId, companyId, initialDocuments }: Props) {
+export function DocumentsSection({ collaboratorId, initialDocuments }: Props) {
   const [documents, setDocuments] = useState(initialDocuments);
   const [uploading, startUpload] = useTransition();
   const [deleting, setDeleting] = useState<string | null>(null);
@@ -100,7 +104,7 @@ export function DocumentsSection({ collaboratorId, companyId, initialDocuments }
     fd.append("visible_to_collaborator", String(visible));
 
     startUpload(async () => {
-      const res = await uploadCollaboratorDocument(collaboratorId, companyId, fd);
+      const res = await uploadCollaboratorDocument(collaboratorId, fd);
       if (!res.ok) {
         setUploadError(res.error);
         return;
