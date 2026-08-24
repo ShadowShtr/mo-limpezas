@@ -234,7 +234,6 @@ export default async function ColaboradorDetailPage({ params }: Props) {
             {/* Documentos */}
             <DocumentsSection
               collaboratorId={id}
-              companyId={companyRes.data?.company_id ?? ""}
               initialDocuments={documents}
             />
           </div>
