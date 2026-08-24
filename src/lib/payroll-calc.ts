@@ -75,6 +75,28 @@ export function calcAbsenceSummary(
   return { absenceDays, injustifiedDays, absenceHours, absenceDeductions };
 }
 
+// ─── Overtime bonus ───────────────────────────────────────────────────────────
+
+/**
+ * Acréscimo pago pelas horas para além do período contratado.
+ *
+ * 🔴 Fonte **única** desta regra. Até à blindagem da folha existiam duas: esta,
+ *    parametrizada por `overtime_rate_pct` das definições da empresa, e um
+ *    `* 0.25` escrito à mão dentro de `adjustPayrollRecord`. Configurar 50% nas
+ *    definições mudava o cálculo mensal e não mudava o ajuste manual — a mesma
+ *    colaboradora, no mesmo mês, tinha dois valores de hora extra consoante o
+ *    caminho por onde o número tinha passado.
+ *
+ * Quem chamar isto passa a percentagem que leu; não a inventa.
+ */
+export function calcOvertimeBonus(
+  overtimeHours: number,
+  hourlyRate: number,
+  overtimeRatePct: number,
+): number {
+  return Math.round(overtimeHours * hourlyRate * (overtimeRatePct / 100) * 100) / 100;
+}
+
 // ─── Collaborator payroll ─────────────────────────────────────────────────────
 
 export interface TimesheetEntry {
@@ -139,19 +161,17 @@ export function calcCollaboratorPayroll(
   // Monetary values
   const grossSalary = Math.round(workedHours * hourlyRate * 100) / 100;
   const mealAllowance = Math.round(daysWorked * settings.mealAllowanceDay * 100) / 100;
-  const overtimeBonus =
-    Math.round(overtimeHours * hourlyRate * (settings.overtimeRatePct / 100) * 100) / 100;
+  const overtimeBonus = calcOvertimeBonus(overtimeHours, hourlyRate, settings.overtimeRatePct);
 
-  const netSalary =
-    Math.round(
-      (grossSalary +
-        mealAllowance +
-        overtimeBonus +
-        otherAdditions -
-        absenceDeductions -
-        otherDeductions) *
-        100,
-    ) / 100;
+  // Uma soma só: a mesma que o ajuste manual usa. Ver `calcAdjustedNetSalary`.
+  const netSalary = calcAdjustedNetSalary(
+    grossSalary,
+    mealAllowance,
+    overtimeBonus,
+    otherAdditions,
+    absenceDeductions,
+    otherDeductions,
+  );
 
   return {
     workedHours,

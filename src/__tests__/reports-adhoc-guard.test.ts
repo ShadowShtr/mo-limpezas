@@ -123,7 +123,15 @@ const IGNORED_ERROR_CEILING: Record<string, number> = {
   // falhasse, a função devolvia **sucesso com zero faturas** e ninguém era
   // faturado nesse mês, com o ecrã a dizer que correu bem.
   "src/app/actions/invoices.ts": 6,
-  "src/app/actions/payroll.ts": 9,
+  // 9 → 0 (P0A). A folha deixou de ter uma única leitura cujo erro se
+  // confunda com ausência de dados. As quatro do cálculo — definições, ponto,
+  // faltas e registos existentes — abortavam para valores por omissão, zero
+  // horas, zero faltas e "não há ajustes"; as de `markPayrollPaid` davam
+  // sucesso sem pagar nada.
+  //
+  // O teto a zero é agora uma afirmação forte: qualquer leitura nova nesta
+  // action tem de tratar o `error`, ou esta guarda fica vermelha.
+  "src/app/actions/payroll.ts": 0,
   "src/app/actions/reports.ts": 10,
 };
 

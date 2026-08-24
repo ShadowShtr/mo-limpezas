@@ -1,9 +1,22 @@
 "use server";
 
-import { createAdminClient } from "@/lib/supabase/admin";
-import { createClient } from "@/lib/supabase/server";
 import { requireProfile } from "@/lib/auth-guard";
-import { monthRange, calcCollaboratorPayroll } from "@/lib/payroll-calc";
+import {
+  monthRange,
+  calcCollaboratorPayroll,
+  calcOvertimeBonus,
+  calcAdjustedNetSalary,
+} from "@/lib/payroll-calc";
+import { isNoRowsError, queryFailure } from "@/lib/query-error";
+import {
+  parsePayrollStatus,
+  denyEconomicMutation,
+  approveTransition,
+  splitRecalculationScope,
+  PAYROLL_MUTATION_DENIAL_MESSAGE,
+  PAYROLL_APPROVE_DENIAL_MESSAGE,
+  type PayrollStatus,
+} from "@/domain/payroll/payroll-state";
 import { auditLog } from "@/lib/audit";
 import { getMissingCashFlowReferenceIds, isValidCashFlowAmount } from "@/lib/cash-flow-integrity";
 import { isValidFiniteNumber } from "@/lib/utils";
@@ -148,6 +161,24 @@ type PayrollPaidProfileJoin = {
   profiles?: { full_name: string } | null;
 };
 
+/**
+ * Resultado de um cálculo de folha.
+ *
+ * `preservados` conta as linhas que **não** foram recalculadas por já estarem
+ * aprovadas ou pagas. Existe para que a interface não possa dizer "folha
+ * recalculada" depois de não ter tocado em metade delas.
+ */
+export type PayrollCalculationResult =
+  | {
+      ok: true;
+      records: PayrollRecord[];
+      materializado: boolean;
+      motivo?: string;
+      /** Linhas preservadas por estarem aprovadas ou pagas. */
+      preservados: number;
+    }
+  | { ok: false; error: string };
+
 // monthRange re-exported from payroll-calc (timezone-safe, uses Date.UTC)
 
 // ─── Calcular e guardar folha de pagamento ────────────────────────────────────
@@ -173,10 +204,7 @@ async function runPayrollCalculation(
   //    recalcula financeiramente um período fechado». As duas regras
   //    coexistem por aqui: calcula, mostra, e não escreve.
   opcoes: { permitirMaterializacao?: boolean } = {},
-): Promise<
-  | { ok: true; records: PayrollRecord[]; materializado: boolean; motivo?: string }
-  | { ok: false; error: string }
-> {
+): Promise<PayrollCalculationResult> {
   const permitirMaterializacao = opcoes.permitirMaterializacao ?? true;
   const guard = await requireProfile({ roles: ["admin", "gestor"] });
   if (!guard.ok) return { ok: false, error: guard.error };
@@ -193,15 +221,29 @@ async function runPayrollCalculation(
     .eq("status", "ativo")
     .order("full_name");
 
-  if (pErr) return { ok: false, error: pErr.message };
-  if (!profiles?.length) return { ok: true, records: [], materializado: false };
+  if (pErr) return queryFailure("runPayrollCalculation:profiles", pErr);
+  if (!profiles?.length) return { ok: true, records: [], materializado: false, preservados: 0 };
 
   // 2. Configurações da empresa (salário/hora e sub. alimentação por defeito)
-  const { data: settings } = await admin
+  //
+  // 🔴 `.maybeSingle()` em vez de `.single()`: a empresa pode legitimamente não
+  //    ter uma linha de definições, e isso não é uma avaria. Com `.single()` a
+  //    ausência vinha como erro e ficava indistinguível de uma falha real.
+  //
+  //    A distinção importa em euros. Antes, `settings?.hourly_rate ?? 8` dava
+  //    8 €/hora tanto para "não configuraram" como para "a consulta rebentou".
+  //    A segunda leitura calcula uma folha inteira a um valor que ninguém
+  //    escolheu. Agora a falha aborta e a ausência mantém os valores por
+  //    omissão de sempre — o comportamento económico não muda.
+  const { data: settings, error: sErr } = await admin
     .from("company_settings")
     .select("hourly_rate, meal_allowance_day, overtime_rate_pct")
     .eq("company_id", companyId)
-    .single();
+    .maybeSingle();
+
+  if (sErr && !isNoRowsError(sErr)) {
+    return queryFailure("runPayrollCalculation:company_settings", sErr);
+  }
 
   const defaultHourlyRate = settings?.hourly_rate ?? 8;
   const mealAllowanceDay  = settings?.meal_allowance_day ?? 9.6;
@@ -211,13 +253,19 @@ async function runPayrollCalculation(
 
   // 3. Ponto GERAL do mês (entrada→saída). É isto que conta para o salário —
   //    os pontos por serviço (timesheets) são apenas informativos.
-  const { data: dailyClocks } = await admin
+  //
+  // 🔴 Falhar aqui não pode dar uma folha de zero horas. Uma pessoa que
+  //    trabalhou o mês inteiro sairia com o bruto a zero e o subsídio de
+  //    alimentação a zero, e a folha seria gravada nesse estado.
+  const { data: dailyClocks, error: cErr } = await admin
     .from("daily_clocks")
     .select("collaborator_id, work_date, clock_in_at, clock_out_at")
     .eq("company_id", companyId)
     .in("collaborator_id", profileIds)
     .gte("work_date", start)
     .lte("work_date", end);
+
+  if (cErr) return queryFailure("runPayrollCalculation:daily_clocks", cErr);
 
   // Converte cada dia (com início e fim) numa entrada equivalente a um timesheet,
   // para reutilizar o cálculo existente sem o alterar.
@@ -232,7 +280,11 @@ async function runPayrollCalculation(
     }));
 
   // 4. Faltas do mês
-  const { data: absences } = await admin
+  //
+  // 🔴 Falhar aqui daria "sem faltas": ninguém perderia retribuição por
+  //    ausência injustificada, e a folha seria gravada como se o mês tivesse
+  //    sido inteiramente trabalhado.
+  const { data: absences, error: aErr } = await admin
     .from("absences")
     .select("collaborator_id, absence_type, starts_on, ends_on")
     .eq("company_id", companyId)
@@ -240,20 +292,50 @@ async function runPayrollCalculation(
     .lte("starts_on", end)
     .gte("ends_on", start);
 
-  // 5. Registos existentes (para preservar ajustes manuais)
-  const { data: existing } = await admin
+  if (aErr) return queryFailure("runPayrollCalculation:absences", aErr);
+
+  // 5. Registos existentes — decidem duas coisas: que ajustes manuais preservar
+  //    e, sobretudo, em que linhas é sequer permitido tocar.
+  //
+  // 🔴 Falhar aqui era o pior dos quatro. Sem os registos existentes, o
+  //    recálculo perdia os ajustes manuais **e** deixava de saber que uma
+  //    linha estava aprovada ou paga — reescrevendo-a por cima.
+  const { data: existing, error: eErr } = await admin
     .from("payroll_records")
     .select("collaborator_id, other_additions, other_deductions, notes, status, paid_at")
     .eq("company_id", companyId)
     .eq("period_year", year)
     .eq("period_month", month);
 
+  if (eErr) return queryFailure("runPayrollCalculation:existing", eErr);
+
   const existingMap = Object.fromEntries(
     (existing ?? []).map((r) => [r.collaborator_id, r]),
   );
 
-  // 6. Calcular por colaborador
-  const upserts = profiles.map((p) => {
+  // 6. Separar quem pode ser recalculado de quem já não pode
+  //
+  // 🔴 ESTE É O DEFEITO CENTRAL QUE A BLINDAGEM FECHA.
+  //
+  //    O código anterior calculava toda a gente e fazia `upsert` de toda a
+  //    gente, preservando apenas `status` e `paid_at`. Os valores em euros —
+  //    horas, bruto, subsídio, extra, deduções, líquido — eram reescritos
+  //    mesmo em linhas aprovadas ou pagas.
+  //
+  //    Uma folha paga de €1.200 tem uma saída de caixa de €1.200 associada.
+  //    Recalcular o mês depois de corrigir um ponto passava a folha para
+  //    €1.250 e deixava o caixa em €1.200. A linha continuava a dizer "pago".
+  //    Nada avisava.
+  //
+  //    Agora aprovado e pago são fotografias: o recálculo lê-os, conta-os, e
+  //    não lhes toca.
+  const { recalculable, preserved } = splitRecalculationScope(
+    profiles,
+    (p) => parsePayrollStatus(existingMap[p.id]?.status),
+  );
+
+  // 7. Calcular por colaborador — apenas os que ainda são rascunho
+  const upserts = recalculable.map((p) => {
     const myTimesheets = (timesheets ?? []).filter((t) => t.collaborator_id === p.id);
     const myAbsences   = (absences   ?? []).filter((a) => a.collaborator_id === p.id);
 
@@ -264,8 +346,10 @@ async function runPayrollCalculation(
     const otherAdditions  = ex?.other_additions  ?? 0;
     const otherDeductions = ex?.other_deductions ?? 0;
     const notes           = ex?.notes ?? null;
-    const status  = ex?.status === "aprovado" || ex?.status === "pago" ? ex.status : "rascunho";
-    const paidAt  = ex?.paid_at ?? null;
+    // Só chegam aqui linhas inexistentes ou em rascunho — ver o split acima.
+    // O estado não precisa de ser deduzido: é sempre este.
+    const status  = "rascunho" as const;
+    const paidAt  = null;
 
     const calc = calcCollaboratorPayroll(
       myTimesheets as { duration_minutes: number; clock_in_at: string }[],
@@ -320,52 +404,67 @@ async function runPayrollCalculation(
       records: existentes.records,
       materializado: false,
       motivo: PAYROLL_PERIOD_CLOSED_NO_MATERIALIZATION,
+      preservados: preserved.length,
     };
   }
 
-  const { error: uErr } = await admin
-    .from("payroll_records")
-    .upsert(upserts, { onConflict: "company_id,collaborator_id,period_year,period_month" });
+  // Toda a gente já está aprovada ou paga: não há nada para escrever, e um
+  // upsert vazio não é uma escrita que valha a pena arriscar.
+  if (upserts.length > 0) {
+    const { error: uErr } = await admin
+      .from("payroll_records")
+      .upsert(upserts, { onConflict: "company_id,collaborator_id,period_year,period_month" });
 
-  if (uErr) return { ok: false, error: uErr.message };
+    if (uErr) return queryFailure("runPayrollCalculation:upsert", uErr);
+  }
 
   const gravados = await getPayrollRecords(companyId, year, month);
   if (!gravados.ok) return gravados;
-  return { ok: true, records: gravados.records, materializado: true };
+  return {
+    ok: true,
+    records: gravados.records,
+    materializado: true,
+    preservados: preserved.length,
+  };
 }
 
 /**
- * Usada por páginas Server Component para garantir que a folha do mês está
- * calculada. NUNCA chama revalidatePath — revalidar dentro do render de uma
- * página não é suportado pelo Next.js (rebenta para o error boundary).
+ * Estado atual da folha de um período, para quem precisa de o mostrar.
  *
- * 🔴 Num mês **fechado** não materializa: devolve o que existe, com
- *    `materializado: false`. Não devolve erro — abrir a página de um mês
- *    fechado continua a mostrar os números. Ver a nota em
- *    `runPayrollCalculation`.
+ * 🔴 O nome é histórico e o comportamento já não é o que ele sugere: **não
+ *    calcula nem grava nada**. É leitura pura.
  *
- * 🔴 Se não conseguir determinar o estado do período, **não materializa**. A
- *    falha fecha para o lado seguro: mostrar sem gravar é sempre recuperável,
- *    gravar por engano num mês fechado não é.
+ *    O nome antigo descrevia o que a função fazia até à ronda do Financeiro
+ *    V2: era chamada dentro do render de um Server Component e, se faltassem
+ *    linhas, calculava a folha e fazia `upsert`. Abrir a página gravava. Essa
+ *    chamada saiu da página (ver o comentário em `folha-pagamento/page.tsx`),
+ *    mas a função continuava a existir com o motor de cálculo lá dentro —
+ *    uma escrita à espera de quem a chamasse por engano.
+ *
+ *    Agora não há motor nenhum aqui. Um período sem folha calculada devolve
+ *    lista vazia e `materializado: false`; quem vê decide se carrega em
+ *    "Recalcular folha", que é o único caminho que escreve.
+ *
+ * O nome mantém-se porque `financeiro-v2-shell.test.ts` o vigia como acção
+ * proibida no render — e uma acção que já não escreve continuar nessa lista é
+ * conservador, não errado.
  */
 export async function ensurePayrollCalculated(
   year: number,
   month: number,
-): Promise<
-  | { ok: true; records: PayrollRecord[]; materializado: boolean; motivo?: string }
-  | { ok: false; error: string }
-> {
+): Promise<PayrollCalculationResult> {
   const guard = await requireProfile({ roles: ["admin", "gestor"] });
   if (!guard.ok) return { ok: false, error: guard.error };
 
-  const estado = await lerEstadoPeriodo(
-    guard.admin as unknown as ClientePeriodo,
-    guard.profile.company_id,
-    { year, month },
-  );
+  const existentes = await getPayrollRecords(guard.profile.company_id, year, month);
+  if (!existentes.ok) return existentes;
 
-  const podeMaterializar = estado.ok && estado.estado.status === "open";
-  return runPayrollCalculation(year, month, { permitirMaterializacao: podeMaterializar });
+  return {
+    ok: true,
+    records: existentes.records,
+    materializado: false,
+    preservados: 0,
+  };
 }
 
 /**
@@ -377,10 +476,7 @@ export async function calculateAndSavePayroll(
   _companyId: string,
   year: number,
   month: number,
-): Promise<
-  | { ok: true; records: PayrollRecord[]; materializado: boolean; motivo?: string }
-  | { ok: false; error: string }
-> {
+): Promise<PayrollCalculationResult> {
   const bloqueio = await bloquearSePeriodoFechado(year, month);
   if (bloqueio) return bloqueio;
 
@@ -463,30 +559,35 @@ export async function adjustPayrollRecord(
   const bloqueio = await bloquearSePeriodoFechadoPorIds([id]);
   if (bloqueio) return bloqueio;
 
-  const supabase = await createClient();
-  const admin    = createAdminClient();
+  const guard = await requireProfile({ roles: ["admin", "gestor"] });
+  if (!guard.ok) return { ok: false, error: guard.error };
+  const { admin } = guard;
+  const companyId = guard.profile.company_id;
 
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { ok: false, error: "Não autenticado." };
-
-  const { data: profile } = await admin
-    .from("profiles")
-    .select("company_id, role")
-    .eq("id", user.id)
-    .single();
-  if (!profile || !["admin", "gestor"].includes(profile.role)) {
-    return { ok: false, error: "Sem permissão." };
-  }
-
-  // Ler registo atual para recalcular net_salary
+  // Ler o registo atual: para recalcular, para auditar o antes verdadeiro e —
+  // sobretudo — para saber se sequer se pode tocar nele.
   const { data: rec, error: rErr } = await admin
     .from("payroll_records")
-    .select("company_id, gross_salary, meal_allowance, overtime_bonus, absence_deductions, other_additions, other_deductions, worked_hours, overtime_hours, absence_hours, days_worked, hourly_rate")
+    .select("company_id, status, gross_salary, meal_allowance, overtime_bonus, absence_deductions, other_additions, other_deductions, net_salary, worked_hours, overtime_hours, absence_hours, days_worked, hourly_rate, notes")
     .eq("id", id)
-    .single();
+    .eq("company_id", companyId)
+    .maybeSingle();
 
-  if (rErr || !rec) return { ok: false, error: rErr?.message ?? "Registo não encontrado." };
-  if (rec.company_id !== profile.company_id) return { ok: false, error: "Acesso negado." };
+  if (rErr && !isNoRowsError(rErr)) {
+    return queryFailure("adjustPayrollRecord:record", rErr);
+  }
+  if (!rec) return { ok: false, error: "Registo não encontrado." };
+
+  // ── Guarda de estado ───────────────────────────────────────────
+  //
+  // 🔴 Antes, a única guarda era o período financeiro estar aberto. Num mês
+  //    aberto, uma folha já **paga** podia ser editada à vontade: os valores
+  //    mudavam, o `status` continuava "pago", e a saída de caixa ficava com o
+  //    montante antigo. Período aberto diz que o mês ainda se mexe; não diz
+  //    que aquela linha em particular ainda se mexe.
+  const status = parsePayrollStatus(rec.status);
+  const recusa = denyEconomicMutation(status);
+  if (recusa) return { ok: false, error: PAYROLL_MUTATION_DENIAL_MESSAGE[recusa] };
 
   const workedHours    = adjust.worked_hours      ?? rec.worked_hours       ?? 0;
   const overtimeHours  = adjust.overtime_hours    ?? rec.overtime_hours     ?? 0;
@@ -510,18 +611,44 @@ export async function adjustPayrollRecord(
     ? Math.round(daysWorked * mealPerDay * 100) / 100
     : (rec.meal_allowance ?? 0);
 
-  // Bónus horas extra: taxa de 25% sobre o valor/hora
-  const overtimeBonus = (adjust.overtime_hours !== undefined || rateChanged)
-    ? Math.round(overtimeHours * hourlyRate * 0.25 * 100) / 100
-    : (rec.overtime_bonus ?? 0);
+  // ── Horas extra: uma regra só ────────────────────────────────────
+  //
+  // 🔴 Aqui estava `overtimeHours * hourlyRate * 0.25`, escrito à mão, enquanto
+  //    o cálculo mensal usava `overtime_rate_pct` das definições da empresa.
+  //    Uma empresa com 50% configurados tinha 50% no cálculo do mês e 25% em
+  //    qualquer ajuste manual — dois valores para a mesma hora extra, e o que
+  //    ficava gravado dependia de por onde o número tinha passado.
+  //
+  //    A percentagem vem agora da mesma fonte que o cálculo mensal. Se não a
+  //    conseguirmos ler, o ajuste é recusado: assumir 25% é inventar dinheiro.
+  const precisaTaxaExtra = adjust.overtime_hours !== undefined || rateChanged;
+  let overtimeBonus = rec.overtime_bonus ?? 0;
+
+  if (precisaTaxaExtra) {
+    const { data: settings, error: sErr } = await admin
+      .from("company_settings")
+      .select("overtime_rate_pct")
+      .eq("company_id", companyId)
+      .maybeSingle();
+
+    if (sErr && !isNoRowsError(sErr)) {
+      return queryFailure("adjustPayrollRecord:company_settings", sErr);
+    }
+
+    // Sem linha de definições mantém-se o valor por omissão de sempre — é o
+    // contrato do produto, e esta PR não muda contratos económicos.
+    const overtimeRatePct = settings?.overtime_rate_pct ?? 25;
+    overtimeBonus = calcOvertimeBonus(overtimeHours, hourlyRate, overtimeRatePct);
+  }
 
   const absenceDed = adjust.absence_deductions ?? rec.absence_deductions ?? 0;
   const otherAdd   = adjust.other_additions    ?? rec.other_additions    ?? 0;
   const otherDed   = adjust.other_deductions   ?? rec.other_deductions   ?? 0;
 
-  const netSalary = Math.round(
-    (grossSalary + mealAllowance + overtimeBonus + otherAdd - absenceDed - otherDed) * 100,
-  ) / 100;
+  // A mesma soma que o cálculo mensal usa. Ver `calcAdjustedNetSalary`.
+  const netSalary = calcAdjustedNetSalary(
+    grossSalary, mealAllowance, overtimeBonus, otherAdd, absenceDed, otherDed,
+  );
 
   const { error } = await admin
     .from("payroll_records")
@@ -540,18 +667,45 @@ export async function adjustPayrollRecord(
       net_salary:          netSalary,
       notes:               adjust.notes !== undefined ? adjust.notes : undefined,
     })
-    .eq("id", id);
+    .eq("id", id)
+    .eq("company_id", companyId)
+    // 🔴 Guarda final na própria escrita. A leitura acima pode ter ficado
+    //    obsoleta entre o `select` e o `update` — se outra sessão aprovou a
+    //    folha entretanto, esta condição faz a escrita não encontrar linha
+    //    nenhuma em vez de passar por cima da aprovação.
+    .eq("status", "rascunho");
 
-  if (error) return { ok: false, error: error.message };
+  if (error) return queryFailure("adjustPayrollRecord:update", error);
 
   await auditLog({
-    companyId: profile.company_id,
-    actorId: user.id,
+    companyId,
+    actorId: guard.profile.id,
     action: "payroll_adjusted",
     entityType: "payroll",
     entityId: id,
-    before: { net_salary: rec.gross_salary, gross_salary: rec.gross_salary },
-    after: { gross_salary: grossSalary, net_salary: netSalary },
+    // 🔴 O `before` estava a mentir: `net_salary` era preenchido com o
+    //    `gross_salary` anterior. Quem lesse a auditoria via um líquido que
+    //    nunca existiu, e a diferença antes/depois não fechava.
+    before: {
+      status,
+      gross_salary:       rec.gross_salary ?? 0,
+      meal_allowance:     rec.meal_allowance ?? 0,
+      overtime_bonus:     rec.overtime_bonus ?? 0,
+      absence_deductions: rec.absence_deductions ?? 0,
+      other_additions:    rec.other_additions ?? 0,
+      other_deductions:   rec.other_deductions ?? 0,
+      net_salary:         rec.net_salary ?? 0,
+    },
+    after: {
+      status,
+      gross_salary:       grossSalary,
+      meal_allowance:     mealAllowance,
+      overtime_bonus:     overtimeBonus,
+      absence_deductions: absenceDed,
+      other_additions:    otherAdd,
+      other_deductions:   otherDed,
+      net_salary:         netSalary,
+    },
     source: "dashboard",
   }, admin);
 
@@ -563,35 +717,95 @@ export async function adjustPayrollRecord(
 
 export async function approvePayrollRecords(
   ids: string[],
-): Promise<{ ok: boolean; error?: string }> {
+): Promise<{ ok: boolean; error?: string; aprovados?: number; jaAprovados?: number }> {
+  const uniqueIds = [...new Set(ids)];
+  if (uniqueIds.length === 0) return { ok: true, aprovados: 0, jaAprovados: 0 };
+
   // Aprovar fixa o valor a pagar. Num mês fechado isso já não se mexe.
-  const bloqueio = await bloquearSePeriodoFechadoPorIds(ids);
+  const bloqueio = await bloquearSePeriodoFechadoPorIds(uniqueIds);
   if (bloqueio) return bloqueio;
 
-  const supabase = await createClient();
-  const admin    = createAdminClient();
+  const guard = await requireProfile({ roles: ["admin", "gestor"] });
+  if (!guard.ok) return { ok: false, error: guard.error };
+  const { admin } = guard;
+  const companyId = guard.profile.company_id;
 
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { ok: false, error: "Não autenticado." };
+  // ── Resolver o lote antes de lhe tocar ────────────────────────────────────
+  //
+  // 🔴 O código anterior fazia `update(...).in("id", ids).eq("company_id", ...)`
+  //    e mais nada. Consequências:
+  //
+  //    · um id inexistente, ou de outra empresa, era silenciosamente ignorado
+  //      — a operação dizia "ok" tendo aprovado menos linhas do que as pedidas,
+  //      e ninguém ficava a saber quais;
+  //    · o estado atual nunca era lido, por isso uma linha **paga** voltava a
+  //      "aprovado". A saída de caixa ficava lá, e a folha passava a dizer que
+  //      estava por pagar com o dinheiro já registado como saído.
+  const { data: encontrados, error: fErr } = await admin
+    .from("payroll_records")
+    .select("id, status")
+    .eq("company_id", companyId)
+    .in("id", uniqueIds);
 
-  const { data: profile } = await admin
-    .from("profiles")
-    .select("company_id, role")
-    .eq("id", user.id)
-    .single();
-  if (!profile || !["admin", "gestor"].includes(profile.role)) {
-    return { ok: false, error: "Sem permissão." };
+  if (fErr) return queryFailure("approvePayrollRecords:resolve", fErr);
+
+  // Falha fechada: pedimos N, resolvemos N, ou não se escreve nada.
+  //
+  // A mensagem não diz *qual* id falhou nem porquê — distinguir "não existe"
+  // de "é de outra empresa" confirmaria a existência de registos alheios a
+  // quem tentasse adivinhar ids.
+  if ((encontrados?.length ?? 0) !== uniqueIds.length) {
+    return {
+      ok: false,
+      error: "A seleção já não corresponde aos registos existentes. Atualiza a página e tenta novamente.",
+    };
+  }
+
+  const aAprovar: string[] = [];
+  let jaAprovados = 0;
+
+  for (const r of encontrados ?? []) {
+    const resultado = approveTransition(parsePayrollStatus(r.status));
+    // Um estado que não se pode aprovar derruba o lote inteiro. Aprovar
+    // metade de uma seleção financeira deixa quem clicou sem saber o que
+    // ficou feito — e é precisamente nessa dúvida que se clica outra vez.
+    if (resultado.kind === "denied") {
+      return { ok: false, error: PAYROLL_APPROVE_DENIAL_MESSAGE[resultado.code] };
+    }
+    if (resultado.kind === "noop") { jaAprovados += 1; continue; }
+    aAprovar.push(r.id);
+  }
+
+  // Lote inteiro já aprovado: um segundo clique, ou um retry depois de a
+  // resposta se ter perdido, não é erro. Idempotente, sem escrita.
+  if (aAprovar.length === 0) {
+    return { ok: true, aprovados: 0, jaAprovados };
   }
 
   const { error } = await admin
     .from("payroll_records")
-    .update({ status: "aprovado", approved_by: user.id })
-    .in("id", ids)
-    .eq("company_id", profile.company_id);
+    .update({ status: "aprovado", approved_by: guard.profile.id })
+    .in("id", aAprovar)
+    .eq("company_id", companyId)
+    // 🔴 Guarda final na escrita, pelo mesmo motivo do ajuste: entre o
+    //    `select` e o `update` outra sessão pode ter pago a folha.
+    .eq("status", "rascunho");
 
-  if (error) return { ok: false, error: error.message };
+  if (error) return queryFailure("approvePayrollRecords:update", error);
+
+  await auditLog({
+    companyId,
+    actorId: guard.profile.id,
+    action: "payroll_approved",
+    entityType: "payroll",
+    before: { status: "rascunho" as PayrollStatus, count: aAprovar.length },
+    after:  { status: "aprovado" as PayrollStatus, count: aAprovar.length },
+    meta: { ids: aAprovar, jaAprovados },
+    source: "dashboard",
+  }, admin);
+
   revalidatePath("/dashboard/folha-pagamento");
-  return { ok: true };
+  return { ok: true, aprovados: aAprovar.length, jaAprovados };
 }
 
 // ─── Marcar como pago ────────────────────────────────────────────────────────
@@ -599,9 +813,6 @@ export async function approvePayrollRecords(
 export async function markPayrollPaid(
   ids: string[],
 ): Promise<{ ok: boolean; error?: string }> {
-  const supabase = await createClient();
-  const admin    = createAdminClient();
-
   const uniqueIds = [...new Set(ids)];
   if (uniqueIds.length === 0) return { ok: true };
 
@@ -610,23 +821,27 @@ export async function markPayrollPaid(
   const bloqueio = await bloquearSePeriodoFechadoPorIds(uniqueIds);
   if (bloqueio) return bloqueio;
 
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { ok: false, error: "Nao autenticado." };
+  const guard = await requireProfile({ roles: ["admin", "gestor"] });
+  if (!guard.ok) return { ok: false, error: guard.error };
+  const { admin } = guard;
+  const profile = guard.profile;
 
-  const { data: profile } = await admin
-    .from("profiles")
-    .select("company_id, role")
-    .eq("id", user.id)
-    .single();
-  if (!profile || !["admin", "gestor"].includes(profile.role)) {
-    return { ok: false, error: "Sem permissao." };
-  }
-
-  const { data: records } = await admin
+  // 🔴 Sem verificar o `error`, uma consulta falhada devolvia `records = []`,
+  //    a função seguia até ao fim sem nada para pagar e respondia `ok: true`.
+  //    Quem carregou no botão via sucesso e nenhuma folha paga.
+  //
+  // ⚠️ A atomicidade desta operação continua por resolver: o `update` da folha
+  //    e o `insert` do movimento de caixa são duas escritas separadas, e uma
+  //    falha entre elas deixa salário pago sem saída de caixa. Isso é a P0B,
+  //    precisa de RPC transacional e de migration, e está fora desta PR. O que
+  //    aqui muda é só o que se podia fechar sem tocar no schema.
+  const { data: records, error: rErr } = await admin
     .from("payroll_records")
     .select("id, company_id, collaborator_id, net_salary, period_year, period_month, status, profiles(full_name)")
     .in("id", uniqueIds)
     .eq("company_id", profile.company_id);
+
+  if (rErr) return queryFailure("markPayrollPaid:records", rErr);
 
   const payableRecords = (records ?? []).filter((r) => r.status !== "pago");
   const payableIds = payableRecords.map((r) => r.id);
@@ -642,12 +857,16 @@ export async function markPayrollPaid(
   }
 
   if (payableRecords.length > 0) {
-    const { data: existingRefs } = await admin
+    // 🔴 Falhar aqui assumia "não existe movimento" e mandava inserir tudo —
+    //    criando um segundo movimento de caixa para uma folha que já o tinha.
+    const { data: existingRefs, error: refErr } = await admin
       .from("cash_flow_entries")
       .select("reference_id")
       .eq("company_id", profile.company_id)
       .eq("reference_type", "payroll")
       .in("reference_id", payableIds);
+
+    if (refErr) return queryFailure("markPayrollPaid:cash_refs", refErr);
 
     const missingIds = new Set(getMissingCashFlowReferenceIds(
       payableIds,
@@ -673,14 +892,14 @@ export async function markPayrollPaid(
 
     if (cashEntries.length > 0) {
       const { error: cashErr } = await admin.from("cash_flow_entries").insert(cashEntries);
-      if (cashErr) return { ok: false, error: cashErr.message };
+      if (cashErr) return queryFailure("markPayrollPaid:cash_insert", cashErr);
     }
   }
 
   if (payableIds.length > 0) {
     await auditLog({
       companyId: profile.company_id,
-      actorId: user.id,
+      actorId: profile.id,
       action: "payroll_paid",
       entityType: "payroll",
       after: { status: "pago", count: payableIds.length },

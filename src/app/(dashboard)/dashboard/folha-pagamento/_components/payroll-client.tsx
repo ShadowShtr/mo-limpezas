@@ -65,6 +65,11 @@ export function PayrollClient({ initialRecords, companyId, mesParam, year, month
   const [editing, setEditing]   = useState<PayrollRecord | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [error, setError]       = useState<string | null>(null);
+  /**
+   * Aviso informativo, distinto de erro: a operação correu bem mas não fez
+   * tudo o que a seleção pedia. Ver `handleRecalculate` e `handleApprove`.
+   */
+  const [aviso, setAviso]       = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
   // Totais
@@ -94,11 +99,22 @@ export function PayrollClient({ initialRecords, companyId, mesParam, year, month
 
   function handleRecalculate() {
     setError(null);
+    setAviso(null);
     startTransition(async () => {
       const res = await calculateAndSavePayroll(companyId, year, month);
       if (res.ok) {
         setRecords(res.records);
         setSelected(new Set());
+        // 🔴 Não fingir que recalculou tudo. Folhas aprovadas ou pagas são
+        //    fotografias e ficam como estão — quem carregou no botão tem de
+        //    saber que aquelas linhas não mudaram.
+        if (res.preservados > 0) {
+          setAviso(
+            res.preservados === 1
+              ? "1 folha não foi recalculada por já estar aprovada ou paga."
+              : `${res.preservados} folhas não foram recalculadas por já estarem aprovadas ou pagas.`,
+          );
+        }
       } else {
         setError(res.error);
       }
@@ -108,13 +124,24 @@ export function PayrollClient({ initialRecords, companyId, mesParam, year, month
   function handleApprove() {
     if (!selected.size) return;
     setError(null);
+    setAviso(null);
     startTransition(async () => {
       const res = await approvePayrollRecords([...selected]);
       if (res.ok) {
+        // Só as linhas que estavam em rascunho passam a aprovado. As que já
+        // estavam aprovadas ficam na mesma — e nenhuma folha paga chega aqui,
+        // porque o servidor recusa o lote inteiro nesse caso.
         setRecords((prev) =>
-          prev.map((r) => selected.has(r.id) ? { ...r, status: "aprovado" } : r),
+          prev.map((r) =>
+            selected.has(r.id) && r.status === "rascunho"
+              ? { ...r, status: "aprovado" }
+              : r,
+          ),
         );
         setSelected(new Set());
+        if ((res.jaAprovados ?? 0) > 0 && (res.aprovados ?? 0) === 0) {
+          setAviso("A seleção já estava aprovada. Nada foi alterado.");
+        }
       } else {
         setError(res.error ?? "Erro ao aprovar.");
       }
@@ -124,6 +151,7 @@ export function PayrollClient({ initialRecords, companyId, mesParam, year, month
   function handlePay() {
     if (!selected.size) return;
     setError(null);
+    setAviso(null);
     startTransition(async () => {
       const res = await markPayrollPaid([...selected]);
       if (res.ok) {
@@ -284,6 +312,14 @@ export function PayrollClient({ initialRecords, companyId, mesParam, year, month
           <div className="flex items-center gap-2 p-3 rounded-lg bg-red-50 border border-red-200 text-sm text-red-700">
             <AlertCircle className="w-4 h-4 shrink-0" />
             {error}
+          </div>
+        )}
+
+        {/* Aviso — operação bem sucedida que não fez tudo o que a seleção pedia */}
+        {aviso && (
+          <div className="flex items-center gap-2 p-3 rounded-lg bg-amber-50 border border-amber-200 text-sm text-amber-800">
+            <AlertCircle className="w-4 h-4 shrink-0" />
+            {aviso}
           </div>
         )}
 
