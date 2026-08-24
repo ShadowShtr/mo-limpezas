@@ -1,25 +1,25 @@
 {
   "generatedBy": "scripts/audit-file-inventory.mjs",
-  "totalFiles": 673,
+  "totalFiles": 676,
   "byStatus": {
-    "MANTER": 655,
+    "MANTER": 658,
     "STANDBY": 18
   },
   "byCategory": {
     "route-ui": 135,
-    "test": 114,
+    "test": 115,
     "migration": 78,
     "lib": 65,
     "script": 47,
+    "domain": 44,
     "doc": 43,
-    "domain": 43,
     "server-action": 41,
     "component": 30,
     "doc-historico": 16,
     "api-route": 16,
     "config": 12,
+    "src-other": 9,
     "asset": 8,
-    "src-other": 8,
     "report": 4,
     "script-historico": 4,
     "ci": 2,
@@ -29,7 +29,7 @@
     "other": 1
   },
   "byConfidence": {
-    "alta": 657,
+    "alta": 660,
     "média": 10,
     "baixa": 6
   },
@@ -3744,6 +3744,35 @@
         "supabase": 4,
         "fallbackArray": 1,
         "dynamicImport": 7
+      },
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/__tests__/availability-fail-closed.test.ts",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [
+        "supabase"
+      ],
+      "risks": [],
+      "signals": {
+        "supabase": 2,
+        "sqlWrite": 9,
+        "fallbackArray": 4,
+        "dynamicImport": 1
       },
       "action": "nenhuma",
       "reason": "suite de testes — corre por convenção do vitest",
@@ -10321,11 +10350,11 @@
       "category": "server-action",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 3,
+      "consumers": 4,
       "consumerSample": [
+        "src/__tests__/availability-fail-closed.test.ts",
         "src/app/(dashboard)/dashboard/faltas/_components/absence-sheet.tsx",
-        "src/app/(dashboard)/dashboard/faltas/_components/absence-table.tsx",
-        "src/app/(dashboard)/dashboard/faltas/_components/substitution-panel.tsx"
+        "src/app/(dashboard)/dashboard/faltas/_components/absence-table.tsx"
       ],
       "autoLoaded": false,
       "referencedBy": [
@@ -10340,17 +10369,17 @@
         "erro-de-query-ignorado(1)"
       ],
       "signals": {
-        "supabase": 15,
+        "supabase": 14,
         "serverAction": 1,
         "write": 3,
         "sqlWrite": 3,
         "ignoredError": 1,
         "fallbackZero": 2,
-        "fallbackArray": 10,
+        "fallbackArray": 11,
         "revalidatePath": 5
       },
       "action": "auditar atomicidade (T12/T13)",
-      "reason": "em uso: 3 consumidor(es)",
+      "reason": "em uso: 4 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -14689,7 +14718,7 @@
       "category": "domain",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 14,
+      "consumers": 15,
       "consumerSample": [
         "src/__tests__/update-notice-modal.test.tsx",
         "src/__tests__/update-notices-eligibility.test.ts",
@@ -14704,11 +14733,41 @@
       "risks": [],
       "signals": {},
       "action": "nenhuma",
-      "reason": "em uso: 14 consumidor(es), configuração",
+      "reason": "em uso: 15 consumidor(es), configuração",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
         "cliEntrypoint": true,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/domain/workforce/availability.ts",
+      "category": "domain",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 2,
+      "consumerSample": [
+        "src/__tests__/availability-fail-closed.test.ts",
+        "src/app/actions/absences.ts"
+      ],
+      "autoLoaded": false,
+      "referencedBy": [
+        "docs"
+      ],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "fallbackZero": 1,
+        "fallbackArray": 2
+      },
+      "action": "nenhuma",
+      "reason": "em uso: 2 consumidor(es)",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
         "dynamicImport": true,
         "allClosed": false
       }
@@ -14817,11 +14876,11 @@
       "category": "lib",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 22,
+      "consumers": 23,
       "consumerSample": [
         "src/__tests__/auth-revalidation-central.test.ts",
-        "src/app/actions/attachments.ts",
-        "src/app/actions/bank-reconciliation.ts"
+        "src/app/actions/absences.ts",
+        "src/app/actions/attachments.ts"
       ],
       "autoLoaded": false,
       "referencedBy": [
@@ -14838,7 +14897,7 @@
         "ignoredError": 1
       },
       "action": "nenhuma",
-      "reason": "em uso: 22 consumidor(es)",
+      "reason": "em uso: 23 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -16700,6 +16759,32 @@
     },
     {
       "path": "src/release-notes/2026-08-20-avisos-de-atualizacao.ts",
+      "category": "src-other",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 1,
+      "consumerSample": [
+        "src/release-notes/index.ts"
+      ],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "sqlWrite": 1
+      },
+      "action": "nenhuma",
+      "reason": "em uso: 1 consumidor(es)",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/release-notes/2026-08-24-disponibilidade-mais-segura.ts",
       "category": "src-other",
       "status": "MANTER",
       "confidence": "alta",

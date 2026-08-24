@@ -19,6 +19,7 @@ import { nota as financeiroEAnexos } from "./2026-08-19-financeiro-e-anexos";
 import { nota as avisosDeAtualizacao } from "./2026-08-20-avisos-de-atualizacao";
 import { nota as documentosMaisProtegidos } from "./2026-08-24-documentos-mais-protegidos";
 import { nota as recibosSemEliminacao } from "./2026-08-24-recibos-sem-eliminacao";
+import { nota as disponibilidadeMaisSegura } from "./2026-08-24-disponibilidade-mais-segura";
 import { nota as anexosAAbrir } from "./2026-08-25-anexos-a-abrir";
 import { nota as financeiroMudaDeMes } from "./2026-08-25-financeiro-muda-de-mes";
 
@@ -27,6 +28,7 @@ export const RELEASE_NOTES: ReleaseNote[] = [
   avisosDeAtualizacao,
   documentosMaisProtegidos,
   recibosSemEliminacao,
+  disponibilidadeMaisSegura,
   anexosAAbrir,
   financeiroMudaDeMes,
 ];
