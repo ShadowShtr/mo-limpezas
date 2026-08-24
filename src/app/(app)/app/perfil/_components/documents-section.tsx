@@ -10,8 +10,8 @@ import {
   saveDamageReportRecord,
   getSignedDocumentUrl,
   type CollaboratorDocument,
-  type DocumentCategory,
 } from "@/app/actions/collaborator-documents";
+import type { DocumentCategory } from "@/lib/collaborator-documents";
 
 const CATEGORY_LABELS: Record<DocumentCategory, string> = {
   recibo_salario: "Folha de Salário",
