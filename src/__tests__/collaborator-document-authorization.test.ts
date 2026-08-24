@@ -515,9 +515,13 @@ export async function deleteCollaboratorDocument() {}
   });
 
   it("as guardas não se deixam enganar pelos comentários que as explicam", () => {
-    // O ficheiro real cita `category as DocumentCategory` no comentário que
-    // explica o que saiu. Se a guarda medisse comentários, estaria vermelha.
-    expect(SRC).toMatch(/category as DocumentCategory/);
+    // O módulo puro cita `category as DocumentCategory` no comentário que
+    // explica o que saiu — é lá que o parser vive, porque um ficheiro
+    // "use server" não pode exportar constantes nem funções síncronas.
+    // Se a guarda medisse comentários, estaria vermelha.
+    const lib = ler("src/lib/collaborator-documents.ts");
+    expect(lib).toMatch(/category as DocumentCategory/);
+    expect(categoriaSemParser(semComentarios(lib))).toEqual([]);
     expect(categoriaSemParser(LIMPO)).toEqual([]);
   });
 });

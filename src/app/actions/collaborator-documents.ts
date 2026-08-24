@@ -7,34 +7,20 @@ import {
   buildDamageReportNotificationRows,
   buildDocumentStoragePath,
   isStoragePathInCompany,
+  parseDocumentCategory,
+  type DocumentCategory,
 } from "@/lib/collaborator-documents";
 import { isNoRowsError, queryFailure, logQueryFailure } from "@/lib/query-error";
 import { revalidatePath } from "next/cache";
 
-export const DOCUMENT_CATEGORIES = [
-  "contrato",
-  "recibo_salario",
-  "identificacao",
-  "avaria",
-  "outro",
-] as const;
-
-export type DocumentCategory = (typeof DOCUMENT_CATEGORIES)[number];
-
-/**
- * 🔴 Substitui `category as DocumentCategory`.
- *
- * Um `as` não valida nada — é uma afirmação ao compilador, não uma verificação
- * em execução. O valor chega de um `FormData` do browser, portanto podia ser
- * qualquer string e ia inteira para a coluna. Devolve `null` para desconhecido;
- * quem chama recusa **antes** de escrever no storage.
- */
-export function parseDocumentCategory(value: unknown): DocumentCategory | null {
-  return typeof value === "string"
-    && (DOCUMENT_CATEGORIES as readonly string[]).includes(value)
-    ? (value as DocumentCategory)
-    : null;
-}
+// 🔴 O tipo NÃO é re-exportado daqui. Parecia inofensivo — tipos são apagados
+//    na compilação — mas o Turbopack constrói o grafo de Server Actions a
+//    partir da lista estática de exportações do módulo e trata a re-exportação
+//    como um valor, falhando com «Export DocumentCategory doesn'''t exist in
+//    target module».
+//
+//    Quem precisa do tipo importa-o de `@/lib/collaborator-documents`, que é
+//    onde ele vive.
 
 export interface CollaboratorDocument {
   id: string;

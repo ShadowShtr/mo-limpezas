@@ -15188,11 +15188,11 @@
       "category": "lib",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 3,
+      "consumers": 5,
       "consumerSample": [
         "src/__tests__/collaborator-document-authorization.test.ts",
         "src/__tests__/collaborator-documents.test.ts",
-        "src/app/actions/collaborator-documents.ts"
+        "src/app/(app)/app/perfil/_components/documents-section.tsx"
       ],
       "autoLoaded": false,
       "referencedBy": [
@@ -15204,7 +15204,7 @@
         "fallbackArray": 1
       },
       "action": "nenhuma",
-      "reason": "em uso: 3 consumidor(es)",
+      "reason": "em uso: 5 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,

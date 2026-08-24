@@ -11,8 +11,8 @@ import {
   deleteCollaboratorDocument,
   getSignedDocumentUrl,
   type CollaboratorDocument,
-  type DocumentCategory,
 } from "@/app/actions/collaborator-documents";
+import type { DocumentCategory } from "@/lib/collaborator-documents";
 
 const CATEGORIES: { value: DocumentCategory; label: string }[] = [
   { value: "recibo_salario", label: "Folha de Salário" },
