@@ -1,22 +1,43 @@
 /**
- * Cron: Arquivo automático de documentos com 3+ meses
+ * Cron: eliminação automática de documentos expirados
+ *
+ * 🔴 «Arquivo» é um eufemismo, e o nome do ficheiro mantém-no por compatibilidade
+ *    de rota. O que esta rota faz é:
+ *
+ *      1. gerar um manifesto JSON com **metadados** dos documentos;
+ *      2. guardar o manifesto em `archives/YYYY-MM/`;
+ *      3. marcar `archived_at` na base;
+ *      4. `storage.remove()` — os ficheiros **deixam de existir**.
+ *
+ *    O manifesto tem nome, tamanho, categoria e datas. Não tem o conteúdo.
+ *    Depois desta rota correr, o documento não é recuperável a partir dela.
+ *    Chamar-lhe «arquivado com segurança» seria falso.
  *
  * Executa uma vez por dia (configurado no vercel.json).
- * Para cada empresa, arquiva e apaga documentos expirados.
  *
- * Antes de apagar:
- *  1. Gera um JSON de manifesto com metadados de todos os documentos
- *  2. Guarda o manifesto em storage na pasta "archives/YYYY-MM/"
- *  3. Apaga os ficheiros originais do storage
- *  4. Marca registos na DB como archived_at = now()
+ * ---------------------------------------------------------------------------
+ * A proteção por política
+ * ---------------------------------------------------------------------------
  *
- * O gestor pode aceder a archives/ no painel de documentos para
- * fazer download antes de o link signed URL expirar (7 dias).
+ * Nem toda a categoria pode ser destruída pelo relógio. A regra vive em
+ * `src/domain/documents/retention-policy.ts` e é aplicada **duas vezes**:
+ *
+ *   · na consulta, para não trazer o que não se pode apagar;
+ *   · por documento, imediatamente antes de apagar.
+ *
+ * A segunda não é redundância defensiva por hábito. É o que garante que, se
+ * alguém um dia simplificar a consulta e tirar o filtro, um recibo de
+ * vencimento continua a sobreviver. Numa operação destrutiva e automática, a
+ * proteção tem de estar colada ao ato de destruir.
  */
 
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { checkCronAuth } from "@/lib/cron-auth";
+import {
+  podeArquivarAutomaticamente,
+  CATEGORIAS_PROTEGIDAS,
+} from "@/domain/documents/retention-policy";
 
 export const maxDuration = 60;
 
@@ -49,13 +70,46 @@ export async function GET(req: NextRequest) {
     for (const company of companies ?? []) {
       try {
         // 2. Buscar documentos expirados desta empresa (limite para não saturar)
-        const { data: expired } = await admin
+        // Primeira barreira: não trazer o que não se pode apagar.
+        const { data: expiredRaw, error: expiredErr } = await admin
           .from("collaborator_documents")
           .select("id, file_name, file_url, file_size, mime_type, category, notes, visible_to_collaborator, uploaded_by_role, expires_at, created_at, collaborator_id")
           .eq("company_id", company.id)
           .lt("expires_at", now.toISOString())
           .is("archived_at", null)
+          .not("category", "in", `(${CATEGORIAS_PROTEGIDAS.join(",")})`)
           .limit(DOCS_PER_COMPANY);
+
+        // Numa operação destrutiva, uma consulta falhada não pode ser lida como
+        // «nada a apagar» nem como «apaga o que vier». Passa-se à empresa
+        // seguinte e regista-se — nada é destruído com base numa leitura
+        // incompleta.
+        if (expiredErr) {
+          results.push({
+            company_id: company.id, company_name: company.name,
+            archived: 0, manifest_path: null,
+            error: "query_failed",
+          });
+          continue;
+        }
+
+        // Segunda barreira, por documento e colada ao ato de destruir. Uma
+        // categoria que a política não reconheça **não** herda o comportamento
+        // por omissão: apagar exige certeza, guardar a mais não custa nada.
+        const protegidos: string[] = [];
+        const expired = (expiredRaw ?? []).filter((d) => {
+          if (podeArquivarAutomaticamente(d.category)) return true;
+          protegidos.push(String(d.category));
+          return false;
+        });
+
+        if (protegidos.length > 0) {
+          console.warn("[retention] documentos preservados por política", {
+            company_id: company.id,
+            count: protegidos.length,
+            categorias: [...new Set(protegidos)],
+          });
+        }
 
         // Nome do colaborador buscado separadamente para evitar joins complexos
         const collabIds = [...new Set((expired ?? []).map((d) => d.collaborator_id))];
@@ -65,7 +119,7 @@ export async function GET(req: NextRequest) {
         const collabNameMap: Record<string, string> = {};
         for (const p of collabRows ?? []) collabNameMap[p.id] = p.full_name;
 
-        if (!expired || expired.length === 0) {
+        if (expired.length === 0) {
           results.push({ company_id: company.id, company_name: company.name, archived: 0, manifest_path: null });
           continue;
         }
@@ -152,7 +206,13 @@ export async function GET(req: NextRequest) {
         }
 
         // 7. Apagar ficheiros originais do storage (após DB confirmada)
-        const storagePaths = (expired ?? [])
+        //
+        // `expired` já passou pela política acima; este `filter` é o último
+        // ponto antes da destruição e mantém-se explícito de propósito — é a
+        // linha que alguém teria de apagar deliberadamente para reintroduzir o
+        // defeito.
+        const storagePaths = expired
+          .filter((d) => podeArquivarAutomaticamente(d.category))
           .map((d) => {
             const prefix = `/${BUCKET}/`;
             return typeof d.file_url === "string" && d.file_url.includes(prefix)

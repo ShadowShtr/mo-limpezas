@@ -527,44 +527,44 @@ export async function deleteCollaboratorDocument() {}
 });
 
 // ═══════════════════════════════════════════════════════════════════════════
-// PARTE D — RETENÇÃO: o que se descobriu, e não se mexeu
+// PARTE D — RETENÇÃO: o risco descoberto aqui, corrigido na P0F
 // ═══════════════════════════════════════════════════════════════════════════
 //
-// 🔴 DATA_RETENTION_RISK está ATIVO e este PR **não o corrige** — corrigi-lo é
-//    mudar a semântica de uma categoria, e isso é uma decisão própria, com o
-//    seu próprio PR.
+// Estes testes nasceram na P0E a **fixar o comportamento defeituoso**, para que
+// não mudasse por acidente e para que o diff mostrasse exatamente o quê quando
+// mudasse de propósito. É agora que isso acontece: a P0F muda-o de propósito, e
+// este bloco é o diff prometido.
 //
-// Estes testes existem para fixar o comportamento tal como ele é hoje. Se
-// alguém o alterar sem querer, ficam vermelhos; quando for alterado de
-// propósito, são estes que se atualizam, e o diff mostra exatamente o quê.
+//     antes                                    depois
+//     ─────────────────────────────────────    ────────────────────────────────
+//     RETENTION_MONTHS = 3, para tudo          política por categoria
+//     recibo_salario → expires_at = +3 meses   recibo_salario → expires_at NULL
+//     cron apaga por data, sem ver categoria   cron consulta a política
+//
+// A regra em si é testada em `payroll-document-retention.test.ts`. O que fica
+// aqui é o par mínimo que prova a transição no ponto de escrita.
 
-describe("retenção — estado atual, fixado para não mudar por acidente", () => {
-  it("RETENTION_MONTHS continua a ser 3", () => {
-    expect(LIMPO).toMatch(/RETENTION_MONTHS\s*=\s*3/);
+describe("retenção — depois da P0F", () => {
+  it("a retenção deixou de ser uma constante global deste módulo", () => {
+    // `RETENTION_MONTHS = 3` aplicava-se a todas as categorias. A regra mudou
+    // de sítio: vive em `src/domain/documents/retention-policy.ts`.
+    expect(LIMPO).not.toMatch(/RETENTION_MONTHS\s*=\s*\d/);
+    expect(LIMPO).toMatch(/resolveDocumentExpiresAt/);
   });
 
-  it("🔴 um recibo de vencimento nasce com data de expiração", async () => {
-    // É este o risco: `expires_at` é atribuído a TODAS as categorias, e o cron
-    // diário apaga do armazenamento tudo o que esteja expirado. Um recibo
-    // carregado hoje perde o ficheiro daqui a três meses.
+  it("🔴 um recibo de vencimento nasce SEM data de expiração", async () => {
     const res = await upload();
     expect(res.ok).toBe(true);
 
     const insert = dbOps.find((o) => o.op === "insert")!.payload as Record<string, unknown>;
     expect(insert.category).toBe("recibo_salario");
-    expect(insert.expires_at).toBeTruthy();
-
-    const expira = new Date(insert.expires_at as string);
-    const meses = (expira.getFullYear() - new Date().getFullYear()) * 12
-      + (expira.getMonth() - new Date().getMonth());
-    expect(meses).toBe(3);
+    expect(insert.expires_at).toBeNull();
   });
 
-  it("o cron de arquivo apaga por expires_at, sem olhar à categoria", () => {
+  it("o cron passou a filtrar por categoria, não só por data", () => {
     const cron = semComentarios(ler("src/app/api/cron/archive-documents/route.ts"));
-    expect(cron).toMatch(/lt\(\s*["']expires_at["']/);
-    // A categoria é lida para o manifesto, mas nunca filtra o que se apaga —
-    // e é essa ausência de filtro que torna o risco real.
-    expect(cron).not.toMatch(/\.(eq|neq|in|not)\(\s*["']category["']/);
+    expect(cron).toMatch(/lt\(\s*["\']expires_at["\']/);
+    expect(cron).toMatch(/\.not\(\s*["\']category["\']/);
+    expect(cron).toMatch(/podeArquivarAutomaticamente/);
   });
 });

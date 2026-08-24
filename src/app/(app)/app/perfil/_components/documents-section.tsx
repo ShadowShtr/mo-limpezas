@@ -12,6 +12,7 @@ import {
   type CollaboratorDocument,
 } from "@/app/actions/collaborator-documents";
 import type { DocumentCategory } from "@/lib/collaborator-documents";
+import { mostraExpiracao } from "@/domain/documents/retention-policy";
 
 const CATEGORY_LABELS: Record<DocumentCategory, string> = {
   recibo_salario: "Folha de Salário",
@@ -286,7 +287,10 @@ export function AppDocumentsSection({ initialDocuments }: Props) {
                 Folhas de Salário
               </p>
               {salaryDocs.map((doc) => {
-                const days          = daysUntil(doc.expires_at);
+                // Pela política, não pela coluna: um recibo antigo com data
+                // gravada já não é apagado, e não deve anunciar uma contagem
+                // decrescente que não vai acontecer.
+                const days          = mostraExpiracao(doc.category) ? daysUntil(doc.expires_at) : null;
                 const isDownloading = downloading === doc.id;
                 const isCached      = cachedDocIds.has(doc.id);
                 return (

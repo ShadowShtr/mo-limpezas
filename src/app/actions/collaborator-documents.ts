@@ -10,6 +10,11 @@ import {
   parseDocumentCategory,
   type DocumentCategory,
 } from "@/lib/collaborator-documents";
+import {
+  resolveDocumentExpiresAt,
+  podeArquivarAutomaticamente,
+  CATEGORIAS_PROTEGIDAS,
+} from "@/domain/documents/retention-policy";
 import { isNoRowsError, queryFailure, logQueryFailure } from "@/lib/query-error";
 import { revalidatePath } from "next/cache";
 
@@ -39,7 +44,11 @@ export interface CollaboratorDocument {
 }
 
 const BUCKET = "collaborator-documents";
-const RETENTION_MONTHS = 3;
+
+// 🔴 `RETENTION_MONTHS = 3` vivia aqui e era aplicado a todas as categorias.
+//    A regra mudou de sítio: vive em `src/domain/documents/retention-policy.ts`
+//    e depende da categoria. Nenhum consumidor volta a calcular datas de
+//    expiração por sua conta.
 
 async function ensureBucket(admin: ReturnType<typeof createAdminClient>) {
   const { error } = await admin.storage.getBucket(BUCKET);
@@ -162,8 +171,10 @@ export async function uploadCollaboratorDocument(
 
   const { data: urlData } = admin.storage.from(BUCKET).getPublicUrl(path);
 
-  const expiresAt = new Date();
-  expiresAt.setMonth(expiresAt.getMonth() + RETENTION_MONTHS);
+  // 🔴 A data de expiração passa a depender da categoria. Antes eram três
+  //    meses para tudo — incluindo recibos de vencimento, que o cron diário
+  //    depois apagava do armazenamento.
+  const expiresAt = resolveDocumentExpiresAt(category);
 
   const { data, error: dbError } = await admin
     .from("collaborator_documents")
@@ -179,7 +190,7 @@ export async function uploadCollaboratorDocument(
       visible_to_collaborator: visible,
       uploaded_by:             guard.profile.id,
       uploaded_by_role:        "gestor" as const,
-      expires_at:              expiresAt.toISOString(),
+      expires_at:              expiresAt,
     })
     .select("id")
     .single();
@@ -425,8 +436,8 @@ export async function uploadDamageReport(formData: FormData): Promise<{
 
     const { data: urlData } = admin.storage.from(BUCKET).getPublicUrl(path);
 
-    const expiresAt = new Date();
-    expiresAt.setMonth(expiresAt.getMonth() + RETENTION_MONTHS);
+    // Categoria "avaria": mantém os três meses de sempre, agora pela fonte única.
+    const expiresAt = resolveDocumentExpiresAt("avaria");
 
     const { data, error: dbError } = await admin
       .from("collaborator_documents")
@@ -442,7 +453,7 @@ export async function uploadDamageReport(formData: FormData): Promise<{
         visible_to_collaborator: true,
         uploaded_by:             user.id,
         uploaded_by_role:        "colaboradora" as const,
-        expires_at:              expiresAt.toISOString(),
+        expires_at:              expiresAt,
       })
       .select("id")
       .single();
@@ -538,8 +549,8 @@ export async function saveDamageReportRecord(params: {
 
     const { data: urlDerivado } = admin.storage.from(BUCKET).getPublicUrl(params.path);
 
-    const expiresAt = new Date();
-    expiresAt.setMonth(expiresAt.getMonth() + RETENTION_MONTHS);
+    // Categoria "avaria": mantém os três meses de sempre, agora pela fonte única.
+    const expiresAt = resolveDocumentExpiresAt("avaria");
 
     const { data, error: dbError } = await admin
       .from("collaborator_documents")
@@ -555,7 +566,7 @@ export async function saveDamageReportRecord(params: {
         visible_to_collaborator: true,
         uploaded_by:             user.id,
         uploaded_by_role:        "colaboradora" as const,
-        expires_at:              expiresAt.toISOString(),
+        expires_at:              expiresAt,
       })
       .select("id")
       .single();
@@ -703,14 +714,23 @@ export async function archiveExpiredDocuments(_companyId?: string): Promise<{
   const { admin } = guard;
   const companyId = guard.profile.company_id;
 
-  const { data: expired } = await admin
-    .from("collaborator_documents")
-    .select("id, file_url")
-    .eq("company_id", companyId)
-    .lt("expires_at", new Date().toISOString())
-    .is("archived_at", null);
+  // Este é o segundo caminho destrutivo do módulo — o gémeo manual do cron.
+  // Leva as mesmas duas barreiras, pela mesma razão: quem proteger só um dos
+  // dois deixou a porta aberta e não sabe.
+  const agora = new Date().toISOString();
 
-  const docs = expired ?? [];
+  const { data: expiredRaw, error: expiredErr } = await admin
+    .from("collaborator_documents")
+    .select("id, file_url, category")
+    .eq("company_id", companyId)
+    .lt("expires_at", agora)
+    .is("archived_at", null)
+    .not("category", "in", `(${CATEGORIAS_PROTEGIDAS.join(",")})`);
+
+  // Uma leitura falhada não autoriza uma destruição parcial.
+  if (expiredErr) return queryFailure("archiveExpiredDocuments:expired", expiredErr);
+
+  const docs = (expiredRaw ?? []).filter((d) => podeArquivarAutomaticamente(d.category));
 
   const paths = docs
     .map((d) => {
@@ -720,16 +740,24 @@ export async function archiveExpiredDocuments(_companyId?: string): Promise<{
     .filter((p): p is string => p !== null);
 
   if (paths.length > 0) {
-    await admin.storage.from(BUCKET).remove(paths);
+    const { error: storageErr } = await admin.storage.from(BUCKET).remove(paths);
+    if (storageErr) {
+      logQueryFailure("archiveExpiredDocuments:storage", storageErr);
+      return { ok: false, error: "Não foi possível arquivar os documentos. Nada foi alterado." };
+    }
   }
 
-  const { error } = await admin
-    .from("collaborator_documents")
-    .update({ archived_at: new Date().toISOString() })
-    .eq("company_id", companyId)
-    .lt("expires_at", new Date().toISOString())
-    .is("archived_at", null);
+  // Marca apenas os que foram efetivamente processados — nunca um `update` por
+  // data, que voltaria a apanhar as categorias protegidas.
+  if (docs.length > 0) {
+    const { error } = await admin
+      .from("collaborator_documents")
+      .update({ archived_at: agora })
+      .eq("company_id", companyId)
+      .in("id", docs.map((d) => d.id));
 
-  if (error) return { ok: false, error: error.message };
+    if (error) return queryFailure("archiveExpiredDocuments:update", error);
+  }
+
   return { ok: true, count: docs.length };
 }
