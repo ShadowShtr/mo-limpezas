@@ -54,7 +54,12 @@ describe("parseArgs", () => {
   });
 
   it("KNOWN_FLAGS é exatamente o conjunto documentado", () => {
-    expect(new Set(KNOWN_FLAGS)).toEqual(new Set(["--dry-run", "--apply", "--baseline", "--seed", "--confirm-production"]));
+    // `--only` entrou na P0G: aplicar exatamente uma migration deixou de ser
+    // opcional a partir do momento em que existe uma migration congelada na
+    // fila — ver supabase/migration-policy.json, blockedMigrations.
+    expect(new Set(KNOWN_FLAGS)).toEqual(new Set([
+      "--dry-run", "--apply", "--baseline", "--seed", "--confirm-production", "--only",
+    ]));
   });
 });
 

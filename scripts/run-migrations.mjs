@@ -47,6 +47,12 @@
 //     → marca tudo como aplicado SEM executar (1ª utilização numa base já existente)
 //   node scripts/run-migrations.mjs --seed --apply --confirm-production <ref>
 //     → seed.sql (só em base vazia/dev; recusa se companies > 0)
+//   node scripts/run-migrations.mjs --apply --only 077_x.sql --confirm-production <ref>
+//     → aplica EXATAMENTE essa migration. Correspondência exata do nome do
+//       ficheiro; nunca prefixo, nunca "a partir de". Existe porque "aplicar
+//       todas as pendentes" deixou de ser aceitável enquanto houver uma
+//       migration congelada na fila — ver supabase/migration-policy.json,
+//       blockedMigrations.
 // ============================================================================
 
 import pg from "pg";
@@ -54,6 +60,7 @@ import { readFileSync, existsSync } from "fs";
 import { join, dirname } from "path";
 import { fileURLToPath } from "url";
 import { assertNoDuplicateExceptions } from "./lib/migration-checksum.mjs";
+import { assertValidBlockedEntries } from "./lib/migration-blocklist.mjs";
 import {
   parseArgs,
   validateArgCombination,
@@ -75,13 +82,17 @@ if (!combinationCheck.ok) {
   process.exit(1);
 }
 
-const { apply: APPLY, baseline: BASELINE, seed: SEED, confirmProductionValue: CONFIRM_PRODUCTION_VALUE } = parsedArgs;
+const { apply: APPLY, baseline: BASELINE, seed: SEED, confirmProductionValue: CONFIRM_PRODUCTION_VALUE, onlyValue: ONLY } = parsedArgs;
 
 // supabase/migration-policy.json é opcional aqui (só knownChecksumExceptions
 // — este runner não tem o conceito de activeMigrations/frozenDrafts).
 const policy = existsSync(POLICY_FILE) ? JSON.parse(readFileSync(POLICY_FILE, "utf8")) : {};
 const knownChecksumExceptions = policy.knownChecksumExceptions ?? [];
 assertNoDuplicateExceptions(knownChecksumExceptions);
+// Migrations deliberadamente congeladas. A política versionada é a fonte —
+// nunca uma condição escrita no runner, que ninguém vê a desaparecer.
+const blockedMigrations = policy.blockedMigrations ?? [];
+assertValidBlockedEntries(blockedMigrations);
 
 // .env.local (sem dependências externas)
 for (const f of [".env.local", ".env"]) {
@@ -130,6 +141,8 @@ async function main() {
     baseline: BASELINE,
     seed: SEED,
     knownChecksumExceptions,
+    blockedMigrations,
+    only: ONLY,
   });
 
   await client.end();

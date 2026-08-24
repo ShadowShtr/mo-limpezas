@@ -24,6 +24,7 @@ export const KNOWN_FLAGS = Object.freeze([
   "--baseline",
   "--seed",
   "--confirm-production",
+  "--only",
 ]);
 
 /**
@@ -33,6 +34,7 @@ export const KNOWN_FLAGS = Object.freeze([
 export function parseArgs(argv) {
   const unknownArgs = [];
   let confirmProductionValue = null;
+  let onlyValue = null;
   let dryRun = false;
   let apply = false;
   let baseline = false;
@@ -45,6 +47,11 @@ export function parseArgs(argv) {
       i++; // consome o valor, não é uma flag independente
       continue;
     }
+    if (arg === "--only") {
+      onlyValue = argv[i + 1] ?? null;
+      i++; // consome o valor
+      continue;
+    }
     if (!KNOWN_FLAGS.includes(arg)) {
       unknownArgs.push(arg);
       continue;
@@ -55,7 +62,7 @@ export function parseArgs(argv) {
     else if (arg === "--seed") seed = true;
   }
 
-  return { dryRun, apply, baseline, seed, confirmProductionValue, unknownArgs };
+  return { dryRun, apply, baseline, seed, confirmProductionValue, onlyValue, unknownArgs };
 }
 
 /**
@@ -85,6 +92,30 @@ export function validateArgCombination(parsed) {
   }
   if (parsed.baseline && parsed.seed) {
     return { ok: false, error: "--baseline e --seed não podem ser combinados." };
+  }
+  // ── --only: exatamente uma migration, e mais nada ────────────────────────
+  //
+  // 🔴 As combinações abaixo são rejeitadas por serem contraditórias na
+  //    intenção, não por serem tecnicamente impossíveis:
+  //
+  //    · `--only` diz «só esta»; `--baseline` diz «marca todas sem executar».
+  //      Juntos, o mais provável é que quem escreveu quisesse uma coisa e
+  //      recebesse a outra — e a outra escreve no ledger.
+  //    · `--seed` insere dados fictícios e não tem nada que ver com aplicar
+  //      uma migration escolhida.
+  if (parsed.onlyValue !== null && parsed.baseline) {
+    return { ok: false, error: "--only e --baseline não podem ser combinados." };
+  }
+  if (parsed.onlyValue !== null && parsed.seed) {
+    return { ok: false, error: "--only e --seed não podem ser combinados." };
+  }
+  if (parsed.onlyValue !== null && parsed.onlyValue.trim() === "") {
+    return { ok: false, error: "--only exige o nome exato do ficheiro da migration." };
+  }
+  // `--only` sem valor consome a flag seguinte como se fosse o nome; melhor
+  // recusar do que aplicar uma migration chamada "--apply".
+  if (parsed.onlyValue !== null && parsed.onlyValue.startsWith("--")) {
+    return { ok: false, error: `--only recebeu "${parsed.onlyValue}" em vez de um nome de ficheiro.` };
   }
   if ((parsed.baseline || parsed.seed) && !parsed.apply) {
     return {
