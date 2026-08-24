@@ -9,6 +9,9 @@ remeter para ele.
 | Documento | O que responde |
 |---|---|
 | [`../AGENTS.md`](../AGENTS.md) | **REGRA ZERO.** O que é proibido fazer sem autorização explícita. Acima de tudo o resto. |
+| [`HANDOFF-2026-08-24.md`](HANDOFF-2026-08-24.md) | **Retoma atual.** Estado remoto, trabalho feito no Claude, repair preparado, avisos, migrations e ordem para continuar noutro PC. |
+| [`FINANCEIRO-PENDENTE.md`](FINANCEIRO-PENDENTE.md) | Estado do repair histórico preparado e decisões financeiras ainda paradas em gate. |
+| [`FINANCEIRO-PAGAMENTOS-FONTE-UNICA-PLANO.md`](FINANCEIRO-PAGAMENTOS-FONTE-UNICA-PLANO.md) | Plano completo para unificar Contas/Pagamentos e blindar o fluxo obrigação → pagamento → caixa → conciliação. |
 | [`PRODUCTION-RUNBOOK.md`](PRODUCTION-RUNBOOK.md) | Como fazer deploy, rollback, rotação de chaves e resposta a incidentes. |
 | [`ARCHITECTURE.md`](ARCHITECTURE.md) | Onde vive cada coisa e como uma alteração atravessa o sistema. |
 | [`ENGINEERING-STANDARD.md`](ENGINEERING-STANDARD.md) | Como implementar, testar e fechar uma alteração. |
@@ -18,13 +21,16 @@ remeter para ele.
 | Documento | O que responde |
 |---|---|
 | [`PLANO-MESTRE.md`](PLANO-MESTRE.md) | As tasks T00–T19, a ordem obrigatória e o código preparado. |
+| [`FINANCEIRO-PAGAMENTOS-FONTE-UNICA-PLANO.md`](FINANCEIRO-PAGAMENTOS-FONTE-UNICA-PLANO.md) | Próxima frente de produto do Financeiro, ainda não iniciada. |
 | [`code-audit/README.md`](code-audit/README.md) | Inventário integral do repositório e matriz de classificação (T00). |
 
 ## 3. Estado e histórico
 
 | Documento | O que responde |
 |---|---|
-| [`../CLAUDE.md`](../CLAUDE.md) | Estado atual do projeto e pontos de paragem por sessão. |
+| [`HANDOFF-2026-08-24.md`](HANDOFF-2026-08-24.md) | Snapshot da sessão atual e ponto exato de retomada. |
+| [`FINANCEIRO-PENDENTE.md`](FINANCEIRO-PENDENTE.md) | Repair histórico preparado, não executado, e fotografia financeira atual da branch de repair. |
+| [`../CLAUDE.md`](../CLAUDE.md) | Estado acumulado do projeto e pontos de paragem por sessão. |
 | [`../AUDITORIA-CONSOLIDADA.md`](../AUDITORIA-CONSOLIDADA.md) | Auditoria consolidada anterior. |
 | [`../AUDITORIA-REVERSOES.md`](../AUDITORIA-REVERSOES.md) | Análise de reversões. |
 | [`auditoria-tecnica-senior-2026-06-20.md`](auditoria-tecnica-senior-2026-06-20.md) | Auditoria técnica de 2026-06-20. |
@@ -42,9 +48,9 @@ remeter para ele.
 |---|---|
 | Uma regra que passa a valer sempre | `ENGINEERING-STANDARD.md` ou `ARCHITECTURE.md` |
 | Um procedimento de produção | `PRODUCTION-RUNBOOK.md` |
-| O que ficou feito nesta sessão | `../CLAUDE.md` |
+| O que ficou feito nesta sessão | `HANDOFF-YYYY-MM-DD.md` + `../CLAUDE.md` quando necessário |
 | O relato de um incidente | `PRODUCTION-RUNBOOK.md` (procedimento) + `../CLAUDE.md` (relato) |
-| Uma task planeada | `PLANO-MESTRE.md` |
+| Uma task planeada | `PLANO-MESTRE.md` ou documento dedicado da frente |
 | Prova de que algo foi verificado | `code-audit/README.md` ou a própria PR |
 
 Regra: **histórico não é instrução.** Um registo do que aconteceu numa sessão
