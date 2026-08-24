@@ -28,6 +28,12 @@ import {
   knownExceptionMatches,
 } from "./migration-checksum.mjs";
 import { detectarDrift, formatarRelatorioDrift } from "./migration-drift-guard.mjs";
+import {
+  assertValidBlockedEntries,
+  splitBlocked,
+  findBlockedEntry,
+  resolveOnlyTarget,
+} from "./migration-blocklist.mjs";
 
 /** SELECT puro — nunca CREATE. */
 export async function tableExists(client, schemaDotTable) {
@@ -127,11 +133,16 @@ export async function runMigrations({
   baseline = false,
   seed = false,
   knownChecksumExceptions = [],
+  blockedMigrations = [],
+  only = null,
   log = console.log,
   logWarn = console.warn,
   logError = console.error,
 }) {
   assertNoDuplicateExceptions(knownChecksumExceptions);
+  // Uma lista de bloqueios malformada não pode degradar em "nada bloqueado":
+  // seria a falha silenciosa mais cara deste módulo.
+  assertValidBlockedEntries(blockedMigrations);
 
   // ── Leitura de estado — sempre SELECT, em qualquer modo. ──────────────
   const hasTable = await tableExists(client, "public._migrations");
@@ -192,7 +203,23 @@ export async function runMigrations({
   }
 
   if (baseline) {
-    const toBaseline = files.filter((f) => !applied.has(f));
+    const candidatasBaseline = files.filter((f) => !applied.has(f));
+
+    // 🔴 O baseline marca como aplicada tudo o que está ausente do ledger, sem
+    //    executar nada. Aplicado a uma migration bloqueada, transformaria
+    //    "não executámos a 070" em "o ledger diz que executámos a 070" — uma
+    //    mentira gravada na tabela que existe precisamente para não mentir, e
+    //    que faria a 070 desaparecer para sempre de qualquer relatório.
+    const { blocked: baselineBloqueadas, eligible: toBaseline } =
+      splitBlocked(blockedMigrations, candidatasBaseline);
+
+    if (baselineBloqueadas.length > 0) {
+      logWarn("⛔ BLOCKED_PENDING — não serão marcadas por este baseline:");
+      for (const f of baselineBloqueadas) {
+        logWarn(`   ${f} — ${findBlockedEntry(blockedMigrations, f).reason}`);
+      }
+      logWarn("   Continuam ausentes do ledger, que é o estado verdadeiro.");
+    }
 
     // ⚠️ `--baseline` é a única via legítima para o ledger ganhar linhas sem
     //    executar SQL, e é exactamente por isso que precisa de dizer o que
@@ -213,15 +240,16 @@ export async function runMigrations({
 
     if (apply) {
       log(`📋 ${toBaseline.length} migração(ões) a marcar como aplicada(s) (baseline, sem executar): ${toBaseline.join(", ") || "(nenhuma)"}`);
-      for (const f of files) {
-        if (!applied.has(f)) {
-          const sum = checksumForNewMigration(readFileSync(join(migrationsDir, f), "utf8"));
-          await client.query(
-            "INSERT INTO public._migrations (name, checksum) VALUES ($1, $2) ON CONFLICT (name) DO UPDATE SET checksum = EXCLUDED.checksum",
-            [f, sum],
-          );
-          log(`📌 baseline: ${f}`);
-        }
+      // Percorre a lista já filtrada — nunca `files` outra vez. Reintroduzir
+      // aqui um `for (const f of files)` reabria o caminho para o ledger
+      // ganhar uma linha da 070.
+      for (const f of toBaseline) {
+        const sum = checksumForNewMigration(readFileSync(join(migrationsDir, f), "utf8"));
+        await client.query(
+          "INSERT INTO public._migrations (name, checksum) VALUES ($1, $2) ON CONFLICT (name) DO UPDATE SET checksum = EXCLUDED.checksum",
+          [f, sum],
+        );
+        log(`📌 baseline: ${f}`);
       }
       log("✅ Baseline concluído — nada foi executado, tudo marcado como aplicado (com checksum).");
     } else {
@@ -233,9 +261,63 @@ export async function runMigrations({
     return { exitCode: 0 };
   }
 
-  const pending = files.filter((f) => !applied.has(f));
+  const pendingTodas = files.filter((f) => !applied.has(f));
+
+  // ── BLOCKED_PENDING ────────────────────────────────────────────────────
+  //
+  // 🔴 É aqui que a lacuna se fecha. Antes, "pendente" era a única categoria,
+  //    e uma migration congelada era indistinguível de uma que ainda não teve
+  //    oportunidade de correr — por isso entrava na fila do `--apply` normal.
+  //
+  //    Bloqueada continua ausente do ledger e continua a aparecer no
+  //    relatório, com o motivo. O que deixa de ser é elegível.
+  const { blocked, eligible: pending } = splitBlocked(blockedMigrations, pendingTodas);
+
+  if (blocked.length > 0) {
+    log("⛔ BLOCKED_PENDING — ausentes do ledger e deliberadamente não aplicáveis:");
+    for (const f of blocked) {
+      log(`   ${f}`);
+      log(`      Motivo: ${findBlockedEntry(blockedMigrations, f).reason}`);
+    }
+  }
+
+  // ── --only: exatamente uma migration ──────────────────────────────────
+  const alvo = resolveOnlyTarget({
+    only,
+    files,
+    appliedNames: new Set(applied.keys()),
+    blockedEntries: blockedMigrations,
+  });
+
+  if (alvo.kind === "invalid" || alvo.kind === "blocked") {
+    logError(`❌ ${alvo.error}`);
+    return { exitCode: 1 };
+  }
+
+  if (alvo.kind === "already-applied") {
+    // Zero escritas, e um código de saída de sucesso: repetir o comando depois
+    // de ele ter corrido não é um erro, é a definição de idempotente.
+    log(`✅ ${alvo.file} já está aplicada (ledger). Nada a fazer.`);
+    return { exitCode: 0, targetState: "ALREADY_APPLIED" };
+  }
+
+  // A partir daqui, `pending` é o que este run considera para execução.
+  // Com `--only`, é exatamente um ficheiro — nunca "a partir de".
+  const selecionadas = alvo.kind === "target" ? [alvo.file] : pending;
+
+  if (alvo.kind === "target") {
+    log(`🎯 --only ${alvo.file} — exatamente uma migration será considerada.`);
+    const outras = pending.filter((f) => f !== alvo.file);
+    if (outras.length > 0) {
+      log(`   Ficam por aplicar (não selecionadas): ${outras.join(", ")}`);
+    }
+  }
+
+  // A redação desta linha é contrato: outros testes procuram-na para provar
+  // que migrations já aplicadas não reaparecem como pendentes. Continua a
+  // descrever as pendentes ELEGÍVEIS — as bloqueadas saíram acima, com nome.
   log(`📋 ${pending.length} migração(ões) pendente(s)${pending.length > 0 ? ": " + pending.join(", ") : ""}`);
-  if (pending.length === 0) log("✅ Nenhuma migração pendente.");
+  if (pending.length === 0 && blocked.length === 0) log("✅ Nenhuma migração pendente.");
 
   // ── Drift ledger↔schema — SEMPRE, e antes da primeira escrita. ──────────
   //
@@ -247,8 +329,8 @@ export async function runMigrations({
   //
   // Corre nos dois modos. Em dry-run é informação (é o que o `--dry-run` deve
   // dizer); em apply é um travão.
-  if (pending.length > 0) {
-    const drift = await detectarDrift({ client, pendentes: pending });
+  if (selecionadas.length > 0) {
+    const drift = await detectarDrift({ client, pendentes: selecionadas });
 
     if (drift.achados.length > 0) {
       const checksumEsperado = {};
@@ -268,7 +350,7 @@ export async function runMigrations({
     }
   }
 
-  for (const file of pending) {
+  for (const file of selecionadas) {
     if (!apply) { log(`(dry-run) aplicaria: ${file}`); continue; }
     const sql = readFileSync(join(migrationsDir, file), "utf8");
     log(`📦 ${file}...`);
