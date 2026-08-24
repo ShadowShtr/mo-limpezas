@@ -13,6 +13,7 @@ import {
   type CollaboratorDocument,
 } from "@/app/actions/collaborator-documents";
 import type { DocumentCategory } from "@/lib/collaborator-documents";
+import { mostraExpiracao, SEM_ELIMINACAO_AUTOMATICA } from "@/domain/documents/retention-policy";
 
 const CATEGORIES: { value: DocumentCategory; label: string }[] = [
   { value: "recibo_salario", label: "Folha de Salário" },
@@ -52,6 +53,21 @@ function fmtDate(iso: string) {
   return new Date(iso).toLocaleDateString("pt-PT", { day: "2-digit", month: "short", year: "numeric" });
 }
 
+/**
+ * 🔴 A coluna `expires_at` deixou de ser a verdade sobre expiração.
+ *
+ * Linhas antigas de recibos de vencimento continuam a ter uma data lá gravada
+ * — não são alteradas, porque mexer em dados históricos para corrigir um
+ * defeito de código é a troca errada. Mas o cron já não as apaga, portanto
+ * dizer «Expira a 3 de novembro» seria mentir ao gestor, e é o tipo de mentira
+ * que faz alguém correr a fazer downloads de emergência.
+ *
+ * A pergunta passa a ser feita à política, e só depois à coluna.
+ */
+function expiraMesmo(doc: { category: DocumentCategory; expires_at: string | null }): boolean {
+  return mostraExpiracao(doc.category) && doc.expires_at !== null;
+}
+
 function isExpiringSoon(expiresAt: string | null): boolean {
   if (!expiresAt) return false;
   const diff = new Date(expiresAt).getTime() - Date.now();
@@ -86,7 +102,7 @@ export function DocumentsSection({ collaboratorId, initialDocuments }: Props) {
   const [uploadError, setUploadError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const backupWarningDocs = documents.filter((d) => isBackupWarning(d.expires_at));
+  const backupWarningDocs = documents.filter((d) => expiraMesmo(d) && isBackupWarning(d.expires_at));
 
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const f = e.target.files?.[0] ?? null;
@@ -212,7 +228,7 @@ export function DocumentsSection({ collaboratorId, initialDocuments }: Props) {
             <li
               key={doc.id}
               className={`flex items-center gap-3 px-5 py-3 hover:bg-white/40 transition-colors group ${
-                isExpiringSoon(doc.expires_at) ? "bg-amber-50/30" : ""
+                expiraMesmo(doc) && isExpiringSoon(doc.expires_at) ? "bg-amber-50/30" : ""
               }`}
             >
               <div className="shrink-0">{fileIcon(doc.mime_type)}</div>
@@ -241,9 +257,11 @@ export function DocumentsSection({ collaboratorId, initialDocuments }: Props) {
                   {fmtDate(doc.created_at)}
                   {doc.file_size ? ` · ${fmtSize(doc.file_size)}` : ""}
                   {doc.uploaded_by_name ? ` · ${doc.uploaded_by_name}` : ""}
-                  {doc.expires_at ? ` · Expira ${fmtDate(doc.expires_at)}` : ""}
+                  {expiraMesmo(doc) && doc.expires_at
+                    ? ` · Expira ${fmtDate(doc.expires_at)}`
+                    : ` · ${SEM_ELIMINACAO_AUTOMATICA}`}
                 </p>
-                {isExpiringSoon(doc.expires_at) && (
+                {expiraMesmo(doc) && isExpiringSoon(doc.expires_at) && (
                   <p className="text-[10px] text-amber-600 font-medium">
                     Arquivamento automático em breve
                   </p>

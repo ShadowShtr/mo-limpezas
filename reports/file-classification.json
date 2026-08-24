@@ -1,18 +1,18 @@
 {
   "generatedBy": "scripts/audit-file-inventory.mjs",
-  "totalFiles": 666,
+  "totalFiles": 668,
   "byStatus": {
-    "MANTER": 648,
+    "MANTER": 650,
     "STANDBY": 18
   },
   "byCategory": {
     "route-ui": 135,
-    "test": 111,
+    "test": 112,
     "migration": 78,
     "lib": 65,
     "script": 47,
     "doc": 43,
-    "domain": 42,
+    "domain": 43,
     "server-action": 41,
     "component": 30,
     "doc-historico": 16,
@@ -29,7 +29,7 @@
     "other": 1
   },
   "byConfidence": {
-    "alta": 650,
+    "alta": 652,
     "média": 10,
     "baixa": 6
   },
@@ -4005,7 +4005,7 @@
       "risks": [],
       "signals": {
         "supabase": 2,
-        "sqlWrite": 28,
+        "sqlWrite": 27,
         "dynamicImport": 4
       },
       "action": "nenhuma",
@@ -5401,6 +5401,38 @@
       "risks": [],
       "signals": {
         "dynamicImport": 4
+      },
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/__tests__/payroll-document-retention.test.ts",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [
+        "supabase",
+        "env"
+      ],
+      "risks": [],
+      "signals": {
+        "supabase": 1,
+        "env": 2,
+        "sqlWrite": 10,
+        "unknownCast": 1,
+        "fallbackArray": 1,
+        "dynamicImport": 2
       },
       "action": "nenhuma",
       "reason": "suite de testes — corre por convenção do vitest",
@@ -10670,15 +10702,15 @@
         "revalidatePath(4)"
       ],
       "risks": [
-        "erro-de-query-ignorado(12)"
+        "erro-de-query-ignorado(11)"
       ],
       "signals": {
         "supabase": 18,
         "serverAction": 1,
         "write": 7,
-        "sqlWrite": 11,
+        "sqlWrite": 13,
         "consoleErr": 1,
-        "ignoredError": 12,
+        "ignoredError": 11,
         "fallbackArray": 5,
         "revalidatePath": 4
       },
@@ -11953,8 +11985,10 @@
       "category": "api-route",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 0,
-      "consumerSample": [],
+      "consumers": 1,
+      "consumerSample": [
+        "src/__tests__/payroll-document-retention.test.ts"
+      ],
       "autoLoaded": true,
       "referencedBy": [
         "docs"
@@ -11964,17 +11998,18 @@
         "write"
       ],
       "risks": [
-        "erro-de-query-ignorado(3)"
+        "erro-de-query-ignorado(2)"
       ],
       "signals": {
         "supabase": 2,
         "write": 1,
         "sqlWrite": 1,
-        "ignoredError": 3,
+        "consoleErr": 1,
+        "ignoredError": 2,
         "fallbackArray": 4
       },
       "action": "nenhuma",
-      "reason": "em uso: convenção do Next",
+      "reason": "em uso: convenção do Next, 1 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": true,
@@ -13810,6 +13845,34 @@
       }
     },
     {
+      "path": "src/domain/documents/retention-policy.ts",
+      "category": "domain",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 5,
+      "consumerSample": [
+        "src/__tests__/payroll-document-retention.test.ts",
+        "src/app/(app)/app/perfil/_components/documents-section.tsx",
+        "src/app/(dashboard)/dashboard/colaboradores/[id]/_components/documents-section.tsx"
+      ],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "sqlWrite": 2
+      },
+      "action": "nenhuma",
+      "reason": "em uso: 5 consumidor(es)",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
       "path": "src/domain/finance-v2/aggregate.ts",
       "category": "domain",
       "status": "MANTER",
@@ -15188,7 +15251,7 @@
       "category": "lib",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 5,
+      "consumers": 6,
       "consumerSample": [
         "src/__tests__/collaborator-document-authorization.test.ts",
         "src/__tests__/collaborator-documents.test.ts",
@@ -15204,7 +15267,7 @@
         "fallbackArray": 1
       },
       "action": "nenhuma",
-      "reason": "em uso: 5 consumidor(es)",
+      "reason": "em uso: 6 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
