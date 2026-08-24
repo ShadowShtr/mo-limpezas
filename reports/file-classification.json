@@ -1,8 +1,8 @@
 {
   "generatedBy": "scripts/audit-file-inventory.mjs",
-  "totalFiles": 668,
+  "totalFiles": 669,
   "byStatus": {
-    "MANTER": 650,
+    "MANTER": 651,
     "STANDBY": 18
   },
   "byCategory": {
@@ -19,7 +19,7 @@
     "api-route": 16,
     "config": 12,
     "asset": 8,
-    "src-other": 5,
+    "src-other": 6,
     "report": 4,
     "script-historico": 4,
     "ci": 2,
@@ -29,7 +29,7 @@
     "other": 1
   },
   "byConfidence": {
-    "alta": 652,
+    "alta": 653,
     "média": 10,
     "baixa": 6
   },
@@ -14630,7 +14630,7 @@
       "category": "domain",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 11,
+      "consumers": 12,
       "consumerSample": [
         "src/__tests__/update-notice-modal.test.tsx",
         "src/__tests__/update-notices-eligibility.test.ts",
@@ -14645,7 +14645,7 @@
       "risks": [],
       "signals": {},
       "action": "nenhuma",
-      "reason": "em uso: 11 consumidor(es), configuração",
+      "reason": "em uso: 12 consumidor(es), configuração",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -16667,6 +16667,32 @@
     },
     {
       "path": "src/release-notes/2026-08-24-documentos-mais-protegidos.ts",
+      "category": "src-other",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 1,
+      "consumerSample": [
+        "src/release-notes/index.ts"
+      ],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "sqlWrite": 1
+      },
+      "action": "nenhuma",
+      "reason": "em uso: 1 consumidor(es)",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/release-notes/2026-08-24-recibos-sem-eliminacao.ts",
       "category": "src-other",
       "status": "MANTER",
       "confidence": "alta",
