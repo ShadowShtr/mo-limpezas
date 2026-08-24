@@ -18,6 +18,7 @@ remeter para ele.
 | Documento | O que responde |
 |---|---|
 | [`PLANO-MESTRE.md`](PLANO-MESTRE.md) | As tasks T00–T19, a ordem obrigatória e o código preparado. |
+| [`EXECUTION-STATUS-2026-08-24.md`](EXECUTION-STATUS-2026-08-24.md) | Reconciliação de 2026-08-24: o que já está no `master`, as branches que ainda carregam algo, os defeitos provados e a fila P0–P11. Inventário, não regra. |
 | [`code-audit/README.md`](code-audit/README.md) | Inventário integral do repositório e matriz de classificação (T00). |
 
 ## 3. Estado e histórico

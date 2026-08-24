@@ -16,6 +16,16 @@
 > - os testes, riscos, dependências, notas iniciais, metas e condições de conclusão;
 > - os itens concluídos, os itens pendentes e os pontos em standby.
 
+## Fila atual de execução
+
+O estado detalhado de cada frente — o que já está no `master`, o que ainda vive
+só numa branch antiga, e por que ordem se ataca — vive em
+[`EXECUTION-STATUS-2026-08-24.md`](EXECUTION-STATUS-2026-08-24.md).
+
+Esse documento é **inventário**, não regra: este plano continua canónico para o
+roadmap. Quando os dois discordarem sobre *o que fazer*, vale este; quando
+discordarem sobre *o que existe hoje*, volta-se a medir o repositório.
+
 ## Objetivo mínimo obrigatório
 
 Todas as áreas analisadas devem alcançar nota **7/10 ou superior**, com evidência real de testes, integração, compatibilidade e funcionamento conjunto.

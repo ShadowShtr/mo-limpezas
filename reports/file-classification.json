@@ -1,8 +1,8 @@
 {
   "generatedBy": "scripts/audit-file-inventory.mjs",
-  "totalFiles": 664,
+  "totalFiles": 665,
   "byStatus": {
-    "MANTER": 646,
+    "MANTER": 647,
     "STANDBY": 18
   },
   "byCategory": {
@@ -11,7 +11,7 @@
     "migration": 78,
     "lib": 65,
     "script": 47,
-    "doc": 43,
+    "doc": 44,
     "domain": 42,
     "server-action": 41,
     "component": 30,
@@ -29,7 +29,7 @@
     "other": 1
   },
   "byConfidence": {
-    "alta": 648,
+    "alta": 649,
     "média": 10,
     "baixa": 6
   },
@@ -490,6 +490,30 @@
       "sideEffects": [],
       "risks": [],
       "signals": {},
+      "action": "nenhuma",
+      "reason": "documentação",
+      "manualDecision": false
+    },
+    {
+      "path": "docs/EXECUTION-STATUS-2026-08-24.md",
+      "category": "doc",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [
+        "docs"
+      ],
+      "sideEffects": [
+        "write"
+      ],
+      "risks": [],
+      "signals": {
+        "write": 1,
+        "sqlWrite": 10,
+        "fallbackArray": 2
+      },
       "action": "nenhuma",
       "reason": "documentação",
       "manualDecision": false
@@ -11589,7 +11613,9 @@
         "src/app/(dashboard)/dashboard/configuracoes/page.tsx"
       ],
       "autoLoaded": false,
-      "referencedBy": [],
+      "referencedBy": [
+        "docs"
+      ],
       "sideEffects": [
         "write",
         "revalidatePath(2)"
