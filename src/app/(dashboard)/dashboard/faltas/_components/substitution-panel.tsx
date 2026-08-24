@@ -18,10 +18,16 @@ export function SubstitutionPanel({ absence, onClose }: Props) {
   const [selected, setSelected] = useState<string | null>(absence.replaced_by);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
+  /**
+   * Uma fonte opcional falhou: a lista de quem pode ir está correta, a ordem
+   * por afinidade é que ficou pior. Distinto de erro — ver o motor.
+   */
+  const [rankingDegraded, setRankingDegraded] = useState(false);
 
   useEffect(() => {
     async function load() {
       setLoading(true);
+      setError(null);
       const result = await getSubstituteSuggestions(
         absence.collaborator_id,
         absence.starts_on,
@@ -29,7 +35,14 @@ export function SubstitutionPanel({ absence, onClose }: Props) {
       );
       if (result.ok) {
         setSuggestions(result.data);
+        setRankingDegraded(result.rankingDegraded);
       } else {
+        // 🔴 Limpar a lista antiga. Um erro numa segunda leitura não pode
+        //    deixar no ecrã sugestões calculadas noutro momento — quem as
+        //    lesse estaria a escolher sobre disponibilidade que já não foi
+        //    confirmada.
+        setSuggestions([]);
+        setRankingDegraded(false);
         setError(result.error);
       }
       setLoading(false);
@@ -103,6 +116,12 @@ export function SubstitutionPanel({ absence, onClose }: Props) {
             </div>
           ) : (
             <div className="space-y-2">
+              {rankingDegraded && (
+                <div className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-3">
+                  Não foi possível ler as competências de {absence.collaborator_name}.
+                  A lista está correta, mas a ordem por afinidade pode não estar.
+                </div>
+              )}
               <p className="text-xs text-[var(--color-text-muted)] mb-3">
                 {suggestions.length} colaborador{suggestions.length !== 1 ? "es" : ""} disponível{suggestions.length !== 1 ? "eis" : ""}, ordenados por compatibilidade
               </p>
