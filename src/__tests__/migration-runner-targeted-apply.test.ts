@@ -159,6 +159,52 @@ describe("resolução de --only", () => {
   const files = Object.keys(CENARIO);
   const base = { files, appliedNames: new Set<string>(), blockedEntries: BLOQUEADAS };
 
+    it("I2. 🔴 com duas 077_, nenhum nome incompleto escolhe uma delas", () => {
+      // O caso que dá nome à regra. `--only 077` só parece inofensivo enquanto
+      // existe uma só 077_; com duas, "provavelmente era esta" não é resultado
+      // aceitável numa base de produção.
+      const duas = ["077_a.sql", "077_b.sql", "069_guard.sql"];
+      const b2 = { files: duas, appliedNames: new Set<string>(), blockedEntries: BLOQUEADAS };
+
+      // Sem `.sql`, a recusa vem logo da primeira guarda.
+      const semSufixo = resolveOnlyTarget({ ...b2, only: "077" });
+      expect(semSufixo.kind).toBe("invalid");
+      expect(semSufixo.error).toMatch(/nome exato/);
+
+      // Com `.sql` mas incompleto, chega ao ramo que informa sem decidir:
+      // nomeia as duas candidatas e não escolhe nenhuma.
+      const incompleto = resolveOnlyTarget({ ...b2, only: "077_.sql" });
+      expect(incompleto.kind).toBe("invalid");
+      expect(incompleto.error).toContain("077_a.sql");
+      expect(incompleto.error).toContain("077_b.sql");
+
+      // E o nome completo continua a escolher exatamente uma.
+      expect(resolveOnlyTarget({ ...b2, only: "077_a.sql" }))
+        .toEqual({ kind: "target", file: "077_a.sql" });
+      expect(resolveOnlyTarget({ ...b2, only: "077_b.sql" }))
+        .toEqual({ kind: "target", file: "077_b.sql" });
+    });
+
+    it("I3. 🔴 um alvo inexistente que é prefixo de outro ficheiro é recusado", () => {
+      // Nota de honestidade sobre este teste: a guarda do `.sql` já apanha
+      // `--only 077`, o que torna a comparação exata indistinguível de um
+      // `startsWith` para quase todo o input. Este é o caso que os separa —
+      // um nome que termina em `.sql`, que não existe, e que é prefixo de um
+      // ficheiro que existe.
+      //
+      // Com comparação exata: não encontrado, recusa.
+      // Com `startsWith`: encontraria o `.old` e devolveria como alvo um
+      // ficheiro que não está lá — o runner iria abrir uma transação para
+      // aplicar algo inexistente.
+      const colisao = ["076_notices.sql.old", "069_guard.sql"];
+      const b3 = { files: colisao, appliedNames: new Set<string>(), blockedEntries: BLOQUEADAS };
+
+      const r = resolveOnlyTarget({ ...b3, only: "076_notices.sql" });
+      expect(r.kind).toBe("invalid");
+      expect(r.error).toMatch(/não encontrado/);
+    });
+
+
   it("I. 🔴 prefixo não corresponde — exige o nome exato", () => {
     // `--only 077` parece inofensivo até existirem duas 077_, ou até o prefixo
     // apanhar mais do que se pensava. Em produção, «provavelmente era esta»
