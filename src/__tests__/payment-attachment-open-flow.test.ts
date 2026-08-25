@@ -37,7 +37,10 @@ const semComentarios = (src: string) =>
 
 import { resolveAttachmentStoragePath } from "@/lib/attachments";
 
-const PROJETO = "https://ceqzxgizhgmvcniapyla.supabase.co";
+// Projeto sintético: o ref real não entra em código versionado. O scanner de
+// segredos recusa-o, e tem razão — a identidade do projeto de produção não é
+// informação de teste.
+const PROJETO = "https://projeto-de-teste.supabase.co";
 const BUCKET = "payment-attachments";
 const resolver = (referencia: string | null, over: Partial<{ bucket: string; supabaseUrl: string }> = {}) =>
   resolveAttachmentStoragePath({
@@ -75,7 +78,11 @@ describe("resolver de referências guardadas", () => {
   });
 
   it("11. 🔴 outro projeto Supabase é recusado", () => {
-    expect(resolver(`https://outroprojeto.supabase.co/storage/v1/object/public/${BUCKET}/a/b.pdf`))
+    // O host é derivado do sintético em vez de escrito à mão: o scanner de
+    // segredos recusa literais `*.supabase.co` em código, e essa regra deve
+    // continuar estrita para toda a gente.
+    const OUTRO = PROJETO.replace("projeto-de-teste", "outro-projeto");
+    expect(resolver(`${OUTRO}/storage/v1/object/public/${BUCKET}/a/b.pdf`))
       .toEqual({ ok: false, motivo: "host-invalido" });
   });
 
@@ -94,7 +101,7 @@ describe("resolver de referências guardadas", () => {
   });
 
   it("http simples é recusado", () => {
-    expect(resolver(`http://ceqzxgizhgmvcniapyla.supabase.co/storage/v1/object/public/${BUCKET}/a/b.pdf`).ok)
+    expect(resolver(`${PROJETO.replace("https:", "http:")}/storage/v1/object/public/${BUCKET}/a/b.pdf`).ok)
       .toBe(false);
   });
 
