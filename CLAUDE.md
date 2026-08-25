@@ -80,6 +80,57 @@ não instrução a repetir.
 
 ## ⚡ PRÓXIMA TASK A EXECUTAR
 
+## 📍 ATUALIZAÇÃO — 2026-08-25 (estado atual do ledger de migrations)
+
+> 🔴 **O bloco de 2026-08-17, mais abaixo, é uma fotografia histórica daquele
+> dia e NÃO deve ser usado como estado atual.** Estava correto quando foi
+> escrito; deixou de o estar no dia seguinte. Foi lido como estado corrente
+> mais do que uma vez e levou a afirmações erradas em relatórios posteriores.
+
+Consulta read-only a `public._migrations` em 2026-08-25. Nenhuma escrita,
+nenhuma migration aplicada, nenhuma linha de ledger tocada.
+
+`LEDGER_ROWS = 77`
+
+| Migration | Ficheiro no repo | Linha no ledger | Checksum | Estado |
+|---|---|---|---|---|
+| 066 | ausente | ABSENT | — | nunca chegou ao master |
+| 067 | ausente | ABSENT | — | nunca chegou ao master |
+| 068 | sim | **PRESENT** | MATCH | aplicada |
+| 069 | sim | **PRESENT** | MATCH | aplicada |
+| 070 | sim | **ABSENT** | — | **BLOCKED_PENDING** |
+| 071 | sim | **PRESENT** | MATCH | aplicada |
+| 072 | sim | **PRESENT** | MATCH | aplicada |
+| 073 | sim | **PRESENT** | MATCH | aplicada |
+| 074 / 075 / 076 | sim | **PRESENT** | MATCH | aplicadas |
+| 077 | não está no master (vive na PR #73) | ABSENT | — | não aplicada |
+| 078 | não está no master (vive na PR #74) | ABSENT | — | não aplicada |
+
+**071, 072 e 073 têm linha no ledger**, com `applied_at` de 2026-08-18 e
+checksum igual ao do ficheiro no repositório. A frase do bloco de 17/08 —
+«aplicadas fora do ledger, última entrada 069» — descreve o estado *daquele
+dia* e já não descreve o de hoje.
+
+**Sobre a origem, o que se sabe e o que não se sabe.** Hoje observa-se apenas:
+o ficheiro existe, a linha existe, o checksum coincide, e há um `applied_at`.
+Quem ou o que executou cada migration **não está provado** — dizer «foram
+aplicadas pelo SQL Editor» é uma inferência histórica, não um facto verificável
+agora. Estas cinco coisas não são equivalentes e não devem ser confundidas:
+(a) objeto presente no schema; (b) linha presente no ledger; (c) ficheiro no
+repo; (d) checksum coincidente; (e) origem da aplicação.
+
+**A 070 continua congelada.** Ficheiro presente, sem linha no ledger, e listada
+em `supabase/migration-policy.json` como `blockedMigrations`. Não é
+`APPLIED`, nem `IGNORED`, nem `RECONCILED`, nem `BASELINED`.
+
+**Segurança do ledger, medida no mesmo dia:** o papel `anon` consegue fazer
+`SELECT` em `public._migrations` e recebe linhas. É o que a 077 (PR #73) existe
+para fechar. Os detalhes de catálogo (owner, `relrowsecurity`, políticas) não
+são legíveis pelo acesso disponível — só pelo SQL Editor.
+
+---
+
+
 ## 📍 PONTO DE PARAGEM — 2026-08-17 (estado real das migrations 070–073 + drift guard)
 
 **Verificação read-only contra a base de produção.** Nenhuma escrita, nenhuma
