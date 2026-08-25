@@ -40,7 +40,11 @@ export default async function FluxoCaixaPage({
       title="Fluxo de Caixa"
       subtitle="Entradas e saídas do período"
     >
+      {/* A identidade da vista é o período — ver a nota em
+          `financeiro/pagamentos/page.tsx`. Mudar de mês recria a
+          instância e descarta o estado transitório do mês anterior. */}
       <CashFlowClient
+        key={period.key}
         initialData={res.ok ? { entries: res.entries, balance: res.balance, entradas: res.entradas, saidas: res.saidas, pendentes: res.pendentes } : null}
         error={res.ok ? null : res.error}
         companyId={profile.company_id}

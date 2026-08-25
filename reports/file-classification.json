@@ -1,13 +1,13 @@
 {
   "generatedBy": "scripts/audit-file-inventory.mjs",
-  "totalFiles": 671,
+  "totalFiles": 673,
   "byStatus": {
-    "MANTER": 653,
+    "MANTER": 655,
     "STANDBY": 18
   },
   "byCategory": {
     "route-ui": 135,
-    "test": 113,
+    "test": 114,
     "migration": 78,
     "lib": 65,
     "script": 47,
@@ -19,7 +19,7 @@
     "api-route": 16,
     "config": 12,
     "asset": 8,
-    "src-other": 7,
+    "src-other": 8,
     "report": 4,
     "script-historico": 4,
     "ci": 2,
@@ -29,7 +29,7 @@
     "other": 1
   },
   "byConfidence": {
-    "alta": 655,
+    "alta": 657,
     "média": 10,
     "baixa": 6
   },
@@ -4459,6 +4459,31 @@
         "write": 1,
         "sqlWrite": 12,
         "revalidatePath": 1
+      },
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/__tests__/finance-period-view-identity.test.tsx",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "sqlWrite": 3,
+        "dynamicImport": 5
       },
       "action": "nenhuma",
       "reason": "suite de testes — corre por convenção do vitest",
@@ -9482,8 +9507,9 @@
       "category": "route-ui",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 1,
+      "consumers": 2,
       "consumerSample": [
+        "src/__tests__/finance-period-view-identity.test.tsx",
         "src/app/(dashboard)/dashboard/financeiro/pagamentos/page.tsx"
       ],
       "autoLoaded": false,
@@ -9495,7 +9521,7 @@
         "sqlWrite": 2
       },
       "action": "nenhuma",
-      "reason": "em uso: 1 consumidor(es)",
+      "reason": "em uso: 2 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -11414,11 +11440,11 @@
       "category": "server-action",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 4,
+      "consumers": 5,
       "consumerSample": [
+        "src/__tests__/finance-period-view-identity.test.tsx",
         "src/__tests__/financeiro-v2-write-budget.test.ts",
-        "src/app/(dashboard)/dashboard/_components/payments-reminder-banner.tsx",
-        "src/app/(dashboard)/dashboard/financeiro/pagamentos/_components/payments-client.tsx"
+        "src/app/(dashboard)/dashboard/_components/payments-reminder-banner.tsx"
       ],
       "autoLoaded": false,
       "referencedBy": [
@@ -11444,7 +11470,7 @@
         "revalidatePath": 5
       },
       "action": "auditar atomicidade (T12/T13)",
-      "reason": "em uso: 4 consumidor(es)",
+      "reason": "em uso: 5 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -14663,7 +14689,7 @@
       "category": "domain",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 13,
+      "consumers": 14,
       "consumerSample": [
         "src/__tests__/update-notice-modal.test.tsx",
         "src/__tests__/update-notices-eligibility.test.ts",
@@ -14678,7 +14704,7 @@
       "risks": [],
       "signals": {},
       "action": "nenhuma",
-      "reason": "em uso: 13 consumidor(es), configuração",
+      "reason": "em uso: 14 consumidor(es), configuração",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -16752,6 +16778,32 @@
     },
     {
       "path": "src/release-notes/2026-08-25-anexos-a-abrir.ts",
+      "category": "src-other",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 1,
+      "consumerSample": [
+        "src/release-notes/index.ts"
+      ],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "sqlWrite": 1
+      },
+      "action": "nenhuma",
+      "reason": "em uso: 1 consumidor(es)",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/release-notes/2026-08-25-financeiro-muda-de-mes.ts",
       "category": "src-other",
       "status": "MANTER",
       "confidence": "alta",

@@ -52,7 +52,11 @@ export default async function ContasPage({
       title="Contas"
       subtitle="A pagar e a receber · pendências financeiras"
     >
+      {/* A identidade da vista é o período — ver a nota em
+          `financeiro/pagamentos/page.tsx`. Mudar de mês recria a
+          instância e descarta o estado transitório do mês anterior. */}
       <ContasClient
+        key={period.key}
         toReceive={res.ok ? res.toReceive : []}
         toPay={res.ok ? res.toPay : []}
         expenses={res.ok ? res.expenses : []}
