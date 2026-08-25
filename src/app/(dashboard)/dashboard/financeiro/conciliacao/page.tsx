@@ -40,7 +40,11 @@ export default async function ConciliacaoPage({
       title="Conciliação"
       subtitle="Importar extratos e cruzar com lançamentos financeiros"
     >
+      {/* A identidade da vista é o período — ver a nota em
+          `financeiro/pagamentos/page.tsx`. Mudar de mês recria a
+          instância e descarta o estado transitório do mês anterior. */}
       <ReconciliationClient
+        key={period.key}
         initial={res.ok ? { transactions: res.transactions, imports: res.imports, accounts: res.accounts } : null}
         error={res.ok ? null : res.error}
       />

@@ -34,7 +34,27 @@ export default async function PagamentosPage({
       title="Pagamentos"
       subtitle="Fixos e variáveis, com estado de pagamento"
     >
+      {/*
+        🔴 A identidade da vista é o período, não a rota.
+
+        Sem `key`, mudar de mês muda os props mas o React reutiliza a MESMA
+        instância — e `useState(initialData)` só lê o valor na montagem. O
+        servidor entregava Julho e o ecrã continuava a mostrar Agosto. Era
+        este o defeito reportado: «seleciono outro mês e continuam a aparecer
+        os meses anteriores».
+
+        Mudar de mês é mudar de contexto, e por isso a instância é recriada:
+        o estado transitório do mês anterior — sheet aberto, seleção,
+        paginação, rascunho por submeter — é descartado de propósito. Manter
+        um formulário de Agosto vivo por baixo de um ecrã de Julho seria pior
+        do que o perder.
+
+        A `key` traz só o que define o snapshot do servidor. `search`, `tab` e
+        `categoria` pertencem à mesma vista mensal e não entram aqui — se
+        entrassem, escrever na pesquisa remontaria a vista a cada tecla.
+      */}
       <PaymentsClient
+        key={period.key}
         initialData={res.ok ? res.data : null}
         error={res.ok ? null : res.error}
         year={period.year}
