@@ -1,0 +1,40 @@
+# ============================================================================
+# FINS DE LINHA — só onde a diferença parte alguma coisa
+# ============================================================================
+#
+# 🔴 Isto existe por causa de uma falha que passou uma semana mal explicada.
+#
+#    Em Windows, o `core.autocrlf=true` (o valor por omissão de muitas
+#    instalações) converte LF em CRLF no checkout. Nos scripts `.mjs` que
+#    começam por shebang isso produz:
+#
+#        #!/usr/bin/env node\r\n
+#
+#    O Node importa esse ficheiro sem se queixar. O esbuild, que o Vitest usa
+#    para transformar os testes, não: dá `SyntaxError: Invalid or unexpected
+#    token` e a suite inteira deixa de ser recolhida — não falha um teste,
+#    desaparecem todos.
+#
+#    Isolado a 2026-08-25: CRLF sozinho passa, shebang sozinho passa, os dois
+#    juntos partem. Duas suites (`release-note-guard` e `scan-secrets`) nunca
+#    corriam em Windows por causa disto, e a explicação que circulava — uma
+#    vírgula no caminho da pasta — estava errada. O sintoma escondia-se porque
+#    o CI corre em Linux, onde os ficheiros ficam LF e tudo passa.
+#
+#    O perigo não era o teste ausente. Era acreditar que o gate local estava
+#    verde quando 48 testes nunca chegavam a correr.
+#
+# Porque é que a regra é estreita
+# ---------------------------------------------------------------------------
+# Não se renormaliza o repositório inteiro: isso reescreveria ficheiros que
+# nunca deram problema e enterraria esta correção no meio de um diff enorme.
+# A regra cobre os scripts Node, que são os únicos que Vitest importa e os
+# únicos onde o shebang aparece.
+#
+# Seis destes ficheiros têm shebang hoje; dois deles já partiam suites. Os
+# outros quatro partiriam da mesma maneira no dia em que alguém os importasse
+# de um teste — e é por isso que a regra apanha a pasta, não os dois nomes.
+# ============================================================================
+
+scripts/*.mjs    text eol=lf
+scripts/**/*.mjs text eol=lf

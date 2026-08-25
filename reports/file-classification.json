@@ -1,13 +1,13 @@
 {
   "generatedBy": "scripts/audit-file-inventory.mjs",
-  "totalFiles": 683,
+  "totalFiles": 685,
   "byStatus": {
-    "MANTER": 665,
+    "MANTER": 667,
     "STANDBY": 18
   },
   "byCategory": {
     "route-ui": 135,
-    "test": 119,
+    "test": 120,
     "migration": 78,
     "lib": 65,
     "script": 48,
@@ -22,14 +22,14 @@
     "asset": 8,
     "report": 4,
     "script-historico": 4,
+    "other": 2,
     "ci": 2,
     "types": 2,
     "sql-frozen": 2,
-    "supabase-other": 2,
-    "other": 1
+    "supabase-other": 2
   },
   "byConfidence": {
-    "alta": 667,
+    "alta": 669,
     "média": 10,
     "baixa": 6
   },
@@ -63,6 +63,24 @@
       },
       "action": "nenhuma",
       "reason": "configuração/infra",
+      "manualDecision": false
+    },
+    {
+      "path": ".gitattributes",
+      "category": "other",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [
+        "docs"
+      ],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {},
+      "action": "nenhuma",
+      "reason": "ficheiro de other",
       "manualDecision": false
     },
     {
@@ -6174,6 +6192,28 @@
         "serviceRole": 9,
         "fallbackArray": 3
       },
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/__tests__/scripts-eol-policy.test.ts",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {},
       "action": "nenhuma",
       "reason": "suite de testes — corre por convenção do vitest",
       "manualDecision": false,
