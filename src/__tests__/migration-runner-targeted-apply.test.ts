@@ -443,3 +443,122 @@ describe("as proteções acusam quando removidas", () => {
     expect(core).toMatch(/splitBlocked/);
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// O ledger COMO ESTÁ HOJE em produção
+// ═══════════════════════════════════════════════════════════════════════════
+//
+// 🔴 Esta fixture existe por causa de um erro de leitura, não de código.
+//
+//    O `CLAUDE.md` de 2026-08-17 dizia que 071/072/073 estavam aplicadas fora
+//    do ledger e que a última entrada era a 069. Era verdade nesse dia. A 18
+//    deixou de ser — as três passaram a ter linha, com checksum coincidente.
+//    A frase antiga continuou a ser citada como estado corrente durante uma
+//    semana, incluindo por mim.
+//
+//    Escrever a fotografia atual num teste tira-lhe a ambiguidade: se alguém
+//    voltar a assumir que 071–076 estão pendentes, isto fica vermelho.
+//
+//    Medido a 2026-08-25 por consulta read-only: `LEDGER_ROWS = 77`, com
+//    068, 069, 071, 072, 073, 074, 075 e 076 presentes e a 070 ausente.
+// ═══════════════════════════════════════════════════════════════════════════
+
+const LEDGER_HOJE = {
+  "068_disable_untrusted_profile_bootstrap.sql": "SELECT '068';",
+  "069_guard_profile_tenant_role.sql":           "SELECT '069';",
+  "070_guard_profile_managed_fields.sql":        "SELECT 'a 070 nunca deve correr';",
+  "071_finance_periods_and_expense_categories.sql": "SELECT '071';",
+  "072_invoice_atomic_creation.sql":             "SELECT '072';",
+  "073_payment_to_cashflow.sql":                 "SELECT '073';",
+  "074_attachments.sql":                         "SELECT '074';",
+  "075_cash_flow_fixed_variable_payment_reference.sql": "SELECT '075';",
+  "076_update_notices.sql":                      "SELECT '076';",
+};
+
+/** Tudo o que hoje tem linha no ledger — ou seja, todas menos a 070. */
+const COM_LINHA_NO_LEDGER = Object.keys(LEDGER_HOJE)
+  .filter((n) => !n.startsWith("070_"));
+
+describe("fixture do ledger atual (2026-08-25)", () => {
+  it("V. com o ledger de hoje não sobra uma única migration pendente", async () => {
+    // 🔴 A primeira versão procurava os nomes 071/072/073 seguidos da palavra
+    //    "pendente" e exigia que não aparecessem. Nunca apareciam — o runner
+    //    não escreve os nomes das aplicadas — por isso a asserção passava sem
+    //    nunca ter nada contra que falhar.
+    //
+    //    O sinal verdadeiro é a contagem. Se alguém voltar a assumir a
+    //    fotografia de 17/08, 071–076 entram na fila e este número deixa de
+    //    ser zero.
+    const dir = criarMigrations(LEDGER_HOJE);
+    const c = new FakeClient(COM_LINHA_NO_LEDGER.map((n) => jaAplicada(n, dir)));
+    const linhas: string[] = [];
+
+    await correr(c, dir, { apply: false, log: (m: string) => linhas.push(m) });
+    const texto = linhas.join("\n");
+
+    expect(texto).toMatch(/0 migração\(ões\) pendente\(s\)/);
+
+    // Prova de que a contagem reage: sem a linha da 073, ela deixa de ser zero.
+    const semA073 = new FakeClient(
+      COM_LINHA_NO_LEDGER.filter((n) => !n.startsWith("073_")).map((n) => jaAplicada(n, dir)),
+    );
+    const outras: string[] = [];
+    await correr(semA073, dir, { apply: false, log: (m: string) => outras.push(m) });
+    expect(outras.join("\n")).not.toMatch(/0 migração\(ões\) pendente\(s\)/);
+  });
+
+  it("W. com este ledger, um --apply não executa nada além do que falta", async () => {
+    const dir = criarMigrations(LEDGER_HOJE);
+    const c = new FakeClient(COM_LINHA_NO_LEDGER.map((n) => jaAplicada(n, dir)));
+
+    await correr(c, dir, { apply: true });
+
+    // A única sem linha é a 070, e essa está bloqueada: sobra exatamente nada.
+    expect(c.executadas(Object.keys(LEDGER_HOJE))).toEqual([]);
+    expect(c.queries.some((q) => q.sql.includes("a 070 nunca deve correr"))).toBe(false);
+  });
+
+  it("X. a 070 continua a aparecer como BLOCKED_PENDING neste ledger", async () => {
+    const dir = criarMigrations(LEDGER_HOJE);
+    const c = new FakeClient(COM_LINHA_NO_LEDGER.map((n) => jaAplicada(n, dir)));
+    const linhas: string[] = [];
+
+    await correr(c, dir, { apply: false, log: (m: string) => linhas.push(m) });
+    const texto = linhas.join("\n");
+
+    expect(texto).toMatch(/BLOCKED_PENDING/);
+    expect(texto).toMatch(/070_guard_profile_managed_fields\.sql/);
+  });
+
+  it("Y. baseline não inventa uma linha para a 070 — e o mecanismo está vivo", async () => {
+    // 🔴 A primeira versão deste teste passava por vazio: procurava a 070
+    //    dentro dos INSERT emitidos, e não havia INSERT nenhum. Uma asserção
+    //    que nunca olha para nada não prova nada.
+    //
+    //    Passa a afirmar-se as duas metades: com este ledger o baseline não
+    //    escreve **de todo**, e num ledger a que falte uma migration elegível
+    //    ele escreve mesmo — o que mostra que o silêncio acima é uma decisão,
+    //    não uma avaria.
+    const dir = criarMigrations(LEDGER_HOJE);
+    const inserts = (c: FakeClient) =>
+      c.queries.filter((q) => q.sql.startsWith("INSERT INTO public._migrations"));
+
+    const completo = new FakeClient(COM_LINHA_NO_LEDGER.map((n) => jaAplicada(n, dir)));
+    await correr(completo, dir, { apply: true, baseline: true });
+    expect(inserts(completo)).toHaveLength(0);
+
+    // Agora sem a linha da 076: o baseline tem trabalho para fazer.
+    const semA076 = new FakeClient(
+      COM_LINHA_NO_LEDGER.filter((n) => !n.startsWith("076_")).map((n) => jaAplicada(n, dir)),
+    );
+    await correr(semA076, dir, { apply: true, baseline: true });
+
+    const escritas = inserts(semA076);
+    expect(escritas.length).toBeGreaterThan(0);
+
+    const marcadas = escritas.flatMap((q) => (q.params ?? []) as unknown[]).map(String);
+    expect(marcadas.some((v) => v.includes("076_"))).toBe(true);
+    // E a 070, essa, continua sem linha mesmo quando o baseline está a escrever.
+    expect(marcadas.some((v) => v.includes("070_"))).toBe(false);
+  });
+});

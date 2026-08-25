@@ -5196,8 +5196,9 @@
       "sideEffects": [],
       "risks": [],
       "signals": {
-        "sqlWrite": 9,
-        "unknownCast": 1
+        "sqlWrite": 12,
+        "unknownCast": 1,
+        "fallbackArray": 1
       },
       "action": "nenhuma",
       "reason": "suite de testes — corre por convenção do vitest",
