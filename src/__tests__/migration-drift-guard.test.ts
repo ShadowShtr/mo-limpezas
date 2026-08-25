@@ -2,11 +2,19 @@
 // DRIFT GUARD — ledger diz pendente, schema diz presente
 // ============================================================================
 //
-// Origem (2026-08-17): verificação read-only contra a base real mostrou que
-// 071/072/073 estão aplicadas em produção mas ausentes de `public._migrations`
-// (foram aplicadas pelo SQL Editor, que não escreve no ledger). Para o runner
-// isso lê-se como "pendente", e um `--apply` tentaria re-executá-las sobre
-// dados financeiros reais.
+// 🔴 CENÁRIO HISTÓRICO, DELIBERADAMENTE FIXADO — não é o estado de hoje.
+//
+//    Em 2026-08-17 uma verificação read-only mostrou 071/072/073 aplicadas em
+//    produção e ausentes de `public._migrations`. Para o runner isso lê-se
+//    como "pendente", e um `--apply` tentaria re-executá-las sobre dados
+//    financeiros reais. Foi esse susto que fez nascer o drift guard.
+//
+//    Em 2026-08-25 as três passaram a ter linha no ledger com checksum
+//    coincidente — ver a atualização datada no CLAUDE.md. O cenário abaixo
+//    continua aqui de propósito: o que se testa é o **mecanismo** de detecção
+//    de drift, e ele precisa de um caso onde o schema tem os objetos e o
+//    ledger não os conhece. Estas fixtures descrevem esse mecanismo, nunca a
+//    fotografia atual da produção.
 //
 // Nenhum teste aqui liga a uma base. Um cliente falso responde por catálogo
 // (`to_regclass`, `information_schema.columns`, `pg_proc`) e grava tudo o que
