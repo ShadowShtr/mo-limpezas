@@ -1,13 +1,13 @@
 {
   "generatedBy": "scripts/audit-file-inventory.mjs",
-  "totalFiles": 679,
+  "totalFiles": 680,
   "byStatus": {
-    "MANTER": 661,
+    "MANTER": 662,
     "STANDBY": 18
   },
   "byCategory": {
     "route-ui": 135,
-    "test": 116,
+    "test": 117,
     "migration": 78,
     "lib": 65,
     "script": 47,
@@ -29,7 +29,7 @@
     "other": 1
   },
   "byConfidence": {
-    "alta": 663,
+    "alta": 664,
     "média": 10,
     "baixa": 6
   },
@@ -5529,6 +5529,31 @@
       }
     },
     {
+      "path": "src/__tests__/payroll-period-view-identity.test.tsx",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "unknownCast": 1,
+        "dynamicImport": 3
+      },
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
       "path": "src/__tests__/payroll-state-integrity.test.ts",
       "category": "test",
       "status": "MANTER",
@@ -9659,8 +9684,9 @@
       "category": "route-ui",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 1,
+      "consumers": 2,
       "consumerSample": [
+        "src/__tests__/payroll-period-view-identity.test.tsx",
         "src/app/(dashboard)/dashboard/folha-pagamento/page.tsx"
       ],
       "autoLoaded": false,
@@ -9678,7 +9704,7 @@
         "dynamicImport": 2
       },
       "action": "nenhuma",
-      "reason": "em uso: 1 consumidor(es)",
+      "reason": "em uso: 2 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -11549,11 +11575,11 @@
       "category": "server-action",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 4,
+      "consumers": 5,
       "consumerSample": [
+        "src/__tests__/payroll-period-view-identity.test.tsx",
         "src/__tests__/payroll-state-integrity.test.ts",
-        "src/app/(dashboard)/dashboard/folha-pagamento/_components/payroll-client.tsx",
-        "src/app/(dashboard)/dashboard/folha-pagamento/_components/payroll-edit-sheet.tsx"
+        "src/app/(dashboard)/dashboard/folha-pagamento/_components/payroll-client.tsx"
       ],
       "autoLoaded": false,
       "referencedBy": [
@@ -11574,7 +11600,7 @@
         "revalidatePath": 5
       },
       "action": "auditar atomicidade (T12/T13)",
-      "reason": "em uso: 4 consumidor(es)",
+      "reason": "em uso: 5 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
