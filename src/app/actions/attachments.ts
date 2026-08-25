@@ -29,6 +29,7 @@
 // Ver docs/ATTACHMENTS-MULTIPLE.md e supabase/migrations/074_attachments.sql.
 // ============================================================================
 
+import { isNoRowsError, logQueryFailure, queryFailure } from "@/lib/query-error";
 import { revalidatePath } from "next/cache";
 import { requireProfile } from "@/lib/auth-guard";
 import {
@@ -41,6 +42,7 @@ import {
   isAttachmentParentType,
   isAttachmentPathInCompany,
   isLegacyAttachmentId,
+  resolveAttachmentStoragePath,
   validateAttachmentFile,
 } from "@/lib/attachments";
 
@@ -385,12 +387,51 @@ export async function getAttachmentUrl(
   const parent = await loadParent(admin, profile.company_id, parentType, parentId);
   if (!parent.ok) return { ok: false, error: parent.error };
 
+  // ── Anexo legado ──────────────────────────────────────────────────────────
+  //
+  // 🔴 Aqui devolvia-se `parent.legacy.url` cru, e era esse o defeito.
+  //
+  //    `uploadPaymentAttachment` gravava `getPublicUrl(...)` de um bucket
+  //    **privado**. Esse URL não expira — nunca funcionou. Dezassete
+  //    pagamentos ficaram com uma referência que devolve HTTP 400, enquanto
+  //    os ficheiros estavam intactos no armazenamento (17/17 abrem quando
+  //    assinados). Nada se perdeu: só a referência apontava para uma porta
+  //    que não existe.
+  //
+  //    A referência guardada passa a ser interpretada, nunca reenviada.
   if (isLegacyAttachmentId(attachmentId)) {
-    if (!parent.legacy.url) return { ok: false, error: "Anexo não encontrado." };
-    return { ok: true, url: parent.legacy.url };
+    const bucket = PARENT_BUCKET[parent.parentType];
+    const resolvido = resolveAttachmentStoragePath({
+      referencia: parent.legacy.url,
+      bucket,
+      supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL,
+    });
+
+    if (!resolvido.ok) {
+      if (resolvido.motivo === "vazio") return { ok: false, error: "Anexo não encontrado." };
+      // Um valor que aponta para outro host, outro bucket ou fora do caminho
+      // permitido não se assina — assinar às cegas transformaria um valor
+      // errado na base num acesso concedido.
+      logQueryFailure("getAttachmentUrl:referencia-legada", { code: resolvido.motivo });
+      return { ok: false, error: "Anexo inválido." };
+    }
+
+    if (!isAttachmentPathInCompany(resolvido.storagePath, profile.company_id)) {
+      return { ok: false, error: "Sem permissão para aceder a este ficheiro." };
+    }
+
+    const { data: assinado, error: erroLegado } = await admin.storage
+      .from(bucket)
+      .createSignedUrl(resolvido.storagePath, 300);
+
+    if (erroLegado || !assinado) {
+      logQueryFailure("getAttachmentUrl:assinar-legado", erroLegado);
+      return { ok: false, error: "Não foi possível abrir o anexo." };
+    }
+    return { ok: true, url: assinado.signedUrl };
   }
 
-  const { data: row } = await admin
+  const { data: row, error: erroLinha } = await admin
     .from("attachments")
     .select("storage_bucket, storage_path")
     .eq("id", attachmentId)
@@ -399,6 +440,11 @@ export async function getAttachmentUrl(
     .eq("parent_id", parentId)
     .maybeSingle();
 
+  // Uma consulta falhada não é um anexo inexistente: a primeira pede para
+  // tentar outra vez, a segunda diz que não vale a pena.
+  if (erroLinha && !isNoRowsError(erroLinha)) {
+    return queryFailure("getAttachmentUrl:attachment", erroLinha);
+  }
   if (!row) return { ok: false, error: "Anexo não encontrado." };
   if (!isAttachmentPathInCompany(row.storage_path, profile.company_id)) {
     return { ok: false, error: "Caminho de anexo inválido." };
@@ -407,7 +453,10 @@ export async function getAttachmentUrl(
   const { data, error } = await admin.storage
     .from(row.storage_bucket)
     .createSignedUrl(row.storage_path, 300);
-  if (error || !data) return { ok: false, error: error?.message ?? "Não foi possível abrir o anexo." };
+  if (error || !data) {
+    logQueryFailure("getAttachmentUrl:assinar", error);
+    return { ok: false, error: "Não foi possível abrir o anexo." };
+  }
 
   return { ok: true, url: data.signedUrl };
 }
