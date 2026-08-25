@@ -467,12 +467,16 @@ export async function uploadPaymentAttachment(
   // Esta action mantém-se para o caminho legado da coluna `attachment_url`; o
   // ficheiro anterior, se existir, fica no bucket e continua acessível.
 
-  const { data: urlData } = admin.storage.from(PAYMENT_ATTACHMENTS_BUCKET).getPublicUrl(path);
 
   const { error: dbError } = await admin
     .from("fixed_variable_payments")
     .update({
-      attachment_url: urlData.publicUrl,
+      // 🔴 Aqui estava `urlData.publicUrl`. O bucket é privado, e esse URL
+      //    devolve HTTP 400 — nunca funcionou, e ficou gravado em 17 linhas.
+      //    Passa a guardar-se o caminho do objeto, que é a identidade estável.
+      //    `getAttachmentUrl` interpreta as duas formas, por isso as linhas
+      //    antigas continuam a abrir sem serem tocadas.
+      attachment_url: path,
       attachment_name: file.name,
       attachment_size: file.size,
       attachment_mime: file.type,
@@ -483,7 +487,10 @@ export async function uploadPaymentAttachment(
   if (dbError) return { ok: false, error: dbError.message };
 
   revalidate();
-  return { ok: true, url: urlData.publicUrl, name: file.name };
+  // Devolve o caminho, não um URL. Quem quiser abrir pede um URL assinado a
+  // `getAttachmentUrl` — um URL guardado é a origem do defeito que esta ronda
+  // corrige.
+  return { ok: true, url: path, name: file.name };
 }
 
 export async function deletePaymentAttachment(paymentId: string): Promise<{ ok: boolean; error?: string }> {

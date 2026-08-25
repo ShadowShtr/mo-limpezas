@@ -239,3 +239,104 @@ export function combineAttachments(params: {
 
   return out;
 }
+
+// ── Resolução de referências guardadas ──────────────────────────────────────
+//
+// 🔴 Existe por causa de um defeito provado em produção, 2026-08-25.
+//
+//    `uploadPaymentAttachment` gravava `getPublicUrl(...)` na coluna
+//    `attachment_url`. O bucket `payment-attachments` é **privado**: esse URL
+//    não expira — simplesmente nunca funcionou. Dezassete pagamentos ficaram
+//    com uma referência que devolve HTTP 400 ao ser aberta.
+//
+//    Medido, não inferido:
+//
+//        linhas com attachment_url  17
+//        HTTP ao abrir o guardado   400
+//        objeto presente no storage 17 / 17
+//        abre com URL assinado      17 / 17   (HTTP 200)
+//
+//    Ou seja: nada se perdeu. O ficheiro está lá, e abre — só a referência
+//    guardada é que aponta para uma porta que não existe. Por isso a correção
+//    é de **resolução**, e não toca numa única linha nem move um único
+//    ficheiro.
+//
+// ---------------------------------------------------------------------------
+// Duas formas, uma interpretação
+// ---------------------------------------------------------------------------
+//
+// Enquanto existirem as 17 linhas antigas, uma referência guardada pode ser:
+//
+//   · um URL público legado para um bucket privado (o que está lá hoje);
+//   · um caminho de objeto canónico (o que passa a ser gravado).
+//
+// Interpretar as duas é trabalho de **uma** função. Espalhar
+// `if (startsWith("http"))` por componentes diferentes é como estas
+// divergências nascem.
+
+/** O que uma referência guardada pode ser, depois de interpretada. */
+export type ResolvedAttachmentReference =
+  | { ok: true; storagePath: string; forma: "legacy-url" | "caminho" }
+  | { ok: false; motivo: "vazio" | "host-invalido" | "bucket-invalido" | "caminho-invalido" };
+
+/**
+ * Converte uma referência guardada no caminho do objeto dentro do bucket.
+ *
+ * 🔴 Nunca aceita um URL arbitrário. Um valor que aponte para outro host,
+ *    outro projeto Supabase ou outro bucket é recusado — não porque se
+ *    confie no browser (a autorização é feita antes, sobre o registo pai),
+ *    mas porque um valor destes na base significa que alguma coisa está
+ *    errada, e assinar às cegas transformaria isso num acesso concedido.
+ */
+export function resolveAttachmentStoragePath(params: {
+  referencia: string | null | undefined;
+  bucket: string;
+  supabaseUrl: string | undefined;
+}): ResolvedAttachmentReference {
+  const { referencia, bucket, supabaseUrl } = params;
+  if (!referencia || !referencia.trim()) return { ok: false, motivo: "vazio" };
+
+  const valor = referencia.trim();
+
+  // Forma canónica: um caminho, sem esquema nem host.
+  if (!/^[a-z][a-z0-9+.-]*:\/\//i.test(valor)) {
+    if (valor.includes("..") || valor.startsWith("/")) {
+      return { ok: false, motivo: "caminho-invalido" };
+    }
+    return { ok: true, storagePath: valor, forma: "caminho" };
+  }
+
+  // Forma legada: URL de storage do próprio projeto.
+  let url: URL;
+  try {
+    url = new URL(valor);
+  } catch {
+    return { ok: false, motivo: "caminho-invalido" };
+  }
+
+  if (url.protocol !== "https:") return { ok: false, motivo: "host-invalido" };
+
+  // O host tem de ser o do projeto. Sem `supabaseUrl` não há com que comparar,
+  // e a resposta segura a "não sei de quem é este host" é recusar.
+  let esperado: URL;
+  try {
+    esperado = new URL(supabaseUrl ?? "");
+  } catch {
+    return { ok: false, motivo: "host-invalido" };
+  }
+  if (url.host !== esperado.host) return { ok: false, motivo: "host-invalido" };
+
+  // `/storage/v1/object/public/<bucket>/<path>` — e também a forma assinada,
+  // caso alguma referência antiga a tenha.
+  const m = url.pathname.match(/^\/storage\/v1\/object\/(?:public|sign)\/([^/]+)\/(.+)$/);
+  if (!m) return { ok: false, motivo: "caminho-invalido" };
+
+  const [, bucketNoUrl, caminhoBruto] = m;
+  if (bucketNoUrl !== bucket) return { ok: false, motivo: "bucket-invalido" };
+
+  const caminho = decodeURIComponent(caminhoBruto);
+  // `..` depois de descodificar apanha `%2e%2e`, que o `match` deixaria passar.
+  if (!caminho || caminho.includes("..")) return { ok: false, motivo: "caminho-invalido" };
+
+  return { ok: true, storagePath: caminho, forma: "legacy-url" };
+}
