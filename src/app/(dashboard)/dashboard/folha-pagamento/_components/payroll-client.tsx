@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { Fragment, useState, useTransition } from "react";
 import {
   FileText, RefreshCw, CheckCircle, Banknote,
   Download, Pencil, Loader2, AlertCircle, ChevronDown, ChevronUp,
@@ -376,7 +376,7 @@ export function PayrollClient({ initialRecords, companyId, mesParam, year, month
               </thead>
               <tbody className="divide-y divide-[var(--color-border)]">
                 {pag.pageItems.map((r) => (
-                  <>
+                  <Fragment key={r.id}>
                     <tr
                       key={r.id}
                       className={`hover:bg-[var(--color-background)] transition-colors ${selected.has(r.id) ? "bg-[var(--finance-primary-soft)]" : "bg-white"}`}
@@ -487,7 +487,7 @@ export function PayrollClient({ initialRecords, companyId, mesParam, year, month
                         </td>
                       </tr>
                     )}
-                  </>
+                  </Fragment>
                 ))}
               </tbody>
               <tfoot className="border-t-2 border-[var(--color-border)] bg-[var(--color-background)]">

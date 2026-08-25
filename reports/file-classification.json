@@ -1,13 +1,13 @@
 {
   "generatedBy": "scripts/audit-file-inventory.mjs",
-  "totalFiles": 680,
+  "totalFiles": 681,
   "byStatus": {
-    "MANTER": 662,
+    "MANTER": 663,
     "STANDBY": 18
   },
   "byCategory": {
     "route-ui": 135,
-    "test": 117,
+    "test": 118,
     "migration": 78,
     "lib": 65,
     "script": 47,
@@ -29,7 +29,7 @@
     "other": 1
   },
   "byConfidence": {
-    "alta": 664,
+    "alta": 665,
     "média": 10,
     "baixa": 6
   },
@@ -5554,6 +5554,31 @@
       }
     },
     {
+      "path": "src/__tests__/payroll-row-identity.test.tsx",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "unknownCast": 1,
+        "dynamicImport": 2
+      },
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
       "path": "src/__tests__/payroll-state-integrity.test.ts",
       "category": "test",
       "status": "MANTER",
@@ -9684,9 +9709,10 @@
       "category": "route-ui",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 2,
+      "consumers": 3,
       "consumerSample": [
         "src/__tests__/payroll-period-view-identity.test.tsx",
+        "src/__tests__/payroll-row-identity.test.tsx",
         "src/app/(dashboard)/dashboard/folha-pagamento/page.tsx"
       ],
       "autoLoaded": false,
@@ -9704,7 +9730,7 @@
         "dynamicImport": 2
       },
       "action": "nenhuma",
-      "reason": "em uso: 2 consumidor(es)",
+      "reason": "em uso: 3 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -11575,11 +11601,11 @@
       "category": "server-action",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 5,
+      "consumers": 6,
       "consumerSample": [
         "src/__tests__/payroll-period-view-identity.test.tsx",
-        "src/__tests__/payroll-state-integrity.test.ts",
-        "src/app/(dashboard)/dashboard/folha-pagamento/_components/payroll-client.tsx"
+        "src/__tests__/payroll-row-identity.test.tsx",
+        "src/__tests__/payroll-state-integrity.test.ts"
       ],
       "autoLoaded": false,
       "referencedBy": [
@@ -11600,7 +11626,7 @@
         "revalidatePath": 5
       },
       "action": "auditar atomicidade (T12/T13)",
-      "reason": "em uso: 5 consumidor(es)",
+      "reason": "em uso: 6 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
