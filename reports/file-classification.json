@@ -1,17 +1,17 @@
 {
   "generatedBy": "scripts/audit-file-inventory.mjs",
-  "totalFiles": 685,
+  "totalFiles": 687,
   "byStatus": {
-    "MANTER": 667,
+    "MANTER": 669,
     "STANDBY": 18
   },
   "byCategory": {
     "route-ui": 135,
-    "test": 120,
+    "test": 121,
     "migration": 78,
     "lib": 65,
     "script": 48,
-    "domain": 45,
+    "domain": 46,
     "doc": 43,
     "server-action": 41,
     "component": 30,
@@ -29,7 +29,7 @@
     "supabase-other": 2
   },
   "byConfidence": {
-    "alta": 669,
+    "alta": 671,
     "média": 10,
     "baixa": 6
   },
@@ -5484,6 +5484,30 @@
         "sqlWrite": 5,
         "unknownCast": 1,
         "revalidatePath": 1
+      },
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/__tests__/payment-competence.test.ts",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "sqlWrite": 3
       },
       "action": "nenhuma",
       "reason": "suite de testes — corre por convenção do vitest",
@@ -11674,8 +11698,8 @@
       "signals": {
         "supabase": 2,
         "serverAction": 1,
-        "write": 6,
-        "sqlWrite": 6,
+        "write": 7,
+        "sqlWrite": 8,
         "unknownCast": 2,
         "ignoredError": 3,
         "fallbackZero": 4,
@@ -14300,6 +14324,31 @@
       "deadCodeDoors": {
         "frameworkConvention": false,
         "cliEntrypoint": true,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/domain/finance/payment-competence.ts",
+      "category": "domain",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 2,
+      "consumerSample": [
+        "src/__tests__/payment-competence.test.ts",
+        "src/app/actions/payments.ts"
+      ],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {},
+      "action": "nenhuma",
+      "reason": "em uso: 2 consumidor(es)",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
         "dynamicImport": true,
         "allClosed": false
       }

@@ -2,6 +2,10 @@
 
 import { requireProfile } from "@/lib/auth-guard";
 import { createAdminClient } from "@/lib/supabase/admin";
+import {
+  competenceFromDueDate,
+  resolveCompetence,
+} from "@/domain/finance/payment-competence";
 import { revalidatePath } from "next/cache";
 import { todayInLisbon } from "@/lib/lisbon-time";
 import {
@@ -219,12 +223,26 @@ export async function createPayment(input: PaymentInput): Promise<{ ok: boolean;
   if (!input.description.trim()) return { ok: false, error: "Descrição obrigatória." };
   if (input.amount !== null && (!Number.isFinite(input.amount) || input.amount < 0)) return { ok: false, error: "Valor inválido." };
 
+  // 🔴 A competência vem do vencimento, não do mês que está aberto no ecrã.
+  //
+  //    Era aqui que nascia o defeito: criar um pagamento com vencimento a
+  //    03/11/2026 enquanto se via Julho gravava competência de Julho, e a linha
+  //    aparecia em Julho com uma data de Novembro à frente. A consulta mensal
+  //    nunca esteve errada — o valor que ela filtra é que vinha do sítio errado.
+  //
+  //    Sem vencimento, o mês do ecrã é a única informação temporal que existe e
+  //    passa a ser a competência. Ver `payment-competence.ts`.
+  const competencia = resolveCompetence({
+    dueDate: input.due_date,
+    fallback: { year: input.year, month: input.month },
+  });
+
   const { data: maxRow } = await admin
     .from("fixed_variable_payments")
     .select("sort_order")
     .eq("company_id", profile.company_id)
-    .eq("period_year", input.year)
-    .eq("period_month", input.month)
+    .eq("period_year", competencia.year)
+    .eq("period_month", competencia.month)
     .eq("kind", input.kind)
     .order("sort_order", { ascending: false })
     .limit(1);
@@ -239,8 +257,8 @@ export async function createPayment(input: PaymentInput): Promise<{ ok: boolean;
     direct_debit: input.direct_debit,
     status: "pendente",
     recurring: input.kind === "fixo",
-    period_year: input.year,
-    period_month: input.month,
+    period_year: competencia.year,
+    period_month: competencia.month,
     notes: input.notes,
     sort_order,
     created_by: profile.id,
@@ -260,11 +278,39 @@ export async function updatePayment(
   if (patch.description !== undefined && !patch.description.trim()) return { ok: false, error: "Descrição inválida." };
   if (patch.amount !== undefined && patch.amount !== null && (!Number.isFinite(patch.amount) || patch.amount < 0)) return { ok: false, error: "Valor inválido." };
 
-  const { error } = await admin
-    .from("fixed_variable_payments")
-    .update({ ...patch, updated_at: new Date().toISOString() })
-    .eq("id", id)
-    .eq("company_id", profile.company_id);
+  // ── Mudar a data é mudar de mês ─────────────────────────────────────────────
+  //
+  // 🔴 Aqui alterava-se o `due_date` e mais nada. Um pagamento editado de
+  //    15/07 para 15/08 ficava com data de Agosto e competência de Julho: no
+  //    ecrã de Julho continuava a aparecer, e no de Agosto não aparecia.
+  //
+  //    A competência é recalculada no mesmo UPDATE, sobre a mesma linha. O
+  //    pagamento **move-se** entre meses — não é apagado de um e criado no
+  //    outro, por isso o id, os anexos, a conciliação e a auditoria seguem com
+  //    ele. Um registo, um facto económico.
+  //
+  //    `due_date` a ser posto a `null` não altera a competência: não há de onde
+  //    a derivar, e apagar o mês deixaria a linha sem pertencer a lado nenhum.
+  const agora = new Date().toISOString();
+  const novaCompetencia =
+    patch.due_date !== undefined ? competenceFromDueDate(patch.due_date) : null;
+
+  const { error } = novaCompetencia
+    ? await admin
+        .from("fixed_variable_payments")
+        .update({
+          ...patch,
+          updated_at: agora,
+          period_year: novaCompetencia.year,
+          period_month: novaCompetencia.month,
+        })
+        .eq("id", id)
+        .eq("company_id", profile.company_id)
+    : await admin
+        .from("fixed_variable_payments")
+        .update({ ...patch, updated_at: agora })
+        .eq("id", id)
+        .eq("company_id", profile.company_id);
   if (error) return { ok: false, error: error.message };
   revalidate();
   return { ok: true };
