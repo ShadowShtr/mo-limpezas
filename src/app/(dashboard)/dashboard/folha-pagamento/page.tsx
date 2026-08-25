@@ -75,7 +75,25 @@ export default async function FolhaPagamentoPage({
       title="Folha de Pagamento"
       subtitle="Custo salarial do período, aprovações e pagamentos"
     >
+      {/*
+        🔴 A identidade da vista é o período, tal como nas outras quatro
+        vistas do Financeiro (ver `financeiro/pagamentos/page.tsx`). Ficou de
+        fora da ronda anterior de propósito: a Folha estava a ser blindada em
+        paralelo e mexer-lhe ao mesmo tempo misturava duas mudanças numa só.
+
+        Aqui a `key` protege mais do que uma lista. Além de
+        `useState(initialRecords)` — que só lê o valor na montagem — o cliente
+        guarda `selected`, um conjunto de ids de registos. Sem remontagem, uma
+        seleção feita em Agosto sobreviveria a uma navegação para Julho e o
+        botão de aprovar atuaria sobre ids do mês errado.
+
+        Descartar esse estado ao mudar de mês é deliberado. A `key` traz só o
+        período; filtros e seleções dentro do mesmo mês não remontam nada.
+
+        Isto é identidade de interface. Nenhuma fórmula, nenhum valor.
+      */}
       <PayrollClient
+        key={period.key}
         initialRecords={records}
         companyId={companyId}
         mesParam={period.key}

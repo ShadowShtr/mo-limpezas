@@ -360,10 +360,19 @@ describe("nada de semântica financeira mudou", () => {
     expect(cliente).not.toMatch(/useEffect\([^)]*setData\(initialData\)/);
   });
 
-  it("a Folha de Pagamento fica de fora desta ronda", () => {
-    // #68 mexe em `payroll-client.tsx`; corrigir aqui criaria conflito.
-    // PAYROLL_PERIOD_FIX = DEFER_UNTIL_68_INTEGRATION.
-    const folha = ler("src/app/(dashboard)/dashboard/folha-pagamento/page.tsx");
-    expect(folha).not.toMatch(/key=\{period\.key\}/);
-  });
+    it("a Folha de Pagamento recebeu a mesma identidade, na integração da #68", () => {
+      // Este guarda nasceu invertido: enquanto a #68 estava a blindar o estado
+      // da folha, exigia que a Folha **não** tivesse `key`, para a correção não
+      // entrar cedo e criar conflito com esse trabalho.
+      //
+      // O adiamento terminou quando a #68 foi integrada, e foi ela que o
+      // inverteu — a espera acabou por ser sinalizada por este próprio teste a
+      // ficar vermelho, que era exatamente o que se pretendia.
+      //
+      // A prova comportamental da Folha vive em
+      // `payroll-period-view-identity.test.tsx`; aqui fica só a garantia de que
+      // as cinco vistas mensais partilham a mesma regra.
+      const folha = ler("src/app/(dashboard)/dashboard/folha-pagamento/page.tsx");
+      expect(folha).toMatch(/key=\{period\.key\}/);
+    });
 });
