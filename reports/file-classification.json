@@ -1,14 +1,14 @@
 {
   "generatedBy": "scripts/audit-file-inventory.mjs",
-  "totalFiles": 668,
+  "totalFiles": 670,
   "byStatus": {
-    "MANTER": 650,
+    "MANTER": 652,
     "STANDBY": 18
   },
   "byCategory": {
     "route-ui": 135,
-    "test": 112,
-    "migration": 79,
+    "test": 113,
+    "migration": 80,
     "lib": 65,
     "script": 48,
     "doc": 43,
@@ -29,7 +29,7 @@
     "other": 1
   },
   "byConfidence": {
-    "alta": 652,
+    "alta": 654,
     "média": 10,
     "baixa": 6
   },
@@ -4385,6 +4385,34 @@
       "sideEffects": [],
       "risks": [],
       "signals": {},
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/__tests__/domain-mutation-change-event-foundation.test.ts",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [
+        "service-role"
+      ],
+      "signals": {
+        "serviceRole": 1,
+        "sqlWrite": 22,
+        "fallbackArray": 2
+      },
       "action": "nenhuma",
       "reason": "suite de testes — corre por convenção do vitest",
       "manualDecision": false,
@@ -18318,6 +18346,24 @@
       "signals": {
         "serviceRole": 1,
         "sqlWrite": 10
+      },
+      "action": "nenhuma",
+      "reason": "migration versionada — histórico do schema, nunca se apaga",
+      "manualDecision": false
+    },
+    {
+      "path": "supabase/migrations/078_domain_mutation_change_event_foundation.sql",
+      "category": "migration",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "sqlWrite": 57
       },
       "action": "nenhuma",
       "reason": "migration versionada — histórico do schema, nunca se apaga",
