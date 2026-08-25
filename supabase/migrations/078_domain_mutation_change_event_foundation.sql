@@ -81,9 +81,38 @@
 -- 🔴 Não adiciona estado de entrega (`delivered_at`, tentativas, dead-letter).
 --    Não existe worker. Quando existir, terá a sua própria migration.
 --
--- Predecessor operacional exigido: 077 (segurança do ledger). Não é uma
--- dependência técnica — a 078 corre sem ela — é a ordem que decidimos.
+-- ---------------------------------------------------------------------------
+-- Predecessor exigido: 077
+-- ---------------------------------------------------------------------------
+--
+-- A 077 fecha o acesso público ao ledger. Tecnicamente a 078 corria sem ela;
+-- operacionalmente decidimos que a segurança vem primeiro. A diferença entre
+-- essas duas frases é exatamente o que esta verificação elimina: a ordem
+-- deixa de depender de alguém se lembrar dela.
+--
+-- 🔴 A verificação é pela **presença no ledger**, não pelo checksum. O runner
+--    já valida os checksums de todas as migrations aplicadas antes de executar
+--    seja o que for — repetir aqui o valor da 077 criaria uma segunda cópia de
+--    uma verdade que teria de ser mantida em dois sítios, e que ficaria
+--    silenciosamente errada se a 077 alguma vez fosse renumerada.
 -- ============================================================================
+
+DO $$
+BEGIN
+  IF to_regclass('public._migrations') IS NULL THEN
+    RAISE EXCEPTION
+      'REQUIRED_MIGRATION_077_NOT_APPLIED: public._migrations não existe, logo a 077 não pode ter corrido.';
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM public._migrations
+    WHERE name = '077_secure_migrations_ledger.sql'
+  ) THEN
+    RAISE EXCEPTION
+      'REQUIRED_MIGRATION_077_NOT_APPLIED: a 078 exige a 077 (segurança do ledger) registada antes de correr.';
+  END IF;
+END
+$$;
 
 -- ─── Fingerprint do que a produção tem hoje ────────────────────────────────
 --
@@ -315,10 +344,37 @@ CREATE TABLE IF NOT EXISTS public.company_sync_state (
 --    ambígua.
 
 DO $$
-DECLARE r record;
+DECLARE
+  r record;
+  v_tipos text;
+  v_conhecida boolean;
+  -- Conjuntos de tipos de argumento aceites, ordenados alfabeticamente.
+  --
+  -- Ordenar resolve um problema real: a ordem posicional da assinatura legada
+  -- em produção não é conhecida com certeza — o OpenAPI lista argumentos por
+  -- nome, não por posição, e a assinatura que lá está não corresponde à do
+  -- ficheiro 067 que julgávamos ser a origem. Comparar o conjunto ordenado
+  -- reconhece a função sem depender de um palpite sobre a ordem.
+  v_aceites text[] := ARRAY[
+    -- record_company_change_event, forma legada (7 argumentos, sem datas)
+    'jsonb,text,text,text[],uuid,uuid,uuid[]',
+    -- record_company_change_event, forma canónica (9 argumentos)
+    'date,date,jsonb,text,text,text[],uuid,uuid,uuid[]',
+    -- next_company_sequence
+    'uuid',
+    -- lock_domain_mutation
+    'uuid,uuid',
+    -- find_or_conflict_domain_mutation
+    'text,text,uuid,uuid',
+    -- complete_domain_mutation
+    'jsonb,text,text,text,text,uuid,uuid,uuid'
+  ];
 BEGIN
   FOR r IN
-    SELECT p.oid::regprocedure AS assinatura
+    SELECT p.oid,
+           p.oid::regprocedure AS assinatura,
+           p.proargtypes,
+           p.proname
     FROM pg_proc p
     JOIN pg_namespace n ON n.oid = p.pronamespace
     WHERE n.nspname = 'public'
@@ -330,6 +386,27 @@ BEGIN
         'complete_domain_mutation'
       )
   LOOP
+    -- `oidvectortypes` devolve só os tipos, sem nomes de argumento. Usar
+    -- `pg_get_function_identity_arguments` traria `p_company_id uuid`, e o
+    -- fingerprint passaria a depender também dos nomes — que podem
+    -- legitimamente diferir entre versões da mesma função.
+    SELECT string_agg(btrim(t), ',' ORDER BY btrim(t))
+      INTO v_tipos
+    FROM unnest(string_to_array(oidvectortypes(r.proargtypes), ',')) AS t;
+
+    v_conhecida := COALESCE(v_tipos, '') = ANY (v_aceites);
+
+    IF NOT v_conhecida THEN
+      -- 🔴 Uma assinatura que não reconhecemos não é apagada — é motivo para
+      --    parar. Entre a caracterização e a aplicação alguém pode ter criado
+      --    outra função com este nome, e «apareceu algo inesperado, portanto
+      --    apaguei» é o comportamento errado numa migration que corre sozinha
+      --    contra produção.
+      RAISE EXCEPTION
+        'UNKNOWN_FUNCTION_SIGNATURE: % tem argumentos (%) que a 078 não reconhece. Caracterizar antes de aplicar.',
+        r.assinatura, COALESCE(v_tipos, '(nenhum)');
+    END IF;
+
     EXECUTE format('DROP FUNCTION %s', r.assinatura);
   END LOOP;
 END
@@ -560,6 +637,33 @@ BEGIN
     END IF;
     IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') THEN
       EXECUTE format('REVOKE ALL ON FUNCTION public.%s FROM authenticated', f);
+    END IF;
+  END LOOP;
+END
+$$;
+
+-- ─── Pós-condição das assinaturas ──────────────────────────────────────────
+--
+-- `CREATE OR REPLACE` com uma lista de argumentos diferente cria uma
+-- sobrecarga, e duas funções com o mesmo nome tornam cada chamada ambígua.
+-- Depois desta migration só pode existir uma de cada.
+
+DO $$
+DECLARE
+  f text;
+  n int;
+BEGIN
+  FOREACH f IN ARRAY ARRAY[
+    'record_company_change_event', 'next_company_sequence',
+    'lock_domain_mutation', 'find_or_conflict_domain_mutation',
+    'complete_domain_mutation'
+  ] LOOP
+    SELECT count(*) INTO n
+    FROM pg_proc p JOIN pg_namespace ns ON ns.oid = p.pronamespace
+    WHERE ns.nspname = 'public' AND p.proname = f;
+
+    IF n <> 1 THEN
+      RAISE EXCEPTION 'FUNCTION_OVERLOAD: public.% tem % assinaturas, esperada exatamente 1.', f, n;
     END IF;
   END LOOP;
 END

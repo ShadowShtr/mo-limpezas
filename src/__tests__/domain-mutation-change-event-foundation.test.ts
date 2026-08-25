@@ -55,6 +55,13 @@ async function baseNova() {
     CREATE ROLE authenticated NOLOGIN;
     CREATE ROLE service_role NOLOGIN;
     CREATE TABLE public.companies (id uuid PRIMARY KEY, name text NOT NULL);
+
+    -- O ledger com a 077 registada: a 078 exige o predecessor.
+    CREATE TABLE public._migrations (
+      name text PRIMARY KEY, checksum text, applied_at timestamptz NOT NULL DEFAULT now()
+    );
+    INSERT INTO public._migrations (name, checksum)
+    VALUES ('077_secure_migrations_ledger.sql', 'checksum-077');
   `);
   await db.query("INSERT INTO public.companies (id, name) VALUES ($1,$2), ($3,$4)",
     [EMPRESA_A, "Mó", EMPRESA_B, "Outra"]);
@@ -120,6 +127,21 @@ async function comRpcOrfas(db: PGlite) {
 }
 
 const aplicar = (db: PGlite) => db.exec(SQL_078);
+
+/** Base sem o ledger, ou com a 077 por registar — para provar a pré-condição. */
+async function semPredecessor({ comLedger = true } = {}) {
+  const db = new PGlite();
+  await db.exec(`
+    CREATE ROLE anon NOLOGIN;
+    CREATE ROLE authenticated NOLOGIN;
+    CREATE TABLE public.companies (id uuid PRIMARY KEY, name text NOT NULL);
+  `);
+  if (comLedger) {
+    await db.exec(`CREATE TABLE public._migrations (
+      name text PRIMARY KEY, checksum text, applied_at timestamptz NOT NULL DEFAULT now());`);
+  }
+  return db;
+}
 
 /** Fingerprint canónico: colunas, tipos e nulidade, ordenados. */
 async function fingerprint(db: PGlite, tabela: string) {
@@ -634,5 +656,128 @@ describe("AF+AG. a 078 não faz o que dissemos que não faria", () => {
     expect(SQL_078).toMatch(/delete_client_atomic/);
     expect(SQL_078).toMatch(/Realtime/);
     expect(executavel).not.toMatch(/delete_client_atomic/);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// PARTE H — as três garantias acrescentadas no endurecimento
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe("078 exige a 077 antes de correr", () => {
+  it("🔴 sem a 077 no ledger, a 078 recusa", async () => {
+    // A ordem operacional deixa de depender de alguém se lembrar dela.
+    const db = await semPredecessor();
+    await expect(aplicar(db)).rejects.toThrow(/REQUIRED_MIGRATION_077_NOT_APPLIED/);
+  });
+
+  it("sem sequer a tabela do ledger, também recusa", async () => {
+    const db = await semPredecessor({ comLedger: false });
+    await expect(aplicar(db)).rejects.toThrow(/REQUIRED_MIGRATION_077_NOT_APPLIED/);
+  });
+
+  it("com a 077 registada, passa", async () => {
+    const db = await semPredecessor();
+    await db.query("INSERT INTO public._migrations (name, checksum) VALUES ($1, $2)",
+      ["077_secure_migrations_ledger.sql", "checksum-077"]);
+    await expect(aplicar(db)).resolves.not.toThrow();
+  });
+
+  it("recusar acontece ANTES de tocar em qualquer coisa", async () => {
+    const db = await semPredecessor();
+    await aplicar(db).catch(() => {});
+    // Nenhuma das tabelas da fundação foi criada.
+    for (const t of ["company_change_events", "domain_mutations", "company_sync_state"]) {
+      const r = await db.query<{ n: number }>(
+        `SELECT count(*)::int AS n FROM information_schema.tables
+         WHERE table_schema='public' AND table_name=$1`, [t]);
+      expect(r.rows[0].n, t).toBe(0);
+    }
+  });
+});
+
+describe("assinaturas desconhecidas fazem a 078 parar, não apagar", () => {
+  it("🔴 uma assinatura inesperada aborta em vez de ser removida", async () => {
+    // Entre a caracterização e a aplicação alguém pode criar outra função com
+    // este nome. «Apareceu algo inesperado, portanto apaguei» é o
+    // comportamento errado numa migration que corre sozinha contra produção.
+    const db = await producaoLegada();
+    await db.exec(`
+      CREATE FUNCTION public.record_company_change_event(p_qualquer text)
+      RETURNS jsonb LANGUAGE plpgsql AS $f$ BEGIN RETURN '{}'::jsonb; END $f$;
+    `);
+
+    await expect(aplicar(db)).rejects.toThrow(/UNKNOWN_FUNCTION_SIGNATURE/);
+
+    // E a função inesperada continua lá — a migration não a destruiu.
+    expect(await assinaturas(db, "record_company_change_event")).toHaveLength(1);
+  });
+
+  it("a assinatura legada conhecida é reconhecida e removida", async () => {
+    const db = await producaoLegada();
+    await db.exec(`
+      CREATE FUNCTION public.record_company_change_event(
+        p_company_id uuid, p_mutation_id uuid, p_domain text, p_event_type text,
+        p_entity_ids uuid[], p_scopes text[], p_payload jsonb
+      ) RETURNS jsonb LANGUAGE plpgsql AS $f$ BEGIN RETURN '{}'::jsonb; END $f$;
+    `);
+
+    await expect(aplicar(db)).resolves.not.toThrow();
+
+    const sigs = await assinaturas(db, "record_company_change_event");
+    expect(sigs).toHaveLength(1);
+    expect(sigs[0]).toMatch(/date/);
+  });
+
+  it("o fingerprint compara tipos, não nomes de argumento", async () => {
+    // Nomes podem legitimamente diferir entre versões da mesma função; os
+    // tipos são a identidade.
+    const db = await producaoLegada();
+    await db.exec(`
+      CREATE FUNCTION public.record_company_change_event(
+        outro_nome_a uuid, outro_nome_b uuid, outro_nome_c text, outro_nome_d text,
+        outro_nome_e uuid[], outro_nome_f text[], outro_nome_g jsonb
+      ) RETURNS jsonb LANGUAGE plpgsql AS $f$ BEGIN RETURN '{}'::jsonb; END $f$;
+    `);
+    await expect(aplicar(db)).resolves.not.toThrow();
+  });
+
+  it("reaplicar reconhece a própria forma canónica", async () => {
+    const db = await producaoLegada();
+    await aplicar(db);
+    // A segunda passagem encontra a canónica, reconhece-a, e substitui.
+    await expect(aplicar(db)).rejects.toThrow(/NONEMPTY_LEGACY_TABLE|LEGACY_SCHEMA_UNEXPECTED/);
+    // (a tabela já não tem o shape legado — o que prova que o guard de
+    //  shape corre antes, e não que a assinatura foi rejeitada)
+  });
+
+  it("nenhuma das cinco funções fica com mais do que uma assinatura", async () => {
+    const db = await producaoLegada();
+    await aplicar(db);
+    for (const f of ["record_company_change_event", "next_company_sequence",
+                     "lock_domain_mutation", "find_or_conflict_domain_mutation",
+                     "complete_domain_mutation"]) {
+      expect(await assinaturas(db, f), f).toHaveLength(1);
+    }
+  });
+});
+
+describe("a guarda estática acompanha o endurecimento", () => {
+  const executavel = SQL_078.replace(/^\s*--.*$/gm, "").replace(/\/\*[\s\S]*?\*\//g, "");
+
+  it("não existe DROP incondicional de funções por nome", () => {
+    // A versão anterior fazia `FOR ... LOOP DROP` sem validar nada.
+    expect(executavel).toMatch(/UNKNOWN_FUNCTION_SIGNATURE/);
+    expect(executavel).toMatch(/oidvectortypes/);
+  });
+
+  it("a pré-condição da 077 está presente", () => {
+    expect(executavel).toMatch(/REQUIRED_MIGRATION_077_NOT_APPLIED/);
+    expect(executavel).toMatch(/077_secure_migrations_ledger\.sql/);
+  });
+
+  it("a pré-condição não duplica o checksum da 077", () => {
+    // O runner já valida checksums de tudo o que está aplicado; repetir o
+    // valor aqui criaria uma segunda cópia da mesma verdade.
+    expect(executavel).not.toMatch(/d15ca5f0/);
   });
 });

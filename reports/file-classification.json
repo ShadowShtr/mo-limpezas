@@ -1,13 +1,13 @@
 {
   "generatedBy": "scripts/audit-file-inventory.mjs",
-  "totalFiles": 670,
+  "totalFiles": 671,
   "byStatus": {
-    "MANTER": 652,
+    "MANTER": 653,
     "STANDBY": 18
   },
   "byCategory": {
     "route-ui": 135,
-    "test": 113,
+    "test": 114,
     "migration": 80,
     "lib": 65,
     "script": 48,
@@ -29,7 +29,7 @@
     "other": 1
   },
   "byConfidence": {
-    "alta": 654,
+    "alta": 655,
     "média": 10,
     "baixa": 6
   },
@@ -4410,7 +4410,7 @@
       ],
       "signals": {
         "serviceRole": 1,
-        "sqlWrite": 22,
+        "sqlWrite": 26,
         "fallbackArray": 2
       },
       "action": "nenhuma",
@@ -4419,6 +4419,36 @@
       "deadCodeDoors": {
         "frameworkConvention": false,
         "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/__tests__/domain-mutation-sequence-concurrency.pg.test.ts",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [
+        "ci"
+      ],
+      "sideEffects": [
+        "env"
+      ],
+      "risks": [],
+      "signals": {
+        "env": 1,
+        "sqlWrite": 5,
+        "fallbackZero": 1
+      },
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": true,
         "dynamicImport": true,
         "allClosed": false
       }
