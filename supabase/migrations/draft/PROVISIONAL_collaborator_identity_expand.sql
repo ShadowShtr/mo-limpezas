@@ -123,6 +123,36 @@ $fk$;
 --
 --    A ligação ao Auth passa a viver onde deve: em `auth_user_id`, com
 --    `ON DELETE SET NULL`.
+--
+--    ┌── LEGACY_PROFILES_ID_AUTH_FK_STATUS = DROPPED_IN_PHASE_A ─────────────┐
+--    │                                                                      │
+--    │ Largada mesmo, nesta migration — não é preparação para depois. Medido │
+--    │ em Postgres 16, antes e depois:                                       │
+--    │                                                                      │
+--    │   leitura antiga `WHERE id = auth.uid()`   → continua a devolver o    │
+--    │                                              perfil e o papel certos  │
+--    │   `get_my_company_id()` da 014             → continua correcta        │
+--    │   criar pessoa sem conta                   → recusado antes,          │
+--    │                                              possível depois          │
+--    │   apagar a conta no Auth                   → o perfil e a folha       │
+--    │                                              sobrevivem (antes,       │
+--    │                                              desapareciam)            │
+--    │                                                                      │
+--    │ Porque é que isto **não** quebra a compatibilidade: uma chave         │
+--    │ estrangeira só restringe o que se pode **escrever**. Nenhuma leitura  │
+--    │ muda por ela desaparecer, e todas as linhas continuam com os mesmos   │
+--    │ valores. O código antigo não pergunta se a restrição existe — só lê   │
+--    │ `id`, e o `id` é o mesmo.                                            │
+--    │                                                                      │
+--    │ O comportamento novo que isto destranca — uma pessoa sem conta —      │
+--    │ ainda não é alcançável pela aplicação: nenhum ecrã o oferece, e é a   │
+--    │ PHASE D que o abre, depois de a PHASE C preparar as políticas. A base │
+--    │ passa a **aceitá-lo**; ninguém o **produz** ainda.                    │
+--    │                                                                      │
+--    │ E há um efeito que é melhoria imediata, não risco: apagar um          │
+--    │ utilizador do Auth deixa de apagar a pessoa, a folha, os documentos e │
+--    │ as equipas.                                                          │
+--    └──────────────────────────────────────────────────────────────────────┘
 ALTER TABLE public.profiles
   DROP CONSTRAINT IF EXISTS profiles_id_fkey;
 

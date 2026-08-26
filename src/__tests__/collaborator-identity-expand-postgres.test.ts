@@ -333,6 +333,54 @@ describe.sequential("EXPAND — o que passa a ser possível", () => {
       "SELECT count(*)::int n FROM payroll_records WHERE collaborator_id=$1", [semAcesso])).toBe(1);
   });
 
+  /**
+   * 🔴 O buraco que o ramo de compatibilidade abria, registado por inteiro.
+   *
+   *   BUG          o ramo legado de `get_my_profile_id()` respondia a
+   *                `WHERE id = auth.uid()` sem verificar que essa conta existe
+   *                mesmo em `auth.users`.
+   *   ATTACK_PATH  ao permitir pessoas sem conta, o `id` de um perfil deixou
+   *                de ser, por construção, o id de uma conta. Quem obtivesse um
+   *                token cujo `sub` fosse o id de uma pessoa **sem** login
+   *                passava a ser resolvido como essa pessoa — herdando a sua
+   *                empresa e o seu papel. Antes desta migration era impossível.
+   *   FIX          o ramo legado exige
+   *                `EXISTS (SELECT 1 FROM auth.users u WHERE u.id = p.id)`.
+   *   TEST         os dois que se seguem.
+   *   MUTATION     retirando o EXISTS, ficam vermelhos.
+   */
+  it("🔴 SEGURANÇA: um id de pessoa sem conta não resolve para ninguém", async () => {
+    await baseAntiga();
+    await pool.query(EXPAND());
+    const semAcesso = randomUUID();
+    await pool.query(
+      "INSERT INTO profiles(id,company_id,full_name,role) VALUES($1,$2,'Sem acesso','admin')",
+      [semAcesso, EMPRESA_A]);
+
+    // Um token forjado com o id desta pessoa não pode dar acesso à identidade
+    // dela — e ela é `admin`, o que tornaria o ganho maior.
+    expect(await comoUtilizador(semAcesso, async (c) =>
+      (await c.query("SELECT public.get_my_profile_id()::text AS id")).rows[0].id)).toBeNull();
+  });
+
+  it("🔴 SEGURANÇA: o mesmo vale para um id de outra empresa", async () => {
+    await baseAntiga();
+    await pool.query(EXPAND());
+    const daOutra = randomUUID();
+    await pool.query(
+      "INSERT INTO profiles(id,company_id,full_name) VALUES($1,$2,'De outra empresa')",
+      [daOutra, EMPRESA_B]);
+    expect(await comoUtilizador(daOutra, async (c) =>
+      (await c.query("SELECT public.get_my_profile_id()::text AS id")).rows[0].id)).toBeNull();
+  });
+
+  it("um id que não é de ninguém resolve para NULL, não para a primeira linha", async () => {
+    await baseAntiga();
+    await pool.query(EXPAND());
+    expect(await comoUtilizador(randomUUID(), async (c) =>
+      (await c.query("SELECT public.get_my_profile_id()::text AS id")).rows[0].id)).toBeNull();
+  });
+
   it("quem não tem conta não é ninguém para o get_my_profile_id()", async () => {
     await baseAntiga();
     await pool.query(EXPAND());
