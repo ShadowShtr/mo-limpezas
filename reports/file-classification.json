@@ -1,17 +1,17 @@
 {
   "generatedBy": "scripts/audit-file-inventory.mjs",
-  "totalFiles": 690,
+  "totalFiles": 692,
   "byStatus": {
-    "MANTER": 672,
+    "MANTER": 674,
     "STANDBY": 18
   },
   "byCategory": {
     "route-ui": 135,
-    "test": 122,
+    "test": 123,
     "migration": 78,
     "lib": 65,
     "script": 48,
-    "domain": 46,
+    "domain": 47,
     "doc": 43,
     "server-action": 41,
     "component": 30,
@@ -29,7 +29,7 @@
     "supabase-other": 2
   },
   "byConfidence": {
-    "alta": 674,
+    "alta": 676,
     "média": 10,
     "baixa": 6
   },
@@ -4460,6 +4460,30 @@
       "sideEffects": [],
       "risks": [],
       "signals": {},
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/__tests__/effective-expense-category.test.ts",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "dynamicImport": 2
+      },
       "action": "nenhuma",
       "reason": "suite de testes — corre por convenção do vitest",
       "manualDecision": false,
@@ -10870,11 +10894,11 @@
         "sqlWrite": 6,
         "eslintDisable": 3,
         "anyType": 3,
-        "unknownCast": 8,
+        "unknownCast": 9,
         "consoleErr": 2,
         "ignoredError": 3,
         "fallbackZero": 3,
-        "fallbackArray": 4,
+        "fallbackArray": 5,
         "revalidatePath": 6
       },
       "action": "auditar atomicidade (T12/T13)",
@@ -11346,10 +11370,10 @@
         "supabase": 2,
         "serverAction": 1,
         "sqlWrite": 3,
-        "unknownCast": 5,
-        "consoleErr": 1,
+        "unknownCast": 6,
+        "consoleErr": 3,
         "fallbackZero": 9,
-        "fallbackArray": 6
+        "fallbackArray": 7
       },
       "action": "nenhuma",
       "reason": "em uso: 1 consumidor(es), CI",
@@ -14235,6 +14259,32 @@
       "signals": {},
       "action": "nenhuma",
       "reason": "em uso: 5 consumidor(es)",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/domain/finance-v2/effective-expense-category.ts",
+      "category": "domain",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 3,
+      "consumerSample": [
+        "src/__tests__/effective-expense-category.test.ts",
+        "src/app/actions/cash-flow.ts",
+        "src/app/actions/finance-dashboard-v2.ts"
+      ],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {},
+      "action": "nenhuma",
+      "reason": "em uso: 3 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,

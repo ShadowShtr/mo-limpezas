@@ -1,6 +1,10 @@
 "use server";
 
 import { createAdminClient } from "@/lib/supabase/admin";
+import {
+  resolverCategoriaEfetiva, idsDePagamentoAResolver,
+  type CategoriaDoPagamento,
+} from "@/domain/finance-v2/effective-expense-category";
 import { createClient } from "@/lib/supabase/server";
 import { requireProfile } from "@/lib/auth-guard";
 import { isValidCashFlowAmount } from "@/lib/cash-flow-integrity";
@@ -86,12 +90,55 @@ export async function getCashFlowEntries(
     expense_categories?: { name: string; color_token: string | null }
       | { name: string; color_token: string | null }[] | null;
   };
-  const entries: CashFlowEntry[] = ((data ?? []) as unknown as LinhaCaixa[]).map((r) => {
-    const cat = Array.isArray(r.expense_categories) ? r.expense_categories[0] : r.expense_categories;
+  const linhas = (data ?? []) as unknown as LinhaCaixa[];
+
+  // ── A mesma regra do resumo, no mesmo sítio ───────────────────────────────
+  //
+  // 🔴 Uma saída nascida de um pagamento é classificada pelo pagamento. Se a
+  //    lista usasse a categoria do movimento e o donut usasse a do pagamento,
+  //    voltávamos a ter duas verdades sobre o mesmo facto — que é o defeito
+  //    que isto remove. Ver `effective-expense-category.ts`.
+  const paraClassificar = linhas.map((r) => ({
+    reference_type: r.reference_type,
+    reference_id: r.reference_id,
+    categoriaEstruturada:
+      (Array.isArray(r.expense_categories) ? r.expense_categories[0] : r.expense_categories)?.name ?? null,
+    categoriaEstruturadaCor:
+      (Array.isArray(r.expense_categories) ? r.expense_categories[0] : r.expense_categories)?.color_token ?? null,
+    categoriaLegada: r.category,
+  }));
+
+  const idsPagamento = idsDePagamentoAResolver(paraClassificar);
+  const categoriaPorPagamento = new Map<string, CategoriaDoPagamento>();
+
+  if (idsPagamento.length > 0) {
+    const { data: pgs, error: erroPg } = await admin
+      .from("fixed_variable_payments")
+      .select("id, expense_categories(name, color_token)")
+      .eq("company_id", companyId)
+      .in("id", idsPagamento);
+
+    // Falhar a ler não pode virar «nenhum tem categoria»: isso mostraria uma
+    // lista plausível e errada. Falha fechada.
+    if (erroPg) return { ok: false, error: erroPg.message };
+
+    for (const pg of (pgs ?? []) as unknown as {
+      id: string;
+      expense_categories?: { name: string; color_token: string | null }
+        | { name: string; color_token: string | null }[] | null;
+    }[]) {
+      const c = Array.isArray(pg.expense_categories) ? pg.expense_categories[0] : pg.expense_categories;
+      categoriaPorPagamento.set(pg.id, { nome: c?.name ?? null, cor: c?.color_token ?? null });
+    }
+  }
+
+  const entries: CashFlowEntry[] = linhas.map((r, i) => {
+    const doPagamento = r.reference_id ? categoriaPorPagamento.get(r.reference_id) ?? null : null;
+    const efetiva = resolverCategoriaEfetiva(paraClassificar[i], doPagamento);
     return {
       ...r,
-      expense_category_name: cat?.name ?? null,
-      expense_category_color: cat?.color_token ?? null,
+      expense_category_name: efetiva.nome,
+      expense_category_color: efetiva.cor,
     };
   });
   const confirmed = entries.filter((e) => e.status === "confirmado");
