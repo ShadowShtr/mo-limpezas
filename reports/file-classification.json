@@ -1,16 +1,16 @@
 {
   "generatedBy": "scripts/audit-file-inventory.mjs",
-  "totalFiles": 697,
+  "totalFiles": 701,
   "byStatus": {
-    "MANTER": 678,
-    "STANDBY": 19
+    "MANTER": 680,
+    "STANDBY": 21
   },
   "byCategory": {
     "route-ui": 135,
-    "test": 124,
+    "test": 125,
     "migration": 80,
     "lib": 65,
-    "script": 49,
+    "script": 52,
     "domain": 47,
     "doc": 43,
     "server-action": 41,
@@ -29,15 +29,15 @@
     "supabase-other": 2
   },
   "byConfidence": {
-    "alta": 680,
-    "média": 11,
+    "alta": 682,
+    "média": 13,
     "baixa": 6
   },
   "scriptRisk": {
-    "SAFE_OFFLINE": 27,
+    "SAFE_OFFLINE": 28,
     "ADMIN_GUARDED_WRITE": 11,
-    "ADMIN_READ": 6,
-    "WRITE_CAPABLE": 5
+    "WRITE_CAPABLE": 7,
+    "ADMIN_READ": 6
   },
   "files": [
     {
@@ -3321,6 +3321,96 @@
       "scriptRisk": "WRITE_CAPABLE"
     },
     {
+      "path": "scripts/rehearse-six-repair.mjs",
+      "category": "script",
+      "status": "STANDBY",
+      "confidence": "média",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [
+        "npm"
+      ],
+      "sideEffects": [
+        "write"
+      ],
+      "risks": [],
+      "signals": {
+        "write": 1,
+        "sqlWrite": 9,
+        "consoleLog": 15,
+        "consoleErr": 1
+      },
+      "action": "T17-B: confirmar se ainda é preciso",
+      "reason": "capaz de escrever na base",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": true,
+        "dynamicImport": true,
+        "allClosed": false
+      },
+      "scriptRisk": "WRITE_CAPABLE"
+    },
+    {
+      "path": "scripts/repairs/lib/six-pending-core.mjs",
+      "category": "script",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 2,
+      "consumerSample": [
+        "scripts/repairs/six-pending-obligations.mjs",
+        "src/__tests__/six-pending-obligations.test.ts"
+      ],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "fallbackArray": 3
+      },
+      "action": "nenhuma",
+      "reason": "ferramenta offline, sem acesso à base",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": true,
+        "dynamicImport": true,
+        "allClosed": false
+      },
+      "scriptRisk": "SAFE_OFFLINE"
+    },
+    {
+      "path": "scripts/repairs/six-pending-obligations.mjs",
+      "category": "script",
+      "status": "STANDBY",
+      "confidence": "média",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [
+        "write"
+      ],
+      "risks": [],
+      "signals": {
+        "write": 1,
+        "sqlWrite": 7,
+        "consoleLog": 17,
+        "consoleErr": 1
+      },
+      "action": "T17-B: confirmar se ainda é preciso",
+      "reason": "capaz de escrever na base",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": true,
+        "dynamicImport": true,
+        "allClosed": false
+      },
+      "scriptRisk": "WRITE_CAPABLE"
+    },
+    {
       "path": "scripts/restore-backup.mjs",
       "category": "script",
       "status": "MANTER",
@@ -6386,6 +6476,34 @@
       "sideEffects": [],
       "risks": [],
       "signals": {},
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/__tests__/six-pending-obligations.test.ts",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [
+        "write"
+      ],
+      "risks": [],
+      "signals": {
+        "write": 1,
+        "sqlWrite": 6,
+        "unknownCast": 3
+      },
       "action": "nenhuma",
       "reason": "suite de testes — corre por convenção do vitest",
       "manualDecision": false,
