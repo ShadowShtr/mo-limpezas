@@ -41,7 +41,7 @@ async function getCompanyId(): Promise<string> {
   const { data: profile } = await admin
     .from("profiles")
     .select("company_id")
-    .eq("id", user.id)
+    .eq("auth_user_id", user.id)
     .single();
 
   if (!profile) throw new Error("Perfil não encontrado");
@@ -239,7 +239,7 @@ export async function moveCollaboratorToTeam(input: {
 
     const admin = createAdminClient();
     const { data: actor } = await admin
-      .from("profiles").select("company_id, role").eq("id", user.id).single();
+      .from("profiles").select("company_id, role").eq("auth_user_id", user.id).single();
     if (!actor || !["admin", "gestor"].includes(actor.role)) {
       return { ok: false, error: "Sem permissão." };
     }

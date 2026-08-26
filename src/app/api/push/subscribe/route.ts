@@ -32,15 +32,15 @@ export async function POST(req: NextRequest) {
 
   const { data: profile } = await admin
     .from("profiles")
-    .select("company_id")
-    .eq("id", user.id)
+    .select("id, company_id")
+    .eq("auth_user_id", user.id)
     .single();
 
   if (!profile) return NextResponse.json({ error: "Perfil não encontrado" }, { status: 404 });
 
   await admin.from("push_subscriptions").upsert(
     {
-      user_id: user.id,
+      user_id: profile.id,
       company_id: profile.company_id,
       endpoint,
       p256dh: keys.p256dh,

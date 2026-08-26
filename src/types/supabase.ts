@@ -1195,6 +1195,7 @@ export type Database = {
       }
       profiles: {
         Row: {
+          auth_user_id: string | null
           availability: Json | null
           avatar_url: string | null
           company_id: string
@@ -1218,6 +1219,7 @@ export type Database = {
           vacation_balance: number | null
         }
         Insert: {
+          auth_user_id?: string | null
           availability?: Json | null
           avatar_url?: string | null
           company_id: string
@@ -1229,7 +1231,7 @@ export type Database = {
           full_name: string
           hourly_rate?: number | null
           iban?: string | null
-          id: string
+          id?: string
           invite_accepted_at?: string | null
           invited_at?: string | null
           nif?: string | null
@@ -1241,6 +1243,7 @@ export type Database = {
           vacation_balance?: number | null
         }
         Update: {
+          auth_user_id?: string | null
           availability?: Json | null
           avatar_url?: string | null
           company_id?: string

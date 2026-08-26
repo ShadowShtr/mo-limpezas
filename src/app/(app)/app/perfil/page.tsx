@@ -5,13 +5,15 @@ import { Phone, Clock, AlertTriangle, User, Download } from "lucide-react";
 import { SignOutButton } from "./_components/sign-out-button";
 import { ChangePasswordSection } from "./_components/change-password-section";
 import { AppDocumentsSection } from "./_components/documents-section";
-import { getCurrentUser } from "@/lib/auth/current-user";
+import { getCurrentProfile, getCurrentUser } from "@/lib/auth/current-user";
 import { getMyDocuments } from "@/app/actions/collaborator-documents";
 import { todayInLisbon, toLisbonTimestamp } from "@/lib/lisbon-time";
 
 export default async function PerfilPage() {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
+  const currentProfile = await getCurrentProfile();
+  if (!currentProfile) redirect("/login");
 
   const admin = createAdminClient();
   const today = todayInLisbon();
@@ -24,18 +26,18 @@ export default async function PerfilPage() {
     admin
       .from("profiles")
       .select("full_name, phone, email, avatar_url, contracted_hours_month, skills")
-      .eq("id", user.id)
+      .eq("auth_user_id", user.id)
       .single(),
     admin
       .from("timesheets")
       .select("duration_minutes")
-      .eq("collaborator_id", user.id)
+      .eq("collaborator_id", currentProfile.id)
       .gte("clock_in_at", toLisbonTimestamp(monthStart, "00:00"))
       .not("clock_out_at", "is", null),
     admin
       .from("absences")
       .select("id", { count: "exact", head: true })
-      .eq("collaborator_id", user.id)
+      .eq("collaborator_id", currentProfile.id)
       .gte("starts_on", monthStart)
       .lte("starts_on", monthEnd),
     getMyDocuments(),

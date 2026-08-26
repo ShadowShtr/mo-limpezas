@@ -1,4 +1,4 @@
-﻿import Link from "next/link";
+import Link from "next/link";
 import { Bell, ChevronRight } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -18,7 +18,7 @@ export default async function DashboardPage() {
   if (!user) redirect("/login");
 
   const admin = createAdminClient();
-  const { data: profile } = await admin.from("profiles").select("company_id").eq("id", user.id).single();
+  const { data: profile } = await admin.from("profiles").select("company_id").eq("auth_user_id", user.id).single();
   if (!profile?.company_id) redirect("/login");
 
   const today = new Date();

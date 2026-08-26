@@ -21,7 +21,7 @@ export async function saveEquipa(
   const { data: profile } = await admin
     .from("profiles")
     .select("role, company_id")
-    .eq("id", user.id)
+    .eq("auth_user_id", user.id)
     .single();
 
   if (!profile || !["admin", "gestor"].includes(profile.role)) {
@@ -110,7 +110,7 @@ export async function deleteEquipa(
   const { data: profile } = await admin
     .from("profiles")
     .select("role, company_id")
-    .eq("id", user.id)
+    .eq("auth_user_id", user.id)
     .single();
   if (!profile || !["admin", "gestor"].includes(profile.role)) {
     return { ok: false, error: "Sem permissão." };

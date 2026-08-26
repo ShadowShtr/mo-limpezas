@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { calcVacationEntitlement } from "@/lib/vacation-entitlement";
 import { isNoRowsError, queryFailure } from "@/lib/query-error";
+import { getCurrentProfile } from "@/lib/auth/current-user";
 
 export interface VacationRequest {
   id: string;
@@ -43,7 +44,7 @@ export async function createVacationRequest(input: {
   if (!user) return { ok: false, error: "Não autenticado." };
 
   const { data: profile } = await admin
-    .from("profiles").select("company_id").eq("id", user.id).single();
+    .from("profiles").select("id, company_id").eq("auth_user_id", user.id).single();
   if (!profile) return { ok: false, error: "Perfil não encontrado." };
 
   if (input.ends_on < input.starts_on) {
@@ -52,7 +53,7 @@ export async function createVacationRequest(input: {
 
   const { error } = await admin.from("vacation_requests").insert({
     company_id: profile.company_id,
-    collaborator_id: user.id,
+    collaborator_id: profile.id,
     starts_on: input.starts_on,
     ends_on: input.ends_on,
     days_count: countWeekdays(input.starts_on, input.ends_on),
@@ -64,7 +65,7 @@ export async function createVacationRequest(input: {
 
   // Notificar gestores do pedido de férias
   const [{ data: collab }, { data: managers }] = await Promise.all([
-    admin.from("profiles").select("full_name").eq("id", user.id).single(),
+    admin.from("profiles").select("full_name").eq("auth_user_id", user.id).single(),
     admin.from("profiles").select("id").eq("company_id", profile.company_id).in("role", ["gestor", "admin"]),
   ]);
   if (managers && managers.length > 0) {
@@ -77,7 +78,7 @@ export async function createVacationRequest(input: {
         type:       "vacation_requested",
         title:      `${name} pediu ${dias} dia(s) de férias`,
         body:       `De ${input.starts_on} a ${input.ends_on}.${input.notes ? ` "${input.notes}"` : ""}`,
-        data:       { collaborator_id: user.id },
+        data:       { collaborator_id: profile.id },
       })),
     );
   }
@@ -100,7 +101,7 @@ export async function createOwnAbsence(input: {
   if (!user) return { ok: false, error: "Não autenticado." };
 
   const { data: profile } = await admin
-    .from("profiles").select("company_id").eq("id", user.id).single();
+    .from("profiles").select("id, company_id").eq("auth_user_id", user.id).single();
   if (!profile) return { ok: false, error: "Perfil não encontrado." };
 
   if (input.ends_on < input.starts_on) {
@@ -109,12 +110,12 @@ export async function createOwnAbsence(input: {
 
   const { error } = await admin.from("absences").insert({
     company_id: profile.company_id,
-    collaborator_id: user.id,
+    collaborator_id: profile.id,
     absence_type: input.absence_type,
     starts_on: input.starts_on,
     ends_on: input.ends_on,
     notes: input.notes ?? null,
-    created_by: user.id,
+    created_by: profile.id,
   });
 
   if (error) return { ok: false, error: error.message };
@@ -128,7 +129,7 @@ export async function createOwnAbsence(input: {
   };
 
   const [{ data: collab }, { data: managers }] = await Promise.all([
-    admin.from("profiles").select("full_name").eq("id", user.id).single(),
+    admin.from("profiles").select("full_name").eq("auth_user_id", user.id).single(),
     admin.from("profiles").select("id").eq("company_id", profile.company_id).in("role", ["gestor", "admin"]),
   ]);
   if (managers && managers.length > 0) {
@@ -141,7 +142,7 @@ export async function createOwnAbsence(input: {
         type:       "absence_requested",
         title:      `${name} registou uma falta`,
         body:       `Motivo: ${label}. De ${input.starts_on} a ${input.ends_on}.${input.notes ? ` "${input.notes}"` : ""}`,
-        data:       { collaborator_id: user.id },
+        data:       { collaborator_id: profile.id },
       })),
     );
   }
@@ -159,16 +160,18 @@ export async function getMyRequests(): Promise<{
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { vacations: [], absences: [] };
+  const profile = await getCurrentProfile();
+  if (!profile) return { vacations: [], absences: [] };
 
   const admin = createAdminClient();
   const [{ data: vacations }, { data: absences }] = await Promise.all([
     admin.from("vacation_requests")
       .select("id, collaborator_id, starts_on, ends_on, days_count, status, notes, rejection_reason, created_at")
-      .eq("collaborator_id", user.id)
+      .eq("collaborator_id", profile.id)
       .order("created_at", { ascending: false }),
     admin.from("absences")
       .select("id, absence_type, starts_on, ends_on, notes, created_at")
-      .eq("collaborator_id", user.id)
+      .eq("collaborator_id", profile.id)
       .order("starts_on", { ascending: false }),
   ]);
 
@@ -186,7 +189,7 @@ export async function getPendingVacationRequests(): Promise<VacationRequest[]> {
   if (!user) return [];
 
   const { data: me } = await admin
-    .from("profiles").select("company_id, role").eq("id", user.id).single();
+    .from("profiles").select("company_id, role").eq("auth_user_id", user.id).single();
   if (!me || !["admin", "gestor"].includes(me.role)) return [];
 
   const { data } = await admin
@@ -214,7 +217,7 @@ export async function reviewVacationRequest(
   if (!user) return { ok: false, error: "Não autenticado." };
 
   const { data: me } = await admin
-    .from("profiles").select("company_id, role").eq("id", user.id).single();
+    .from("profiles").select("company_id, role").eq("auth_user_id", user.id).single();
   if (!me || !["admin", "gestor"].includes(me.role)) {
     return { ok: false, error: "Sem permissão." };
   }
@@ -294,7 +297,7 @@ export async function getAllVacationsOverview(year: number): Promise<EmployeeVac
   if (!user) return [];
 
   const { data: me } = await admin
-    .from("profiles").select("company_id, role").eq("id", user.id).single();
+    .from("profiles").select("company_id, role").eq("auth_user_id", user.id).single();
   if (!me || !["admin", "gestor"].includes(me.role)) return [];
 
   const yearStart = `${year}-01-01`;

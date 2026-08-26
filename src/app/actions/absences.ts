@@ -66,7 +66,7 @@ async function getCompanyId(): Promise<string> {
   const supabase = await createClient();
   const admin = createAdminClient();
   const { data: { user } } = await supabase.auth.getUser();
-  const { data } = await admin.from("profiles").select("company_id").eq("id", user!.id).single();
+  const { data } = await admin.from("profiles").select("company_id").eq("auth_user_id", user!.id).single();
   return data?.company_id ?? "";
 }
 
@@ -76,7 +76,7 @@ export async function createAbsence(input: CreateAbsenceInput) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { ok: false as const, error: "Não autenticado." };
 
-  const { data: actor } = await admin.from("profiles").select("role, company_id").eq("id", user.id).single();
+  const { data: actor } = await admin.from("profiles").select("role, company_id").eq("auth_user_id", user.id).single();
   if (!actor || !["admin", "gestor"].includes(actor.role)) return { ok: false as const, error: "Sem permissão." };
 
   if (!isValidIsoDateString(input.starts_on)) {

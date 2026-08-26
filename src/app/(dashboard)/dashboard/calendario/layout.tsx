@@ -19,7 +19,7 @@ export default async function CalendarioLayout({ children }: { children: React.R
   const { data: me } = await admin
     .from("profiles")
     .select("company_id, role")
-    .eq("id", user.id)
+    .eq("auth_user_id", user.id)
     .single();
 
   if (!me || !["admin", "gestor"].includes(me.role)) redirect("/app");

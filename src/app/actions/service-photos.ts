@@ -34,10 +34,10 @@ export async function getServicePhotos(
 
   const admin = createAdminClient();
   const { data: profile } = await admin
-    .from("profiles").select("company_id, role").eq("id", user.id).single();
+    .from("profiles").select("id, company_id, role").eq("auth_user_id", user.id).single();
   if (!profile) return { ok: false, error: "Perfil não encontrado" };
 
-  const allowed = await canAccessService(admin, user.id, profile.company_id, serviceId, profile.role);
+  const allowed = await canAccessService(admin, profile.id, profile.company_id, serviceId, profile.role);
   if (!allowed) return { ok: false, error: "Sem permissão para aceder a este serviço." };
 
   const { data, error } = await admin

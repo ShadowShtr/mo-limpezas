@@ -28,7 +28,6 @@ type Colaborador = {
 
 interface Props {
   trigger: React.ReactElement;
-  companyId: string;
   colaborador?: Colaborador;
 }
 
@@ -37,7 +36,7 @@ const SKILLS_SUGESTOES = [
   "Casas de banho", "Exterior", "Hospitalar", "Alta pressão", "Encerador",
 ];
 
-export function ColaboradorSheet({ trigger, companyId, colaborador }: Props) {
+export function ColaboradorSheet({ trigger, colaborador }: Props) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [pending, startTransition] = useTransition();
@@ -52,8 +51,14 @@ export function ColaboradorSheet({ trigger, companyId, colaborador }: Props) {
   const [hourlyRate, setHourlyRate] = useState(colaborador?.hourly_rate != null ? String(colaborador.hourly_rate) : "");
   const [contractStart, setContractStart] = useState(colaborador?.contract_start ?? "");
   const [contractEnd, setContractEnd] = useState(colaborador?.contract_end ?? "");
-  const [role, setRole] = useState(colaborador?.role ?? "colaborador");
-  const [status, setStatus] = useState(colaborador?.status ?? "ativo");
+  const [role, setRole] = useState<"colaborador" | "gestor">(
+    colaborador?.role === "gestor" ? "gestor" : "colaborador",
+  );
+  const [status, setStatus] = useState<"ativo" | "inativo" | "suspenso">(
+    colaborador?.status === "inativo" || colaborador?.status === "suspenso"
+      ? colaborador.status
+      : "ativo",
+  );
   const [hours, setHours] = useState(String(colaborador?.contracted_hours_month ?? "168"));
   const [skills, setSkills] = useState<string[]>(colaborador?.skills ?? []);
   const [skillInput, setSkillInput] = useState("");
@@ -82,13 +87,13 @@ export function ColaboradorSheet({ trigger, companyId, colaborador }: Props) {
         contract_end: contractEnd || null,
         role,
         status,
-        contracted_hours_month: parseFloat(hours) || 168,
+        contracted_hours_month: hours.trim() === "" ? undefined : Number(hours),
         skills,
       };
 
       const res = isEdit
         ? await updateColaborador(colaborador.id, input)
-        : await createColaborador({ ...input, company_id: companyId });
+        : await createColaborador(input);
 
       if (res.ok) {
         setMessage({
@@ -113,9 +118,7 @@ export function ColaboradorSheet({ trigger, companyId, colaborador }: Props) {
     setSending(true);
     setMessage(null);
     const fd = new FormData();
-    fd.set("email", email);
-    fd.set("name", name);
-    fd.set("company_id", companyId);
+    fd.set("collaborator_id", colaborador!.id);
     const result = await inviteCollaborator(fd);
     setSending(false);
     if ("error" in result) {
@@ -149,7 +152,7 @@ export function ColaboradorSheet({ trigger, companyId, colaborador }: Props) {
                   {isEdit ? "Editar colaborador" : "Novo colaborador"}
                 </h2>
                 <p className="text-xs text-[var(--color-text-muted)] mt-0.5">
-                  {isEdit ? "Atualiza os dados abaixo." : "Preenche os dados. Email é opcional para testes."}
+                  {isEdit ? "Atualiza os dados abaixo." : "Só o nome é obrigatório."}
                 </p>
               </div>
               <button onClick={() => setOpen(false)} className="p-1.5 rounded-lg text-[var(--color-text-muted)] hover:bg-[var(--color-background)] transition-colors">
@@ -226,14 +229,14 @@ export function ColaboradorSheet({ trigger, companyId, colaborador }: Props) {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-[var(--color-text-main)] mb-1.5">Função</label>
-                  <select value={role} onChange={(e) => setRole(e.target.value)} className={selectCls}>
+                  <select value={role} onChange={(e) => setRole(e.target.value as "colaborador" | "gestor")} className={selectCls}>
                     <option value="colaborador">Colaborador</option>
                     <option value="gestor">Gestor</option>
                   </select>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-[var(--color-text-main)] mb-1.5">Estado</label>
-                  <select value={status} onChange={(e) => setStatus(e.target.value)} className={selectCls}>
+                  <select value={status} onChange={(e) => setStatus(e.target.value as "ativo" | "inativo" | "suspenso")} className={selectCls}>
                     <option value="ativo">Ativo</option>
                     <option value="inativo">Inativo</option>
                     <option value="suspenso">Suspenso</option>
@@ -291,7 +294,7 @@ export function ColaboradorSheet({ trigger, companyId, colaborador }: Props) {
 
             {/* Footer */}
             <div className="border-t border-[var(--color-border)] px-6 py-4 space-y-2">
-              {email && (
+              {isEdit && email && (
                 <button type="button" onClick={handleSendInvite} disabled={sending}
                   className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg border border-[var(--color-primary)] text-[var(--color-primary)] text-sm font-medium hover:bg-[var(--color-primary-light)] transition-colors disabled:opacity-50">
                   {sending && <Loader2 className="w-4 h-4 animate-spin" />}

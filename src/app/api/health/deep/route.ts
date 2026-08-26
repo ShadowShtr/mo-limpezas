@@ -15,7 +15,7 @@ export async function GET() {
   const { data: me } = await admin
     .from("profiles")
     .select("role")
-    .eq("id", user.id)
+    .eq("auth_user_id", user.id)
     .single();
 
   if (!me || !["admin", "gestor"].includes(me.role)) {

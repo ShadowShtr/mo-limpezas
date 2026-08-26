@@ -43,7 +43,7 @@ export async function createService(
   const { data: profile } = await admin
     .from("profiles")
     .select("company_id, role")
-    .eq("id", user.id)
+    .eq("auth_user_id", user.id)
     .single();
 
   if (!profile || !["admin", "gestor"].includes(profile.role)) {

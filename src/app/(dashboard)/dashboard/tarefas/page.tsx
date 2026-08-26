@@ -1,4 +1,4 @@
-﻿import { createAdminClient } from "@/lib/supabase/admin";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { getKanbanColumns, getManagementTasks } from "@/app/actions/management-tasks";
@@ -11,7 +11,7 @@ export default async function TarefasPage() {
   if (!user) redirect("/login");
 
   const admin = createAdminClient();
-  const { data: profile } = await admin.from("profiles").select("company_id").eq("id", user.id).single();
+  const { data: profile } = await admin.from("profiles").select("company_id").eq("auth_user_id", user.id).single();
   if (!profile?.company_id) redirect("/login");
 
   const [tasksRes, columnsRes, { data: members }, { data: clients }] = await Promise.all([

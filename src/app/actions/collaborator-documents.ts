@@ -17,6 +17,7 @@ import {
 } from "@/domain/documents/retention-policy";
 import { isNoRowsError, queryFailure, logQueryFailure } from "@/lib/query-error";
 import { revalidatePath } from "next/cache";
+import { getCurrentProfile } from "@/lib/auth/current-user";
 
 // 🔴 O tipo NÃO é re-exportado daqui. Parecia inofensivo — tipos são apagados
 //    na compilação — mas o Turbopack constrói o grafo de Server Actions a
@@ -364,12 +365,14 @@ export async function getMyDocuments(): Promise<{
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { ok: false, error: "Não autenticado" };
+  const profile = await getCurrentProfile();
+  if (!profile) return { ok: false, error: "Perfil não encontrado" };
 
   const admin = createAdminClient();
   const { data, error } = await admin
     .from("collaborator_documents")
     .select("id, file_name, file_url, file_size, mime_type, category, notes, visible_to_collaborator, uploaded_by_role, expires_at, archived_at, created_at")
-    .eq("collaborator_id", user.id)
+    .eq("collaborator_id", profile.id)
     .eq("visible_to_collaborator", true)
     .is("archived_at", null)
     .order("created_at", { ascending: false });
@@ -409,8 +412,8 @@ export async function uploadDamageReport(formData: FormData): Promise<{
     const admin = createAdminClient();
     const { data: profile } = await admin
       .from("profiles")
-      .select("company_id")
-      .eq("id", user.id)
+      .select("id, company_id")
+      .eq("auth_user_id", user.id)
       .single();
     if (!profile) return { ok: false, error: "Perfil não encontrado" };
 
@@ -422,7 +425,7 @@ export async function uploadDamageReport(formData: FormData): Promise<{
 
     const path = buildDocumentStoragePath({
       companyId: profile.company_id,
-      collaboratorId: user.id,
+      collaboratorId: profile.id,
       fileName: file.name,
     });
 
@@ -443,7 +446,7 @@ export async function uploadDamageReport(formData: FormData): Promise<{
       .from("collaborator_documents")
       .insert({
         company_id:              profile.company_id,
-        collaborator_id:         user.id,
+        collaborator_id:         profile.id,
         file_name:               file.name,
         file_url:                urlData.publicUrl,
         file_size:               file.size,
@@ -451,7 +454,7 @@ export async function uploadDamageReport(formData: FormData): Promise<{
         category:                "avaria" as const,
         notes,
         visible_to_collaborator: true,
-        uploaded_by:             user.id,
+        uploaded_by:             profile.id,
         uploaded_by_role:        "colaboradora" as const,
         expires_at:              expiresAt,
       })
@@ -462,14 +465,14 @@ export async function uploadDamageReport(formData: FormData): Promise<{
 
     // Notificar todos os gestores/admins da empresa
     const [{ data: collaboratorProfile }, { data: managers }] = await Promise.all([
-      admin.from("profiles").select("full_name").eq("id", user.id).single(),
+      admin.from("profiles").select("full_name").eq("auth_user_id", user.id).single(),
       admin.from("profiles").select("id").eq("company_id", profile.company_id).in("role", ["gestor", "admin"]),
     ]);
 
     if (managers && managers.length > 0) {
       await admin.from("notifications").insert(buildDamageReportNotificationRows({
         companyId: profile.company_id,
-        collaboratorId: user.id,
+        collaboratorId: profile.id,
         collaboratorName: collaboratorProfile?.full_name,
         documentId: data.id,
         notes,
@@ -497,12 +500,12 @@ export async function getDamageReportUploadUrl(
 
     const admin = createAdminClient();
     const { data: profile } = await admin
-      .from("profiles").select("company_id").eq("id", user.id).single();
+      .from("profiles").select("id, company_id").eq("auth_user_id", user.id).single();
     if (!profile) return { ok: false, error: "Perfil não encontrado" };
 
     const path = buildDocumentStoragePath({
       companyId: profile.company_id,
-      collaboratorId: user.id,
+      collaboratorId: profile.id,
       fileName,
     });
 
@@ -533,7 +536,7 @@ export async function saveDamageReportRecord(params: {
 
     const admin = createAdminClient();
     const { data: profile } = await admin
-      .from("profiles").select("company_id").eq("id", user.id).single();
+      .from("profiles").select("id, company_id").eq("auth_user_id", user.id).single();
     if (!profile) return { ok: false, error: "Perfil não encontrado" };
 
     // 🔴 `path` e `publicUrl` chegam do browser — foram devolvidos por
@@ -543,7 +546,7 @@ export async function saveDamageReportRecord(params: {
     //    pedido deixava um registo apontar para um ficheiro que não foi este
     //    upload.
     if (!isStoragePathInCompany(params.path, profile.company_id)
-        || params.path.split("/")[1] !== user.id) {
+        || params.path.split("/")[1] !== profile.id) {
       return { ok: false, error: "Caminho de ficheiro inválido." };
     }
 
@@ -556,7 +559,7 @@ export async function saveDamageReportRecord(params: {
       .from("collaborator_documents")
       .insert({
         company_id:              profile.company_id,
-        collaborator_id:         user.id,
+        collaborator_id:         profile.id,
         file_name:               params.fileName,
         file_url:                urlDerivado.publicUrl,
         file_size:               params.fileSize,
@@ -564,7 +567,7 @@ export async function saveDamageReportRecord(params: {
         category:                "avaria" as const,
         notes:                   params.notes,
         visible_to_collaborator: true,
-        uploaded_by:             user.id,
+        uploaded_by:             profile.id,
         uploaded_by_role:        "colaboradora" as const,
         expires_at:              expiresAt,
       })
@@ -574,14 +577,14 @@ export async function saveDamageReportRecord(params: {
     if (dbError) return { ok: false, error: dbError.message };
 
     const [{ data: collaboratorProfile }, { data: managers }] = await Promise.all([
-      admin.from("profiles").select("full_name").eq("id", user.id).single(),
+      admin.from("profiles").select("full_name").eq("auth_user_id", user.id).single(),
       admin.from("profiles").select("id").eq("company_id", profile.company_id).in("role", ["gestor", "admin"]),
     ]);
 
     if (managers && managers.length > 0) {
       await admin.from("notifications").insert(buildDamageReportNotificationRows({
         companyId: profile.company_id,
-        collaboratorId: user.id,
+        collaboratorId: profile.id,
         collaboratorName: collaboratorProfile?.full_name,
         documentId: data.id,
         notes: params.notes,
@@ -622,7 +625,7 @@ export async function getDocumentsForBackup(): Promise<{
   const { data: profile } = await admin
     .from("profiles")
     .select("company_id, role")
-    .eq("id", user.id)
+    .eq("auth_user_id", user.id)
     .single();
 
   if (!profile) return { ok: false, error: "Perfil não encontrado" };
