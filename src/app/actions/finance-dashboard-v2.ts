@@ -23,6 +23,10 @@
 // ============================================================================
 
 import { requireProfile } from "@/lib/auth-guard";
+import {
+  resolverCategoriaEfetiva, idsDePagamentoAResolver, vinculosPartidos,
+  type CategoriaDoPagamento,
+} from "@/domain/finance-v2/effective-expense-category";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { todayInLisbon } from "@/lib/lisbon-time";
 import { getUnbilledServices } from "@/app/actions/invoices";
@@ -97,7 +101,7 @@ async function loadCashFacts(admin: AdminClient, ctx: FinanceReadContext): Promi
   // A categoria estruturada só existe depois da 071. Pede-se, e se a base
   // ainda não a tiver repete-se sem ela — mas só nesse caso: um erro de outra
   // natureza continua a ser erro, e não «mês sem movimentos».
-  const COLUNAS = "date, type, status, amount, category";
+  const COLUNAS = "date, type, status, amount, category, reference_type, reference_id";
   const consulta = (colunas: string) =>
     admin
       .from("cash_flow_entries")
@@ -121,21 +125,82 @@ async function loadCashFacts(admin: AdminClient, ctx: FinanceReadContext): Promi
 
   type Linha = {
     date: string; type: string; status: string; amount: number | null; category: string | null;
+    reference_type: string | null; reference_id: string | null;
     expense_categories?: { name: string; color_token: string | null }
       | { name: string; color_token: string | null }[] | null;
   };
+
+  const linhas = (data ?? []) as unknown as Linha[];
+  const cruas = linhas.map((r) => {
+    const cat = Array.isArray(r.expense_categories) ? r.expense_categories[0] : r.expense_categories;
+    return {
+      date: r.date,
+      tipo: (r.type === "entrada" ? "entrada" : "saida") as "entrada" | "saida",
+      status: r.status,
+      amount: Number(r.amount ?? 0),
+      reference_type: r.reference_type,
+      reference_id: r.reference_id,
+      categoriaLegada: r.category,
+      categoriaEstruturada: cat?.name ?? null,
+      categoriaEstruturadaCor: cat?.color_token ?? null,
+    };
+  });
+
+  // ── Quem manda na classificação de uma saída nascida de um pagamento ──────
+  //
+  // 🔴 É o pagamento, não o movimento. Marcar um pagamento como pago cria a
+  //    linha de caixa sem `expense_category_id`, por isso o donut mostrava o
+  //    texto legado («despesa») em vez da categoria escolhida
+  //    («Subcontratação»). Resolve-se aqui, na leitura, e não por cópia: copiar
+  //    deixaria as duas a divergir assim que alguém editasse o pagamento.
+  const idsPagamento = idsDePagamentoAResolver(cruas);
+  const categoriaPorPagamento = new Map<string, CategoriaDoPagamento>();
+
+  if (idsPagamento.length > 0) {
+    const { data: pgs, error: erroPg } = await admin
+      .from("fixed_variable_payments")
+      .select("id, expense_categories(name, color_token)")
+      .eq("company_id", ctx.companyId)
+      .in("id", idsPagamento);
+
+    if (erroPg) {
+      // 🔴 Falhar a ler os pagamentos não pode virar «nenhum tem categoria».
+      //    Isso mostraria um donut plausível e errado. Falha fechada.
+      console.error("[resumo] categoria dos pagamentos ligados indisponível.", erroPg.code, erroPg.message);
+      return { ok: false, erro: erroPg.message };
+    }
+
+    for (const p of (pgs ?? []) as unknown as {
+      id: string;
+      expense_categories?: { name: string; color_token: string | null }
+        | { name: string; color_token: string | null }[] | null;
+    }[]) {
+      const c = Array.isArray(p.expense_categories) ? p.expense_categories[0] : p.expense_categories;
+      categoriaPorPagamento.set(p.id, { nome: c?.name ?? null, cor: c?.color_token ?? null });
+    }
+
+    const partidos = vinculosPartidos(cruas, new Set(categoriaPorPagamento.keys()));
+    if (partidos.length > 0) {
+      // Não aborta: o movimento existe e o dinheiro saiu. Mas fica registado,
+      // porque `reference_id` não tem chave estrangeira e um vínculo partido é
+      // um problema real a precisar de olhos.
+      console.error("[resumo] saídas com origem em pagamento não resolvida:", partidos.length);
+    }
+  }
+
   return {
     ok: true,
-    factos: ((data ?? []) as unknown as Linha[]).map((r) => {
-      const cat = Array.isArray(r.expense_categories) ? r.expense_categories[0] : r.expense_categories;
+    factos: cruas.map((r) => {
+      const doPagamento = r.reference_id ? categoriaPorPagamento.get(r.reference_id) ?? null : null;
+      const efetiva = resolverCategoriaEfetiva(r, doPagamento);
       return {
         date: r.date,
-        tipo: (r.type === "entrada" ? "entrada" : "saida") as "entrada" | "saida",
+        tipo: r.tipo,
         status: r.status,
-        amount: Number(r.amount ?? 0),
-        categoria: r.category,
-        categoriaEstruturada: cat?.name ?? null,
-        categoriaEstruturadaCor: cat?.color_token ?? null,
+        amount: r.amount,
+        categoria: r.categoriaLegada,
+        categoriaEstruturada: efetiva.nome,
+        categoriaEstruturadaCor: efetiva.cor,
       };
     }),
   };

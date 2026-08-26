@@ -256,12 +256,15 @@ export interface FatiaServico {
 export function FinanceRevenueByService({
   slot,
   titulo = "Receita por serviço",
+  subtitulo,
   hrefDe,
   rodape,
 }: {
   slot: Slot<FatiaServico[]>;
   /** O mesmo donut serve receita por serviço e despesas por categoria. */
   titulo?: string;
+  /** Uma linha curta a dizer o que o gráfico mede. Não poluir. */
+  subtitulo?: string;
   /** Para onde leva clicar numa fatia. Sem isto, as linhas não são clicáveis. */
   hrefDe?: (f: FatiaServico) => string | null;
   /** Uma linha por baixo do gráfico — o que ficou de fora, e porquê. */
@@ -270,6 +273,9 @@ export function FinanceRevenueByService({
   return (
     <FinanceCard className="h-full">
       <SectionHeader title={titulo} />
+      {subtitulo && (
+        <p className="-mt-1 mb-3 text-[11px] text-[var(--color-text-muted)]">{subtitulo}</p>
+      )}
       <RenderSlot slot={slot} esqueleto={<Skeleton h={190} />}>
         {(fatias) => {
           const total = fatias.reduce((s, f) => s + f.valor, 0);

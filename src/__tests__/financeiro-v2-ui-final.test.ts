@@ -178,12 +178,18 @@ describe("Financeiro V2 — os painéis sem fonte não inventam", () => {
     expect(grid).not.toMatch(/buildings|predio|Predio/i);
   });
 
-  it("🔴 o donut mostra despesas por categoria, não receita por serviço", () => {
+  it("🔴 o donut mostra saídas de caixa por categoria, não receita por serviço", () => {
     // Classificar receita por serviço exigiria adivinhar pela descrição. A
-    // classificação de despesas existe desde sempre em `category`.
+    // classificação de saídas existe desde sempre em `category`.
+    //
+    // O título dizia «Despesas por categoria» e foi corrigido: o gráfico mede
+    // movimentos de saída, não obrigações. Quem o leu à espera de ver lá um
+    // pagamento por pagar não o encontrava, e tinha razão em estranhar — uma
+    // obrigação só aparece aqui quando o dinheiro sai.
     const i = src.indexOf("<FinanceRevenueByService");
-    const trecho = src.slice(i, i + 700);
-    expect(trecho).toMatch(/titulo="Despesas por categoria"/);
+    const trecho = src.slice(i, i + 900);
+    expect(trecho).toMatch(/titulo="Saídas registadas por categoria"/);
+    expect(trecho, "e diz o que mede").toMatch(/subtitulo=/);
     expect(trecho).toMatch(/snapshot\?\.expensesByCategory\.estado === "AVAILABLE"/);
     expect(trecho, "e tem saída para indisponível").toMatch(/estado:\s*"indisponivel"/);
   });

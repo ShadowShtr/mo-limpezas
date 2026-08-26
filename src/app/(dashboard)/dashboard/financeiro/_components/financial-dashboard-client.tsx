@@ -580,8 +580,19 @@ export function FinancialDashboardClient({
           O componente `FinanceRevenueByService` não foi apagado: fica em
           STANDBY e volta quando os serviços tiverem classificação verdadeira.
         */}
+        {/*
+          🔴 O título dizia «Despesas por categoria» e o gráfico mostra saídas
+             de caixa — confirmadas e pendentes — do período. A diferença não é
+             académica: alguém olhou para ele à espera de ver lá uma obrigação
+             registada em Pagamentos que ainda não tinha sido paga, e não estava.
+             Uma obrigação só aparece aqui quando o dinheiro sai.
+
+             O nome passa a dizer o que a coisa é. As ~50 mil de histórico
+             continuam todas cá — só a etiqueta mudou.
+        */}
         <FinanceRevenueByService
-          titulo="Despesas por categoria"
+          titulo="Saídas registadas por categoria"
+          subtitulo="Movimentos de saída confirmados e pendentes do período selecionado."
           slot={
             snapshot?.expensesByCategory.estado === "AVAILABLE" && snapshot.expensesByCategory.total > 0
               ? {
