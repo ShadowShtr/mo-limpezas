@@ -61,6 +61,7 @@ type Dados = import("@/app/actions/payments").PaymentsData;
 const pagamento = (id: string, description: string): Pagamento => ({
   id, kind: "fixo", description, amount: 100, due_date: "2026-08-10",
   direct_debit: false, status: "pendente", notes: null, sort_order: 1,
+  expense_category_id: null,
   recurring: true, period_year: 2026, period_month: 8, paid_at: null,
   attachment_url: null, attachment_name: null, attachment_size: null, attachment_mime: null,
 });

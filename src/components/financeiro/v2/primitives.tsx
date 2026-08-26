@@ -15,7 +15,8 @@
 
 "use client";
 
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { MoreHorizontal } from "lucide-react";
 
 // ─── Cartão ───────────────────────────────────────────────────────────────────
@@ -183,28 +184,108 @@ export interface RowAction {
  */
 export function RowMenu({ actions, label = "Mais ações" }: { actions: RowAction[]; label?: string }) {
   const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
+  const botaoRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  const LARGURA = 180;
+  const MARGEM = 8;
+
+  /**
+   * Calcula a posição a partir do botão, em coordenadas de viewport.
+   *
+   * Vira para cima quando não há espaço em baixo — na última linha da tabela
+   * é o caso normal — e encosta-se à margem quando não há espaço à direita.
+   */
+  const posicionar = useCallback(() => {
+    const b = botaoRef.current?.getBoundingClientRect();
+    if (!b) return;
+    const altura = menuRef.current?.offsetHeight ?? 0;
+
+    const cabeEmBaixo = b.bottom + altura + MARGEM <= window.innerHeight;
+    const top = cabeEmBaixo ? b.bottom + 4 : Math.max(MARGEM, b.top - altura - 4);
+
+    const desejado = b.right - LARGURA;
+    const left = Math.min(
+      Math.max(MARGEM, desejado),
+      Math.max(MARGEM, window.innerWidth - LARGURA - MARGEM),
+    );
+    setPos({ top, left });
+  }, []);
+
+  useLayoutEffect(() => { if (open) posicionar(); }, [open, posicionar]);
 
   useEffect(() => {
     if (!open) return;
     const fora = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+      const alvo = e.target as Node;
+      if (botaoRef.current?.contains(alvo)) return;
+      if (menuRef.current?.contains(alvo)) return;
+      setOpen(false);
     };
     const esc = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
+    // O menu vive fora do contentor que faz scroll: se esse contentor rolar,
+    // a posição calculada deixa de servir. Fechar é mais honesto do que
+    // deixá-lo a flutuar longe da linha a que pertence.
+    const aoRolar = () => setOpen(false);
+
     document.addEventListener("mousedown", fora);
     document.addEventListener("keydown", esc);
+    window.addEventListener("resize", posicionar);
+    window.addEventListener("scroll", aoRolar, true);
     return () => {
       document.removeEventListener("mousedown", fora);
       document.removeEventListener("keydown", esc);
+      window.removeEventListener("resize", posicionar);
+      window.removeEventListener("scroll", aoRolar, true);
     };
-  }, [open]);
+  }, [open, posicionar]);
 
   const uteis = actions.filter((a) => !a.disabled);
   if (uteis.length === 0) return null;
 
+  /**
+   * 🔴 O menu é desenhado no `body`, não dentro da linha.
+   *
+   *    Estava `absolute` dentro do `TableWrap`, que tem `overflow-x-auto`.
+   *    Abrir o menu aumentava o conteúdo do contentor: aparecia uma barra de
+   *    rolagem horizontal, a tabela mexia-se, e nas últimas linhas o menu
+   *    ficava cortado.
+   *
+   *    Um `overflow: visible` no contentor resolveria o corte e estragaria o
+   *    scroll horizontal que a tabela precisa em ecrãs estreitos. Sair do
+   *    contentor resolve as duas coisas: o menu flutua por cima e as
+   *    dimensões da tabela não mudam.
+   */
+  const menu = open && pos ? createPortal(
+    <div
+      ref={menuRef}
+      role="menu"
+      style={{ position: "fixed", top: pos.top, left: pos.left, width: LARGURA }}
+      className="z-[60] py-1 bg-white rounded-xl border border-[#E2E8F0] shadow-lg"
+    >
+      {uteis.map((a) => (
+        <button
+          key={a.label}
+          type="button"
+          role="menuitem"
+          onClick={() => { setOpen(false); a.onSelect(); }}
+          className={`w-full flex items-center gap-2.5 px-3 py-2 text-[13px] text-left transition-colors ${
+            a.danger ? "text-[#B91C1C] hover:bg-[#FEF2F2]" : "text-[#334155] hover:bg-[#F8FAFC]"
+          }`}
+        >
+          {a.icon && <span className="shrink-0">{a.icon}</span>}
+          {a.label}
+        </button>
+      ))}
+    </div>,
+    document.body,
+  ) : null;
+
   return (
-    <div className="relative inline-block" ref={ref}>
+    <div className="inline-block">
       <button
+        ref={botaoRef}
         type="button"
         aria-label={label}
         aria-haspopup="menu"
@@ -214,27 +295,7 @@ export function RowMenu({ actions, label = "Mais ações" }: { actions: RowActio
       >
         <MoreHorizontal className="w-4 h-4" />
       </button>
-      {open && (
-        <div
-          role="menu"
-          className="absolute right-0 top-full mt-1 z-50 min-w-[180px] py-1 bg-white rounded-xl border border-[#E2E8F0] shadow-lg"
-        >
-          {uteis.map((a) => (
-            <button
-              key={a.label}
-              type="button"
-              role="menuitem"
-              onClick={() => { setOpen(false); a.onSelect(); }}
-              className={`w-full flex items-center gap-2.5 px-3 py-2 text-[13px] text-left transition-colors ${
-                a.danger ? "text-[#B91C1C] hover:bg-[#FEF2F2]" : "text-[#334155] hover:bg-[#F8FAFC]"
-              }`}
-            >
-              {a.icon && <span className="shrink-0">{a.icon}</span>}
-              {a.label}
-            </button>
-          ))}
-        </div>
-      )}
+      {menu}
     </div>
   );
 }

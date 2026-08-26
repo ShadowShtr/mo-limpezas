@@ -1,13 +1,13 @@
 {
   "generatedBy": "scripts/audit-file-inventory.mjs",
-  "totalFiles": 688,
+  "totalFiles": 689,
   "byStatus": {
-    "MANTER": 670,
+    "MANTER": 671,
     "STANDBY": 18
   },
   "byCategory": {
     "route-ui": 135,
-    "test": 121,
+    "test": 122,
     "migration": 78,
     "lib": 65,
     "script": 48,
@@ -29,7 +29,7 @@
     "supabase-other": 2
   },
   "byConfidence": {
-    "alta": 672,
+    "alta": 673,
     "média": 10,
     "baixa": 6
   },
@@ -5484,6 +5484,31 @@
         "sqlWrite": 5,
         "unknownCast": 1,
         "revalidatePath": 1
+      },
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/__tests__/payment-categories-and-menu.test.ts",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "sqlWrite": 2,
+        "fallbackArray": 2
       },
       "action": "nenhuma",
       "reason": "suite de testes — corre por convenção do vitest",
@@ -11267,7 +11292,7 @@
       "category": "server-action",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 4,
+      "consumers": 5,
       "consumerSample": [
         "src/app/(dashboard)/dashboard/financeiro/contas/_components/contas-client.tsx",
         "src/app/(dashboard)/dashboard/financeiro/contas/page.tsx",
@@ -11291,7 +11316,7 @@
         "revalidatePath": 3
       },
       "action": "auditar atomicidade (T12/T13)",
-      "reason": "em uso: 4 consumidor(es)",
+      "reason": "em uso: 5 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -13182,7 +13207,8 @@
       "risks": [],
       "signals": {
         "clientComponent": 1,
-        "sqlWrite": 1
+        "sqlWrite": 1,
+        "fallbackZero": 1
       },
       "action": "nenhuma",
       "reason": "em uso: 5 consumidor(es)",

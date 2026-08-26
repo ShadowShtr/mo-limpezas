@@ -38,6 +38,7 @@ export interface Payment {
   description: string;
   amount: number | null;
   due_date: string | null;
+  expense_category_id: string | null;
   direct_debit: boolean | null;
   status: PaymentStatus;
   recurring: boolean;
@@ -63,7 +64,7 @@ export interface PaymentsData {
   countOverdue: number;
 }
 
-const COLS = "id, kind, description, amount, due_date, direct_debit, status, recurring, period_year, period_month, paid_at, notes, sort_order, attachment_url, attachment_name, attachment_size, attachment_mime";
+const COLS = "id, kind, description, amount, due_date, expense_category_id, direct_debit, status, recurring, period_year, period_month, paid_at, notes, sort_order, attachment_url, attachment_name, attachment_size, attachment_mime";
 
 // A materialização de mês (clonar os fixos do mês anterior) vivia aqui, e era
 // chamada pelas duas funções de leitura abaixo. Está desligada e em quarentena
@@ -210,6 +211,7 @@ export interface PaymentInput {
   description: string;
   amount: number | null;
   due_date: string | null;
+  expense_category_id: string | null;
   direct_debit: boolean | null;
   notes: string | null;
   year: number;
@@ -254,6 +256,7 @@ export async function createPayment(input: PaymentInput): Promise<{ ok: boolean;
     description: input.description.trim(),
     amount: input.amount,
     due_date: input.due_date,
+    expense_category_id: input.expense_category_id,
     direct_debit: input.direct_debit,
     status: "pendente",
     recurring: input.kind === "fixo",
@@ -270,7 +273,7 @@ export async function createPayment(input: PaymentInput): Promise<{ ok: boolean;
 
 export async function updatePayment(
   id: string,
-  patch: { description?: string; amount?: number | null; due_date?: string | null; direct_debit?: boolean | null; notes?: string | null },
+  patch: { description?: string; amount?: number | null; due_date?: string | null; expense_category_id?: string | null; direct_debit?: boolean | null; notes?: string | null },
 ): Promise<{ ok: boolean; error?: string }> {
   const guard = await requireProfile({ roles: ["admin", "gestor"] });
   if (!guard.ok) return { ok: false, error: guard.error };

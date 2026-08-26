@@ -34,7 +34,10 @@ function fmtDate(s: string | null) {
     day: "2-digit", month: "short", year: "numeric",
   });
 }
+export interface CategoriaOpcao { id: string; name: string }
+
 interface Props {
+  categorias?: CategoriaOpcao[];
   initialData: PaymentsData | null;
   error: string | null;
   year: number;
@@ -47,6 +50,7 @@ type FormState = {
   description: string;
   amount: string;
   due_date: string;
+  expense_category_id: string;
   direct_debit: "" | "sim" | "nao";
   notes: string;
   attachment_url: string | null;
@@ -54,11 +58,12 @@ type FormState = {
 };
 
 const emptyForm = (kind: PaymentKind): FormState => ({
-  id: null, kind, description: "", amount: "", due_date: "", direct_debit: "", notes: "",
+  id: null, kind, description: "", amount: "", due_date: "", expense_category_id: "", direct_debit: "", notes: "",
   attachment_url: null, attachment_name: null,
 });
 
-export function PaymentsClient({ initialData, error: initErr, year, month }: Props) {
+export function PaymentsClient({ initialData, error: initErr, year, month, categorias = [] }: Props) {
+  const nomePorCategoria = new Map<string, string>(categorias.map((c) => [c.id, c.name]));
   const [data, setData] = useState<PaymentsData | null>(initialData);
   const [error, setError] = useState(initErr);
   const [isPending, startTransition] = useTransition();
@@ -86,6 +91,7 @@ export function PaymentsClient({ initialData, error: initErr, year, month }: Pro
       id: p.id, kind: p.kind, description: p.description,
       amount: p.amount === null ? "" : String(p.amount),
       due_date: p.due_date ?? "",
+      expense_category_id: p.expense_category_id ?? "",
       direct_debit: p.direct_debit === null ? "" : p.direct_debit ? "sim" : "nao",
       notes: p.notes ?? "",
       attachment_url: p.attachment_url,
@@ -103,11 +109,13 @@ export function PaymentsClient({ initialData, error: initErr, year, month }: Pro
     const direct_debit = form.direct_debit === "" ? null : form.direct_debit === "sim";
     const due_date = form.due_date.trim() === "" ? null : form.due_date;
     const notes = form.notes.trim() === "" ? null : form.notes.trim();
+    // Sem categoria continua a ser um estado válido — não se inventa uma.
+    const expense_category_id = form.expense_category_id === "" ? null : form.expense_category_id;
 
     startTransition(async () => {
       const res = form.id
-        ? await updatePayment(form.id, { description: form.description.trim(), amount, due_date, direct_debit, notes })
-        : await createPayment({ kind: form.kind, description: form.description.trim(), amount, due_date, direct_debit, notes, year, month });
+        ? await updatePayment(form.id, { description: form.description.trim(), amount, due_date, expense_category_id, direct_debit, notes })
+        : await createPayment({ kind: form.kind, description: form.description.trim(), amount, due_date, expense_category_id, direct_debit, notes, year, month });
       if (!res.ok) { setFormError(res.error ?? "Erro."); return; }
       setForm(null);
       reload();
@@ -220,12 +228,14 @@ export function PaymentsClient({ initialData, error: initErr, year, month }: Pro
         <>
           {aba === "fixos" ? (
             <PaymentSection
+          nomePorCategoria={nomePorCategoria}
               title="Pagamentos Fixos" subtitle="Repetem de mês para mês" icon={<Repeat className="w-4 h-4 text-[var(--finance-primary)]" />}
               emptyLabel="Ainda não existem pagamentos fixos neste mês."
               items={data.fixos} today={today} onAdd={() => openNew("fixo")} onEdit={openEdit} onToggle={toggleStatus} onDelete={handleDelete} busy={isPending}
             />
           ) : (
             <PaymentSection
+          nomePorCategoria={nomePorCategoria}
               title="Pagamentos Variáveis" subtitle="Pontuais deste mês" icon={<Zap className="w-4 h-4 text-amber-600" />}
               emptyLabel="Ainda não existem pagamentos variáveis neste mês."
               items={data.variaveis} today={today} onAdd={() => openNew("variavel")} onEdit={openEdit} onToggle={toggleStatus} onDelete={handleDelete} busy={isPending}
@@ -248,6 +258,28 @@ export function PaymentsClient({ initialData, error: initErr, year, month }: Pro
             <form onSubmit={handleSubmit} className="space-y-4">
               <Field label="Descrição *">
                 <input autoFocus value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} className={inputCls} placeholder="ex: Renda do escritório" />
+              </Field>
+              <Field label="Categoria">
+                {/*
+                  Sem categoria é um estado legítimo — há pagamentos antigos
+                  sem ela e não se inventa um valor para os preencher.
+                */}
+                <select
+                  value={form.expense_category_id}
+                  onChange={(e) => setForm({ ...form, expense_category_id: e.target.value })}
+                  className={inputCls}
+                  disabled={categorias.length === 0}
+                >
+                  <option value="">— sem categoria —</option>
+                  {categorias.map((c) => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </select>
+                {categorias.length === 0 && (
+                  <p className="mt-1 text-[11px] text-[var(--color-text-muted)]">
+                    Ainda não há categorias definidas.
+                  </p>
+                )}
               </Field>
               <div className="grid grid-cols-2 gap-3">
                 <Field label="Valor (€)">
@@ -331,10 +363,11 @@ function Kpi({ icon, bg: _bg, label, value, accent }: { icon: React.ReactNode; b
 }
 
 function PaymentSection({
-  title, subtitle, icon, emptyLabel, items, today, onAdd, onEdit, onToggle, onDelete, busy,
+  title, subtitle, icon, emptyLabel, items, today, onAdd, onEdit, onToggle, onDelete, busy, nomePorCategoria,
 }: {
   title: string; subtitle: string; icon: React.ReactNode; emptyLabel: string; items: Payment[]; today: string;
   onAdd: () => void; onEdit: (p: Payment) => void; onToggle: (p: Payment) => void; onDelete: (p: Payment) => void; busy: boolean;
+  nomePorCategoria: Map<string, string>;
 }) {
   return (
     <div
@@ -372,7 +405,19 @@ function PaymentSection({
                 const overdue = p.status === "pendente" && p.due_date && p.due_date < today;
                 return (
                   <tr key={p.id} className="border-t border-[var(--finance-divider)] hover:bg-[#FAFBFC] transition-colors">
-                    <td className="px-3 py-3.5 text-[13px] text-[var(--finance-text)]">{p.description}</td>
+                    {/*
+                      A categoria vive por baixo da descrição, não numa coluna própria: a
+                      tabela já é larga e uma coluna a mais empurrava-a para o scroll
+                      horizontal em ecrãs estreitos — o mesmo problema que o menu tinha.
+                    */}
+                    <td className="px-3 py-3.5 text-[13px] text-[var(--finance-text)]">
+                      <span>{p.description}</span>
+                      {p.expense_category_id && nomePorCategoria.get(p.expense_category_id) && (
+                        <span className="block mt-0.5 text-[11px] text-[var(--color-text-muted)]">
+                          {nomePorCategoria.get(p.expense_category_id)}
+                        </span>
+                      )}
+                    </td>
                     <td className="px-3 py-3.5">
                       <span className={`inline-flex items-center gap-1.5 text-[12.5px] ${overdue ? "text-[var(--finance-red)] font-semibold" : "text-[var(--finance-text-secondary)]"}`}>
                         {p.due_date && <Calendar className="w-3.5 h-3.5" aria-hidden />}
