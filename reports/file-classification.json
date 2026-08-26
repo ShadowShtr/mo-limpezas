@@ -1,16 +1,16 @@
 {
   "generatedBy": "scripts/audit-file-inventory.mjs",
-  "totalFiles": 693,
+  "totalFiles": 697,
   "byStatus": {
-    "MANTER": 675,
-    "STANDBY": 18
+    "MANTER": 678,
+    "STANDBY": 19
   },
   "byCategory": {
     "route-ui": 135,
-    "test": 123,
-    "migration": 78,
+    "test": 124,
+    "migration": 80,
     "lib": 65,
-    "script": 48,
+    "script": 49,
     "domain": 47,
     "doc": 43,
     "server-action": 41,
@@ -29,15 +29,15 @@
     "supabase-other": 2
   },
   "byConfidence": {
-    "alta": 677,
-    "média": 10,
+    "alta": 680,
+    "média": 11,
     "baixa": 6
   },
   "scriptRisk": {
     "SAFE_OFFLINE": 27,
     "ADMIN_GUARDED_WRITE": 11,
     "ADMIN_READ": 6,
-    "WRITE_CAPABLE": 4
+    "WRITE_CAPABLE": 5
   },
   "files": [
     {
@@ -3292,6 +3292,35 @@
       "scriptRisk": "SAFE_OFFLINE"
     },
     {
+      "path": "scripts/rehearse-079.mjs",
+      "category": "script",
+      "status": "STANDBY",
+      "confidence": "média",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [
+        "npm"
+      ],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "sqlWrite": 13,
+        "consoleLog": 17,
+        "consoleErr": 1
+      },
+      "action": "T17-B: confirmar se ainda é preciso",
+      "reason": "capaz de escrever na base",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": true,
+        "dynamicImport": true,
+        "allClosed": false
+      },
+      "scriptRisk": "WRITE_CAPABLE"
+    },
+    {
       "path": "scripts/restore-backup.mjs",
       "category": "script",
       "status": "MANTER",
@@ -6200,6 +6229,30 @@
       "sideEffects": [],
       "risks": [],
       "signals": {},
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/__tests__/reuse-pending-cashflow-rpc.test.ts",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "sqlWrite": 12
+      },
       "action": "nenhuma",
       "reason": "suite de testes — corre por convenção do vitest",
       "manualDecision": false,
@@ -18993,6 +19046,24 @@
       "manualDecision": false
     },
     {
+      "path": "supabase/migrations/079_reuse_pending_cashflow_on_payment.sql",
+      "category": "migration",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "sqlWrite": 13
+      },
+      "action": "nenhuma",
+      "reason": "migration versionada — histórico do schema, nunca se apaga",
+      "manualDecision": false
+    },
+    {
       "path": "supabase/migrations/20260608_new_features.sql",
       "category": "migration",
       "status": "MANTER",
@@ -19067,6 +19138,24 @@
       "risks": [],
       "signals": {
         "sqlWrite": 1
+      },
+      "action": "nenhuma",
+      "reason": "migration versionada — histórico do schema, nunca se apaga",
+      "manualDecision": false
+    },
+    {
+      "path": "supabase/migrations/rollback/079_reuse_pending_cashflow_on_payment.down.sql",
+      "category": "migration",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "sqlWrite": 4
       },
       "action": "nenhuma",
       "reason": "migration versionada — histórico do schema, nunca se apaga",
