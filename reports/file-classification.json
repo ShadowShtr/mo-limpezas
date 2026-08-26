@@ -1,18 +1,18 @@
 {
   "generatedBy": "scripts/audit-file-inventory.mjs",
-  "totalFiles": 693,
+  "totalFiles": 695,
   "byStatus": {
-    "MANTER": 675,
+    "MANTER": 677,
     "STANDBY": 18
   },
   "byCategory": {
     "route-ui": 135,
-    "test": 123,
+    "test": 124,
     "migration": 78,
     "lib": 65,
     "script": 48,
     "domain": 47,
-    "doc": 43,
+    "doc": 44,
     "server-action": 41,
     "component": 30,
     "doc-historico": 16,
@@ -29,7 +29,7 @@
     "supabase-other": 2
   },
   "byConfidence": {
-    "alta": 677,
+    "alta": 679,
     "média": 10,
     "baixa": 6
   },
@@ -488,6 +488,24 @@
         "supabase": 2,
         "sqlWrite": 1,
         "dynamicImport": 1
+      },
+      "action": "nenhuma",
+      "reason": "documentação",
+      "manualDecision": false
+    },
+    {
+      "path": "docs/CODEX-TASK-12-ADVERSARIAL-81-82.md",
+      "category": "doc",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "sqlWrite": 3
       },
       "action": "nenhuma",
       "reason": "documentação",
@@ -3661,6 +3679,35 @@
         "serviceRole": 1,
         "sqlWrite": 4,
         "fallbackArray": 1
+      },
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/__tests__/adversarial-81-82-postgres.test.ts",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [
+        "docs"
+      ],
+      "sideEffects": [],
+      "risks": [
+        "any(1)"
+      ],
+      "signals": {
+        "sqlWrite": 41,
+        "anyType": 1
       },
       "action": "nenhuma",
       "reason": "suite de testes — corre por convenção do vitest",
