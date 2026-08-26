@@ -43,6 +43,21 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: codex
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d codex"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -106,6 +121,13 @@ jobs:
         run: npm run lint:strict
 
       - name: Testes
+        env:
+          CODEX_POSTGRES_TESTS: "1"
+          PGHOST: 127.0.0.1
+          PGPORT: "5432"
+          PGUSER: postgres
+          PGPASSWORD: postgres
+          PGDATABASE: codex
         run: npm test
 
       - name: Auditoria do código

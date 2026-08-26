@@ -1,23 +1,23 @@
 {
   "generatedBy": "scripts/audit-file-inventory.mjs",
-  "totalFiles": 693,
+  "totalFiles": 701,
   "byStatus": {
-    "MANTER": 675,
+    "MANTER": 683,
     "STANDBY": 18
   },
   "byCategory": {
     "route-ui": 135,
-    "test": 123,
-    "migration": 78,
-    "lib": 65,
+    "test": 126,
+    "migration": 80,
+    "lib": 66,
     "script": 48,
     "domain": 47,
-    "doc": 43,
+    "doc": 44,
     "server-action": 41,
     "component": 30,
     "doc-historico": 16,
     "api-route": 16,
-    "src-other": 13,
+    "src-other": 14,
     "config": 12,
     "asset": 8,
     "report": 4,
@@ -29,7 +29,7 @@
     "supabase-other": 2
   },
   "byConfidence": {
-    "alta": 677,
+    "alta": 685,
     "média": 10,
     "baixa": 6
   },
@@ -488,6 +488,24 @@
         "supabase": 2,
         "sqlWrite": 1,
         "dynamicImport": 1
+      },
+      "action": "nenhuma",
+      "reason": "documentação",
+      "manualDecision": false
+    },
+    {
+      "path": "docs/CODEX-HARDENING-TASK-LEDGER.md",
+      "category": "doc",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "sqlWrite": 3
       },
       "action": "nenhuma",
       "reason": "documentação",
@@ -4986,6 +5004,67 @@
       }
     },
     {
+      "path": "src/__tests__/invoice-cash-atomicity-contract.test.ts",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [
+        "docs"
+      ],
+      "sideEffects": [],
+      "risks": [
+        "service-role"
+      ],
+      "signals": {
+        "serviceRole": 1,
+        "sqlWrite": 3
+      },
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/__tests__/invoice-cash-postgres.test.ts",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [
+        "npm"
+      ],
+      "sideEffects": [
+        "env"
+      ],
+      "risks": [
+        "service-role"
+      ],
+      "signals": {
+        "env": 3,
+        "serviceRole": 2,
+        "sqlWrite": 19
+      },
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": true,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
       "path": "src/__tests__/invoice-duplicates.test.ts",
       "category": "test",
       "status": "MANTER",
@@ -4999,6 +5078,30 @@
       "sideEffects": [],
       "risks": [],
       "signals": {},
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/__tests__/invoice-status-rpc.test.ts",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "unknownCast": 2
+      },
       "action": "nenhuma",
       "reason": "suite de testes — corre por convenção do vitest",
       "manualDecision": false,
@@ -11520,20 +11623,20 @@
         "revalidatePath(4)"
       ],
       "risks": [
-        "erro-de-query-ignorado(6)",
+        "erro-de-query-ignorado(1)",
         "any(3)"
       ],
       "signals": {
-        "supabase": 8,
+        "supabase": 5,
         "serverAction": 1,
-        "write": 4,
-        "sqlWrite": 10,
+        "write": 1,
+        "sqlWrite": 1,
         "eslintDisable": 3,
         "anyType": 3,
-        "unknownCast": 3,
-        "ignoredError": 6,
+        "unknownCast": 2,
+        "ignoredError": 1,
         "fallbackZero": 2,
-        "fallbackArray": 14,
+        "fallbackArray": 13,
         "revalidatePath": 4
       },
       "action": "auditar atomicidade (T12/T13)",
@@ -15047,7 +15150,7 @@
       "category": "domain",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 19,
+      "consumers": 20,
       "consumerSample": [
         "src/__tests__/update-notice-modal.test.tsx",
         "src/__tests__/update-notices-eligibility.test.ts",
@@ -15062,7 +15165,7 @@
       "risks": [],
       "signals": {},
       "action": "nenhuma",
-      "reason": "em uso: 19 consumidor(es), configuração",
+      "reason": "em uso: 20 consumidor(es), configuração",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -15618,7 +15721,7 @@
       "category": "lib",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 6,
+      "consumers": 5,
       "consumerSample": [
         "src/__tests__/cash-flow-integrity.test.ts",
         "src/app/actions/bank-reconciliation.ts",
@@ -15630,7 +15733,7 @@
       "risks": [],
       "signals": {},
       "action": "nenhuma",
-      "reason": "em uso: 6 consumidor(es)",
+      "reason": "em uso: 5 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -16090,15 +16193,40 @@
       }
     },
     {
+      "path": "src/lib/finance-rpc/invoice-status.ts",
+      "category": "lib",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 2,
+      "consumerSample": [
+        "src/__tests__/invoice-status-rpc.test.ts",
+        "src/app/actions/invoices.ts"
+      ],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {},
+      "action": "nenhuma",
+      "reason": "em uso: 2 consumidor(es)",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
       "path": "src/lib/finance-rpc/payment-cashflow.ts",
       "category": "lib",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 3,
+      "consumers": 5,
       "consumerSample": [
+        "src/__tests__/invoice-status-rpc.test.ts",
         "src/__tests__/payment-cashflow-rpc.test.ts",
-        "src/app/actions/payments.ts",
-        "src/lib/finance-rpc/invoice-creation.ts"
+        "src/app/actions/payments.ts"
       ],
       "autoLoaded": false,
       "referencedBy": [
@@ -16108,7 +16236,7 @@
       "risks": [],
       "signals": {},
       "action": "nenhuma",
-      "reason": "em uso: 3 consumidor(es)",
+      "reason": "em uso: 5 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -16601,7 +16729,7 @@
       "category": "lib",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 27,
+      "consumers": 28,
       "consumerSample": [
         "src/__tests__/query-error.test.ts",
         "src/app/(dashboard)/dashboard/calendario/_actions/create-service.ts",
@@ -16617,7 +16745,7 @@
         "consoleErr": 1
       },
       "action": "nenhuma",
-      "reason": "em uso: 27 consumidor(es)",
+      "reason": "em uso: 28 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -17296,6 +17424,32 @@
     },
     {
       "path": "src/release-notes/2026-08-26-categorias-e-menu-dos-pagamentos.ts",
+      "category": "src-other",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 1,
+      "consumerSample": [
+        "src/release-notes/index.ts"
+      ],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "sqlWrite": 1
+      },
+      "action": "nenhuma",
+      "reason": "em uso: 1 consumidor(es)",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/release-notes/2026-08-26-faturas-e-caixa-consistentes.ts",
       "category": "src-other",
       "status": "MANTER",
       "confidence": "alta",
@@ -19067,6 +19221,48 @@
       "risks": [],
       "signals": {
         "sqlWrite": 1
+      },
+      "action": "nenhuma",
+      "reason": "migration versionada — histórico do schema, nunca se apaga",
+      "manualDecision": false
+    },
+    {
+      "path": "supabase/migrations/provisional/080_codex_invoice_cash_atomicity.rollback.sql",
+      "category": "migration",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [
+        "service-role"
+      ],
+      "signals": {
+        "serviceRole": 1,
+        "sqlWrite": 6
+      },
+      "action": "nenhuma",
+      "reason": "migration versionada — histórico do schema, nunca se apaga",
+      "manualDecision": false
+    },
+    {
+      "path": "supabase/migrations/provisional/080_codex_invoice_cash_atomicity.sql",
+      "category": "migration",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [
+        "service-role"
+      ],
+      "signals": {
+        "serviceRole": 1,
+        "sqlWrite": 6
       },
       "action": "nenhuma",
       "reason": "migration versionada — histórico do schema, nunca se apaga",

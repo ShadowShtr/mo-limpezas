@@ -4,7 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { requireProfile } from "@/lib/auth-guard";
 import { criarFaturaComLinhas } from "@/lib/finance-rpc/invoice-creation";
-import { getMissingCashFlowReferenceIds, isValidCashFlowAmount } from "@/lib/cash-flow-integrity";
+import { alterarEstadoFatura } from "@/lib/finance-rpc/invoice-status";
 import { findDuplicateMonthlyContractsByLocation } from "@/lib/invoice-duplicates";
 import { revalidatePath } from "next/cache";
 import { todayInLisbon, addDaysToDateString, toLisbonTimestamp } from "@/lib/lisbon-time";
@@ -14,6 +14,7 @@ import {
   type ClientePeriodo,
 } from "@/lib/finance-period-guard";
 import { mensagemPeriodoFechado } from "@/domain/finance-v2/financial-period";
+import { queryFailure } from "@/lib/query-error";
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 
@@ -46,6 +47,7 @@ export interface Invoice {
   payment_method: string | null;
   notes: string | null;
   items: InvoiceItem[];
+  revision: number;
 }
 
 function monthRange(year: number, month: number) {
@@ -450,7 +452,7 @@ export async function getInvoices(
     .select(`
       id, client_id, invoice_number, invoice_date, due_date,
       period_start, period_end, subtotal, vat_rate, vat_amount, total,
-      status, paid_at, payment_method, notes,
+      status, paid_at, payment_method, notes, revision,
       clients ( name, phone ),
       invoice_items ( id, service_id, description, quantity, unit_price, total, sort_order )
     `)
@@ -485,6 +487,7 @@ export async function getInvoices(
       payment_method: row.payment_method ?? null,
       notes:          row.notes ?? null,
       items:          [...rawItems].sort((a, b) => a.sort_order - b.sort_order),
+      revision:       row.revision,
     };
   });
 
@@ -497,96 +500,29 @@ export async function updateInvoiceStatus(
   id: string,
   status: Invoice["status"],
   paymentMethod?: string,
-): Promise<{ ok: boolean; error?: string }> {
-  const supabase = await createClient();
-  const admin    = createAdminClient();
-
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { ok: false, error: "Nao autenticado." };
-
-  const { data: profile } = await admin
-    .from("profiles")
-    .select("company_id, role")
-    .eq("id", user.id)
-    .single();
-  if (!profile || !["admin", "gestor"].includes(profile.role)) {
-    return { ok: false, error: "Sem permissao." };
+  mutationId?: string,
+  expectedRevision?: number,
+): Promise<{ ok: boolean; error?: string; revision?: number }> {
+  const guard = await requireProfile({ roles: ["admin", "gestor"] });
+  if (!guard.ok) return { ok: false, error: guard.error };
+  if (!mutationId || expectedRevision === undefined) {
+    return { ok: false, error: "Atualize a página antes de alterar a fatura." };
   }
 
-  const { data: inv } = await admin
-    .from("invoices")
-    .select("company_id, total, invoice_number, client_id, status, paid_at, invoice_date")
-    .eq("id", id)
-    .eq("company_id", profile.company_id)
-    .single();
-
-  if (!inv) return { ok: false, error: "Fatura nao encontrada." };
-
-  // 🔴 A data autoritativa é `invoice_date` — a data de emissão do documento,
-  //    que é o que o determina o mês a que a fatura pertence. Não `period_start`
-  //    (o período de serviço facturado pode atravessar meses) e não hoje.
-  const periodo = await assertFinancialPeriodOpen({
-    cliente: admin as unknown as ClientePeriodo,
-    companyId: profile.company_id,
-    data: String(inv.invoice_date),
+  const result = await alterarEstadoFatura(guard.admin, {
+    invoiceId: id,
+    companyId: guard.profile.company_id,
+    actorId: guard.profile.id,
+    status,
+    paymentMethod: paymentMethod ?? null,
+    mutationId,
+    expectedRevision,
   });
-  if (!periodo.ok) return { ok: false, error: periodo.error };
-
-  const update: { status: string; paid_at?: string | null; payment_method?: string | null } = { status };
-  if (status === "pago") {
-    update.paid_at = inv.paid_at ?? new Date().toISOString();
-    update.payment_method = paymentMethod ?? null;
-  } else {
-    update.paid_at = null;
-    update.payment_method = null;
-  }
-
-  const { error } = await admin
-    .from("invoices")
-    .update(update)
-    .eq("id", id)
-    .eq("company_id", profile.company_id);
-
-  if (error) return { ok: false, error: error.message };
-
-  if (status === "pago" && isValidCashFlowAmount(inv.total)) {
-    const { data: existingRefs } = await admin
-      .from("cash_flow_entries")
-      .select("reference_id")
-      .eq("company_id", profile.company_id)
-      .eq("reference_type", "invoice")
-      .eq("reference_id", id);
-
-    const missingIds = getMissingCashFlowReferenceIds([id], (existingRefs ?? []).map((r) => r.reference_id));
-    if (missingIds.length > 0) {
-      const { data: clientData } = await admin.from("clients").select("name").eq("id", inv.client_id).single();
-      const { error: cashErr } = await admin.from("cash_flow_entries").insert({
-        company_id: inv.company_id,
-        type: "entrada",
-        amount: inv.total,
-        description: `Fatura ${inv.invoice_number} - ${(clientData as { name?: string })?.name ?? "Cliente"}`,
-        category: "faturacao",
-        date: todayInLisbon(),
-        reference_id: id,
-        reference_type: "invoice",
-        status: "confirmado",
-      });
-      if (cashErr) return { ok: false, error: cashErr.message };
-    }
-  }
-
-  if (status !== "pago") {
-    await admin
-      .from("cash_flow_entries")
-      .delete()
-      .eq("company_id", profile.company_id)
-      .eq("reference_type", "invoice")
-      .eq("reference_id", id);
-  }
+  if (!result.ok) return { ok: false, error: result.error };
 
   revalidatePath("/dashboard/cobrancas");
   revalidatePath("/dashboard/financeiro");
-  return { ok: true };
+  return { ok: true, revision: result.revision };
 }
 
 // ─── Eliminar rascunho ────────────────────────────────────────────────────────
@@ -679,10 +615,11 @@ export async function getUnbilledServices(
 
   // IDs de serviços que já têm invoice_item
   const serviceIds = services.map((s) => s.id);
-  const { data: billed } = await admin
+  const { data: billed, error: billedError } = await admin
     .from("invoice_items")
     .select("service_id")
     .in("service_id", serviceIds);
+  if (billedError) return queryFailure("getUnbilledServices:invoice_items", billedError);
 
   const billedIds = new Set((billed ?? []).map((b) => b.service_id));
 

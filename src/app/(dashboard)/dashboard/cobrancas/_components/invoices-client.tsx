@@ -132,12 +132,29 @@ export function InvoicesClient({ initialInvoices, unbilledServices, companyId, m
   function applyStatusChange(id: string, status: Invoice["status"], method: string | undefined) {
     setError(null);
     startTransition(async () => {
-      const res = await updateInvoiceStatus(id, status, method);
+      const current = invoices.find((invoice) => invoice.id === id);
+      if (!current) {
+        setError("Fatura não encontrada. Atualize a página.");
+        return;
+      }
+      const res = await updateInvoiceStatus(
+        id,
+        status,
+        method,
+        crypto.randomUUID(),
+        current.revision,
+      );
       if (res.ok) {
         setInvoices((prev) =>
           prev.map((inv) =>
             inv.id === id
-              ? { ...inv, status, paid_at: status === "pago" ? new Date().toISOString() : inv.paid_at, payment_method: method ?? inv.payment_method }
+              ? {
+                  ...inv,
+                  status,
+                  paid_at: status === "pago" ? new Date().toISOString() : null,
+                  payment_method: status === "pago" ? method ?? null : null,
+                  revision: res.revision ?? inv.revision,
+                }
               : inv,
           ),
         );

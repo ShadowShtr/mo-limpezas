@@ -115,14 +115,16 @@ const IGNORED_ERROR_CEILING: Record<string, number> = {
   "src/app/actions/cash-flow.ts": 3,
   "src/app/actions/daily-billing.ts": 8,
   "src/app/actions/financial-dashboard.ts": 2,
-  // 13 → 6. Sete erros de consulta deixaram de ser ignorados em
+  // 13 → 1. Sete erros de consulta deixaram de ser ignorados em
   // `generateInvoices`: avenças, contratos ativos, locais de preço fixo,
   // locais, clientes, faturas existentes e as definições de IVA.
   //
   // O que estava em jogo não era um número errado: se a consulta das avenças
   // falhasse, a função devolvia **sucesso com zero faturas** e ninguém era
   // faturado nesse mês, com o ecrã a dizer que correu bem.
-  "src/app/actions/invoices.ts": 6,
+  // Os cinco restantes saíram quando a alteração do estado passou para a RPC
+  // atómica e a leitura de `invoice_items` começou a propagar o erro.
+  "src/app/actions/invoices.ts": 1,
   // 9 → 0 (P0A). A folha deixou de ter uma única leitura cujo erro se
   // confunda com ausência de dados. As quatro do cálculo — definições, ponto,
   // faltas e registos existentes — abortavam para valores por omissão, zero
