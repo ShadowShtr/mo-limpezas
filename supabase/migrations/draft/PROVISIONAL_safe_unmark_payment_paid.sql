@@ -22,13 +22,36 @@
 --   proveniência diz `adopted_existing`  → **restaura**. Mesmo `id`, volta a
 --                                          `pendente`, com a data e a categoria
 --                                          que tinha antes. Nunca `DELETE`.
---   não há proveniência nenhuma          → apaga. É o comportamento da 073, e
---                                          é o que era verdade para todos os
---                                          movimentos criados antes desta
---                                          migration existir. Não se adivinha.
+--   não há proveniência nenhuma          → 🔴 **recusa**. Não apaga.
 --
 -- E, antes de qualquer um dos três: se o movimento estiver conciliado, não se
 -- faz nada. `UNMARK_RECONCILED_CASHFLOW = BLOCKED`.
+--
+-- ---------------------------------------------------------------------------
+-- Porque é que «não sei» não pode significar «apaga»
+-- ---------------------------------------------------------------------------
+--
+-- A primeira versão deste ficheiro tratava a ausência de proveniência como
+-- «criado pelo mark», por continuidade com a 073. Estava errada, e vale a pena
+-- deixar escrito porquê, para não voltar.
+--
+-- Não haver registo não prova que o movimento foi criado pelo `mark`. Prova
+-- que ninguém sabe. Para as linhas anteriores a esta infraestrutura as duas
+-- hipóteses continuam abertas — e uma delas é «já cá estava», que é
+-- exactamente o caso cuja destruição esta migration existe para impedir.
+-- Herdar o comportamento antigo teria deixado o buraco aberto precisamente
+-- onde ele é mais provável: no histórico.
+--
+--     UNKNOWN_PROVENANCE_UNMARK = FAIL_CLOSED
+--
+-- O preço é conhecido e aceite: desmarcar um movimento antigo passa a exigir
+-- que alguém lhe determine a origem primeiro, pela auditoria da task
+-- `PAYMENT_CASHFLOW_PROVENANCE_BACKFILL`. Recusar uma operação legítima
+-- corrige-se com uma classificação; apagar histórico financeiro não se corrige.
+--
+-- E a classificação não se faz por `created_at`, `description`, `notes` ou
+-- proximidade temporal: um palpite bem-intencionado sobre dinheiro continua a
+-- ser um palpite.
 -- ============================================================================
 
 BEGIN;
@@ -110,6 +133,12 @@ BEGIN
        WHERE id = v_mov.id;
 
     ELSIF v_mov.status = 'confirmado' THEN
+      -- 🔴 Idempotência, e **nenhuma** proveniência escrita aqui.
+      --
+      --    Um movimento já confirmado e sem registo pode ter sido criado pelo
+      --    `mark` ou adoptado e já confirmado — daqui não se distingue.
+      --    Inventar um dos dois seria fabricar uma prova. Fica desconhecido, e
+      --    o `unmark` recusa-o mais tarde por isso mesmo.
       v_sem_efeito := true;
 
     ELSE
@@ -260,9 +289,33 @@ BEGIN
      WHERE cash_flow_entry_id = v_mov.id
      FOR UPDATE;
 
-    IF FOUND AND v_prov.origin = 'adopted_existing' THEN
+    IF NOT FOUND THEN
+      -- 🔴 Proveniência desconhecida. **Falha fechado.**
+      --
+      --    A ausência de registo não prova que o movimento foi criado pelo
+      --    `mark`: prova apenas que ninguém sabe. Para as linhas anteriores a
+      --    esta infraestrutura as duas hipóteses continuam abertas, e uma
+      --    delas é «já cá estava». Apagar sobre essa dúvida é exactamente o
+      --    risco que esta migration existe para fechar — a versão anterior
+      --    deste ficheiro apagava, e estava errada.
+      --
+      --    Quem tiver de desmarcar um movimento destes classifica-o primeiro,
+      --    com a auditoria da task PAYMENT_CASHFLOW_PROVENANCE_BACKFILL. Não
+      --    se adivinha a origem a partir de `created_at`, `description`,
+      --    `notes` ou proximidade temporal: são sinais insuficientes.
+      RAISE EXCEPTION 'UNMARK_BLOCKED_UNKNOWN_CASHFLOW_PROVENANCE'
+        USING ERRCODE = 'object_not_in_prerequisite_state';
+    END IF;
+
+    IF v_prov.origin = 'adopted_existing' THEN
       -- 🔴 O movimento já cá estava. Desmarcar devolve-o ao que era —
       --    mesma linha, mesmo `id`, mesmo histórico. Nunca `DELETE`.
+      --
+      --    `status` não é lido de uma cópia: é `pendente` por invariante
+      --    estrutural. `adopted_existing` só pode nascer de uma linha
+      --    `pendente` — o `CHECK` da tabela de proveniência não chega para o
+      --    garantir, portanto é a própria RPC que só o escreve nesse ramo, e
+      --    há testes que o provam. Derivação, não adivinhação.
       --
       --    A proveniência **fica**: se o pagamento voltar a ser marcado, o
       --    movimento é adoptado outra vez, e o prestate original continua a
@@ -275,12 +328,27 @@ BEGIN
 
       v_removidos := 0;
 
-    ELSE
-      -- Criado pelo `mark`, ou sem proveniência (movimento anterior a esta
-      -- migration). Nos dois casos o comportamento da 073 é o correcto.
+    ELSIF v_prov.origin = 'created_by_mark' THEN
+      -- Foi o `mark` que o criou; desfazer é fazê-lo desaparecer. Não havia
+      -- nada antes, portanto não há nada para restaurar.
+      --
+      -- 🔴 A proveniência sai primeiro. A chave estrangeira é `RESTRICT`, de
+      --    propósito: ninguém apaga um movimento com origem registada sem
+      --    passar por aqui. Este é o único sítio que tem o direito de o fazer,
+      --    e fá-lo na mesma transacção — se o `DELETE` do movimento falhar, o
+      --    registo volta com ele.
+      DELETE FROM public.payment_cashflow_provenance
+       WHERE cash_flow_entry_id = v_mov.id;
+
       DELETE FROM public.cash_flow_entries
        WHERE id = v_mov.id;
       GET DIAGNOSTICS v_removidos = ROW_COUNT;
+
+    ELSE
+      -- O CHECK da tabela só permite os dois valores acima. Outra coisa quer
+      -- dizer que o modelo mudou e esta função não sabe o que fazer.
+      RAISE EXCEPTION 'UNMARK_BLOCKED_UNKNOWN_CASHFLOW_PROVENANCE'
+        USING ERRCODE = 'object_not_in_prerequisite_state';
     END IF;
   END IF;
 

@@ -65,9 +65,17 @@
 -- com chave estrangeira, sem alargar `cash_flow_entries` com colunas que só
 -- fazem sentido para um caminho.
 --
--- Guarda-se o que não se deriva, e só isso: `status` fica de fora porque é
--- sempre `pendente` no caminho de adopção, e uma cópia a mais é mais uma coisa
--- que pode divergir da verdade.
+-- Guarda-se o que não se deriva, e só isso. `status` fica de fora **por
+-- invariante estrutural**, não por conveniência: `adopted_existing` só é
+-- escrito no ramo em que o movimento está `pendente` — nos outros ramos não se
+-- escreve proveniência nenhuma. Portanto «adoptado» implica «era pendente», e o
+-- `unmark` deriva o estado em vez de o ler de uma cópia que podia divergir. A
+-- regra não vive só neste comentário: há testes que tentam criar um registo de
+-- adopção a partir de um movimento confirmado e exigem que não aconteça.
+--
+-- `prestate_expense_category_id` pode legitimamente ser NULL, e isso é
+-- informação: o `origin` distingue «capturado, e era NULL» de «não capturado»,
+-- porque sem registo nenhum não há `origin` nenhum.
 --
 -- ---------------------------------------------------------------------------
 -- O que isto NÃO faz
@@ -76,8 +84,8 @@
 --  · não escreve uma única linha de dados — cria uma tabela vazia e substitui
 --    duas funções. `MIGRATION_DATA_WRITES = 0`;
 --  · não inventa proveniência para o histórico. Um movimento sem linha nesta
---    tabela é tratado como criado pelo `mark`, que é o que era verdade antes
---    de a reparação existir. Não se adivinha o passado;
+--    tabela fica **desconhecido**, e o `unmark` recusa-o. Não se adivinha o
+--    passado, e não se apaga sobre uma dúvida;
 --  · não altera `mark_payment_paid` no que toca ao F14-A — o helper
 --    `assert_payment_cashflow_link` continua a valer para os dois caminhos;
 --  · não implementa reversão de conciliação. Não existe mecanismo canónico de
@@ -89,19 +97,21 @@ BEGIN;
 
 -- ─── 1. A relação ───────────────────────────────────────────────────────────
 --
--- Uma linha por movimento adoptado. `cash_flow_entry_id` é a chave primária:
--- um movimento não pode ter duas proveniências, e a unicidade é estrutural em
--- vez de depender de um índice que alguém possa largar.
---
--- 🔴 `ON DELETE CASCADE` aqui é seguro e é o oposto do cascade que causou o
---    problema: se o movimento desaparecer por um caminho legítimo, o registo de
---    proveniência não tem razão para sobreviver. O cascade perigoso é o de
---    `bank_reconciliation_matches`, e esse não se toca — bloqueia-se antes.
+-- Uma linha por movimento com origem conhecida. `cash_flow_entry_id` é a chave
+-- primária: um movimento não pode ter duas proveniências, e a unicidade é
+-- estrutural em vez de depender de um índice que alguém possa largar.
 CREATE TABLE IF NOT EXISTS public.payment_cashflow_provenance (
+  -- 🔴 `ON DELETE RESTRICT`, não `CASCADE`. A proveniência não pode
+  --    desaparecer em silêncio por alguém ter apagado a linha que ela existe
+  --    para proteger — seria reabrir o buraco por outro lado. Um movimento com
+  --    proveniência registada só se apaga pelo `unmark`, que sabe o que está a
+  --    fazer e limpa o registo primeiro. Foi um `CASCADE` mal colocado
+  --    (`bank_reconciliation_matches`) que tornou o F14-B destrutivo.
   cash_flow_entry_id  uuid PRIMARY KEY
-                        REFERENCES public.cash_flow_entries(id) ON DELETE CASCADE,
-  company_id          uuid NOT NULL REFERENCES public.companies(id) ON DELETE CASCADE,
-  payment_id          uuid NOT NULL,
+                        REFERENCES public.cash_flow_entries(id) ON DELETE RESTRICT,
+  company_id          uuid NOT NULL REFERENCES public.companies(id) ON DELETE RESTRICT,
+  payment_id          uuid NOT NULL
+                        REFERENCES public.fixed_variable_payments(id) ON DELETE RESTRICT,
   origin              text NOT NULL
                         CHECK (origin IN ('created_by_mark', 'adopted_existing')),
 
@@ -115,8 +125,26 @@ CREATE TABLE IF NOT EXISTS public.payment_cashflow_provenance (
   -- 🔴 Um registo de adopção sem a data de origem não serve para nada: no
   --    `unmark` não haveria a que voltar. O CHECK impede que exista.
   CONSTRAINT payment_cashflow_provenance_adopted_needs_prestate
-    CHECK (origin <> 'adopted_existing' OR prestate_date IS NOT NULL)
+    CHECK (origin <> 'adopted_existing' OR prestate_date IS NOT NULL),
+
+  -- 🔴 O contrato do outro lado, explícito em vez de por omissão: um movimento
+  --    criado pelo `mark` não tinha estado nenhum antes de existir, portanto
+  --    não pode trazer prestate. Sem isto, uma linha `created_by_mark` com
+  --    uma data lá dentro passaria — e ninguém saberia dizer o que ela
+  --    significava.
+  CONSTRAINT payment_cashflow_provenance_created_has_no_prestate
+    CHECK (origin <> 'created_by_mark'
+           OR (prestate_date IS NULL AND prestate_expense_category_id IS NULL))
 );
+
+-- 🔴 A identidade económica é 1:1. O `cash_flow_entry_id` já é chave primária,
+--    portanto um movimento nunca tem duas proveniências. Falta o outro lado: um
+--    pagamento não pode ter dois movimentos com proveniência. O índice único da
+--    024 sobre `cash_flow_entries` já garante um movimento por pagamento, mas
+--    é um índice **parcial** noutra tabela — depender dele daqui seria depender
+--    de uma condição que esta tabela não controla.
+CREATE UNIQUE INDEX IF NOT EXISTS uq_payment_cashflow_provenance_payment
+  ON public.payment_cashflow_provenance(company_id, payment_id);
 
 -- 🔴 A proveniência é por empresa **e** por pagamento. Sem isto, uma linha
 --    forjada com o `company_id` de outra empresa podia descrever um movimento

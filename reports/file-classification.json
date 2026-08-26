@@ -6330,7 +6330,7 @@
       "sideEffects": [],
       "risks": [],
       "signals": {
-        "sqlWrite": 23
+        "sqlWrite": 33
       },
       "action": "nenhuma",
       "reason": "suite de testes — corre por convenção do vitest",
@@ -19203,7 +19203,7 @@
       "sideEffects": [],
       "risks": [],
       "signals": {
-        "sqlWrite": 9
+        "sqlWrite": 10
       },
       "action": "nenhuma",
       "reason": "migration versionada — histórico do schema, nunca se apaga",
@@ -19221,7 +19221,7 @@
       "sideEffects": [],
       "risks": [],
       "signals": {
-        "sqlWrite": 22
+        "sqlWrite": 24
       },
       "action": "nenhuma",
       "reason": "migration versionada — histórico do schema, nunca se apaga",

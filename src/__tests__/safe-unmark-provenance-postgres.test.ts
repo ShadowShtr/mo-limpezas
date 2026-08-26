@@ -481,15 +481,220 @@ describe.sequential("F14-B — concorrência e integridade", () => {
     )).rejects.toThrow(/payment_cashflow_provenance_adopted_needs_prestate/);
   });
 
-  it("sem proveniência, desmarcar apaga — o comportamento da 073", async () => {
+  it("B18. um pagamento não pode ter duas proveniências", async () => {
     await reset();
     const id = await payment();
     const legacy = await legacyCash(id);
     await mark(id);
-    // Um movimento anterior a esta migration: existe, mas não tem registo.
+    // Outro movimento, o mesmo pagamento: o índice único recusa.
+    const outro = randomUUID();
+    await pool.query(
+      `INSERT INTO cash_flow_entries(id,company_id,type,amount,description,category,date,status)
+       VALUES($1,$2,'saida',100,'Outro movimento','despesa','2026-07-11','pendente')`,
+      [outro, COMPANY]);
+    await expect(pool.query(
+      `INSERT INTO payment_cashflow_provenance
+         (cash_flow_entry_id,company_id,payment_id,origin)
+       VALUES($1,$2,$3,'created_by_mark')`,
+      [outro, COMPANY, id],
+    )).rejects.toThrow(/uq_payment_cashflow_provenance_payment/);
+    expect((await provenance(legacy))[0].origin).toBe("adopted_existing");
+  });
+
+  it("um registo created_by_mark não pode trazer prestate", async () => {
+    await reset();
+    const id = await payment();
+    const legacy = await legacyCash(id);
+    await expect(pool.query(
+      `INSERT INTO payment_cashflow_provenance
+         (cash_flow_entry_id,company_id,payment_id,origin,prestate_date)
+       VALUES($1,$2,$3,'created_by_mark','2026-07-10')`,
+      [legacy, COMPANY, id],
+    )).rejects.toThrow(/payment_cashflow_provenance_created_has_no_prestate/);
+  });
+
+  it("a proveniência não desaparece por alguém apagar o movimento", async () => {
+    await reset();
+    const id = await payment();
+    const legacy = await legacyCash(id);
+    await mark(id);
+    // 🔴 `ON DELETE RESTRICT`: um DELETE directo não leva o registo à frente.
+    await expect(pool.query("DELETE FROM cash_flow_entries WHERE id=$1", [legacy]))
+      .rejects.toThrow();
+    expect(await provenance(legacy)).toHaveLength(1);
+  });
+});
+
+describe.sequential("F14-B — proveniência desconhecida falha fechado", () => {
+  it("B13. sem proveniência, desmarcar RECUSA — nunca apaga", async () => {
+    await reset();
+    const id = await payment();
+    const legacy = await legacyCash(id);
+    const antes = (await cashFor(id))[0];
+    await mark(id);
+    // Um movimento anterior a esta infraestrutura: existe, mas ninguém sabe
+    // de onde veio.
     await pool.query("DELETE FROM payment_cashflow_provenance WHERE cash_flow_entry_id=$1", [legacy]);
+
+    await expect(unmark(id)).rejects.toThrow(/UNMARK_BLOCKED_UNKNOWN_CASHFLOW_PROVENANCE/);
+
+    // 🔴 O que interessa: a linha continua lá, e o pagamento continua pago.
+    const cash = await cashFor(id);
+    expect(cash).toHaveLength(1);
+    expect(cash[0].id).toBe(legacy);
+    expect(cash[0].notes).toBe(antes.notes);
+    expect(cash[0].created_at).toEqual(antes.created_at);
+    expect(await paymentStatus(id)).toBe("pago");
+  });
+
+  it("B14. confirmado sem proveniência: marcar é idempotente, desmarcar recusa", async () => {
+    await reset();
+    const id = await payment();
+    const legacy = randomUUID();
+    // Um movimento já confirmado e ligado, sem registo nenhum: daqui não se
+    // distingue «criado pelo mark» de «adoptado e já confirmado».
+    await pool.query(
+      `INSERT INTO cash_flow_entries
+         (id,company_id,type,amount,description,category,date,reference_type,reference_id,status)
+       VALUES($1,$2,'saida',100,'Confirmado sem origem','despesa','2026-07-10',
+              'fixed_variable_payment',$3,'confirmado')`,
+      [legacy, COMPANY, id]);
+
+    const resultado = await mark(id);
+    expect(resultado.rows[0].ja_estava_pago).toBe(true);
+    // 🔴 Marcar não fabrica uma proveniência que ninguém pode provar.
+    expect(await provenance(legacy)).toEqual([]);
+
+    await expect(unmark(id)).rejects.toThrow(/UNMARK_BLOCKED_UNKNOWN_CASHFLOW_PROVENANCE/);
+    expect(await cashFor(id)).toHaveLength(1);
+  });
+
+  it("B15. pendente sem proveniência: marcar captura a adopção antes de mutar", async () => {
+    await reset();
+    const id = await payment({ expense_category_id: CATEGORY });
+    const legacy = await legacyCash(id, { date: "2026-06-15" });
+    // Nenhum registo antes do mark — é o mark que tem de o criar.
+    expect(await provenance(legacy)).toEqual([]);
+
+    await mark(id);
+
+    // 🔴 O prestate guardado é o de ANTES do UPDATE, não o de depois.
+    expect(await provenance(legacy)).toEqual([
+      { origin: "adopted_existing", prestate_date: "2026-06-15",
+        prestate_expense_category_id: OLD_CATEGORY },
+    ]);
+    expect((await cashFor(id))[0].date).toBe("2026-08-26");
+  });
+
+  it("B16. adopted_existing nunca nasce de um movimento confirmado", async () => {
+    await reset();
+    const id = await payment();
+    const legacy = randomUUID();
+    await pool.query(
+      `INSERT INTO cash_flow_entries
+         (id,company_id,type,amount,description,category,date,reference_type,reference_id,status)
+       VALUES($1,$2,'saida',100,'Confirmado','despesa','2026-07-10',
+              'fixed_variable_payment',$3,'confirmado')`,
+      [legacy, COMPANY, id]);
+    await mark(id);
+    // É este invariante que autoriza o unmark a derivar `status = pendente`
+    // em vez de o guardar: adoptado ⇒ era pendente.
+    expect(await provenance(legacy)).toEqual([]);
+  });
+
+  it("B17. proveniência de outra empresa é recusada pela chave estrangeira", async () => {
+    await reset();
+    const id = await payment();
+    const legacy = await legacyCash(id);
+    // O pagamento é desta empresa; declarar que a proveniência é de outra não
+    // passa — e a chave primária já impede substituir a verdadeira.
+    await mark(id);
+    await expect(pool.query(
+      `INSERT INTO payment_cashflow_provenance
+         (cash_flow_entry_id,company_id,payment_id,origin)
+       VALUES($1,$2,$3,'created_by_mark')`,
+      [legacy, OTHER_COMPANY, id],
+    )).rejects.toThrow();
+    expect((await provenance(legacy))[0].origin).toBe("adopted_existing");
+  });
+
+  it("desmarcar um movimento criado pelo mark continua a apagá-lo", async () => {
+    await reset();
+    const id = await payment();
+    await mark(id);
+    const cashId = (await cashFor(id))[0].id;
+    expect((await provenance(cashId))[0].origin).toBe("created_by_mark");
     const resultado = await unmark(id);
     expect(resultado.rows[0].movimentos_removidos).toBe(1);
     expect(await cashFor(id)).toEqual([]);
+    // O registo de proveniência sai com ele — a FK RESTRICT obriga a que saia
+    // primeiro, e é o unmark que o faz.
+    expect(await provenance(cashId)).toEqual([]);
+  });
+});
+
+describe.sequential("F14-B — rollback do schema", () => {
+  const rollbackSql = () =>
+    readSql("supabase", "migrations", "draft", "rollback",
+      "PROVISIONAL_payment_cashflow_provenance.down.sql");
+
+  const funcDef = async (nome: string) =>
+    (await pool.query("SELECT pg_get_functiondef($1::regproc) d", [nome])).rows[0].d;
+
+  it("B19. sem linhas de proveniência: repõe o estado anterior por inteiro", async () => {
+    await reset();
+    // A definição que a 079 corrigida deixou, antes de a proveniência existir.
+    await pool.query(BASELINE);
+    await pool.query(readSql("supabase", "migrations", "073_payment_to_cashflow.sql"));
+    await pool.query(readSql("supabase", "migrations", "079_reuse_pending_cashflow_on_payment.sql"));
+    const markAntes = await funcDef("public.mark_payment_paid");
+    const unmarkAntes = await funcDef("public.unmark_payment_paid");
+
+    await pool.query(readSql("supabase", "migrations", "draft",
+      "PROVISIONAL_payment_cashflow_provenance.sql"));
+    await pool.query(readSql("supabase", "migrations", "draft",
+      "PROVISIONAL_safe_unmark_payment_paid.sql"));
+    expect(await funcDef("public.unmark_payment_paid")).not.toEqual(unmarkAntes);
+
+    await pool.query(rollbackSql());
+    // O rollback não traz cópia da 079: reaplica-se a própria, que é
+    // `CREATE OR REPLACE` e não escreve dados. Uma segunda cópia mantida à mão
+    // divergiria — foi o que este teste apanhou na primeira tentativa.
+    await pool.query(readSql("supabase", "migrations", "079_reuse_pending_cashflow_on_payment.sql"));
+
+    // 🔴 Byte a byte, não «parecido».
+    expect(await funcDef("public.mark_payment_paid")).toEqual(markAntes);
+    expect(await funcDef("public.unmark_payment_paid")).toEqual(unmarkAntes);
+    // Nenhum objecto órfão: tabela, índice e políticas foram com ela.
+    expect((await pool.query(
+      "SELECT to_regclass('public.payment_cashflow_provenance') t")).rows[0].t).toBeNull();
+    expect((await pool.query(
+      `SELECT count(*)::int n FROM pg_indexes
+        WHERE indexname='uq_payment_cashflow_provenance_payment'`)).rows[0].n).toBe(0);
+    expect((await pool.query(
+      `SELECT count(*)::int n FROM pg_policies
+        WHERE tablename='payment_cashflow_provenance'`)).rows[0].n).toBe(0);
+  });
+
+  it("B20. com linhas de proveniência: recusa, e não destrói nada", async () => {
+    await reset();
+    const id = await payment();
+    const legacy = await legacyCash(id, { date: "2026-06-01" });
+    await mark(id);
+    const provAntes = await provenance(legacy);
+    const unmarkAntes = await funcDef("public.unmark_payment_paid");
+
+    await expect(pool.query(rollbackSql()))
+      .rejects.toThrow(/ROLLBACK_BLOCKED_PROVENANCE_ROWS_EXIST/);
+
+    // 🔴 Zero destruição parcial: a tabela, as linhas e as funções ficam como
+    //    estavam. A guarda corre antes de qualquer DDL.
+    expect((await pool.query(
+      "SELECT to_regclass('public.payment_cashflow_provenance') t")).rows[0].t).not.toBeNull();
+    expect(await provenance(legacy)).toEqual(provAntes);
+    expect(await funcDef("public.unmark_payment_paid")).toEqual(unmarkAntes);
+    // E o unmark seguro continua a ser o que está instalado.
+    await expect(unmark(id)).resolves.toBeDefined();
+    expect((await cashFor(id))[0].date).toBe("2026-06-01");
   });
 });
