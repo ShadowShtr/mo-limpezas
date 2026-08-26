@@ -70,8 +70,16 @@ das três PRs são evidência **local**; a CI cobre o resto.
 **Preparar o EXPAND da identidade de colaboradores (Option A), sobre a #89.**
 
 ```
-NEXT_TASK = COLLABORATOR_IDENTITY_EXPAND_PREPARATION
+NEXT_TASK = COLLABORATOR_IDENTITY_PHASE_C (resolver + políticas RLS)
 ```
+
+A **PHASE A está feita e verde** — ver «EXPAND», mais abaixo. O que se segue é
+a PHASE C: migrar as políticas para `get_my_profile_id()`, uma de cada vez e
+com teste. A PHASE D (largar o pressuposto `id = auth.uid()` da chave
+primária) só depois de nada no código o assumir.
+
+O name-only no ecrã vem **depois** da PHASE C, nunca antes: a base já o aceita,
+mas o runtime ainda lê pela convenção antiga.
 
 A #89 está pronta e verde, e **fica parada** — mesclá-la dispara auto-deploy, e
 o SHA activo em produção ainda é inferido, não provado. Antes de a mesclar:
@@ -249,6 +257,85 @@ reconciliar.
 
 ---
 
+## EXPAND da identidade de colaborador — PHASE A feita
+
+```
+BRANCH = feat/collaborator-identity-expand
+PR = #90   HEAD = e83fee41   CI = 33024444801 SUCCESS   MERGEABLE = YES
+BASE = hotfix/reconcile-master-after-86 (a #89, nunca o master)
+MIGRATION_NUMBER_FINAL = UNASSIGNED
+```
+
+| | |
+|---|---|
+| `profiles.auth_user_id` | coluna nova, nullable, `ON DELETE SET NULL` |
+| FK de `profiles.id` para `auth.users` | **largada** — a chave primária e os valores ficam |
+| backfill | `auth_user_id = id` para todos os perfis existentes |
+| `get_my_profile_id()` | terceira da família de `get_my_company_id()` / `get_my_role()` (014) |
+
+```
+IDENTITY_IDS_PRESERVED = YES        OLD_RUNTIME_AFTER_EXPAND = PASS
+EXPAND_BACKWARD_COMPATIBLE = YES    ROLLBACK_WITH_NEW_DATA = BLOCKED
+EXISTING_PROFILE_IDS_CHANGED = 0    PAYROLL_PARENT_IDS_CHANGED = 0
+DOCUMENT_PARENT_IDS_CHANGED = 0     TEAM_MEMBER_IDS_CHANGED = 0
+```
+
+O backfill mantém `id = auth.uid()` e `auth_user_id = auth.uid()`
+equivalentes — é por isso que as 99 políticas continuam correctas sem se lhes
+tocar.
+
+### A auditoria RLS foi mais favorável do que o número sugeria
+
+```
+RLS_AUDIT_OBJECT_COUNT = 99
+  · 72 seguem o padrão idêntico `FROM profiles WHERE id = auth.uid()`
+  · 4 usam `id = auth.uid()` directo (acesso ao próprio perfil)
+  · as restantes «variantes» contadas antes eram comentários de teste
+CANONICAL_AUTH_TO_PROFILE_RESOLVER = get_my_profile_id() (existe, testada)
+```
+
+🔴 **A camada canónica já existia no projecto.** `get_my_company_id()` e
+`get_my_role()`, da 014, resolvem o mesmo tipo de pergunta com
+`SECURITY DEFINER` para não reentrarem na RLS que servem. Não se inventou um
+padrão novo — seguiu-se o que lá estava. Migrar uma política passa a ser trocar
+uma expressão pela função, não tomar 99 decisões.
+
+### Três defeitos que só a execução apanhou
+
+1. **Adicionar a coluna não chegava.** Com a FK do `id` de pé, criar uma pessoa
+   sem conta continuava impossível. Seis testes vermelhos disseram-no.
+
+2. 🔴 **O ramo de compatibilidade de `get_my_profile_id()` abria um buraco de
+   segurança.** Sem exigir que a conta exista mesmo em `auth.users`, quem
+   soubesse o id de uma pessoa **sem** login podia fazer-se passar por ela.
+   Antes desta migration era impossível — um id de perfil era sempre um id de
+   conta. Ao permitir pessoas sem conta, a equivalência deixou de valer.
+
+3. A política de `profiles` no ensaio recorria a si própria — o mesmo defeito
+   que a 014 corrigiu.
+
+Nenhum apareceu ao reler o SQL.
+
+```
+15/15 em Postgres 16 · verificado por mutação:
+  sem largar a FK antiga    ⇒ 6 vermelhos
+  sem o EXISTS de segurança ⇒ 1 vermelho
+  sem o backfill            ⇒ 4 vermelhos
+```
+
+### Uma lição de ferramenta, para não se repetir
+
+A CI falhou uma vez por `@types/pg` em falta, com o typecheck a passar
+localmente: o pacote estava no `node_modules` por resíduo de outra branch, e o
+`package.json` desta linha não o declarava. **A instalação limpa é a única
+verificação que conta** — `git archive` + `npm ci`, não o worktree actual.
+
+Na mesma sessão, um `; echo $?` capturou o código de saída do `echo` e não do
+script, e um `tsc` correu num directório vazio a devolver zero. Os três
+produziam um verde que não significava nada.
+
+---
+
 ## Ronda F14 — fechada em 2026-08-26
 
 Três defeitos confirmados pela revisão adversarial do Codex (#85), corrigidos e
@@ -370,6 +457,7 @@ Nenhuma branch tem commits por enviar. `LOCAL_HEAD == REMOTE_HEAD` em todas.
 | `codex/hardening-invoice-cash-atomicity` | Codex | atomicidade fatura/caixa, migration 080 provisória | `0a5da475` | #84 | OPEN, revisão Claude requerida | não |
 | `codex/adversarial-review-81-82` | Codex | revisão adversarial de #81/#82 | `dcda4c06` | #85 | OPEN, 🔴 **serve produção** | **NUNCA** |
 | `hotfix/reconcile-master-after-86` | Claude | revert da #86 + protecções | `e3c22991` | #89 | OPEN, CI verde, **não mesclar** | não |
+| `feat/collaborator-identity-expand` | Claude | PHASE A da identidade | `e83fee41` | #90 | OPEN, CI verde, stacked sobre a #89 | não |
 | `codex/fix-collaborator-name-only-create` | Codex | colaborador só com nome | `1cc405d0` | #86 | **MESCLADA** | — |
 
 > 🔴 **`fix/reuse-pending-cashflow-on-payment` não pode ser apagada.** A #82 tem-na
