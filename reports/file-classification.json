@@ -1,13 +1,13 @@
 {
   "generatedBy": "scripts/audit-file-inventory.mjs",
-  "totalFiles": 695,
+  "totalFiles": 699,
   "byStatus": {
-    "MANTER": 677,
+    "MANTER": 681,
     "STANDBY": 18
   },
   "byCategory": {
     "route-ui": 135,
-    "test": 124,
+    "test": 125,
     "migration": 78,
     "lib": 65,
     "script": 48,
@@ -15,9 +15,9 @@
     "doc": 43,
     "server-action": 41,
     "component": 30,
+    "src-other": 17,
     "doc-historico": 16,
     "api-route": 16,
-    "src-other": 14,
     "config": 12,
     "asset": 8,
     "report": 4,
@@ -29,7 +29,7 @@
     "supabase-other": 2
   },
   "byConfidence": {
-    "alta": 679,
+    "alta": 683,
     "média": 10,
     "baixa": 6
   },
@@ -1851,7 +1851,7 @@
       ],
       "signals": {
         "supabase": 1,
-        "sqlWrite": 26,
+        "sqlWrite": 27,
         "debugger": 6,
         "revalidatePath": 37
       },
@@ -2232,9 +2232,10 @@
       "category": "script",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 1,
+      "consumers": 2,
       "consumerSample": [
-        "src/__tests__/release-note-guard.test.ts"
+        "src/__tests__/release-note-guard.test.ts",
+        "src/__tests__/release-note-withdrawal.test.ts"
       ],
       "autoLoaded": false,
       "referencedBy": [
@@ -6061,6 +6062,30 @@
       "sideEffects": [],
       "risks": [],
       "signals": {},
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/__tests__/release-note-withdrawal.test.ts",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "sqlWrite": 1
+      },
       "action": "nenhuma",
       "reason": "suite de testes — corre por convenção do vitest",
       "manualDecision": false,
@@ -15047,8 +15072,9 @@
       "category": "domain",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 2,
+      "consumers": 3,
       "consumerSample": [
+        "src/__tests__/release-note-withdrawal.test.ts",
         "src/__tests__/update-notices-eligibility.test.ts",
         "src/app/actions/update-notices.ts"
       ],
@@ -15058,7 +15084,7 @@
       "risks": [],
       "signals": {},
       "action": "nenhuma",
-      "reason": "em uso: 2 consumidor(es)",
+      "reason": "em uso: 3 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -15072,7 +15098,7 @@
       "category": "domain",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 20,
+      "consumers": 23,
       "consumerSample": [
         "src/__tests__/update-notice-modal.test.tsx",
         "src/__tests__/update-notices-eligibility.test.ts",
@@ -15087,7 +15113,7 @@
       "risks": [],
       "signals": {},
       "action": "nenhuma",
-      "reason": "em uso: 20 consumidor(es), configuração",
+      "reason": "em uso: 23 consumidor(es), configuração",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -17086,6 +17112,61 @@
       }
     },
     {
+      "path": "src/release-note-withdrawals/2026-08-26-colaborador-apenas-com-nome.ts",
+      "category": "src-other",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 1,
+      "consumerSample": [
+        "src/release-note-withdrawals/index.ts"
+      ],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "sqlWrite": 1
+      },
+      "action": "nenhuma",
+      "reason": "em uso: 1 consumidor(es)",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/release-note-withdrawals/index.ts",
+      "category": "src-other",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 2,
+      "consumerSample": [
+        "src/__tests__/release-note-withdrawal.test.ts",
+        "src/domain/update-notices/eligibility.ts"
+      ],
+      "autoLoaded": false,
+      "referencedBy": [
+        "docs"
+      ],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "sqlWrite": 1
+      },
+      "action": "nenhuma",
+      "reason": "em uso: 2 consumidor(es)",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
       "path": "src/release-notes/2026-08-19-financeiro-e-anexos.ts",
       "category": "src-other",
       "status": "MANTER",
@@ -17346,6 +17427,32 @@
       }
     },
     {
+      "path": "src/release-notes/2026-08-26-colaborador-apenas-com-nome.ts",
+      "category": "src-other",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 1,
+      "consumerSample": [
+        "src/release-notes/index.ts"
+      ],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "sqlWrite": 1
+      },
+      "action": "nenhuma",
+      "reason": "em uso: 1 consumidor(es)",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
       "path": "src/release-notes/2026-08-26-pagamentos-no-mes-certo.ts",
       "category": "src-other",
       "status": "MANTER",
@@ -17402,11 +17509,11 @@
       "category": "src-other",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 3,
+      "consumers": 4,
       "consumerSample": [
         "src/__tests__/release-note-guard.test.ts",
-        "src/__tests__/update-notices-eligibility.test.ts",
-        "src/app/actions/update-notices.ts"
+        "src/__tests__/release-note-withdrawal.test.ts",
+        "src/__tests__/update-notices-eligibility.test.ts"
       ],
       "autoLoaded": false,
       "referencedBy": [
@@ -17418,7 +17525,7 @@
         "sqlWrite": 1
       },
       "action": "nenhuma",
-      "reason": "em uso: 3 consumidor(es)",
+      "reason": "em uso: 4 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,

@@ -7,6 +7,7 @@
 // ============================================================================
 
 import type { NoticeForDisplay, ReleaseNote } from "./types";
+import { withdrawnKeys } from "@/release-note-withdrawals";
 
 /**
  * 🔴 Corte de activação do sistema.
@@ -97,8 +98,22 @@ export function releasesPorMostrar(
   profileCreatedAt: string,
   jaLidas: ReadonlySet<string>,
   activatedAt: string = UPDATE_NOTICES_SYSTEM_ACTIVATED_AT,
+  retiradas: ReadonlySet<string> = withdrawnKeys(),
 ): NoticeForDisplay[] {
   return notas
+    // 🔴 A retirada vem primeiro, e é deliberado: uma nota retirada não é
+    //    oferecida a ninguém, tenha ou não sido lida, seja qual for a data do
+    //    perfil. As outras condições dizem «ainda não é para ti»; esta diz
+    //    «deixou de ser verdade».
+    //
+    //    Filtra-se aqui, no único sítio por onde as notas de código passam
+    //    para chegar ao ecrã, e não em cada chamador — um chamador que se
+    //    esquecesse mostraria um aviso que já não é verdade.
+    //
+    //    A nota original continua a existir e os registos de leitura continuam
+    //    a apontar para a sua `key`: não se apaga histórico para deixar de
+    //    mostrar uma coisa.
+    .filter((n) => !retiradas.has(n.key))
     .filter((n) => !jaLidas.has(n.key))
     .filter((n) => releaseElegivel(n, profileCreatedAt, activatedAt))
     .map((n) => ({

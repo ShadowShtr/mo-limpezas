@@ -13,6 +13,11 @@
 //     `src/release-notes/`;
 //   · modificar ou apagar uma nota existente é sempre erro — publicada, é
 //     imutável: a `key` liga ao registo de leitura de cada perfil;
+//   · uma nota que deixou de ser verdade **retira-se**, não se apaga: um
+//     ficheiro novo em `src/release-note-withdrawals/` com a sua `key`. A
+//     retirada é igualmente imutável, e **não** conta como nota nova — se o
+//     comportamento mudou, quem usa o sistema tem direito a saber o que é
+//     verdade agora, e uma retirada não diz nada a ninguém;
 //   · `docs/**`, `reports/**` e `src/__tests__/**` não contam como visíveis.
 //
 // Não existe variável de ambiente que desligue isto. Um escape genérico
@@ -27,6 +32,8 @@ import { execFileSync } from "node:child_process";
 
 const RELEASE_DIR = "src/release-notes/";
 const INDEX = "src/release-notes/index.ts";
+const WITHDRAWAL_DIR = "src/release-note-withdrawals/";
+const WITHDRAWAL_INDEX = "src/release-note-withdrawals/index.ts";
 
 /** Superfícies cuja alteração se vê no ecrã. */
 const AREAS_VISIVEIS = ["src/app/", "src/components/"];
@@ -42,6 +49,7 @@ export function classificar(ficheiros) {
   const visiveis = [];
   const notasNovas = [];
   const notasAlteradas = [];
+  const retiradasAlteradas = [];
 
   for (const { status, path } of ficheiros) {
     if (path.startsWith(RELEASE_DIR)) {
@@ -52,11 +60,29 @@ export function classificar(ficheiros) {
       continue;
     }
 
+    if (path.startsWith(WITHDRAWAL_DIR)) {
+      // 🔴 Uma retirada nova é permitida e **não** entra em `notasNovas`:
+      //    retirar um aviso não é anunciar nada. Depois de criada é tão
+      //    imutável quanto a nota que retira.
+      if (path === WITHDRAWAL_INDEX) continue;
+      if (status !== "A") retiradasAlteradas.push(`${status} ${path}`);
+      continue;
+    }
+
     if (EXCLUIDAS.some((e) => path.startsWith(e))) continue;
     if (AREAS_VISIVEIS.some((a) => path.startsWith(a))) visiveis.push(`${status} ${path}`);
   }
 
   const problemas = [];
+
+  if (retiradasAlteradas.length > 0) {
+    problemas.push(
+      "Uma retirada é imutável como a nota que retira — desfazê-la faz o aviso " +
+        "reaparecer a quem já não devia recebê-lo, e apagá-la perde o registo de " +
+        "que a nota deixou de ser verdade:\n  " +
+        retiradasAlteradas.join("\n  "),
+    );
+  }
 
   if (notasAlteradas.length > 0) {
     problemas.push(
@@ -76,7 +102,7 @@ export function classificar(ficheiros) {
     );
   }
 
-  return { visiveis, notasNovas, notasAlteradas, problemas };
+  return { visiveis, notasNovas, notasAlteradas, retiradasAlteradas, problemas };
 }
 
 export function lerDiff(base, head) {

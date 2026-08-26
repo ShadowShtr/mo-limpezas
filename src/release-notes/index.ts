@@ -26,6 +26,10 @@ import { nota as financeiroMudaDeMes } from "./2026-08-25-financeiro-muda-de-mes
 import { nota as pagamentosNoMesCerto } from "./2026-08-26-pagamentos-no-mes-certo";
 import { nota as categoriasEMenu } from "./2026-08-26-categorias-e-menu-dos-pagamentos";
 import { nota as categoriaDasSaidas } from "./2026-08-26-categoria-das-saidas";
+// 🔴 Retirada — ver `src/release-note-withdrawals/`. Continua aqui de propósito:
+//    a `key` liga aos registos de leitura, e tirá-la do catálogo deixava-os a
+//    apontar para coisa nenhuma. Deixou de ser oferecida, não de existir.
+import { nota as colaboradorApenasComNome } from "./2026-08-26-colaborador-apenas-com-nome";
 import { nota as reposicaoDoAcesso } from "./2026-08-26-reposicao-do-acesso";
 
 export const RELEASE_NOTES: ReleaseNote[] = [
@@ -40,6 +44,7 @@ export const RELEASE_NOTES: ReleaseNote[] = [
   pagamentosNoMesCerto,
   categoriasEMenu,
   categoriaDasSaidas,
+  colaboradorApenasComNome,
   reposicaoDoAcesso,
 ];
 
