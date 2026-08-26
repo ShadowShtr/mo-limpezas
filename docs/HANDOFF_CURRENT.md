@@ -67,8 +67,19 @@ das três PRs são evidência **local**; a CI cobre o resto.
 
 ## NEXT_EXACT_ACTION
 
-**Reconciliar o `master` e o runtime de produção — o incidente da #86 — e só
-depois retomar a integração das branches financeiras.**
+**Preparar o EXPAND da identidade de colaboradores (Option A), sobre a #89.**
+
+```
+NEXT_TASK = COLLABORATOR_IDENTITY_EXPAND_PREPARATION
+```
+
+A #89 está pronta e verde, e **fica parada** — mesclá-la dispara auto-deploy, e
+o SHA activo em produção ainda é inferido, não provado. Antes de a mesclar:
+prova directa do deployment no painel da Vercel.
+
+O trabalho seguinte não espera por esse merge: parte da branch da #89, que já
+tem o modelo estável mais as protecções. Ver «Rollout obrigatório», acima —
+PHASE A primeiro, e nada de runtime a exigir schema que ainda não existe.
 
 ```
 MASTER_INTEGRATION_GATE = BLOCKED_BY_86_RUNTIME_GIT_DIVERGENCE
@@ -93,6 +104,151 @@ A ordem a seguir:
 
 ---
 
+## Ronda MASTER/COLLABORATOR_RECONCILIATION — em curso
+
+```
+F14_ROUND = COMPLETE
+MASTER_COLLABORATOR_RECONCILIATION = IN_PROGRESS
+```
+
+### O runtime não é o `master` — e também não é o pré-#86
+
+Medido a 2026-08-26 com `vercel inspect molimpezas.pt`:
+
+```
+ACTIVE_PRODUCTION_DEPLOYMENT_ID = dpl_38it94GjVxsyxT6e3WWNM3c6C3Jt
+ACTIVE_PRODUCTION_DEPLOYMENT_TIME = 2026-08-26T18:08:38Z
+ACTIVE_PRODUCTION_ALIASES = molimpezas.pt · www.molimpezas.pt ·
+  mo-limpezas.vercel.app · mo-limpezas-git-codex-adversarial-r-bc1cbb-…
+ACTIVE_PRODUCTION_DEPLOYED_SHA = dcda4c06  ← INFERIDO, não lido
+PRODUCTION_EQUALS_MASTER = NO
+PRODUCTION_EQUALS_PRE86  = NO
+```
+
+🔴 **O rollback não foi para o `master` pré-#86.** Foi para um deployment da
+branch da **#85** (`codex/adversarial-review-81-82`), cuja base é `f001866` e
+que **não contém a #86**. Em comportamento é equivalente ao pré-#86 — a #85 só
+toca `src/__tests__/`, `docs/`, `package.json` e `reports/`, zero runtime.
+
+> ⚠️ **Fechar ou mesclar a #85 pode reciclar o deployment que serve
+> `molimpezas.pt`.** Enquanto a #89 não for mesclada, a #85 fica aberta e
+> intocada. `PR85_FROZEN = YES`.
+
+O SHA é **inferido** por alias de branch e correlação de timestamps: o
+`vercel inspect` deste CLI não expõe `meta.githubCommitSha`.
+`DIRECT_PROOF = REQUIRED` antes de qualquer merge.
+
+### #86 — três estados distintos
+
+```
+PR86_GIT_STATE = MERGED (0527127b)     PR86_GIT_REVERTED = NO → a #89 prepara-o
+PR86_RUNTIME_STATE = NOT_RUNNING       PR86_RUNTIME_ROLLED_BACK = YES
+ROOT_CAUSE = CODE_SCHEMA_ORDERING
+```
+
+A #86 mudou `getCurrentProfile` de `.eq("id", user.id)` para
+`.eq("auth_user_id", user.id)`, com a coluna a viver numa migration **draft**
+que nenhum runner aplica. O merge disparou auto-deploy, o runtime passou a
+interrogar produção por uma coluna inexistente, e a consulta do perfil deixou
+de devolver nada — para toda a gente, admin incluído.
+
+Não foi um bug de colaboradores. Foi uma inversão de ordem.
+
+### PR #89 — o revert, pronta e parada
+
+```
+REVERT_BRANCH = hotfix/reconcile-master-after-86
+REVERT_PR = #89   HEAD = e3c22991   CI = 33022510192 SUCCESS   MERGEABLE = YES
+MERGE = NO   ← mesclar dispara auto-deploy
+```
+
+O revert está isolado em `d33d017`, com árvore **byte a byte** igual a
+`f001866`. A árvore **final** da PR não é: acrescenta a guarda de ordem, a
+release note e a infraestrutura de retirada.
+
+### Decisão registada: retirada de notas, sem quebrar a imutabilidade
+
+```
+RELEASE_NOTE_86 = WITHDRAWN_PRESERVED
+RELEASE_NOTE_IMMUTABILITY = PRESERVED
+GENERIC_IMMUTABILITY_EXCEPTION = NO
+```
+
+A nota da #86 anunciava algo que o revert removeu. Apagá-la destruiria o que
+alguém disse ter lido; mantê-la mentiria. A saída é uma terceira: a nota fica
+byte a byte, com a mesma `key`, ainda no catálogo — e um artefacto **separado**
+e igualmente imutável (`src/release-note-withdrawals/`) diz que deixou de ser
+oferecida. Passa a haver diferença entre «existiu no histórico» e «ainda deve
+ser mostrada».
+
+🔴 **Uma correcção que importa preservar.** Argumentei que a nota «nunca chegou
+a ser lida» porque o `publishedAt` era posterior ao deployment. **Está errado:**
+`releaseElegivel` compara `publishedAt` com
+`max(profileCreatedAt, activatedAt)` e **nunca com o relógio** — uma nota com
+data futura é elegível na mesma. O teste `RN04b` existe para impedir que
+alguém volte a usar esse raciocínio.
+
+Task separada, por decidir:
+`RELEASE_NOTE_PUBLISHED_AT_SEMANTICS_AUDIT` — o `publishedAt` é metadado
+histórico ou hora de publicação agendada?
+
+### Decisão registada: arquitectura de colaboradores
+
+```
+COLLABORATOR_ARCHITECTURE = OPTION_A
+IDENTITY_IDS_PRESERVED = YES
+OPTION_B = REJECTED_FOR_NOW
+RLS_AUDIT_REQUIRED = YES
+```
+
+**O modelo actual, medido:**
+
+```
+AUTH_ENTITY   = auth.users            PERSON_ENTITY = public.profiles
+AUTH_PROFILE_LINK = profiles.id **IS** auth.users.id
+                    (PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE)
+```
+
+| dependência de `profiles.id = auth.uid()` | contagem |
+|---|---|
+| políticas RLS | **99** |
+| ficheiros de migration | **34** |
+| chaves estrangeiras para `profiles(id)` | **43** |
+
+Hoje é **impossível** um colaborador sem login: a FK é obrigatória. Não é
+limitação de UI, é estrutural.
+
+Sete tabelas laborais apontam para `profiles(id)` com `ON DELETE CASCADE`:
+`payroll_records`, `team_members`, `collaborator_documents`, `absences`,
+`vacation_requests`, `timesheets`, `push_subscriptions`.
+
+**Porquê a Option A.** Preservar os ids das pessoas vale mais do que evitar
+trabalho de RLS. As políticas auditam-se, testam-se e migram-se por etapas;
+trocar a identidade laboral por uma tabela nova obrigaria a migrar folha,
+documentos, equipas, calendário e histórico para ids novos — sob aquele
+cascade, é o cenário de ligação partida silenciosa.
+
+🔴 **Isto não significa alterar 99 políticas às cegas.** Significa criar uma
+camada canónica que resolva `auth.uid() → profile id` num sítio só, e migrar
+as políticas contra ela. Copiar a mesma subconsulta por dezenas de políticas
+seria repetir, em RLS, o erro que o helper único do F14-A evitou.
+
+A análise da Option B fica registada, não apagada.
+
+### Rollout obrigatório
+
+```
+PHASE A — EXPAND    schema compatível; código antigo continua a funcionar
+PHASE B — MIGRATE   backfill determinístico; zero mudanças de id ou password
+PHASE C — RUNTIME   passa a usar a relação nova, com compatibilidade
+PHASE D — CONTRACT  muito depois, remover o pressuposto antigo
+```
+
+`MIGRATION_NUMBER_FINAL = UNASSIGNED` — a 077/078/079 continuam por
+reconciliar.
+
+---
+
 ## Ronda F14 — fechada em 2026-08-26
 
 Três defeitos confirmados pela revisão adversarial do Codex (#85), corrigidos e
@@ -102,7 +258,15 @@ provados em PostgreSQL 16 real. Nenhum foi aplicado em lado nenhum.
 F14_A = FIXED_AND_PROVEN     PR #81   HEAD e99872e6
 F14_B = FIXED_AND_PROVEN     PR #87   HEAD 29b6336f
 F14_C = FIXED_AND_PROVEN     PR #88   HEAD e47312fd
+
+F14_POSTGRES_PROOF    = LOCAL_DOCKER_POSTGRES16
+F14_CI_POSTGRES_PROOF = NO
 ```
+
+🔴 **CI verde não substitui a prova local.** O workflow corre `rehearse:071`
+(PGlite); as 60 verificações da ronda F14 exigem Docker e correm apenas neste
+computador. As duas coisas são evidência de coisas diferentes, e confundi-las
+seria dar por provado o que não foi.
 
 | | o que era | o que passou a ser |
 |---|---|---|
@@ -204,7 +368,8 @@ Nenhuma branch tem commits por enviar. `LOCAL_HEAD == REMOTE_HEAD` em todas.
 | `fix/secure-migrations-ledger` | Claude | migration 077 | `f54d62cb` | #73 CLOSED | branch viva | não |
 | `feat/domain-mutation-change-event-foundation` | Claude | migration 078 | `a8475227` | #74 | OPEN | não |
 | `codex/hardening-invoice-cash-atomicity` | Codex | atomicidade fatura/caixa, migration 080 provisória | `0a5da475` | #84 | OPEN, revisão Claude requerida | não |
-| `codex/adversarial-review-81-82` | Codex | revisão adversarial de #81/#82 | `dcda4c06` | #85 | OPEN | não |
+| `codex/adversarial-review-81-82` | Codex | revisão adversarial de #81/#82 | `dcda4c06` | #85 | OPEN, 🔴 **serve produção** | **NUNCA** |
+| `hotfix/reconcile-master-after-86` | Claude | revert da #86 + protecções | `e3c22991` | #89 | OPEN, CI verde, **não mesclar** | não |
 | `codex/fix-collaborator-name-only-create` | Codex | colaborador só com nome | `1cc405d0` | #86 | **MESCLADA** | — |
 
 > 🔴 **`fix/reuse-pending-cashflow-on-payment` não pode ser apagada.** A #82 tem-na
@@ -493,6 +658,9 @@ COLLABORATOR_ACCESS_REDESIGN                = PENDING_CODEX/CLAUDE_REVIEW
 MASTER_INTEGRATION_GATE                     = BLOCKED_BY_86_RUNTIME_GIT_DIVERGENCE
 OLD_LOCAL_REPO_REQUIRES_FORENSIC_REVIEW     = YES
 PAYMENT_CASHFLOW_PROVENANCE_BACKFILL        = PENDING_AUDIT
+RELEASE_NOTE_PUBLISHED_AT_SEMANTICS_AUDIT   = PENDING_DECISION
+COLLABORATOR_RLS_AUDIT                      = REQUIRED (99 políticas)
+PR85_SERVES_PRODUCTION                      = YES — não fechar, não mesclar
 ```
 
 **A pilha financeira não entra no `master` por agora.** A #81 está
