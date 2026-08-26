@@ -7,9 +7,9 @@ Codex e mesclada automaticamente. Todas exigem revisao do Claude.
 
 | Task | Estado | PR | HEAD | CI | Claude review |
 |---|---|---|---|---|---|
-| CODEX_TASK_00 - transformar achados em provas | IN_PROGRESS | #84 | 397cd47 | PENDING | YES |
-| CODEX_TASK_01 - invoice/cash atomicity | IN_PROGRESS | #84 | 397cd47 | PENDING | YES |
-| CODEX_TASK_02 - invoice_items query error | IN_PROGRESS | #84 | 397cd47 | PENDING | YES |
+| CODEX_TASK_00 - transformar achados em provas | IN_PROGRESS | #84 | 6d9d4e8 | SUCCESS | YES |
+| CODEX_TASK_01 - invoice/cash atomicity | DONE | #84 | 6d9d4e8 | SUCCESS | YES |
+| CODEX_TASK_02 - invoice_items query error | DONE | #84 | 6d9d4e8 | SUCCESS | YES |
 | CODEX_TASK_03 - daily billing atomicity | NOT_STARTED | - | - | - | YES |
 | CODEX_TASK_04 - exclusao mutua de receita | NOT_STARTED | - | - | - | YES |
 | CODEX_TASK_05 - payroll/cash atomicity | NOT_STARTED | - | - | - | YES |
