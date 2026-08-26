@@ -28,7 +28,7 @@ export async function createCliente(input: ClienteInput) {
   const { data: profile } = await admin
     .from("profiles")
     .select("company_id, role")
-    .eq("id", user.id)
+    .eq("auth_user_id", user.id)
     .single();
   if (!profile || !["admin", "gestor"].includes(profile.role) || profile.company_id !== input.company_id) {
     return { ok: false as const, error: "Sem permissao." };
@@ -78,7 +78,7 @@ export async function createClienteComLocal(companyId: string, input: ClienteCom
   const { data: profile } = await admin
     .from("profiles")
     .select("company_id, role")
-    .eq("id", user.id)
+    .eq("auth_user_id", user.id)
     .single();
   if (!profile || !["admin", "gestor"].includes(profile.role) || profile.company_id !== companyId) {
     return { ok: false as const, error: "Sem permissão.", clientId: null, locationId: null };
@@ -138,7 +138,7 @@ export async function archiveCliente(id: string) {
   const { data: profile } = await admin
     .from("profiles")
     .select("company_id, role")
-    .eq("id", user.id)
+    .eq("auth_user_id", user.id)
     .single();
   if (!profile || !["admin", "gestor"].includes(profile.role)) {
     return { ok: false as const, error: "Sem permissao." };
@@ -206,7 +206,7 @@ export async function updateCliente(id: string, input: Omit<ClienteInput, "compa
   const { data: profile } = await admin
     .from("profiles")
     .select("company_id, role")
-    .eq("id", user.id)
+    .eq("auth_user_id", user.id)
     .single();
   if (!profile || !["admin", "gestor"].includes(profile.role)) {
     return { ok: false as const, error: "Sem permissao." };
@@ -283,7 +283,7 @@ export async function deleteCliente(id: string) {
   const { data: profile } = await admin
     .from("profiles")
     .select("company_id, role")
-    .eq("id", user.id)
+    .eq("auth_user_id", user.id)
     .single();
   if (!profile || !["admin", "gestor"].includes(profile.role)) {
     return { ok: false as const, error: "Sem permissao." };

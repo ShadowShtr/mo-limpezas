@@ -25,7 +25,7 @@ export async function sendWhatsAppToClient(
     const { data: profile } = await admin
       .from("profiles")
       .select("role, company_id")
-      .eq("id", user.id)
+      .eq("auth_user_id", user.id)
       .single();
 
     if (!profile || !["admin", "gestor"].includes(profile.role)) {

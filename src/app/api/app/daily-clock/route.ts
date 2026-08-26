@@ -52,7 +52,7 @@ export async function POST(req: NextRequest) {
 
   const admin = createAdminClient();
   const { data: profile } = await admin
-    .from("profiles").select("company_id").eq("id", user.id).single();
+    .from("profiles").select("id, company_id").eq("auth_user_id", user.id).single();
   if (!profile) return NextResponse.json({ error: "Perfil não encontrado." }, { status: 404 });
 
   const workDate = lisbonDate();
@@ -65,7 +65,7 @@ export async function POST(req: NextRequest) {
     .from("daily_clocks")
     .select("id, clock_in_at, clock_out_at")
     .eq("company_id", profile.company_id)
-    .eq("collaborator_id", user.id)
+    .eq("collaborator_id", profile.id)
     .eq("work_date", workDate)
     .maybeSingle();
   if (existingError) {
@@ -96,14 +96,14 @@ export async function POST(req: NextRequest) {
   } else {
     const { data, error } = await admin
       .from("daily_clocks")
-      .insert({ company_id: profile.company_id, collaborator_id: user.id, work_date: workDate, ...patch } as never)
+      .insert({ company_id: profile.company_id, collaborator_id: profile.id, work_date: workDate, ...patch } as never)
       .select().single();
     if (error) return NextResponse.json({ error: error.message }, { status: 400 });
     row = data;
   }
 
   await auditLog(
-    { companyId: profile.company_id, actorId: user.id, action: `daily_clock.${action}`, entityType: "daily_clock", entityId: row.id, meta: { workDate }, source: "mobile" },
+    { companyId: profile.company_id, actorId: profile.id, action: `daily_clock.${action}`, entityType: "daily_clock", entityId: row.id, meta: { workDate }, source: "mobile" },
     admin,
   );
 

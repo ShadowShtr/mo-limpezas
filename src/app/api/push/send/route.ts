@@ -36,7 +36,7 @@ export async function POST(req: NextRequest) {
   const { data: sender } = await admin
     .from("profiles")
     .select("company_id, role")
-    .eq("id", user.id)
+    .eq("auth_user_id", user.id)
     .single();
 
   if (!sender || !["admin", "gestor"].includes(sender.role)) {

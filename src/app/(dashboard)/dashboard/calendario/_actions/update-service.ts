@@ -29,7 +29,7 @@ async function authorize(admin: AdminClient): Promise<Authorized | Unauthorized>
   const { data: profile } = await admin
     .from("profiles")
     .select("company_id, role")
-    .eq("id", user.id)
+    .eq("auth_user_id", user.id)
     .single();
 
   if (!profile || !["admin", "gestor"].includes(profile.role)) {

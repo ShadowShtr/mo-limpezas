@@ -1,4 +1,4 @@
-﻿import { createClient } from "@/lib/supabase/server";
+import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Header } from "@/components/layout/header";
 import { ContratosTable } from "./_components/table";
@@ -17,7 +17,7 @@ export default async function ContratosPage() {
   const { data: me } = await admin
     .from("profiles")
     .select("company_id")
-    .eq("id", user!.id)
+    .eq("auth_user_id", user!.id)
     .single();
 
   const companyId = me?.company_id ?? "";

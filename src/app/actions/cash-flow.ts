@@ -176,7 +176,7 @@ export async function createCashFlowEntry(
   const { data: profile } = await admin
     .from("profiles")
     .select("company_id, role")
-    .eq("id", user.id)
+    .eq("auth_user_id", user.id)
     .single();
   if (!profile || !["admin", "gestor"].includes(profile.role) || profile.company_id !== companyId) {
     return { ok: false, error: "Sem permissÃ£o." };
@@ -262,7 +262,7 @@ export async function updateCashFlowEntry(
   const { data: profile } = await admin
     .from("profiles")
     .select("company_id, role")
-    .eq("id", user.id)
+    .eq("auth_user_id", user.id)
     .single();
   if (!profile || !["admin", "gestor"].includes(profile.role)) {
     return { ok: false, error: "Sem permissão." };
@@ -346,7 +346,7 @@ export async function deleteCashFlowEntry(id: string): Promise<{ ok: boolean; er
   const { data: profile } = await admin
     .from("profiles")
     .select("company_id, role")
-    .eq("id", user.id)
+    .eq("auth_user_id", user.id)
     .single();
   if (!profile || !["admin", "gestor"].includes(profile.role)) {
     return { ok: false, error: "Sem permissão." };

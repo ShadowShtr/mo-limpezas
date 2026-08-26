@@ -1,4 +1,4 @@
-﻿import { createAdminClient } from "@/lib/supabase/admin";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { Header } from "@/components/layout/header";
 import { getReportsData } from "@/app/actions/reports";
@@ -22,7 +22,7 @@ export default async function RelatoriosPage({
   const { data: profile } = await admin
     .from("profiles")
     .select("company_id")
-    .eq("id", user!.id)
+    .eq("auth_user_id", user!.id)
     .single();
 
   const companyId = profile?.company_id ?? "";

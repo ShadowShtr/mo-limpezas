@@ -1,20 +1,15 @@
 "use server";
 
+import { randomUUID } from "node:crypto";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { queryFailure } from "@/lib/query-error";
+import { getCurrentProfile, getCurrentUser } from "@/lib/auth/current-user";
 
 async function getCallerContext() {
-  const supabase = await createClient();
-  const admin = createAdminClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await getCurrentUser();
   if (!user) return null;
-  const { data: profile } = await admin
-    .from("profiles")
-    .select("company_id, role")
-    .eq("id", user.id)
-    .single();
+  const profile = await getCurrentProfile();
   if (!profile || !["admin", "gestor"].includes(profile.role)) return null;
   return { company_id: profile.company_id as string, role: profile.role as string };
 }
@@ -51,26 +46,11 @@ export async function importColaboradorasCSV(rows: CsvColaboradora[]) {
 
     const role = allowedRoles.includes(r.funcao ?? "") ? r.funcao! : "colaborador";
 
-    const email =
-      r.email?.trim() ||
-      `${r.nome.toLowerCase().replace(/\s+/g, ".").replace(/[^a-z0-9.]/g, "")}.${Date.now()}@demo.escala.pt`;
-
-    const { data: authData, error: authError } = await admin.auth.admin.createUser({
-      email,
-      email_confirm: true,
-      user_metadata: { company_id, role, full_name: r.nome.trim() },
-    });
-
-    if (authError) {
-      results.push({ row: i + 1, ok: false, error: authError.message });
-      continue;
-    }
-
     const { error: profileError } = await admin
       .from("profiles")
-      .upsert(
+      .insert(
         {
-          id: authData.user.id,
+          id: randomUUID(),
           company_id,
           role,
           full_name: r.nome.trim(),
@@ -80,7 +60,6 @@ export async function importColaboradorasCSV(rows: CsvColaboradora[]) {
           status: "ativo",
           skills: [],
         },
-        { onConflict: "id" },
       );
 
     if (profileError) {

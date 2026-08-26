@@ -438,7 +438,7 @@ export async function createContrato(input: ContratoInput) {
   const { data: profile } = await admin
     .from("profiles")
     .select("company_id, role")
-    .eq("id", user.id)
+    .eq("auth_user_id", user.id)
     .single();
   if (!profile || !["admin", "gestor"].includes(profile.role) || profile.company_id !== input.company_id) {
     return { ok: false as const, error: "Sem permissao." };
@@ -572,7 +572,7 @@ export async function updateContrato(id: string, input: Omit<ContratoInput, "com
   const { data: profile } = await admin
     .from("profiles")
     .select("company_id, role")
-    .eq("id", user.id)
+    .eq("auth_user_id", user.id)
     .single();
   if (!profile || !["admin", "gestor"].includes(profile.role)) {
     return { ok: false as const, error: "Sem permissao." };
@@ -816,7 +816,7 @@ export async function deleteContrato(id: string) {
   const { data: profile } = await admin
     .from("profiles")
     .select("company_id, role")
-    .eq("id", user.id)
+    .eq("auth_user_id", user.id)
     .single();
   if (!profile || !["admin", "gestor"].includes(profile.role)) {
     return { ok: false as const, error: "Sem permissao." };

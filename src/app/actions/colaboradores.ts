@@ -1,120 +1,69 @@
 "use server";
 
-import { z } from "zod";
+import { randomUUID } from "node:crypto";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { auditLog } from "@/lib/audit";
 import { isNoRowsError, logQueryFailure, queryFailure } from "@/lib/query-error";
-
-export interface ColaboradorInput {
-  full_name: string;
-  email?: string;
-  phone?: string;
-  nif?: string;
-  iban?: string;
-  hourly_rate?: number | null;
-  contract_start?: string | null;
-  contract_end?: string | null;
-  role: string;
-  status: string;
-  contracted_hours_month: number;
-  skills: string[];
-  company_id: string;
-}
-
-const colaboradorSchema = z.object({
-  full_name: z.string().min(2, "Nome deve ter pelo menos 2 caracteres.").max(120).trim(),
-  email: z.email("Email inválido.").optional().or(z.literal("")),
-  phone: z.string().max(20).optional(),
-  role: z.enum(["colaborador", "gestor", "admin"]),
-  status: z.enum(["ativo", "inativo", "arquivado"]),
-  contracted_hours_month: z.number().min(0).max(744),
-  skills: z.array(z.string().max(60)),
-  company_id: z.string().uuid("company_id inválido."),
-});
+import { getCurrentProfile, getCurrentUser } from "@/lib/auth/current-user";
+import {
+  normalizarColaborador,
+  type ColaboradorInput,
+} from "@/domain/collaborators/profile-input";
 
 export async function createColaborador(input: ColaboradorInput) {
-  const parsed = colaboradorSchema.safeParse(input);
-  if (!parsed.success) {
-    return { ok: false as const, error: parsed.error.issues[0].message };
-  }
+  const parsed = normalizarColaborador(input);
+  if (!parsed.ok) return { ok: false as const, error: parsed.error };
 
-  const supabase = await createClient();
-  const admin    = createAdminClient();
-
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await getCurrentUser();
   if (!user) return { ok: false as const, error: "Não autenticado." };
 
-  const { data: callerProfile } = await admin
-    .from("profiles")
-    .select("company_id, role")
-    .eq("id", user.id)
-    .single();
+  const callerProfile = await getCurrentProfile();
+  if (!callerProfile?.company_id) {
+    return { ok: false as const, error: "COMPANY_CONTEXT_MISSING" };
+  }
   if (!callerProfile || !["admin", "gestor"].includes(callerProfile.role)) {
     return { ok: false as const, error: "Sem permissão." };
   }
-  // company_id vem sempre da sessão do chamador, nunca do payload do
-  // cliente — o valor recebido em `input.company_id` é ignorado a partir
-  // daqui (só serviu para passar na validação de forma do schema).
-  const companyId = callerProfile.company_id;
+  if (callerProfile.role === "gestor" && parsed.data.role !== "colaborador") {
+    return { ok: false as const, error: "Sem permissão para atribuir essa função." };
+  }
 
-  // Gera email placeholder se não fornecido (formato válido obrigatório pelo GoTrue)
-  const email =
-    parsed.data.email?.trim() ||
-    `${input.full_name.toLowerCase().replace(/\s+/g, ".").replace(/[^a-z0-9.]/g, "")}.${Date.now()}@demo.escala.pt`;
-
-  const { data: authData, error: authError } = await admin.auth.admin.createUser({
-    email,
-    email_confirm: true,
-    user_metadata: {
-      company_id: companyId,
-      role: parsed.data.role,
-      full_name: parsed.data.full_name,
-    },
-  });
-
-  if (authError) return { ok: false as const, error: authError.message };
-
-  // Upsert do profile — cobre o caso em que o trigger falhou silenciosamente
+  const admin = createAdminClient();
+  const id = randomUUID();
   const { error: profileError } = await admin
     .from("profiles")
-    .upsert({
-      id: authData.user.id,
-      company_id: companyId,
-      role: parsed.data.role,
-      full_name: parsed.data.full_name,
-      email: parsed.data.email?.trim() || null,
-      phone: parsed.data.phone || null,
-      status: parsed.data.status,
-      contracted_hours_month: parsed.data.contracted_hours_month,
-      skills: parsed.data.skills,
-    }, { onConflict: "id" });
+    .insert({ id, company_id: callerProfile.company_id, ...parsed.data });
 
   if (profileError) return { ok: false as const, error: profileError.message };
 
   revalidatePath("/dashboard/colaboradores");
-  return { ok: true as const };
+  return { ok: true as const, id };
 }
 
 export async function updateColaborador(
   id: string,
-  input: Omit<ColaboradorInput, "company_id">,
+  input: ColaboradorInput,
 ) {
-  const supabase = await createClient();
-  const admin    = createAdminClient();
+  const parsed = normalizarColaborador(input);
+  if (!parsed.ok) return { ok: false as const, error: parsed.error };
 
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await getCurrentUser();
   if (!user) return { ok: false as const, error: "Não autenticado." };
 
-  const { data: callerProfile } = await admin
-    .from("profiles")
-    .select("company_id, role")
-    .eq("id", user.id)
-    .single();
+  const callerProfile = await getCurrentProfile();
+  if (!callerProfile?.company_id) {
+    return { ok: false as const, error: "COMPANY_CONTEXT_MISSING" };
+  }
   if (!callerProfile || !["admin", "gestor"].includes(callerProfile.role)) {
     return { ok: false as const, error: "Sem permissão." };
   }
+  if (callerProfile.role === "gestor" && parsed.data.role !== "colaborador") {
+    return { ok: false as const, error: "Sem permissão para atribuir essa função." };
+  }
+
+  const admin = createAdminClient();
 
   // Valor antigo dos campos sensíveis (privilégio, dados bancários), só para
   // auditoria — nunca bloqueia o update se falhar.
@@ -129,20 +78,7 @@ export async function updateColaborador(
 
   const { error } = await admin
     .from("profiles")
-    .update({
-      full_name: input.full_name,
-      email: input.email?.trim() || null,
-      phone: input.phone || null,
-      nif: input.nif || null,
-      iban: input.iban || null,
-      hourly_rate: input.hourly_rate ?? null,
-      contract_start: input.contract_start || null,
-      contract_end: input.contract_end || null,
-      role: input.role,
-      status: input.status,
-      contracted_hours_month: input.contracted_hours_month,
-      skills: input.skills,
-    })
+    .update(parsed.data)
     .eq("id", id)
     .eq("company_id", callerProfile.company_id);
 
@@ -150,7 +86,12 @@ export async function updateColaborador(
 
   // Auditoria dos campos sensíveis (privilégio/dados bancários) — sem isto
   // uma escalada de privilégio (role) ou alteração de IBAN não deixa rasto.
-  const after = { role: input.role, iban: input.iban || null, hourly_rate: input.hourly_rate ?? null, nif: input.nif || null };
+  const after = {
+    role: parsed.data.role,
+    iban: parsed.data.iban,
+    hourly_rate: parsed.data.hourly_rate,
+    nif: parsed.data.nif,
+  };
   if (
     before &&
     (before.role !== after.role || before.iban !== after.iban ||
@@ -187,7 +128,7 @@ export async function updateVacationBalance(id: string, balance: number) {
   const { data: callerProfile } = await admin
     .from("profiles")
     .select("company_id, role")
-    .eq("id", user.id)
+    .eq("auth_user_id", user.id)
     .single();
   if (!callerProfile || !["admin", "gestor"].includes(callerProfile.role)) {
     return { ok: false as const, error: "Sem permissão." };
@@ -217,7 +158,7 @@ export async function resetColaboradorPassword(id: string) {
   const { data: callerProfile } = await admin
     .from("profiles")
     .select("company_id, role")
-    .eq("id", user.id)
+    .eq("auth_user_id", user.id)
     .single();
   if (!callerProfile || !["admin", "gestor"].includes(callerProfile.role)) {
     return { ok: false as const, error: "Sem permissão." };
@@ -225,7 +166,7 @@ export async function resetColaboradorPassword(id: string) {
 
   const { data: target, error: targetError } = await admin
     .from("profiles")
-    .select("company_id, full_name")
+    .select("company_id, full_name, auth_user_id")
     .eq("id", id)
     .single();
   // Decide sobre QUEM se repõe a password. Falhando, dizia "não encontrada".
@@ -236,13 +177,16 @@ export async function resetColaboradorPassword(id: string) {
   if (target.company_id !== callerProfile.company_id) {
     return { ok: false as const, error: "Acesso negado." };
   }
+  if (!target.auth_user_id) {
+    return { ok: false as const, error: "Esta colaboradora ainda não tem conta de acesso." };
+  }
 
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789";
   let rnd = "";
   for (const b of crypto.getRandomValues(new Uint8Array(10))) rnd += chars[b % chars.length];
   const password = "Mo" + rnd + "!9";
 
-  const { error } = await admin.auth.admin.updateUserById(id, { password });
+  const { error } = await admin.auth.admin.updateUserById(target.auth_user_id, { password });
   if (error) return { ok: false as const, error: "Não foi possível redefinir a password." };
 
   return { ok: true as const, password, name: target.full_name as string };
@@ -264,7 +208,7 @@ export async function forceAppUpdate(id: string) {
   const { data: callerProfile } = await admin
     .from("profiles")
     .select("company_id, role")
-    .eq("id", user.id)
+    .eq("auth_user_id", user.id)
     .single();
   if (!callerProfile || !["admin", "gestor"].includes(callerProfile.role)) {
     return { ok: false as const, error: "Sem permissão." };
@@ -272,7 +216,7 @@ export async function forceAppUpdate(id: string) {
 
   const { data: target, error: targetError } = await admin
     .from("profiles")
-    .select("company_id, full_name")
+    .select("company_id, full_name, auth_user_id")
     .eq("id", id)
     .single();
   // Decide a QUEM se envia o pedido de actualização forçada da app.
@@ -282,6 +226,9 @@ export async function forceAppUpdate(id: string) {
   if (!target) return { ok: false as const, error: "Colaboradora não encontrada." };
   if (target.company_id !== callerProfile.company_id) {
     return { ok: false as const, error: "Acesso negado." };
+  }
+  if (!target.auth_user_id) {
+    return { ok: false as const, error: "Esta colaboradora ainda não tem conta de acesso." };
   }
 
   const { sendForceUpdatePush } = await import("@/lib/push-notify");
@@ -304,29 +251,29 @@ export async function forceAppUpdate(id: string) {
   return { ok: true as const, sent };
 }
 
-export async function deleteColaborador(id: string, companyId: string) {
+export async function deleteColaborador(id: string) {
   const supabase = await createClient();
   const admin = createAdminClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { ok: false as const, error: "Não autenticado." };
-  if (user.id === id) return { ok: false as const, error: "Não podes excluir a tua própria conta." };
-
   const { data: caller } = await admin
-    .from("profiles").select("company_id, role").eq("id", user.id).single();
+    .from("profiles").select("id, company_id, role").eq("auth_user_id", user.id).single();
   if (!caller || !["admin", "gestor"].includes(caller.role)) {
     return { ok: false as const, error: "Sem permissão." };
   }
-  if (caller.company_id !== companyId) return { ok: false as const, error: "Empresa inválida." };
+  if (caller.id === id) return { ok: false as const, error: "Não podes excluir a tua própria conta." };
 
   const { data: target, error: targetError } = await admin
-    .from("profiles").select("id, company_id, full_name").eq("id", id).single();
+    .from("profiles").select("id, company_id, full_name, auth_user_id").eq("id", id).single();
   // Decide QUEM é eliminado, e a verificação de empresa depende disto.
   if (targetError && !isNoRowsError(targetError)) {
     return queryFailure("deleteColaborador:target", targetError);
   }
-  if (!target || target.company_id !== companyId) {
+  if (!target || target.company_id !== caller.company_id) {
     return { ok: false as const, error: "Colaboradora inválida." };
   }
+
+  const companyId = caller.company_id;
 
   // Anula referências RESTRICT a este perfil (senão o cascade do auth bloqueia).
   // Preserva os registos (serviços, contratos, faturas, etc.), só remove a autoria.
@@ -340,10 +287,21 @@ export async function deleteColaborador(id: string, companyId: string) {
   await admin.from("invoices").update({ created_by: null }).eq("company_id", companyId).eq("created_by", id);
   await admin.from("payroll_records").update({ approved_by: null }).eq("company_id", companyId).eq("approved_by", id);
 
-  // Apaga o utilizador auth → cascade do profile (team_members, timesheets,
-  // ausências, férias, folha, reforços, notificações).
-  const { error } = await admin.auth.admin.deleteUser(id);
-  if (error) return { ok: false as const, error: error.message };
+  // O perfil deixou de depender de Auth: elimina-o explicitamente e só tenta
+  // remover a conta de acesso quando ela existe.
+  const { error: profileDeleteError } = await admin
+    .from("profiles")
+    .delete()
+    .eq("id", id)
+    .eq("company_id", companyId);
+  if (profileDeleteError) return { ok: false as const, error: profileDeleteError.message };
+
+  if (target.auth_user_id) {
+    const { error: authDeleteError } = await admin.auth.admin.deleteUser(target.auth_user_id);
+    if (authDeleteError) {
+      return { ok: false as const, error: "Perfil eliminado, mas a conta de acesso exige remoção manual." };
+    }
+  }
 
   revalidatePath("/dashboard/colaboradores");
   revalidatePath("/dashboard/equipas");

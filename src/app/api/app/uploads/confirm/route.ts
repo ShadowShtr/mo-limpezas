@@ -35,7 +35,7 @@ async function handle(req: NextRequest) {
 
   const admin = createAdminClient();
   const { data: profile } = await admin
-    .from("profiles").select("company_id").eq("id", user.id).single();
+    .from("profiles").select("id, company_id").eq("auth_user_id", user.id).single();
   if (!profile) return NextResponse.json({ error: "Perfil não encontrado" }, { status: 404 });
 
   const { data: photo, error: photoError } = await admin
@@ -52,7 +52,7 @@ async function handle(req: NextRequest) {
   }
 
   if (!photo) return NextResponse.json({ error: "Registo de foto não encontrado" }, { status: 404 });
-  if (photo.collaborator_id !== user.id) {
+  if (photo.collaborator_id !== profile.id) {
     return NextResponse.json({ error: "Sem permissão" }, { status: 403 });
   }
 
@@ -87,7 +87,7 @@ async function handle(req: NextRequest) {
   // Auditoria central (TASK 22).
   await auditLog({
     companyId: profile.company_id,
-    actorId: user.id,
+    actorId: profile.id,
     action: status === "uploaded" ? "service_photo_uploaded" : "service_photo_failed",
     entityType: "service_photo",
     entityId: photo.id,

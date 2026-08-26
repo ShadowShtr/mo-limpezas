@@ -1,4 +1,4 @@
-﻿import { createClient } from "@/lib/supabase/server";
+import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Header } from "@/components/layout/header";
 import { LocaisTable } from "./_components/table";
@@ -14,7 +14,7 @@ export default async function LocaisPage() {
   const { data: me } = await admin
     .from("profiles")
     .select("company_id")
-    .eq("id", user!.id)
+    .eq("auth_user_id", user!.id)
     .single();
 
   const [locaisRes, clientesRes] = await Promise.all([
