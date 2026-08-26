@@ -26,6 +26,7 @@ import { nota as financeiroMudaDeMes } from "./2026-08-25-financeiro-muda-de-mes
 import { nota as pagamentosNoMesCerto } from "./2026-08-26-pagamentos-no-mes-certo";
 import { nota as categoriasEMenu } from "./2026-08-26-categorias-e-menu-dos-pagamentos";
 import { nota as categoriaDasSaidas } from "./2026-08-26-categoria-das-saidas";
+import { nota as faturasECaixaConsistentes } from "./2026-08-26-faturas-e-caixa-consistentes";
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   financeiroEAnexos,
@@ -39,6 +40,7 @@ export const RELEASE_NOTES: ReleaseNote[] = [
   pagamentosNoMesCerto,
   categoriasEMenu,
   categoriaDasSaidas,
+  faturasECaixaConsistentes,
 ];
 
 /** As chaves têm de ser únicas — duas notas com a mesma key partilhariam a leitura. */
