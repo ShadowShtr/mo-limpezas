@@ -84,8 +84,8 @@ export function sanitizar(mensagem) {
  *    escrever por engano numa linha de comando; as quatro juntas não.
  */
 export function parseArgs(argv) {
-  const out = { apply: false, manifest: null, manifestSha: null, confirmProduction: null, snapshot: null };
-  const conhecidas = new Set(["--apply", "--manifest", "--manifest-sha", "--confirm-production", "--snapshot"]);
+  const out = { apply: false, manifest: null, manifestSha: null, confirmProduction: null, snapshot: null, databaseUrl: null };
+  const conhecidas = new Set(["--apply", "--manifest", "--manifest-sha", "--confirm-production", "--snapshot", "--database-url"]);
 
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
@@ -100,6 +100,7 @@ export function parseArgs(argv) {
     if (a === "--manifest-sha") out.manifestSha = valor;
     if (a === "--confirm-production") out.confirmProduction = valor;
     if (a === "--snapshot") out.snapshot = valor;
+    if (a === "--database-url") out.databaseUrl = valor;
     i++;
   }
 
@@ -225,6 +226,16 @@ const SELECT_COLS =
 /**
  * Corre a reparação. Sem `apply`, não abre transação de escrita nem envia
  * `UPDATE` — valida tudo e diz o que faria.
+ *
+ * @param {{
+ *   client: { query: (sql: string, params?: unknown[]) => Promise<{ rows?: unknown[], rowCount?: number }> },
+ *   manifesto: Array<Record<string, unknown>>,
+ *   apply?: boolean,
+ *   projectRefEsperado?: string | null,
+ *   confirmProduction?: string | null,
+ *   log?: (m: string) => void,
+ *   logErro?: (m: string) => void,
+ * }} opts
  */
 export async function runBackfill({
   client, manifesto, apply = false, projectRefEsperado = null, confirmProduction = null,
@@ -233,9 +244,21 @@ export async function runBackfill({
   const v = validarManifesto(manifesto);
   if (!v.ok) { logErro("❌ MANIFESTO_INVALIDO: " + v.error); return { exitCode: 1, writes: 0 }; }
 
-  if (apply && projectRefEsperado && confirmProduction !== projectRefEsperado) {
-    logErro("❌ CONFIRM_PRODUCTION_MISMATCH — o project ref confirmado não é o da ligação. Nada foi escrito.");
-    return { exitCode: 1, writes: 0 };
+  // 🔴 Não conseguir identificar o alvo é motivo para recusar, não para seguir.
+  //
+  //    A primeira versão disto era `if (apply && projectRefEsperado && ...)`:
+  //    uma URL de onde não se extraía ref — `localhost`, um host escrito à mão,
+  //    uma string malformada — saltava a confirmação inteira e escrevia. O
+  //    portão só existia quando já se sabia contra o que se estava a escrever.
+  if (apply) {
+    if (!projectRefEsperado) {
+      logErro("❌ TARGET_UNIDENTIFIED — não foi possível identificar o alvo da ligação. Nada foi escrito.");
+      return { exitCode: 1, writes: 0 };
+    }
+    if (confirmProduction !== projectRefEsperado) {
+      logErro("❌ CONFIRM_TARGET_MISMATCH — o alvo confirmado não é o da ligação. Nada foi escrito.");
+      return { exitCode: 1, writes: 0 };
+    }
   }
 
   const ids = manifesto.map((l) => l.payment_id);

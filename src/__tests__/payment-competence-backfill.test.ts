@@ -113,8 +113,22 @@ const LOTE = [
 ];
 const MANIFESTO = LOTE.map(doManifesto);
 
+/**
+ * Por omissão o alvo está identificado e confirmado — é o caso normal. Os
+ * testes que exercitam a recusa passam os seus próprios valores por cima.
+ *
+ * 🔴 O executor recusa escrever quando não consegue identificar o alvo. A
+ *    primeira versão só validava a confirmação *se* houvesse ref, e uma URL de
+ *    onde não se extraía nada (localhost, string malformada) escrevia sem
+ *    portão nenhum.
+ */
+const ALVO = "alvo-de-teste";
 const correr = (c: ClienteFalso, extra: Record<string, unknown> = {}) =>
-  runBackfill({ client: c, manifesto: MANIFESTO, log: () => {}, logErro: () => {}, ...extra });
+  runBackfill({
+    client: c, manifesto: MANIFESTO, log: () => {}, logErro: () => {},
+    projectRefEsperado: ALVO, confirmProduction: ALVO,
+    ...extra,
+  });
 
 // ═══════════════════════════════════════════════════════════════════════════
 // A–C — nada escreve sem as quatro flags
@@ -137,15 +151,24 @@ describe("portões antes de escrever", () => {
 
   it("B2. --apply sem confirmação de produção não escreve", async () => {
     const c = new ClienteFalso(LOTE);
-    const r = await correr(c, { apply: true, projectRefEsperado: "abc123", confirmProduction: null });
+    const r = await correr(c, { apply: true, confirmProduction: null });
     expect(r.writes).toBe(0);
     expect(c.mutacoes).toEqual([]);
   });
 
   it("B3. confirmação com o projeto errado não escreve", async () => {
     const c = new ClienteFalso(LOTE);
-    const r = await correr(c, { apply: true, projectRefEsperado: "abc123", confirmProduction: "outro" });
+    const r = await correr(c, { apply: true, confirmProduction: "outro" });
     expect(r.exitCode).toBe(1);
+    expect(c.mutacoes).toEqual([]);
+  });
+
+  it("B4. 🔴 alvo por identificar → recusa, não escreve às cegas", async () => {
+    // Uma URL de onde não se consegue extrair o alvo — localhost, um host
+    // escrito à mão, uma string malformada — não é motivo para seguir.
+    const c = new ClienteFalso(LOTE);
+    const r = await correr(c, { apply: true, projectRefEsperado: null, confirmProduction: "seja o que for" });
+    expect(r.writes).toBe(0);
     expect(c.mutacoes).toEqual([]);
   });
 

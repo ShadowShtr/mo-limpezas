@@ -55,14 +55,29 @@ function lerEnv(ficheiro) {
 
 const sha256 = (o) => crypto.createHash("sha256").update(JSON.stringify(o)).digest("hex");
 
-/** Project ref extraído da URL por estrutura, nunca por substring solta. */
-function projectRefDaUrl(url) {
-  try {
-    const u = new URL(url);
-    if (u.username.includes(".")) return u.username.split(".").slice(1).join(".");  // pooler
-    const m = /^db\.([a-z0-9]+)\.supabase\.co$/i.exec(u.hostname);                   // direta
-    return m ? m[1] : null;
-  } catch { return null; }
+/**
+ * Identifica o alvo da ligação: produção (Supabase) ou ensaio (descartável).
+ *
+ * 🔴 As duas formas são deliberadamente distintas e nunca se confundem. Um
+ *    host Supabase só pode ser confirmado com o seu project ref; um host que
+ *    não seja Supabase só pode ser confirmado com a palavra literal
+ *    `ENSAIO-DESCARTAVEL`, e só quando a URL foi passada à mão com
+ *    `--database-url`. Não há caminho em que uma escreva com a confirmação da
+ *    outra.
+ */
+function identificarAlvo(url, veioDeFlag) {
+  let u;
+  try { u = new URL(url); } catch { return { kind: "desconhecido", ref: null }; }
+
+  const supabase = /supabase\.(co|com)$/i.test(u.hostname) || /pooler\.supabase\.com$/i.test(u.hostname);
+  if (supabase) {
+    if (u.username.includes(".")) return { kind: "producao", ref: u.username.split(".").slice(1).join(".") };
+    const m = /^db\.([a-z0-9]+)\.supabase\.co$/i.exec(u.hostname);
+    return { kind: "producao", ref: m ? m[1] : null };
+  }
+  // Só é ensaio se alguém escreveu a URL na linha de comando de propósito.
+  if (!veioDeFlag) return { kind: "desconhecido", ref: null };
+  return { kind: "ensaio", ref: "ENSAIO-DESCARTAVEL" };
 }
 
 const log = (m) => console.log(m);
@@ -74,13 +89,24 @@ async function principal() {
   const args = r.args;
 
   const env = { ...lerEnv(path.join(RAIZ, ".env.local")), ...process.env };
-  const url = env.SUPABASE_DB_URL || env.DATABASE_URL;
+  const url = args.databaseUrl || env.SUPABASE_DB_URL || env.DATABASE_URL;
   if (!url) {
     logErro("❌ Falta SUPABASE_DB_URL no .env.local (ligação Postgres direta, não PostgREST).");
     process.exit(1);
   }
 
-  const client = new pg.Client({ connectionString: url, ssl: { rejectUnauthorized: false }, statement_timeout: 60000 });
+  // 🔴 O alvo é identificado ANTES de ligar, e é ele que decide o SSL.
+  //
+  //    Produção (Supabase) liga sempre com SSL. Um Postgres descartável local
+  //    não o suporta — mas só se chega a esse ramo com `--database-url`
+  //    escrito à mão e um host que não é Supabase. Não há forma de a ligação
+  //    de produção perder o SSL por causa deste ramo.
+  const alvo = identificarAlvo(url, Boolean(args.databaseUrl));
+  const client = new pg.Client({
+    connectionString: url,
+    ssl: alvo.kind === "ensaio" ? false : { rejectUnauthorized: false },
+    statement_timeout: 60000,
+  });
   try {
     await client.connect();
   } catch (err) {
@@ -134,15 +160,16 @@ async function principal() {
         restore_period_month: l.before_period_month,
       }));
 
-      fs.writeFileSync(args.snapshot, JSON.stringify(manifesto, null, 2), "utf8");
-      const alvoRollback = args.snapshot.replace(/\.json$/, "") + ".rollback.json";
-      fs.writeFileSync(alvoRollback, JSON.stringify(rollback, null, 2), "utf8");
-
       if (ilegiveis.length > 0) {
         logErro(`❌ ${ilegiveis.length} pagamento(s) com due_date presente mas ilegível — snapshot abortado.`);
         for (const id of ilegiveis.slice(0, 10)) logErro("   " + id);
         return 1;
       }
+
+      fs.writeFileSync(args.snapshot, JSON.stringify(manifesto, null, 2), "utf8");
+      const alvoRollback = args.snapshot.replace(/\.json$/, "") + ".rollback.json";
+      fs.writeFileSync(alvoRollback, JSON.stringify(rollback, null, 2), "utf8");
+
       log("ROWS_SCANNED             = " + q.rows.length);
       log("ROWS_WITHOUT_DUE_DATE    = " + semVencimento);
       log("MANIFEST_ROW_COUNT       = " + manifesto.length);
@@ -171,10 +198,14 @@ async function principal() {
       log("MANIFEST_HASH_GUARD = OK");
     }
 
-    const refDaLigacao = projectRefDaUrl(url);
+    log("TARGET_KIND            = " + alvo.kind);
+    if (args.apply && alvo.kind === "desconhecido") {
+      logErro("❌ TARGET_UNIDENTIFIED — alvo não reconhecido. Para um ensaio, passa --database-url explicitamente.");
+      return 1;
+    }
     const res = await runBackfill({
       client, manifesto, apply: args.apply,
-      projectRefEsperado: refDaLigacao, confirmProduction: args.confirmProduction,
+      projectRefEsperado: alvo.ref, confirmProduction: args.confirmProduction,
       log, logErro,
     });
 
