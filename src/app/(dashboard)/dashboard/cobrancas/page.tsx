@@ -24,7 +24,7 @@ export default async function CobrancastPage({
   const { data: profile } = await admin
     .from("profiles")
     .select("company_id")
-    .eq("auth_user_id", user!.id)
+    .eq("id", user!.id)
     .single();
 
   const companyId = profile?.company_id ?? "";

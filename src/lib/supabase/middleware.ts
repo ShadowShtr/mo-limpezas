@@ -34,7 +34,7 @@ export async function updateSession(request: NextRequest) {
     const { data } = await supabase.auth.getUser();
     user = data.user;
     if (user) {
-      const { data: profile } = await supabase.from("profiles").select("role").eq("auth_user_id", user.id).maybeSingle();
+      const { data: profile } = await supabase.from("profiles").select("role").eq("id", user.id).maybeSingle();
       profileRole = profile?.role ?? null;
     }
   } catch (e) {

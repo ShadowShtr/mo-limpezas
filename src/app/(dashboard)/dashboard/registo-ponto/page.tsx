@@ -39,7 +39,7 @@ export default async function RegistoPontoPage({
   const { data: me } = await admin
     .from("profiles")
     .select("company_id, role")
-    .eq("auth_user_id", user.id)
+    .eq("id", user.id)
     .single();
   if (!me) redirect("/login");
   if (!["admin", "gestor"].includes(me.role)) redirect("/app");

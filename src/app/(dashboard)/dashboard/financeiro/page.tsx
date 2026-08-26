@@ -27,7 +27,7 @@ export default async function FinanceiroPage({
     // real é da action, que valida o papel outra vez — isto só evita mostrar um
     // botão que ia recusar.
     .select("company_id, role")
-    .eq("auth_user_id", user!.id)
+    .eq("id", user!.id)
     .single();
 
   const companyId = profile?.company_id ?? "";

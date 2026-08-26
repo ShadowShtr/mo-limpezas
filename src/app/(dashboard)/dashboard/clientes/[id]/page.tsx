@@ -63,7 +63,7 @@ export default async function ClientDetailPage({
   const { data: me } = await admin
     .from("profiles")
     .select("company_id, role")
-    .eq("auth_user_id", user.id)
+    .eq("id", user.id)
     .single();
 
   if (!me) redirect("/login");

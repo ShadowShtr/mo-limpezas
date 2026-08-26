@@ -200,7 +200,7 @@ export async function updatePassword(
     let role: string | undefined;
     try {
       const { createAdminClient: mkAdmin2 } = await import("@/lib/supabase/admin");
-      const { data: profile } = await mkAdmin2().from("profiles").select("role").eq("auth_user_id", user.id).single();
+      const { data: profile } = await mkAdmin2().from("profiles").select("role").eq("id", user.id).single();
       role = profile?.role as string | undefined;
     } catch {
       role = undefined;
@@ -227,35 +227,34 @@ export async function logout() {
 }
 
 export async function inviteCollaborator(formData: FormData) {
-  const { getCurrentProfile, getCurrentUser } = await import("@/lib/auth/current-user");
-  const user = await getCurrentUser();
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { error: "Não autenticado." };
 
   const { createAdminClient } = await import("@/lib/supabase/admin");
   const admin = createAdminClient();
-  const callerProfile = await getCurrentProfile();
-  if (!callerProfile?.company_id) return { error: "COMPANY_CONTEXT_MISSING" };
+
+  const { data: callerProfile } = await admin
+    .from("profiles")
+    .select("company_id, role")
+    .eq("id", user.id)
+    .single();
   if (!callerProfile || !["admin", "gestor"].includes(callerProfile.role)) {
     return { error: "Sem permissão." };
   }
 
-  const collaboratorId = String(formData.get("collaborator_id") ?? "");
-  const { data: target, error: targetError } = await admin
-    .from("profiles")
-    .select("id, company_id, full_name, email, auth_user_id")
-    .eq("id", collaboratorId)
-    .eq("company_id", callerProfile.company_id)
-    .single();
-  if (targetError || !target) return { error: "Colaborador não encontrado nesta empresa." };
-  if (!target.email) return { error: "Preenche um email válido antes de enviar o convite." };
-  if (target.auth_user_id) return { error: "Este colaborador já tem uma conta de acesso." };
+  const email = formData.get("email") as string;
+  const name = formData.get("name") as string;
+  const companyId = formData.get("company_id") as string;
+
+  if (companyId !== callerProfile.company_id) return { error: "Acesso negado." };
 
   // Gerar link de convite sem enviar o email padrão do Supabase
   const { data: linkData, error: linkError } = await admin.auth.admin.generateLink({
     type: "invite",
-    email: target.email,
+    email,
     options: {
-      data: { collaborator_profile_id: target.id },
+      data: { role: "colaborador", full_name: name, company_id: companyId },
       redirectTo: `${process.env.NEXT_PUBLIC_APP_URL}/auth/callback?next=/app/boas-vindas`,
     },
   });
@@ -264,38 +263,24 @@ export async function inviteCollaborator(formData: FormData) {
     return { error: "Não foi possível gerar o convite. Verifica o email." };
   }
 
-  const { error: linkProfileError } = await admin
-    .from("profiles")
-    .update({ auth_user_id: linkData.user.id, invited_at: new Date().toISOString() })
-    .eq("id", target.id)
-    .eq("company_id", callerProfile.company_id);
-  if (linkProfileError) {
-    if (!target.auth_user_id) await admin.auth.admin.deleteUser(linkData.user.id);
-    return { error: "A conta foi criada, mas não foi possível ligá-la ao colaborador." };
-  }
-
   // Enviar email personalizado via Resend
   try {
     const { getResend, FROM_EMAIL } = await import("@/lib/email");
     const { collaboratorInviteTemplate } = await import("@/lib/email/templates");
 
     const { subject, html } = collaboratorInviteTemplate({
-      collaboratorName: target.full_name,
+      collaboratorName: name,
       inviteUrl: linkData.properties.action_link,
     });
 
     const resend = getResend();
-    await resend.emails.send({ from: FROM_EMAIL, to: target.email, subject, html });
+    await resend.emails.send({ from: FROM_EMAIL, to: email, subject, html });
   } catch {
-    // generateLink já criou a conta. Reverter ambas as metades mantém a ação
-    // repetível e evita uma conta ligada sem convite entregue.
-    await admin
-      .from("profiles")
-      .update({ auth_user_id: null, invited_at: null })
-      .eq("id", target.id)
-      .eq("company_id", callerProfile.company_id);
-    await admin.auth.admin.deleteUser(linkData.user.id);
-    return { error: "Não foi possível enviar o convite. Tenta novamente." };
+    // Se o Resend falhar (ex: API key não configurada), usa o convite base do Supabase
+    await admin.auth.admin.inviteUserByEmail(email, {
+      data: { role: "colaborador", full_name: name, company_id: companyId },
+      redirectTo: `${process.env.NEXT_PUBLIC_APP_URL}/auth/callback?next=/app/boas-vindas`,
+    });
   }
 
   return { success: "Convite enviado.", userId: linkData.user.id };

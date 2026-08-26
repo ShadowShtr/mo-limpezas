@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
+import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { getCurrentProfile } from "@/lib/auth/current-user";
 import { Header } from "@/components/layout/header";
 import { ColaboradorSheet } from "../_components/sheet";
 import { ColaboradorAbsences } from "./_components/colaborador-absences";
@@ -21,17 +21,15 @@ interface Props {
 
 export default async function ColaboradorDetailPage({ params }: Props) {
   const { id } = await params;
+  const supabase = await createClient();
   const admin = createAdminClient();
-  const callerProfile = await getCurrentProfile();
-  if (!callerProfile?.company_id) notFound();
 
-  const [profileRes, timesheetsRes, docsRes, rawAbsencesRes] = await Promise.all([
-    admin
-      .from("profiles")
-      .select("*")
-      .eq("id", id)
-      .eq("company_id", callerProfile.company_id)
-      .single(),
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) notFound();
+
+  const [companyRes, profileRes, timesheetsRes, docsRes, rawAbsencesRes] = await Promise.all([
+    admin.from("profiles").select("company_id").eq("id", user.id).single(),
+    admin.from("profiles").select("*").eq("id", id).single(),
     admin
       .from("timesheets")
       .select("id, clock_in_at, clock_out_at, duration_minutes, location_warning, service_id")
@@ -61,7 +59,6 @@ export default async function ColaboradorDetailPage({ params }: Props) {
     const { data: subs } = await admin
       .from("profiles")
       .select("id, full_name")
-      .eq("company_id", callerProfile.company_id)
       .in("id", replacedByIds);
     substituteNames = Object.fromEntries((subs ?? []).map((s) => [s.id, s.full_name]));
   }
@@ -100,6 +97,7 @@ export default async function ColaboradorDetailPage({ params }: Props) {
         subtitle={`${profile.role} · ${inviteStatus}`}
         actions={
           <ColaboradorSheet
+            companyId={companyRes.data?.company_id ?? ""}
             colaborador={profile}
             trigger={
               <button className="flex items-center gap-2 px-3 py-2 rounded-lg border border-[var(--color-border)] text-[var(--color-text-sub)] text-sm font-medium hover:bg-[var(--color-background)] transition-colors">

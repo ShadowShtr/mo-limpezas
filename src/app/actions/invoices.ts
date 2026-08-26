@@ -507,7 +507,7 @@ export async function updateInvoiceStatus(
   const { data: profile } = await admin
     .from("profiles")
     .select("company_id, role")
-    .eq("auth_user_id", user.id)
+    .eq("id", user.id)
     .single();
   if (!profile || !["admin", "gestor"].includes(profile.role)) {
     return { ok: false, error: "Sem permissao." };
@@ -603,7 +603,7 @@ export async function deleteInvoice(
   const { data: profile } = await admin
     .from("profiles")
     .select("company_id, role")
-    .eq("auth_user_id", user.id)
+    .eq("id", user.id)
     .single();
   if (!profile || !["admin", "gestor"].includes(profile.role)) {
     return { ok: false, error: "Sem permissão." };

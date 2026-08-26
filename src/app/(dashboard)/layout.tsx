@@ -16,7 +16,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
   const { data: profile, error: profileError } = await admin
     .from("profiles")
     .select("full_name, role, avatar_url")
-    .eq("auth_user_id", user.id)
+    .eq("id", user.id)
     .maybeSingle();
 
   if (profileError || !profile) {

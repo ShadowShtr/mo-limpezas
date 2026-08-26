@@ -36,7 +36,7 @@ export async function POST(req: NextRequest) {
   const { data: profile } = await admin
     .from("profiles")
     .select("company_id, role")
-    .eq("auth_user_id", user.id)
+    .eq("id", user.id)
     .single();
 
   // Só admin/gestor — colaborador nunca acede a dados bancários.

@@ -19,7 +19,7 @@ export default async function FluxoCaixaPage({
   if (!user) redirect("/login");
 
   const admin = createAdminClient();
-  const { data: profile } = await admin.from("profiles").select("company_id").eq("auth_user_id", user.id).single();
+  const { data: profile } = await admin.from("profiles").select("company_id").eq("id", user.id).single();
   if (!profile?.company_id) redirect("/login");
 
   const params = await searchParams;

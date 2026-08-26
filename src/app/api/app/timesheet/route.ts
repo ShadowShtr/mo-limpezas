@@ -107,7 +107,7 @@ async function postHandler(req: NextRequest) {
   const admin = createAdminClient();
 
   const { data: profile } = await admin
-    .from("profiles").select("id, company_id").eq("auth_user_id", user.id).single();
+    .from("profiles").select("company_id").eq("id", user.id).single();
   if (!profile)
     return NextResponse.json({ error: "Perfil não encontrado" }, { status: 404 });
 
@@ -118,7 +118,7 @@ async function postHandler(req: NextRequest) {
   const { data: dayClock, error: dayClockError } = await admin
     .from("daily_clocks")
     .select("clock_in_at")
-    .eq("collaborator_id", profile.id)
+    .eq("collaborator_id", user.id)
     .eq("work_date", lisbonDate)
     .maybeSingle();
   // Sem isto, uma falha de leitura dizia à colaboradora que ainda não tinha
@@ -158,9 +158,9 @@ async function postHandler(req: NextRequest) {
 
   const [{ data: membership }, { data: reinforcement }, settings] = await Promise.all([
     service.team_id
-      ? admin.from("team_members").select("id").eq("team_id", service.team_id).eq("collaborator_id", profile.id).is("left_at", null).maybeSingle()
+      ? admin.from("team_members").select("id").eq("team_id", service.team_id).eq("collaborator_id", user.id).is("left_at", null).maybeSingle()
       : Promise.resolve({ data: null }),
-    admin.from("service_reinforcements").select("id").eq("service_id", service_id).eq("collaborator_id", profile.id).maybeSingle(),
+    admin.from("service_reinforcements").select("id").eq("service_id", service_id).eq("collaborator_id", user.id).maybeSingle(),
     getCompanySettings(profile.company_id),
   ]);
 
@@ -181,7 +181,7 @@ async function postHandler(req: NextRequest) {
   // Anti-duplicado. Falhando a leitura, "dupOpen" vinha null e a entrada era
   // registada outra vez — dois pontos abertos para o mesmo serviço.
   const { data: dupOpen, error: dupOpenError } = await admin
-    .from("timesheets").select("id").eq("service_id", service_id).eq("collaborator_id", profile.id).is("clock_out_at", null).maybeSingle();
+    .from("timesheets").select("id").eq("service_id", service_id).eq("collaborator_id", user.id).is("clock_out_at", null).maybeSingle();
   if (dupOpenError) {
     logQueryFailure("timesheet:dupOpen", dupOpenError);
     return NextResponse.json({ error: QUERY_FAILURE_MESSAGE }, { status: 503 });
@@ -191,7 +191,7 @@ async function postHandler(req: NextRequest) {
 
   // Guard: ponto aberto noutro serviço
   const { data: openElsewhere, error: openElsewhereError } = await admin
-    .from("timesheets").select("id").eq("collaborator_id", profile.id).is("clock_out_at", null).neq("service_id", service_id).maybeSingle();
+    .from("timesheets").select("id").eq("collaborator_id", user.id).is("clock_out_at", null).neq("service_id", service_id).maybeSingle();
   if (openElsewhereError) {
     logQueryFailure("timesheet:openElsewhere", openElsewhereError);
     return NextResponse.json({ error: QUERY_FAILURE_MESSAGE }, { status: 503 });
@@ -201,7 +201,7 @@ async function postHandler(req: NextRequest) {
 
   const insertPayload = {
     service_id,
-    collaborator_id: profile.id,
+    collaborator_id: user.id,
     company_id: profile.company_id,
     clock_in_at: clockInAt,
     clock_in_lat: lat,
@@ -230,14 +230,14 @@ async function postHandler(req: NextRequest) {
   await admin.from("services").update({ actual_start: clockInAt, status: "em_curso" }).eq("id", service_id).is("actual_start", null);
 
   if (manual) {
-    await logAudit(admin, profile.company_id, profile.id, "timesheet.manual_checkin", data.id, {
+    await logAudit(admin, profile.company_id, user.id, "timesheet.manual_checkin", data.id, {
       service_id, gps_accuracy, reason: "GPS indisponível/impreciso confirmado pela colaboradora",
       tooOld, ip: req.headers.get("x-forwarded-for") ?? "unknown",
     });
   }
 
   if (tooOld) {
-    await logAudit(admin, profile.company_id, profile.id, "timesheet.late_sync", data.id, {
+    await logAudit(admin, profile.company_id, user.id, "timesheet.late_sync", data.id, {
       service_id, clock_in_at: clockInAt, delay_hours: Math.round((Date.now() - new Date(clockInAt).getTime()) / 3_600_000),
     });
   }
@@ -278,7 +278,7 @@ async function patchHandler(req: NextRequest) {
   const admin = createAdminClient();
 
   const { data: profile } = await admin
-    .from("profiles").select("id, company_id").eq("auth_user_id", user.id).single();
+    .from("profiles").select("company_id").eq("id", user.id).single();
   if (!profile)
     return NextResponse.json({ error: "Perfil não encontrado" }, { status: 404 });
 
@@ -286,7 +286,7 @@ async function patchHandler(req: NextRequest) {
     .from("timesheets")
     .select("id, clock_in_at")
     .eq("service_id", service_id)
-    .eq("collaborator_id", profile.id)
+    .eq("collaborator_id", user.id)
     .is("clock_out_at", null)
     .single();
   // Identifica QUE ponto é fechado. Uma falha dizia "não tem ponto aberto".
@@ -355,7 +355,7 @@ async function patchHandler(req: NextRequest) {
   const updatedTs = data[0];
 
   if (manual) {
-    await logAudit(admin, profile.company_id, profile.id, "timesheet.manual_checkout", ts.id, {
+    await logAudit(admin, profile.company_id, user.id, "timesheet.manual_checkout", ts.id, {
       service_id, gps_accuracy, reason: "GPS indisponível/impreciso confirmado pela colaboradora",
       ip: req.headers.get("x-forwarded-for") ?? "unknown",
     });

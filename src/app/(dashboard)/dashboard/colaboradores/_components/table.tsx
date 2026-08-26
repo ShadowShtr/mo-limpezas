@@ -36,9 +36,10 @@ const STATUS_STYLE: Record<string, { label: string; dot: string; text: string; b
 
 interface Props {
   colaboradores: Colaborador[];
+  companyId: string;
 }
 
-export function ColaboradoresTable({ colaboradores }: Props) {
+export function ColaboradoresTable({ colaboradores, companyId }: Props) {
   const router = useRouter();
   const [search, setSearch] = useState("");
   const [filterStatus, setFilterStatus] = useState<string>("todos");
@@ -49,7 +50,7 @@ export function ColaboradoresTable({ colaboradores }: Props) {
       `Excluir a colaboradora "${c.full_name}"?\n\nApaga a conta de acesso e os registos dela (equipas, pontos, ausências, férias, folha). Os serviços e contratos ficam, sem a autoria. Não pode ser desfeito.`,
     )) return;
     startDelete(async () => {
-      const res = await deleteColaborador(c.id);
+      const res = await deleteColaborador(c.id, companyId);
       if (!res.ok) { window.alert(res.error); return; }
       router.refresh();
     });
@@ -204,6 +205,7 @@ export function ColaboradoresTable({ colaboradores }: Props) {
                           <ExternalLink className="w-4 h-4" />
                         </Link>
                         <ColaboradorSheet
+                          companyId={companyId}
                           colaborador={c}
                           trigger={
                             <button className="p-1.5 rounded-lg text-[var(--color-text-muted)] hover:bg-[var(--color-background)] hover:text-[var(--color-text-main)] transition-colors">
