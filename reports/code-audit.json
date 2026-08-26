@@ -1,10 +1,10 @@
 {
   "inventorySource": "git ls-files",
   "summary": {
-    "repositoryFiles": 698,
-    "textFiles": 685,
-    "sourceFiles": 495,
-    "textLines": 165400,
+    "repositoryFiles": 703,
+    "textFiles": 690,
+    "sourceFiles": 498,
+    "textLines": 167713,
     "typescriptDiagnostics": 0,
     "productionEntries": 71,
     "unreachableProductionModules": 38,

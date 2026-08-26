@@ -334,6 +334,35 @@ export function planoRollback(manifesto, estadoActual) {
       impedimentos.push(`o pagamento ${l.target_payment_id} ganhou um vencimento — alguém trabalhou nele`);
     }
 
+
+    // 🔴 F14-C. O que a reversao protegia era o esqueleto economico: existencia,
+    //    estado, valor, vencimento. Uma pessoa que tenha classificado, datado,
+    //    descrito ou anotado o pagamento depois do repair fez trabalho real, e
+    //    apaga-lo e destrui-lo — mesmo que o valor nao tenha mudado.
+    for (const [campo, rotulo] of [
+      ["description", "a descricao"],
+      ["notes", "as notas"],
+      ["expense_category_id", "a categoria"],
+      ["period_year", "o ano da competencia"],
+      ["period_month", "o mes da competencia"],
+    ]) {
+      if (String(pag[campo] ?? null) !== String(l.target[campo] ?? null)) {
+        impedimentos.push(
+          `o pagamento ${l.target_payment_id} teve ${rotulo} alterada depois do repair`,
+        );
+      }
+    }
+
+    // 🔴 Anexos. Apagar o pagamento deixaria o documento sem dono: um ficheiro
+    //    em storage que ninguem alcanca, e uma linha em `attachments` a apontar
+    //    para um pagamento que ja nao existe. As duas vias contam — a tabela e a
+    //    coluna legada — porque um pagamento pode ter documentos pelas duas.
+    if ((pag.attachment_count ?? 0) > 0 || (pag.attachment_url ?? null) !== null) {
+      impedimentos.push(
+        `o pagamento ${l.target_payment_id} ganhou um documento depois do repair — ` +
+        `apaga-lo deixaria o anexo orfao`,
+      );
+    }
     if (!mov) {
       impedimentos.push(`o movimento ${l.legacy_cashflow_id} já não existe`);
       continue;
@@ -344,8 +373,33 @@ export function planoRollback(manifesto, estadoActual) {
     if (mov.status !== "pendente") {
       impedimentos.push(`o movimento ${l.legacy_cashflow_id} está \`${mov.status}\` — o dinheiro já saiu`);
     }
-  }
 
+    // 🔴 F14-C. O movimento legado tambem pode ter sido trabalhado. Desliga-lo
+    //    e devolve-lo ao que era apagaria essa classificacao.
+    for (const [campo, rotulo] of [
+      ["description", "a descricao"],
+      ["date", "a data"],
+      ["category", "a categoria legada"],
+      ["expense_category_id", "a categoria estruturada"],
+      ["notes", "as notas"],
+      ["amount", "o valor"],
+    ]) {
+      if (String(mov[campo] ?? null) !== String(l.before[campo] ?? null)) {
+        impedimentos.push(
+          `o movimento ${l.legacy_cashflow_id} teve ${rotulo} alterada depois do repair`,
+        );
+      }
+    }
+
+    // 🔴 Conciliacao. Se o movimento entrou numa correspondencia bancaria, a
+    //    reversao nao lhe toca: desliga-lo do pagamento deixaria a conciliacao
+    //    a afirmar uma coisa que ja nao e verdade.
+    if ((mov.reconciliation_count ?? 0) > 0) {
+      impedimentos.push(
+        `o movimento ${l.legacy_cashflow_id} entrou numa conciliacao bancaria depois do repair`,
+      );
+    }
+  }
   if (impedimentos.length > 0) return { ok: false, impedimentos };
 
   return {

@@ -317,6 +317,25 @@ async function aplicar(cliente, manifesto) {
          t.recurring, t.period_year, t.period_month, t.notes, t.expense_category_id],
       );
 
+      // 🔴 F14-C. O `WHERE` cobre **todo** o estado economicamente relevante
+      //    que o manifesto viu, não só uma parte dele.
+      //
+      //    A versão anterior condicionava a `company_id`, `reference_type`,
+      //    `reference_id`, `status`, `type` e `amount`. Ficavam de fora
+      //    `description`, `date`, `category`, `expense_category_id`,
+      //    `notes` e `created_at` — e a PR #85 mostrou o que isso custava:
+      //    uma categoria atribuída depois do snapshot era sobrescrita pelo
+      //    valor antigo; uma data alterada depois do snapshot gerava a
+      //    competência a partir da data velha, porque é dela que a competência
+      //    das seis é derivada.
+      //
+      //    Os valores já estavam todos no manifesto (`COLUNAS_MOVIMENTO` lê os
+      //    treze) — só não eram usados como guarda. Passam a ser.
+      //
+      //    `IS NOT DISTINCT FROM` e não `=`: metade destas colunas é
+      //    anulável, e `NULL = NULL` é `NULL`, que não é verdadeiro. Com `=`,
+      //    uma linha cuja categoria era e continua a ser nula falharia a
+      //    guarda e abortaria o lote inteiro sem nada ter mudado.
       const upd = await cliente.query(
         `UPDATE public.cash_flow_entries
             SET reference_type = $1, reference_id = $2
@@ -326,14 +345,48 @@ async function aplicar(cliente, manifesto) {
             AND reference_id IS NULL
             AND status = 'pendente'
             AND type = 'saida'
-            AND amount::text = $5`,
-        [ORIGEM_PAGAMENTO, t.id, l.legacy_cashflow_id, l.company_id, String(l.before.amount)],
+            AND amount::text = $5
+            AND description IS NOT DISTINCT FROM $6
+            AND date::text IS NOT DISTINCT FROM $7
+            AND category IS NOT DISTINCT FROM $8
+            AND expense_category_id::text IS NOT DISTINCT FROM $9
+            AND notes IS NOT DISTINCT FROM $10
+            AND created_at::text IS NOT DISTINCT FROM $11`,
+        [ORIGEM_PAGAMENTO, t.id, l.legacy_cashflow_id, l.company_id, String(l.before.amount),
+         l.before.description, l.before.date, l.before.category,
+         l.before.expense_category_id, l.before.notes, l.before.created_at],
       );
 
       if (upd.rowCount !== 1) {
         throw new Error(
           `O movimento ${l.legacy_cashflow_id} já não está como o manifesto o viu ` +
           `(${upd.rowCount} linhas afectadas, esperava 1). Nada foi gravado.`,
+        );
+      }
+
+      // 🔴 F14-B. O repair está a **adoptar** um movimento que já existia: é
+      //    exactamente a situação que a proveniência existe para registar.
+      //    Escreve-se aqui, na mesma transacção, com o prestate que o
+      //    manifesto viu — e antes de qualquer coisa que o destrua.
+      //
+      //    Sem isto, o movimento adoptado pelo repair ficaria sem origem
+      //    conhecida, e o `unmark` recusá-lo-ia para sempre por
+      //    `UNMARK_BLOCKED_UNKNOWN_CASHFLOW_PROVENANCE`. O repair sabe que
+      //    está a adoptar; é o único momento em que essa prova existe.
+      const prov = await cliente.query(
+        `INSERT INTO public.payment_cashflow_provenance
+           (cash_flow_entry_id, company_id, payment_id, origin,
+            prestate_date, prestate_expense_category_id)
+         VALUES ($1, $2, $3, 'adopted_existing', $4::date, $5::uuid)
+         ON CONFLICT (cash_flow_entry_id) DO NOTHING`,
+        [l.legacy_cashflow_id, l.company_id, t.id,
+         l.before.date, l.before.expense_category_id],
+      );
+      if (prov.rowCount !== 1) {
+        throw new Error(
+          `A proveniência do movimento ${l.legacy_cashflow_id} não foi registada ` +
+          `(${prov.rowCount} linhas). Já existia um registo para este movimento. ` +
+          `Nada foi gravado.`,
         );
       }
       feitos.push(l.legacy_cashflow_id);
@@ -361,16 +414,36 @@ async function reverter(cliente, rollbackManifesto) {
   const ids = rollbackManifesto.passos.map((p) => p.apagar_pagamento);
   const movIds = rollbackManifesto.passos.map((p) => p.cash_flow_id);
 
+  // 🔴 F14-C. Lê-se **todo** o estado que a reversão precisa de comparar, não
+  //    só o esqueleto económico. Uma descrição, uma nota ou uma categoria
+  //    escrita depois do repair é trabalho de alguém, e apagá-la em silêncio
+  //    é o mesmo defeito do forward, do outro lado.
+  //
+  //    `attachment_count` conta a tabela `attachments`; `attachment_url` é a
+  //    via legada. As duas contam: um pagamento pode ter documentos por ambas,
+  //    e apagá-lo com qualquer uma preenchida deixaria o ficheiro órfão.
   const pagamentos = Object.fromEntries(
     (await cliente.query(
-      `SELECT id::text AS id, status, amount::text AS amount, due_date::text AS due_date
-         FROM public.fixed_variable_payments WHERE id = ANY($1::uuid[])`, [ids],
+      `SELECT p.id::text AS id, p.status, p.amount::text AS amount,
+              p.due_date::text AS due_date, p.description, p.notes,
+              p.expense_category_id::text AS expense_category_id,
+              p.period_year, p.period_month, p.attachment_url,
+              (SELECT count(*)::int FROM public.attachments a
+                WHERE a.parent_type = 'fixed_variable_payment'
+                  AND a.parent_id = p.id) AS attachment_count
+         FROM public.fixed_variable_payments p WHERE p.id = ANY($1::uuid[])`, [ids],
     )).rows.map((r) => [r.id, r]),
   );
   const movimentos = Object.fromEntries(
     (await cliente.query(
-      `SELECT id::text AS id, status, reference_id::text AS reference_id
-         FROM public.cash_flow_entries WHERE id = ANY($1::uuid[])`, [movIds],
+      `SELECT c.id::text AS id, c.status, c.reference_id::text AS reference_id,
+              c.description, c.date::text AS date, c.category,
+              c.expense_category_id::text AS expense_category_id,
+              c.notes, c.amount::text AS amount,
+              (SELECT count(*)::int FROM public.bank_reconciliation_matches m
+                WHERE m.cash_flow_entry_id = c.id
+                  AND m.status <> 'rejected') AS reconciliation_count
+         FROM public.cash_flow_entries c WHERE c.id = ANY($1::uuid[])`, [movIds],
     )).rows.map((r) => [r.id, r]),
   );
 
@@ -378,7 +451,7 @@ async function reverter(cliente, rollbackManifesto) {
     { linhas: rollbackManifesto.passos.map((p) => ({
         legacy_cashflow_id: p.cash_flow_id,
         target_payment_id: p.apagar_pagamento,
-        target: { amount: p.esperado_antes_da_reversao.pagamento.amount },
+        target: p.esperado_antes_da_reversao.pagamento,
         before: p.repor,
       })) },
     { pagamentos, movimentos },
@@ -404,6 +477,16 @@ async function reverter(cliente, rollbackManifesto) {
          passo.desligar.cash_flow_id, passo.apagar_pagamento],
       );
       if (u.rowCount !== 1) throw new Error(`Desligar ${passo.desligar.cash_flow_id}: ${u.rowCount} linhas.`);
+
+      // 🔴 F14-B. A proveniência que o forward criou sai antes do pagamento:
+      //    as chaves estrangeiras são `RESTRICT`, de propósito, e é este o
+      //    único caminho autorizado a removê-la. Na mesma transacção — se o
+      //    `DELETE` do pagamento falhar, o registo volta com ele.
+      await cliente.query(
+        `DELETE FROM public.payment_cashflow_provenance
+          WHERE cash_flow_entry_id = $1 AND payment_id = $2`,
+        [passo.desligar.cash_flow_id, passo.apagar_pagamento],
+      );
 
       const d = await cliente.query(
         `DELETE FROM public.fixed_variable_payments WHERE id = $1 AND status = 'pendente'`,

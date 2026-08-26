@@ -339,12 +339,25 @@ describe("o hash é o que separa «autorizado» de «gerado»", () => {
 // ═══════════════════════════════════════════════════════════════════════════
 
 describe("a reversão recusa em vez de destruir", () => {
+  // 🔴 F14-C. «Limpo» passou a querer dizer **tudo** como o manifesto o viu,
+  //    não só o esqueleto económico. A reversão compara agora descrição, datas,
+  //    categorias, notas, anexos e conciliação — um estado que só declarasse
+  //    `status`/`amount` deixaria esses campos `undefined` e faria a reversão
+  //    recusar com razão.
   const estadoLimpo = (m: ReturnType<typeof manifestoValido>) => ({
     pagamentos: Object.fromEntries(m.linhas.map((l) => [l.target_payment_id, {
       status: "pendente", amount: l.target.amount, due_date: null,
+      description: l.target.description, notes: l.target.notes,
+      expense_category_id: l.target.expense_category_id,
+      period_year: l.target.period_year, period_month: l.target.period_month,
+      attachment_url: null, attachment_count: 0,
     }])),
     movimentos: Object.fromEntries(m.linhas.map((l) => [l.legacy_cashflow_id, {
       status: "pendente", reference_id: l.target_payment_id,
+      description: l.before.description, date: l.before.date,
+      category: l.before.category, expense_category_id: l.before.expense_category_id,
+      notes: l.before.notes, amount: l.before.amount,
+      reconciliation_count: 0,
     }])),
   });
 
