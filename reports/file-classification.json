@@ -1,16 +1,16 @@
 {
   "generatedBy": "scripts/audit-file-inventory.mjs",
-  "totalFiles": 688,
+  "totalFiles": 691,
   "byStatus": {
-    "MANTER": 670,
-    "STANDBY": 18
+    "MANTER": 672,
+    "STANDBY": 19
   },
   "byCategory": {
     "route-ui": 135,
-    "test": 121,
+    "test": 122,
     "migration": 78,
     "lib": 65,
-    "script": 48,
+    "script": 50,
     "domain": 46,
     "doc": 43,
     "server-action": 41,
@@ -29,15 +29,15 @@
     "supabase-other": 2
   },
   "byConfidence": {
-    "alta": 672,
-    "média": 10,
+    "alta": 674,
+    "média": 11,
     "baixa": 6
   },
   "scriptRisk": {
-    "SAFE_OFFLINE": 27,
+    "SAFE_OFFLINE": 28,
     "ADMIN_GUARDED_WRITE": 11,
     "ADMIN_READ": 6,
-    "WRITE_CAPABLE": 4
+    "WRITE_CAPABLE": 5
   },
   "files": [
     {
@@ -3292,6 +3292,67 @@
       "scriptRisk": "SAFE_OFFLINE"
     },
     {
+      "path": "scripts/repairs/lib/competence-backfill-core.mjs",
+      "category": "script",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 2,
+      "consumerSample": [
+        "scripts/repairs/payment-competence-backfill.mjs",
+        "src/__tests__/payment-competence-backfill.test.ts"
+      ],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "sqlWrite": 4,
+        "fallbackArray": 6
+      },
+      "action": "nenhuma",
+      "reason": "ferramenta offline, sem acesso à base",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": true,
+        "dynamicImport": true,
+        "allClosed": false
+      },
+      "scriptRisk": "SAFE_OFFLINE"
+    },
+    {
+      "path": "scripts/repairs/payment-competence-backfill.mjs",
+      "category": "script",
+      "status": "STANDBY",
+      "confidence": "média",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [
+        "env",
+        "write"
+      ],
+      "risks": [],
+      "signals": {
+        "env": 1,
+        "write": 1,
+        "sqlWrite": 1,
+        "consoleLog": 1,
+        "consoleErr": 1
+      },
+      "action": "T17-B: confirmar se ainda é preciso",
+      "reason": "capaz de escrever na base",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": true,
+        "dynamicImport": true,
+        "allClosed": false
+      },
+      "scriptRisk": "WRITE_CAPABLE"
+    },
+    {
       "path": "scripts/restore-backup.mjs",
       "category": "script",
       "status": "MANTER",
@@ -5484,6 +5545,33 @@
         "sqlWrite": 5,
         "unknownCast": 1,
         "revalidatePath": 1
+      },
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/__tests__/payment-competence-backfill.test.ts",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "sqlWrite": 10,
+        "unknownCast": 1,
+        "fallbackArray": 4,
+        "dynamicImport": 6
       },
       "action": "nenhuma",
       "reason": "suite de testes — corre por convenção do vitest",
