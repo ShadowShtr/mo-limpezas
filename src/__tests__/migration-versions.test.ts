@@ -83,7 +83,15 @@ describe("migrations — a versão identifica uma só migration", () => {
     // produção de 2026-08-05, e serão extraídas em PRs isolados.
     //
     // O teste continua a existir para apanhar o **próximo** salto.
-    const AUSENTES_CONHECIDAS = [66, 67];
+    //
+    // 077 e 078 são o mesmo caso, por outra razão: não estão perdidas, estão
+    // **ocupadas**. Vivem em branches que ainda existem no remoto —
+    // `fix/secure-migrations-ledger` (077, PR #73) e
+    // `feat/domain-mutation-change-event-foundation` (078, PR #74) — e é por
+    // isso que a 079 saltou por cima delas em vez de reutilizar um número.
+    // Duas migrations diferentes com o mesmo número é uma colisão que só se
+    // descobre no dia do merge, com o ledger a dizer que já aplicou aquilo.
+    const AUSENTES_CONHECIDAS = [66, 67, 77, 78];
 
     const nums = ficheiros()
       .map(versaoSequencial)
