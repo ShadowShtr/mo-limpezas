@@ -20,8 +20,8 @@ Atualizado      = 2026-08-26
 | TASK | Título | Estado |
 |---|---|---|
 | 00 | Baseline / snapshot / mapa completo | **DONE** |
-| 01 | Baseline de documentos e anexos | **NEXT** |
-| 01A | Forensics do drift schema ↔ ledger de migrations | NOT_STARTED |
+| 01 | Baseline de documentos e anexos | **DONE** |
+| 01A | Forensics do drift schema ↔ ledger de migrations | **NEXT** |
 | 02 | *(título não fornecido)* | NOT_STARTED |
 | 03 | *(título não fornecido)* | NOT_STARTED |
 | 04 | *(título não fornecido)* | NOT_STARTED |
@@ -285,16 +285,154 @@ período fechado, escrita bloqueada, rollback, casos de fronteira.
 
 ---
 
-## 7. Critério de DONE da TASK 01
+## 6A. TASK 01 — baseline de documentos e anexos (DONE)
+
+Leitura fresca, 2026-08-26. `POINT_IN_TIME_SNAPSHOT = YES`.
+
+### Anexos de pagamento
 
 ```
-FINANCE_DOCUMENT_BASELINE     = COMPLETE
-FINANCE_ATTACHMENT_BASELINE   = COMPLETE
-PAYMENT_DUAL_ATTACHMENT_MODEL = DOCUMENTED
-OPENABILITY_TESTED            = YES
-BROKEN_REFS_CLASSIFIED        = YES
-ORPHAN_STORAGE_CLASSIFIED     = YES
-MISSING_BUCKETS_CLASSIFIED    = YES
+PAYMENT_STORAGE_FILE_COUNT        = 23
+PAYMENT_ATTACHMENT_TABLE_REF_COUNT = 6
+PAYMENT_LEGACY_URL_REF_COUNT      = 17
+PAYMENTS_WITH_ANY_ATTACHMENT      = 21
+PAYMENTS_WITH_BOTH_MODELS         = 1
+BROKEN_PAYMENT_REFERENCES         = 0
+ORPHAN_PAYMENT_STORAGE_OBJECTS    = 0
+```
+
+6 + 17 = 23 = número exato de ficheiros. Cada ficheiro tem **uma** referência, e
+cada referência tem ficheiro. Nenhum objeto a mais, nenhum a menos.
+
+### 🔴 Correção a uma premissa da regra de dedupe
+
+A regra escrita previa que o pagamento com os dois modelos pudesse apontar para
+o mesmo objeto lógico, e mandava mostrá-lo uma vez. **Medido: não aponta.**
+
+```
+caminho legado → …/1787062008131-Gold_Energy.pdf
+caminho novo   → …/1787142901936-WhatsApp_Image_…jpeg
+mesmo_objecto  = false
+```
+
+São **dois anexos diferentes do mesmo pagamento**, carregados por vias
+diferentes com 22 horas de intervalo. Colapsá-los em um esconderia um documento
+real.
+
+```
+PAYMENT_ATTACHMENT_DUPLICATES_VISIBLE = 0   (já verdadeiro; nada a deduplicar)
+```
+
+A regra de dedupe mantém-se escrita e continua correta como salvaguarda — a
+identidade forte é `bucket` + `object path`, **nunca** o nome do ficheiro. Hoje
+não tem nada em que atuar. Um dedupe por nome teria colapsado estes dois? Não,
+os nomes diferem — mas teria colapsado dois ficheiros homónimos de pagamentos
+distintos, e é por isso que a regra é por caminho.
+
+### Abertura
+
+```
+OPENABLE_REFERENCE_COUNT = 26 / 26
+BROKEN_REFERENCE_COUNT   = 0
+```
+
+Todos os 26 objetos dos dois buckets com conteúdo foram assinados e
+descarregados. Os 26 tamanhos descarregados batem byte a byte com o tamanho
+declarado nos metadados. Assinar não altera storage; descarregar é leitura.
+
+### Documentos
+
+```
+FINANCE_ATTACHMENT_TOTAL = 23 referências / 23 ficheiros / 6 518 807 bytes
+FINANCE_DOCUMENT_TOTAL   = 0 registos  (collaborator_documents 0, service_photos 0)
+```
+
+### Inventário completo das vias de anexo no schema
+
+| via | linhas com valor | linhas na tabela | estado |
+|---|---|---|---|
+| `attachments` (polimórfica) | 6 | 6 | **ativa** |
+| `fixed_variable_payments.attachment_url` | 17 | 114 | **ativa, legada** |
+| `management_tasks.attachment_url` | 0 | 8 | coluna existe, nunca usada |
+| `absences.document_url` | 0 | 0 | coluna existe, nunca usada |
+| `collaborator_documents.file_url` | 0 | 0 | tabela vazia |
+| `service_photos.storage_path` | 0 | 0 | tabela vazia |
+
+`PAYMENT_DUAL_ATTACHMENT_MODEL = DOCUMENTED`. As 17 legadas apontam todas para
+`payment-attachments` — nenhuma aponta para bucket errado.
+
+### Órfãos de storage
+
+```
+ORPHAN_STORAGE_COUNT = 3   (bucket collaborator-documents, 3 553 746 bytes)
+ORPHAN_STORAGE_CLASSIFICATION:
+  proprietário do ficheiro  = KNOWN_PARENT  (3 de 3)
+  registo do documento      = UNKNOWN       (3 de 3)
+```
+
+O caminho é gerado por `buildDocumentStoragePath()`:
+`${companyId}/${collaboratorId}/${timestamp}-${nome}`. É codificação
+determinística escrita pela própria aplicação, não semelhança. Os três caminhos
+resolvem para um `profiles.id` **que existe**, o mesmo colaborador nos três.
+
+O que **não** se sabe, e não se vai adivinhar: `category`, `notes`,
+`visible_to_collaborator`, `uploaded_by_role`, `expires_at`. Um dos ficheiros
+chama-se `folha-pagamento-2026-06.pdf` e o colaborador tem mesmo folha de
+2026/06 — mas inferir `category = 'recibo_salario'` a partir do nome seria
+exatamente a semelhança que está proibida, e essa categoria é a **protegida**
+pela política de retenção. Fica `UNKNOWN`.
+
+Origem da perda dos registos: **não provada**. `audit_logs` tem 0 entradas de
+documento. `scripts/historico/reset-operacao.mjs` **não** inclui
+`collaborator_documents` na sua lista de tabelas, portanto não é a explicação.
+
+```
+DELETE_ORPHAN_COLLABORATOR_FILES = NO
+MOVE_ORPHAN_COLLABORATOR_FILES   = NO
+REUPLOAD = NO
+```
+
+Os três abrem e estão íntegros. Nada urge.
+
+### Buckets em falta
+
+```
+MISSING_BUCKETS = task-attachments · absence-documents
+CONFIGURED_BUCKET_MISSING_TASK_ATTACHMENTS  = YES
+CONFIGURED_BUCKET_MISSING_ABSENCE_DOCUMENTS = YES
+
+MISSING_BUCKETS_USAGE_ANALYSIS = CONFIGURAÇÃO_INCOMPLETA, sem dados em risco
+```
+
+`PARENT_BUCKET` mapeia `management_task` → `task-attachments` e `absence` →
+`absence-documents`, e o CHECK de `attachments.parent_type` aceita os dois. Mas:
+zero linhas em `attachments` com esses tipos, zero valores em
+`management_tasks.attachment_url` (8 linhas), zero em `absences.document_url`
+(0 linhas), e os buckets não existem.
+
+Não é funcionalidade morta com dados presos, nem migration em falta que perdeu
+informação: é caminho **nunca exercitado**. O primeiro upload por essa via
+falharia, ou criaria o bucket, consoante o fluxo — por determinar, e sem
+urgência porque não há dados. Não criar buckets agora.
+
+### Contadores de segurança
+
+```
+STORAGE_MOVE_COUNT = 0   STORAGE_DELETE_COUNT = 0   STORAGE_UPLOAD_COUNT = 0
+```
+
+---
+
+## 7. Critério de DONE da TASK 01 — cumprido
+
+```
+FINANCE_DOCUMENT_BASELINE     = COMPLETE   ✅
+FINANCE_ATTACHMENT_BASELINE   = COMPLETE   ✅
+PAYMENT_DUAL_ATTACHMENT_MODEL = DOCUMENTED ✅
+OPENABILITY_TESTED            = YES        ✅ 26/26
+BROKEN_REFS_CLASSIFIED        = YES        ✅ 0
+ORPHAN_STORAGE_CLASSIFIED     = YES        ✅ 3
+MISSING_BUCKETS_CLASSIFIED    = YES        ✅ 2
 
 STORAGE_MOVE_COUNT   = 0
 STORAGE_DELETE_COUNT = 0
@@ -303,7 +441,7 @@ STORAGE_UPLOAD_COUNT = 0
 LEGACY_ATTACHMENT_URL_MIGRATION_NOW = NO
 ```
 
-A TASK 01 é baseline, não migration.
+A TASK 01 é baseline, não migration. **Todos os critérios cumpridos.**
 
 ---
 
