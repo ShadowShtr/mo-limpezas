@@ -9,7 +9,7 @@
  * número: MIGRATION_NUMBER_FINAL = UNASSIGNED enquanto a 077/078/079 não
  * estiverem reconciliadas.
  */
-import { execFileSync, spawnSync } from "node:child_process";
+import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { randomUUID } from "node:crypto";

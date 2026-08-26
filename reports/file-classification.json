@@ -1,14 +1,14 @@
 {
   "generatedBy": "scripts/audit-file-inventory.mjs",
-  "totalFiles": 697,
+  "totalFiles": 701,
   "byStatus": {
-    "MANTER": 678,
+    "MANTER": 682,
     "STANDBY": 19
   },
   "byCategory": {
     "route-ui": 135,
-    "test": 124,
-    "migration": 80,
+    "test": 126,
+    "migration": 82,
     "lib": 65,
     "script": 49,
     "domain": 47,
@@ -29,7 +29,7 @@
     "supabase-other": 2
   },
   "byConfidence": {
-    "alta": 680,
+    "alta": 684,
     "média": 11,
     "baixa": 6
   },
@@ -4601,6 +4601,30 @@
       }
     },
     {
+      "path": "src/__tests__/f14a-old-vs-new-postgres.test.ts",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "sqlWrite": 14
+      },
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
       "path": "src/__tests__/finance-period-view-identity.test.tsx",
       "category": "test",
       "status": "MANTER",
@@ -6283,6 +6307,30 @@
         "sqlWrite": 16,
         "fallbackArray": 1,
         "dynamicImport": 2
+      },
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/__tests__/safe-unmark-provenance-postgres.test.ts",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "sqlWrite": 23
       },
       "action": "nenhuma",
       "reason": "suite de testes — corre por convenção do vitest",
@@ -19057,7 +19105,7 @@
       "sideEffects": [],
       "risks": [],
       "signals": {
-        "sqlWrite": 13
+        "sqlWrite": 20
       },
       "action": "nenhuma",
       "reason": "migration versionada — histórico do schema, nunca se apaga",
@@ -19144,6 +19192,42 @@
       "manualDecision": false
     },
     {
+      "path": "supabase/migrations/draft/PROVISIONAL_payment_cashflow_provenance.sql",
+      "category": "migration",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "sqlWrite": 9
+      },
+      "action": "nenhuma",
+      "reason": "migration versionada — histórico do schema, nunca se apaga",
+      "manualDecision": false
+    },
+    {
+      "path": "supabase/migrations/draft/PROVISIONAL_safe_unmark_payment_paid.sql",
+      "category": "migration",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "sqlWrite": 22
+      },
+      "action": "nenhuma",
+      "reason": "migration versionada — histórico do schema, nunca se apaga",
+      "manualDecision": false
+    },
+    {
       "path": "supabase/migrations/rollback/079_reuse_pending_cashflow_on_payment.down.sql",
       "category": "migration",
       "status": "MANTER",
@@ -19155,7 +19239,7 @@
       "sideEffects": [],
       "risks": [],
       "signals": {
-        "sqlWrite": 4
+        "sqlWrite": 6
       },
       "action": "nenhuma",
       "reason": "migration versionada — histórico do schema, nunca se apaga",
