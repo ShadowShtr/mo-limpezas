@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getPayments } from "@/app/actions/payments";
+import { getExpenseCategoryCatalog } from "@/app/actions/expense-categories";
 import { FinanceShell } from "@/components/financeiro/finance-shell";
 import { parseFinancePeriod } from "@/lib/finance-period";
 import { PaymentsClient } from "./_components/payments-client";
@@ -27,6 +28,14 @@ export default async function PagamentosPage({
   const period = parseFinancePeriod(params.mes);
 
   const res = await getPayments(period.year, period.month);
+
+  // O catálogo é opcional: se não estiver disponível, o campo aparece vazio e
+  // "sem categoria" continua a ser uma escolha válida. Uma falha aqui não pode
+  // impedir alguém de registar um pagamento.
+  const catalogo = await getExpenseCategoryCatalog();
+  const categorias = catalogo.ok && catalogo.catalog.available
+    ? catalogo.catalog.categories.map((c) => ({ id: c.id, name: c.name }))
+    : [];
 
   return (
     <FinanceShell
@@ -55,6 +64,7 @@ export default async function PagamentosPage({
       */}
       <PaymentsClient
         key={period.key}
+        categorias={categorias}
         initialData={res.ok ? res.data : null}
         error={res.ok ? null : res.error}
         year={period.year}
