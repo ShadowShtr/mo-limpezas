@@ -111,4 +111,16 @@ COMMENT ON FUNCTION public.mark_payment_paid IS
   'só transacção. Idempotente pela identidade (company, reference_type, '
   'reference_id) — repetir devolve o mesmo movimento.';
 
+-- 🔴 F14-A. A 079 criou `assert_payment_cashflow_link` e é a única coisa que a
+--    usa. Reposta a definição da 073, a função fica sem chamador nenhum:
+--    deixá-la de pé seria devolver a base a um estado que a 073 nunca produziu.
+--    O `DROP` vem depois do `CREATE OR REPLACE` acima — enquanto
+--    `mark_payment_paid` ainda dependia dela, largá-la primeiro falharia.
+DROP FUNCTION IF EXISTS public.assert_payment_cashflow_link(
+  public.cash_flow_entries,
+  public.fixed_variable_payments,
+  uuid,
+  uuid
+);
+
 COMMIT;

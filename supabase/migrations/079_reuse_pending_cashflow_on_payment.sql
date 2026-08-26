@@ -96,6 +96,77 @@
 
 BEGIN;
 
+-- ─── Invariantes do vínculo pagamento → movimento ──────────────────────────
+--
+-- 🔴 F14-A. Um único sítio, chamado pelos **dois** caminhos que podem terminar
+--    a reutilizar uma linha que esta transacção não criou:
+--
+--      · a linha já existia quando a função a leu   (`IF FOUND`);
+--      · a linha apareceu de outra ligação e o `INSERT ... ON CONFLICT`
+--        embateu nela                                (`DO NOTHING` → releitura).
+--
+--    Antes, só o primeiro caminho validava. O segundo lia o `id` e aceitava o
+--    que lá estivesse — e a PR #85 mostrou, em PostgreSQL real, o que passava.
+--    Duas cópias da mesma regra divergem; uma função não pode divergir de si
+--    própria. Qualquer invariante novo entra aqui e passa a valer nos dois.
+--
+--    Falha fechado: levanta excepção e a transacção inteira reverte. O
+--    pagamento não fica pago e o movimento não é tocado.
+-- 🔴 Os parâmetros são os **tipos compostos** das tabelas, não `%ROWTYPE`:
+--    `%ROWTYPE` só é válido em `DECLARE`, nunca numa assinatura. O nome da
+--    tabela vale como tipo e aceita a variável `%ROWTYPE` de quem chama.
+CREATE OR REPLACE FUNCTION public.assert_payment_cashflow_link(
+  p_mov        public.cash_flow_entries,
+  p_pag        public.fixed_variable_payments,
+  p_company_id uuid,
+  p_payment_id uuid
+)
+RETURNS void
+LANGUAGE plpgsql
+IMMUTABLE
+SECURITY INVOKER
+AS $guard$
+BEGIN
+  -- Identidade: empresa e vínculo. Uma linha de outra empresa, ou ligada a
+  -- outro pagamento, nunca é reutilizada.
+  IF p_mov.company_id IS DISTINCT FROM p_company_id
+     OR p_mov.reference_type IS DISTINCT FROM 'fixed_variable_payment'
+     OR p_mov.reference_id IS DISTINCT FROM p_payment_id THEN
+    RAISE EXCEPTION 'CASHFLOW_LINK_MISMATCH'
+      USING ERRCODE = 'data_exception';
+  END IF;
+
+  -- Sentido económico: pagar é sempre uma saída. Uma entrada com esta origem
+  -- inverteria o sinal do dinheiro.
+  IF p_mov.type IS DISTINCT FROM 'saida' THEN
+    RAISE EXCEPTION 'CASHFLOW_LINK_TYPE_MISMATCH'
+      USING ERRCODE = 'data_exception';
+  END IF;
+
+  -- Um valor diferente não se ajusta em silêncio. Ou alguém editou o movimento
+  -- à mão, ou o pagamento mudou de valor depois de ligado — nos dois casos,
+  -- confirmar a saída pelo valor errado é pior do que parar.
+  IF p_mov.amount IS DISTINCT FROM p_pag.amount THEN
+    RAISE EXCEPTION 'CASHFLOW_LINK_AMOUNT_MISMATCH'
+      USING ERRCODE = 'data_exception';
+  END IF;
+
+  -- O CHECK da tabela só permite `pendente`/`confirmado`. Outra coisa quer
+  -- dizer que o modelo mudou e esta função não sabe o que fazer.
+  IF p_mov.status IS NULL OR p_mov.status NOT IN ('pendente', 'confirmado') THEN
+    RAISE EXCEPTION 'CASHFLOW_LINK_STATUS_UNEXPECTED'
+      USING ERRCODE = 'data_exception';
+  END IF;
+END;
+$guard$;
+
+COMMENT ON FUNCTION public.assert_payment_cashflow_link IS
+  'Invariantes que um movimento de caixa tem de cumprir para ser reutilizado '
+  'por mark_payment_paid: mesma empresa, mesmo vínculo, saída, valor igual ao '
+  'do pagamento e estado conhecido. Chamada pelos dois caminhos de '
+  'reutilização — o que lê a linha antes do INSERT e o que a encontra depois '
+  'de um conflito. Falha fechado.';
+
 CREATE OR REPLACE FUNCTION public.mark_payment_paid(
   p_company_id uuid,
   p_payment_id uuid,
@@ -156,25 +227,9 @@ BEGIN
 
   IF FOUND THEN
     -- ── Guardas. Nenhuma linha é reutilizada sem provar que é a linha certa.
-    IF v_mov.company_id <> p_company_id
-       OR v_mov.reference_type IS DISTINCT FROM 'fixed_variable_payment'
-       OR v_mov.reference_id IS DISTINCT FROM p_payment_id THEN
-      RAISE EXCEPTION 'CASHFLOW_LINK_MISMATCH'
-        USING ERRCODE = 'data_exception';
-    END IF;
-
-    IF v_mov.type IS DISTINCT FROM 'saida' THEN
-      RAISE EXCEPTION 'CASHFLOW_LINK_TYPE_MISMATCH'
-        USING ERRCODE = 'data_exception';
-    END IF;
-
-    -- Um valor diferente não se ajusta em silêncio. Ou alguém editou o
-    -- movimento à mão, ou o pagamento mudou de valor depois de ligado — nos
-    -- dois casos, confirmar a saída pelo valor errado é pior do que parar.
-    IF v_mov.amount IS DISTINCT FROM v_pag.amount THEN
-      RAISE EXCEPTION 'CASHFLOW_LINK_AMOUNT_MISMATCH'
-        USING ERRCODE = 'data_exception';
-    END IF;
+    --    A regra vive em `assert_payment_cashflow_link` e é a mesma que o
+    --    caminho do conflito aplica — ver F14-A mais abaixo.
+    PERFORM public.assert_payment_cashflow_link(v_mov, v_pag, p_company_id, p_payment_id);
 
     IF v_mov.status = 'pendente' THEN
       -- 🔴 A mesma linha. O `id` não muda, e é isso que preserva o histórico
@@ -227,16 +282,55 @@ BEGIN
     RETURNING id INTO v_entrada;
 
     IF v_entrada IS NULL THEN
-      -- Alguém inseriu o movimento entre o `SELECT` e o `INSERT`. Não pode
-      -- acontecer para o mesmo pagamento (a tranca acima impede-o), mas se
-      -- acontecer devolve-se o que lá está em vez de um erro que ninguém sabe
-      -- interpretar.
-      SELECT c.id INTO v_entrada
+      -- 🔴 F14-A. O `DO NOTHING` disparou: outra ligação inseriu a linha entre
+      --    o `SELECT ... FOR UPDATE` e este `INSERT`.
+      --
+      --    A versão anterior desta função relia aqui **apenas o `id`** e
+      --    devolvia-o, com o comentário de que isto «não pode acontecer para o
+      --    mesmo pagamento porque a tranca acima impede-o». O comentário estava
+      --    errado, e a PR #85 provou-o em PostgreSQL real: a tranca serializa
+      --    duas chamadas **à RPC**, mas não impede um `INSERT` directo de
+      --    outra ligação sobre a mesma identidade única. Era possível terminar
+      --    com `type = entrada` numa saída, com um valor que não é o do
+      --    pagamento, e com o movimento em `pendente` enquanto o pagamento
+      --    ficava `pago`.
+      --
+      --    A linha que vem de fora não merece mais confiança do que a que já cá
+      --    estava. Relê-se **completa**, com `FOR UPDATE` — quem a inseriu
+      --    pode ainda não ter feito COMMIT — e passa exactamente pelos mesmos
+      --    invariantes do caminho de reutilização, pela mesma função.
+      SELECT * INTO v_mov
         FROM public.cash_flow_entries c
        WHERE c.company_id = p_company_id
          AND c.reference_type = 'fixed_variable_payment'
-         AND c.reference_id = p_payment_id;
-      v_sem_efeito := true;
+         AND c.reference_id = p_payment_id
+       FOR UPDATE;
+
+      IF NOT FOUND THEN
+        -- O `DO NOTHING` disparou mas não há linha nenhuma: quem a inseriu
+        -- reverteu. Não há nada para adoptar, e não se inventa um movimento.
+        RAISE EXCEPTION 'CASHFLOW_LINK_VANISHED'
+          USING ERRCODE = 'data_exception';
+      END IF;
+
+      PERFORM public.assert_payment_cashflow_link(v_mov, v_pag, p_company_id, p_payment_id);
+
+      -- Sobreviveu aos guardas: é economicamente a mesma ocorrência. Segue a
+      -- mesma regra do caminho de reutilização.
+      IF v_mov.status = 'pendente' THEN
+        UPDATE public.cash_flow_entries
+           SET status = 'confirmado',
+               date   = p_paid_on,
+               expense_category_id = COALESCE(v_pag.expense_category_id, expense_category_id)
+         WHERE id = v_mov.id;
+      ELSIF v_mov.status = 'confirmado' THEN
+        v_sem_efeito := true;
+      ELSE
+        RAISE EXCEPTION 'CASHFLOW_LINK_STATUS_UNEXPECTED'
+          USING ERRCODE = 'data_exception';
+      END IF;
+
+      v_entrada := v_mov.id;
     END IF;
   END IF;
 
