@@ -9,8 +9,12 @@ deploy para persistir documentação.
 > perigosa: primeiro concluir e medir, depois registar.
 
 ```
-MASTER_BASE_SHA = f001866c9efa2479ab05c9e52308674c5b676f3c
+MASTER_BASE_SHA = 0527127b1eaf5385b55d5dbfad6d61f0afcf56fb   (a #86 mesclou; o master avançou)
+ACTUAL_PRODUCTION_DEPLOYED_SHA = NOT_PROVEN / USER_ROLLED_BACK_PREVIOUS_DEPLOYMENT
 Atualizado      = 2026-08-26
+
+> 🔴 **Handoff entre computadores: ler `docs/HANDOFF_CURRENT.md` primeiro.**
+> É o documento que permite continuar noutra máquina sem esta sessão.
 ```
 
 ---
@@ -21,16 +25,16 @@ Atualizado      = 2026-08-26
 |---|---|---|
 | 00 | Baseline / snapshot / mapa completo | **DONE** |
 | 01 | Baseline de documentos e anexos | **DONE** |
-| 01A | Forensics do drift schema ↔ ledger de migrations | **NEXT** |
-| 02 | *(título não fornecido)* | NOT_STARTED |
+| 01A | Forensics do drift schema ↔ ledger de migrations | **DONE** |
+| 02 | *(título não fornecido)* | **NEXT** |
 | 03 | *(título não fornecido)* | NOT_STARTED |
 | 04 | *(título não fornecido)* | NOT_STARTED |
 | 05 | *(título não fornecido)* | NOT_STARTED |
 | 06 | *(título não fornecido)* | NOT_STARTED |
 | 07 | *(título não fornecido)* | NOT_STARTED |
 | 08 | *(título não fornecido)* | NOT_STARTED |
-| 09 | RPC `mark_payment_paid` / reuso de pending cashflow | **PRECOMPLETED_EVIDENCE_READY** |
-| 10 | Repair das 6 pendências / preparação | **PRECOMPLETED_EVIDENCE_READY** |
+| 09 | RPC `mark_payment_paid` / reuso de pending cashflow | **EVIDENCE_CONTESTED — F14-A por corrigir** |
+| 10 | Repair das 6 pendências / preparação | **EVIDENCE_CONTESTED — F14-C por corrigir** |
 | 11 | Remoção da aba Contas | **BLOCKED_BY_UNIQUE_CONTAS_SEMANTICS** |
 | 12–21 | *(títulos não fornecidos)* | NOT_STARTED |
 | 22 | Conciliação bancária integrada | NOT_STARTED |
@@ -66,8 +70,15 @@ TWO_CONNECTION_LOCK_PROOF     = PASS
 MIGRATION_ROLLBACK            = pg_get_functiondef reposto exatamente
 ```
 
-Revalidar contra os invariantes canónicos quando a TASK 02 estiver DONE. Se
-continuar compatível → `TASK_09 = DONE`, sem refazer trabalho.
+> 🔴 **Esta evidência foi contestada e a contestação procede.** A revisão
+> adversarial do Codex (PR #85) reproduziu `F14-A` em PostgreSQL real: os guardas
+> da 079 só correm no ramo que lê o movimento antes de inserir. No ramo de
+> conflito (`ON CONFLICT DO NOTHING`), o código relê apenas o `id` e aceita a
+> linha que encontrar — incluindo `type = entrada`, valor errado e `status`
+> divergente. Ver `docs/HANDOFF_CURRENT.md`.
+>
+> `TASK_09` **não** pode passar a DONE antes da correção. As provas do Claude
+> continuam válidas para os caminhos que exercitaram; não cobriam este.
 
 ### TASK 10 — PR #82
 
@@ -83,6 +94,12 @@ kind = variavel · due_date = NULL · period = mês civil do registo legado
 forward / mark-paid / retry / rollback em descartável = PASS
 mid-batch persisted = 0 · delete count = 0
 ```
+
+> 🔴 `F14-C` (Codex, PR #85): a atomicidade está segura, mas o prestate do
+> manifesto está **incompleto**. O `UPDATE` não é condicional a `description`,
+> `date`, `category`, `expense_category_id`, `notes` nem `created_at`. E o
+> rollback aceita apagar o repair depois de alterações nesses campos, deixando
+> anexo órfão.
 
 Depende de TASK 09 **e** de TASK 01A (nenhuma migration em produção antes do
 drift estar resolvido).
@@ -256,8 +273,33 @@ Objeto presente no schema **não prova** origem da aplicação. São cinco coisa
 distintas que este projeto já confundiu antes: (a) objeto presente; (b) linha no
 ledger; (c) ficheiro no repo; (d) checksum coincidente; (e) origem da aplicação.
 
-Proibido até a TASK 01A concluir: baseline, reconcile, inserir linha 078 no
-ledger, alterar schema, aplicar a 078, ou assumir que «já está aplicada».
+**TASK 01A concluída (2026-08-26).** Produção **não** tem a 078 da PR #74 — tem
+uma versão anterior e incompleta: 4 dos 9 objetos declarados.
+
+```
+PROD_078_OBJECT_COUNT   = 4 de 9
+EXACT_078_MATCH_COUNT   = 0     PARTIAL_078_MATCH_COUNT = 3
+DIFFERENT_COUNT         = 1     MISSING_COUNT           = 5
+078_SCHEMA_MATCH        = PARTIAL
+RUNNER_079_GATE         = BLOCKED_BY_SCHEMA_LEDGER_DRIFT
+```
+
+Faltam `company_sync_state` e quatro funções (`complete_domain_mutation`,
+`find_or_conflict_domain_mutation`, `lock_domain_mutation`,
+`next_company_sequence`). O índice em produção chama-se
+`idx_company_change_events_pending` e tem outra definição.
+
+Descoberto no mesmo varrimento: as colunas `revision` em 8 tabelas e
+`fn_increment_revision` **não vêm da 078** nem de nenhuma migration do `master`.
+`UNKNOWN_ORIGIN`.
+
+Também confirmado: **077 não está aplicada** (`_migrations` sem RLS, 0 políticas
+— o acesso público ao ledger continua aberto) e **079 não está aplicada**.
+
+Continua proibido: baseline, reconcile, inserir linha 078 no ledger, alterar
+schema, aplicar a 078, ou assumir que «já está aplicada».
+`RECONCILIATION_EXECUTED = NO`. Opção preferida: decidir o destino da 078 antes
+de tudo o resto — detalhe em `docs/HANDOFF_CURRENT.md`.
 
 ### `BANK_ACCOUNT_RELATIONSHIP_RISK = OPEN`
 

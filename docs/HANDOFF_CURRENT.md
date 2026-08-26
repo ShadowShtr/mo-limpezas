@@ -1,0 +1,477 @@
+# HANDOFF — continuar noutro computador
+
+**Lê este ficheiro primeiro.** Foi escrito para que uma sessão nova, noutra
+máquina, sem acesso a este chat, consiga continuar exatamente do ponto atual.
+
+```
+PROJECT            = ShadowShtr/mo-limpezas
+HANDOFF_TIMESTAMP  = 2026-08-26
+MASTER_REMOTE_SHA  = 0527127b1eaf5385b55d5dbfad6d61f0afcf56fb
+```
+
+## ⚠️ O SHA de produção não é o SHA do master
+
+```
+GIT_MASTER_SHA                = 0527127b1eaf5385b55d5dbfad6d61f0afcf56fb
+ACTUAL_PRODUCTION_DEPLOYED_SHA = NOT_PROVEN / USER_ROLLED_BACK_PREVIOUS_DEPLOYMENT
+```
+
+A PR #86 foi mesclada em `master` a 2026-08-26T17:58Z e disparou auto-deploy. O
+proprietário **reverteu manualmente** o runtime para um deployment anterior.
+Portanto o que corre em `molimpezas.pt` **não é** o topo do `master`.
+
+Três conceitos que não se podem confundir a partir daqui:
+
+| conceito | valor |
+|---|---|
+| `GIT_MASTER_SHA` | `0527127b` |
+| `LATEST_GIT_DEPLOYABLE_SHA` | `0527127b` |
+| `ACTUAL_PRODUCTION_DEPLOYED_SHA` | **não provado** — anterior a `0527127b` |
+
+Antes de qualquer conclusão sobre comportamento em produção, ler o SHA do
+deployment ativo na Vercel. Não assumir.
+
+---
+
+## Primeiro passo no computador novo
+
+```bash
+git clone https://github.com/ShadowShtr/mo-limpezas
+cd mo-limpezas
+git fetch origin --prune
+git branch -a
+```
+
+1. ler este ficheiro;
+2. abrir a **PR #83** (`docs/FINANCE_MASTER_TASK_LEDGER.md`) — é o estado do plano;
+3. conferir o registo de branches, mais abaixo;
+4. **não aplicar migration nenhuma**;
+5. continuar em `NEXT_EXACT_ACTION`;
+6. fazer snapshot read-only fresco de produção sempre que for preciso medir.
+
+```bash
+git switch --track origin/docs/finance-master-task-ledger   # o ledger
+git switch --track origin/fix/reuse-pending-cashflow-on-payment   # o trabalho a corrigir
+```
+
+---
+
+## NEXT_EXACT_ACTION
+
+**Corrigir F14-A na migration 079 (branch `fix/reuse-pending-cashflow-on-payment`, PR #81).**
+
+Uma auditoria independente (Codex, PR #85) reproduziu em PostgreSQL real um
+defeito confirmado no meu próprio trabalho. Está descrito em detalhe na secção
+«Evidência em conflito», mais abaixo. A correção proposta já está escrita; falta
+implementá-la, reensaiar e refazer os gates.
+
+Não mesclar nada antes disso.
+
+---
+
+## Registo de branches
+
+Nenhuma branch tem commits por enviar. `LOCAL_HEAD == REMOTE_HEAD` em todas.
+
+| branch | dono | propósito | HEAD | PR | estado | apagar? |
+|---|---|---|---|---|---|---|
+| `master` | — | tronco | `0527127b` | — | — | não |
+| `docs/finance-master-task-ledger` | Claude | ledger + este handoff | ver PR #83 | #83 | OPEN, não mesclar | **não** |
+| `fix/reuse-pending-cashflow-on-payment` | Claude | migration 079 | `a10c7b2b` | #81 | OPEN, CI verde, **F14-A por corrigir** | **NUNCA** |
+| `repair/six-pending-obligations` | Claude | repair das 6 | `5eaee43d` | #82 | OPEN, CI verde, **F14-C por corrigir** | não |
+| `repair/payment-competence-backfill` | Claude | backfill dos 29 | `94ecdc14` | #78 | OPEN, ⛔ não executar | não |
+| `fix/secure-migrations-ledger` | Claude | migration 077 | `f54d62cb` | #73 CLOSED | branch viva | não |
+| `feat/domain-mutation-change-event-foundation` | Claude | migration 078 | `a8475227` | #74 | OPEN | não |
+| `codex/hardening-invoice-cash-atomicity` | Codex | atomicidade fatura/caixa, migration 080 provisória | `0a5da475` | #84 | OPEN, revisão Claude requerida | não |
+| `codex/adversarial-review-81-82` | Codex | revisão adversarial de #81/#82 | `dcda4c06` | #85 | OPEN | não |
+| `codex/fix-collaborator-name-only-create` | Codex | colaborador só com nome | `1cc405d0` | #86 | **MESCLADA** | — |
+
+> 🔴 **`fix/reuse-pending-cashflow-on-payment` não pode ser apagada.** A #82 tem-na
+> como base. Apagar uma branch base já fechou uma PR automaticamente neste
+> repositório (aconteceu à #73). `--delete-branch` é proibido.
+>
+> Sequência obrigatória quando a #81 for mesclada: merge **sem** `--delete-branch`
+> → confirmar #82 ainda OPEN → retarget/rebase da #82 para `master` → só então
+> considerar remover a branch antiga.
+
+Existem ~50 branches antigas já mescladas ou arquivadas, todas presentes no
+remoto. Nenhuma tem trabalho exclusivo local.
+
+---
+
+## Registo de PRs
+
+| PR | dono | base | head | estado | CI | migration | prod |
+|---|---|---|---|---|---|---|---|
+| #73 | Claude | `fix/migration-runner-targeted-apply` | `f54d62cb` | CLOSED (auto, base apagada) | — | 077 | não aplicada |
+| #74 | Claude | `fix/secure-migrations-ledger` | `a8475227` | OPEN | — | 078 | **parcialmente materializada, origem não provada** |
+| #78 | Claude | `master` | `94ecdc14` | OPEN | — | — | ⛔ não executar |
+| #80 | Claude | `master` | `c8ed2be7` | MERGED 26/08 13:51 | verde | — | em produção |
+| #81 | Claude | `master` | `a10c7b2b` | OPEN | **success** (`32980073496`) | 079 | não aplicada |
+| #82 | Claude | `fix/reuse-pending-cashflow-on-payment` | `5eaee43d` | OPEN | **success** (`32982219026`) | — | não executado |
+| #83 | Claude | `master` | ver ledger | OPEN | docs | — | não mesclar |
+| #84 | Codex | `master` | `0a5da475` | OPEN | verde (reportado) | **080 provisória** | não aplicada |
+| #85 | Codex | `master` | `dcda4c06` | OPEN | verde (reportado) | — | só reprodução |
+| #86 | Codex | `master` | `1cc405d0` | **MERGED** 26/08 17:58 | — | draft colaborador | **revertido em runtime pelo proprietário** |
+
+---
+
+## 🔴 Evidência em conflito — #81 e #82
+
+Duas fontes independentes chegaram a conclusões diferentes sobre o mesmo código.
+**Ambas ficam registadas.** A do Codex é mais recente e reproduz em PostgreSQL
+real; onde diverge, prevalece.
+
+```
+CONFLICTING_EVIDENCE = YES
+```
+
+### O que o Claude provou (#81/#82, ensaios próprios)
+
+Postgres 16.15 descartável, 61/61 e 37/37: reutilização do movimento pendente
+com preservação de `id`, idempotência, duas ligações concorrentes com bloqueio
+real medido (1242 ms), erro forçado com reversão total, rollback que repõe a
+definição da 073 byte a byte. Forward das 6, marcar pago, retry, falha a meio
+com prestate integral, rollback seguro.
+
+Isto continua verdadeiro **para os caminhos que exercitou**.
+
+### F14-A — `CONFIRMED_BUG` (Codex, PR #85)
+
+**O meu erro.** Os guardas da 079 (`company`, `type`, `amount`, referência) só
+correm no ramo `IF FOUND` — o caminho que lê o movimento **antes** de inserir.
+No ramo `ELSE`, quando o `INSERT ... ON CONFLICT DO NOTHING` colide com uma
+linha inserida concorrentemente por outra ligação, o código relê **apenas o
+`id`** e aceita o que encontrar.
+
+Codex reproduziu com um trigger como barreira determinística: a ligação A pára
+antes do `INSERT`, B insere uma linha com a mesma identidade única, A continua.
+Resultado aceite sem erro:
+
+- `type = entrada` numa saída;
+- valor `999.00` para uma obrigação de `100.00`;
+- `status = pendente` com o pagamento a terminar `pago`.
+
+Escrevi num comentário que isto «não pode acontecer para o mesmo pagamento (a
+tranca acima impede-o)». A tranca serializa duas chamadas *à RPC*; não impede um
+`INSERT` direto de outra ligação. O comentário estava errado.
+
+**Correção proposta (não implementada):** depois do conflito, reler a linha
+completa e passá-la exatamente pelas mesmas validações do caminho de
+reutilização, abortando em qualquer divergência.
+
+### F14-B — `CONFIRMED_BUG` (Codex)
+
+`unmark_payment_paid` **apaga** o movimento de caixa com aquela origem. Depois
+do repair das 6, o movimento com aquela origem é o **movimento legado
+reutilizado** — e desmarcar apaga-o. O schema não distingue «movimento criado
+pelo mark» de «movimento preexistente adotado».
+
+```
+SCHEMA_OR_PROTOCOL_GAP = YES
+```
+
+Pior: se o movimento estiver conciliado, o `DELETE` cascateia para a
+correspondência de conciliação, enquanto a transação bancária continua marcada
+como reconciliada — apaga evidência financeira e deixa estados divergentes.
+
+Eu tinha registado, na própria 079, que não tocava em `unmark_payment_paid` e
+que a consequência ficava «registada como pendente, não como esquecido». Estava
+certo em nomeá-la; subestimei-a ao chamar-lhe decisão de negócio separada. É um
+caminho de perda de dados.
+
+**Correção proposta:** registar proveniência e prestate de reutilização de forma
+transacional; no unmark, apagar apenas o que o mark criou; para movimento
+legado, restaurar o prestate; recusar unmark quando exista conciliação.
+
+### F14-C — `PARTIAL` (Codex)
+
+A atomicidade do executor das 6 está segura. O **prestate do manifesto está
+incompleto**: o `UPDATE` só é condicional a `amount`, `status`, `type`,
+`company_id`, `reference_type` e `reference_id`. Ficam desprotegidos
+`description`, `date`, `category`, `expense_category_id`, `notes` e `created_at`.
+
+Consequências reproduzidas: uma categoria estruturada atribuída depois do
+snapshot é sobrescrita pelo valor antigo; uma data alterada depois do snapshot
+gera competência a partir da data velha; um anexo criado antecipadamente para o
+UUID alvo é silenciosamente adotado quando o pagamento nasce.
+
+O rollback recusa pagamento pago e não faz rollback parcial — mas aceita apagar
+o repair depois de alterações em descrição, categoria, notas e competência, e
+deixa anexo órfão.
+
+### Períodos financeiros
+
+```
+CURRENT_PERIOD_POLICY = COMPETENCE_ONLY
+```
+
+A RPC valida apenas o período da **competência**. Uma competência aberta com
+data de caixa em mês fechado passa. Política proposta: validar os dois — a
+competência protege a obrigação, `p_paid_on` protege o movimento de caixa.
+
+---
+
+## TASK 01A — forensics do drift (concluída)
+
+Leitura fresca de produção, 2026-08-26. Zero escritas.
+
+```
+LEDGER_ROWS = 77   (última entrada: 076, 2026-08-20)
+ausentes do ledger: 066 067 070 077 078 079
+```
+
+### 078 versus produção, objeto a objeto
+
+A 078 declara 3 tabelas, 5 funções e 1 índice. Produção tem **4 dos 9**.
+
+| objeto declarado pela 078 | produção | classificação |
+|---|---|---|
+| `company_change_events` (tabela) | existe | `PARTIAL_078_MATCH` |
+| `domain_mutations` (tabela) | existe | `PARTIAL_078_MATCH` |
+| `company_sync_state` (tabela) | **não existe** | `EXPECTED_078_MISSING` |
+| `record_company_change_event()` | existe, `SECURITY DEFINER` | `PARTIAL_078_MATCH` |
+| `complete_domain_mutation()` | **não existe** | `EXPECTED_078_MISSING` |
+| `find_or_conflict_domain_mutation()` | **não existe** | `EXPECTED_078_MISSING` |
+| `lock_domain_mutation()` | **não existe** | `EXPECTED_078_MISSING` |
+| `next_company_sequence()` | **não existe** | `EXPECTED_078_MISSING` |
+| `idx_company_change_events_company_sequence` | **não existe**; existe `idx_company_change_events_pending` | `DIFFERENT_FROM_078` |
+
+```
+PROD_078_OBJECT_COUNT      = 4 de 9
+EXACT_078_MATCH_COUNT      = 0
+PARTIAL_078_MATCH_COUNT    = 3
+DIFFERENT_COUNT            = 1
+MISSING_COUNT              = 5
+EXTRA_COUNT                = 0
+078_SCHEMA_MATCH           = PARTIAL
+ORIGIN_OF_PROD_078_OBJECTS = NOT_PROVEN
+LEDGER_078_PRESENT         = NO
+```
+
+**O que isto quer dizer.** Produção **não** tem a 078 da PR #74. Tem uma versão
+**anterior e incompleta** dela: as duas tabelas centrais e uma função, com um
+índice de nome e definição diferentes. Nenhum objeto bate exatamente com o que a
+078 declara hoje.
+
+Estado e origem continuam separados: os objetos estão presentes; quem os criou
+não é verificável agora. Não é `APPLIED`.
+
+`company_change_events` e `domain_mutations` têm RLS ativa e 1 política cada.
+
+### Outras verificações
+
+```
+077 aplicada?  NÃO — public._migrations sem RLS, 0 políticas.
+               O acesso público ao ledger continua aberto: é o que a 077 fecha.
+079 aplicada?  NÃO — mark_payment_paid não contém CASHFLOW_LINK_AMOUNT_MISMATCH.
+070            intocada, ausente do ledger, em blockedMigrations.
+```
+
+As colunas `revision` existem em 8 tabelas (`clients`, `contracts`, `invoices`,
+`invoice_items`, `locations`, `services`, `teams`, `team_members`) com
+`fn_increment_revision`. **Não vêm da 078** e não estão em nenhuma migration do
+`master`. Origem `UNKNOWN_ORIGIN` — mais um objeto fora do ledger.
+
+### Consequência operacional
+
+```
+SCHEMA_LEDGER_DRIFT = YES
+RUNNER_079_GATE     = BLOCKED_BY_SCHEMA_LEDGER_DRIFT
+```
+
+`SAFE_RECONCILIATION_OPTIONS`, por ordem de preferência:
+
+1. **decidir o destino da 078 primeiro** — a PR #74 tem de ser reconciliada com
+   o que produção realmente tem, ou reescrita como migration idempotente que
+   completa o que falta. Preferida: sem isto, qualquer aplicação da 078 falha ou
+   duplica;
+2. aplicar a 079 isoladamente pelo SQL Editor e registar a linha no ledger — só
+   depois de F14-A corrigido, e continua a deixar o drift por resolver;
+3. baseline/reconcile do ledger — **rejeitada**: apagaria a prova de que algo
+   correu fora do runner.
+
+```
+PREFERRED_RECONCILIATION_OPTION = 1
+RECONCILIATION_EXECUTED = NO
+```
+
+---
+
+## Baseline de documentos e anexos (TASK 01)
+
+```
+payment-attachments: 23 ficheiros
+  tabela `attachments`                     6 referências
+  coluna legada `attachment_url`          17 referências
+  pagamentos com anexo                    21
+  pagamentos com os dois modelos           1
+  órfãos 0 · referências partidas 0 · abertura 26/26 (tamanho confere)
+```
+
+🔴 O pagamento com os dois modelos aponta para **objetos diferentes** — um PDF e
+uma imagem, carregados com 22 horas de intervalo. **Não são duplicados.** Nunca
+deduplicar por pagamento; só por identidade forte do objeto (`bucket` +
+`storage_path`), nunca por nome de ficheiro.
+
+```
+LEGACY_ATTACHMENT_URL_MIGRATION_NOW = NO
+SUPPORT_BOTH_ATTACHMENT_MODELS      = YES
+```
+
+Vias de anexo no schema: 2 ativas (`attachments`,
+`fixed_variable_payments.attachment_url`) e 4 com zero linhas
+(`management_tasks.attachment_url`, `absences.document_url`,
+`collaborator_documents.file_url`, `service_photos.storage_path`).
+
+**3 objetos órfãos** em `collaborator-documents` (a tabela tem 0 linhas). O
+caminho é gerado por `buildDocumentStoragePath()` e resolve para um perfil que
+existe → proprietário `KNOWN_PARENT`; registo do documento `UNKNOWN`. Categoria,
+notas e visibilidade não se recuperam de um ficheiro. Não apagar, não mover, não
+reenviar. Origem da perda: não provada.
+
+Buckets `task-attachments` e `absence-documents` não existem, e não há um único
+dado que aponte para eles: configuração incompleta nunca exercitada.
+
+---
+
+## Riscos abertos
+
+```
+PRODUCTION_IS_LIVE_DURING_REFACTOR          = YES
+BANK_ACCOUNT_RELATIONSHIP_RISK              = OPEN
+FINANCIAL_PERIOD_GUARD_PRODUCTION_EXERCISED = NO
+MISSING_STORAGE_BUCKET_CONFIGURATION        = OPEN
+DUAL_PAYMENT_ATTACHMENT_MODEL               = SUPPORTED
+078_SCHEMA_LEDGER_DRIFT                     = PARTIAL / ORIGIN NOT_PROVEN
+COLLABORATOR_ACCESS_REDESIGN                = PENDING_CODEX/CLAUDE_REVIEW
+```
+
+**Produção mexe-se durante o trabalho.** Observado nesta sessão: `payments`
+113 → 114, movimentos ligados 6 → 7, e um anexo novo criado às 15:39. Nenhum
+snapshot antigo serve de prestate. Antes de qualquer execução: snapshot fresco,
+ids frescos, manifesto fresco, hashes frescos, guarda de staleness, transação.
+
+**Conciliação bancária:** 336 transações, **todas** com `bank_account_id` nulo,
+`bank_accounts` vazia, 11 correspondências assentes nisso.
+
+**Período financeiro:** `financial_periods` está vazia. A guarda
+`FINANCIAL_PERIOD_CLOSED` nunca disparou em produção. Não remover, não concluir
+que está errada — provar em Postgres descartável.
+
+---
+
+## Reparações — estado
+
+| repair | branch | forward | rollback | Docker | manifesto | produção |
+|---|---|---|---|---|---|---|
+| 6 obrigações pendentes | `repair/six-pending-obligations` | ensaiado 37/37 | ensaiado, recusa após atividade | destruído | preparação apenas | **NÃO EXECUTADO** |
+| competência dos 29 (#78) | `repair/payment-competence-backfill` | preparado | por implementar | — | hashes inválidos | **NÃO EXECUTADO** |
+
+```
+PREPARATION_MANIFEST_ONLY = YES     FINAL_EXECUTION_MANIFEST = NO
+```
+
+Manifestos brutos **não são versionados** — contêm ids de produção. Só ficam
+registados contagem, hash e estado. Os hashes gerados nesta sessão
+(`2f0376db…` / `2f0fb2e4…`) são de preparação e **já não devem ser autorizados**:
+produção mudou desde então.
+
+---
+
+## Decisão registada: colaborador ≠ conta de acesso
+
+Ainda **não implementada**. Preservada aqui para não se perder.
+
+- criar colaborador exige **apenas o Nome**; NIF, IBAN, email, telefone, morada,
+  datas e dados laborais são opcionais;
+- criar colaborador **não** cria conta Auth;
+- no perfil existe «Criar acesso». O admin pode definir senha temporária,
+  redefinir para nova senha temporária e desativar acesso;
+- o admin **não** pode consultar a password atual. Password em claro **nunca** é
+  guardada;
+- primeiro login após senha temporária → `must_change_password = true`;
+- autenticação de admin/gestor é separada e não pode regredir por causa disto.
+
+```
+COLLABORATOR_ACCESS_REDESIGN = PENDING_CODEX/CLAUDE_REVIEW
+PERSONAL_DATA_COMMITTED = NO
+```
+
+O pedido original continha dados pessoais reais (nome, NIF, IBAN). **Não foram
+versionados** e não devem ser. Fixtures sintéticas apenas.
+
+---
+
+## Arquitetura financeira alvo (aprovada, por implementar)
+
+```
+Financeiro → Resumo · Pagamentos · Cobranças · Folha de Pagamento · Conciliação
+Pagamentos → Todos · Fixos · Variáveis
+Tabela     → Data · Descrição · Vencimento · Categoria · Origem · Valor · Estado · Ações
+```
+
+**Fluxo de Caixa** sai da navegação futura, mas `cash_flow_entries` **permanece**
+como tabela.
+
+**Contas** só pode sair depois de realocar: A Receber → Cobranças · A Pagar
+Salários → Folha · Categorias → configuração canónica · Despesas Pendentes →
+Pagamentos.
+
+```
+CONTAS_UNIQUE_SEMANTICS_REMAIN = YES
+CONTAS_UI_REMOVAL_SAFE = NO
+```
+
+### Cobranças — especificação a preservar
+
+Cobrança manual; cliente existente ou novo; `client_id` canónico; Avença ou
+Serviço; contrato opcional; fonte única de verdade; integração com o perfil do
+cliente; «Editar todas»; pagamento de 50% / 100% / valor personalizado dentro do
+Editar; 50% do saldo restante; pagamento atómico; idempotência; concorrência;
+recibo de caixa uma só vez; sem cobrança duplicada no perfil.
+
+Ainda não implementado. Não perder.
+
+---
+
+## Estado local no momento do handoff
+
+```
+WORKTREE_COUNT = 5   (nenhum removido)
+```
+
+| caminho | branch | HEAD | limpo |
+|---|---|---|---|
+| `mo-limpezas` | `master` | `0527127b` | sim |
+| `mo-limpezas-ledger` | `docs/finance-master-task-ledger` | ver PR #83 | sim |
+| `mo-limpezas-codex-invoice` | `codex/hardening-invoice-cash-atomicity` | `0a5da475` | sim |
+| `mo-limpezas-codex-adversarial` | `codex/adversarial-review-81-82` | `dcda4c06` | sim |
+| `mo-limpezas-codex-collaborator` | `codex/fix-collaborator-name-only-create` | `1cc405d0` | sim |
+
+**Stash.** Existe um `stash@{0}: On test/isolated-production-tenants: hotfix wip`,
+com alterações a `src/app/(dashboard)/layout.tsx` e `src/proxy.ts`. É o hotfix do
+loop `/login ↔ /dashboard` de 2026-08-05. Verifiquei: `master` já contém a
+substância (`maybeSingle`, log do erro, `signOut()` antes do redirect, e o
+`isPublic && profileRole` no proxy) — entrou pela PR #30. O stash é uma cópia
+superada.
+
+```
+STASH_RELEVANT_ITEMS = 0
+```
+
+Não foi apagado. Não é backup de nada — se este PC desaparecer, nada se perde
+com ele.
+
+**Harness de ensaio.** Tudo o que é preciso para reproduzir as provas está
+versionado: `scripts/rehearse-079.mjs` e `scripts/rehearse-six-repair.mjs` (PR
+#81/#82), `scripts/repairs/` (PR #82), `src/__tests__/adversarial-81-82-postgres.test.ts`
+(PR #85). Nenhum harness crítico vive apenas em temporários.
+
+Ficheiros de diagnóstico gerados em `scratchpad` durante a sessão **não** foram
+versionados: são consultas read-only descartáveis, recriáveis a partir das
+queries documentadas neste ficheiro.
+
+```
+LOCAL_ONLY_RELEVANT_ITEMS = 0
+```
