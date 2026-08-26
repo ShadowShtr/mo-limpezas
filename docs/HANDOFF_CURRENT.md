@@ -5,8 +5,10 @@ máquina, sem acesso a este chat, consiga continuar exatamente do ponto atual.
 
 ```
 PROJECT            = ShadowShtr/mo-limpezas
-HANDOFF_TIMESTAMP  = 2026-08-26
+HANDOFF_TIMESTAMP  = 2026-08-26 (actualizado no fim da ronda F14)
 MASTER_REMOTE_SHA  = 0527127b1eaf5385b55d5dbfad6d61f0afcf56fb
+F14_A = FIXED_AND_PROVEN   F14_B = FIXED_AND_PROVEN   F14_C = FIXED_AND_PROVEN
+MASTER_INTEGRATION_GATE = BLOCKED_BY_86_RUNTIME_GIT_DIVERGENCE
 ```
 
 ## ⚠️ O SHA de produção não é o SHA do master
@@ -50,22 +52,139 @@ git branch -a
 6. fazer snapshot read-only fresco de produção sempre que for preciso medir.
 
 ```bash
-git switch --track origin/docs/finance-master-task-ledger   # o ledger
-git switch --track origin/fix/reuse-pending-cashflow-on-payment   # o trabalho a corrigir
+git switch --track origin/docs/finance-master-task-ledger        # o ledger
+git switch --track origin/fix/reuse-pending-cashflow-on-payment  # F14-A, PR #81
+git switch --track origin/fix/payment-cashflow-safe-unmark       # F14-B, PR #87
+git switch --track origin/repair/six-pending-obligations-hardened # F14-C, PR #88
 ```
+
+🔴 **Docker é obrigatório** para reproduzir as provas desta ronda: os ensaios
+correm PostgreSQL 16 em contentor descartável. Sem ele, a suite F14 não corre —
+e o workflow de CI também não a corre, porque usa PGlite. As 60 verificações
+das três PRs são evidência **local**; a CI cobre o resto.
 
 ---
 
 ## NEXT_EXACT_ACTION
 
-**Corrigir F14-A na migration 079 (branch `fix/reuse-pending-cashflow-on-payment`, PR #81).**
+**Reconciliar o `master` e o runtime de produção — o incidente da #86 — e só
+depois retomar a integração das branches financeiras.**
 
-Uma auditoria independente (Codex, PR #85) reproduziu em PostgreSQL real um
-defeito confirmado no meu próprio trabalho. Está descrito em detalhe na secção
-«Evidência em conflito», mais abaixo. A correção proposta já está escrita; falta
-implementá-la, reensaiar e refazer os gates.
+```
+MASTER_INTEGRATION_GATE = BLOCKED_BY_86_RUNTIME_GIT_DIVERGENCE
+```
 
-Não mesclar nada antes disso.
+O F14-A, o F14-B e o F14-C estão **fechados e provados**: três PRs empilhadas,
+CI verde em todas, zero escritas em produção. O que bloqueia agora não é
+trabalho financeiro por fazer — é o `master` não ser o que corre em produção.
+
+A PR #81 está `CONFLICTING` contra o `master`. **Não rebasear, não retargetar,
+não mesclar.** O `master` avançou com a #86 enquanto o runtime foi revertido à
+mão: até se saber o que corre mesmo em `molimpezas.pt`, integrar seria empilhar
+por cima de um estado que ninguém provou.
+
+A ordem a seguir:
+
+1. ler o SHA do deployment activo na Vercel — não assumir o topo do `master`;
+2. decidir o destino da #86 e da arquitectura de colaboradores;
+3. reconciliar 077/078/079 (ver TASK 01A: produção tem 4 dos 9 objectos da 078,
+   origem não provada);
+4. só então a pilha #81 → #87 → #88.
+
+---
+
+## Ronda F14 — fechada em 2026-08-26
+
+Três defeitos confirmados pela revisão adversarial do Codex (#85), corrigidos e
+provados em PostgreSQL 16 real. Nenhum foi aplicado em lado nenhum.
+
+```
+F14_A = FIXED_AND_PROVEN     PR #81   HEAD e99872e6
+F14_B = FIXED_AND_PROVEN     PR #87   HEAD 29b6336f
+F14_C = FIXED_AND_PROVEN     PR #88   HEAD e47312fd
+```
+
+| | o que era | o que passou a ser |
+|---|---|---|
+| **F14-A** | o ramo de conflito relia só o `id` e aceitava a linha | relê a linha completa com `FOR UPDATE` e valida pelos mesmos invariantes, num helper único chamado pelos dois caminhos |
+| **F14-B** | `unmark` apagava o movimento, legado incluído, com cascade para a conciliação | proveniência explícita: apaga o que criou, **restaura** o que adoptou, recusa o conciliado e recusa o desconhecido |
+| **F14-C** | o `UPDATE` do repair condicionava a 6 dos 13 campos do manifesto | condiciona aos 13, e regista a adopção na mesma transacção |
+
+**A decisão que mais pesa, e porquê.** A primeira versão do F14-B tratava a
+ausência de proveniência como «criado pelo mark», por continuidade com a 073.
+Estava errada: não haver registo não prova que o movimento foi criado pelo
+`mark` — prova que ninguém sabe. Para as linhas anteriores a esta
+infraestrutura as duas hipóteses continuam abertas, e uma delas é «já cá
+estava», que é o caso cuja destruição o F14-B existe para impedir.
+
+```
+UNKNOWN_PROVENANCE_UNMARK = FAIL_CLOSED
+```
+
+O preço é conhecido e aceite: desmarcar um movimento antigo passa a exigir que
+alguém lhe determine a origem primeiro. Recusar uma operação legítima
+corrige-se com uma classificação; apagar histórico financeiro não se corrige.
+
+**Como é que se sabe que os testes provam alguma coisa.** Cada correcção foi
+mutada e vista a ficar vermelha — um teste que passa com e sem o código que
+diz testar não prova nada:
+
+```
+migration do unmark seguro fora   ⇒ 10 de 17 vermelhos
+UNKNOWN volta a apagar            ⇒ B13 e B14 vermelhos
+guarda do rollback fora           ⇒ B20 vermelho
+guards do UPDATE do repair fora   ⇒ 6 vermelhos
+proveniência fora do forward      ⇒ 2 vermelhos
+```
+
+**A prova histórica não foi tocada.** O harness da #85 lê a 079 fixada em
+`a10c7b2b`: continua a reproduzir o defeito, e é isso que se quer dele. A
+prova da HEAD corrigida vive num ficheiro novo
+(`f14a-old-vs-new-postgres.test.ts`) que corre o mesmo cenário contra as duas
+versões e exige as duas metades — a antiga reproduz, a nova bloqueia.
+
+```
+HISTORICAL_BASELINE_PRESERVED = YES
+TARGET_HEAD_ADVERSARIAL_MATRIX = PASS
+```
+
+### Migrations desta ronda — sem número, por desenho
+
+```
+MIGRATION_NUMBER_FINAL = UNASSIGNED
+```
+
+Vivem em `supabase/migrations/draft/`, que o runner **não lê** — confirmado por
+execução, não por leitura do código. O número só se atribui quando a 077/078/079
+estiverem reconciliadas; escolher um «080» hoje seria fingir que a sequência é
+conhecida.
+
+### TASK nova: `PAYMENT_CASHFLOW_PROVENANCE_BACKFILL`
+
+Consequência directa do `FAIL_CLOSED`. Auditoria read-only dos movimentos
+ligados a pagamentos que já existem, para os classificar em
+`PROVEN_CREATED_BY_MARK`, `PROVEN_ADOPTED` ou `UNKNOWN`. Só as categorias
+provadas podem receber proveniência por reparação; `UNKNOWN` continua bloqueado
+para `unmark`.
+
+**Não executar agora.** E não classificar por `created_at`, `description`,
+`notes` ou proximidade temporal: um palpite bem-intencionado sobre dinheiro
+continua a ser um palpite.
+
+---
+
+## Cópia local antiga — congelada
+
+```
+OLD_LOCAL_REPO_REQUIRES_FORENSIC_REVIEW = YES
+```
+
+`C:Usersshadoprojectsmo-limpezas`, branch `chore/repair-historical-cashflow`,
+HEAD `cc97bcc` — **não existe no remoto**. Árvore limpa, sem stashes.
+
+`DELETE = NO` · `PUSH = NO` · `CHERRY_PICK = NO`. Pode conter trabalho histórico
+nunca publicado; decide-se numa task própria (`LEGACY-LOCAL-REPO-FORENSICS`),
+não por arrasto. O repositório operacional é `C:Usersshadomo-limpezas`.
 
 ---
 
@@ -77,8 +196,10 @@ Nenhuma branch tem commits por enviar. `LOCAL_HEAD == REMOTE_HEAD` em todas.
 |---|---|---|---|---|---|---|
 | `master` | — | tronco | `0527127b` | — | — | não |
 | `docs/finance-master-task-ledger` | Claude | ledger + este handoff | ver PR #83 | #83 | OPEN, não mesclar | **não** |
-| `fix/reuse-pending-cashflow-on-payment` | Claude | migration 079 | `a10c7b2b` | #81 | OPEN, CI verde, **F14-A por corrigir** | **NUNCA** |
-| `repair/six-pending-obligations` | Claude | repair das 6 | `5eaee43d` | #82 | OPEN, CI verde, **F14-C por corrigir** | não |
+| `fix/reuse-pending-cashflow-on-payment` | Claude | migration 079 | `e99872e6` | #81 | OPEN, CI verde, **F14-A corrigido e provado** | **NUNCA** |
+| `fix/payment-cashflow-safe-unmark` | Claude | F14-B, proveniência e unmark seguro | `29b6336f` | #87 | OPEN, CI verde, stacked sobre a #81 | **NUNCA** |
+| `repair/six-pending-obligations-hardened` | Claude | F14-C, sucessora da #82 | `e47312fd` | #88 | OPEN, CI verde, stacked sobre a #87 | não |
+| `repair/six-pending-obligations` | Claude | repair das 6 | `5eaee43d` | #82 | OPEN, **SUPERSEDED_FOR_HARDENING** pela #88 | não |
 | `repair/payment-competence-backfill` | Claude | backfill dos 29 | `94ecdc14` | #78 | OPEN, ⛔ não executar | não |
 | `fix/secure-migrations-ledger` | Claude | migration 077 | `f54d62cb` | #73 CLOSED | branch viva | não |
 | `feat/domain-mutation-change-event-foundation` | Claude | migration 078 | `a8475227` | #74 | OPEN | não |
@@ -107,8 +228,10 @@ remoto. Nenhuma tem trabalho exclusivo local.
 | #74 | Claude | `fix/secure-migrations-ledger` | `a8475227` | OPEN | — | 078 | **parcialmente materializada, origem não provada** |
 | #78 | Claude | `master` | `94ecdc14` | OPEN | — | — | ⛔ não executar |
 | #80 | Claude | `master` | `c8ed2be7` | MERGED 26/08 13:51 | verde | — | em produção |
-| #81 | Claude | `master` | `a10c7b2b` | OPEN | **success** (`32980073496`) | 079 | não aplicada |
-| #82 | Claude | `fix/reuse-pending-cashflow-on-payment` | `5eaee43d` | OPEN | **success** (`32982219026`) | — | não executado |
+| #81 | Claude | `master` | `e99872e6` | OPEN, **CONFLICTING** | verde | 079 | não aplicada |
+| #82 | Claude | `fix/reuse-pending-cashflow-on-payment` | `5eaee43d` | OPEN, superseded | verde | — | não executado |
+| #87 | Claude | `fix/reuse-pending-cashflow-on-payment` | `29b6336f` | OPEN | **success** (`33012489618`) | draft, sem número | não aplicada |
+| #88 | Claude | `fix/payment-cashflow-safe-unmark` | `e47312fd` | OPEN | **success** (`33013600532`) | — | não executado |
 | #83 | Claude | `master` | ver ledger | OPEN | docs | — | não mesclar |
 | #84 | Codex | `master` | `0a5da475` | OPEN | verde (reportado) | **080 provisória** | não aplicada |
 | #85 | Codex | `master` | `dcda4c06` | OPEN | verde (reportado) | — | só reprodução |
@@ -119,12 +242,34 @@ remoto. Nenhuma tem trabalho exclusivo local.
 ## 🔴 Evidência em conflito — #81 e #82
 
 Duas fontes independentes chegaram a conclusões diferentes sobre o mesmo código.
-**Ambas ficam registadas.** A do Codex é mais recente e reproduz em PostgreSQL
-real; onde diverge, prevalece.
+**Ambas ficam registadas.** A do Codex era mais recente e reproduzia em
+PostgreSQL real; onde divergia, prevalecia.
 
 ```
-CONFLICTING_EVIDENCE = YES
+CONFLICTING_EVIDENCE = RESOLVED_2026_08_26
 ```
+
+🟢 **Resolvido.** Os três findings foram corrigidos e provados — ver «Ronda F14»,
+mais acima. O que se segue é o registo do que era, e continua a valer como
+descrição do defeito e da razão por que existia. As secções não foram
+reescritas de propósito: apagar o diagnóstico depois de o corrigir tiraria a
+única explicação de porque é que o código tem hoje a forma que tem.
+
+**Uma correcção ao finding do F14-A.** O Codex listava três sintomas, um deles
+«`status = pendente` apesar de o pagamento terminar `pago`». Isso era amplo
+demais, e a distinção importa:
+
+```
+F14_A_STATUS_PENDING_ACCEPTED_WITHOUT_TRANSITION = BUG
+F14_A_STATUS_PENDING_ACCEPTED_AND_CONFIRMED      = CORRECT_BEHAVIOR
+F14_A_STATUS_UNEXPECTED_ACCEPTED                 = BUG
+```
+
+Uma linha concorrente com empresa, referência, tipo e valor correctos, em
+`pendente`, é economicamente a mesma ocorrência: convertê-la é o propósito
+inteiro da 079. O defeito não era o `status` da linha — era o ramo não reler
+nem converter, deixando o movimento preso em `pendente` com o pagamento
+`pago`. É essa divergência que desapareceu.
 
 ### O que o Claude provou (#81/#82, ensaios próprios)
 
@@ -345,7 +490,15 @@ MISSING_STORAGE_BUCKET_CONFIGURATION        = OPEN
 DUAL_PAYMENT_ATTACHMENT_MODEL               = SUPPORTED
 078_SCHEMA_LEDGER_DRIFT                     = PARTIAL / ORIGIN NOT_PROVEN
 COLLABORATOR_ACCESS_REDESIGN                = PENDING_CODEX/CLAUDE_REVIEW
+MASTER_INTEGRATION_GATE                     = BLOCKED_BY_86_RUNTIME_GIT_DIVERGENCE
+OLD_LOCAL_REPO_REQUIRES_FORENSIC_REVIEW     = YES
+PAYMENT_CASHFLOW_PROVENANCE_BACKFILL        = PENDING_AUDIT
 ```
+
+**A pilha financeira não entra no `master` por agora.** A #81 está
+`CONFLICTING`, e resolvê-lo seria integrar por cima de um `master` que não
+corresponde ao runtime. Primeiro a #86 e os colaboradores; depois a
+reconciliação 077/078/079; só então a pilha.
 
 **Produção mexe-se durante o trabalho.** Observado nesta sessão: `payments`
 113 → 114, movimentos ligados 6 → 7, e um anexo novo criado às 15:39. Nenhum

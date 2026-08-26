@@ -33,8 +33,9 @@ Atualizado      = 2026-08-26
 | 06 | *(título não fornecido)* | NOT_STARTED |
 | 07 | *(título não fornecido)* | NOT_STARTED |
 | 08 | *(título não fornecido)* | NOT_STARTED |
-| 09 | RPC `mark_payment_paid` / reuso de pending cashflow | **EVIDENCE_CONTESTED — F14-A por corrigir** |
-| 10 | Repair das 6 pendências / preparação | **EVIDENCE_CONTESTED — F14-C por corrigir** |
+| 09 | RPC `mark_payment_paid` / reuso de pending cashflow | **FIXED_AND_PROVEN** — F14-A corrigido (#81) |
+| 10 | Repair das 6 pendências / preparação | **FIXED_AND_PROVEN** — F14-C corrigido (#88) |
+| 11 | Proveniência do movimento e unmark seguro | **FIXED_AND_PROVEN** — F14-B (#87) |
 | 11 | Remoção da aba Contas | **BLOCKED_BY_UNIQUE_CONTAS_SEMANTICS** |
 | 12–21 | *(títulos não fornecidos)* | NOT_STARTED |
 | 22 | Conciliação bancária integrada | NOT_STARTED |
@@ -56,8 +57,8 @@ não autoriza saltar TASKS.
 ```
 BRANCH = fix/reuse-pending-cashflow-on-payment
 PR     = #81   OPEN · MERGED = NO · MERGEABLE = YES
-HEAD   = a10c7b2bf059acd6ee2eaced65c07e2b409c0565
-CI     = 32980073496 · SUCCESS
+HEAD   = e99872e6619c94581bb2141eeddbe0c6d14b2096
+CI     = verde · MERGEABLE = NO (conflito com master — ver gate de integração)
 FILE   = supabase/migrations/079_reuse_pending_cashflow_on_payment.sql
 
 MARK_PAID_REUSES_PENDING      = YES
@@ -70,24 +71,74 @@ TWO_CONNECTION_LOCK_PROOF     = PASS
 MIGRATION_ROLLBACK            = pg_get_functiondef reposto exatamente
 ```
 
-> 🔴 **Esta evidência foi contestada e a contestação procede.** A revisão
-> adversarial do Codex (PR #85) reproduziu `F14-A` em PostgreSQL real: os guardas
-> da 079 só correm no ramo que lê o movimento antes de inserir. No ramo de
-> conflito (`ON CONFLICT DO NOTHING`), o código relê apenas o `id` e aceita a
-> linha que encontrar — incluindo `type = entrada`, valor errado e `status`
-> divergente. Ver `docs/HANDOFF_CURRENT.md`.
+> 🟢 **Contestação resolvida em 2026-08-26.** A revisão adversarial do Codex
+> (PR #85) tinha razão: os guardas da 079 só corriam no ramo que lê o movimento
+> antes de inserir; no ramo de conflito o código relia apenas o `id`.
 >
-> `TASK_09` **não** pode passar a DONE antes da correção. As provas do Claude
-> continuam válidas para os caminhos que exercitaram; não cobriam este.
+> Corrigido: depois do conflito a linha é relida **completa**, com `FOR UPDATE`,
+> e passa pelos mesmos invariantes — num helper único
+> (`assert_payment_cashflow_link`) chamado pelos dois caminhos, para que a regra
+> não possa divergir de si própria.
+
+```
+F14_A = FIXED_AND_PROVEN
+CONFLICT_FULL_ROW_REVALIDATED = YES   SINGLE_VALIDATION_RULE = YES
+WRONG_TYPE_BLOCKED = YES              WRONG_AMOUNT_BLOCKED = YES
+WRONG_REFERENCE_BLOCKED = YES         UNEXPECTED_STATUS_BLOCKED = YES
+PENDING_VALID_ROW_CONFIRMED = YES     (é o desenho da 079, não um defeito)
+OLD_SHA_REPRODUCES_F14_A = YES        NEW_HEAD_FIXES_F14_A = YES
+HISTORICAL_BASELINE_PRESERVED = YES   (#85 intocada, pin não mexido)
+rehearse:079 = 61/61 · suite #81 = 26/26 · matriz OLD vs NEW = 9/9
+```
+
+> A prova da HEAD corrigida vive em `src/__tests__/f14a-old-vs-new-postgres.test.ts`,
+> que corre o mesmo cenário contra as duas versões da migration e exige as duas
+> metades: a antiga reproduz, a nova bloqueia. O harness do Codex continua a ler
+> a SHA fixa `a10c7b2b` — é uma reprodução histórica e é para continuar a sê-lo.
+
+### TASK 11 — PR #87 (F14-B)
+
+```
+BRANCH = fix/payment-cashflow-safe-unmark
+PR     = #87   OPEN · MERGED = NO · MERGEABLE = YES · stacked sobre a #81
+HEAD   = 29b6336ffaeebdfd05a529163cc9f090763b5068
+CI     = 33012489618 · SUCCESS
+FILES  = supabase/migrations/draft/PROVISIONAL_payment_cashflow_provenance.sql
+         supabase/migrations/draft/PROVISIONAL_safe_unmark_payment_paid.sql
+         supabase/migrations/draft/rollback/PROVISIONAL_..._provenance.down.sql
+
+PROVENANCE_EXISTING_MECHANISM_FOUND = NO
+SCHEMA_OR_PROTOCOL_GAP = YES
+CHOSEN_PROVENANCE_MODEL = relação dedicada payment_cashflow_provenance
+ADOPTED_PRESTATE_FIELDS = date, expense_category_id
+
+UNKNOWN_PROVENANCE_UNMARK = FAIL_CLOSED
+RECONCILED_UNMARK = BLOCKED
+LEGACY_CASHFLOW_DELETE_COUNT = 0     SAME_CASHFLOW_ID_ALL_CYCLE = YES
+ROLLBACK_EMPTY_STATE = PASS          ROLLBACK_WITH_PROVENANCE_ROWS = BLOCKED
+B01_B20 = 27/27 · Postgres 16-alpine
+```
+
+> **Porquê uma tabela e não uma flag.** O `unmark` não precisa só de saber que a
+> linha foi adoptada — precisa de saber **ao que voltar**. O `mark` altera três
+> campos e dois deles (`date`, `expense_category_id`) não se reconstroem a
+> partir de nada. `status` fica de fora por invariante estrutural provado
+> (B16), não por conveniência.
+>
+> **Porquê `FAIL_CLOSED` no desconhecido.** Não haver registo não prova que o
+> movimento foi criado pelo `mark` — prova que ninguém sabe. Apagar sobre essa
+> dúvida é o risco que esta task existe para fechar. Ver a task
+> `PAYMENT_CASHFLOW_PROVENANCE_BACKFILL`.
 
 ### TASK 10 — PR #82
 
 ```
-BRANCH   = repair/six-pending-obligations
-PR       = #82   OPEN · MERGED = NO · MERGEABLE = YES
-BASE     = fix/reuse-pending-cashflow-on-payment @ a10c7b2b
-HEAD     = 5eaee43d01025f7f8961a7a527219ab092957738
-CI       = 32982219026 · SUCCESS
+BRANCH   = repair/six-pending-obligations-hardened   (sucessora da #82)
+PR       = #88   OPEN · MERGED = NO · MERGEABLE = YES · stacked sobre a #87
+BASE     = fix/payment-cashflow-safe-unmark @ 29b6336f
+HEAD     = e47312fdbed6f4807097c21d74f090928baef78e
+CI       = 33013600532 · SUCCESS
+SOURCE   = #82 (commit 5eaee43, cherry-pick) — #82 = SUPERSEDED_FOR_HARDENING
 
 linhas = 6 · total = 151033 cents
 kind = variavel · due_date = NULL · period = mês civil do registo legado
@@ -95,14 +146,61 @@ forward / mark-paid / retry / rollback em descartável = PASS
 mid-batch persisted = 0 · delete count = 0
 ```
 
-> 🔴 `F14-C` (Codex, PR #85): a atomicidade está segura, mas o prestate do
-> manifesto está **incompleto**. O `UPDATE` não é condicional a `description`,
-> `date`, `category`, `expense_category_id`, `notes` nem `created_at`. E o
-> rollback aceita apagar o repair depois de alterações nesses campos, deixando
-> anexo órfão.
+> 🟢 **`F14-C` corrigido em 2026-08-26.** O Codex tinha razão: a atomicidade
+> estava segura, mas o `UPDATE` era condicional a 6 dos 13 campos que o
+> manifesto captura. Os treze **já estavam** no manifesto — só não eram usados
+> como guarda. Passam a ser, com `IS NOT DISTINCT FROM` e não `=`, porque
+> metade das colunas é anulável e `NULL = NULL` não é verdadeiro.
+>
+> O repair passa também a registar proveniência `adopted_existing` na mesma
+> transacção: ligar um movimento legado a um pagamento novo **é** adoptar.
+
+```
+F14_C = FIXED_AND_PROVEN
+PROTECTED = description · date · category · expense_category_id · notes ·
+            created_at · amount · status · type · company · reference
+STALE_FIELD_MATRIX = 9 campos, cada um isolado, WRITES = 0 em todos
+PROVENANCE_CREATED_AT_REPAIR = YES
+ATTACHMENT_ROLLBACK_GUARD = YES (attachments + attachment_url legada)
+RECONCILIATION_GUARD = YES
+MID_BATCH_PERSISTED = 0   SECOND_APPLY_DUPLICATES = 0
+ROLLBACK_AFTER_ACTIVITY = REFUSED
+FULL_REPAIR_MARK_UNMARK_MARK = PASS (mesmo id, data legada reposta)
+16/16 · Postgres 16-alpine
+```
 
 Depende de TASK 09 **e** de TASK 01A (nenhuma migration em produção antes do
 drift estar resolvido).
+
+### TASK 12 — `PAYMENT_CASHFLOW_PROVENANCE_BACKFILL` (nova, não executar)
+
+```
+ESTADO = PENDING_AUDIT
+DEPENDE_DE = TASK 11 (#87)
+PRODUCTION_WRITES_AUTORIZADAS = 0
+```
+
+Consequência directa de `UNKNOWN_PROVENANCE_UNMARK = FAIL_CLOSED`. Os movimentos
+ligados a pagamentos que já existem em produção não têm registo de proveniência,
+e o `unmark` passa a recusá-los. Isso é o comportamento seguro, e é também um
+problema operacional que se resolve com uma classificação — não relaxando a
+guarda.
+
+**O que a task faz:** auditoria read-only dos movimentos com
+`reference_type = 'fixed_variable_payment'`, classificando cada um em
+
+```
+PROVEN_CREATED_BY_MARK · PROVEN_ADOPTED · UNKNOWN
+```
+
+Só as categorias **provadas** podem receber proveniência por reparação.
+`UNKNOWN` continua bloqueado para `unmark` — e continuar bloqueado é uma
+resposta legítima, não uma falha da task.
+
+🔴 **A classificação não se faz por heurística.** `created_at`, `description`,
+`notes`, `created_by` nulo ou proximidade temporal são sinais insuficientes: um
+palpite bem-intencionado sobre dinheiro continua a ser um palpite. Se não houver
+prova, o veredicto é `UNKNOWN`.
 
 ---
 
