@@ -1,14 +1,14 @@
 {
   "generatedBy": "scripts/audit-file-inventory.mjs",
-  "totalFiles": 701,
+  "totalFiles": 702,
   "byStatus": {
-    "MANTER": 682,
+    "MANTER": 683,
     "STANDBY": 19
   },
   "byCategory": {
     "route-ui": 135,
     "test": 126,
-    "migration": 82,
+    "migration": 83,
     "lib": 65,
     "script": 49,
     "domain": 47,
@@ -29,7 +29,7 @@
     "supabase-other": 2
   },
   "byConfidence": {
-    "alta": 684,
+    "alta": 685,
     "média": 11,
     "baixa": 6
   },
@@ -19222,6 +19222,24 @@
       "risks": [],
       "signals": {
         "sqlWrite": 24
+      },
+      "action": "nenhuma",
+      "reason": "migration versionada — histórico do schema, nunca se apaga",
+      "manualDecision": false
+    },
+    {
+      "path": "supabase/migrations/draft/rollback/PROVISIONAL_payment_cashflow_provenance.down.sql",
+      "category": "migration",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "sqlWrite": 4
       },
       "action": "nenhuma",
       "reason": "migration versionada — histórico do schema, nunca se apaga",
