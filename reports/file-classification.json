@@ -1,13 +1,13 @@
 {
   "generatedBy": "scripts/audit-file-inventory.mjs",
-  "totalFiles": 693,
+  "totalFiles": 694,
   "byStatus": {
-    "MANTER": 675,
+    "MANTER": 676,
     "STANDBY": 18
   },
   "byCategory": {
     "route-ui": 135,
-    "test": 123,
+    "test": 124,
     "migration": 78,
     "lib": 65,
     "script": 48,
@@ -29,7 +29,7 @@
     "supabase-other": 2
   },
   "byConfidence": {
-    "alta": 677,
+    "alta": 678,
     "média": 10,
     "baixa": 6
   },
@@ -4952,6 +4952,31 @@
       "signals": {
         "sqlWrite": 6,
         "dynamicImport": 2
+      },
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/__tests__/incident-86-schema-ordering.test.ts",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "sqlWrite": 1,
+        "fallbackArray": 1
       },
       "action": "nenhuma",
       "reason": "suite de testes — corre por convenção do vitest",
