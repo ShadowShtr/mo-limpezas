@@ -1,14 +1,14 @@
 {
   "generatedBy": "scripts/audit-file-inventory.mjs",
-  "totalFiles": 706,
+  "totalFiles": 709,
   "byStatus": {
-    "MANTER": 688,
+    "MANTER": 691,
     "STANDBY": 18
   },
   "byCategory": {
     "route-ui": 135,
-    "test": 128,
-    "migration": 82,
+    "test": 129,
+    "migration": 84,
     "lib": 65,
     "script": 48,
     "domain": 47,
@@ -29,7 +29,7 @@
     "supabase-other": 2
   },
   "byConfidence": {
-    "alta": 690,
+    "alta": 693,
     "média": 10,
     "baixa": 6
   },
@@ -5007,6 +5007,33 @@
       "signals": {
         "serviceRole": 4,
         "sqlWrite": 15
+      },
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/__tests__/identity-resolver-rls-lote2-postgres.test.ts",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [
+        "service-role"
+      ],
+      "signals": {
+        "serviceRole": 3,
+        "sqlWrite": 35
       },
       "action": "nenhuma",
       "reason": "suite de testes — corre por convenção do vitest",
@@ -19333,6 +19360,24 @@
       "manualDecision": false
     },
     {
+      "path": "supabase/migrations/draft/PROVISIONAL_collaborator_identity_resolver_rls_lote2.sql",
+      "category": "migration",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "sqlWrite": 9
+      },
+      "action": "nenhuma",
+      "reason": "migration versionada — histórico do schema, nunca se apaga",
+      "manualDecision": false
+    },
+    {
       "path": "supabase/migrations/draft/PROVISIONAL_collaborator_identity_resolver_rls.sql",
       "category": "migration",
       "status": "MANTER",
@@ -19363,6 +19408,24 @@
       "risks": [],
       "signals": {
         "sqlWrite": 9
+      },
+      "action": "nenhuma",
+      "reason": "migration versionada — histórico do schema, nunca se apaga",
+      "manualDecision": false
+    },
+    {
+      "path": "supabase/migrations/draft/rollback/PROVISIONAL_collaborator_identity_resolver_rls_lote2.down.sql",
+      "category": "migration",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "sqlWrite": 8
       },
       "action": "nenhuma",
       "reason": "migration versionada — histórico do schema, nunca se apaga",
