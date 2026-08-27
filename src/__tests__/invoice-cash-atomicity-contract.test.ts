@@ -10,14 +10,14 @@ const MIGRATION = path.join(
   "supabase",
   "migrations",
   "provisional",
-  "080_codex_invoice_cash_atomicity.sql",
+  "PROVISIONAL_invoice_cash_atomicity.sql",
 );
 const ROLLBACK = path.join(
   ROOT,
   "supabase",
   "migrations",
   "provisional",
-  "080_codex_invoice_cash_atomicity.rollback.sql",
+  "PROVISIONAL_invoice_cash_atomicity.rollback.sql",
 );
 
 const read = (file: string) => fs.readFileSync(file, "utf8");

@@ -121,7 +121,7 @@ describePostgres("PostgreSQL real - invoice/cash atomicity", () => {
       END $fn$;
     `);
     const migration = fs.readFileSync(
-      path.join(process.cwd(), "supabase/migrations/provisional/080_codex_invoice_cash_atomicity.sql"),
+      path.join(process.cwd(), "supabase/migrations/provisional/PROVISIONAL_invoice_cash_atomicity.sql"),
       "utf8",
     );
     await pool.query(migration);
@@ -285,12 +285,12 @@ describePostgres("PostgreSQL real - invoice/cash atomicity", () => {
     const rollback = fs.readFileSync(
       path.join(
         process.cwd(),
-        "supabase/migrations/provisional/080_codex_invoice_cash_atomicity.rollback.sql",
+        "supabase/migrations/provisional/PROVISIONAL_invoice_cash_atomicity.rollback.sql",
       ),
       "utf8",
     );
     const migration = fs.readFileSync(
-      path.join(process.cwd(), "supabase/migrations/provisional/080_codex_invoice_cash_atomicity.sql"),
+      path.join(process.cwd(), "supabase/migrations/provisional/PROVISIONAL_invoice_cash_atomicity.sql"),
       "utf8",
     );
 

@@ -1,3 +1,24 @@
+-- ============================================================================
+-- MIGRATION_NUMBER_FINAL = UNASSIGNED
+-- ============================================================================
+--
+-- Este ficheiro chamou-se `080_codex_invoice_cash_atomicity.sql`. O 080 nao
+-- lhe pertence: esta atribuido a `080_payment_cashflow_provenance.sql`, da
+-- onda 077->081 que ja esta revista e com CI verde. Dois ficheiros a reclamar
+-- o mesmo numero e drift a nascer — e drift de numeracao foi exactamente o
+-- que custou a TASK 1 a reconciliar.
+--
+-- O numero nao se troca por outro agora, e de proposito. Este ramo esta
+-- assente num master anterior a frente dos colaboradores, e o numero final so
+-- se atribui depois do rebase e da reconciliacao contra o master da altura —
+-- escolher ja um seria adivinhar a sequencia outra vez.
+--
+--     FILA = FIN-INVOICE-HARDENING
+--     REQUER = rebase e reconciliacao completa contra o master actual
+--
+-- Enquanto vive em `provisional/`, nenhum runner lhe toca.
+-- ============================================================================
+
 -- PROVISIONAL: number 080 is not reserved. Do not move this file into the
 -- active migration directory until the migration ledger and 077-079 ordering
 -- have been reconciled.
