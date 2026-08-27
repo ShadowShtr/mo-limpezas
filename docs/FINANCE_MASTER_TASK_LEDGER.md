@@ -9,12 +9,59 @@ deploy para persistir documentação.
 > perigosa: primeiro concluir e medir, depois registar.
 
 ```
-MASTER_BASE_SHA = 0527127b1eaf5385b55d5dbfad6d61f0afcf56fb   (a #86 mesclou; o master avançou)
+MASTER_BASE_SHA = 8a90f6df60ded87f58c98cdab81ed13e8c8234a4   (27/08, depois das #92/#93/#94)
 ACTUAL_PRODUCTION_DEPLOYED_SHA = NOT_PROVEN / USER_ROLLED_BACK_PREVIOUS_DEPLOYMENT
 Atualizado      = 2026-08-26
 
 > 🔴 **Handoff entre computadores: ler `docs/HANDOFF_CURRENT.md` primeiro.**
 > É o documento que permite continuar noutra máquina sem esta sessão.
+```
+
+---
+
+## 0. Cabeça canónica F14 — 2026-08-27
+
+> 🔴 **Não usar fotografias antigas do CLAUDE.md como estado corrente.** O bloco
+> de 25/08 lá dentro continua verdadeiro sobre os *ficheiros* 077/078 no
+> `master`, mas não descreve o incidente da #86 nem o EXPAND de identidade de
+> 26–27/08, que já está **aplicado em produção**.
+
+```
+INTEGRATION_HEAD = integration/finance-f14-canonical
+BASE             = master@8a90f6df   (verificado imediatamente antes do push)
+HEAD             = d2bb0c8
+```
+
+Reconstrução semântica da cadeia inteira, e não três rebases isolados: a pilha
+antiga assentava numa base com 27 commits de atraso e a #81 já nem era
+mergeable.
+
+| origem | o que entra |
+|---|---|
+| #73 `fix/secure-migrations-ledger` | **077** — 2 ficheiros novos; o resto do runner já estava no master pela #72, verificado idêntico |
+| **#95** | **078 reconciliada** — assinatura legada caracterizada, restrição duplicada largada |
+| #88 (topo de #81 → #87 → #88) | **079/F14-A**, **F14-B** (proveniência + unmark seguro), **F14-C** (repair endurecido) |
+
+**Numeração varrida em todas as branches remotas:** 001–079 em uso; **080 e 081
+livres em todo o lado**. As migrations do F14-B são drafts sem número e não
+reservam nada — a numeração fica para quando houver decisão, não por arrasto.
+
+**Provas nesta cabeça, em PostgreSQL 16 real:**
+
+```
+cadeia 077 → 078 → 079        21/21
+F14-A / F14-B / F14-C + 078   140/140
+suite completa                3534 passed
+POSTGRES_REQUIRED_SKIPPED = 0 (a de concorrência corrida com TEST_DATABASE_URL: 6/6)
+clean install · diff-check · secrets · typecheck · lint · audit · build · T17 · release-note = 0
+```
+
+**Estado das PRs históricas:** #74 fica `SUPERSEDED_BY #95`. #81, #82, #87 e #88
+ficam abertas como evidência. Nenhuma foi force-pushed, nenhuma branch apagada.
+
+```
+MERGE = requer autorização explícita
+PRODUCTION_MIGRATIONS = 0
 ```
 
 ---
