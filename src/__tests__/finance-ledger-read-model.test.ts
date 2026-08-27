@@ -19,6 +19,8 @@ const payment = (patch: Partial<FinanceLedgerPaymentSource> = {}): FinanceLedger
   period_year: 2026,
   period_month: 8,
   paid_at: null,
+  direct_debit: null,
+  notes: null,
   expense_category_id: "category-payment",
   category_name: "Viaturas",
   created_at: "2026-08-01T10:00:00Z",
@@ -39,6 +41,7 @@ const cashflow = (patch: Partial<FinanceLedgerCashflowSource> = {}): FinanceLedg
   expense_category_id: "category-cash",
   category_name: "Materiais",
   created_at: "2026-08-21T10:00:00Z",
+  notes: null,
   ...patch,
 });
 

@@ -142,6 +142,15 @@ const CAPABILITY_CEILING: Record<string, string[]> = {
     "createPayment", "deletePayment",
     "setPaymentStatus", "updatePayment",
   ],
+  // Superfície unificada. Durante o rollout, o cliente anterior continua no
+  // repositório para permitir recuo sem retirar rotas. Esta entrada torna
+  // explícito que a nova página pode escrever nas duas entidades canónicas;
+  // nenhuma delas é chamada durante render.
+  "src/app/(dashboard)/dashboard/financeiro/pagamentos/_components/unified-payments-client.tsx": [
+    "createCashFlowEntry", "createPayment",
+    "deleteCashFlowEntry", "deletePayment",
+    "setPaymentStatus", "updateCashFlowEntry", "updatePayment",
+  ],
   // `pagamentos/page.tsx` desapareceu deste inventário por não lhe restar
   // nenhuma capacidade de escrita — só chama `getPayments`.
 

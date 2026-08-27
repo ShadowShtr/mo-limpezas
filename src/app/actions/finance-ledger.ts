@@ -24,8 +24,8 @@ interface CashflowRecord extends Omit<FinanceLedgerCashflowSource, "category_nam
   expense_categories?: CategoryRelation | CategoryRelation[] | null;
 }
 
-const PAYMENT_COLUMNS = "id, kind, description, amount, due_date, status, period_year, period_month, paid_at, expense_category_id, created_at, updated_at, expense_categories(name)";
-const CASHFLOW_COLUMNS = "id, type, amount, description, category, date, reference_type, reference_id, status, expense_category_id, created_at, expense_categories(name)";
+const PAYMENT_COLUMNS = "id, kind, description, amount, due_date, status, period_year, period_month, paid_at, direct_debit, notes, expense_category_id, created_at, updated_at, expense_categories(name)";
+const CASHFLOW_COLUMNS = "id, type, amount, description, category, date, reference_type, reference_id, status, notes, expense_category_id, created_at, expense_categories(name)";
 
 function categoryName(relation: CategoryRelation | CategoryRelation[] | null | undefined): string | null {
   const category = Array.isArray(relation) ? relation[0] : relation;
