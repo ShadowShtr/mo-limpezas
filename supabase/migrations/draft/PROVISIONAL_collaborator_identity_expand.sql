@@ -237,8 +237,45 @@ COMMENT ON FUNCTION public.get_my_profile_id IS
   'do Auth. Serve para as políticas deixarem de assumir que os dois são o '
   'mesmo, uma de cada vez.';
 
+-- 🔴 `anon` também executa, e é preciso.
+--
+--    Uma política de RLS é avaliada com os privilégios de quem faz o pedido.
+--    Se `anon` não puder chamar a função, um pedido anónimo a uma tabela com
+--    esta política rebenta com `permission denied for function` em vez de
+--    simplesmente não devolver nada. A diferença importa: um erro revela que a
+--    função existe e transforma uma negação silenciosa numa falha ruidosa que
+--    o cliente vê.
+--
+--    Não é um relaxamento. Sem sessão, `auth.uid()` é NULL, a função devolve
+--    NULL, e `id = NULL` nunca é verdadeiro — o anónimo continua a não ver
+--    nada. Foi um teste com o papel `anon` que apanhou isto.
 REVOKE ALL ON FUNCTION public.get_my_profile_id() FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION public.get_my_profile_id() TO authenticated, service_role;
+
+-- 🔴 `anon` também executa, e é preciso.
+--
+--    Uma política de RLS é avaliada com os privilégios de quem faz o pedido.
+--    Se `anon` não puder chamar a função, um pedido anónimo a uma tabela com
+--    esta política rebenta com `permission denied for function` em vez de
+--    simplesmente não devolver nada. A diferença importa: o erro revela que a
+--    função existe e transforma uma negação silenciosa numa falha ruidosa.
+--
+--    Não é relaxamento. Sem sessão, `auth.uid()` é NULL, a função devolve NULL,
+--    e `id = NULL` nunca é verdadeiro — o anónimo continua a não ver nada. Foi
+--    um teste com o papel `anon` que apanhou isto.
+--
+--    Concede-se a quem existir: em Supabase os três papéis existem sempre, mas
+--    uma base de ensaio pode não os ter todos, e um `GRANT` a um papel
+--    inexistente aborta a migration inteira.
+DO $grants$
+DECLARE r text;
+BEGIN
+  FOREACH r IN ARRAY ARRAY['authenticated', 'anon', 'service_role'] LOOP
+    IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = r) THEN
+      EXECUTE format('GRANT EXECUTE ON FUNCTION public.get_my_profile_id() TO %I', r);
+    END IF;
+  END LOOP;
+END
+$grants$;
 
 COMMIT;
 
