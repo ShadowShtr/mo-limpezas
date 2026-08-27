@@ -129,14 +129,61 @@ CREATE POLICY "profiles_update_own" ON public.profiles
     AND company_id = public.get_my_company_id()
   );
 
--- ─── 3. profiles_manage_company ─────────────────────────────────────────────
+-- ─── 3. profiles_insert_admin ───────────────────────────────────────────────
+--
+-- 🔴 Correcção. Este ficheiro dizia «UNCHANGED (015)» — e estava errado. Um
+--    preflight contra a base real mostrou que a política **usa** `auth.uid()`
+--    no ramo de auto-inserção. O segundo ramo (admin/gestor da empresa) cobre
+--    o caso normal, mas deixar o primeiro com a equivalência antiga mantinha
+--    uma política de identidade legada de pé, e o objectivo é não sobrar
+--    nenhuma.
+DROP POLICY IF EXISTS "profiles_insert_admin" ON public.profiles;
+CREATE POLICY "profiles_insert_admin" ON public.profiles
+  FOR INSERT
+  WITH CHECK (
+    id = public.get_my_profile_id()
+    OR (company_id = public.get_my_company_id()
+        AND public.get_my_role() = ANY (ARRAY['admin'::text, 'gestor'::text]))
+  );
+
+-- ─── 4. Duas políticas órfãs que a base tem e o repositório não ─────────────
+--
+-- 🔴 `users see own profile` e `users see company profiles` existem em
+--    produção e **não existem em nenhuma migration versionada**. São restos da
+--    002 que uma substituição posterior não apagou, por ter usado nomes
+--    diferentes no `DROP` — exactamente o padrão que causou a recursão de RLS
+--    corrigida pela 018.
+--
+--    Não são inofensivas. O PostgreSQL combina políticas permissivas por
+--    **OR**: enquanto `users see own profile` (`id = auth.uid()`) estiver de
+--    pé, a `profiles_select` acima deixa de ser o único caminho, e a guarda
+--    `EXISTS` que o resolver tem — a que impede alguém de ser tratado como uma
+--    pessoa sem conta cujo id conheça — passa a ter uma porta ao lado.
+--
+--    São apagadas, e não substituídas: o que faziam já é feito pela
+--    `profiles_select` e pela `profiles_manage_company`.
+DROP POLICY IF EXISTS "users see own profile" ON public.profiles;
+DROP POLICY IF EXISTS "users see company profiles" ON public.profiles;
+
+-- ─── 5. profiles_manage_company ─────────────────────────────────────────────
 --
 -- Não menciona `auth.uid()`: já usava os helpers da 014. Fica **como está**.
 -- Recriá-la só para lhe tocar seria arriscar uma diferença de transcrição sem
 -- ganhar nada — e uma política mal copiada é uma falha de isolamento.
 --
 --     `profiles_manage_company` = UNCHANGED
---     `profiles_insert_admin`   = UNCHANGED (015)
+
+-- ─── Pós-condições ─────────────────────────────────────────────────────────
+DO $post$
+DECLARE v_restantes int;
+BEGIN
+  SELECT count(*) INTO v_restantes FROM pg_policies
+   WHERE schemaname='public' AND tablename='profiles'
+     AND (coalesce(qual,'')||' '||coalesce(with_check,'')) LIKE '%auth.uid()%';
+  IF v_restantes <> 0 THEN
+    RAISE EXCEPTION 'POSCONDICAO: sobraram % políticas com auth.uid() em profiles.', v_restantes;
+  END IF;
+END $post$;
 
 COMMIT;
 
