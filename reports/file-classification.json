@@ -1,12 +1,12 @@
 {
   "generatedBy": "scripts/audit-file-inventory.mjs",
-  "totalFiles": 742,
+  "totalFiles": 743,
   "byStatus": {
-    "MANTER": 721,
+    "MANTER": 722,
     "STANDBY": 21
   },
   "byCategory": {
-    "test": 144,
+    "test": 145,
     "route-ui": 136,
     "migration": 92,
     "lib": 65,
@@ -29,7 +29,7 @@
     "supabase-other": 2
   },
   "byConfidence": {
-    "alta": 723,
+    "alta": 724,
     "média": 13,
     "baixa": 6
   },
@@ -3135,7 +3135,7 @@
       "category": "script",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 7,
+      "consumers": 8,
       "consumerSample": [
         "scripts/lib/migration-drift-guard.mjs",
         "scripts/run-migrations.mjs",
@@ -5769,6 +5769,31 @@
         "sqlWrite": 12,
         "unknownCast": 1,
         "fallbackArray": 1
+      },
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/__tests__/migration-schema-ledger-atomicity.pg.test.ts",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "sqlWrite": 13,
+        "unknownCast": 4
       },
       "action": "nenhuma",
       "reason": "suite de testes — corre por convenção do vitest",
@@ -19969,7 +19994,7 @@
       "sideEffects": [],
       "risks": [],
       "signals": {
-        "sqlWrite": 20
+        "sqlWrite": 22
       },
       "action": "nenhuma",
       "reason": "migration versionada — histórico do schema, nunca se apaga",
@@ -19987,7 +20012,7 @@
       "sideEffects": [],
       "risks": [],
       "signals": {
-        "sqlWrite": 10
+        "sqlWrite": 11
       },
       "action": "nenhuma",
       "reason": "migration versionada — histórico do schema, nunca se apaga",
@@ -20005,7 +20030,7 @@
       "sideEffects": [],
       "risks": [],
       "signals": {
-        "sqlWrite": 24
+        "sqlWrite": 25
       },
       "action": "nenhuma",
       "reason": "migration versionada — histórico do schema, nunca se apaga",
