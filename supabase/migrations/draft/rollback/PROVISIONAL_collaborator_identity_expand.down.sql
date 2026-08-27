@@ -87,6 +87,14 @@ ALTER TABLE public.profiles
 ALTER TABLE public.profiles
   DROP COLUMN IF EXISTS auth_user_id;
 
+-- 🔴 `must_change_password` sai também, e sem guarda própria: largá-la não
+--    perde informação que importe — quem estivesse a meio de uma troca
+--    obrigatória deixa de ser obrigado, o que é a mesma coisa que voltar ao
+--    modelo onde a obrigação não existia. A guarda que interessa é a de cima,
+--    sobre as pessoas sem conta.
+ALTER TABLE public.profiles
+  DROP COLUMN IF EXISTS must_change_password;
+
 -- ─── 4. E a chave estrangeira da 002 volta ──────────────────────────────────
 --
 -- 🔴 Sem isto o rollback ficava a meio: a coluna desaparecia mas a exigência

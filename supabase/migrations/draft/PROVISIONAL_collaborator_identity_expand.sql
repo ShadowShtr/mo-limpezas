@@ -168,6 +168,31 @@ CREATE UNIQUE INDEX IF NOT EXISTS uq_profiles_auth_user_id
 CREATE INDEX IF NOT EXISTS idx_profiles_company_auth
   ON public.profiles(company_id, auth_user_id);
 
+-- ─── 1c. Troca de senha obrigatória no primeiro acesso ─────────────────────
+--
+-- 🔴 `NOT NULL DEFAULT false`, e é essencial que seja assim.
+--
+--    Se a coluna fosse anulável, todas as contas que já existem ficariam com
+--    `NULL` — e um código que tratasse `NULL` como «não sei, é mais seguro
+--    obrigar» mandaria todos os administradores e gestores para o ecrã de
+--    trocar senha na manhã seguinte. Ninguém lhes definiu senha temporária
+--    nenhuma; não têm o que trocar.
+--
+--    Com `DEFAULT false`, as contas existentes ficam explicitamente com «não
+--    tem de trocar», que é a verdade sobre elas. Só quem receber uma senha
+--    temporária passa a `true`.
+--
+--    É a mesma família de erro que causou a #86 — schema novo a mudar o
+--    comportamento de quem já lá estava — e evita-se da mesma maneira: o valor
+--    por omissão é o que já era verdade.
+ALTER TABLE public.profiles
+  ADD COLUMN IF NOT EXISTS must_change_password boolean NOT NULL DEFAULT false;
+
+COMMENT ON COLUMN public.profiles.must_change_password IS
+  'Verdadeiro quando alguém definiu uma senha temporária a esta pessoa e ela '
+  'ainda não a trocou. As contas anteriores a esta coluna ficam false — nunca '
+  'receberam senha temporária, e não têm o que trocar.';
+
 COMMENT ON COLUMN public.profiles.auth_user_id IS
   'Conta de acesso desta pessoa, quando existe. NULL = pessoa sem login: '
   'consta da folha, das equipas e do histórico, mas não entra na aplicação. '

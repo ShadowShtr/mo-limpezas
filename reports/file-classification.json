@@ -1,9 +1,9 @@
 {
   "generatedBy": "scripts/audit-file-inventory.mjs",
-  "totalFiles": 714,
+  "totalFiles": 715,
   "byStatus": {
     "MANTER": 696,
-    "STANDBY": 18
+    "STANDBY": 19
   },
   "byCategory": {
     "route-ui": 135,
@@ -13,7 +13,7 @@
     "domain": 49,
     "script": 48,
     "doc": 43,
-    "server-action": 41,
+    "server-action": 42,
     "component": 30,
     "src-other": 18,
     "doc-historico": 16,
@@ -31,7 +31,7 @@
   "byConfidence": {
     "alta": 698,
     "média": 10,
-    "baixa": 6
+    "baixa": 7
   },
   "scriptRisk": {
     "SAFE_OFFLINE": 27,
@@ -11233,6 +11233,39 @@
       }
     },
     {
+      "path": "src/app/actions/collaborator-access.ts",
+      "category": "server-action",
+      "status": "STANDBY",
+      "confidence": "baixa",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [
+        "supabase",
+        "write",
+        "revalidatePath(4)"
+      ],
+      "risks": [],
+      "signals": {
+        "supabase": 10,
+        "serverAction": 1,
+        "write": 2,
+        "sqlWrite": 2,
+        "fallbackZero": 1,
+        "revalidatePath": 4
+      },
+      "action": "porta(s) ainda abertas (import dinâmico não resolúvel) — não remover",
+      "reason": "sem consumidor encontrado por análise estática",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
       "path": "src/app/actions/collaborator-documents.ts",
       "category": "server-action",
       "status": "MANTER",
@@ -14164,9 +14197,10 @@
       "category": "domain",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 1,
+      "consumers": 2,
       "consumerSample": [
-        "src/__tests__/collaborator-access-lifecycle.test.ts"
+        "src/__tests__/collaborator-access-lifecycle.test.ts",
+        "src/app/actions/collaborator-access.ts"
       ],
       "autoLoaded": false,
       "referencedBy": [],
@@ -14174,7 +14208,7 @@
       "risks": [],
       "signals": {},
       "action": "nenhuma",
-      "reason": "em uso: 1 consumidor(es)",
+      "reason": "em uso: 2 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -15418,7 +15452,7 @@
       "category": "lib",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 20,
+      "consumers": 21,
       "consumerSample": [
         "src/__tests__/audit.test.ts",
         "src/app/(dashboard)/dashboard/calendario/_actions/reschedule.ts",
@@ -15446,7 +15480,7 @@
         "consoleErr": 2
       },
       "action": "nenhuma",
-      "reason": "em uso: 20 consumidor(es), script npm, CI, configuração",
+      "reason": "em uso: 21 consumidor(es), script npm, CI, configuração",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -17044,7 +17078,7 @@
       "category": "lib",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 78,
+      "consumers": 79,
       "consumerSample": [
         "src/app/(app)/app/perfil/page.tsx",
         "src/app/(app)/app/servico/[id]/page.tsx",
@@ -17067,7 +17101,7 @@
         "serviceRole": 1
       },
       "action": "nenhuma",
-      "reason": "em uso: 78 consumidor(es)",
+      "reason": "em uso: 79 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -17152,7 +17186,7 @@
       "category": "lib",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 67,
+      "consumers": 68,
       "consumerSample": [
         "src/app/(app)/app/escala/page.tsx",
         "src/app/(app)/app/page.tsx",
@@ -17174,7 +17208,7 @@
         "env": 2
       },
       "action": "nenhuma",
-      "reason": "em uso: 67 consumidor(es), CI, configuração",
+      "reason": "em uso: 68 consumidor(es), CI, configuração",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -19475,7 +19509,7 @@
       ],
       "signals": {
         "serviceRole": 1,
-        "sqlWrite": 10
+        "sqlWrite": 11
       },
       "action": "nenhuma",
       "reason": "migration versionada — histórico do schema, nunca se apaga",
@@ -19529,7 +19563,7 @@
       "sideEffects": [],
       "risks": [],
       "signals": {
-        "sqlWrite": 9
+        "sqlWrite": 11
       },
       "action": "nenhuma",
       "reason": "migration versionada — histórico do schema, nunca se apaga",

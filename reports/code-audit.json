@@ -1,13 +1,13 @@
 {
   "inventorySource": "git ls-files",
   "summary": {
-    "repositoryFiles": 710,
-    "textFiles": 697,
-    "sourceFiles": 507,
-    "textLines": 165348,
+    "repositoryFiles": 711,
+    "textFiles": 698,
+    "sourceFiles": 508,
+    "textLines": 165641,
     "typescriptDiagnostics": 0,
     "productionEntries": 71,
-    "unreachableProductionModules": 40,
+    "unreachableProductionModules": 41,
     "exactDuplicateFileGroups": 0
   },
   "highConfidence": {
@@ -17,6 +17,7 @@
   },
   "reviewRequired": {
     "unreachableProductionModules": [
+      "src/app/actions/collaborator-access.ts",
       "src/app/actions/whatsapp.ts",
       "src/domain/billing/billing-compat.ts",
       "src/domain/billing/consumer-parity.ts",
@@ -115,6 +116,7 @@
       "src/app/actions/cash-flow.ts",
       "src/app/actions/clientes.ts",
       "src/app/actions/colaboradores.ts",
+      "src/app/actions/collaborator-access.ts",
       "src/app/actions/collaborator-documents.ts",
       "src/app/actions/csv-import.ts",
       "src/app/actions/daily-billing.ts",

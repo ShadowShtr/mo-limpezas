@@ -1195,6 +1195,7 @@ export type Database = {
       }
       profiles: {
         Row: {
+          auth_user_id: string | null
           availability: Json | null
           avatar_url: string | null
           company_id: string
@@ -1202,6 +1203,7 @@ export type Database = {
           contract_start: string | null
           contracted_hours_month: number | null
           created_at: string | null
+          must_change_password: boolean
           email: string | null
           full_name: string
           hourly_rate: number | null
@@ -1218,6 +1220,7 @@ export type Database = {
           vacation_balance: number | null
         }
         Insert: {
+          auth_user_id?: string | null
           availability?: Json | null
           avatar_url?: string | null
           company_id: string
@@ -1225,6 +1228,7 @@ export type Database = {
           contract_start?: string | null
           contracted_hours_month?: number | null
           created_at?: string | null
+          must_change_password?: boolean
           email?: string | null
           full_name: string
           hourly_rate?: number | null
@@ -1241,6 +1245,7 @@ export type Database = {
           vacation_balance?: number | null
         }
         Update: {
+          auth_user_id?: string | null
           availability?: Json | null
           avatar_url?: string | null
           company_id?: string
@@ -1248,6 +1253,7 @@ export type Database = {
           contract_start?: string | null
           contracted_hours_month?: number | null
           created_at?: string | null
+          must_change_password?: boolean
           email?: string | null
           full_name?: string
           hourly_rate?: number | null
