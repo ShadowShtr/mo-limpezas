@@ -62,7 +62,7 @@ export default async function AuditoriaPage({
   const { data: profile } = await admin
     .from("profiles")
     .select("company_id, role")
-    .eq("auth_user_id", user.id)
+    .eq("id", user.id)
     .single();
 
   const canView = profile && ["admin", "gestor"].includes(profile.role);

@@ -1,4 +1,4 @@
-import { createClient } from "@/lib/supabase/server";
+﻿import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export const dynamic = "force-dynamic";
@@ -16,7 +16,7 @@ export default async function ColaboradoresPage() {
   const { data: company } = await admin
     .from("profiles")
     .select("company_id")
-    .eq("auth_user_id", user!.id)
+    .eq("id", user!.id)
     .single();
 
   const { data: colaboradores } = await admin
@@ -41,6 +41,7 @@ export default async function ColaboradoresPage() {
         subtitle={`${colaboradoresCount} colaboradores + ${administracaoCount} administração`}
         actions={
           <ColaboradorSheet
+            companyId={company?.company_id ?? ""}
             trigger={
               <button className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[var(--color-primary)] text-white text-sm font-medium hover:bg-[var(--color-primary-hover)] transition-colors">
                 <UserPlus className="w-4 h-4" />
@@ -74,6 +75,7 @@ export default async function ColaboradoresPage() {
             const r = c as typeof c & { nif?: string | null; iban?: string | null; hourly_rate?: number | null; contract_start?: string | null; contract_end?: string | null };
             return { ...r, nif: r.nif ?? null, iban: r.iban ?? null, hourly_rate: r.hourly_rate ?? null, contract_start: r.contract_start ?? null, contract_end: r.contract_end ?? null };
           })}
+          companyId={company?.company_id ?? ""}
         />
       </div>
     </div>

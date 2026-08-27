@@ -10,7 +10,7 @@ export default async function RootPage() {
   const { data: profile } = await supabase
     .from("profiles")
     .select("role")
-    .eq("auth_user_id", user.id)
+    .eq("id", user.id)
     .single();
 
   if (profile?.role === "colaborador") redirect("/app");

@@ -1,4 +1,4 @@
-import Link from "next/link";
+﻿import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Header } from "@/components/layout/header";
@@ -15,7 +15,7 @@ export default async function EquipasPage() {
   const { data: me } = await admin
     .from("profiles")
     .select("company_id")
-    .eq("auth_user_id", user!.id)
+    .eq("id", user!.id)
     .single();
 
   const [equipasRes, colaboradoresRes] = await Promise.all([

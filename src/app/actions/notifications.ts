@@ -103,7 +103,7 @@ async function _notifyTeam(serviceId: string, message: string) {
   if (!user) return { ok: false as const, error: "Não autenticado.", sent: 0 };
 
   const { data: sender } = await admin
-    .from("profiles").select("company_id, role").eq("auth_user_id", user.id).single();
+    .from("profiles").select("company_id, role").eq("id", user.id).single();
 
   if (!sender || !["admin", "gestor"].includes(sender.role)) {
     return { ok: false as const, error: "Sem permissão.", sent: 0 };

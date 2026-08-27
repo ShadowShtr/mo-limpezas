@@ -1,4 +1,4 @@
-import { createAdminClient } from "@/lib/supabase/admin";
+﻿import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { Header } from "@/components/layout/header";
 import { getCompanySettings } from "@/app/actions/settings";
@@ -15,7 +15,7 @@ export default async function ConfiguracoesPage() {
   const { data: profile } = await admin
     .from("profiles")
     .select("company_id, role")
-    .eq("auth_user_id", user!.id)
+    .eq("id", user!.id)
     .single();
 
   const companyId = profile?.company_id ?? "";

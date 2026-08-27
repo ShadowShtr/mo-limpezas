@@ -9,7 +9,7 @@ import { ClockButton } from "./_components/clock-button";
 import { TeamRealtime } from "./_components/team-realtime";
 import { ServicePhotos } from "./_components/service-photos";
 import { getServicePhotos } from "@/app/actions/service-photos";
-import { getCurrentProfile } from "@/lib/auth/current-user";
+import { getCurrentUser } from "@/lib/auth/current-user";
 
 interface Props {
   params: Promise<{ id: string }>;
@@ -19,8 +19,8 @@ export default async function ServicoDetailPage({ params }: Props) {
   const { id } = await params;
   const supabase = await createClient();
 
-  const profile = await getCurrentProfile();
-  if (!profile) redirect("/login");
+  const user = await getCurrentUser();
+  if (!user) redirect("/login");
 
   const { data: s } = await supabase
     .from("services_full")
@@ -52,7 +52,7 @@ export default async function ServicoDetailPage({ params }: Props) {
     .from("timesheets")
     .select("id, clock_in_at, clock_out_at, location_warning, clock_in_distance_m")
     .eq("service_id", id)
-    .eq("collaborator_id", profile.id)
+    .eq("collaborator_id", user.id)
     .maybeSingle();
 
   const myTimesheet = myTimesheetRaw as unknown as TimesheetRow | null;

@@ -5,7 +5,6 @@ import type { User } from "@supabase/supabase-js";
 
 export interface CurrentProfile {
   id: string;
-  auth_user_id: string | null;
   company_id: string;
   full_name: string;
   role: string;
@@ -33,8 +32,8 @@ export const getCurrentProfile = cache(async (): Promise<CurrentProfile | null> 
   const admin = createAdminClient();
   const { data } = await admin
     .from("profiles")
-    .select("id, auth_user_id, company_id, full_name, role, avatar_url")
-    .eq("auth_user_id", user.id)
+    .select("id, company_id, full_name, role, avatar_url")
+    .eq("id", user.id)
     .single();
 
   return (data as CurrentProfile) ?? null;

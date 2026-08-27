@@ -2,7 +2,6 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { redirect } from "next/navigation";
-import { getCurrentProfile } from "@/lib/auth/current-user";
 
 function icsDate(iso: string): string {
   return new Date(iso).toISOString().replace(/[-:]/g, "").split(".")[0] + "Z";
@@ -18,15 +17,13 @@ export async function GET() {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return redirect("/login");
-  const profile = await getCurrentProfile();
-  if (!profile) return redirect("/login");
 
   const admin = createAdminClient();
 
   const { data: memberships } = await admin
     .from("team_members")
     .select("team_id")
-    .eq("collaborator_id", profile.id)
+    .eq("collaborator_id", user.id)
     .is("left_at", null);
 
   const teamIds = (memberships ?? []).map((m) => m.team_id);

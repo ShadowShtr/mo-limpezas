@@ -1,12 +1,14 @@
 import { notFound } from "next/navigation";
+import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { getCurrentProfile } from "@/lib/auth/current-user";
 import { Header } from "@/components/layout/header";
 import { ColaboradorSheet } from "../_components/sheet";
 import { ColaboradorAbsences } from "./_components/colaborador-absences";
 import { PresencaHistory } from "./_components/presenca-history";
 import { DocumentsSection } from "./_components/documents-section";
 import { ResetPasswordButton } from "./_components/reset-password-button";
+import { AccessSection } from "./_components/access-section";
+import { estadoAcesso } from "@/domain/collaborators/access-lifecycle";
 import { ForceAppUpdateButton } from "./_components/force-app-update-button";
 import { VacationBalanceForm } from "./_components/vacation-balance-form";
 import { getCollaboratorDocuments } from "@/app/actions/collaborator-documents";
@@ -21,17 +23,15 @@ interface Props {
 
 export default async function ColaboradorDetailPage({ params }: Props) {
   const { id } = await params;
+  const supabase = await createClient();
   const admin = createAdminClient();
-  const callerProfile = await getCurrentProfile();
-  if (!callerProfile?.company_id) notFound();
 
-  const [profileRes, timesheetsRes, docsRes, rawAbsencesRes] = await Promise.all([
-    admin
-      .from("profiles")
-      .select("*")
-      .eq("id", id)
-      .eq("company_id", callerProfile.company_id)
-      .single(),
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) notFound();
+
+  const [companyRes, profileRes, timesheetsRes, docsRes, rawAbsencesRes] = await Promise.all([
+    admin.from("profiles").select("company_id").eq("id", user.id).single(),
+    admin.from("profiles").select("*").eq("id", id).single(),
     admin
       .from("timesheets")
       .select("id, clock_in_at, clock_out_at, duration_minutes, location_warning, service_id")
@@ -61,7 +61,6 @@ export default async function ColaboradorDetailPage({ params }: Props) {
     const { data: subs } = await admin
       .from("profiles")
       .select("id, full_name")
-      .eq("company_id", callerProfile.company_id)
       .in("id", replacedByIds);
     substituteNames = Object.fromEntries((subs ?? []).map((s) => [s.id, s.full_name]));
   }
@@ -100,6 +99,7 @@ export default async function ColaboradorDetailPage({ params }: Props) {
         subtitle={`${profile.role} · ${inviteStatus}`}
         actions={
           <ColaboradorSheet
+            companyId={companyRes.data?.company_id ?? ""}
             colaborador={profile}
             trigger={
               <button className="flex items-center gap-2 px-3 py-2 rounded-lg border border-[var(--color-border)] text-[var(--color-text-sub)] text-sm font-medium hover:bg-[var(--color-background)] transition-colors">
@@ -203,7 +203,24 @@ export default async function ColaboradorDetailPage({ params }: Props) {
               absences={absences}
             />
 
-            {/* Acesso / redefinir password */}
+            {/* Acesso ao sistema — criar, senha temporária, desactivar, reactivar */}
+            <AccessSection
+              colaboradorId={id}
+              nome={profile.full_name}
+              estado={estadoAcesso(
+                {
+                  id: profile.id,
+                  company_id: profile.company_id,
+                  full_name: profile.full_name,
+                  auth_user_id: profile.auth_user_id ?? null,
+                },
+                profile.auth_user_id
+                  ? { must_change_password: profile.must_change_password ?? false }
+                  : null,
+              )}
+            />
+
+            {/* Acesso / redefinir password (fluxo antigo, ainda em uso) */}
             <ResetPasswordButton colaboradorId={id} />
 
             {/* Forçar atualização da app (colaboradora presa em versão antiga) */}

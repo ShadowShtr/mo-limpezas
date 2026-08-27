@@ -55,7 +55,7 @@ export async function getMapServices(date: string): Promise<{ services: MapServi
   const { data: profile } = await admin
     .from("profiles")
     .select("company_id, role")
-    .eq("auth_user_id", user.id)
+    .eq("id", user.id)
     .single();
 
   if (!profile?.company_id) return { services: [], teams: [], clockPoints: [] };

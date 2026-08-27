@@ -65,7 +65,7 @@ export async function requireProfile(
   const { data: profile } = await admin
     .from("profiles")
     .select("id, company_id, role")
-    .eq("auth_user_id", user.id)
+    .eq("id", user.id)
     .single();
 
   if (!profile) {

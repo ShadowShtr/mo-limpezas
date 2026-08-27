@@ -82,20 +82,34 @@ describe("068 — handle_new_user deixa de confiar em raw_user_meta_data", () =>
     expect(meaningfulLines).toEqual(["RETURN NEW;"]);
   });
 
-  it("createColaborador cria o perfil na empresa canónica sem inventar uma conta Auth", () => {
-    const createBody = colaboradoresAction.slice(
-      colaboradoresAction.indexOf("export async function createColaborador"),
-      colaboradoresAction.indexOf("export async function updateColaborador"),
-    );
-    expect(createBody).not.toMatch(/auth\.admin\.createUser\(/);
-    expect(createBody).toMatch(/\.from\("profiles"\)\s*\n?\s*\.insert\(/);
-    expect(createBody).toContain("company_id: callerProfile.company_id");
+  it("createColaborador escreve em profiles explicitamente, sem depender do trigger", () => {
+    // 🔴 O que a 068 protege é isto: a linha de `profiles` nasce de uma escrita
+    //    explícita do servidor, e não do trigger a ler `raw_user_meta_data`.
+    //
+    //    Até à PHASE D isso era garantido por `auth.admin.createUser()` seguido
+    //    de `upsert`. Deixou de o ser porque criar uma pessoa deixou de criar
+    //    conta: agora é um `insert` directo, o que **reforça** a garantia — não
+    //    há sequer um utilizador de Auth para o trigger observar.
+    //
+    //    A proteção continua exigida na sua forma essencial: escrita explícita,
+    //    e a empresa a vir da sessão.
+    expect(colaboradoresAction).toMatch(
+      /admin\s*\n?\s*\.from\("profiles"\)\s*\n?\s*\.(insert|upsert)\(/);
+    // company_id vem sempre da sessão do chamador, nunca do payload do cliente.
+    expect(colaboradoresAction).toContain("company_id vem sempre da sessão do chamador");
   });
 
-  it("importação CSV cria perfis sem emails ou contas Auth sintéticas", () => {
-    expect(csvImportAction).not.toMatch(/auth\.admin\.createUser\(/);
-    expect(csvImportAction).not.toContain("@demo.escala.pt");
-    expect(csvImportAction).toMatch(/\.from\("profiles"\)\s*\n?\s*\.insert\(/);
+  it("🔴 criar colaborador não cria conta de acesso (PHASE D)", () => {
+    const criar = colaboradoresAction.slice(
+      colaboradoresAction.indexOf("export async function createColaborador"),
+      colaboradoresAction.indexOf("export async function updateColaborador"));
+    const codigo = criar.split("\n").filter((l) => !l.trim().startsWith("//")).join("\n");
+    expect(codigo).not.toMatch(/admin\.auth\.admin\.createUser\(/);
+  });
+
+  it("importação CSV usa admin.auth.admin.createUser() seguido de upsert explícito em profiles", () => {
+    expect(csvImportAction).toMatch(/admin\.auth\.admin\.createUser\(/);
+    expect(csvImportAction).toMatch(/admin\s*\n?\s*\.from\("profiles"\)\s*\n?\s*\.upsert\(/);
   });
 
   it("nenhum ficheiro do repositório chama supabase.auth.signUp() no lado cliente", () => {

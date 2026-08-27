@@ -55,7 +55,7 @@ async function handle(req: NextRequest, m: ReturnType<typeof startRouteTimer>) {
   const admin = createAdminClient();
 
   const { data: profile } = await admin
-    .from("profiles").select("id, company_id").eq("auth_user_id", user.id).single();
+    .from("profiles").select("company_id").eq("id", user.id).single();
   if (!profile) return NextResponse.json({ error: "Perfil não encontrado" }, { status: 404 });
   m.setContext({ companyId: profile.company_id, role: "colaborador" });
 
@@ -81,9 +81,9 @@ async function handle(req: NextRequest, m: ReturnType<typeof startRouteTimer>) {
   // Autorização: membro da equipa OU reforço do serviço.
   const [{ data: membership }, { data: reinforcement }] = await Promise.all([
     service.team_id
-      ? admin.from("team_members").select("id").eq("team_id", service.team_id).eq("collaborator_id", profile.id).is("left_at", null).maybeSingle()
+      ? admin.from("team_members").select("id").eq("team_id", service.team_id).eq("collaborator_id", user.id).is("left_at", null).maybeSingle()
       : Promise.resolve({ data: null }),
-    admin.from("service_reinforcements").select("id").eq("service_id", service_id).eq("collaborator_id", profile.id).maybeSingle(),
+    admin.from("service_reinforcements").select("id").eq("service_id", service_id).eq("collaborator_id", user.id).maybeSingle(),
   ]);
   if (!membership && !reinforcement) {
     return NextResponse.json({ error: "Sem permissão para este serviço" }, { status: 403 });
@@ -136,7 +136,7 @@ async function handle(req: NextRequest, m: ReturnType<typeof startRouteTimer>) {
       .insert({
         company_id: profile.company_id,
         service_id,
-        collaborator_id: profile.id,
+        collaborator_id: user.id,
         storage_path: path,
         kind: safeKind,
         status: "pending",

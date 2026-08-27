@@ -1,13 +1,13 @@
 {
   "inventorySource": "git ls-files",
   "summary": {
-    "repositoryFiles": 696,
-    "textFiles": 683,
-    "sourceFiles": 497,
-    "textLines": 162759,
+    "repositoryFiles": 717,
+    "textFiles": 704,
+    "sourceFiles": 512,
+    "textLines": 168948,
     "typescriptDiagnostics": 0,
     "productionEntries": 71,
-    "unreachableProductionModules": 38,
+    "unreachableProductionModules": 39,
     "exactDuplicateFileGroups": 0
   },
   "highConfidence": {
@@ -25,6 +25,7 @@
       "src/domain/billing/money.ts",
       "src/domain/billing/monthly-allocation.ts",
       "src/domain/billing/vat.ts",
+      "src/domain/collaborators/create-input.ts",
       "src/domain/dashboard/client-summary.ts",
       "src/domain/dashboard/comparison.ts",
       "src/domain/dashboard/dashboard-compat.ts",
@@ -64,6 +65,7 @@
       "src/domain/billing/money.ts",
       "src/domain/billing/monthly-allocation.ts",
       "src/domain/billing/vat.ts",
+      "src/domain/collaborators/create-input.ts",
       "src/domain/dashboard/client-summary.ts",
       "src/domain/dashboard/comparison.ts",
       "src/domain/dashboard/dashboard-compat.ts",
@@ -111,6 +113,7 @@
       "src/app/actions/cash-flow.ts",
       "src/app/actions/clientes.ts",
       "src/app/actions/colaboradores.ts",
+      "src/app/actions/collaborator-access.ts",
       "src/app/actions/collaborator-documents.ts",
       "src/app/actions/csv-import.ts",
       "src/app/actions/daily-billing.ts",

@@ -1203,6 +1203,7 @@ export type Database = {
           contract_start: string | null
           contracted_hours_month: number | null
           created_at: string | null
+          must_change_password: boolean
           email: string | null
           full_name: string
           hourly_rate: number | null
@@ -1227,11 +1228,12 @@ export type Database = {
           contract_start?: string | null
           contracted_hours_month?: number | null
           created_at?: string | null
+          must_change_password?: boolean
           email?: string | null
           full_name: string
           hourly_rate?: number | null
           iban?: string | null
-          id?: string
+          id: string
           invite_accepted_at?: string | null
           invited_at?: string | null
           nif?: string | null
@@ -1251,6 +1253,7 @@ export type Database = {
           contract_start?: string | null
           contracted_hours_month?: number | null
           created_at?: string | null
+          must_change_password?: boolean
           email?: string | null
           full_name?: string
           hourly_rate?: number | null

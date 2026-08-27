@@ -33,7 +33,7 @@ export async function createLocation(input: LocationInput) {
   const { data: me } = await admin
     .from("profiles")
     .select("company_id, role")
-    .eq("auth_user_id", user.id)
+    .eq("id", user.id)
     .single();
 
   if (!me || !["admin", "gestor"].includes(me.role)) {
@@ -73,7 +73,7 @@ export async function updateLocation(id: string, input: Omit<LocationInput, "cli
   const { data: me } = await admin
     .from("profiles")
     .select("company_id, role")
-    .eq("auth_user_id", user.id)
+    .eq("id", user.id)
     .single();
 
   if (!me || !["admin", "gestor"].includes(me.role)) {
@@ -160,7 +160,7 @@ export async function updateLocationAccess(
   const { data: me } = await admin
     .from("profiles")
     .select("company_id, role")
-    .eq("auth_user_id", user.id)
+    .eq("id", user.id)
     .single();
 
   if (!me || !["admin", "gestor"].includes(me.role)) {
@@ -195,7 +195,7 @@ export async function deleteLocation(id: string) {
   const { data: me } = await admin
     .from("profiles")
     .select("company_id, role")
-    .eq("auth_user_id", user.id)
+    .eq("id", user.id)
     .single();
 
   if (!me || !["admin", "gestor"].includes(me.role)) {

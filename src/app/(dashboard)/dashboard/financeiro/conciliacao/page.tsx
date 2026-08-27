@@ -22,7 +22,7 @@ export default async function ConciliacaoPage({
   const { data: profile } = await admin
     .from("profiles")
     .select("company_id, role")
-    .eq("auth_user_id", user.id)
+    .eq("id", user.id)
     .single();
   if (!profile?.company_id) redirect("/login");
   if (!["admin", "gestor"].includes(profile.role)) redirect("/dashboard");
