@@ -1,8 +1,8 @@
 {
   "generatedBy": "scripts/audit-file-inventory.mjs",
-  "totalFiles": 757,
+  "totalFiles": 753,
   "byStatus": {
-    "MANTER": 734,
+    "MANTER": 730,
     "STANDBY": 23
   },
   "byCategory": {
@@ -20,7 +20,7 @@
     "api-route": 16,
     "config": 12,
     "asset": 8,
-    "report": 8,
+    "report": 4,
     "script-historico": 4,
     "other": 2,
     "ci": 2,
@@ -29,7 +29,7 @@
     "supabase-other": 2
   },
   "byConfidence": {
-    "alta": 736,
+    "alta": 732,
     "média": 15,
     "baixa": 6
   },
@@ -1832,58 +1832,6 @@
       "manualDecision": false
     },
     {
-      "path": "reports/code-audit.json",
-      "category": "report",
-      "status": "MANTER",
-      "confidence": "alta",
-      "consumers": 0,
-      "consumerSample": [],
-      "autoLoaded": false,
-      "referencedBy": [
-        "npm",
-        "ci",
-        "config",
-        "docs"
-      ],
-      "sideEffects": [
-        "supabase"
-      ],
-      "risks": [],
-      "signals": {
-        "supabase": 1,
-        "sqlWrite": 1
-      },
-      "action": "nenhuma",
-      "reason": "configuração/infra",
-      "manualDecision": false
-    },
-    {
-      "path": "reports/code-audit.json",
-      "category": "report",
-      "status": "MANTER",
-      "confidence": "alta",
-      "consumers": 0,
-      "consumerSample": [],
-      "autoLoaded": false,
-      "referencedBy": [
-        "npm",
-        "ci",
-        "config",
-        "docs"
-      ],
-      "sideEffects": [
-        "supabase"
-      ],
-      "risks": [],
-      "signals": {
-        "supabase": 1,
-        "sqlWrite": 1
-      },
-      "action": "nenhuma",
-      "reason": "configuração/infra",
-      "manualDecision": false
-    },
-    {
       "path": "reports/file-classification.json",
       "category": "report",
       "status": "MANTER",
@@ -1896,7 +1844,7 @@
       ],
       "sideEffects": [
         "supabase",
-        "revalidatePath(40)"
+        "revalidatePath(38)"
       ],
       "risks": [
         "debugger"
@@ -1904,64 +1852,8 @@
       "signals": {
         "supabase": 1,
         "sqlWrite": 26,
-        "debugger": 10,
-        "revalidatePath": 40
-      },
-      "action": "nenhuma",
-      "reason": "configuração/infra",
-      "manualDecision": false
-    },
-    {
-      "path": "reports/file-classification.json",
-      "category": "report",
-      "status": "MANTER",
-      "confidence": "alta",
-      "consumers": 0,
-      "consumerSample": [],
-      "autoLoaded": false,
-      "referencedBy": [
-        "docs"
-      ],
-      "sideEffects": [
-        "supabase",
-        "revalidatePath(40)"
-      ],
-      "risks": [
-        "debugger"
-      ],
-      "signals": {
-        "supabase": 1,
-        "sqlWrite": 26,
-        "debugger": 10,
-        "revalidatePath": 40
-      },
-      "action": "nenhuma",
-      "reason": "configuração/infra",
-      "manualDecision": false
-    },
-    {
-      "path": "reports/file-classification.json",
-      "category": "report",
-      "status": "MANTER",
-      "confidence": "alta",
-      "consumers": 0,
-      "consumerSample": [],
-      "autoLoaded": false,
-      "referencedBy": [
-        "docs"
-      ],
-      "sideEffects": [
-        "supabase",
-        "revalidatePath(40)"
-      ],
-      "risks": [
-        "debugger"
-      ],
-      "signals": {
-        "supabase": 1,
-        "sqlWrite": 26,
-        "debugger": 10,
-        "revalidatePath": 40
+        "debugger": 6,
+        "revalidatePath": 38
       },
       "action": "nenhuma",
       "reason": "configuração/infra",
