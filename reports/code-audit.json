@@ -5,7 +5,7 @@
     "textFiles": 713,
     "sourceFiles": 521,
     "textLines": 170025,
-    "typescriptDiagnostics": 1,
+    "typescriptDiagnostics": 0,
     "productionEntries": 71,
     "unreachableProductionModules": 42,
     "exactDuplicateFileGroups": 0
@@ -149,15 +149,5 @@
       "src/lib/payroll-calc.ts"
     ]
   },
-  "diagnostics": [
-    {
-      "code": 2322,
-      "category": "Error",
-      "message": "Type '\"melhoria\"' is not assignable to type '\"manutencao\" | \"correcao\" | \"novidade\" | \"aviso\"'.",
-      "location": {
-        "file": "src/release-notes/2026-08-27-pagamentos-leitura-unificada.ts",
-        "line": 6
-      }
-    }
-  ]
+  "diagnostics": []
 }
