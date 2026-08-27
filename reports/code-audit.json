@@ -1,13 +1,13 @@
 {
   "inventorySource": "git ls-files",
   "summary": {
-    "repositoryFiles": 713,
-    "textFiles": 700,
-    "sourceFiles": 510,
-    "textLines": 166525,
+    "repositoryFiles": 714,
+    "textFiles": 701,
+    "sourceFiles": 511,
+    "textLines": 166746,
     "typescriptDiagnostics": 0,
     "productionEntries": 71,
-    "unreachableProductionModules": 41,
+    "unreachableProductionModules": 39,
     "exactDuplicateFileGroups": 0
   },
   "highConfidence": {
@@ -17,7 +17,6 @@
   },
   "reviewRequired": {
     "unreachableProductionModules": [
-      "src/app/actions/collaborator-access.ts",
       "src/app/actions/whatsapp.ts",
       "src/domain/billing/billing-compat.ts",
       "src/domain/billing/consumer-parity.ts",
@@ -26,7 +25,6 @@
       "src/domain/billing/money.ts",
       "src/domain/billing/monthly-allocation.ts",
       "src/domain/billing/vat.ts",
-      "src/domain/collaborators/access-lifecycle.ts",
       "src/domain/collaborators/create-input.ts",
       "src/domain/dashboard/client-summary.ts",
       "src/domain/dashboard/comparison.ts",
@@ -67,7 +65,6 @@
       "src/domain/billing/money.ts",
       "src/domain/billing/monthly-allocation.ts",
       "src/domain/billing/vat.ts",
-      "src/domain/collaborators/access-lifecycle.ts",
       "src/domain/collaborators/create-input.ts",
       "src/domain/dashboard/client-summary.ts",
       "src/domain/dashboard/comparison.ts",

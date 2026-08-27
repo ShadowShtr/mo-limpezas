@@ -7,6 +7,8 @@ import { ColaboradorAbsences } from "./_components/colaborador-absences";
 import { PresencaHistory } from "./_components/presenca-history";
 import { DocumentsSection } from "./_components/documents-section";
 import { ResetPasswordButton } from "./_components/reset-password-button";
+import { AccessSection } from "./_components/access-section";
+import { estadoAcesso } from "@/domain/collaborators/access-lifecycle";
 import { ForceAppUpdateButton } from "./_components/force-app-update-button";
 import { VacationBalanceForm } from "./_components/vacation-balance-form";
 import { getCollaboratorDocuments } from "@/app/actions/collaborator-documents";
@@ -201,7 +203,24 @@ export default async function ColaboradorDetailPage({ params }: Props) {
               absences={absences}
             />
 
-            {/* Acesso / redefinir password */}
+            {/* Acesso ao sistema — criar, senha temporária, desactivar, reactivar */}
+            <AccessSection
+              colaboradorId={id}
+              nome={profile.full_name}
+              estado={estadoAcesso(
+                {
+                  id: profile.id,
+                  company_id: profile.company_id,
+                  full_name: profile.full_name,
+                  auth_user_id: profile.auth_user_id ?? null,
+                },
+                profile.auth_user_id
+                  ? { must_change_password: profile.must_change_password ?? false }
+                  : null,
+              )}
+            />
+
+            {/* Acesso / redefinir password (fluxo antigo, ainda em uso) */}
             <ResetPasswordButton colaboradorId={id} />
 
             {/* Forçar atualização da app (colaboradora presa em versão antiga) */}
