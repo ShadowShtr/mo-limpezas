@@ -105,20 +105,28 @@ describe("setPaymentStatus — a action continua fail-closed", () => {
 
   const corpo = corpoDe("setPaymentStatus");
 
+  // 🔴 As três asserções abaixo exigiam a forma de UMA linha
+  // (`if (!guard.ok) return { ok: false…`). O rasto de observabilidade passou a
+  // registar a etapa antes de devolver, o que parte o `if` em bloco — sem mudar
+  // nada do que estes testes protegem. Passaram a medir a garantia (o ramo de
+  // falha devolve erro) em vez da formatação, que nunca foi o contrato.
+  const ramoDeFalha = (cond: string) =>
+    new RegExp(`if \\(!${cond}\\.ok\\)[\\s\\S]{0,400}?return \\{ ok: false`);
+
   it("recusa sem permissão", () => {
     expect(corpo).toContain("requireProfile");
-    expect(corpo).toMatch(/if \(!guard\.ok\) return \{ ok: false/);
+    expect(corpo).toMatch(ramoDeFalha("guard"));
   });
 
   it("recusa em período financeiro fechado", () => {
     expect(corpo).toContain("assertFinancialPeriodOpen");
-    expect(corpo).toMatch(/if \(!p\.ok\) return \{ ok: false/);
+    expect(corpo).toMatch(ramoDeFalha("p"));
   });
 
   it("propaga o erro da RPC canónica em vez de o engolir", () => {
     expect(corpo).toContain("marcarPagamentoPago");
     expect(corpo).toContain("desmarcarPagamentoPago");
-    expect(corpo).toMatch(/if \(!r\.ok\) return \{ ok: false/);
+    expect(corpo).toMatch(ramoDeFalha("r"));
   });
 
   it("🔴 nunca devolve ok depois de um erro registado só em consola", () => {

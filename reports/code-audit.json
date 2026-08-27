@@ -3,8 +3,8 @@
   "summary": {
     "repositoryFiles": 739,
     "textFiles": 726,
-    "sourceFiles": 523,
-    "textLines": 176838,
+    "sourceFiles": 525,
+    "textLines": 176895,
     "typescriptDiagnostics": 0,
     "productionEntries": 71,
     "unreachableProductionModules": 39,

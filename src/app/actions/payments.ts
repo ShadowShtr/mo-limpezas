@@ -14,6 +14,7 @@ import {
   type ClientePeriodo,
 } from "@/lib/finance-period-guard";
 import { mensagemPeriodoFechado } from "@/domain/finance-v2/financial-period";
+import { novoCorrelationId, tracePaymentStatus } from "@/lib/observability/payment-status-trace";
 import {
   desmarcarPagamentoPago,
   marcarPagamentoPago,
@@ -383,8 +384,20 @@ async function bloquearSePagamentoEmPeriodoFechado(
 }
 
 export async function setPaymentStatus(id: string, status: PaymentStatus): Promise<{ ok: boolean; error?: string }> {
+  // 🔴 O rasto existe porque a base ficar intacta não distingue nada: uma falha
+  //    antes da RPC e um rollback integral da RPC deixam o mesmo estado. Sem
+  //    isto, diagnosticar uma marcação falhada obrigava a repeti-la em
+  //    produção. Não altera comportamento — só diz onde parou.
+  const cid = novoCorrelationId();
+
   const guard = await requireProfile({ roles: ["admin", "gestor"] });
-  if (!guard.ok) return { ok: false, error: guard.error };
+  if (!guard.ok) {
+    tracePaymentStatus({
+      stage: "PAYMENT_STATUS_AUTH_GUARD", correlationId: cid, targetStatus: status,
+      paymentId: id, code: guard.code, ok: false,
+    });
+    return { ok: false, error: guard.error };
+  }
   const { admin, profile } = guard;
 
   // ─── Guarda de período ──────────────────────────────────────────────────────
@@ -409,7 +422,13 @@ export async function setPaymentStatus(id: string, status: PaymentStatus): Promi
       companyId: profile.company_id,
       data: hoje,
     });
-    if (!p.ok) return { ok: false, error: p.error };
+    if (!p.ok) {
+      tracePaymentStatus({
+        stage: "PAYMENT_STATUS_PERIOD_GUARD", correlationId: cid, targetStatus: status,
+        paymentId: id, companyId: profile.company_id, code: "FINANCIAL_PERIOD_CLOSED", ok: false,
+      });
+      return { ok: false, error: p.error };
+    }
 
     const r = await marcarPagamentoPago(admin, {
       companyId: profile.company_id,
@@ -418,21 +437,47 @@ export async function setPaymentStatus(id: string, status: PaymentStatus): Promi
       // Vercel, e `new Date()` na primeira hora do dia dava o dia anterior.
       paidOn: hoje,
     });
-    if (!r.ok) return { ok: false, error: r.error };
+    if (!r.ok) {
+      tracePaymentStatus({
+        stage: "PAYMENT_STATUS_MARK_RPC", correlationId: cid, targetStatus: status,
+        paymentId: id, companyId: profile.company_id, code: r.motivo, ok: false,
+      });
+      return { ok: false, error: r.error };
+    }
     revalidateCaixa();
+    tracePaymentStatus({
+      stage: "PAYMENT_STATUS_OK", correlationId: cid, targetStatus: status,
+      paymentId: id, companyId: profile.company_id, ok: true,
+    });
     return { ok: true };
   }
 
   if (status === "pendente") {
     const bloqueio = await bloquearSePagamentoEmPeriodoFechado(admin, profile.company_id, id);
-    if (bloqueio) return bloqueio;
+    if (bloqueio) {
+      tracePaymentStatus({
+        stage: "PAYMENT_STATUS_UNMARK_GUARD", correlationId: cid, targetStatus: status,
+        paymentId: id, companyId: profile.company_id, code: "FINANCIAL_PERIOD_CLOSED", ok: false,
+      });
+      return bloqueio;
+    }
 
     const r = await desmarcarPagamentoPago(admin, {
       companyId: profile.company_id,
       paymentId: id,
     });
-    if (!r.ok) return { ok: false, error: r.error };
+    if (!r.ok) {
+      tracePaymentStatus({
+        stage: "PAYMENT_STATUS_UNMARK_RPC", correlationId: cid, targetStatus: status,
+        paymentId: id, companyId: profile.company_id, code: r.motivo, ok: false,
+      });
+      return { ok: false, error: r.error };
+    }
     revalidateCaixa();
+    tracePaymentStatus({
+      stage: "PAYMENT_STATUS_OK", correlationId: cid, targetStatus: status,
+      paymentId: id, companyId: profile.company_id, ok: true,
+    });
     return { ok: true };
   }
 
