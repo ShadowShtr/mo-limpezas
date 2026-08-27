@@ -1,13 +1,13 @@
 {
   "generatedBy": "scripts/audit-file-inventory.mjs",
-  "totalFiles": 716,
+  "totalFiles": 717,
   "byStatus": {
-    "MANTER": 697,
+    "MANTER": 698,
     "STANDBY": 19
   },
   "byCategory": {
     "route-ui": 135,
-    "test": 132,
+    "test": 133,
     "migration": 84,
     "lib": 65,
     "domain": 49,
@@ -29,7 +29,7 @@
     "supabase-other": 2
   },
   "byConfidence": {
-    "alta": 699,
+    "alta": 700,
     "média": 10,
     "baixa": 7
   },
@@ -4187,6 +4187,33 @@
       "signals": {
         "serviceRole": 3,
         "sqlWrite": 33
+      },
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/__tests__/collaborator-identity-hardening-postgres.test.ts",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [
+        "service-role"
+      ],
+      "signals": {
+        "serviceRole": 3,
+        "sqlWrite": 49
       },
       "action": "nenhuma",
       "reason": "suite de testes — corre por convenção do vitest",
