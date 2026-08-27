@@ -1,13 +1,13 @@
 {
   "generatedBy": "scripts/audit-file-inventory.mjs",
-  "totalFiles": 715,
+  "totalFiles": 716,
   "byStatus": {
-    "MANTER": 696,
+    "MANTER": 697,
     "STANDBY": 19
   },
   "byCategory": {
     "route-ui": 135,
-    "test": 131,
+    "test": 132,
     "migration": 84,
     "lib": 65,
     "domain": 49,
@@ -29,7 +29,7 @@
     "supabase-other": 2
   },
   "byConfidence": {
-    "alta": 698,
+    "alta": 699,
     "média": 10,
     "baixa": 7
   },
@@ -1844,7 +1844,7 @@
       ],
       "sideEffects": [
         "supabase",
-        "revalidatePath(37)"
+        "revalidatePath(38)"
       ],
       "risks": [
         "debugger"
@@ -1853,7 +1853,7 @@
         "supabase": 1,
         "sqlWrite": 26,
         "debugger": 6,
-        "revalidatePath": 37
+        "revalidatePath": 38
       },
       "action": "nenhuma",
       "reason": "configuração/infra",
@@ -4058,6 +4058,33 @@
       "sideEffects": [],
       "risks": [],
       "signals": {},
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/__tests__/collaborator-access-concurrency-postgres.test.ts",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [
+        "service-role"
+      ],
+      "signals": {
+        "serviceRole": 2,
+        "sqlWrite": 18
+      },
       "action": "nenhuma",
       "reason": "suite de testes — corre por convenção do vitest",
       "manualDecision": false,
@@ -14197,8 +14224,9 @@
       "category": "domain",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 2,
+      "consumers": 3,
       "consumerSample": [
+        "src/__tests__/collaborator-access-concurrency-postgres.test.ts",
         "src/__tests__/collaborator-access-lifecycle.test.ts",
         "src/app/actions/collaborator-access.ts"
       ],
@@ -14208,7 +14236,7 @@
       "risks": [],
       "signals": {},
       "action": "nenhuma",
-      "reason": "em uso: 2 consumidor(es)",
+      "reason": "em uso: 3 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
