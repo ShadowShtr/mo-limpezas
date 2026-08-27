@@ -206,9 +206,9 @@ export type Database = {
         Relationships: [];
       };
       collaborator_ride_assignments: {
-        Row: { id: string; company_id: string; collaborator_id: string; team_id: string; date: string; assigned_by: string | null; created_at: string; updated_at: string };
-        Insert: { company_id: string; collaborator_id: string; team_id: string; date: string; assigned_by?: string | null; id?: string };
-        Update: { team_id?: string; assigned_by?: string | null };
+        Row: { id: string; company_id: string; collaborator_id: string; team_id: string | null; date: string; assigned_by: string | null; created_at: string; updated_at: string };
+        Insert: { company_id: string; collaborator_id: string; team_id?: string | null; date: string; assigned_by?: string | null; id?: string };
+        Update: { team_id?: string | null; assigned_by?: string | null };
         Relationships: [];
       };
       building_cards: {

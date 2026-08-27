@@ -1,13 +1,13 @@
 {
   "inventorySource": "git ls-files",
   "summary": {
-    "repositoryFiles": 721,
-    "textFiles": 708,
-    "sourceFiles": 516,
-    "textLines": 169438,
+    "repositoryFiles": 727,
+    "textFiles": 714,
+    "sourceFiles": 520,
+    "textLines": 170236,
     "typescriptDiagnostics": 0,
     "productionEntries": 71,
-    "unreachableProductionModules": 39,
+    "unreachableProductionModules": 40,
     "exactDuplicateFileGroups": 0
   },
   "highConfidence": {
@@ -51,6 +51,7 @@
       "src/domain/scheduling/occurrence-repair.ts",
       "src/domain/scheduling/reconciliation.ts",
       "src/domain/scheduling/recurrence-compat.ts",
+      "src/domain/teams/allocation-draft.ts",
       "src/lib/bank-import/pdf.ts",
       "src/lib/bank-import/xlsx.ts",
       "src/lib/finance-write-surface.ts",
@@ -91,6 +92,7 @@
       "src/domain/scheduling/occurrence-repair.ts",
       "src/domain/scheduling/reconciliation.ts",
       "src/domain/scheduling/recurrence-compat.ts",
+      "src/domain/teams/allocation-draft.ts",
       "src/lib/finance-write-surface.ts"
     ],
     "testSignupCalls": [
