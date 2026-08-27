@@ -20,7 +20,6 @@ export interface ColaboradorInput {
   status: string;
   contracted_hours_month: number;
   skills: string[];
-  company_id: string;
 }
 
 /**
@@ -36,8 +35,23 @@ export interface ColaboradorInput {
  * exigidos — uma pessoa nova é uma colaboradora activa até alguém decidir
  * outra coisa.
  *
- * `company_id` continua aceite pela forma mas **ignorado**: quem cria é a
- * empresa de quem está autenticado, e isso resolve-se do lado do servidor.
+ * 🔴 `company_id` **não está aqui, e não pode voltar.**
+ *
+ *    Estava — declarado como `z.string().uuid()`, aceite pela forma e depois
+ *    ignorado, porque a empresa vem sempre da sessão de quem cria. Peso morto,
+ *    até deixar de ser: o Zod 4 passou a validar UUIDs contra a RFC 9562, que
+ *    exige um nibble de versão entre 1 e 8. O `company_id` desta empresa é
+ *    `00000000-0000-0000-0000-000000000001`, com versão `0`.
+ *
+ *    Resultado: **criar um colaborador ficou impossível** — «company_id
+ *    inválido.» — por causa de um campo que o servidor nem lê. O Zod 3 aceitava,
+ *    o Zod 4 não, e a falha apareceu numa atualização de dependência, longe de
+ *    qualquer alteração a colaboradores.
+ *
+ *    A lição não é «relaxar a validação». É que validar o que não se usa só
+ *    pode fazer mal: não protege nada e cria uma forma de falhar. A empresa
+ *    resolve-se no servidor, a partir do perfil de quem está autenticado, e é
+ *    lá que tem de ser verificada.
  */
 const colaboradorSchema = z.object({
   full_name: z.string().min(2, "Nome deve ter pelo menos 2 caracteres.").max(120).trim(),
@@ -47,7 +61,6 @@ const colaboradorSchema = z.object({
   status: z.enum(["ativo", "inativo", "arquivado"]).default("ativo"),
   contracted_hours_month: z.number().min(0).max(744).nullable().optional(),
   skills: z.array(z.string().max(60)).default([]),
-  company_id: z.string().uuid("company_id inválido.").optional(),
 });
 
 export async function createColaborador(input: ColaboradorInput) {
