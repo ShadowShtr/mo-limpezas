@@ -331,8 +331,36 @@ describe("guardas permanentes da retenção", () => {
   });
 
   it("15+16+17. sem migration, sem UPDATE histórico, sem backfill", () => {
-    const migrations = fs.readdirSync(path.join(ROOT, "supabase/migrations"));
-    expect(migrations.filter((f) => /^07[7-9]|^0[89]\d/.test(f))).toEqual([]);
+    // 🔴 A versão anterior desta guarda dizia «não existe nenhuma migration
+    //    numerada 077 ou acima». Media a coisa errada: ficava vermelha à
+    //    primeira migration que alguém escrevesse a seguir, por razões que nada
+    //    tinham que ver com retenção de documentos — e foi exactamente isso que
+    //    aconteceu com a 079 (uma alteração de RPC de pagamentos).
+    //
+    //    O que se quer garantir é que **a retenção** não trouxe migration
+    //    nenhuma: nenhum ficheiro de migration mexe em `expires_at` nem em
+    //    `collaborator_documents`. Isso continua a apanhar o defeito real — um
+    //    backfill de datas de expiração escondido numa migration — e deixa de
+    //    depender de quantas migrations existem.
+    //
+    //    As duas migrations abaixo são as que **criaram** o esquema —
+    //    `collaborator_documents` e a coluna `expires_at`. São o ponto de
+    //    partida, não a retenção: a política vive toda em código. Qualquer
+    //    outra migration a aparecer nesta lista é uma migration nova a mexer em
+    //    datas de expiração, que é precisamente o que não pode acontecer.
+    const CRIARAM_O_ESQUEMA = ["021_documents_enhanced.sql", "20260608_new_features.sql"];
+
+    const dir = path.join(ROOT, "supabase/migrations");
+    const tocamNaRetencao = fs
+      .readdirSync(dir)
+      .filter((f) => f.endsWith(".sql") && !CRIARAM_O_ESQUEMA.includes(f))
+      .filter((f) => {
+        const sql = fs.readFileSync(path.join(dir, f), "utf8");
+        const executavel = sql
+          .split("\n").filter((l) => !l.trimStart().startsWith("--")).join("\n");
+        return /\bexpires_at\b/.test(executavel) || /\bcollaborator_documents\b/.test(executavel);
+      });
+    expect(tocamNaRetencao, "migration a mexer na retenção de documentos").toEqual([]);
     // Nenhuma escrita em massa sobre expires_at em lado nenhum.
     expect(ACTIONS).not.toMatch(/update\(\s*\{\s*expires_at/);
     expect(CRON).not.toMatch(/update\(\s*\{\s*expires_at/);
