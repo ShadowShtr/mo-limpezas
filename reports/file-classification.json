@@ -1,12 +1,12 @@
 {
   "generatedBy": "scripts/audit-file-inventory.mjs",
-  "totalFiles": 723,
+  "totalFiles": 724,
   "byStatus": {
-    "MANTER": 704,
+    "MANTER": 705,
     "STANDBY": 19
   },
   "byCategory": {
-    "test": 136,
+    "test": 137,
     "route-ui": 136,
     "migration": 84,
     "lib": 65,
@@ -29,7 +29,7 @@
     "supabase-other": 2
   },
   "byConfidence": {
-    "alta": 706,
+    "alta": 707,
     "média": 11,
     "baixa": 6
   },
@@ -4175,6 +4175,35 @@
       }
     },
     {
+      "path": "src/__tests__/collaborator-create-name-only-postgres.test.ts",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [
+        "write"
+      ],
+      "risks": [],
+      "signals": {
+        "write": 2,
+        "sqlWrite": 15,
+        "eslintDisable": 1,
+        "dynamicImport": 1
+      },
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
       "path": "src/__tests__/collaborator-document-authorization.test.ts",
       "category": "test",
       "status": "MANTER",
@@ -5171,8 +5200,9 @@
       "category": "test",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 2,
+      "consumers": 3,
       "consumerSample": [
+        "src/__tests__/collaborator-create-name-only-postgres.test.ts",
         "src/__tests__/collaborator-identity-hardening-postgres.test.ts",
         "src/__tests__/identity-resolver-rls-lote2-postgres.test.ts"
       ],
@@ -11397,7 +11427,7 @@
         "supabase": 20,
         "serverAction": 1,
         "write": 12,
-        "sqlWrite": 15,
+        "sqlWrite": 17,
         "ignoredError": 6,
         "revalidatePath": 6,
         "dynamicImport": 1
