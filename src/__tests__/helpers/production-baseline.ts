@@ -71,7 +71,7 @@ export function formaDeProducao(): string {
 export const ANDAIME_SUPABASE = `
 CREATE SCHEMA IF NOT EXISTS auth;
 
-CREATE TABLE auth.users (id uuid PRIMARY KEY, email text);
+CREATE TABLE auth.users (id uuid PRIMARY KEY, email text UNIQUE, banned_until timestamptz);
 
 CREATE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql STABLE AS $uid$
   SELECT NULLIF(current_setting('request.jwt.claim.sub', true), '')::uuid $uid$;
@@ -121,6 +121,11 @@ CREATE OR REPLACE FUNCTION public.get_service_company_id(p uuid) RETURNS uuid
  */
 export const GRANTS_SUPABASE = `
 GRANT USAGE ON SCHEMA public TO anon, authenticated, service_role;
+-- O schema auth também precisa: há políticas e funções que o atravessam.
+-- Sem isto o Postgres recusa por permissão de schema antes da RLS, e uma
+-- asserção de recusa passa pela razão errada.
+GRANT USAGE ON SCHEMA auth TO anon, authenticated, service_role;
+GRANT SELECT ON auth.users TO authenticated, service_role;
 GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO anon, authenticated;
 GRANT ALL ON ALL TABLES IN SCHEMA public TO service_role;
 `;

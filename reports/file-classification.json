@@ -1,17 +1,17 @@
 {
   "generatedBy": "scripts/audit-file-inventory.mjs",
-  "totalFiles": 718,
+  "totalFiles": 721,
   "byStatus": {
-    "MANTER": 700,
-    "STANDBY": 18
+    "MANTER": 702,
+    "STANDBY": 19
   },
   "byCategory": {
     "route-ui": 136,
-    "test": 133,
+    "test": 135,
     "migration": 84,
     "lib": 65,
+    "script": 49,
     "domain": 49,
-    "script": 48,
     "doc": 43,
     "server-action": 42,
     "component": 30,
@@ -29,15 +29,15 @@
     "supabase-other": 2
   },
   "byConfidence": {
-    "alta": 702,
-    "média": 10,
+    "alta": 704,
+    "média": 11,
     "baixa": 6
   },
   "scriptRisk": {
     "SAFE_OFFLINE": 27,
     "ADMIN_GUARDED_WRITE": 11,
     "ADMIN_READ": 6,
-    "WRITE_CAPABLE": 4
+    "WRITE_CAPABLE": 5
   },
   "files": [
     {
@@ -2488,6 +2488,34 @@
       "scriptRisk": "SAFE_OFFLINE"
     },
     {
+      "path": "scripts/dump-production-rls-baseline.mjs",
+      "category": "script",
+      "status": "STANDBY",
+      "confidence": "média",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "sqlWrite": 2,
+        "consoleLog": 5,
+        "consoleErr": 1,
+        "fallbackZero": 1
+      },
+      "action": "T17-B: confirmar se ainda é preciso",
+      "reason": "capaz de escrever na base",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": true,
+        "dynamicImport": true,
+        "allClosed": false
+      },
+      "scriptRisk": "WRITE_CAPABLE"
+    },
+    {
       "path": "scripts/fix-num-people.mjs",
       "category": "script",
       "status": "MANTER",
@@ -4208,12 +4236,9 @@
       "autoLoaded": false,
       "referencedBy": [],
       "sideEffects": [],
-      "risks": [
-        "service-role"
-      ],
+      "risks": [],
       "signals": {
-        "serviceRole": 3,
-        "sqlWrite": 49
+        "sqlWrite": 29
       },
       "action": "nenhuma",
       "reason": "suite de testes — corre por convenção do vitest",
@@ -5094,6 +5119,57 @@
       }
     },
     {
+      "path": "src/__tests__/fixtures/production-schema-shape.sql",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [
+        "service-role"
+      ],
+      "signals": {
+        "serviceRole": 2,
+        "sqlWrite": 269
+      },
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false
+    },
+    {
+      "path": "src/__tests__/helpers/production-baseline.ts",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 2,
+      "consumerSample": [
+        "src/__tests__/collaborator-identity-hardening-postgres.test.ts",
+        "src/__tests__/identity-resolver-rls-lote2-postgres.test.ts"
+      ],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [
+        "service-role"
+      ],
+      "signals": {
+        "serviceRole": 7,
+        "sqlWrite": 3
+      },
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
       "path": "src/__tests__/identity-expand-preserves-069-guard.test.ts",
       "category": "test",
       "status": "MANTER",
@@ -5130,12 +5206,9 @@
       "autoLoaded": false,
       "referencedBy": [],
       "sideEffects": [],
-      "risks": [
-        "service-role"
-      ],
+      "risks": [],
       "signals": {
-        "serviceRole": 3,
-        "sqlWrite": 35
+        "sqlWrite": 17
       },
       "action": "nenhuma",
       "reason": "suite de testes — corre por convenção do vitest",
@@ -19610,7 +19683,7 @@
       "sideEffects": [],
       "risks": [],
       "signals": {
-        "sqlWrite": 9
+        "sqlWrite": 91
       },
       "action": "nenhuma",
       "reason": "migration versionada — histórico do schema, nunca se apaga",
@@ -19628,7 +19701,7 @@
       "sideEffects": [],
       "risks": [],
       "signals": {
-        "sqlWrite": 4
+        "sqlWrite": 9
       },
       "action": "nenhuma",
       "reason": "migration versionada — histórico do schema, nunca se apaga",
@@ -19664,7 +19737,7 @@
       "sideEffects": [],
       "risks": [],
       "signals": {
-        "sqlWrite": 8
+        "sqlWrite": 91
       },
       "action": "nenhuma",
       "reason": "migration versionada — histórico do schema, nunca se apaga",
@@ -19682,7 +19755,7 @@
       "sideEffects": [],
       "risks": [],
       "signals": {
-        "sqlWrite": 3
+        "sqlWrite": 7
       },
       "action": "nenhuma",
       "reason": "migration versionada — histórico do schema, nunca se apaga",

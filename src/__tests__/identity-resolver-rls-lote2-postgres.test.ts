@@ -18,6 +18,8 @@ import { randomUUID } from "node:crypto";
 import pg from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
+import { baselineCompleto } from "./helpers/production-baseline";
+
 const ROOT = process.cwd();
 const CONTAINER = `rls-lote2-${process.pid}`;
 const EMPRESA_A = "11111111-1111-4111-8111-111111111111";
@@ -45,110 +47,23 @@ const LOTE2_DOWN = () => readSql("supabase", "migrations", "draft", "rollback",
  * O esqueleto das tabelas de dados pessoais, com as colunas que as políticas
  * lêem — e `user_id` a apontar para `profiles`, apesar do nome.
  */
-const BASELINE = `
-  DROP SCHEMA IF EXISTS public CASCADE;
-  DROP SCHEMA IF EXISTS auth CASCADE;
-  CREATE SCHEMA public;
-  CREATE SCHEMA auth;
-
-  CREATE TABLE auth.users (id uuid PRIMARY KEY, email text);
-  CREATE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql STABLE AS $uid$
-    SELECT NULLIF(current_setting('request.jwt.claim.sub', true), '')::uuid $uid$;
-  CREATE FUNCTION auth.role() RETURNS text LANGUAGE sql STABLE AS $rol$
-    SELECT NULLIF(current_setting('request.jwt.claim.role', true), '') $rol$;
-
-  CREATE TABLE public.companies (id uuid PRIMARY KEY, name text NOT NULL);
-  CREATE TABLE public.profiles (
-    id uuid PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
-    company_id uuid NOT NULL REFERENCES public.companies(id) ON DELETE CASCADE,
-    full_name text NOT NULL,
-    role text NOT NULL DEFAULT 'colaborador');
-
-  CREATE TABLE public.timesheets (
-    id uuid PRIMARY KEY DEFAULT gen_random_uuid(), company_id uuid NOT NULL,
-    collaborator_id uuid NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
-    horas numeric(6,2));
-  CREATE TABLE public.payroll_records (
-    id uuid PRIMARY KEY DEFAULT gen_random_uuid(), company_id uuid NOT NULL,
-    collaborator_id uuid NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
-    net_salary numeric(10,2));
-  CREATE TABLE public.absences (
-    id uuid PRIMARY KEY DEFAULT gen_random_uuid(), company_id uuid NOT NULL,
-    collaborator_id uuid NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
-    motivo text);
-  CREATE TABLE public.daily_clocks (
-    id uuid PRIMARY KEY DEFAULT gen_random_uuid(), company_id uuid NOT NULL,
-    collaborator_id uuid NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
-    dia date);
-  CREATE TABLE public.service_photos (
-    id uuid PRIMARY KEY DEFAULT gen_random_uuid(), company_id uuid NOT NULL,
-    collaborator_id uuid NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
-    storage_path text);
-  -- 🔴 user_id aponta para profiles, não para auth.users. O nome engana.
-  CREATE TABLE public.notifications (
-    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id uuid NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
-    titulo text);
-  CREATE TABLE public.push_subscriptions (
-    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id uuid NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
-    endpoint text);
-
-  CREATE FUNCTION public.get_my_company_id() RETURNS uuid
-    LANGUAGE sql SECURITY DEFINER STABLE SET search_path = public AS $c$
-    SELECT company_id FROM profiles WHERE id = auth.uid() LIMIT 1 $c$;
-  CREATE FUNCTION public.get_my_role() RETURNS text
-    LANGUAGE sql SECURITY DEFINER STABLE SET search_path = public AS $r$
-    SELECT role FROM profiles WHERE id = auth.uid() LIMIT 1 $r$;
-
-  ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
-  CREATE POLICY "profiles_select" ON profiles
-    FOR SELECT USING (id = auth.uid() OR company_id = get_my_company_id());
-  CREATE POLICY "profiles_update_own" ON public.profiles
-    FOR UPDATE USING (id = auth.uid())
-    WITH CHECK (id = auth.uid() AND company_id = public.get_my_company_id());
-  CREATE POLICY "profiles_manage_company" ON profiles
-    FOR ALL USING (
-      company_id = get_my_company_id() AND get_my_role() IN ('admin','gestor'));
-
-  -- As formas de origem do lote 2.
-  ALTER TABLE public.timesheets ENABLE ROW LEVEL SECURITY;
-  CREATE POLICY "collaborators see own timesheets" ON timesheets
-    FOR SELECT USING (collaborator_id = auth.uid());
-  CREATE POLICY "timesheets_own_select" ON timesheets
-    FOR SELECT USING (collaborator_id = auth.uid());
-  ALTER TABLE public.payroll_records ENABLE ROW LEVEL SECURITY;
-  CREATE POLICY "collaborators see own payroll" ON payroll_records
-    FOR SELECT USING (collaborator_id = auth.uid());
-  ALTER TABLE public.absences ENABLE ROW LEVEL SECURITY;
-  CREATE POLICY "absences_own_select" ON absences
-    FOR SELECT USING (collaborator_id = auth.uid());
-  ALTER TABLE public.daily_clocks ENABLE ROW LEVEL SECURITY;
-  CREATE POLICY "daily_clocks_own" ON daily_clocks
-    FOR ALL USING (collaborator_id = auth.uid())
-    WITH CHECK (collaborator_id = auth.uid());
-  ALTER TABLE public.service_photos ENABLE ROW LEVEL SECURITY;
-  CREATE POLICY "service_photos_own_read" ON service_photos
-    FOR SELECT USING (collaborator_id = auth.uid());
-  ALTER TABLE public.notifications ENABLE ROW LEVEL SECURITY;
-  CREATE POLICY "users see own notifications" ON notifications
-    FOR SELECT USING (user_id = auth.uid());
-  ALTER TABLE public.push_subscriptions ENABLE ROW LEVEL SECURITY;
-  CREATE POLICY "users manage own push subs" ON push_subscriptions
-    FOR ALL USING (user_id = auth.uid()) WITH CHECK (user_id = auth.uid());
-
-  DO $roles$ BEGIN
-    IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname='authenticated')
-      THEN CREATE ROLE authenticated; END IF;
-    IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname='anon')
-      THEN CREATE ROLE anon; END IF;
-    IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname='service_role')
-      THEN CREATE ROLE service_role; END IF;
-  END $roles$;
-  GRANT USAGE ON SCHEMA public, auth TO authenticated, anon, service_role;
-  GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public
-    TO authenticated, anon;
-`;
+/**
+ * 🔴 O baseline deixou de ser escrito à mão.
+ *
+ *    Esta constante tinha dez tabelas inventadas, com colunas que produção não
+ *    tem (`horas`, `motivo`, `dia`, `titulo`) e duas das oito políticas reais
+ *    de `timesheets`. Provava o desenho contra um mundo mais simples do que o
+ *    nosso — e foi por isso que não viu que 71 políticas, e não 8, resolvem a
+ *    identidade pela equivalência antiga.
+ *
+ *    Agora parte da forma real do schema, gerada por
+ *    `scripts/dump-production-rls-baseline.mjs`.
+ */
+const BASELINE = () =>
+  `DROP SCHEMA IF EXISTS public CASCADE;
+   DROP SCHEMA IF EXISTS auth CASCADE;
+   CREATE SCHEMA public;
+   ${baselineCompleto()}`;
 
 async function waitForPostgres() {
   const deadline = Date.now() + 60_000;
@@ -161,8 +76,9 @@ async function waitForPostgres() {
 }
 
 async function prepara(comLote2: boolean) {
-  await pool.query(BASELINE);
-  await pool.query("INSERT INTO companies VALUES($1,'A'),($2,'B')", [EMPRESA_A, EMPRESA_B]);
+  await pool.query(BASELINE());
+  await pool.query("INSERT INTO companies(id,name,slug) VALUES($1,'A','a'),($2,'B','b')",
+    [EMPRESA_A, EMPRESA_B]);
   const criar = async (nome: string) => {
     const id = randomUUID();
     await pool.query("INSERT INTO auth.users VALUES($1,$2)", [id, `${nome}@exemplo.pt`]);
@@ -182,20 +98,43 @@ async function prepara(comLote2: boolean) {
   await pool.query("INSERT INTO profiles(id,company_id,full_name) VALUES($1,$2,'Sem conta')",
     [semConta, EMPRESA_A]);
 
-  // Dados pessoais de cada uma das três.
-  for (const [quem] of [[colabA], [colegaA], [semConta]] as const) {
-    await pool.query("INSERT INTO timesheets(company_id,collaborator_id,horas) VALUES($1,$2,8)",
+  // Dados pessoais de cada uma das três, com as colunas que produção exige.
+  const CLIENTE = randomUUID(), LOCAL = randomUUID(), SERVICO = randomUUID();
+  await pool.query("INSERT INTO clients(id,company_id,name) VALUES($1,$2,'Cliente')",
+    [CLIENTE, EMPRESA_A]);
+  await pool.query(
+    "INSERT INTO locations(id,company_id,client_id,name,address) VALUES($1,$2,$3,'Local','Rua')",
+    [LOCAL, EMPRESA_A, CLIENTE]);
+  await pool.query(
+    `INSERT INTO services(id,company_id,location_id,reference_number,scheduled_start,scheduled_end)
+     VALUES($1,$2,$3,'S-1',now(),now())`,
+    [SERVICO, EMPRESA_A, LOCAL]);
+
+  for (const quem of [colabA, colegaA, semConta]) {
+    await pool.query(
+      "INSERT INTO timesheets(company_id,collaborator_id,service_id) VALUES($1,$2,$3)",
+      [EMPRESA_A, quem, SERVICO]);
+    await pool.query(
+      "INSERT INTO payroll_records(company_id,collaborator_id,period_year,period_month) VALUES($1,$2,2026,8)",
       [EMPRESA_A, quem]);
-    await pool.query("INSERT INTO payroll_records(company_id,collaborator_id,net_salary) VALUES($1,$2,1200)",
+    await pool.query(
+      `INSERT INTO absences(company_id,collaborator_id,absence_type,starts_on,ends_on)
+       VALUES($1,$2,'doenca','2026-08-26','2026-08-26')`,
       [EMPRESA_A, quem]);
-    await pool.query("INSERT INTO absences(company_id,collaborator_id,motivo) VALUES($1,$2,'doença')",
+    await pool.query(
+      "INSERT INTO daily_clocks(company_id,collaborator_id,work_date) VALUES($1,$2,'2026-08-26')",
       [EMPRESA_A, quem]);
-    await pool.query("INSERT INTO daily_clocks(company_id,collaborator_id,dia) VALUES($1,$2,'2026-08-26')",
+    await pool.query(
+      `INSERT INTO service_photos(company_id,service_id,collaborator_id,storage_path,client_event_id)
+       VALUES($1,$2,$3,'f.jpg',gen_random_uuid())`,
+      [EMPRESA_A, SERVICO, quem]);
+    await pool.query(
+      "INSERT INTO notifications(company_id,user_id,type,title) VALUES($1,$2,'aviso','Aviso')",
       [EMPRESA_A, quem]);
-    await pool.query("INSERT INTO service_photos(company_id,collaborator_id,storage_path) VALUES($1,$2,'f.jpg')",
+    await pool.query(
+      `INSERT INTO push_subscriptions(company_id,user_id,endpoint,p256dh,auth_key)
+       VALUES($1,$2,'https://e','k','a')`,
       [EMPRESA_A, quem]);
-    await pool.query("INSERT INTO notifications(user_id,titulo) VALUES($1,'aviso')", [quem]);
-    await pool.query("INSERT INTO push_subscriptions(user_id,endpoint) VALUES($1,'https://e')", [quem]);
   }
 }
 
@@ -274,7 +213,7 @@ describe.sequential("lote 2 — o id de uma pessoa sem conta não abre nada", ()
   it("🔴 e não consegue escrever por essa via", async () => {
     await prepara(true);
     const r = await comoRest(semConta, (c) =>
-      c.query("UPDATE daily_clocks SET dia='2026-01-01' WHERE collaborator_id=$1", [semConta]));
+      c.query("UPDATE daily_clocks SET work_date='2026-01-01' WHERE collaborator_id=$1", [semConta]));
     expect(r.rowCount).toBe(0);
   });
 });

@@ -69,4 +69,28 @@ CREATE POLICY "profiles_update_own" ON public.profiles
     AND company_id = public.get_my_company_id()
   );
 
+-- ─── profiles_insert_admin — a forma que a base tinha ───────────────────────
+DROP POLICY IF EXISTS "profiles_insert_admin" ON public.profiles;
+CREATE POLICY "profiles_insert_admin" ON public.profiles
+  FOR INSERT
+  WITH CHECK (
+    id = auth.uid()
+    OR (company_id = public.get_my_company_id()
+        AND public.get_my_role() = ANY (ARRAY['admin'::text, 'gestor'::text]))
+  );
+
+-- ─── As duas órfãs voltam ───────────────────────────────────────────────────
+--
+-- 🔴 Reverter é repor o que lá estava, não melhorar o que lá estava. Estas
+--    duas são restos legados que o LOTE 1 apaga de propósito — mas um rollback
+--    que as deixasse de fora não devolveria a base ao estado anterior, e a
+--    próxima pessoa a comparar encontraria uma diferença que ninguém explicou.
+DROP POLICY IF EXISTS "users see own profile" ON public.profiles;
+CREATE POLICY "users see own profile" ON public.profiles
+  FOR SELECT USING (id = auth.uid());
+
+DROP POLICY IF EXISTS "users see company profiles" ON public.profiles;
+CREATE POLICY "users see company profiles" ON public.profiles
+  FOR SELECT USING (company_id = public.get_my_company_id());
+
 COMMIT;

@@ -20,10 +20,20 @@ import { randomUUID } from "node:crypto";
 import pg from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
+import { baselineCompleto } from "./helpers/production-baseline";
+
 const ROOT = process.cwd();
 const CONTAINER = `hardening-${process.pid}`;
 const EMPRESA_A = "11111111-1111-4111-8111-111111111111";
 const EMPRESA_B = "22222222-2222-4222-8222-222222222222";
+
+// Cadeia mínima que o schema real exige: um serviço precisa de local, que
+// precisa de cliente. Antes, com o baseline à mão, nada disto era necessário —
+// e era essa a diferença entre o ensaio e a base.
+const CLIENTE = "33333333-3333-4333-8333-333333333333";
+const LOCAL   = "44444444-4444-4444-8444-444444444444";
+const SERVICO = "55555555-5555-4555-8555-555555555555";
+const EQUIPA  = "66666666-6666-4666-8666-666666666666";
 
 let port = 0;
 let pool: pg.Pool;
@@ -38,122 +48,18 @@ const draft = (f: string) => readSql("supabase", "migrations", "draft", f);
  * O esqueleto anterior a tudo: `profiles.id` a ser chave estrangeira para
  * `auth.users`, as funções da 014, e as políticas nas formas de origem.
  */
-const BASELINE = `
-  DROP SCHEMA IF EXISTS public CASCADE;
-  DROP SCHEMA IF EXISTS auth CASCADE;
-  CREATE SCHEMA public;
-  CREATE SCHEMA auth;
-
-  CREATE TABLE auth.users (id uuid PRIMARY KEY, email text UNIQUE, banned_until timestamptz);
-  CREATE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql STABLE AS $uid$
-    SELECT NULLIF(current_setting('request.jwt.claim.sub', true), '')::uuid $uid$;
-  CREATE FUNCTION auth.role() RETURNS text LANGUAGE sql STABLE AS $rol$
-    SELECT NULLIF(current_setting('request.jwt.claim.role', true), '') $rol$;
-
-  CREATE TABLE public.companies (id uuid PRIMARY KEY, name text NOT NULL);
-  CREATE TABLE public.profiles (
-    id uuid PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
-    company_id uuid NOT NULL REFERENCES public.companies(id) ON DELETE CASCADE,
-    full_name text NOT NULL,
-    phone text, email text, nif text, iban text,
-    hourly_rate numeric(10,2), contract_start date,
-    role text NOT NULL DEFAULT 'colaborador'
-      CHECK (role IN ('admin','gestor','colaborador')),
-    status text NOT NULL DEFAULT 'ativo');
-
-  CREATE TABLE public.payroll_records (
-    id uuid PRIMARY KEY DEFAULT gen_random_uuid(), company_id uuid NOT NULL,
-    collaborator_id uuid NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
-    net_salary numeric(10,2));
-  CREATE TABLE public.team_members (
-    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-    collaborator_id uuid NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE);
-  CREATE TABLE public.collaborator_documents (
-    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-    collaborator_id uuid NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
-    file_url text);
-  CREATE TABLE public.absences (
-    id uuid PRIMARY KEY DEFAULT gen_random_uuid(), company_id uuid NOT NULL,
-    collaborator_id uuid NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
-    motivo text);
-  CREATE TABLE public.vacation_requests (
-    id uuid PRIMARY KEY DEFAULT gen_random_uuid(), company_id uuid NOT NULL,
-    collaborator_id uuid NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE);
-  CREATE TABLE public.timesheets (
-    id uuid PRIMARY KEY DEFAULT gen_random_uuid(), company_id uuid NOT NULL,
-    collaborator_id uuid NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
-    horas numeric(6,2));
-  CREATE TABLE public.daily_clocks (
-    id uuid PRIMARY KEY DEFAULT gen_random_uuid(), company_id uuid NOT NULL,
-    collaborator_id uuid NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
-    dia date);
-  CREATE TABLE public.service_photos (
-    id uuid PRIMARY KEY DEFAULT gen_random_uuid(), company_id uuid NOT NULL,
-    collaborator_id uuid NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
-    storage_path text);
-  CREATE TABLE public.notifications (
-    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id uuid NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE, titulo text);
-  CREATE TABLE public.push_subscriptions (
-    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id uuid NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE, endpoint text);
-
-  CREATE FUNCTION public.get_my_company_id() RETURNS uuid
-    LANGUAGE sql SECURITY DEFINER STABLE SET search_path = public AS $c$
-    SELECT company_id FROM profiles WHERE id = auth.uid() LIMIT 1 $c$;
-  CREATE FUNCTION public.get_my_role() RETURNS text
-    LANGUAGE sql SECURITY DEFINER STABLE SET search_path = public AS $r$
-    SELECT role FROM profiles WHERE id = auth.uid() LIMIT 1 $r$;
-
-  ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
-  CREATE POLICY "profiles_select" ON profiles
-    FOR SELECT USING (id = auth.uid() OR company_id = get_my_company_id());
-  CREATE POLICY "profiles_update_own" ON public.profiles
-    FOR UPDATE USING (id = auth.uid())
-    WITH CHECK (id = auth.uid() AND company_id = public.get_my_company_id());
-  CREATE POLICY "profiles_manage_company" ON profiles
-    FOR ALL USING (
-      company_id = get_my_company_id() AND get_my_role() IN ('admin','gestor'));
-
-  ALTER TABLE public.timesheets ENABLE ROW LEVEL SECURITY;
-  CREATE POLICY "timesheets_own_select" ON timesheets
-    FOR SELECT USING (collaborator_id = auth.uid());
-  CREATE POLICY "collaborators see own timesheets" ON timesheets
-    FOR SELECT USING (collaborator_id = auth.uid());
-  ALTER TABLE public.payroll_records ENABLE ROW LEVEL SECURITY;
-  CREATE POLICY "collaborators see own payroll" ON payroll_records
-    FOR SELECT USING (collaborator_id = auth.uid());
-  CREATE POLICY "payroll_company" ON payroll_records
-    FOR SELECT USING (company_id = get_my_company_id());
-  ALTER TABLE public.absences ENABLE ROW LEVEL SECURITY;
-  CREATE POLICY "absences_own_select" ON absences
-    FOR SELECT USING (collaborator_id = auth.uid());
-  ALTER TABLE public.daily_clocks ENABLE ROW LEVEL SECURITY;
-  CREATE POLICY "daily_clocks_own" ON daily_clocks
-    FOR ALL USING (collaborator_id = auth.uid())
-    WITH CHECK (collaborator_id = auth.uid());
-  ALTER TABLE public.service_photos ENABLE ROW LEVEL SECURITY;
-  CREATE POLICY "service_photos_own_read" ON service_photos
-    FOR SELECT USING (collaborator_id = auth.uid());
-  ALTER TABLE public.notifications ENABLE ROW LEVEL SECURITY;
-  CREATE POLICY "users see own notifications" ON notifications
-    FOR SELECT USING (user_id = auth.uid());
-  ALTER TABLE public.push_subscriptions ENABLE ROW LEVEL SECURITY;
-  CREATE POLICY "users manage own push subs" ON push_subscriptions
-    FOR ALL USING (user_id = auth.uid()) WITH CHECK (user_id = auth.uid());
-
-  DO $roles$ BEGIN
-    IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname='authenticated')
-      THEN CREATE ROLE authenticated; END IF;
-    IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname='anon')
-      THEN CREATE ROLE anon; END IF;
-    IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname='service_role')
-      THEN CREATE ROLE service_role; END IF;
-  END $roles$;
-  GRANT USAGE ON SCHEMA public, auth TO authenticated, anon, service_role;
-  GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public
-    TO authenticated, anon;
-`;
+/**
+ * 🔴 Deixou de ser escrito à mão — ver `helpers/production-baseline.ts`.
+ *
+ *    Tinha treze tabelas com colunas inventadas. Produção tem 47 e 93
+ *    políticas. Era esse subconjunto que fazia estas provas serem verdadeiras
+ *    sem serem suficientes.
+ */
+const BASELINE = () =>
+  `DROP SCHEMA IF EXISTS public CASCADE;
+   DROP SCHEMA IF EXISTS auth CASCADE;
+   CREATE SCHEMA public;
+   ${baselineCompleto()}`;
 
 async function waitForPostgres() {
   const deadline = Date.now() + 60_000;
@@ -167,8 +73,17 @@ async function waitForPostgres() {
 
 /** Gente que já existia antes de tudo isto, com o seu histórico. */
 async function mundoAntigo() {
-  await pool.query(BASELINE);
-  await pool.query("INSERT INTO companies VALUES($1,'A'),($2,'B')", [EMPRESA_A, EMPRESA_B]);
+  await pool.query(BASELINE());
+  await pool.query("INSERT INTO companies(id,name,slug) VALUES($1,'A','a'),($2,'B','b')",
+    [EMPRESA_A, EMPRESA_B]);
+  await pool.query("INSERT INTO clients(id,company_id,name) VALUES($1,$2,'Cliente')", [CLIENTE, EMPRESA_A]);
+  await pool.query(
+    "INSERT INTO locations(id,company_id,client_id,name,address) VALUES($1,$2,$3,'Local','Rua')",
+    [LOCAL, EMPRESA_A, CLIENTE]);
+  await pool.query(
+    `INSERT INTO services(id,company_id,location_id,reference_number,scheduled_start,scheduled_end)
+     VALUES($1,$2,$3,'S-1',now(),now())`, [SERVICO, EMPRESA_A, LOCAL]);
+  await pool.query("INSERT INTO teams(id,company_id,name) VALUES($1,$2,'Equipa')", [EQUIPA, EMPRESA_A]);
   const criar = async (empresa: string, nome: string, papel: string) => {
     const id = randomUUID();
     await pool.query("INSERT INTO auth.users VALUES($1,$2)", [id, `${nome}@exemplo.pt`]);
@@ -186,18 +101,18 @@ async function mundoAntigo() {
   };
   for (const quem of [ids.colab]) {
     await pool.query(
-      "INSERT INTO payroll_records(company_id,collaborator_id,net_salary) VALUES($1,$2,1200)",
+      "INSERT INTO payroll_records(company_id,collaborator_id,period_year,period_month,net_salary) VALUES($1,$2,2026,8,1200)",
       [EMPRESA_A, quem]);
-    await pool.query("INSERT INTO team_members(collaborator_id) VALUES($1)", [quem]);
+    await pool.query("INSERT INTO team_members(team_id,collaborator_id) VALUES($1,$2)", [EQUIPA, quem]);
     await pool.query(
-      "INSERT INTO collaborator_documents(collaborator_id,file_url) VALUES($1,'contrato.pdf')",
-      [quem]);
-    await pool.query("INSERT INTO absences(company_id,collaborator_id,motivo) VALUES($1,$2,'d')",
+      "INSERT INTO collaborator_documents(company_id,collaborator_id,file_name,file_url) VALUES($1,$2,'contrato.pdf','contrato.pdf')",
       [EMPRESA_A, quem]);
-    await pool.query("INSERT INTO vacation_requests(company_id,collaborator_id) VALUES($1,$2)",
+    await pool.query("INSERT INTO absences(company_id,collaborator_id,absence_type,starts_on,ends_on) VALUES($1,$2,'doenca','2026-08-26','2026-08-26')",
       [EMPRESA_A, quem]);
-    await pool.query("INSERT INTO timesheets(company_id,collaborator_id,horas) VALUES($1,$2,8)",
+    await pool.query("INSERT INTO vacation_requests(company_id,collaborator_id,starts_on,ends_on) VALUES($1,$2,'2026-08-26','2026-08-27')",
       [EMPRESA_A, quem]);
+    await pool.query("INSERT INTO timesheets(company_id,collaborator_id,service_id) VALUES($1,$2,$3)",
+      [EMPRESA_A, quem, SERVICO]);
   }
   return ids;
 }
@@ -346,14 +261,14 @@ describe.sequential("consumidores — uma pessoa sem conta não parte nada", () 
     // Algumas destas tabelas não têm `company_id`; passar um parâmetro que a
     // consulta não usa faz o Postgres recusar por não lhe saber o tipo.
     const comEmpresa: Record<string, string> = {
-      payroll_records: "(company_id,collaborator_id,net_salary) VALUES($1,$2,800)",
-      absences: "(company_id,collaborator_id,motivo) VALUES($1,$2,'d')",
-      vacation_requests: "(company_id,collaborator_id) VALUES($1,$2)",
-      timesheets: "(company_id,collaborator_id,horas) VALUES($1,$2,8)",
+      payroll_records: "(company_id,collaborator_id,period_year,period_month,net_salary) VALUES($1,$2,2026,8,800)",
+      absences: "(company_id,collaborator_id,absence_type,starts_on,ends_on) VALUES($1,$2,'doenca','2026-08-26','2026-08-26')",
+      vacation_requests: "(company_id,collaborator_id,starts_on,ends_on) VALUES($1,$2,'2026-08-26','2026-08-27')",
+      timesheets: `(company_id,collaborator_id,service_id) VALUES($1,$2,'${SERVICO}')`,
+      collaborator_documents: "(company_id,collaborator_id,file_name,file_url) VALUES($1,$2,'c.pdf','c.pdf')",
     };
     const semEmpresa: Record<string, string> = {
-      team_members: "(collaborator_id) VALUES($1)",
-      collaborator_documents: "(collaborator_id,file_url) VALUES($1,'c.pdf')",
+      team_members: `(team_id,collaborator_id) VALUES('${EQUIPA}',$1)`,
     };
     const sql = `INSERT INTO ${tabela} ${comEmpresa[tabela] ?? semEmpresa[tabela]}`;
     const params = tabela in comEmpresa ? [EMPRESA_A, semConta] : [semConta];
@@ -386,7 +301,7 @@ describe.sequential("o ciclo completo, com a mesma identidade do princípio ao f
     await pool.query("INSERT INTO profiles(id,company_id,full_name) VALUES($1,$2,'Maria')",
       [pessoa, EMPRESA_A]);
     await pool.query(
-      "INSERT INTO payroll_records(company_id,collaborator_id,net_salary) VALUES($1,$2,900)",
+      "INSERT INTO payroll_records(company_id,collaborator_id,period_year,period_month,net_salary) VALUES($1,$2,2026,8,900)",
       [EMPRESA_A, pessoa]);
 
     // 2. Dar-lhe acesso.
