@@ -3,7 +3,13 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
-import { isNoRowsError, logQueryFailure, queryFailure } from "@/lib/query-error";
+import { logQueryFailure } from "@/lib/query-error";
+import {
+  canonicalSnapshot,
+  type DayAssignment,
+  type TeamAllocationSnapshot,
+  type VehicleAssignment,
+} from "@/domain/teams/allocation-draft";
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 
@@ -159,50 +165,11 @@ export async function getAllocationsForDate(date: string) {
   return data as unknown as VehicleAllocation[];
 }
 
-export async function upsertAllocation(input: {
-  vehicle_id: string;
-  team_id: string;
-  driver_id: string | null;
-  date: string;
-}) {
-  const companyId = await getCompanyId();
-  const admin = createAdminClient();
-
-  const { error } = await admin
-    .from("vehicle_allocations")
-    .upsert(
-      {
-        company_id: companyId,
-        vehicle_id: input.vehicle_id,
-        team_id: input.team_id,
-        driver_id: input.driver_id || null,
-        date: input.date,
-      },
-      { onConflict: "vehicle_id,date" },
-    );
-
-  if (error) throw error;
-}
-
-export async function removeAllocation(teamId: string, date: string) {
-  const companyId = await getCompanyId();
-  const admin = createAdminClient();
-
-  const { error } = await admin
-    .from("vehicle_allocations")
-    .delete()
-    .eq("company_id", companyId)
-    .eq("team_id", teamId)
-    .eq("date", date);
-
-  if (error) throw error;
-}
-
 // ─── Trocar colaboradoras de equipa por dia ─────────────────────────────────────
 
 export interface DayTeamAssignment {
   collaborator_id: string;
-  team_id: string;
+  team_id: string | null;
 }
 
 /** Lê as reatribuições do dia (colaboradora → equipa com que trabalha hoje). */
@@ -220,106 +187,81 @@ export async function getDayTeamAssignmentsForDate(date: string): Promise<DayTea
   return (data ?? []) as DayTeamAssignment[];
 }
 
-/**
- * Move uma colaboradora para a equipa `teamId` apenas nesse dia e avisa-a no
- * telemóvel (push + notificação in-app). Se `teamId` for a equipa de origem
- * (`homeTeamId`), remove a reatribuição — volta à sua equipa.
- * Nunca lança: devolve sempre `{ ok }`.
- */
-export async function moveCollaboratorToTeam(input: {
-  collaboratorId: string;
-  teamId: string;
-  homeTeamId: string | null;
+type RpcInvoker = (
+  name: string,
+  args: Record<string, unknown>,
+) => Promise<{ data: unknown; error: { message?: string } | null }>;
+
+export async function saveTeamDayAllocations(input: {
   date: string;
-}): Promise<{ ok: boolean; error?: string; notified?: boolean }> {
-  try {
-    const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return { ok: false, error: "Não autenticado." };
+  expected: TeamAllocationSnapshot;
+  memberAssignments: DayAssignment[];
+  vehicleAllocations: VehicleAssignment[];
+}): Promise<
+  | { ok: true; snapshot: TeamAllocationSnapshot }
+  | { ok: false; error: string; conflict?: boolean }
+> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { ok: false, error: "Não autenticado." };
 
-    const admin = createAdminClient();
-    const { data: actor } = await admin
-      .from("profiles").select("company_id, role").eq("id", user.id).single();
-    if (!actor || !["admin", "gestor"].includes(actor.role)) {
-      return { ok: false, error: "Sem permissão." };
-    }
-    const companyId = actor.company_id;
-
-    const { data: collab, error: collabError } = await admin
-      .from("profiles").select("id, full_name, company_id").eq("id", input.collaboratorId).single();
-    // A verificação de empresa depende desta leitura: sem ela, "inválida".
-    if (collabError && !isNoRowsError(collabError)) {
-      return queryFailure("moveCollaboratorToTeam:collaborator", collabError);
-    }
-    if (!collab || collab.company_id !== companyId) {
-      return { ok: false, error: "Colaboradora inválida." };
-    }
-
-    // Validar que a equipa de destino é da empresa.
-    const { data: targetTeam, error: targetTeamError } = await admin
-      .from("teams")
-      .select("id")
-      .eq("id", input.teamId)
-      .eq("company_id", companyId)
-      .single();
-    if (targetTeamError && !isNoRowsError(targetTeamError)) {
-      return queryFailure("moveCollaboratorToTeam:team", targetTeamError);
-    }
-    if (!targetTeam) return { ok: false, error: "Equipa inválida." };
-
-    // Movimento PERMANENTE: atualiza a composição da equipa (team_members), para
-    // que a aba Equipas e o calendário fiquem sempre iguais.
-    // 1) Fecha qualquer pertença ativa noutras equipas.
-    await admin
-      .from("team_members")
-      .update({ left_at: input.date })
-      .eq("collaborator_id", input.collaboratorId)
-      .is("left_at", null)
-      .neq("team_id", input.teamId);
-
-    // 2) Ativa (ou cria) a pertença à equipa de destino.
-    const { error: upErr } = await admin
-      .from("team_members")
-      .upsert(
-        {
-          team_id: input.teamId,
-          collaborator_id: input.collaboratorId,
-          left_at: null,
-          joined_at: input.date,
-        },
-        { onConflict: "team_id,collaborator_id" },
-      );
-    if (upErr) return { ok: false, error: upErr.message };
-
-    // 3) Limpa reatribuições diárias antigas desta colaboradora (agora obsoletas:
-    //    a mudança passou a ser permanente).
-    await admin
-      .from("collaborator_ride_assignments")
-      .delete()
-      .eq("company_id", companyId)
-      .eq("collaborator_id", input.collaboratorId);
-
-    const isReset = false;
-    const notified = await notifyDayTeam({
-      admin,
-      companyId,
-      collaboratorId: input.collaboratorId,
-      teamId: input.teamId,
-      date: input.date,
-      isReset,
-    });
-
-    // Mudança permanente em team_members → refrescar as telas que dependem da
-    // composição das equipas (aba Equipas, calendário e geração de serviços).
-    revalidatePath("/dashboard/equipas");
-    revalidatePath("/dashboard/calendario");
-
-    return { ok: true, notified };
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : "Erro interno desconhecido";
-    console.error("[moveCollaboratorToTeam] uncaught:", err);
-    return { ok: false, error: msg };
+  const admin = createAdminClient();
+  const { data: actor, error: actorError } = await admin
+    .from("profiles")
+    .select("company_id, role")
+    .eq("id", user.id)
+    .single();
+  if (actorError || !actor || !["admin", "gestor"].includes(actor.role)) {
+    return { ok: false, error: "Sem permissão." };
   }
+
+  const rpc = admin.rpc.bind(admin) as unknown as RpcInvoker;
+  const { data, error } = await rpc("save_team_day_allocations", {
+    p_company_id: actor.company_id,
+    p_actor_id: user.id,
+    p_date: input.date,
+    p_expected_snapshot: canonicalSnapshot(input.expected),
+    p_member_assignments: canonicalSnapshot({
+      member_assignments: input.memberAssignments,
+      vehicle_allocations: [],
+    }).member_assignments,
+    p_vehicle_allocations: canonicalSnapshot({
+      member_assignments: [],
+      vehicle_allocations: input.vehicleAllocations,
+    }).vehicle_allocations,
+  });
+
+  if (error) {
+    const conflict = error.message?.includes("TEAM_ALLOCATION_CONFLICT") ?? false;
+    return {
+      ok: false,
+      conflict,
+      error: conflict
+        ? "As alocações foram alteradas por outra pessoa. Atualize antes de guardar novamente."
+        : "Não foi possível guardar as alocações.",
+    };
+  }
+
+  const snapshot = data as TeamAllocationSnapshot | null;
+  if (!snapshot?.member_assignments || !snapshot?.vehicle_allocations) {
+    return { ok: false, error: "A base devolveu uma resposta incompleta." };
+  }
+
+  const previous = new Map(input.expected.member_assignments.map((row) => [row.collaborator_id, row.team_id]));
+  await Promise.all(snapshot.member_assignments
+    .filter((row) => previous.get(row.collaborator_id) !== row.team_id)
+    .map((row) => notifyDayTeam({
+      admin,
+      companyId: actor.company_id,
+      collaboratorId: row.collaborator_id,
+      teamId: row.team_id,
+      date: input.date,
+    })));
+
+  revalidatePath("/dashboard/calendario");
+  revalidatePath("/dashboard/equipas");
+  revalidatePath("/app");
+  return { ok: true, snapshot: canonicalSnapshot(snapshot) };
 }
 
 /** Avisa a colaboradora (in-app + web push) da equipa com que trabalha nesse dia. */
@@ -328,13 +270,12 @@ async function notifyDayTeam(args: {
   admin: any;
   companyId: string;
   collaboratorId: string;
-  teamId: string;
+  teamId: string | null;
   date: string;
-  isReset: boolean;
 }): Promise<boolean> {
-  const { admin, companyId, collaboratorId, teamId, date, isReset } = args;
+  const { admin, companyId, collaboratorId, teamId, date } = args;
 
-  const [{ data: team }, { data: alloc }] = await Promise.all([
+  const [{ data: team }, { data: alloc }] = teamId ? await Promise.all([
     admin.from("teams").select("name").eq("id", teamId).single(),
     admin
       .from("vehicle_allocations")
@@ -343,7 +284,7 @@ async function notifyDayTeam(args: {
       .eq("team_id", teamId)
       .eq("date", date)
       .maybeSingle(),
-  ]);
+  ]) : [{ data: null }, { data: null }];
 
   const vehicle = alloc?.vehicles
     ? (Array.isArray(alloc.vehicles) ? alloc.vehicles[0] : alloc.vehicles)
@@ -356,9 +297,9 @@ async function notifyDayTeam(args: {
   });
 
   const title = "🔄 Mudança de equipa";
-  const body = isReset
-    ? `${dateLabel}: voltas à tua equipa.`
-    : `${dateLabel}: trabalhas com a equipa ${teamName}${vehicleLabel ? ` (viatura ${vehicleLabel})` : ""}.`;
+  const body = teamId
+    ? `${dateLabel}: trabalhas com a equipa ${teamName}${vehicleLabel ? ` (viatura ${vehicleLabel})` : ""}.`
+    : `${dateLabel}: ficas disponível, sem equipa atribuída.`;
 
   await admin.from("notifications").insert({
     company_id: companyId,

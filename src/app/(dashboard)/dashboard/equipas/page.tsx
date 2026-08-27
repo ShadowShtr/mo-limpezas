@@ -5,6 +5,7 @@ import { Header } from "@/components/layout/header";
 import { EquipasGrid } from "./_components/grid";
 import { EquipaSheet } from "./_components/sheet";
 import { Plus, Car } from "lucide-react";
+import { logQueryFailure } from "@/lib/query-error";
 
 export default async function EquipasPage() {
   const supabase = await createClient();
@@ -18,7 +19,7 @@ export default async function EquipasPage() {
     .eq("id", user!.id)
     .single();
 
-  const [equipasRes, colaboradoresRes] = await Promise.all([
+  const [equipasRes, colaboradoresRes, teamVersionsRes] = await Promise.all([
     admin
       .from("teams_with_members")
       .select("*")
@@ -30,9 +31,23 @@ export default async function EquipasPage() {
       .eq("role", "colaborador")
       .eq("status", "ativo")
       .order("full_name"),
+    admin
+      .from("teams")
+      .select("id, updated_at")
+      .eq("company_id", me?.company_id ?? ""),
   ]);
 
-  const equipas = [...(equipasRes.data ?? [])].sort((a, b) =>
+  if (equipasRes.error || colaboradoresRes.error || teamVersionsRes.error) {
+    if (equipasRes.error) logQueryFailure("EquipasPage:teams", equipasRes.error);
+    if (colaboradoresRes.error) logQueryFailure("EquipasPage:profiles", colaboradoresRes.error);
+    if (teamVersionsRes.error) logQueryFailure("EquipasPage:versions", teamVersionsRes.error);
+    throw new Error("Não foi possível carregar as equipas.");
+  }
+
+  const versions = new Map((teamVersionsRes.data ?? []).map((team) => [team.id, team.updated_at]));
+  const equipas = [...(equipasRes.data ?? [])]
+    .map((team) => ({ ...team, updated_at: versions.get(team.id) ?? "" }))
+    .sort((a, b) =>
     (a.name as string).localeCompare(b.name as string, "pt", { numeric: true, sensitivity: "base" })
   );
 

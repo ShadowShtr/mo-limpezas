@@ -14,6 +14,7 @@ type Equipa = {
   color: string;
   active: boolean;
   leader_id: string | null;
+  updated_at: string;
   members: Member[];
 };
 

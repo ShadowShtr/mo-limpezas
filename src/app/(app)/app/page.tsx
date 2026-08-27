@@ -13,6 +13,11 @@ export default async function AppHomePage() {
 
   const supabase = await createClient();
 
+  const today = new Date();
+  const todayDateKey = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Europe/Lisbon", year: "numeric", month: "2-digit", day: "2-digit",
+  }).format(today);
+
   // Equipas onde a colaboradora está activa
   const { data: memberships } = await supabase
     .from("team_members")
@@ -22,15 +27,24 @@ export default async function AppHomePage() {
 
   const teamIds = (memberships ?? []).map((m) => m.team_id);
 
-  const today = new Date();
+  const { data: dayTeam } = await supabase
+    .from("collaborator_ride_assignments")
+    .select("team_id")
+    .eq("collaborator_id", user.id)
+    .eq("date", todayDateKey)
+    .maybeSingle();
+
+  const effTeamId = dayTeam ? dayTeam.team_id : teamIds[0] ?? null;
+  const movido = dayTeam !== null;
+
   const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate()).toISOString();
   const todayEnd   = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 23, 59, 59).toISOString();
 
-  const { data: services } = teamIds.length
+  const { data: services } = effTeamId
     ? await supabase
         .from("services_full")
         .select("id, scheduled_start, scheduled_end, status, client_name, location_name, location_address, team_color")
-        .in("team_id", teamIds)
+        .eq("team_id", effTeamId)
         .gte("scheduled_start", todayStart)
         .lte("scheduled_start", todayEnd)
         .order("scheduled_start")
@@ -39,9 +53,6 @@ export default async function AppHomePage() {
   const list = services ?? [];
 
   // Ponto geral de hoje — sem ele, os pontos de serviço ficam bloqueados.
-  const todayDateKey = new Intl.DateTimeFormat("en-CA", {
-    timeZone: "Europe/Lisbon", year: "numeric", month: "2-digit", day: "2-digit",
-  }).format(today);
   const { data: dayClock } = await supabase
     .from("daily_clocks")
     .select("clock_in_at")
@@ -52,17 +63,7 @@ export default async function AppHomePage() {
 
   // ── Equipa/viatura de hoje ─────────────────────────────────────────────────
   // Por defeito trabalha com a sua equipa; uma reatribuição do dia tem prioridade.
-  const todayDate = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
-
-  const { data: dayTeam } = await supabase
-    .from("collaborator_ride_assignments")
-    .select("team_id")
-    .eq("collaborator_id", user.id)
-    .eq("date", todayDate)
-    .maybeSingle();
-
-  const effTeamId = dayTeam?.team_id ?? teamIds[0] ?? null;
-  const movido = Boolean(dayTeam?.team_id);
+  const todayDate = todayDateKey;
 
   let todayTeam: { name: string; vehicle: string | null } | null = null;
   if (effTeamId) {
@@ -186,6 +187,17 @@ export default async function AppHomePage() {
               Alterada
             </span>
           )}
+        </div>
+      )}
+      {movido && !todayTeam && (
+        <div className="rounded-2xl border border-slate-200 bg-white p-4 flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center shrink-0">
+            <Users className="w-5 h-5 text-slate-500" />
+          </div>
+          <div>
+            <p className="text-[11px] text-[var(--color-text-muted)] uppercase tracking-wide">Alocação de hoje</p>
+            <p className="text-sm font-semibold text-[var(--color-text-main)]">Disponível</p>
+          </div>
         </div>
       )}
 

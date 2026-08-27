@@ -14,6 +14,7 @@ type Equipa = {
   color: string;
   active: boolean;
   leader_id: string | null;
+  updated_at: string;
   members: Member[];
 };
 
@@ -54,6 +55,7 @@ export function EquipaSheet({ trigger, companyId, colaboradores, equipa }: Props
   const isEdit = !!equipa;
 
   function toggleMember(id: string) {
+    if (leaderId === id) setLeaderId("");
     setSelectedMembers((prev) =>
       prev.includes(id) ? prev.filter((m) => m !== id) : [...prev, id]
     );
@@ -69,6 +71,11 @@ export function EquipaSheet({ trigger, companyId, colaboradores, equipa }: Props
       companyId,
       { name, color, active, leader_id: leaderId || null },
       selectedMembers,
+      equipa ? {
+        updatedAt: equipa.updated_at,
+        leaderId: equipa.leader_id,
+        memberIds: equipa.members.map((member) => member.id),
+      } : undefined,
     );
 
     setLoading(false);
@@ -202,7 +209,15 @@ export function EquipaSheet({ trigger, companyId, colaboradores, equipa }: Props
 
   return (
     <>
-      <span onClick={() => setOpen(true)} style={{ display: "contents", cursor: "pointer" }}>
+      <span onClick={() => {
+        setName(equipa?.name ?? "");
+        setColor(equipa?.color ?? COLORS[0]);
+        setActive(equipa?.active ?? true);
+        setLeaderId(equipa?.leader_id ?? "");
+        setSelectedMembers(equipa?.members.map((member) => member.id) ?? []);
+        setMessage(null);
+        setOpen(true);
+      }} style={{ display: "contents", cursor: "pointer" }}>
         {trigger}
       </span>
       {overlay}
