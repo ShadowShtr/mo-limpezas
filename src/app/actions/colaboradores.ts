@@ -1,5 +1,7 @@
 "use server";
 
+import { randomUUID } from "node:crypto";
+
 import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
@@ -61,7 +63,24 @@ const colaboradorSchema = z.object({
   status: z.enum(["ativo", "inativo", "arquivado"]).default("ativo"),
   contracted_hours_month: z.number().min(0).max(744).nullable().optional(),
   skills: z.array(z.string().max(60)).default([]),
+
+  // 🔴 Estes cinco existiam no formulário e não existiam aqui. O `safeParse`
+  //    deitava-os fora em silêncio e o INSERT nunca os via: escrevia-se o NIF,
+  //    o IBAN, o valor à hora e as datas de contrato, gravava-se com sucesso, e
+  //    a pessoa nascia sem nada disso. Perder o que alguém acabou de escrever é
+  //    pior do que recusar guardar — ninguém vai lá confirmar.
+  nif: z.string().max(20).optional(),
+  iban: z.string().max(40).optional(),
+  hourly_rate: z.number().min(0).max(10000).nullable().optional(),
+  contract_start: z.string().optional().nullable(),
+  contract_end: z.string().optional().nullable(),
 });
+
+/** Vazio é ausência, nunca `""` — um valor inventado é indistinguível de um real. */
+const ouNulo = (v: string | null | undefined): string | null => {
+  const t = typeof v === "string" ? v.trim() : "";
+  return t === "" ? null : t;
+};
 
 export async function createColaborador(input: ColaboradorInput) {
   const parsed = colaboradorSchema.safeParse(input);
@@ -108,11 +127,28 @@ export async function createColaborador(input: ColaboradorInput) {
   const { error: profileError } = await admin
     .from("profiles")
     .insert({
+      // 🔴 O id da pessoa nasce aqui, no servidor.
+      //
+      //    `profiles.id` é PRIMARY KEY e **não tem DEFAULT**: durante anos veio
+      //    de `auth.users.id`, porque criar uma pessoa era criar uma conta. Ao
+      //    separar as duas coisas, o INSERT deixou de trazer id nenhum e a base
+      //    respondia `null value in column "id" of relation "profiles"`.
+      //
+      //    Não se resolve pedindo um id ao Auth — isso repunha a dependência
+      //    que o EXPAND existe para cortar, e criava uma conta a quem não a
+      //    pediu. A pessoa tem identidade própria; a conta é opcional e vem
+      //    depois.
+      id: randomUUID(),
       company_id: companyId,
       role: parsed.data.role,
       full_name: parsed.data.full_name,
-      email: parsed.data.email?.trim() || null,
-      phone: parsed.data.phone || null,
+      email: ouNulo(parsed.data.email),
+      phone: ouNulo(parsed.data.phone),
+      nif: ouNulo(parsed.data.nif),
+      iban: ouNulo(parsed.data.iban),
+      hourly_rate: parsed.data.hourly_rate ?? null,
+      contract_start: ouNulo(parsed.data.contract_start),
+      contract_end: ouNulo(parsed.data.contract_end),
       status: parsed.data.status,
       contracted_hours_month: parsed.data.contracted_hours_month,
       skills: parsed.data.skills,
