@@ -1,11 +1,11 @@
 {
   "inventorySource": "git ls-files",
   "summary": {
-    "repositoryFiles": 725,
-    "textFiles": 712,
-    "sourceFiles": 520,
-    "textLines": 170011,
-    "typescriptDiagnostics": 0,
+    "repositoryFiles": 726,
+    "textFiles": 713,
+    "sourceFiles": 521,
+    "textLines": 170025,
+    "typescriptDiagnostics": 1,
     "productionEntries": 71,
     "unreachableProductionModules": 42,
     "exactDuplicateFileGroups": 0
@@ -149,5 +149,15 @@
       "src/lib/payroll-calc.ts"
     ]
   },
-  "diagnostics": []
+  "diagnostics": [
+    {
+      "code": 2322,
+      "category": "Error",
+      "message": "Type '\"melhoria\"' is not assignable to type '\"manutencao\" | \"correcao\" | \"novidade\" | \"aviso\"'.",
+      "location": {
+        "file": "src/release-notes/2026-08-27-pagamentos-leitura-unificada.ts",
+        "line": 6
+      }
+    }
+  ]
 }
