@@ -43,6 +43,21 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
+    # Postgres descartável, só para o teste de concorrência da 078. Nasce e
+    # morre com o job; não guarda nada e não conhece produção.
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -113,6 +128,29 @@ jobs:
         # destruir ou popular uma base real, `createAdminClient` num client
         # component, ou `auth.signUp` em código de produção.
         run: npm run audit:code:strict
+
+      - name: Concorrência real da 078 (duas ligações Postgres)
+        # ─────────────────────────────────────────────────────────────────────
+        # 🔴 Porque é que isto precisa de um Postgres a sério
+        #
+        # O PGlite prova que a sequência é monotónica numa sessão e que
+        # `UNIQUE(company_id, sequence)` impede um duplicado. Não prova aquilo
+        # para que `next_company_sequence` foi escrita: que duas transações
+        # simultâneas obtêm números diferentes **sem que nenhuma falhe**.
+        #
+        #   «a constraint impede corrupção»  → uma das requests rebenta
+        #   «as duas serializam»             → as duas passam, N e N+1
+        #
+        # A primeira é rede de segurança; a segunda é o comportamento. Aceitar
+        # uma como prova da outra seria dizer que um sistema que falha metade
+        # dos pedidos concorrentes está correto.
+        #
+        # O service container abaixo é descartável, local ao runner, e não tem
+        # nada que ver com produção — o workflow continua sem segredos.
+        # ─────────────────────────────────────────────────────────────────────
+        env:
+          TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/postgres
+        run: npx vitest run src/__tests__/domain-mutation-sequence-concurrency.pg.test.ts
 
       - name: Ensaio da migration 071
         # ─────────────────────────────────────────────────────────────────────
