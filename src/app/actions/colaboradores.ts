@@ -23,15 +23,31 @@ export interface ColaboradorInput {
   company_id: string;
 }
 
+/**
+ * 🔴 Só o nome é obrigatório.
+ *
+ * Tudo o resto pode ficar por preencher e ser completado mais tarde no perfil.
+ * Uma pessoa entra na empresa antes de alguém ter o NIF, o IBAN ou a data de
+ * contrato à mão, e obrigar a inventá-los para poder guardar é como se
+ * perdiam: um valor inventado é indistinguível de um verdadeiro para quem o
+ * ler a seguir.
+ *
+ * `role`, `status` e `contracted_hours_month` têm omissão em vez de serem
+ * exigidos — uma pessoa nova é uma colaboradora activa até alguém decidir
+ * outra coisa.
+ *
+ * `company_id` continua aceite pela forma mas **ignorado**: quem cria é a
+ * empresa de quem está autenticado, e isso resolve-se do lado do servidor.
+ */
 const colaboradorSchema = z.object({
   full_name: z.string().min(2, "Nome deve ter pelo menos 2 caracteres.").max(120).trim(),
   email: z.email("Email inválido.").optional().or(z.literal("")),
   phone: z.string().max(20).optional(),
-  role: z.enum(["colaborador", "gestor", "admin"]),
-  status: z.enum(["ativo", "inativo", "arquivado"]),
-  contracted_hours_month: z.number().min(0).max(744),
-  skills: z.array(z.string().max(60)),
-  company_id: z.string().uuid("company_id inválido."),
+  role: z.enum(["colaborador", "gestor", "admin"]).default("colaborador"),
+  status: z.enum(["ativo", "inativo", "arquivado"]).default("ativo"),
+  contracted_hours_month: z.number().min(0).max(744).nullable().optional(),
+  skills: z.array(z.string().max(60)).default([]),
+  company_id: z.string().uuid("company_id inválido.").optional(),
 });
 
 export async function createColaborador(input: ColaboradorInput) {
@@ -59,28 +75,26 @@ export async function createColaborador(input: ColaboradorInput) {
   // daqui (só serviu para passar na validação de forma do schema).
   const companyId = callerProfile.company_id;
 
-  // Gera email placeholder se não fornecido (formato válido obrigatório pelo GoTrue)
-  const email =
-    parsed.data.email?.trim() ||
-    `${input.full_name.toLowerCase().replace(/\s+/g, ".").replace(/[^a-z0-9.]/g, "")}.${Date.now()}@demo.escala.pt`;
-
-  const { data: authData, error: authError } = await admin.auth.admin.createUser({
-    email,
-    email_confirm: true,
-    user_metadata: {
-      company_id: companyId,
-      role: parsed.data.role,
-      full_name: parsed.data.full_name,
-    },
-  });
-
-  if (authError) return { ok: false as const, error: authError.message };
-
-  // Upsert do profile — cobre o caso em que o trigger falhou silenciosamente
+  // 🔴 Criar uma pessoa não cria conta de acesso, e não inventa dados.
+  //
+  //    O código anterior fazia as duas coisas: chamava `auth.admin.createUser`
+  //    sempre, e quando não havia email fabricava um
+  //    (`nome.1724713200000@demo.escala.pt`) porque o GoTrue exige um. Esse
+  //    endereço ficava guardado como se fosse o email da pessoa.
+  //
+  //    Agora: `INSERT` em `profiles` e mais nada. Quem precisar de entrar na
+  //    aplicação recebe acesso depois, no perfil, por uma acção própria — e é
+  //    aí que uma conta é criada, com um identificador de autenticação que
+  //    ninguém confunde com o email pessoal.
+  //
+  //    `COLLABORATOR_CREATE_AUTH_WRITE = 0`.
+  //
+  //    Isto só é possível porque `profiles.id` deixou de ser chave estrangeira
+  //    para `auth.users` (ver o EXPAND). Antes disso não havia id para dar a
+  //    uma pessoa sem conta.
   const { error: profileError } = await admin
     .from("profiles")
-    .upsert({
-      id: authData.user.id,
+    .insert({
       company_id: companyId,
       role: parsed.data.role,
       full_name: parsed.data.full_name,
@@ -89,7 +103,7 @@ export async function createColaborador(input: ColaboradorInput) {
       status: parsed.data.status,
       contracted_hours_month: parsed.data.contracted_hours_month,
       skills: parsed.data.skills,
-    }, { onConflict: "id" });
+    });
 
   if (profileError) return { ok: false as const, error: profileError.message };
 

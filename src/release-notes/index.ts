@@ -31,6 +31,7 @@ import { nota as categoriaDasSaidas } from "./2026-08-26-categoria-das-saidas";
 //    apontar para coisa nenhuma. Deixou de ser oferecida, não de existir.
 import { nota as colaboradorApenasComNome } from "./2026-08-26-colaborador-apenas-com-nome";
 import { nota as reposicaoDoAcesso } from "./2026-08-26-reposicao-do-acesso";
+import { nota as colaboradorSoComONome } from "./2026-08-27-colaborador-so-com-o-nome";
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   financeiroEAnexos,
@@ -46,6 +47,7 @@ export const RELEASE_NOTES: ReleaseNote[] = [
   categoriaDasSaidas,
   colaboradorApenasComNome,
   reposicaoDoAcesso,
+  colaboradorSoComONome,
 ];
 
 /** As chaves têm de ser únicas — duas notas com a mesma key partilhariam a leitura. */

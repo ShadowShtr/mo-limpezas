@@ -1,21 +1,21 @@
 {
   "generatedBy": "scripts/audit-file-inventory.mjs",
-  "totalFiles": 709,
+  "totalFiles": 712,
   "byStatus": {
-    "MANTER": 691,
+    "MANTER": 694,
     "STANDBY": 18
   },
   "byCategory": {
     "route-ui": 135,
-    "test": 129,
+    "test": 130,
     "migration": 84,
     "lib": 65,
     "script": 48,
-    "domain": 47,
+    "domain": 48,
     "doc": 43,
     "server-action": 41,
     "component": 30,
-    "src-other": 17,
+    "src-other": 18,
     "doc-historico": 16,
     "api-route": 16,
     "config": 12,
@@ -29,7 +29,7 @@
     "supabase-other": 2
   },
   "byConfidence": {
-    "alta": 693,
+    "alta": 696,
     "média": 10,
     "baixa": 6
   },
@@ -4148,6 +4148,30 @@
       }
     },
     {
+      "path": "src/__tests__/collaborator-name-only.test.ts",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "dynamicImport": 1
+      },
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
       "path": "src/__tests__/concurrent-load.test.ts",
       "category": "test",
       "status": "MANTER",
@@ -6675,7 +6699,7 @@
       "signals": {
         "supabase": 2,
         "serviceRole": 6,
-        "sqlWrite": 3
+        "sqlWrite": 5
       },
       "action": "nenhuma",
       "reason": "suite de testes — corre por convenção do vitest",
@@ -11169,7 +11193,7 @@
         "supabase": 20,
         "serverAction": 1,
         "write": 12,
-        "sqlWrite": 13,
+        "sqlWrite": 15,
         "ignoredError": 6,
         "revalidatePath": 6,
         "dynamicImport": 1
@@ -14112,6 +14136,30 @@
       }
     },
     {
+      "path": "src/domain/collaborators/create-input.ts",
+      "category": "domain",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 1,
+      "consumerSample": [
+        "src/__tests__/collaborator-name-only.test.ts"
+      ],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {},
+      "action": "nenhuma",
+      "reason": "em uso: 1 consumidor(es)",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
       "path": "src/domain/dashboard/client-summary.ts",
       "category": "domain",
       "status": "MANTER",
@@ -15206,7 +15254,7 @@
       "category": "domain",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 23,
+      "consumers": 24,
       "consumerSample": [
         "src/__tests__/update-notice-modal.test.tsx",
         "src/__tests__/update-notices-eligibility.test.ts",
@@ -15221,7 +15269,7 @@
       "risks": [],
       "signals": {},
       "action": "nenhuma",
-      "reason": "em uso: 23 consumidor(es), configuração",
+      "reason": "em uso: 24 consumidor(es), configuração",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -17588,6 +17636,32 @@
     },
     {
       "path": "src/release-notes/2026-08-26-reposicao-do-acesso.ts",
+      "category": "src-other",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 1,
+      "consumerSample": [
+        "src/release-notes/index.ts"
+      ],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "sqlWrite": 1
+      },
+      "action": "nenhuma",
+      "reason": "em uso: 1 consumidor(es)",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/release-notes/2026-08-27-colaborador-so-com-o-nome.ts",
       "category": "src-other",
       "status": "MANTER",
       "confidence": "alta",
