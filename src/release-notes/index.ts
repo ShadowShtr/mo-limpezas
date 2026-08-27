@@ -35,6 +35,7 @@ import { nota as colaboradorSoComONome } from "./2026-08-27-colaborador-so-com-o
 import { nota as criarColaboradorCorrigido } from "./2026-08-27-criar-colaborador-corrigido";
 import { nota as criarColaboradorGuardaTudo } from "./2026-08-27-criar-colaborador-guarda-tudo";
 import { nota as pagamentosDiagnosticoDeFalhas } from "./2026-08-28-pagamentos-diagnostico-de-falhas";
+import { nota as pagamentosSoPelaAplicacao } from "./2026-08-28-pagamentos-so-pela-aplicacao";
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   financeiroEAnexos,
@@ -54,6 +55,7 @@ export const RELEASE_NOTES: ReleaseNote[] = [
   criarColaboradorCorrigido,
   criarColaboradorGuardaTudo,
   pagamentosDiagnosticoDeFalhas,
+  pagamentosSoPelaAplicacao,
 ];
 
 /** As chaves têm de ser únicas — duas notas com a mesma key partilhariam a leitura. */
