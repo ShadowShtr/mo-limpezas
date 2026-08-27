@@ -83,6 +83,12 @@ describe("migrations — a versão identifica uma só migration", () => {
     // produção de 2026-08-05, e serão extraídas em PRs isolados.
     //
     // O teste continua a existir para apanhar o **próximo** salto.
+    //
+    // 🔴 077 e 078 **saíram** desta lista. Estiveram cá enquanto viviam em
+    //    branches separadas e o `master` só tinha até à 076 — nessa altura a
+    //    079 abria uma lacuna real. Nesta cabeça a cadeia está inteira
+    //    (077, 078, 079), portanto não há lacuna nenhuma para documentar, e
+    //    mantê-las aqui esconderia o próximo salto verdadeiro.
     const AUSENTES_CONHECIDAS = [66, 67];
 
     const nums = ficheiros()

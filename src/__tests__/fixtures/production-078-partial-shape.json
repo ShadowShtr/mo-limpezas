@@ -1,0 +1,213 @@
+{
+ "company_change_events": {
+  "cols": [
+   {
+    "column_name": "id",
+    "udt_name": "uuid",
+    "is_nullable": "NO",
+    "column_default": "gen_random_uuid()"
+   },
+   {
+    "column_name": "company_id",
+    "udt_name": "uuid",
+    "is_nullable": "NO",
+    "column_default": null
+   },
+   {
+    "column_name": "sequence",
+    "udt_name": "int8",
+    "is_nullable": "NO",
+    "column_default": null
+   },
+   {
+    "column_name": "mutation_id",
+    "udt_name": "uuid",
+    "is_nullable": "NO",
+    "column_default": null
+   },
+   {
+    "column_name": "domain",
+    "udt_name": "text",
+    "is_nullable": "NO",
+    "column_default": null
+   },
+   {
+    "column_name": "event_type",
+    "udt_name": "text",
+    "is_nullable": "NO",
+    "column_default": null
+   },
+   {
+    "column_name": "entity_ids",
+    "udt_name": "_uuid",
+    "is_nullable": "NO",
+    "column_default": "'{}'::uuid[]"
+   },
+   {
+    "column_name": "scopes",
+    "udt_name": "_text",
+    "is_nullable": "NO",
+    "column_default": "'{}'::text[]"
+   },
+   {
+    "column_name": "affected_range",
+    "udt_name": "tstzrange",
+    "is_nullable": "YES",
+    "column_default": null
+   },
+   {
+    "column_name": "payload",
+    "udt_name": "jsonb",
+    "is_nullable": "NO",
+    "column_default": "'{}'::jsonb"
+   },
+   {
+    "column_name": "delivered_at",
+    "udt_name": "timestamptz",
+    "is_nullable": "YES",
+    "column_default": null
+   },
+   {
+    "column_name": "created_at",
+    "udt_name": "timestamptz",
+    "is_nullable": "NO",
+    "column_default": "now()"
+   }
+  ],
+  "cons": [
+   {
+    "conname": "company_change_events_company_id_fkey",
+    "def": "FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE"
+   },
+   {
+    "conname": "company_change_events_company_id_mutation_id_domain_event_t_key",
+    "def": "UNIQUE (company_id, mutation_id, domain, event_type)"
+   },
+   {
+    "conname": "company_change_events_company_id_sequence_key",
+    "def": "UNIQUE (company_id, sequence)"
+   },
+   {
+    "conname": "company_change_events_pkey",
+    "def": "PRIMARY KEY (id)"
+   }
+  ],
+  "idx": [
+   {
+    "indexname": "company_change_events_company_id_mutation_id_domain_event_t_key",
+    "indexdef": "CREATE UNIQUE INDEX company_change_events_company_id_mutation_id_domain_event_t_key ON public.company_change_events USING btree (company_id, mutation_id, domain, event_type)"
+   },
+   {
+    "indexname": "company_change_events_company_id_sequence_key",
+    "indexdef": "CREATE UNIQUE INDEX company_change_events_company_id_sequence_key ON public.company_change_events USING btree (company_id, sequence)"
+   },
+   {
+    "indexname": "company_change_events_pkey",
+    "indexdef": "CREATE UNIQUE INDEX company_change_events_pkey ON public.company_change_events USING btree (id)"
+   },
+   {
+    "indexname": "idx_company_change_events_pending",
+    "indexdef": "CREATE INDEX idx_company_change_events_pending ON public.company_change_events USING btree (company_id, sequence) WHERE (delivered_at IS NULL)"
+   }
+  ],
+  "rls": {
+   "relrowsecurity": true
+  },
+  "pol": [
+   {
+    "policyname": "managers see company change events",
+    "cmd": "SELECT",
+    "roles": "{public}",
+    "qual": "((company_id = ( SELECT profiles.company_id\n   FROM profiles\n  WHERE (profiles.id = get_my_profile_id()))) AND (( SELECT profiles.role\n   FROM profiles\n  WHERE (profiles.id = get_my_profile_id())) = ANY (ARRAY['admin'::text, 'gestor'::text])))",
+    "with_check": null
+   }
+  ]
+ },
+ "domain_mutations": {
+  "cols": [
+   {
+    "column_name": "id",
+    "udt_name": "uuid",
+    "is_nullable": "NO",
+    "column_default": "gen_random_uuid()"
+   },
+   {
+    "column_name": "company_id",
+    "udt_name": "uuid",
+    "is_nullable": "NO",
+    "column_default": null
+   },
+   {
+    "column_name": "mutation_id",
+    "udt_name": "uuid",
+    "is_nullable": "NO",
+    "column_default": null
+   },
+   {
+    "column_name": "domain",
+    "udt_name": "text",
+    "is_nullable": "NO",
+    "column_default": null
+   },
+   {
+    "column_name": "status",
+    "udt_name": "text",
+    "is_nullable": "NO",
+    "column_default": null
+   },
+   {
+    "column_name": "result",
+    "udt_name": "jsonb",
+    "is_nullable": "NO",
+    "column_default": "'{}'::jsonb"
+   },
+   {
+    "column_name": "created_at",
+    "udt_name": "timestamptz",
+    "is_nullable": "NO",
+    "column_default": "now()"
+   }
+  ],
+  "cons": [
+   {
+    "conname": "domain_mutations_company_id_fkey",
+    "def": "FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE"
+   },
+   {
+    "conname": "domain_mutations_company_id_mutation_id_key",
+    "def": "UNIQUE (company_id, mutation_id)"
+   },
+   {
+    "conname": "domain_mutations_pkey",
+    "def": "PRIMARY KEY (id)"
+   },
+   {
+    "conname": "domain_mutations_status_check",
+    "def": "CHECK ((status = 'completed'::text))"
+   }
+  ],
+  "idx": [
+   {
+    "indexname": "domain_mutations_company_id_mutation_id_key",
+    "indexdef": "CREATE UNIQUE INDEX domain_mutations_company_id_mutation_id_key ON public.domain_mutations USING btree (company_id, mutation_id)"
+   },
+   {
+    "indexname": "domain_mutations_pkey",
+    "indexdef": "CREATE UNIQUE INDEX domain_mutations_pkey ON public.domain_mutations USING btree (id)"
+   }
+  ],
+  "rls": {
+   "relrowsecurity": true
+  },
+  "pol": [
+   {
+    "policyname": "service role domain mutations",
+    "cmd": "ALL",
+    "roles": "{public}",
+    "qual": "false",
+    "with_check": "false"
+   }
+  ]
+ },
+ "fn_record": "CREATE OR REPLACE FUNCTION public.record_company_change_event(p_company_id uuid, p_mutation_id uuid, p_domain text, p_event_type text, p_entity_ids uuid[], p_scopes text[], p_affected_range tstzrange DEFAULT NULL::tstzrange, p_payload jsonb DEFAULT '{}'::jsonb)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\r\nDECLARE\r\n  v_event public.company_change_events;\r\nBEGIN\r\n  INSERT INTO public.company_change_events (\r\n    company_id, mutation_id, domain, event_type, entity_ids, scopes, affected_range, payload\r\n  )\r\n  VALUES (\r\n    p_company_id,\r\n    p_mutation_id,\r\n    p_domain,\r\n    p_event_type,\r\n    COALESCE(p_entity_ids, '{}'),\r\n    COALESCE(p_scopes, '{}'),\r\n    p_affected_range,\r\n    COALESCE(p_payload, '{}'::jsonb)\r\n  )\r\n  ON CONFLICT (company_id, mutation_id, domain, event_type)\r\n  DO UPDATE SET payload = EXCLUDED.payload\r\n  RETURNING * INTO v_event;\r\n\r\n  RETURN jsonb_build_object(\r\n    'event_id', v_event.id,\r\n    'sequence', v_event.sequence\r\n  );\r\nEND;\r\n$function$\n"
+}
