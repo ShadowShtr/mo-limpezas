@@ -19,7 +19,8 @@
     "quality": "npm run typecheck && npm run lint:strict && npm test && npm run rehearse:071 && npm run build",
     "rehearse:071": "node scripts/rehearse-071.mjs",
     "migrations:reconcile:inspect": "node scripts/reconcile-migrations.mjs",
-    "rehearse:chain": "node scripts/rehearse-migration-chain-077-079.mjs"
+    "rehearse:chain": "node scripts/rehearse-migration-chain-077-079.mjs",
+    "rehearse:079": "node scripts/rehearse-079.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.5.0",
