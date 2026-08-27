@@ -109,7 +109,12 @@ describe.sequential("concorrência real das equipas", () => {
   });
 
   it("dois editores da mesma equipa não perdem membros", async () => {
-    const updatedAt = (await pool.query("SELECT updated_at FROM teams WHERE id=$1", [TEAM_A])).rows[0].updated_at;
+    // Keep PostgreSQL microseconds. Converting to Date truncates them and makes
+    // both requests stale before the concurrency check starts.
+    const updatedAt = (await pool.query(
+      "SELECT updated_at::text FROM teams WHERE id=$1",
+      [TEAM_A],
+    )).rows[0].updated_at;
     const call = (memberId: string) => pool.query(
       "SELECT save_team_with_members_v2($1,$2,$3,$4,'[]'::jsonb,$5,$6,$7,$8,$9::uuid[])",
       [COMPANY, ACTOR, TEAM_A, updatedAt, "Equipa A", "#16A34A", true, null, [memberId]],
