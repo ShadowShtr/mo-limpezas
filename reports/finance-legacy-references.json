@@ -1,0 +1,2245 @@
+{
+  "generatedFrom": "git ls-files",
+  "patterns": [
+    "/dashboard/financeiro/fluxo-caixa",
+    "Fluxo de Caixa",
+    "cashFlow",
+    "getCashFlow",
+    "createCashFlow",
+    "/dashboard/financeiro/contas",
+    "Contas",
+    "getAccountsData"
+  ],
+  "counts": {
+    "UI_ONLY": 37,
+    "DOMAIN_REQUIRED": 41,
+    "REPORT_REQUIRED": 40,
+    "RECONCILIATION_REQUIRED": 7,
+    "OTHER": 151
+  },
+  "references": [
+    {
+      "file": "AUDITORIA_COMPLETA.txt",
+      "line": 60,
+      "classification": "OTHER",
+      "patterns": [
+        "getCashFlow",
+        "getAccountsData"
+      ]
+    },
+    {
+      "file": "AUDITORIA_COMPLETA.txt",
+      "line": 435,
+      "classification": "OTHER",
+      "patterns": [
+        "Fluxo de Caixa"
+      ]
+    },
+    {
+      "file": "AUDITORIA_COMPLETA.txt",
+      "line": 493,
+      "classification": "OTHER",
+      "patterns": [
+        "Fluxo de Caixa"
+      ]
+    },
+    {
+      "file": "AUDITORIA_COMPLETA.txt",
+      "line": 530,
+      "classification": "OTHER",
+      "patterns": [
+        "Fluxo de Caixa"
+      ]
+    },
+    {
+      "file": "AUDITORIA_COMPLETA.txt",
+      "line": 555,
+      "classification": "OTHER",
+      "patterns": [
+        "Fluxo de Caixa"
+      ]
+    },
+    {
+      "file": "AUDITORIA_COMPLETA.txt",
+      "line": 661,
+      "classification": "OTHER",
+      "patterns": [
+        "Fluxo de Caixa"
+      ]
+    },
+    {
+      "file": "AUDITORIA_COMPLETA.txt",
+      "line": 771,
+      "classification": "OTHER",
+      "patterns": [
+        "Fluxo de Caixa"
+      ]
+    },
+    {
+      "file": "AUDITORIA_COMPLETA.txt",
+      "line": 952,
+      "classification": "OTHER",
+      "patterns": [
+        "Fluxo de Caixa",
+        "Contas"
+      ]
+    },
+    {
+      "file": "CLAUDE.md",
+      "line": 461,
+      "classification": "OTHER",
+      "patterns": [
+        "Fluxo de Caixa"
+      ]
+    },
+    {
+      "file": "CLAUDE.md",
+      "line": 688,
+      "classification": "OTHER",
+      "patterns": [
+        "Contas"
+      ]
+    },
+    {
+      "file": "CLAUDE.md",
+      "line": 689,
+      "classification": "OTHER",
+      "patterns": [
+        "getAccountsData"
+      ]
+    },
+    {
+      "file": "CLAUDE.md",
+      "line": 693,
+      "classification": "OTHER",
+      "patterns": [
+        "getAccountsData"
+      ]
+    },
+    {
+      "file": "CLAUDE.md",
+      "line": 694,
+      "classification": "OTHER",
+      "patterns": [
+        "/dashboard/financeiro/contas"
+      ]
+    },
+    {
+      "file": "CLAUDE.md",
+      "line": 697,
+      "classification": "OTHER",
+      "patterns": [
+        "createCashFlow"
+      ]
+    },
+    {
+      "file": "CLAUDE.md",
+      "line": 718,
+      "classification": "OTHER",
+      "patterns": [
+        "Fluxo de Caixa"
+      ]
+    },
+    {
+      "file": "docs/APLICAR-071-072-073.md",
+      "line": 41,
+      "classification": "OTHER",
+      "patterns": [
+        "Contas"
+      ]
+    },
+    {
+      "file": "docs/APLICAR-071-072-073.md",
+      "line": 43,
+      "classification": "OTHER",
+      "patterns": [
+        "createCashFlow"
+      ]
+    },
+    {
+      "file": "docs/APLICAR-071-072-073.md",
+      "line": 50,
+      "classification": "OTHER",
+      "patterns": [
+        "Fluxo de Caixa"
+      ]
+    },
+    {
+      "file": "docs/APLICAR-071-072-073.md",
+      "line": 267,
+      "classification": "OTHER",
+      "patterns": [
+        "/dashboard/financeiro/contas"
+      ]
+    },
+    {
+      "file": "docs/APLICAR-071-072-073.md",
+      "line": 286,
+      "classification": "OTHER",
+      "patterns": [
+        "Fluxo de Caixa"
+      ]
+    },
+    {
+      "file": "docs/APLICAR-071-072-073.md",
+      "line": 293,
+      "classification": "OTHER",
+      "patterns": [
+        "Fluxo de Caixa"
+      ]
+    },
+    {
+      "file": "docs/FINANCEIRO-V2-PR-A-SHELL.md",
+      "line": 63,
+      "classification": "OTHER",
+      "patterns": [
+        "Fluxo de Caixa",
+        "Contas"
+      ]
+    },
+    {
+      "file": "docs/FINANCEIRO-V2-PR-A-SHELL.md",
+      "line": 84,
+      "classification": "OTHER",
+      "patterns": [
+        "Fluxo de Caixa",
+        "Contas"
+      ]
+    },
+    {
+      "file": "docs/FINANCEIRO-V2-PR-A-SHELL.md",
+      "line": 95,
+      "classification": "OTHER",
+      "patterns": [
+        "Fluxo de Caixa"
+      ]
+    },
+    {
+      "file": "docs/FINANCEIRO-V2-PR-A-SHELL.md",
+      "line": 96,
+      "classification": "OTHER",
+      "patterns": [
+        "Contas"
+      ]
+    },
+    {
+      "file": "docs/FINANCEIRO-V2-PR-A-SHELL.md",
+      "line": 186,
+      "classification": "OTHER",
+      "patterns": [
+        "Contas"
+      ]
+    },
+    {
+      "file": "docs/FINANCEIRO-V2-PR-A-SHELL.md",
+      "line": 187,
+      "classification": "OTHER",
+      "patterns": [
+        "Fluxo de Caixa"
+      ]
+    },
+    {
+      "file": "docs/FINANCEIRO-V2-PR-A-SHELL.md",
+      "line": 279,
+      "classification": "OTHER",
+      "patterns": [
+        "Contas"
+      ]
+    },
+    {
+      "file": "docs/FINANCEIRO-V2-PR-A-SHELL.md",
+      "line": 298,
+      "classification": "OTHER",
+      "patterns": [
+        "Fluxo de Caixa",
+        "Contas"
+      ]
+    },
+    {
+      "file": "docs/FINANCEIRO-V2-PR-A-SHELL.md",
+      "line": 299,
+      "classification": "OTHER",
+      "patterns": [
+        "getAccountsData"
+      ]
+    },
+    {
+      "file": "docs/FINANCEIRO-V2-PR-A-SHELL.md",
+      "line": 348,
+      "classification": "OTHER",
+      "patterns": [
+        "Fluxo de Caixa",
+        "Contas"
+      ]
+    },
+    {
+      "file": "docs/FINANCIAL-PERIOD-CLOSE-RUNTIME.md",
+      "line": 87,
+      "classification": "OTHER",
+      "patterns": [
+        "createCashFlow"
+      ]
+    },
+    {
+      "file": "docs/HANDOFF-2026-08-07.md",
+      "line": 528,
+      "classification": "OTHER",
+      "patterns": [
+        "Contas"
+      ]
+    },
+    {
+      "file": "docs/incidents/2026-08-06-credential-exposure.md",
+      "line": 152,
+      "classification": "OTHER",
+      "patterns": [
+        "Contas"
+      ]
+    },
+    {
+      "file": "docs/incidents/2026-08-06-credential-exposure.md",
+      "line": 183,
+      "classification": "OTHER",
+      "patterns": [
+        "Contas"
+      ]
+    },
+    {
+      "file": "reports/file-classification.json",
+      "line": 10135,
+      "classification": "REPORT_REQUIRED",
+      "patterns": [
+        "/dashboard/financeiro/contas"
+      ]
+    },
+    {
+      "file": "reports/file-classification.json",
+      "line": 10141,
+      "classification": "REPORT_REQUIRED",
+      "patterns": [
+        "/dashboard/financeiro/contas"
+      ]
+    },
+    {
+      "file": "reports/file-classification.json",
+      "line": 10166,
+      "classification": "REPORT_REQUIRED",
+      "patterns": [
+        "/dashboard/financeiro/contas"
+      ]
+    },
+    {
+      "file": "reports/file-classification.json",
+      "line": 10197,
+      "classification": "REPORT_REQUIRED",
+      "patterns": [
+        "/dashboard/financeiro/fluxo-caixa"
+      ]
+    },
+    {
+      "file": "reports/file-classification.json",
+      "line": 10203,
+      "classification": "REPORT_REQUIRED",
+      "patterns": [
+        "/dashboard/financeiro/fluxo-caixa"
+      ]
+    },
+    {
+      "file": "reports/file-classification.json",
+      "line": 10225,
+      "classification": "REPORT_REQUIRED",
+      "patterns": [
+        "/dashboard/financeiro/fluxo-caixa"
+      ]
+    },
+    {
+      "file": "reports/file-classification.json",
+      "line": 11371,
+      "classification": "REPORT_REQUIRED",
+      "patterns": [
+        "/dashboard/financeiro/contas"
+      ]
+    },
+    {
+      "file": "reports/file-classification.json",
+      "line": 11372,
+      "classification": "REPORT_REQUIRED",
+      "patterns": [
+        "/dashboard/financeiro/contas"
+      ]
+    },
+    {
+      "file": "reports/file-classification.json",
+      "line": 11373,
+      "classification": "REPORT_REQUIRED",
+      "patterns": [
+        "/dashboard/financeiro/fluxo-caixa"
+      ]
+    },
+    {
+      "file": "reports/file-classification.json",
+      "line": 11854,
+      "classification": "REPORT_REQUIRED",
+      "patterns": [
+        "/dashboard/financeiro/contas"
+      ]
+    },
+    {
+      "file": "reports/file-classification.json",
+      "line": 11855,
+      "classification": "REPORT_REQUIRED",
+      "patterns": [
+        "/dashboard/financeiro/contas"
+      ]
+    },
+    {
+      "file": "reports/file-classification.json",
+      "line": 11856,
+      "classification": "REPORT_REQUIRED",
+      "patterns": [
+        "/dashboard/financeiro/fluxo-caixa"
+      ]
+    },
+    {
+      "file": "reports/file-classification.json",
+      "line": 13534,
+      "classification": "REPORT_REQUIRED",
+      "patterns": [
+        "/dashboard/financeiro/contas"
+      ]
+    },
+    {
+      "file": "reports/file-classification.json",
+      "line": 13785,
+      "classification": "REPORT_REQUIRED",
+      "patterns": [
+        "/dashboard/financeiro/contas"
+      ]
+    },
+    {
+      "file": "reports/file-classification.json",
+      "line": 13786,
+      "classification": "REPORT_REQUIRED",
+      "patterns": [
+        "/dashboard/financeiro/fluxo-caixa"
+      ]
+    },
+    {
+      "file": "reports/file-classification.json",
+      "line": 14915,
+      "classification": "REPORT_REQUIRED",
+      "patterns": [
+        "/dashboard/financeiro/contas"
+      ]
+    },
+    {
+      "file": "reports/ignored-query-errors.json",
+      "line": 782,
+      "classification": "REPORT_REQUIRED",
+      "patterns": [
+        "/dashboard/financeiro/contas"
+      ]
+    },
+    {
+      "file": "reports/ignored-query-errors.json",
+      "line": 784,
+      "classification": "REPORT_REQUIRED",
+      "patterns": [
+        "Contas"
+      ]
+    },
+    {
+      "file": "reports/ignored-query-errors.json",
+      "line": 803,
+      "classification": "REPORT_REQUIRED",
+      "patterns": [
+        "/dashboard/financeiro/fluxo-caixa"
+      ]
+    },
+    {
+      "file": "reports/ignored-query-errors.json",
+      "line": 1290,
+      "classification": "REPORT_REQUIRED",
+      "patterns": [
+        "createCashFlow"
+      ]
+    },
+    {
+      "file": "scripts/audit-finance-legacy-references.mjs",
+      "line": 8,
+      "classification": "OTHER",
+      "patterns": [
+        "/dashboard/financeiro/fluxo-caixa"
+      ]
+    },
+    {
+      "file": "scripts/audit-finance-legacy-references.mjs",
+      "line": 9,
+      "classification": "OTHER",
+      "patterns": [
+        "Fluxo de Caixa"
+      ]
+    },
+    {
+      "file": "scripts/audit-finance-legacy-references.mjs",
+      "line": 10,
+      "classification": "OTHER",
+      "patterns": [
+        "cashFlow"
+      ]
+    },
+    {
+      "file": "scripts/audit-finance-legacy-references.mjs",
+      "line": 11,
+      "classification": "OTHER",
+      "patterns": [
+        "getCashFlow"
+      ]
+    },
+    {
+      "file": "scripts/audit-finance-legacy-references.mjs",
+      "line": 12,
+      "classification": "OTHER",
+      "patterns": [
+        "createCashFlow"
+      ]
+    },
+    {
+      "file": "scripts/audit-finance-legacy-references.mjs",
+      "line": 13,
+      "classification": "OTHER",
+      "patterns": [
+        "/dashboard/financeiro/contas"
+      ]
+    },
+    {
+      "file": "scripts/audit-finance-legacy-references.mjs",
+      "line": 14,
+      "classification": "OTHER",
+      "patterns": [
+        "Contas"
+      ]
+    },
+    {
+      "file": "scripts/audit-finance-legacy-references.mjs",
+      "line": 15,
+      "classification": "OTHER",
+      "patterns": [
+        "getAccountsData"
+      ]
+    },
+    {
+      "file": "scripts/historico/import-fluxo-junho.mjs",
+      "line": 34,
+      "classification": "OTHER",
+      "patterns": [
+        "Fluxo de Caixa"
+      ]
+    },
+    {
+      "file": "src/__tests__/collaborator-access-concurrency-postgres.test.ts",
+      "line": 172,
+      "classification": "OTHER",
+      "patterns": [
+        "Contas"
+      ]
+    },
+    {
+      "file": "src/__tests__/collaborator-access-concurrency-postgres.test.ts",
+      "line": 223,
+      "classification": "OTHER",
+      "patterns": [
+        "Contas"
+      ]
+    },
+    {
+      "file": "src/__tests__/collaborator-access-concurrency-postgres.test.ts",
+      "line": 239,
+      "classification": "OTHER",
+      "patterns": [
+        "Contas"
+      ]
+    },
+    {
+      "file": "src/__tests__/collaborator-access-concurrency-postgres.test.ts",
+      "line": 286,
+      "classification": "OTHER",
+      "patterns": [
+        "Contas"
+      ]
+    },
+    {
+      "file": "src/__tests__/collaborator-access-concurrency-postgres.test.ts",
+      "line": 299,
+      "classification": "OTHER",
+      "patterns": [
+        "Contas"
+      ]
+    },
+    {
+      "file": "src/__tests__/collaborator-access-concurrency-postgres.test.ts",
+      "line": 329,
+      "classification": "OTHER",
+      "patterns": [
+        "Contas"
+      ]
+    },
+    {
+      "file": "src/__tests__/collaborator-access-concurrency-postgres.test.ts",
+      "line": 388,
+      "classification": "OTHER",
+      "patterns": [
+        "Contas"
+      ]
+    },
+    {
+      "file": "src/__tests__/dashboard-adhoc-guard.test.ts",
+      "line": 121,
+      "classification": "OTHER",
+      "patterns": [
+        "/dashboard/financeiro/fluxo-caixa"
+      ]
+    },
+    {
+      "file": "src/__tests__/dashboard-read-model.test.ts",
+      "line": 56,
+      "classification": "OTHER",
+      "patterns": [
+        "cashFlow"
+      ]
+    },
+    {
+      "file": "src/__tests__/dashboard-read-model.test.ts",
+      "line": 167,
+      "classification": "OTHER",
+      "patterns": [
+        "cashFlow"
+      ]
+    },
+    {
+      "file": "src/__tests__/dashboard-read-model.test.ts",
+      "line": 184,
+      "classification": "OTHER",
+      "patterns": [
+        "cashFlow"
+      ]
+    },
+    {
+      "file": "src/__tests__/dashboard-read-model.test.ts",
+      "line": 235,
+      "classification": "OTHER",
+      "patterns": [
+        "cashFlow"
+      ]
+    },
+    {
+      "file": "src/__tests__/dashboard-read-model.test.ts",
+      "line": 244,
+      "classification": "OTHER",
+      "patterns": [
+        "cashFlow"
+      ]
+    },
+    {
+      "file": "src/__tests__/dashboard-read-model.test.ts",
+      "line": 258,
+      "classification": "OTHER",
+      "patterns": [
+        "cashFlow"
+      ]
+    },
+    {
+      "file": "src/__tests__/dashboard-read-model.test.ts",
+      "line": 349,
+      "classification": "OTHER",
+      "patterns": [
+        "cashFlow"
+      ]
+    },
+    {
+      "file": "src/__tests__/expense-categories-runtime.test.ts",
+      "line": 49,
+      "classification": "OTHER",
+      "patterns": [
+        "/dashboard/financeiro/contas"
+      ]
+    },
+    {
+      "file": "src/__tests__/expense-categories-runtime.test.ts",
+      "line": 50,
+      "classification": "OTHER",
+      "patterns": [
+        "/dashboard/financeiro/contas"
+      ]
+    },
+    {
+      "file": "src/__tests__/expense-categories-runtime.test.ts",
+      "line": 189,
+      "classification": "OTHER",
+      "patterns": [
+        "/dashboard/financeiro/fluxo-caixa",
+        "/dashboard/financeiro/contas"
+      ]
+    },
+    {
+      "file": "src/__tests__/expense-categories-runtime.test.ts",
+      "line": 197,
+      "classification": "OTHER",
+      "patterns": [
+        "createCashFlow"
+      ]
+    },
+    {
+      "file": "src/__tests__/expense-categories-runtime.test.ts",
+      "line": 216,
+      "classification": "OTHER",
+      "patterns": [
+        "createCashFlow"
+      ]
+    },
+    {
+      "file": "src/__tests__/expense-categories-runtime.test.ts",
+      "line": 221,
+      "classification": "OTHER",
+      "patterns": [
+        "getAccountsData"
+      ]
+    },
+    {
+      "file": "src/__tests__/expense-categories-runtime.test.ts",
+      "line": 226,
+      "classification": "OTHER",
+      "patterns": [
+        "getAccountsData"
+      ]
+    },
+    {
+      "file": "src/__tests__/expense-categories-runtime.test.ts",
+      "line": 244,
+      "classification": "OTHER",
+      "patterns": [
+        "Contas"
+      ]
+    },
+    {
+      "file": "src/__tests__/expense-categories-runtime.test.ts",
+      "line": 408,
+      "classification": "OTHER",
+      "patterns": [
+        "Contas"
+      ]
+    },
+    {
+      "file": "src/__tests__/expense-categories-runtime.test.ts",
+      "line": 644,
+      "classification": "OTHER",
+      "patterns": [
+        "Contas"
+      ]
+    },
+    {
+      "file": "src/__tests__/expense-categories-runtime.test.ts",
+      "line": 718,
+      "classification": "OTHER",
+      "patterns": [
+        "Contas"
+      ]
+    },
+    {
+      "file": "src/__tests__/expense-categories-runtime.test.ts",
+      "line": 758,
+      "classification": "OTHER",
+      "patterns": [
+        "Contas"
+      ]
+    },
+    {
+      "file": "src/__tests__/expense-categories-runtime.test.ts",
+      "line": 759,
+      "classification": "OTHER",
+      "patterns": [
+        "Contas"
+      ]
+    },
+    {
+      "file": "src/__tests__/expense-categories-runtime.test.ts",
+      "line": 764,
+      "classification": "OTHER",
+      "patterns": [
+        "Fluxo de Caixa"
+      ]
+    },
+    {
+      "file": "src/__tests__/expense-categories-runtime.test.ts",
+      "line": 765,
+      "classification": "OTHER",
+      "patterns": [
+        "Contas"
+      ]
+    },
+    {
+      "file": "src/__tests__/expense-categories-runtime.test.ts",
+      "line": 768,
+      "classification": "OTHER",
+      "patterns": [
+        "/dashboard/financeiro/fluxo-caixa"
+      ]
+    },
+    {
+      "file": "src/__tests__/expense-categories-runtime.test.ts",
+      "line": 769,
+      "classification": "OTHER",
+      "patterns": [
+        "/dashboard/financeiro/fluxo-caixa"
+      ]
+    },
+    {
+      "file": "src/__tests__/expense-categories-runtime.test.ts",
+      "line": 771,
+      "classification": "OTHER",
+      "patterns": [
+        "Fluxo de Caixa"
+      ]
+    },
+    {
+      "file": "src/__tests__/expense-categories-runtime.test.ts",
+      "line": 792,
+      "classification": "OTHER",
+      "patterns": [
+        "getCashFlow"
+      ]
+    },
+    {
+      "file": "src/__tests__/expense-categories-runtime.test.ts",
+      "line": 793,
+      "classification": "OTHER",
+      "patterns": [
+        "createCashFlow"
+      ]
+    },
+    {
+      "file": "src/__tests__/expense-categories-runtime.test.ts",
+      "line": 816,
+      "classification": "OTHER",
+      "patterns": [
+        "Contas"
+      ]
+    },
+    {
+      "file": "src/__tests__/expense-categories-runtime.test.ts",
+      "line": 831,
+      "classification": "OTHER",
+      "patterns": [
+        "Fluxo de Caixa"
+      ]
+    },
+    {
+      "file": "src/__tests__/finance-legacy-navigation.test.ts",
+      "line": 11,
+      "classification": "OTHER",
+      "patterns": [
+        "cashFlow"
+      ]
+    },
+    {
+      "file": "src/__tests__/finance-legacy-navigation.test.ts",
+      "line": 12,
+      "classification": "OTHER",
+      "patterns": [
+        "cashFlow"
+      ]
+    },
+    {
+      "file": "src/__tests__/finance-legacy-navigation.test.ts",
+      "line": 21,
+      "classification": "OTHER",
+      "patterns": [
+        "Contas"
+      ]
+    },
+    {
+      "file": "src/__tests__/finance-legacy-navigation.test.ts",
+      "line": 23,
+      "classification": "OTHER",
+      "patterns": [
+        "cashFlow"
+      ]
+    },
+    {
+      "file": "src/__tests__/finance-legacy-navigation.test.ts",
+      "line": 28,
+      "classification": "OTHER",
+      "patterns": [
+        "cashFlow"
+      ]
+    },
+    {
+      "file": "src/__tests__/finance-legacy-navigation.test.ts",
+      "line": 40,
+      "classification": "OTHER",
+      "patterns": [
+        "cashFlow"
+      ]
+    },
+    {
+      "file": "src/__tests__/finance-period-view-identity.test.tsx",
+      "line": 296,
+      "classification": "OTHER",
+      "patterns": [
+        "Fluxo de Caixa"
+      ]
+    },
+    {
+      "file": "src/__tests__/finance-period-view-identity.test.tsx",
+      "line": 297,
+      "classification": "OTHER",
+      "patterns": [
+        "Contas"
+      ]
+    },
+    {
+      "file": "src/__tests__/finance-unhandled-mutation-result.test.ts",
+      "line": 50,
+      "classification": "OTHER",
+      "patterns": [
+        "createCashFlow"
+      ]
+    },
+    {
+      "file": "src/__tests__/finance-v2-mirror.test.ts",
+      "line": 5,
+      "classification": "OTHER",
+      "patterns": [
+        "Contas"
+      ]
+    },
+    {
+      "file": "src/__tests__/finance-v2-mirror.test.ts",
+      "line": 77,
+      "classification": "OTHER",
+      "patterns": [
+        "Contas"
+      ]
+    },
+    {
+      "file": "src/__tests__/finance-v2-mirror.test.ts",
+      "line": 82,
+      "classification": "OTHER",
+      "patterns": [
+        "Contas"
+      ]
+    },
+    {
+      "file": "src/__tests__/finance-v2-mirror.test.ts",
+      "line": 93,
+      "classification": "OTHER",
+      "patterns": [
+        "Contas"
+      ]
+    },
+    {
+      "file": "src/__tests__/finance-v2-mirror.test.ts",
+      "line": 119,
+      "classification": "OTHER",
+      "patterns": [
+        "Contas"
+      ]
+    },
+    {
+      "file": "src/__tests__/finance-v2-mirror.test.ts",
+      "line": 155,
+      "classification": "OTHER",
+      "patterns": [
+        "Contas"
+      ]
+    },
+    {
+      "file": "src/__tests__/finance-v2-mirror.test.ts",
+      "line": 163,
+      "classification": "OTHER",
+      "patterns": [
+        "Contas"
+      ]
+    },
+    {
+      "file": "src/__tests__/finance-v2-mirror.test.ts",
+      "line": 182,
+      "classification": "OTHER",
+      "patterns": [
+        "Contas"
+      ]
+    },
+    {
+      "file": "src/__tests__/finance-v2-mirror.test.ts",
+      "line": 312,
+      "classification": "OTHER",
+      "patterns": [
+        "getAccountsData"
+      ]
+    },
+    {
+      "file": "src/__tests__/finance-v2-mirror.test.ts",
+      "line": 316,
+      "classification": "OTHER",
+      "patterns": [
+        "Contas"
+      ]
+    },
+    {
+      "file": "src/__tests__/finance-v2-mirror.test.ts",
+      "line": 321,
+      "classification": "OTHER",
+      "patterns": [
+        "getAccountsData"
+      ]
+    },
+    {
+      "file": "src/__tests__/finance-v2-period-scope.test.ts",
+      "line": 12,
+      "classification": "OTHER",
+      "patterns": [
+        "getAccountsData"
+      ]
+    },
+    {
+      "file": "src/__tests__/finance-v2-period-scope.test.ts",
+      "line": 42,
+      "classification": "OTHER",
+      "patterns": [
+        "/dashboard/financeiro/contas"
+      ]
+    },
+    {
+      "file": "src/__tests__/finance-v2-period-scope.test.ts",
+      "line": 43,
+      "classification": "OTHER",
+      "patterns": [
+        "/dashboard/financeiro/fluxo-caixa"
+      ]
+    },
+    {
+      "file": "src/__tests__/finance-v2-period-scope.test.ts",
+      "line": 68,
+      "classification": "OTHER",
+      "patterns": [
+        "getAccountsData"
+      ]
+    },
+    {
+      "file": "src/__tests__/finance-v2-period-scope.test.ts",
+      "line": 70,
+      "classification": "OTHER",
+      "patterns": [
+        "getAccountsData"
+      ]
+    },
+    {
+      "file": "src/__tests__/finance-v2-period-scope.test.ts",
+      "line": 79,
+      "classification": "OTHER",
+      "patterns": [
+        "Contas"
+      ]
+    },
+    {
+      "file": "src/__tests__/finance-v2-period-scope.test.ts",
+      "line": 84,
+      "classification": "OTHER",
+      "patterns": [
+        "Contas"
+      ]
+    },
+    {
+      "file": "src/__tests__/finance-v2-period-scope.test.ts",
+      "line": 104,
+      "classification": "OTHER",
+      "patterns": [
+        "/dashboard/financeiro/contas"
+      ]
+    },
+    {
+      "file": "src/__tests__/finance-v2-period-scope.test.ts",
+      "line": 105,
+      "classification": "OTHER",
+      "patterns": [
+        "getAccountsData"
+      ]
+    },
+    {
+      "file": "src/__tests__/finance-v2-period-scope.test.ts",
+      "line": 186,
+      "classification": "OTHER",
+      "patterns": [
+        "getAccountsData"
+      ]
+    },
+    {
+      "file": "src/__tests__/finance-v2-period-scope.test.ts",
+      "line": 196,
+      "classification": "OTHER",
+      "patterns": [
+        "Contas"
+      ]
+    },
+    {
+      "file": "src/__tests__/financeiro-pipeline.test.ts",
+      "line": 166,
+      "classification": "OTHER",
+      "patterns": [
+        "cashFlow"
+      ]
+    },
+    {
+      "file": "src/__tests__/financeiro-pipeline.test.ts",
+      "line": 356,
+      "classification": "OTHER",
+      "patterns": [
+        "cashFlow"
+      ]
+    },
+    {
+      "file": "src/__tests__/financeiro-pipeline.test.ts",
+      "line": 398,
+      "classification": "OTHER",
+      "patterns": [
+        "cashFlow"
+      ]
+    },
+    {
+      "file": "src/__tests__/financeiro-pipeline.test.ts",
+      "line": 417,
+      "classification": "OTHER",
+      "patterns": [
+        "cashFlow"
+      ]
+    },
+    {
+      "file": "src/__tests__/financeiro-pipeline.test.ts",
+      "line": 579,
+      "classification": "OTHER",
+      "patterns": [
+        "cashFlow"
+      ]
+    },
+    {
+      "file": "src/__tests__/financeiro-v2-presentation.test.ts",
+      "line": 32,
+      "classification": "OTHER",
+      "patterns": [
+        "/dashboard/financeiro/contas"
+      ]
+    },
+    {
+      "file": "src/__tests__/financeiro-v2-presentation.test.ts",
+      "line": 33,
+      "classification": "OTHER",
+      "patterns": [
+        "/dashboard/financeiro/fluxo-caixa"
+      ]
+    },
+    {
+      "file": "src/__tests__/financeiro-v2-presentation.test.ts",
+      "line": 44,
+      "classification": "OTHER",
+      "patterns": [
+        "/dashboard/financeiro/contas"
+      ]
+    },
+    {
+      "file": "src/__tests__/financeiro-v2-presentation.test.ts",
+      "line": 45,
+      "classification": "OTHER",
+      "patterns": [
+        "/dashboard/financeiro/fluxo-caixa"
+      ]
+    },
+    {
+      "file": "src/__tests__/financeiro-v2-presentation.test.ts",
+      "line": 89,
+      "classification": "OTHER",
+      "patterns": [
+        "createCashFlow"
+      ]
+    },
+    {
+      "file": "src/__tests__/financeiro-v2-presentation.test.ts",
+      "line": 90,
+      "classification": "OTHER",
+      "patterns": [
+        "createCashFlow"
+      ]
+    },
+    {
+      "file": "src/__tests__/financeiro-v2-shell.test.ts",
+      "line": 119,
+      "classification": "OTHER",
+      "patterns": [
+        "/dashboard/financeiro/contas"
+      ]
+    },
+    {
+      "file": "src/__tests__/financeiro-v2-shell.test.ts",
+      "line": 120,
+      "classification": "OTHER",
+      "patterns": [
+        "/dashboard/financeiro/fluxo-caixa"
+      ]
+    },
+    {
+      "file": "src/__tests__/financeiro-v2-shell.test.ts",
+      "line": 140,
+      "classification": "OTHER",
+      "patterns": [
+        "Contas"
+      ]
+    },
+    {
+      "file": "src/__tests__/financeiro-v2-shell.test.ts",
+      "line": 157,
+      "classification": "OTHER",
+      "patterns": [
+        "/dashboard/financeiro/contas"
+      ]
+    },
+    {
+      "file": "src/__tests__/financeiro-v2-shell.test.ts",
+      "line": 158,
+      "classification": "OTHER",
+      "patterns": [
+        "/dashboard/financeiro/fluxo-caixa"
+      ]
+    },
+    {
+      "file": "src/__tests__/financeiro-v2-shell.test.ts",
+      "line": 180,
+      "classification": "OTHER",
+      "patterns": [
+        "Contas"
+      ]
+    },
+    {
+      "file": "src/__tests__/financeiro-v2-shell.test.ts",
+      "line": 182,
+      "classification": "OTHER",
+      "patterns": [
+        "/dashboard/financeiro/contas"
+      ]
+    },
+    {
+      "file": "src/__tests__/financeiro-v2-shell.test.ts",
+      "line": 203,
+      "classification": "OTHER",
+      "patterns": [
+        "createCashFlow"
+      ]
+    },
+    {
+      "file": "src/__tests__/financeiro-v2-shell.test.ts",
+      "line": 346,
+      "classification": "OTHER",
+      "patterns": [
+        "/dashboard/financeiro/contas"
+      ]
+    },
+    {
+      "file": "src/__tests__/financeiro-v2-shell.test.ts",
+      "line": 347,
+      "classification": "OTHER",
+      "patterns": [
+        "/dashboard/financeiro/fluxo-caixa"
+      ]
+    },
+    {
+      "file": "src/__tests__/financeiro-v2-shell.test.ts",
+      "line": 357,
+      "classification": "OTHER",
+      "patterns": [
+        "/dashboard/financeiro/contas"
+      ]
+    },
+    {
+      "file": "src/__tests__/financeiro-v2-shell.test.ts",
+      "line": 358,
+      "classification": "OTHER",
+      "patterns": [
+        "/dashboard/financeiro/fluxo-caixa"
+      ]
+    },
+    {
+      "file": "src/__tests__/financeiro-v2-ui-final.test.ts",
+      "line": 262,
+      "classification": "OTHER",
+      "patterns": [
+        "/dashboard/financeiro/contas"
+      ]
+    },
+    {
+      "file": "src/__tests__/financeiro-v2-ui-final.test.ts",
+      "line": 263,
+      "classification": "OTHER",
+      "patterns": [
+        "/dashboard/financeiro/fluxo-caixa"
+      ]
+    },
+    {
+      "file": "src/__tests__/financeiro-v2-ui-final.test.ts",
+      "line": 280,
+      "classification": "OTHER",
+      "patterns": [
+        "/dashboard/financeiro/fluxo-caixa"
+      ]
+    },
+    {
+      "file": "src/__tests__/financeiro-v2-write-budget.test.ts",
+      "line": 150,
+      "classification": "OTHER",
+      "patterns": [
+        "createCashFlow"
+      ]
+    },
+    {
+      "file": "src/__tests__/financeiro-v2-write-budget.test.ts",
+      "line": 157,
+      "classification": "OTHER",
+      "patterns": [
+        "Fluxo de Caixa",
+        "Contas"
+      ]
+    },
+    {
+      "file": "src/__tests__/financeiro-v2-write-budget.test.ts",
+      "line": 163,
+      "classification": "OTHER",
+      "patterns": [
+        "/dashboard/financeiro/contas"
+      ]
+    },
+    {
+      "file": "src/__tests__/financeiro-v2-write-budget.test.ts",
+      "line": 164,
+      "classification": "OTHER",
+      "patterns": [
+        "createCashFlow"
+      ]
+    },
+    {
+      "file": "src/__tests__/financeiro-v2-write-budget.test.ts",
+      "line": 167,
+      "classification": "OTHER",
+      "patterns": [
+        "/dashboard/financeiro/fluxo-caixa"
+      ]
+    },
+    {
+      "file": "src/__tests__/financeiro-v2-write-budget.test.ts",
+      "line": 168,
+      "classification": "OTHER",
+      "patterns": [
+        "createCashFlow"
+      ]
+    },
+    {
+      "file": "src/__tests__/financeiro-v2-write-budget.test.ts",
+      "line": 340,
+      "classification": "OTHER",
+      "patterns": [
+        "getCashFlow"
+      ]
+    },
+    {
+      "file": "src/__tests__/financeiro-v2-write-budget.test.ts",
+      "line": 424,
+      "classification": "OTHER",
+      "patterns": [
+        "/dashboard/financeiro/contas"
+      ]
+    },
+    {
+      "file": "src/__tests__/financeiro-v2-write-budget.test.ts",
+      "line": 425,
+      "classification": "OTHER",
+      "patterns": [
+        "/dashboard/financeiro/fluxo-caixa"
+      ]
+    },
+    {
+      "file": "src/__tests__/payment-cashflow-rpc.test.ts",
+      "line": 347,
+      "classification": "OTHER",
+      "patterns": [
+        "Fluxo de Caixa",
+        "Contas"
+      ]
+    },
+    {
+      "file": "src/__tests__/payment-cashflow-rpc.test.ts",
+      "line": 352,
+      "classification": "OTHER",
+      "patterns": [
+        "/dashboard/financeiro/fluxo-caixa",
+        "/dashboard/financeiro/contas"
+      ]
+    },
+    {
+      "file": "src/__tests__/report-export-adapter.test.ts",
+      "line": 61,
+      "classification": "REPORT_REQUIRED",
+      "patterns": [
+        "cashFlow"
+      ]
+    },
+    {
+      "file": "src/__tests__/report-read-model.test.ts",
+      "line": 101,
+      "classification": "REPORT_REQUIRED",
+      "patterns": [
+        "cashFlow"
+      ]
+    },
+    {
+      "file": "src/__tests__/report-read-model.test.ts",
+      "line": 161,
+      "classification": "REPORT_REQUIRED",
+      "patterns": [
+        "cashFlow"
+      ]
+    },
+    {
+      "file": "src/__tests__/report-read-model.test.ts",
+      "line": 177,
+      "classification": "REPORT_REQUIRED",
+      "patterns": [
+        "cashFlow"
+      ]
+    },
+    {
+      "file": "src/__tests__/report-read-model.test.ts",
+      "line": 401,
+      "classification": "REPORT_REQUIRED",
+      "patterns": [
+        "cashFlow"
+      ]
+    },
+    {
+      "file": "src/__tests__/report-read-model.test.ts",
+      "line": 415,
+      "classification": "REPORT_REQUIRED",
+      "patterns": [
+        "cashFlow"
+      ]
+    },
+    {
+      "file": "src/__tests__/report-read-model.test.ts",
+      "line": 430,
+      "classification": "REPORT_REQUIRED",
+      "patterns": [
+        "cashFlow"
+      ]
+    },
+    {
+      "file": "src/__tests__/report-read-model.test.ts",
+      "line": 441,
+      "classification": "REPORT_REQUIRED",
+      "patterns": [
+        "cashFlow"
+      ]
+    },
+    {
+      "file": "src/__tests__/report-read-model.test.ts",
+      "line": 479,
+      "classification": "REPORT_REQUIRED",
+      "patterns": [
+        "cashFlow"
+      ]
+    },
+    {
+      "file": "src/__tests__/report-read-model.test.ts",
+      "line": 493,
+      "classification": "REPORT_REQUIRED",
+      "patterns": [
+        "cashFlow"
+      ]
+    },
+    {
+      "file": "src/__tests__/report-read-model.test.ts",
+      "line": 602,
+      "classification": "REPORT_REQUIRED",
+      "patterns": [
+        "cashFlow"
+      ]
+    },
+    {
+      "file": "src/__tests__/report-read-model.test.ts",
+      "line": 663,
+      "classification": "REPORT_REQUIRED",
+      "patterns": [
+        "cashFlow"
+      ]
+    },
+    {
+      "file": "src/__tests__/report-read-model.test.ts",
+      "line": 710,
+      "classification": "REPORT_REQUIRED",
+      "patterns": [
+        "cashFlow"
+      ]
+    },
+    {
+      "file": "src/app/(dashboard)/dashboard/cobrancas/_components/daily-billing-client.tsx",
+      "line": 39,
+      "classification": "UI_ONLY",
+      "patterns": [
+        "Fluxo de Caixa"
+      ]
+    },
+    {
+      "file": "src/app/(dashboard)/dashboard/financeiro/_components/financial-dashboard-client.tsx",
+      "line": 609,
+      "classification": "UI_ONLY",
+      "patterns": [
+        "Fluxo de Caixa",
+        "Contas"
+      ]
+    },
+    {
+      "file": "src/app/(dashboard)/dashboard/financeiro/_components/financial-dashboard-client.tsx",
+      "line": 611,
+      "classification": "UI_ONLY",
+      "patterns": [
+        "Contas"
+      ]
+    },
+    {
+      "file": "src/app/(dashboard)/dashboard/financeiro/_components/financial-dashboard-client.tsx",
+      "line": 615,
+      "classification": "UI_ONLY",
+      "patterns": [
+        "Fluxo de Caixa"
+      ]
+    },
+    {
+      "file": "src/app/(dashboard)/dashboard/financeiro/_components/financial-dashboard-client.tsx",
+      "line": 620,
+      "classification": "UI_ONLY",
+      "patterns": [
+        "Contas"
+      ]
+    },
+    {
+      "file": "src/app/(dashboard)/dashboard/financeiro/_components/financial-dashboard-client.tsx",
+      "line": 637,
+      "classification": "UI_ONLY",
+      "patterns": [
+        "/dashboard/financeiro/fluxo-caixa"
+      ]
+    },
+    {
+      "file": "src/app/(dashboard)/dashboard/financeiro/contas/_components/contas-client.tsx",
+      "line": 14,
+      "classification": "UI_ONLY",
+      "patterns": [
+        "createCashFlow"
+      ]
+    },
+    {
+      "file": "src/app/(dashboard)/dashboard/financeiro/contas/_components/contas-client.tsx",
+      "line": 76,
+      "classification": "UI_ONLY",
+      "patterns": [
+        "Contas"
+      ]
+    },
+    {
+      "file": "src/app/(dashboard)/dashboard/financeiro/contas/_components/contas-client.tsx",
+      "line": 207,
+      "classification": "UI_ONLY",
+      "patterns": [
+        "createCashFlow"
+      ]
+    },
+    {
+      "file": "src/app/(dashboard)/dashboard/financeiro/contas/_components/contas-client.tsx",
+      "line": 411,
+      "classification": "UI_ONLY",
+      "patterns": [
+        "/dashboard/financeiro/contas"
+      ]
+    },
+    {
+      "file": "src/app/(dashboard)/dashboard/financeiro/contas/_components/contas-client.tsx",
+      "line": 437,
+      "classification": "UI_ONLY",
+      "patterns": [
+        "/dashboard/financeiro/contas"
+      ]
+    },
+    {
+      "file": "src/app/(dashboard)/dashboard/financeiro/contas/page.tsx",
+      "line": 4,
+      "classification": "UI_ONLY",
+      "patterns": [
+        "getAccountsData"
+      ]
+    },
+    {
+      "file": "src/app/(dashboard)/dashboard/financeiro/contas/page.tsx",
+      "line": 8,
+      "classification": "UI_ONLY",
+      "patterns": [
+        "Contas"
+      ]
+    },
+    {
+      "file": "src/app/(dashboard)/dashboard/financeiro/contas/page.tsx",
+      "line": 10,
+      "classification": "UI_ONLY",
+      "patterns": [
+        "Contas"
+      ]
+    },
+    {
+      "file": "src/app/(dashboard)/dashboard/financeiro/contas/page.tsx",
+      "line": 12,
+      "classification": "UI_ONLY",
+      "patterns": [
+        "Contas"
+      ]
+    },
+    {
+      "file": "src/app/(dashboard)/dashboard/financeiro/contas/page.tsx",
+      "line": 26,
+      "classification": "UI_ONLY",
+      "patterns": [
+        "getAccountsData"
+      ]
+    },
+    {
+      "file": "src/app/(dashboard)/dashboard/financeiro/contas/page.tsx",
+      "line": 34,
+      "classification": "UI_ONLY",
+      "patterns": [
+        "Contas"
+      ]
+    },
+    {
+      "file": "src/app/(dashboard)/dashboard/financeiro/contas/page.tsx",
+      "line": 36,
+      "classification": "UI_ONLY",
+      "patterns": [
+        "getAccountsData"
+      ]
+    },
+    {
+      "file": "src/app/(dashboard)/dashboard/financeiro/contas/page.tsx",
+      "line": 52,
+      "classification": "UI_ONLY",
+      "patterns": [
+        "Contas"
+      ]
+    },
+    {
+      "file": "src/app/(dashboard)/dashboard/financeiro/contas/page.tsx",
+      "line": 58,
+      "classification": "UI_ONLY",
+      "patterns": [
+        "Contas"
+      ]
+    },
+    {
+      "file": "src/app/(dashboard)/dashboard/financeiro/fluxo-caixa/_components/cash-flow-client.tsx",
+      "line": 10,
+      "classification": "UI_ONLY",
+      "patterns": [
+        "getCashFlow"
+      ]
+    },
+    {
+      "file": "src/app/(dashboard)/dashboard/financeiro/fluxo-caixa/_components/cash-flow-client.tsx",
+      "line": 11,
+      "classification": "UI_ONLY",
+      "patterns": [
+        "createCashFlow"
+      ]
+    },
+    {
+      "file": "src/app/(dashboard)/dashboard/financeiro/fluxo-caixa/_components/cash-flow-client.tsx",
+      "line": 83,
+      "classification": "UI_ONLY",
+      "patterns": [
+        "Contas"
+      ]
+    },
+    {
+      "file": "src/app/(dashboard)/dashboard/financeiro/fluxo-caixa/_components/cash-flow-client.tsx",
+      "line": 94,
+      "classification": "UI_ONLY",
+      "patterns": [
+        "Fluxo de Caixa"
+      ]
+    },
+    {
+      "file": "src/app/(dashboard)/dashboard/financeiro/fluxo-caixa/_components/cash-flow-client.tsx",
+      "line": 111,
+      "classification": "UI_ONLY",
+      "patterns": [
+        "getCashFlow"
+      ]
+    },
+    {
+      "file": "src/app/(dashboard)/dashboard/financeiro/fluxo-caixa/_components/cash-flow-client.tsx",
+      "line": 123,
+      "classification": "UI_ONLY",
+      "patterns": [
+        "createCashFlow"
+      ]
+    },
+    {
+      "file": "src/app/(dashboard)/dashboard/financeiro/fluxo-caixa/_components/cash-flow-client.tsx",
+      "line": 231,
+      "classification": "UI_ONLY",
+      "patterns": [
+        "Contas"
+      ]
+    },
+    {
+      "file": "src/app/(dashboard)/dashboard/financeiro/fluxo-caixa/_components/cash-flow-client.tsx",
+      "line": 323,
+      "classification": "UI_ONLY",
+      "patterns": [
+        "/dashboard/financeiro/fluxo-caixa"
+      ]
+    },
+    {
+      "file": "src/app/(dashboard)/dashboard/financeiro/fluxo-caixa/page.tsx",
+      "line": 4,
+      "classification": "UI_ONLY",
+      "patterns": [
+        "getCashFlow"
+      ]
+    },
+    {
+      "file": "src/app/(dashboard)/dashboard/financeiro/fluxo-caixa/page.tsx",
+      "line": 10,
+      "classification": "UI_ONLY",
+      "patterns": [
+        "Fluxo de Caixa"
+      ]
+    },
+    {
+      "file": "src/app/(dashboard)/dashboard/financeiro/fluxo-caixa/page.tsx",
+      "line": 29,
+      "classification": "UI_ONLY",
+      "patterns": [
+        "getCashFlow"
+      ]
+    },
+    {
+      "file": "src/app/(dashboard)/dashboard/financeiro/fluxo-caixa/page.tsx",
+      "line": 40,
+      "classification": "UI_ONLY",
+      "patterns": [
+        "Fluxo de Caixa"
+      ]
+    },
+    {
+      "file": "src/app/(dashboard)/dashboard/financeiro/pagamentos/_components/unified-payments-client.tsx",
+      "line": 29,
+      "classification": "UI_ONLY",
+      "patterns": [
+        "createCashFlow"
+      ]
+    },
+    {
+      "file": "src/app/(dashboard)/dashboard/financeiro/pagamentos/_components/unified-payments-client.tsx",
+      "line": 215,
+      "classification": "UI_ONLY",
+      "patterns": [
+        "createCashFlow"
+      ]
+    },
+    {
+      "file": "src/app/actions/bank-reconciliation.ts",
+      "line": 60,
+      "classification": "RECONCILIATION_REQUIRED",
+      "patterns": [
+        "Contas"
+      ]
+    },
+    {
+      "file": "src/app/actions/bank-reconciliation.ts",
+      "line": 346,
+      "classification": "RECONCILIATION_REQUIRED",
+      "patterns": [
+        "cashFlow"
+      ]
+    },
+    {
+      "file": "src/app/actions/bank-reconciliation.ts",
+      "line": 355,
+      "classification": "RECONCILIATION_REQUIRED",
+      "patterns": [
+        "cashFlow"
+      ]
+    },
+    {
+      "file": "src/app/actions/bank-reconciliation.ts",
+      "line": 367,
+      "classification": "RECONCILIATION_REQUIRED",
+      "patterns": [
+        "cashFlow"
+      ]
+    },
+    {
+      "file": "src/app/actions/bank-reconciliation.ts",
+      "line": 384,
+      "classification": "RECONCILIATION_REQUIRED",
+      "patterns": [
+        "cashFlow"
+      ]
+    },
+    {
+      "file": "src/app/actions/bank-reconciliation.ts",
+      "line": 395,
+      "classification": "RECONCILIATION_REQUIRED",
+      "patterns": [
+        "cashFlow"
+      ]
+    },
+    {
+      "file": "src/app/actions/bank-reconciliation.ts",
+      "line": 515,
+      "classification": "RECONCILIATION_REQUIRED",
+      "patterns": [
+        "/dashboard/financeiro/fluxo-caixa"
+      ]
+    },
+    {
+      "file": "src/app/actions/cash-flow.ts",
+      "line": 50,
+      "classification": "DOMAIN_REQUIRED",
+      "patterns": [
+        "getCashFlow"
+      ]
+    },
+    {
+      "file": "src/app/actions/cash-flow.ts",
+      "line": 64,
+      "classification": "DOMAIN_REQUIRED",
+      "patterns": [
+        "Contas"
+      ]
+    },
+    {
+      "file": "src/app/actions/cash-flow.ts",
+      "line": 153,
+      "classification": "DOMAIN_REQUIRED",
+      "patterns": [
+        "createCashFlow"
+      ]
+    },
+    {
+      "file": "src/app/actions/cash-flow.ts",
+      "line": 238,
+      "classification": "DOMAIN_REQUIRED",
+      "patterns": [
+        "/dashboard/financeiro/fluxo-caixa"
+      ]
+    },
+    {
+      "file": "src/app/actions/cash-flow.ts",
+      "line": 239,
+      "classification": "DOMAIN_REQUIRED",
+      "patterns": [
+        "/dashboard/financeiro/contas"
+      ]
+    },
+    {
+      "file": "src/app/actions/cash-flow.ts",
+      "line": 353,
+      "classification": "DOMAIN_REQUIRED",
+      "patterns": [
+        "/dashboard/financeiro/fluxo-caixa"
+      ]
+    },
+    {
+      "file": "src/app/actions/cash-flow.ts",
+      "line": 354,
+      "classification": "DOMAIN_REQUIRED",
+      "patterns": [
+        "/dashboard/financeiro/contas"
+      ]
+    },
+    {
+      "file": "src/app/actions/cash-flow.ts",
+      "line": 423,
+      "classification": "DOMAIN_REQUIRED",
+      "patterns": [
+        "/dashboard/financeiro/fluxo-caixa"
+      ]
+    },
+    {
+      "file": "src/app/actions/cash-flow.ts",
+      "line": 424,
+      "classification": "DOMAIN_REQUIRED",
+      "patterns": [
+        "/dashboard/financeiro/contas"
+      ]
+    },
+    {
+      "file": "src/app/actions/cash-flow.ts",
+      "line": 477,
+      "classification": "DOMAIN_REQUIRED",
+      "patterns": [
+        "Contas"
+      ]
+    },
+    {
+      "file": "src/app/actions/cash-flow.ts",
+      "line": 495,
+      "classification": "DOMAIN_REQUIRED",
+      "patterns": [
+        "getAccountsData"
+      ]
+    },
+    {
+      "file": "src/app/actions/daily-billing.ts",
+      "line": 266,
+      "classification": "DOMAIN_REQUIRED",
+      "patterns": [
+        "Fluxo de Caixa"
+      ]
+    },
+    {
+      "file": "src/app/actions/daily-billing.ts",
+      "line": 351,
+      "classification": "DOMAIN_REQUIRED",
+      "patterns": [
+        "Fluxo de Caixa"
+      ]
+    },
+    {
+      "file": "src/app/actions/daily-billing.ts",
+      "line": 366,
+      "classification": "DOMAIN_REQUIRED",
+      "patterns": [
+        "cashFlow"
+      ]
+    },
+    {
+      "file": "src/app/actions/daily-billing.ts",
+      "line": 373,
+      "classification": "DOMAIN_REQUIRED",
+      "patterns": [
+        "cashFlow"
+      ]
+    },
+    {
+      "file": "src/app/actions/expense-categories.ts",
+      "line": 12,
+      "classification": "DOMAIN_REQUIRED",
+      "patterns": [
+        "Contas"
+      ]
+    },
+    {
+      "file": "src/app/actions/expense-categories.ts",
+      "line": 253,
+      "classification": "DOMAIN_REQUIRED",
+      "patterns": [
+        "/dashboard/financeiro/contas"
+      ]
+    },
+    {
+      "file": "src/app/actions/expense-categories.ts",
+      "line": 255,
+      "classification": "DOMAIN_REQUIRED",
+      "patterns": [
+        "/dashboard/financeiro/fluxo-caixa"
+      ]
+    },
+    {
+      "file": "src/app/actions/finance-dashboard-v2.ts",
+      "line": 92,
+      "classification": "DOMAIN_REQUIRED",
+      "patterns": [
+        "Contas"
+      ]
+    },
+    {
+      "file": "src/app/actions/financial-periods.ts",
+      "line": 71,
+      "classification": "DOMAIN_REQUIRED",
+      "patterns": [
+        "/dashboard/financeiro/contas"
+      ]
+    },
+    {
+      "file": "src/app/actions/financial-periods.ts",
+      "line": 72,
+      "classification": "DOMAIN_REQUIRED",
+      "patterns": [
+        "/dashboard/financeiro/fluxo-caixa"
+      ]
+    },
+    {
+      "file": "src/app/actions/payments.ts",
+      "line": 199,
+      "classification": "DOMAIN_REQUIRED",
+      "patterns": [
+        "Fluxo de Caixa",
+        "Contas"
+      ]
+    },
+    {
+      "file": "src/app/actions/payments.ts",
+      "line": 205,
+      "classification": "DOMAIN_REQUIRED",
+      "patterns": [
+        "/dashboard/financeiro/contas"
+      ]
+    },
+    {
+      "file": "src/app/actions/payments.ts",
+      "line": 206,
+      "classification": "DOMAIN_REQUIRED",
+      "patterns": [
+        "/dashboard/financeiro/fluxo-caixa"
+      ]
+    },
+    {
+      "file": "src/app/actions/payments.ts",
+      "line": 358,
+      "classification": "DOMAIN_REQUIRED",
+      "patterns": [
+        "Fluxo de Caixa"
+      ]
+    },
+    {
+      "file": "src/components/financeiro/finance-nav.tsx",
+      "line": 39,
+      "classification": "UI_ONLY",
+      "patterns": [
+        "/dashboard/financeiro/contas",
+        "Contas"
+      ]
+    },
+    {
+      "file": "src/components/financeiro/finance-nav.tsx",
+      "line": 40,
+      "classification": "UI_ONLY",
+      "patterns": [
+        "/dashboard/financeiro/fluxo-caixa",
+        "Fluxo de Caixa"
+      ]
+    },
+    {
+      "file": "src/components/financeiro/v2/finance-buildings-card.tsx",
+      "line": 17,
+      "classification": "UI_ONLY",
+      "patterns": [
+        "Fluxo de Caixa"
+      ]
+    },
+    {
+      "file": "src/domain/dashboard/dashboard-compat.ts",
+      "line": 183,
+      "classification": "DOMAIN_REQUIRED",
+      "patterns": [
+        "cashFlow"
+      ]
+    },
+    {
+      "file": "src/domain/dashboard/dashboard-compat.ts",
+      "line": 185,
+      "classification": "DOMAIN_REQUIRED",
+      "patterns": [
+        "cashFlow"
+      ]
+    },
+    {
+      "file": "src/domain/dashboard/dashboard-compat.ts",
+      "line": 191,
+      "classification": "DOMAIN_REQUIRED",
+      "patterns": [
+        "cashFlow"
+      ]
+    },
+    {
+      "file": "src/domain/dashboard/dashboard-compat.ts",
+      "line": 210,
+      "classification": "DOMAIN_REQUIRED",
+      "patterns": [
+        "cashFlow"
+      ]
+    },
+    {
+      "file": "src/domain/finance-v2/aggregate.ts",
+      "line": 144,
+      "classification": "DOMAIN_REQUIRED",
+      "patterns": [
+        "Contas"
+      ]
+    },
+    {
+      "file": "src/domain/finance-v2/aggregate.ts",
+      "line": 147,
+      "classification": "DOMAIN_REQUIRED",
+      "patterns": [
+        "Contas"
+      ]
+    },
+    {
+      "file": "src/domain/finance-v2/aggregate.ts",
+      "line": 435,
+      "classification": "DOMAIN_REQUIRED",
+      "patterns": [
+        "Contas"
+      ]
+    },
+    {
+      "file": "src/domain/finance-v2/types.ts",
+      "line": 226,
+      "classification": "DOMAIN_REQUIRED",
+      "patterns": [
+        "Fluxo de Caixa"
+      ]
+    },
+    {
+      "file": "src/domain/finance/legacy-navigation.ts",
+      "line": 2,
+      "classification": "DOMAIN_REQUIRED",
+      "patterns": [
+        "/dashboard/financeiro/contas"
+      ]
+    },
+    {
+      "file": "src/domain/finance/legacy-navigation.ts",
+      "line": 3,
+      "classification": "DOMAIN_REQUIRED",
+      "patterns": [
+        "/dashboard/financeiro/fluxo-caixa",
+        "cashFlow"
+      ]
+    },
+    {
+      "file": "src/domain/finance/legacy-navigation.ts",
+      "line": 8,
+      "classification": "DOMAIN_REQUIRED",
+      "patterns": [
+        "cashFlow"
+      ]
+    },
+    {
+      "file": "src/domain/finance/legacy-navigation.ts",
+      "line": 14,
+      "classification": "DOMAIN_REQUIRED",
+      "patterns": [
+        "cashFlow"
+      ]
+    },
+    {
+      "file": "src/domain/finance/legacy-navigation.ts",
+      "line": 29,
+      "classification": "DOMAIN_REQUIRED",
+      "patterns": [
+        "cashFlow"
+      ]
+    },
+    {
+      "file": "src/domain/reports/report-read-model.ts",
+      "line": 127,
+      "classification": "REPORT_REQUIRED",
+      "patterns": [
+        "cashFlow"
+      ]
+    },
+    {
+      "file": "src/domain/reports/report-read-model.ts",
+      "line": 457,
+      "classification": "REPORT_REQUIRED",
+      "patterns": [
+        "cashFlow"
+      ]
+    },
+    {
+      "file": "src/domain/reports/report-read-model.ts",
+      "line": 469,
+      "classification": "REPORT_REQUIRED",
+      "patterns": [
+        "cashFlow"
+      ]
+    },
+    {
+      "file": "src/domain/reports/report-read-model.ts",
+      "line": 477,
+      "classification": "REPORT_REQUIRED",
+      "patterns": [
+        "cashFlow"
+      ]
+    },
+    {
+      "file": "src/domain/reports/report-read-model.ts",
+      "line": 632,
+      "classification": "REPORT_REQUIRED",
+      "patterns": [
+        "cashFlow"
+      ]
+    },
+    {
+      "file": "src/domain/reports/report-read-model.ts",
+      "line": 673,
+      "classification": "REPORT_REQUIRED",
+      "patterns": [
+        "cashFlow"
+      ]
+    },
+    {
+      "file": "src/domain/reports/reports-compat.ts",
+      "line": 226,
+      "classification": "REPORT_REQUIRED",
+      "patterns": [
+        "cashFlow"
+      ]
+    },
+    {
+      "file": "src/lib/finance-period.ts",
+      "line": 10,
+      "classification": "DOMAIN_REQUIRED",
+      "patterns": [
+        "Contas"
+      ]
+    },
+    {
+      "file": "src/lib/finance-period.ts",
+      "line": 111,
+      "classification": "DOMAIN_REQUIRED",
+      "patterns": [
+        "Fluxo de Caixa"
+      ]
+    },
+    {
+      "file": "src/lib/finance-write-surface.ts",
+      "line": 53,
+      "classification": "DOMAIN_REQUIRED",
+      "patterns": [
+        "createCashFlow"
+      ]
+    },
+    {
+      "file": "supabase/migrations/049_cash_flow_service_payment_reference.sql",
+      "line": 4,
+      "classification": "OTHER",
+      "patterns": [
+        "Fluxo de Caixa"
+      ]
+    },
+    {
+      "file": "supabase/migrations/073_payment_to_cashflow.sql",
+      "line": 15,
+      "classification": "OTHER",
+      "patterns": [
+        "Fluxo de Caixa"
+      ]
+    }
+  ]
+}

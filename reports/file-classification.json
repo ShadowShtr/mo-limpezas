@@ -1,17 +1,17 @@
 {
   "generatedBy": "scripts/audit-file-inventory.mjs",
-  "totalFiles": 733,
+  "totalFiles": 737,
   "byStatus": {
-    "MANTER": 714,
+    "MANTER": 718,
     "STANDBY": 19
   },
   "byCategory": {
-    "test": 139,
+    "test": 140,
     "route-ui": 137,
     "migration": 84,
     "lib": 66,
-    "domain": 51,
-    "script": 49,
+    "domain": 52,
+    "script": 50,
     "doc": 43,
     "server-action": 43,
     "component": 30,
@@ -20,7 +20,7 @@
     "api-route": 16,
     "config": 12,
     "asset": 8,
-    "report": 4,
+    "report": 5,
     "script-historico": 4,
     "other": 2,
     "ci": 2,
@@ -29,12 +29,12 @@
     "supabase-other": 2
   },
   "byConfidence": {
-    "alta": 716,
+    "alta": 720,
     "média": 11,
     "baixa": 6
   },
   "scriptRisk": {
-    "SAFE_OFFLINE": 27,
+    "SAFE_OFFLINE": 28,
     "ADMIN_GUARDED_WRITE": 11,
     "ADMIN_READ": 6,
     "WRITE_CAPABLE": 5
@@ -1860,6 +1860,22 @@
       "manualDecision": false
     },
     {
+      "path": "reports/finance-legacy-references.json",
+      "category": "report",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {},
+      "action": "nenhuma",
+      "reason": "configuração/infra",
+      "manualDecision": false
+    },
+    {
       "path": "reports/ignored-query-errors.json",
       "category": "report",
       "status": "MANTER",
@@ -1995,6 +2011,31 @@
         "revalidatePath": 1,
         "realtime": 1,
         "dynamicImport": 4
+      },
+      "action": "nenhuma",
+      "reason": "ferramenta offline, sem acesso à base",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": true,
+        "dynamicImport": true,
+        "allClosed": false
+      },
+      "scriptRisk": "SAFE_OFFLINE"
+    },
+    {
+      "path": "scripts/audit-finance-legacy-references.mjs",
+      "category": "script",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "consoleLog": 1
       },
       "action": "nenhuma",
       "reason": "ferramenta offline, sem acesso à base",
@@ -4823,6 +4864,28 @@
         "write": 1,
         "sqlWrite": 4
       },
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/__tests__/finance-legacy-navigation.test.ts",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {},
       "action": "nenhuma",
       "reason": "suite de testes — corre por convenção do vitest",
       "manualDecision": false,
@@ -15061,6 +15124,30 @@
       "signals": {},
       "action": "nenhuma",
       "reason": "em uso: 6 consumidor(es)",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/domain/finance/legacy-navigation.ts",
+      "category": "domain",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 1,
+      "consumerSample": [
+        "src/__tests__/finance-legacy-navigation.test.ts"
+      ],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {},
+      "action": "nenhuma",
+      "reason": "em uso: 1 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
