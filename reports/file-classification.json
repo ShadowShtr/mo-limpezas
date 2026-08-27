@@ -1,8 +1,8 @@
 {
   "generatedBy": "scripts/audit-file-inventory.mjs",
-  "totalFiles": 753,
+  "totalFiles": 752,
   "byStatus": {
-    "MANTER": 730,
+    "MANTER": 729,
     "STANDBY": 23
   },
   "byCategory": {
@@ -15,12 +15,12 @@
     "doc": 43,
     "server-action": 42,
     "component": 30,
-    "src-other": 20,
+    "src-other": 21,
     "doc-historico": 16,
     "api-route": 16,
     "config": 12,
     "asset": 8,
-    "report": 6,
+    "report": 4,
     "script-historico": 4,
     "other": 2,
     "ci": 2,
@@ -29,7 +29,7 @@
     "supabase-other": 2
   },
   "byConfidence": {
-    "alta": 732,
+    "alta": 731,
     "média": 15,
     "baixa": 6
   },
@@ -1832,58 +1832,6 @@
       "manualDecision": false
     },
     {
-      "path": "reports/code-audit.json",
-      "category": "report",
-      "status": "MANTER",
-      "confidence": "alta",
-      "consumers": 0,
-      "consumerSample": [],
-      "autoLoaded": false,
-      "referencedBy": [
-        "npm",
-        "ci",
-        "config",
-        "docs"
-      ],
-      "sideEffects": [
-        "supabase"
-      ],
-      "risks": [],
-      "signals": {
-        "supabase": 1,
-        "sqlWrite": 1
-      },
-      "action": "nenhuma",
-      "reason": "configuração/infra",
-      "manualDecision": false
-    },
-    {
-      "path": "reports/code-audit.json",
-      "category": "report",
-      "status": "MANTER",
-      "confidence": "alta",
-      "consumers": 0,
-      "consumerSample": [],
-      "autoLoaded": false,
-      "referencedBy": [
-        "npm",
-        "ci",
-        "config",
-        "docs"
-      ],
-      "sideEffects": [
-        "supabase"
-      ],
-      "risks": [],
-      "signals": {
-        "supabase": 1,
-        "sqlWrite": 1
-      },
-      "action": "nenhuma",
-      "reason": "configuração/infra",
-      "manualDecision": false
-    },
-    {
       "path": "reports/file-classification.json",
       "category": "report",
       "status": "MANTER",
@@ -1896,7 +1844,7 @@
       ],
       "sideEffects": [
         "supabase",
-        "revalidatePath(38)"
+        "revalidatePath(40)"
       ],
       "risks": [
         "debugger"
@@ -1904,8 +1852,8 @@
       "signals": {
         "supabase": 1,
         "sqlWrite": 26,
-        "debugger": 6,
-        "revalidatePath": 38
+        "debugger": 10,
+        "revalidatePath": 40
       },
       "action": "nenhuma",
       "reason": "configuração/infra",
@@ -16032,7 +15980,7 @@
       "category": "domain",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 26,
+      "consumers": 27,
       "consumerSample": [
         "src/__tests__/update-notice-modal.test.tsx",
         "src/__tests__/update-notices-eligibility.test.ts",
@@ -16047,7 +15995,7 @@
       "risks": [],
       "signals": {},
       "action": "nenhuma",
-      "reason": "em uso: 26 consumidor(es), configuração",
+      "reason": "em uso: 27 consumidor(es), configuração",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -18440,6 +18388,32 @@
     },
     {
       "path": "src/release-notes/2026-08-27-colaborador-so-com-o-nome.ts",
+      "category": "src-other",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 1,
+      "consumerSample": [
+        "src/release-notes/index.ts"
+      ],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "sqlWrite": 1
+      },
+      "action": "nenhuma",
+      "reason": "em uso: 1 consumidor(es)",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/release-notes/2026-08-27-conciliacao-e-edicoes-em-simultaneo.ts",
       "category": "src-other",
       "status": "MANTER",
       "confidence": "alta",
