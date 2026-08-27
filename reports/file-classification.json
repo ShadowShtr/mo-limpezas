@@ -1,16 +1,16 @@
 {
   "generatedBy": "scripts/audit-file-inventory.mjs",
-  "totalFiles": 727,
+  "totalFiles": 732,
   "byStatus": {
-    "MANTER": 708,
-    "STANDBY": 19
+    "MANTER": 712,
+    "STANDBY": 20
   },
   "byCategory": {
-    "test": 138,
+    "test": 141,
     "route-ui": 136,
-    "migration": 85,
+    "migration": 86,
     "lib": 65,
-    "script": 49,
+    "script": 50,
     "domain": 49,
     "doc": 43,
     "server-action": 42,
@@ -29,15 +29,15 @@
     "supabase-other": 2
   },
   "byConfidence": {
-    "alta": 710,
-    "média": 11,
+    "alta": 714,
+    "média": 12,
     "baixa": 6
   },
   "scriptRisk": {
     "SAFE_OFFLINE": 27,
     "ADMIN_GUARDED_WRITE": 11,
     "ADMIN_READ": 6,
-    "WRITE_CAPABLE": 5
+    "WRITE_CAPABLE": 6
   },
   "files": [
     {
@@ -3321,6 +3321,41 @@
       "scriptRisk": "SAFE_OFFLINE"
     },
     {
+      "path": "scripts/rehearse-migration-chain-077-079.mjs",
+      "category": "script",
+      "status": "STANDBY",
+      "confidence": "média",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [
+        "npm"
+      ],
+      "sideEffects": [
+        "env"
+      ],
+      "risks": [
+        "service-role"
+      ],
+      "signals": {
+        "env": 1,
+        "serviceRole": 2,
+        "sqlWrite": 4,
+        "consoleLog": 13,
+        "consoleErr": 2
+      },
+      "action": "T17-B: confirmar se ainda é preciso",
+      "reason": "capaz de escrever na base",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": true,
+        "dynamicImport": true,
+        "allClosed": false
+      },
+      "scriptRisk": "WRITE_CAPABLE"
+    },
+    {
       "path": "scripts/restore-backup.mjs",
       "category": "script",
       "status": "MANTER",
@@ -4682,6 +4717,62 @@
       }
     },
     {
+      "path": "src/__tests__/domain-mutation-change-event-foundation.test.ts",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [
+        "service-role"
+      ],
+      "signals": {
+        "serviceRole": 1,
+        "sqlWrite": 26,
+        "fallbackArray": 2
+      },
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/__tests__/domain-mutation-sequence-concurrency.pg.test.ts",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [
+        "env"
+      ],
+      "risks": [],
+      "signals": {
+        "env": 1,
+        "sqlWrite": 5,
+        "fallbackZero": 1
+      },
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
       "path": "src/__tests__/effective-expense-category.test.ts",
       "category": "test",
       "status": "MANTER",
@@ -5173,6 +5264,24 @@
         "dynamicImport": true,
         "allClosed": false
       }
+    },
+    {
+      "path": "src/__tests__/fixtures/production-078-partial-shape.json",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "sqlWrite": 4
+      },
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false
     },
     {
       "path": "src/__tests__/fixtures/production-schema-shape.sql",
@@ -19724,6 +19833,24 @@
       "signals": {
         "serviceRole": 1,
         "sqlWrite": 10
+      },
+      "action": "nenhuma",
+      "reason": "migration versionada — histórico do schema, nunca se apaga",
+      "manualDecision": false
+    },
+    {
+      "path": "supabase/migrations/078_domain_mutation_change_event_foundation.sql",
+      "category": "migration",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "sqlWrite": 60
       },
       "action": "nenhuma",
       "reason": "migration versionada — histórico do schema, nunca se apaga",
