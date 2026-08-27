@@ -65,7 +65,8 @@
 -- ser um palpite.
 -- ============================================================================
 
-BEGIN;
+-- BEGIN; removido: a transacao autoritativa e a do runner de migrations
+-- (migration-runner-core.mjs: BEGIN -> SQL -> INSERT _migrations -> COMMIT).
 
 -- ─── 0. A 080 tem de ter corrido primeiro ───────────────────────────────────
 --
@@ -414,7 +415,7 @@ COMMENT ON FUNCTION public.unmark_payment_paid IS
   'que o criou; restaura-o ao estado anterior, com o mesmo id, se já existia e '
   'foi adoptado; recusa se o movimento estiver conciliado.';
 
-COMMIT;
+-- COMMIT; removido pelo mesmo motivo: quem faz COMMIT e o runner.
 
 -- ============================================================================
 -- O que esta migration NÃO faz
