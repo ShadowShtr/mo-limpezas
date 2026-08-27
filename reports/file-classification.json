@@ -1,12 +1,12 @@
 {
   "generatedBy": "scripts/audit-file-inventory.mjs",
-  "totalFiles": 746,
+  "totalFiles": 747,
   "byStatus": {
-    "MANTER": 723,
+    "MANTER": 724,
     "STANDBY": 23
   },
   "byCategory": {
-    "test": 146,
+    "test": 147,
     "route-ui": 136,
     "migration": 91,
     "lib": 65,
@@ -29,7 +29,7 @@
     "supabase-other": 2
   },
   "byConfidence": {
-    "alta": 725,
+    "alta": 726,
     "média": 15,
     "baixa": 6
   },
@@ -5007,6 +5007,28 @@
       "signals": {
         "sqlWrite": 14
       },
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/__tests__/finance-pending-cashflow-ui-contract.test.ts",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {},
       "action": "nenhuma",
       "reason": "suite de testes — corre por convenção do vitest",
       "manualDecision": false,
@@ -16978,11 +17000,11 @@
       "category": "lib",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 3,
+      "consumers": 4,
       "consumerSample": [
+        "src/__tests__/finance-pending-cashflow-ui-contract.test.ts",
         "src/__tests__/payment-cashflow-rpc.test.ts",
-        "src/app/actions/payments.ts",
-        "src/lib/finance-rpc/invoice-creation.ts"
+        "src/app/actions/payments.ts"
       ],
       "autoLoaded": false,
       "referencedBy": [
@@ -16992,7 +17014,7 @@
       "risks": [],
       "signals": {},
       "action": "nenhuma",
-      "reason": "em uso: 3 consumidor(es)",
+      "reason": "em uso: 4 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
