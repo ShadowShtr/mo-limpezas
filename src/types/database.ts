@@ -218,8 +218,8 @@ export type Database = {
         Relationships: [];
       };
       cash_flow_entries: {
-        Row: { id: string; company_id: string; type: "entrada" | "saida"; amount: number; description: string; category: "faturacao" | "salario" | "despesa" | "fornecedor" | "outro" | null; date: string; reference_id: string | null; reference_type: "invoice" | "payroll" | "service_payment" | null; status: "pendente" | "confirmado"; notes: string | null; created_by: string | null; created_at: string };
-        Insert: { company_id: string; type: "entrada" | "saida"; amount: number; description: string; date: string; category?: "faturacao" | "salario" | "despesa" | "fornecedor" | "outro" | null; reference_id?: string | null; reference_type?: "invoice" | "payroll" | "service_payment" | null; status?: "pendente" | "confirmado"; notes?: string | null; created_by?: string | null };
+        Row: { id: string; company_id: string; type: "entrada" | "saida"; amount: number; description: string; category: "faturacao" | "salario" | "despesa" | "fornecedor" | "outro" | null; date: string; reference_id: string | null; reference_type: "invoice" | "payroll" | "service_payment" | "fixed_variable_payment" | null; status: "pendente" | "confirmado"; notes: string | null; created_by: string | null; created_at: string };
+        Insert: { company_id: string; type: "entrada" | "saida"; amount: number; description: string; date: string; category?: "faturacao" | "salario" | "despesa" | "fornecedor" | "outro" | null; reference_id?: string | null; reference_type?: "invoice" | "payroll" | "service_payment" | "fixed_variable_payment" | null; status?: "pendente" | "confirmado"; notes?: string | null; created_by?: string | null };
         Update: { description?: string; amount?: number; date?: string; category?: string | null; status?: "pendente" | "confirmado"; notes?: string | null };
         Relationships: [];
       };

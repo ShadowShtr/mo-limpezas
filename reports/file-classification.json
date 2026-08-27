@@ -1,19 +1,19 @@
 {
   "generatedBy": "scripts/audit-file-inventory.mjs",
-  "totalFiles": 725,
+  "totalFiles": 729,
   "byStatus": {
-    "MANTER": 706,
-    "STANDBY": 19
+    "MANTER": 709,
+    "STANDBY": 20
   },
   "byCategory": {
-    "test": 137,
+    "test": 138,
     "route-ui": 136,
     "migration": 84,
-    "lib": 65,
+    "lib": 66,
+    "domain": 50,
     "script": 49,
-    "domain": 49,
     "doc": 43,
-    "server-action": 42,
+    "server-action": 43,
     "component": 30,
     "src-other": 20,
     "doc-historico": 16,
@@ -29,9 +29,9 @@
     "supabase-other": 2
   },
   "byConfidence": {
-    "alta": 708,
+    "alta": 711,
     "média": 11,
-    "baixa": 6
+    "baixa": 7
   },
   "scriptRisk": {
     "SAFE_OFFLINE": 27,
@@ -4771,6 +4771,30 @@
         "write": 1,
         "sqlWrite": 12,
         "revalidatePath": 1
+      },
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/__tests__/finance-ledger-read-model.test.ts",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "fallbackZero": 1
       },
       "action": "nenhuma",
       "reason": "suite de testes — corre por convenção do vitest",
@@ -11837,6 +11861,31 @@
       }
     },
     {
+      "path": "src/app/actions/finance-ledger.ts",
+      "category": "server-action",
+      "status": "STANDBY",
+      "confidence": "baixa",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "serverAction": 1,
+        "fallbackArray": 2
+      },
+      "action": "porta(s) ainda abertas (import dinâmico não resolúvel) — não remover",
+      "reason": "sem consumidor encontrado por análise estática",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
       "path": "src/app/actions/financial-dashboard.ts",
       "category": "server-action",
       "status": "MANTER",
@@ -14773,7 +14822,7 @@
       "category": "domain",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 3,
+      "consumers": 5,
       "consumerSample": [
         "src/__tests__/effective-expense-category.test.ts",
         "src/app/actions/cash-flow.ts",
@@ -14785,7 +14834,7 @@
       "risks": [],
       "signals": {},
       "action": "nenhuma",
-      "reason": "em uso: 3 consumidor(es)",
+      "reason": "em uso: 5 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -14853,11 +14902,11 @@
       "category": "domain",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 3,
+      "consumers": 4,
       "consumerSample": [
         "src/__tests__/finance-v2-money.test.ts",
         "src/app/actions/building-cards.ts",
-        "src/lib/finance-rpc/payment-cashflow.ts"
+        "src/domain/finance/ledger.ts"
       ],
       "autoLoaded": false,
       "referencedBy": [
@@ -14867,7 +14916,7 @@
       "risks": [],
       "signals": {},
       "action": "nenhuma",
-      "reason": "em uso: 3 consumidor(es)",
+      "reason": "em uso: 4 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -14901,6 +14950,34 @@
       "deadCodeDoors": {
         "frameworkConvention": false,
         "cliEntrypoint": true,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/domain/finance/ledger.ts",
+      "category": "domain",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 3,
+      "consumerSample": [
+        "src/__tests__/finance-ledger-read-model.test.ts",
+        "src/app/actions/finance-ledger.ts",
+        "src/lib/finance-ledger-query.ts"
+      ],
+      "autoLoaded": false,
+      "referencedBy": [
+        "docs"
+      ],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {},
+      "action": "nenhuma",
+      "reason": "em uso: 3 consumidor(es)",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
         "dynamicImport": true,
         "allClosed": false
       }
@@ -15707,7 +15784,7 @@
       "category": "lib",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 23,
+      "consumers": 24,
       "consumerSample": [
         "src/__tests__/auth-revalidation-central.test.ts",
         "src/app/actions/absences.ts",
@@ -15728,7 +15805,7 @@
         "ignoredError": 1
       },
       "action": "nenhuma",
-      "reason": "em uso: 23 consumidor(es)",
+      "reason": "em uso: 24 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -16503,6 +16580,31 @@
       "signals": {},
       "action": "nenhuma",
       "reason": "em uso: 5 consumidor(es)",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/lib/finance-ledger-query.ts",
+      "category": "lib",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 2,
+      "consumerSample": [
+        "src/__tests__/finance-ledger-read-model.test.ts",
+        "src/app/actions/finance-ledger.ts"
+      ],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {},
+      "action": "nenhuma",
+      "reason": "em uso: 2 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
