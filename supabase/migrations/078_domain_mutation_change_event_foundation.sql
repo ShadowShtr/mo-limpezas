@@ -219,6 +219,39 @@ $$;
 -- Uma mutation de negócio produz UM evento-resumo. Se tocar em contratos,
 -- serviços e calendário, isso descreve-se em `scopes` — não em três eventos.
 -- É o que torna a idempotência e a ordenação tratáveis.
+-- 🔴 As restrições que produção tem têm nomes AUTO-GERADOS, e por isso não são
+--    apanhadas pelos `DROP CONSTRAINT IF EXISTS` abaixo — que só conhecem os
+--    nomes canónicos.
+--
+--    Sem isto, aplicar esta migration deixava **duas** restrições únicas sobre
+--    `(company_id, sequence)`: a auto-gerada e a canónica. Duas restrições
+--    idênticas não protegem melhor — custam um índice a mais em cada escrita,
+--    para sempre, e deixam quem vier a seguir sem saber qual é a verdadeira.
+--    Foi um ensaio contra o esquema parcial real que o apanhou; a versão
+--    anterior desta migration passava e deixava o duplicado lá.
+--
+--    Só se largam restrições cuja definição é **exactamente** a mesma que a
+--    canónica vai criar. Uma restrição diferente não é lixo desta migration, e
+--    apagá-la seria decidir por quem a criou.
+DO $legado$
+DECLARE r record;
+BEGIN
+  FOR r IN
+    SELECT c.conname, pg_get_constraintdef(c.oid) AS def
+      FROM pg_constraint c
+     WHERE c.conrelid = 'public.company_change_events'::regclass
+       AND c.contype = 'u'
+       AND c.conname <> 'company_change_events_company_sequence_key'
+       AND c.conname <> 'company_change_events_company_mutation_key'
+  LOOP
+    IF r.def = 'UNIQUE (company_id, sequence)' OR r.def = 'UNIQUE (company_id, mutation_id)' THEN
+      EXECUTE format('ALTER TABLE public.company_change_events DROP CONSTRAINT %I', r.conname);
+      RAISE NOTICE 'Restrição legada % largada — duplicava a canónica.', r.conname;
+    END IF;
+  END LOOP;
+END
+$legado$;
+
 ALTER TABLE public.company_change_events
   DROP CONSTRAINT IF EXISTS company_change_events_company_sequence_key;
 ALTER TABLE public.company_change_events
@@ -358,6 +391,33 @@ DECLARE
   v_aceites text[] := ARRAY[
     -- record_company_change_event, forma legada (7 argumentos, sem datas)
     'jsonb,text,text,text[],uuid,uuid,uuid[]',
+    -- record_company_change_event, forma legada com `tstzrange` (8 argumentos)
+    --
+    -- 🔴 Acrescentada depois de a caracterização real ter sido feita contra a
+    --    base de produção, a 2026-08-27. A lista acima não a tinha, e a
+    --    migration parava com `UNKNOWN_FUNCTION_SIGNATURE` — que é o
+    --    comportamento certo: parou porque não sabia, e não apagou nada.
+    --
+    --    O que se mediu, e porque é que aceitá-la é seguro:
+    --
+    --      assinatura  p_company_id uuid, p_mutation_id uuid, p_domain text,
+    --                  p_event_type text, p_entity_ids uuid[], p_scopes text[],
+    --                  p_affected_range tstzrange, p_payload jsonb
+    --      devolve     jsonb          SECURITY DEFINER   search_path=public
+    --      escreve     company_change_events, e mais nada
+    --
+    --    🔴 E **não funciona**. O corpo insere sem `sequence`, e
+    --       `company_change_events.sequence` é `bigint NOT NULL` sem DEFAULT,
+    --       numa tabela sem um único trigger. Qualquer chamada morre com
+    --       `null value in column "sequence"`. É por isso que a tabela tem zero
+    --       linhas — não por estar por usar, mas por ser inutilizável.
+    --
+    --    Não é, portanto, uma implementação alternativa em serviço que esta
+    --    migration fosse destruir. É o rascunho incompleto que ela existe para
+    --    substituir: falta-lhe a geração de sequência (que a `next_company_sequence`
+    --    passa a fazer) e usa `affected_range tstzrange`, que esta migration
+    --    troca por duas datas civis.
+    'jsonb,text,text,text[],tstzrange,uuid,uuid,uuid[]',
     -- record_company_change_event, forma canónica (9 argumentos)
     'date,date,jsonb,text,text,text[],uuid,uuid,uuid[]',
     -- next_company_sequence

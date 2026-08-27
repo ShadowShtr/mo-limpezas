@@ -1,16 +1,16 @@
 {
   "generatedBy": "scripts/audit-file-inventory.mjs",
-  "totalFiles": 671,
+  "totalFiles": 674,
   "byStatus": {
-    "MANTER": 653,
-    "STANDBY": 18
+    "MANTER": 655,
+    "STANDBY": 19
   },
   "byCategory": {
     "route-ui": 135,
-    "test": 114,
+    "test": 115,
     "migration": 80,
     "lib": 65,
-    "script": 48,
+    "script": 49,
     "doc": 43,
     "domain": 42,
     "server-action": 41,
@@ -22,22 +22,22 @@
     "report": 4,
     "script-historico": 4,
     "src-other": 4,
+    "other": 2,
     "ci": 2,
     "types": 2,
     "sql-frozen": 2,
-    "supabase-other": 2,
-    "other": 1
+    "supabase-other": 2
   },
   "byConfidence": {
-    "alta": 655,
-    "média": 10,
+    "alta": 657,
+    "média": 11,
     "baixa": 6
   },
   "scriptRisk": {
     "SAFE_OFFLINE": 27,
     "ADMIN_GUARDED_WRITE": 11,
     "ADMIN_READ": 6,
-    "WRITE_CAPABLE": 4
+    "WRITE_CAPABLE": 5
   },
   "files": [
     {
@@ -63,6 +63,24 @@
       },
       "action": "nenhuma",
       "reason": "configuração/infra",
+      "manualDecision": false
+    },
+    {
+      "path": ".gitattributes",
+      "category": "other",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [
+        "docs"
+      ],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {},
+      "action": "nenhuma",
+      "reason": "ficheiro de other",
       "manualDecision": false
     },
     {
@@ -3274,6 +3292,41 @@
       "scriptRisk": "SAFE_OFFLINE"
     },
     {
+      "path": "scripts/rehearse-migration-chain-077-079.mjs",
+      "category": "script",
+      "status": "STANDBY",
+      "confidence": "média",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [
+        "npm"
+      ],
+      "sideEffects": [
+        "env"
+      ],
+      "risks": [
+        "service-role"
+      ],
+      "signals": {
+        "env": 1,
+        "serviceRole": 2,
+        "sqlWrite": 4,
+        "consoleLog": 12,
+        "consoleErr": 2
+      },
+      "action": "T17-B: confirmar se ainda é preciso",
+      "reason": "capaz de escrever na base",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": true,
+        "dynamicImport": true,
+        "allClosed": false
+      },
+      "scriptRisk": "WRITE_CAPABLE"
+    },
+    {
       "path": "scripts/restore-backup.mjs",
       "category": "script",
       "status": "MANTER",
@@ -4896,6 +4949,24 @@
         "dynamicImport": true,
         "allClosed": false
       }
+    },
+    {
+      "path": "src/__tests__/fixtures/production-078-partial-shape.json",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "sqlWrite": 4
+      },
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false
     },
     {
       "path": "src/__tests__/invalidate-business-state.test.ts",
@@ -18393,7 +18464,7 @@
       "sideEffects": [],
       "risks": [],
       "signals": {
-        "sqlWrite": 57
+        "sqlWrite": 60
       },
       "action": "nenhuma",
       "reason": "migration versionada — histórico do schema, nunca se apaga",
