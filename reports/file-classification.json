@@ -1,12 +1,12 @@
 {
   "generatedBy": "scripts/audit-file-inventory.mjs",
-  "totalFiles": 752,
+  "totalFiles": 757,
   "byStatus": {
-    "MANTER": 729,
+    "MANTER": 734,
     "STANDBY": 23
   },
   "byCategory": {
-    "test": 148,
+    "test": 149,
     "route-ui": 136,
     "migration": 94,
     "lib": 65,
@@ -20,7 +20,7 @@
     "api-route": 16,
     "config": 12,
     "asset": 8,
-    "report": 4,
+    "report": 8,
     "script-historico": 4,
     "other": 2,
     "ci": 2,
@@ -29,7 +29,7 @@
     "supabase-other": 2
   },
   "byConfidence": {
-    "alta": 731,
+    "alta": 736,
     "média": 15,
     "baixa": 6
   },
@@ -1826,6 +1826,114 @@
       "signals": {
         "supabase": 1,
         "sqlWrite": 1
+      },
+      "action": "nenhuma",
+      "reason": "configuração/infra",
+      "manualDecision": false
+    },
+    {
+      "path": "reports/code-audit.json",
+      "category": "report",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [
+        "npm",
+        "ci",
+        "config",
+        "docs"
+      ],
+      "sideEffects": [
+        "supabase"
+      ],
+      "risks": [],
+      "signals": {
+        "supabase": 1,
+        "sqlWrite": 1
+      },
+      "action": "nenhuma",
+      "reason": "configuração/infra",
+      "manualDecision": false
+    },
+    {
+      "path": "reports/code-audit.json",
+      "category": "report",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [
+        "npm",
+        "ci",
+        "config",
+        "docs"
+      ],
+      "sideEffects": [
+        "supabase"
+      ],
+      "risks": [],
+      "signals": {
+        "supabase": 1,
+        "sqlWrite": 1
+      },
+      "action": "nenhuma",
+      "reason": "configuração/infra",
+      "manualDecision": false
+    },
+    {
+      "path": "reports/file-classification.json",
+      "category": "report",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [
+        "docs"
+      ],
+      "sideEffects": [
+        "supabase",
+        "revalidatePath(40)"
+      ],
+      "risks": [
+        "debugger"
+      ],
+      "signals": {
+        "supabase": 1,
+        "sqlWrite": 26,
+        "debugger": 10,
+        "revalidatePath": 40
+      },
+      "action": "nenhuma",
+      "reason": "configuração/infra",
+      "manualDecision": false
+    },
+    {
+      "path": "reports/file-classification.json",
+      "category": "report",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [
+        "docs"
+      ],
+      "sideEffects": [
+        "supabase",
+        "revalidatePath(40)"
+      ],
+      "risks": [
+        "debugger"
+      ],
+      "signals": {
+        "supabase": 1,
+        "sqlWrite": 26,
+        "debugger": 10,
+        "revalidatePath": 40
       },
       "action": "nenhuma",
       "reason": "configuração/infra",
@@ -5031,6 +5139,28 @@
       "signals": {
         "sqlWrite": 14
       },
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/__tests__/finance-pending-cashflow-ui-contract.test.ts",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {},
       "action": "nenhuma",
       "reason": "suite de testes — corre por convenção do vitest",
       "manualDecision": false,
@@ -17027,11 +17157,11 @@
       "category": "lib",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 3,
+      "consumers": 4,
       "consumerSample": [
+        "src/__tests__/finance-pending-cashflow-ui-contract.test.ts",
         "src/__tests__/payment-cashflow-rpc.test.ts",
-        "src/app/actions/payments.ts",
-        "src/lib/finance-rpc/invoice-creation.ts"
+        "src/app/actions/payments.ts"
       ],
       "autoLoaded": false,
       "referencedBy": [
@@ -17041,7 +17171,7 @@
       "risks": [],
       "signals": {},
       "action": "nenhuma",
-      "reason": "em uso: 3 consumidor(es)",
+      "reason": "em uso: 4 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
