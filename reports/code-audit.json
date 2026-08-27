@@ -1,10 +1,10 @@
 {
   "inventorySource": "git ls-files",
   "summary": {
-    "repositoryFiles": 734,
-    "textFiles": 721,
-    "sourceFiles": 522,
-    "textLines": 174711,
+    "repositoryFiles": 739,
+    "textFiles": 726,
+    "sourceFiles": 523,
+    "textLines": 176838,
     "typescriptDiagnostics": 0,
     "productionEntries": 71,
     "unreachableProductionModules": 39,
@@ -134,6 +134,7 @@
     ],
     "dateRiskCandidates": [
       "src/__tests__/civil-date.test.ts",
+      "src/__tests__/migration-schema-ledger-atomicity.pg.test.ts",
       "src/__tests__/recurrence-engine.test.ts",
       "src/app/(app)/app/escala/page.tsx",
       "src/app/actions/invoices.ts",
