@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { format } from "date-fns";
 import { pt } from "date-fns/locale";
-import { X, Loader2, Car, RefreshCw, ChevronDown, User, GripVertical } from "lucide-react";
+import { X, Loader2, Car, RefreshCw, ChevronDown, User, GripVertical, Undo2 } from "lucide-react";
 import {
   DndContext, DragOverlay, PointerSensor, useSensor, useSensors,
   useDraggable, type DragStartEvent, type DragEndEvent,
@@ -11,12 +11,20 @@ import {
 import { createClient } from "@/lib/supabase/client";
 import {
   getAllocationsForDate,
-  upsertAllocation,
-  removeAllocation,
-  moveCollaboratorToTeam,
+  getDayTeamAssignmentsForDate,
+  saveTeamDayAllocations,
   type VehicleAllocation,
 } from "@/app/actions/vehicles";
 import { DroppableColumn } from "./droppable-column";
+import {
+  assignmentMap,
+  canonicalSnapshot,
+  effectiveTeam,
+  moveInDraft,
+  snapshotsEqual,
+  sortedDayAssignments,
+  type TeamAllocationSnapshot,
+} from "@/domain/teams/allocation-draft";
 
 // ─── Constantes ───────────────────────────────────────────────────────────────
 
@@ -64,6 +72,8 @@ interface TeamAllocation {
   vehicleId: string;
   driverId: string;
 }
+
+const AVAILABLE_DROP_ID = "__available__";
 
 interface Props {
   open: boolean;
@@ -130,7 +140,8 @@ export function TeamAllocationModal({
   const [allocationMap, setAllocationMap] = useState<Record<string, TeamAllocation>>({});
 
   // Reatribuições do dia: collaboratorId → equipa com que trabalha hoje
-  const [overrideMap, setOverrideMap] = useState<Record<string, string>>({});
+  const [overrideMap, setOverrideMap] = useState<Record<string, string | null>>({});
+  const [initialSnapshot, setInitialSnapshot] = useState<TeamAllocationSnapshot | null>(null);
 
   // Chip a ser arrastado (para o overlay)
   const [dragging, setDragging] = useState<{ name: string; color: string } | null>(null);
@@ -152,12 +163,13 @@ export function TeamAllocationModal({
     for (const team of allocated) {
       for (const m of team.members) map[m.id] = m;
     }
+    for (const member of available) map[member.id] = member;
     return map;
-  }, [allocated]);
+  }, [allocated, available]);
 
   // Equipa efetiva (override ou origem)
-  function effectiveTeamId(collaboratorId: string): string | undefined {
-    return overrideMap[collaboratorId] ?? homeTeamOf[collaboratorId];
+  function effectiveTeamId(collaboratorId: string): string | null {
+    return effectiveTeam(collaboratorId, homeTeamOf, overrideMap);
   }
 
   // Membros efetivos (que trabalham hoje) por equipa
@@ -174,21 +186,35 @@ export function TeamAllocationModal({
     return map;
   }, [allocated, allMembers, overrideMap, homeTeamOf]);
 
+  const effectiveAvailable = useMemo(() =>
+    Object.values(allMembers)
+      .filter((member) => effectiveTeam(member.id, homeTeamOf, overrideMap) === null)
+      .sort((a, b) => a.full_name.localeCompare(b.full_name)),
+  [allMembers, homeTeamOf, overrideMap]);
+
+  const currentSnapshot = useMemo<TeamAllocationSnapshot>(() => canonicalSnapshot({
+    member_assignments: sortedDayAssignments(overrideMap),
+    vehicle_allocations: Object.entries(allocationMap)
+      .filter(([, allocation]) => Boolean(allocation.vehicleId))
+      .map(([team_id, allocation]) => ({
+        team_id,
+        vehicle_id: allocation.vehicleId,
+        driver_id: allocation.driverId || null,
+      })),
+  }), [allocationMap, overrideMap]);
+
+  const dirty = initialSnapshot !== null && !snapshotsEqual(initialSnapshot, currentSnapshot);
+
   // ── Fetch de dados ao abrir o modal ────────────────────────────────────────
 
   async function fetchData() {
     setLoading(true);
     setMessage(null);
+    setInitialSnapshot(null);
 
     const dateStr = format(selectedDate, "yyyy-MM-dd");
 
-    const [
-      { data: teamsData },
-      { data: membersData },
-      { data: allProfiles },
-      { data: absencesData },
-      { data: vehiclesData },
-    ] = await Promise.all([
+    const [teamsResult, membersResult, profilesResult, absencesResult, vehiclesResult] = await Promise.all([
       supabase
         .from("teams")
         .select("id, name, color")
@@ -225,6 +251,21 @@ export function TeamAllocationModal({
         .eq("status", "ativo")
         .order("model"),
     ]);
+
+    const failedRead = [teamsResult, membersResult, profilesResult, absencesResult, vehiclesResult]
+      .find((result) => result.error);
+    if (failedRead?.error) {
+      console.error("[TeamAllocationModal:fetch]", failedRead.error);
+      setInitialSnapshot(null);
+      setMessage({ type: "error", text: "Não foi possível carregar as alocações." });
+      setLoading(false);
+      return;
+    }
+    const teamsData = teamsResult.data;
+    const membersData = membersResult.data;
+    const allProfiles = profilesResult.data;
+    const absencesData = absencesResult.data;
+    const vehiclesData = vehiclesResult.data;
 
     const absentIds = new Set((absencesData ?? []).map((a) => a.collaborator_id));
     const inTeamIds = new Set((membersData ?? []).map((m) => m.collaborator_id));
@@ -263,7 +304,10 @@ export function TeamAllocationModal({
 
     // Carregar alocações de viatura para o dia.
     try {
-      const existingAllocations = await getAllocationsForDate(dateStr);
+      const [existingAllocations, existingAssignments] = await Promise.all([
+        getAllocationsForDate(dateStr),
+        getDayTeamAssignmentsForDate(dateStr),
+      ]);
       const map: Record<string, TeamAllocation> = {};
       for (const alloc of existingAllocations as VehicleAllocation[]) {
         map[alloc.team_id] = {
@@ -272,13 +316,20 @@ export function TeamAllocationModal({
         };
       }
       setAllocationMap(map);
-
-      // As reatribuições de equipa passaram a ser PERMANENTES (escritas em
-      // team_members), por isso já não se usam overrides diários: a composição
-      // vem toda de team_members (allocated). Mantém o mapa vazio.
-      setOverrideMap({});
-    } catch {
-      // não bloquear se falhar
+      const assignments = assignmentMap(existingAssignments);
+      setOverrideMap(assignments);
+      setInitialSnapshot(canonicalSnapshot({
+        member_assignments: existingAssignments,
+        vehicle_allocations: (existingAllocations as VehicleAllocation[]).map((allocation) => ({
+          team_id: allocation.team_id,
+          vehicle_id: allocation.vehicle_id,
+          driver_id: allocation.driver_id,
+        })),
+      }));
+    } catch (error) {
+      console.error("[TeamAllocationModal:snapshot]", error);
+      setInitialSnapshot(null);
+      setMessage({ type: "error", text: "Não foi possível carregar o estado guardado." });
     }
 
     setLoading(false);
@@ -318,57 +369,27 @@ export function TeamAllocationModal({
     setMessage(null);
   }
 
-  async function handleDragEnd(event: DragEndEvent) {
+  function handleDragEnd(event: DragEndEvent) {
     setDragging(null);
     const { active, over } = event;
     if (!over || !active.data.current) return;
 
     const { collaboratorId } = active.data.current as { collaboratorId: string };
-    const targetTeamId = over.id as string;
+    const targetTeamId = over.id === AVAILABLE_DROP_ID ? null : over.id as string;
     const currentTeamId = effectiveTeamId(collaboratorId);
-    if (!targetTeamId || targetTeamId === currentTeamId) return;
-
-    const homeTeamId = homeTeamOf[collaboratorId] ?? null;
-    const isReset = homeTeamId !== null && targetTeamId === homeTeamId;
-
-    const dateStr = format(selectedDate, "yyyy-MM-dd");
-    const previous = { ...overrideMap };
-
-    // Atualização otimista (sem delay)
-    setOverrideMap((prev) => {
-      const next = { ...prev };
-      if (isReset) delete next[collaboratorId];
-      else next[collaboratorId] = targetTeamId;
-      return next;
-    });
-
-    try {
-      const res = await moveCollaboratorToTeam({
-        collaboratorId,
-        teamId: targetTeamId,
-        homeTeamId,
-        date: dateStr,
-      });
-
-      if (!res.ok) {
-        setOverrideMap(previous);
-        setMessage({ type: "error", text: res.error ?? "Erro ao mover colaboradora." });
-        return;
-      }
-
-      const name = allMembers[collaboratorId]?.full_name.split(" ")[0] ?? "Colaboradora";
-      const targetName = allocated.find((t) => t.id === targetTeamId)?.name ?? "equipa";
-      setMessage({
-        type: res.notified ? "success" : "info",
-        text: `${name} → ${targetName} (equipa permanente).${res.notified ? " Avisada no telemóvel." : ""}`,
-      });
-      // Movimento permanente: recarrega a composição real das equipas (team_members)
-      // para refletir a mudança e limpar marcadores de override.
-      await fetchData();
-    } catch {
-      setOverrideMap(previous);
-      setMessage({ type: "error", text: "Erro ao mover colaboradora." });
-    }
+    if (targetTeamId === currentTeamId) return;
+    setOverrideMap((previous) =>
+      moveInDraft(previous, collaboratorId, targetTeamId, homeTeamOf),
+    );
+    setAllocationMap((previous) => Object.fromEntries(
+      Object.entries(previous).map(([teamId, allocation]) => [
+        teamId,
+        allocation.driverId === collaboratorId && teamId !== targetTeamId
+          ? { ...allocation, driverId: "" }
+          : allocation,
+      ]),
+    ));
+    setMessage({ type: "info", text: "Alteração preparada. Guarde para confirmar." });
   }
 
   // ── Guardar alocações de viatura ────────────────────────────────────────────
@@ -380,27 +401,40 @@ export function TeamAllocationModal({
     const dateStr = format(selectedDate, "yyyy-MM-dd");
 
     try {
-      await Promise.all(
-        allocated.map((team) => {
-          const alloc = allocationMap[team.id];
-          if (!alloc?.vehicleId) {
-            return removeAllocation(team.id, dateStr).catch(() => null);
-          }
-          return upsertAllocation({
-            vehicle_id: alloc.vehicleId,
-            team_id:    team.id,
-            driver_id:  alloc.driverId || null,
-            date:       dateStr,
-          });
-        }),
-      );
-      setMessage({ type: "success", text: "Alocações guardadas." });
-      setTimeout(onClose, 1200);
+      if (!initialSnapshot) throw new Error("snapshot_missing");
+      const vehicles = currentSnapshot.vehicle_allocations.map((row) => row.vehicle_id);
+      if (new Set(vehicles).size !== vehicles.length) {
+        setMessage({ type: "error", text: "A mesma viatura não pode ficar em duas equipas." });
+        return;
+      }
+      const result = await saveTeamDayAllocations({
+        date: dateStr,
+        expected: initialSnapshot,
+        memberAssignments: currentSnapshot.member_assignments,
+        vehicleAllocations: currentSnapshot.vehicle_allocations,
+      });
+      if (!result.ok) {
+        setMessage({ type: "error", text: result.error });
+        return;
+      }
+      setInitialSnapshot(result.snapshot);
+      setOverrideMap(assignmentMap(result.snapshot.member_assignments));
+      setMessage({ type: "success", text: "Alocações guardadas em conjunto." });
     } catch {
       setMessage({ type: "error", text: "Erro ao guardar alocações." });
     } finally {
       setSaving(false);
     }
+  }
+
+  function handleDiscard() {
+    if (!initialSnapshot) return;
+    setOverrideMap(assignmentMap(initialSnapshot.member_assignments));
+    setAllocationMap(Object.fromEntries(initialSnapshot.vehicle_allocations.map((allocation) => [
+      allocation.team_id,
+      { vehicleId: allocation.vehicle_id, driverId: allocation.driver_id ?? "" },
+    ])));
+    setMessage({ type: "info", text: "Alterações descartadas." });
   }
 
   if (!open) return null;
@@ -453,7 +487,7 @@ export function TeamAllocationModal({
                       Equipas ({allocated.length})
                     </h3>
                     <p className="text-[11px] text-[var(--color-text-muted)] mb-3">
-                      Arrasta uma colaboradora para outra equipa — a mudança é permanente (afeta também a aba Equipas) e ela é avisada no telemóvel.
+                      Organize o dia por arrastar. Nada é alterado antes de guardar.
                     </p>
                     <div className="space-y-3">
                       {allocated.length === 0 && (
@@ -490,7 +524,7 @@ export function TeamAllocationModal({
                                     member={m}
                                     color={team.color}
                                     fromTeamId={team.id}
-                                    moved={(overrideMap[m.id] ?? homeTeamOf[m.id]) !== homeTeamOf[m.id]}
+                                    moved={effectiveTeam(m.id, homeTeamOf, overrideMap) !== (homeTeamOf[m.id] ?? null)}
                                   />
                                 ))
                               )}
@@ -549,11 +583,14 @@ export function TeamAllocationModal({
                   {/* Coluna direita */}
                   <div className="space-y-5">
                     {/* DISPONÍVEL */}
-                    <div>
+                    <DroppableColumn
+                      id={AVAILABLE_DROP_ID}
+                      className="rounded-xl border border-dashed border-[var(--color-border)] p-3"
+                    >
                       <h3 className="text-xs font-semibold uppercase tracking-wider text-[var(--color-text-muted)] mb-3">
-                        Disponível ({available.length})
+                        Disponível ({effectiveAvailable.length})
                       </h3>
-                      {available.length === 0 ? (
+                      {effectiveAvailable.length === 0 ? (
                         <p className="text-sm text-[var(--color-text-muted)] py-3 text-center">
                           Todas as colaboradoras têm equipa.
                         </p>
@@ -563,7 +600,7 @@ export function TeamAllocationModal({
                             Arrasta para uma equipa para a adicionar.
                           </p>
                           <div className="flex flex-wrap gap-1.5">
-                            {available.map((m) => (
+                            {effectiveAvailable.map((m) => (
                               <MemberChip
                                 key={m.id}
                                 member={m}
@@ -575,7 +612,7 @@ export function TeamAllocationModal({
                           </div>
                         </>
                       )}
-                    </div>
+                    </DroppableColumn>
 
                     {/* AUSENTES */}
                     {absent.length > 0 && (
@@ -629,14 +666,15 @@ export function TeamAllocationModal({
             )}
             <div className="ml-auto flex gap-2">
               <button
-                onClick={onClose}
+                onClick={handleDiscard}
+                disabled={!dirty || saving}
                 className="px-4 py-2 rounded-lg border border-[var(--color-border)] text-sm font-medium text-[var(--color-text-sub)] hover:bg-[var(--color-background)] transition-colors"
               >
-                Fechar
+                <span className="inline-flex items-center gap-2"><Undo2 className="h-4 w-4" />Descartar</span>
               </button>
               <button
                 onClick={handleSave}
-                disabled={saving || loading}
+                disabled={saving || loading || !dirty}
                 className="flex items-center gap-2 px-4 py-2 rounded-lg bg-[var(--color-primary)] text-white text-sm font-semibold hover:bg-[var(--color-primary-hover)] transition-colors disabled:opacity-50"
               >
                 {saving && <Loader2 className="w-4 h-4 animate-spin" />}

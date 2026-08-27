@@ -1,12 +1,12 @@
 {
   "generatedBy": "scripts/audit-file-inventory.mjs",
-  "totalFiles": 731,
+  "totalFiles": 733,
   "byStatus": {
-    "MANTER": 712,
+    "MANTER": 714,
     "STANDBY": 19
   },
   "byCategory": {
-    "test": 140,
+    "test": 141,
     "route-ui": 136,
     "migration": 86,
     "lib": 65,
@@ -15,7 +15,7 @@
     "doc": 43,
     "server-action": 42,
     "component": 30,
-    "src-other": 20,
+    "src-other": 21,
     "doc-historico": 16,
     "api-route": 16,
     "config": 12,
@@ -29,7 +29,7 @@
     "supabase-other": 2
   },
   "byConfidence": {
-    "alta": 714,
+    "alta": 716,
     "média": 11,
     "baixa": 6
   },
@@ -6965,6 +6965,30 @@
       }
     },
     {
+      "path": "src/__tests__/team-allocation-source-guards.test.ts",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "sqlWrite": 3
+      },
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
       "path": "src/__tests__/tenant-isolation-hotfix.test.ts",
       "category": "test",
       "status": "MANTER",
@@ -8660,8 +8684,9 @@
       "signals": {
         "supabase": 2,
         "clientComponent": 1,
-        "sqlWrite": 2,
+        "sqlWrite": 1,
         "eslintDisable": 2,
+        "consoleErr": 2,
         "fallbackArray": 8
       },
       "action": "nenhuma",
@@ -9842,7 +9867,7 @@
       "signals": {
         "clientComponent": 1,
         "eslintDisable": 1,
-        "fallbackArray": 1
+        "fallbackArray": 2
       },
       "action": "nenhuma",
       "reason": "em uso: 2 consumidor(es)",
@@ -9876,7 +9901,7 @@
         "supabase": 5,
         "selectStar": 1,
         "ignoredError": 1,
-        "fallbackArray": 3
+        "fallbackArray": 4
       },
       "action": "nenhuma",
       "reason": "em uso: convenção do Next",
@@ -11815,7 +11840,7 @@
       "sideEffects": [
         "supabase",
         "write",
-        "revalidatePath(3)"
+        "revalidatePath(4)"
       ],
       "risks": [
         "erro-de-query-ignorado(2)"
@@ -11823,11 +11848,12 @@
       "signals": {
         "supabase": 8,
         "serverAction": 1,
-        "write": 5,
-        "sqlWrite": 6,
+        "write": 1,
+        "sqlWrite": 1,
+        "unknownCast": 1,
         "ignoredError": 2,
         "fallbackArray": 1,
-        "revalidatePath": 3
+        "revalidatePath": 4
       },
       "action": "auditar atomicidade (T12/T13)",
       "reason": "em uso: 2 consumidor(es)",
@@ -12608,27 +12634,27 @@
         "supabase",
         "env",
         "write",
-        "revalidatePath(5)"
+        "revalidatePath(6)"
       ],
       "risks": [
-        "erro-de-query-ignorado(2)",
+        "erro-de-query-ignorado(1)",
         "any(2)",
         "select-*(1)"
       ],
       "signals": {
-        "supabase": 17,
+        "supabase": 15,
         "env": 2,
         "serverAction": 1,
-        "write": 9,
-        "sqlWrite": 7,
+        "write": 4,
+        "sqlWrite": 4,
         "eslintDisable": 2,
         "anyType": 2,
-        "unknownCast": 1,
-        "consoleErr": 2,
+        "unknownCast": 2,
+        "consoleErr": 1,
         "selectStar": 1,
-        "ignoredError": 2,
+        "ignoredError": 1,
         "fallbackArray": 1,
-        "revalidatePath": 5,
+        "revalidatePath": 6,
         "dynamicImport": 2
       },
       "action": "auditar atomicidade (T12/T13)",
@@ -15600,9 +15626,11 @@
       "category": "domain",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 1,
+      "consumers": 3,
       "consumerSample": [
-        "src/__tests__/team-allocation-draft.test.ts"
+        "src/__tests__/team-allocation-draft.test.ts",
+        "src/app/(dashboard)/dashboard/calendario/_components/team-allocation-modal.tsx",
+        "src/app/actions/vehicles.ts"
       ],
       "autoLoaded": false,
       "referencedBy": [],
@@ -15612,7 +15640,7 @@
         "sqlWrite": 1
       },
       "action": "nenhuma",
-      "reason": "em uso: 1 consumidor(es)",
+      "reason": "em uso: 3 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -15652,7 +15680,7 @@
       "category": "domain",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 26,
+      "consumers": 27,
       "consumerSample": [
         "src/__tests__/update-notice-modal.test.tsx",
         "src/__tests__/update-notices-eligibility.test.ts",
@@ -15667,7 +15695,7 @@
       "risks": [],
       "signals": {},
       "action": "nenhuma",
-      "reason": "em uso: 26 consumidor(es), configuração",
+      "reason": "em uso: 27 consumidor(es), configuração",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -17206,7 +17234,7 @@
       "category": "lib",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 27,
+      "consumers": 28,
       "consumerSample": [
         "src/__tests__/query-error.test.ts",
         "src/app/(dashboard)/dashboard/calendario/_actions/create-service.ts",
@@ -17222,7 +17250,7 @@
         "consoleErr": 1
       },
       "action": "nenhuma",
-      "reason": "em uso: 27 consumidor(es)",
+      "reason": "em uso: 28 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -18112,6 +18140,32 @@
     },
     {
       "path": "src/release-notes/2026-08-27-criar-colaborador-guarda-tudo.ts",
+      "category": "src-other",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 1,
+      "consumerSample": [
+        "src/release-notes/index.ts"
+      ],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "sqlWrite": 1
+      },
+      "action": "nenhuma",
+      "reason": "em uso: 1 consumidor(es)",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/release-notes/2026-08-27-equipas-guardar-em-conjunto.ts",
       "category": "src-other",
       "status": "MANTER",
       "confidence": "alta",

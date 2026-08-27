@@ -10,6 +10,7 @@ export async function saveEquipa(
   companyId: string,
   data: { name: string; color: string; active: boolean; leader_id: string | null },
   memberIds: string[],
+  expected?: { updatedAt: string; leaderId: string | null; memberIds: string[] },
 ): Promise<{ ok: true; teamId: string } | { ok: false; error: string }> {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -31,54 +32,50 @@ export async function saveEquipa(
     return { ok: false, error: "Empresa inválida." };
   }
 
-  let savedTeamId = teamId;
-
-  // Estado antigo (líder + membros), só para auditoria — nunca bloqueia a
-  // operação se falhar.
-  let before: { leader_id: string | null; memberIds: string[] } | null = null;
-  if (teamId) {
-    const [{ data: oldTeam }, { data: oldMembers }] = await Promise.all([
-      admin.from("teams").select("leader_id").eq("id", teamId).single(),
-      admin.from("team_members").select("collaborator_id").eq("team_id", teamId),
-    ]);
-    before = { leader_id: oldTeam?.leader_id ?? null, memberIds: (oldMembers ?? []).map((m) => m.collaborator_id) };
+  if (teamId && !expected) {
+    return { ok: false, error: "Atualize a página antes de guardar esta equipa." };
   }
 
-  if (teamId) {
-    const { error } = await admin
-      .from("teams")
-      .update(data)
-      .eq("id", teamId)
-      .eq("company_id", companyId);
-    if (error) return { ok: false, error: error.message };
-  } else {
-    const { data: newTeam, error } = await admin
-      .from("teams")
-      .insert({ ...data, company_id: companyId })
-      .select("id")
-      .single();
-    if (error || !newTeam) return { ok: false, error: error?.message ?? "Erro ao criar equipa." };
-    savedTeamId = newTeam.id;
+  type TeamSaveRpc = (
+    name: string,
+    args: Record<string, unknown>,
+  ) => Promise<{ data: unknown; error: { message?: string } | null }>;
+  const rpc = admin.rpc.bind(admin) as unknown as TeamSaveRpc;
+  const sortedMembers = [...new Set(memberIds)].sort();
+  const { data: savedId, error: saveError } = await rpc("save_team_with_members_v2", {
+    p_company_id: companyId,
+    p_actor_id: user.id,
+    p_team_id: teamId,
+    p_expected_updated_at: expected?.updatedAt ?? null,
+    p_expected_member_ids: [...(expected?.memberIds ?? [])].sort(),
+    p_name: data.name,
+    p_color: data.color,
+    p_active: data.active,
+    p_leader_id: data.leader_id,
+    p_member_ids: sortedMembers,
+  });
+
+  if (saveError) {
+    if (saveError.message?.includes("TEAM_SAVE_CONFLICT")) {
+      return { ok: false, error: "Esta equipa foi alterada por outra pessoa. Atualize antes de guardar." };
+    }
+    if (saveError.message?.includes("TEAM_SAVE_MEMBER_IN_OTHER_TEAM")) {
+      return { ok: false, error: "Uma das colaboradoras já pertence a outra equipa ativa." };
+    }
+    return { ok: false, error: "Não foi possível guardar a equipa." };
   }
 
-  // Substituir membros — usar admin para garantir que não falha por RLS
-  const { error: delError } = await admin
-    .from("team_members")
-    .delete()
-    .eq("team_id", savedTeamId!);
-
-  if (delError) return { ok: false, error: delError.message };
-
-  if (memberIds.length > 0) {
-    const { error: insError } = await admin
-      .from("team_members")
-      .insert(memberIds.map((cid) => ({ team_id: savedTeamId!, collaborator_id: cid })));
-    if (insError) return { ok: false, error: insError.message };
+  if (typeof savedId !== "string") {
+    return { ok: false, error: "A base devolveu uma resposta incompleta." };
   }
+  const savedTeamId = savedId;
 
-  // Auditoria de líder/membros — a operação substitui a equipa toda
-  // (delete + reinsert); sem isto não há como ver quem foi removido.
-  const after = { leader_id: data.leader_id, memberIds };
+  // A RPC preserva os intervalos de membership; a auditoria regista a mudança
+  // funcional que a pessoa pediu, sem depender da forma como foi persistida.
+  const before = expected
+    ? { leader_id: expected.leaderId, memberIds: expected.memberIds }
+    : null;
+  const after = { leader_id: data.leader_id, memberIds: sortedMembers };
   if (!before || before.leader_id !== after.leader_id ||
     before.memberIds.length !== after.memberIds.length ||
     !before.memberIds.every((m) => after.memberIds.includes(m))) {
@@ -95,7 +92,8 @@ export async function saveEquipa(
   }
 
   revalidatePath("/dashboard/equipas");
-  return { ok: true, teamId: savedTeamId! };
+  revalidatePath("/dashboard/calendario");
+  return { ok: true, teamId: savedTeamId };
 }
 
 export async function deleteEquipa(
