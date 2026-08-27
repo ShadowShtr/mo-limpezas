@@ -114,7 +114,8 @@
 --    perda de dados seria trocar um risco por outro. Falha fechado.
 -- ============================================================================
 
-BEGIN;
+-- BEGIN; removido: a transacao autoritativa e a do runner de migrations
+-- (migration-runner-core.mjs: BEGIN -> SQL -> INSERT _migrations -> COMMIT).
 
 -- ─── 1. A relação ───────────────────────────────────────────────────────────
 --
@@ -207,4 +208,4 @@ CREATE POLICY payment_cashflow_provenance_write
   USING (company_id = public.get_my_company_id())
   WITH CHECK (company_id = public.get_my_company_id());
 
-COMMIT;
+-- COMMIT; removido pelo mesmo motivo: quem faz COMMIT e o runner.

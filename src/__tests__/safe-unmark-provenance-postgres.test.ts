@@ -820,8 +820,16 @@ describe.sequential("F14-B — rollback das duas peças", () => {
     const down = semCRLF(readSql("supabase", "migrations", "rollback",
       "081_safe_unmark_payment_paid.down.sql"));
 
+    // O fim do bloco é o fecho do corpo da função (`$fn$;`), não o `COMMIT;`:
+    // a 079 deixou de trazer transação própria — quem faz BEGIN/COMMIT é o
+    // runner de migrations — e um delimitador que dependesse disso deixaria
+    // este teste a comparar uma fatia vazia sem nunca dar erro.
     const inicio = "CREATE OR REPLACE FUNCTION public.mark_payment_paid(";
-    const bloco79 = s79.slice(s79.indexOf(inicio), s79.indexOf("\nCOMMIT;", s79.indexOf(inicio))).trimEnd();
+    const iniIdx = s79.indexOf(inicio);
+    expect(iniIdx).toBeGreaterThanOrEqual(0);
+    const fimIdx = s79.indexOf("\n$fn$;", iniIdx);
+    expect(fimIdx).toBeGreaterThan(iniIdx);
+    const bloco79 = s79.slice(iniIdx, fimIdx + "\n$fn$;".length).trimEnd();
     expect(bloco79.length).toBeGreaterThan(500);
     expect(down).toContain(bloco79);
   });
