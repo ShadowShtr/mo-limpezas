@@ -115,7 +115,13 @@ describe.sequential("concorrência real das equipas", () => {
       [COMPANY, ACTOR, TEAM_A, updatedAt, "Equipa A", "#16A34A", true, null, [memberId]],
     );
     const results = await Promise.allSettled([call(ANA), call(BIA)]);
-    expect(results.filter((result) => result.status === "fulfilled")).toHaveLength(1);
+    const diagnostics = results.map((result) =>
+      result.status === "fulfilled" ? "fulfilled" : result.reason?.message ?? String(result.reason),
+    );
+    expect(
+      results.filter((result) => result.status === "fulfilled"),
+      diagnostics.join(" | "),
+    ).toHaveLength(1);
     const failure = results.find((result) => result.status === "rejected");
     expect(failure && failure.status === "rejected" ? failure.reason.message : "")
       .toMatch(/TEAM_SAVE_CONFLICT/);
