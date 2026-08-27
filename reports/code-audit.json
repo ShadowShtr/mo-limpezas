@@ -1,13 +1,13 @@
 {
   "inventorySource": "git ls-files",
   "summary": {
-    "repositoryFiles": 708,
-    "textFiles": 695,
-    "sourceFiles": 505,
-    "textLines": 164829,
+    "repositoryFiles": 710,
+    "textFiles": 697,
+    "sourceFiles": 507,
+    "textLines": 165348,
     "typescriptDiagnostics": 0,
     "productionEntries": 71,
-    "unreachableProductionModules": 39,
+    "unreachableProductionModules": 40,
     "exactDuplicateFileGroups": 0
   },
   "highConfidence": {
@@ -25,6 +25,7 @@
       "src/domain/billing/money.ts",
       "src/domain/billing/monthly-allocation.ts",
       "src/domain/billing/vat.ts",
+      "src/domain/collaborators/access-lifecycle.ts",
       "src/domain/collaborators/create-input.ts",
       "src/domain/dashboard/client-summary.ts",
       "src/domain/dashboard/comparison.ts",
@@ -65,6 +66,7 @@
       "src/domain/billing/money.ts",
       "src/domain/billing/monthly-allocation.ts",
       "src/domain/billing/vat.ts",
+      "src/domain/collaborators/access-lifecycle.ts",
       "src/domain/collaborators/create-input.ts",
       "src/domain/dashboard/client-summary.ts",
       "src/domain/dashboard/comparison.ts",
