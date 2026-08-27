@@ -88,7 +88,7 @@ export function ColaboradorSheet({ trigger, companyId, colaborador }: Props) {
 
       const res = isEdit
         ? await updateColaborador(colaborador.id, input)
-        : await createColaborador({ ...input, company_id: companyId });
+        : await createColaborador(input);
 
       if (res.ok) {
         setMessage({
