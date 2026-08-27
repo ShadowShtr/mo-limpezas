@@ -70,8 +70,20 @@ das três PRs são evidência **local**; a CI cobre o resto.
 **Preparar o EXPAND da identidade de colaboradores (Option A), sobre a #89.**
 
 ```
-NEXT_TASK = COLLABORATOR_IDENTITY_PHASE_C (resolver + políticas RLS)
+NEXT_TASK = REVISÃO DE INTEGRAÇÃO — a frente de colaboradores está pronta
 ```
+
+As seis fases estão feitas e verdes: EXPAND, backfill, resolver e RLS,
+name-only, gestão de acesso, e a matriz de endurecimento. Ver «Identidade e
+acesso de colaboradores», mais abaixo.
+
+O que falta **não é implementação**: é decidir a integração, e isso passa por
+três coisas que só o proprietário pode desbloquear —
+
+1. confirmar no painel da Vercel o SHA do deployment activo (a #89 espera-o);
+2. autorizar o merge da #89, que alinha o `master` com o runtime;
+3. reconciliar a 077/078/079, sem o que nenhuma migration desta frente pode ser
+   aplicada.
 
 A **PHASE A está feita e verde** — ver «EXPAND», mais abaixo. O que se segue é
 a PHASE C: migrar as políticas para `get_my_profile_id()`, uma de cada vez e
@@ -254,6 +266,109 @@ PHASE D — CONTRACT  muito depois, remover o pressuposto antigo
 
 `MIGRATION_NUMBER_FINAL = UNASSIGNED` — a 077/078/079 continuam por
 reconciliar.
+
+---
+
+## Identidade e acesso de colaboradores — as seis fases
+
+```
+BRANCH = feat/collaborator-identity-resolver   PR = #91
+BASE   = feat/collaborator-identity-expand (#90) → hotfix/... (#89) → master
+CHOSEN_ARCHITECTURE = OPTION_A     IDENTITY_IDS_PRESERVED = YES
+MIGRATION_NUMBER_FINAL = UNASSIGNED
+```
+
+| fase | o quê | estado |
+|---|---|---|
+| A — EXPAND | `auth_user_id` nullable, FK do `id` largada, backfill | PROVEN |
+| B — BACKFILL | determinístico, dentro do EXPAND | PROVEN |
+| C — RESOLVER + RLS | `get_my_profile_id()`, 12 políticas migradas | PROVEN |
+| D — NAME-ONLY | criar pessoa só com o nome, sem conta | PROVEN |
+| E — ACESSO | criar, senha temporária, desactivar, reactivar | PROVEN |
+| F — ENDURECIMENTO | matriz completa com tudo aplicado junto | PROVEN |
+
+### O que mudou para quem usa o sistema
+
+Criar um colaborador passa a exigir **só o nome**. NIF, IBAN, email, telefone e
+dados de contrato ficam por preencher até alguém os saber — e ficam `NULL`,
+não inventados. O código anterior fabricava um email
+(`nome.1724713200000@demo.escala.pt`) porque o serviço de autenticação exige
+um, e guardava-o como se fosse o endereço da pessoa.
+
+Criar a pessoa deixou de criar conta de acesso. Quem precisar de entrar recebe
+acesso à parte, no perfil, com senha temporária que é obrigado a trocar.
+
+### Quatro defeitos de segurança encontrados pelo caminho
+
+Nenhum apareceu ao ler o código. Todos apareceram ao executá-lo, e três só
+existiam **por causa** do EXPAND — cenários que o código antigo nunca teve de
+considerar porque não podiam acontecer.
+
+1. **`get_my_profile_id()`, ramo de compatibilidade.** Respondia a
+   `id = auth.uid()` sem verificar que a conta existe. Um token com o `sub`
+   igual ao id de uma pessoa **sem** conta era resolvido como essa pessoa.
+
+2. **`get_my_company_id()` e `get_my_role()`, da 014.** O mesmo, e pior: o
+   token forjado devolvia a empresa dela, e com ela a leitura de todos os
+   colegas.
+
+3. **Nove políticas de dados pessoais.** `collaborator_id = auth.uid()` compara
+   o id de uma **pessoa** com o de uma **sessão**. Antes da correcção, um token
+   forjado devolvia horas, recibo de vencimento, faltas, ponto, fotografias,
+   notificações e subscrições — nas **sete** tabelas. Há um teste que mede o
+   antes, não só o depois.
+
+4. **Lacuna de cobertura, minha.** Um teste de mutação mostrou que a guarda
+   `AND auth_user_id IS NULL` do `UPDATE` podia ser removida sem nenhum teste
+   ficar vermelho: o índice único do identificador técnico mascarava a corrida
+   antes de ela chegar à base. Sem a mutação, teria reportado a cobertura como
+   completa.
+
+### O que se recusou fazer
+
+```
+COLLABORATOR_CREATE_AUTH_WRITE = 0
+ADMIN_CAN_VIEW_CURRENT_PASSWORD = NO
+PASSWORD_PLAINTEXT_STORAGE = NO
+```
+
+O identificador de entrada **não é** o email da pessoa: deriva do id, num
+domínio `.invalid`. Usar o email pessoal misturaria o sítio onde se fala com
+alguém e a forma como essa pessoa entra — mudar de email deixaria de poder
+entrar, e quem não tem email não poderia ter acesso.
+
+O que se guarda depois de definir uma senha não contém a senha: fica quem a
+definiu e quando. A senha aparece uma vez no ecrã, para ser comunicada.
+
+### Compatibilidade — a lição da #86, aplicada
+
+```
+OLD_RUNTIME_AFTER_EXPAND = PASS      ADMIN_REGRESSION = 0
+EXISTING_PROFILE_IDS_CHANGED = 0     PAYROLL_LINK_LOSS = 0
+DOCUMENT_LOSS = 0                    ORPHAN_AUTH = 0
+DUPLICATE_AUTH = 0                   CROSS_COMPANY = BLOCKED
+```
+
+`must_change_password` nasce `NOT NULL DEFAULT false`. Se fosse anulável, as
+contas existentes ficavam com `NULL`, e um código defensivo que lesse `NULL`
+como «obrigar por precaução» mandava **todos os administradores** para o ecrã
+de trocar senha na manhã seguinte — sem terem recebido senha nenhuma. O valor
+por omissão é o que já era verdade.
+
+### Prova
+
+```
+POSTGRES 16 (Docker):  18 + 15 + 18 + 12 + 18 + 9 = 90 verificações
+DOMÍNIO:               22 (name-only) + 34 (ciclo de acesso)
+SUITE COMPLETA:        3295/3295 · 133/133 ficheiros
+CLEAN_INSTALL:         PASS em cada milestone (git archive + npm ci)
+CI:                    verde em todas as HEADs
+```
+
+Mutações que ficaram vermelhas quando deviam: sem largar a FK antiga (6), sem o
+`EXISTS` de segurança (3), sem o backfill (4), `get_my_company_id` revertida
+(1), políticas revertidas (8+1), sem compensação (2), sem a guarda `IS NULL`
+(1), `must_change_password DEFAULT true` (1), email fabricado reposto (2).
 
 ---
 
@@ -457,7 +572,8 @@ Nenhuma branch tem commits por enviar. `LOCAL_HEAD == REMOTE_HEAD` em todas.
 | `codex/hardening-invoice-cash-atomicity` | Codex | atomicidade fatura/caixa, migration 080 provisória | `0a5da475` | #84 | OPEN, revisão Claude requerida | não |
 | `codex/adversarial-review-81-82` | Codex | revisão adversarial de #81/#82 | `dcda4c06` | #85 | OPEN, 🔴 **serve produção** | **NUNCA** |
 | `hotfix/reconcile-master-after-86` | Claude | revert da #86 + protecções | `e3c22991` | #89 | OPEN, CI verde, **não mesclar** | não |
-| `feat/collaborator-identity-expand` | Claude | PHASE A da identidade | `e83fee41` | #90 | OPEN, CI verde, stacked sobre a #89 | não |
+| `feat/collaborator-identity-expand` | Claude | PHASE A da identidade | `d741a6cc` | #90 | OPEN, CI verde, stacked sobre a #89 | não |
+| `feat/collaborator-identity-resolver` | Claude | fases C a F | `dc7d0135` | #91 | OPEN, CI verde, stacked sobre a #90 | não |
 | `codex/fix-collaborator-name-only-create` | Codex | colaborador só com nome | `1cc405d0` | #86 | **MESCLADA** | — |
 
 > 🔴 **`fix/reuse-pending-cashflow-on-payment` não pode ser apagada.** A #82 tem-na
