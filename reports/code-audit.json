@@ -1,13 +1,13 @@
 {
   "inventorySource": "git ls-files",
   "summary": {
-    "repositoryFiles": 726,
-    "textFiles": 713,
-    "sourceFiles": 521,
-    "textLines": 170025,
+    "repositoryFiles": 730,
+    "textFiles": 717,
+    "sourceFiles": 525,
+    "textLines": 170847,
     "typescriptDiagnostics": 0,
     "productionEntries": 71,
-    "unreachableProductionModules": 42,
+    "unreachableProductionModules": 40,
     "exactDuplicateFileGroups": 0
   },
   "highConfidence": {
@@ -17,7 +17,7 @@
   },
   "reviewRequired": {
     "unreachableProductionModules": [
-      "src/app/actions/finance-ledger.ts",
+      "src/app/(dashboard)/dashboard/financeiro/pagamentos/_components/payments-client.tsx",
       "src/app/actions/whatsapp.ts",
       "src/domain/billing/billing-compat.ts",
       "src/domain/billing/consumer-parity.ts",
@@ -35,7 +35,6 @@
       "src/domain/dashboard/legacy-dashboard.ts",
       "src/domain/dashboard/period-selection.ts",
       "src/domain/dashboard/projection.ts",
-      "src/domain/finance/ledger.ts",
       "src/domain/realtime/event-reconciler.ts",
       "src/domain/reports/absence-metrics.ts",
       "src/domain/reports/export-adapter.ts",
@@ -55,12 +54,12 @@
       "src/domain/scheduling/recurrence-compat.ts",
       "src/lib/bank-import/pdf.ts",
       "src/lib/bank-import/xlsx.ts",
-      "src/lib/finance-ledger-query.ts",
       "src/lib/finance-write-surface.ts",
       "src/lib/payments-month-materialization.ts",
       "src/types/supabase.ts"
     ],
     "testOnlyModules": [
+      "src/app/(dashboard)/dashboard/financeiro/pagamentos/_components/payments-client.tsx",
       "src/domain/billing/billing-compat.ts",
       "src/domain/billing/consumer-parity.ts",
       "src/domain/billing/financial-model.ts",
@@ -77,7 +76,6 @@
       "src/domain/dashboard/legacy-dashboard.ts",
       "src/domain/dashboard/period-selection.ts",
       "src/domain/dashboard/projection.ts",
-      "src/domain/finance/ledger.ts",
       "src/domain/realtime/event-reconciler.ts",
       "src/domain/reports/absence-metrics.ts",
       "src/domain/reports/export-adapter.ts",
@@ -95,7 +93,6 @@
       "src/domain/scheduling/occurrence-repair.ts",
       "src/domain/scheduling/reconciliation.ts",
       "src/domain/scheduling/recurrence-compat.ts",
-      "src/lib/finance-ledger-query.ts",
       "src/lib/finance-write-surface.ts"
     ],
     "testSignupCalls": [

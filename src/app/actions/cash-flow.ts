@@ -237,6 +237,7 @@ export async function createCashFlowEntry(
   if (error) return { ok: false, error: error.message };
   revalidatePath("/dashboard/financeiro/fluxo-caixa");
   revalidatePath("/dashboard/financeiro/contas");
+  revalidatePath("/dashboard/financeiro/pagamentos");
   return { ok: true };
 }
 
@@ -291,7 +292,7 @@ export async function updateCashFlowEntry(
   //    fechado para Setembro aberto, e os totais de Julho mudavam.
   const { data: atual, error: erroAtual } = await admin
     .from("cash_flow_entries")
-    .select("date")
+    .select("date, reference_type")
     .eq("id", id)
     .eq("company_id", profile.company_id)
     .maybeSingle();
@@ -300,6 +301,24 @@ export async function updateCashFlowEntry(
     return { ok: false, error: "Não foi possível confirmar o período do movimento. Nada foi alterado." };
   }
   if (!atual) return { ok: false, error: "Movimento não encontrado." };
+  if (atual.reference_type) {
+    return { ok: false, error: "Este movimento é gerido na sua origem e não pode ser editado aqui." };
+  }
+
+  const { data: conciliacao, error: erroConciliacao } = await admin
+    .from("bank_reconciliation_matches")
+    .select("id")
+    .eq("company_id", profile.company_id)
+    .eq("cash_flow_entry_id", id)
+    .eq("status", "confirmed")
+    .limit(1)
+    .maybeSingle();
+  if (erroConciliacao) {
+    return { ok: false, error: "Não foi possível confirmar a conciliação. Nada foi alterado." };
+  }
+  if (conciliacao) {
+    return { ok: false, error: "Um movimento conciliado não pode ser alterado. Reverta a conciliação primeiro." };
+  }
 
   const dataAntiga = String(atual.date);
   const periodo =
@@ -333,6 +352,7 @@ export async function updateCashFlowEntry(
   if (error) return { ok: false, error: error.message };
   revalidatePath("/dashboard/financeiro/fluxo-caixa");
   revalidatePath("/dashboard/financeiro/contas");
+  revalidatePath("/dashboard/financeiro/pagamentos");
   return { ok: true };
 }
 
@@ -356,7 +376,7 @@ export async function deleteCashFlowEntry(id: string): Promise<{ ok: boolean; er
   // autoritativa é a da própria linha.
   const { data: atual, error: erroAtual } = await admin
     .from("cash_flow_entries")
-    .select("date")
+    .select("date, reference_type")
     .eq("id", id)
     .eq("company_id", profile.company_id)
     .maybeSingle();
@@ -365,6 +385,24 @@ export async function deleteCashFlowEntry(id: string): Promise<{ ok: boolean; er
     return { ok: false, error: "Não foi possível confirmar o período do movimento. Nada foi apagado." };
   }
   if (!atual) return { ok: true }; // já não existe — nada a apagar
+  if (atual.reference_type) {
+    return { ok: false, error: "Este movimento pertence a outra origem e não pode ser eliminado aqui." };
+  }
+
+  const { data: conciliacao, error: erroConciliacao } = await admin
+    .from("bank_reconciliation_matches")
+    .select("id")
+    .eq("company_id", profile.company_id)
+    .eq("cash_flow_entry_id", id)
+    .eq("status", "confirmed")
+    .limit(1)
+    .maybeSingle();
+  if (erroConciliacao) {
+    return { ok: false, error: "Não foi possível confirmar a conciliação. Nada foi apagado." };
+  }
+  if (conciliacao) {
+    return { ok: false, error: "Um movimento conciliado não pode ser eliminado. Reverta a conciliação primeiro." };
+  }
 
   const periodo = await assertFinancialPeriodOpen({
     cliente: admin as unknown as ClientePeriodo,
@@ -384,6 +422,7 @@ export async function deleteCashFlowEntry(id: string): Promise<{ ok: boolean; er
   if (error) return { ok: false, error: error.message };
   revalidatePath("/dashboard/financeiro/fluxo-caixa");
   revalidatePath("/dashboard/financeiro/contas");
+  revalidatePath("/dashboard/financeiro/pagamentos");
   return { ok: true };
 }
 

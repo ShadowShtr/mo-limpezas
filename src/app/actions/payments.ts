@@ -281,6 +281,34 @@ export async function updatePayment(
   if (patch.description !== undefined && !patch.description.trim()) return { ok: false, error: "Descrição inválida." };
   if (patch.amount !== undefined && patch.amount !== null && (!Number.isFinite(patch.amount) || patch.amount < 0)) return { ok: false, error: "Valor inválido." };
 
+  if (patch.amount !== undefined) {
+    const [paymentResult, cashflowResult] = await Promise.all([
+      admin.from("fixed_variable_payments")
+        .select("amount, status")
+        .eq("id", id)
+        .eq("company_id", profile.company_id)
+        .maybeSingle(),
+      admin.from("cash_flow_entries")
+        .select("id")
+        .eq("company_id", profile.company_id)
+        .eq("reference_type", "fixed_variable_payment")
+        .eq("reference_id", id)
+        .limit(1)
+        .maybeSingle(),
+    ]);
+    if (paymentResult.error || cashflowResult.error) {
+      return { ok: false, error: "Não foi possível confirmar as dependências do pagamento. Nada foi alterado." };
+    }
+    if (!paymentResult.data) return { ok: false, error: "Pagamento não encontrado." };
+    const amountChanged = paymentResult.data.amount !== patch.amount;
+    if (amountChanged && (paymentResult.data.status === "pago" || cashflowResult.data)) {
+      return {
+        ok: false,
+        error: "O valor de um pagamento já ligado ao caixa não pode ser alterado. Reverta primeiro o pagamento.",
+      };
+    }
+  }
+
   // ── Mudar a data é mudar de mês ─────────────────────────────────────────────
   //
   // 🔴 Aqui alterava-se o `due_date` e mais nada. Um pagamento editado de
@@ -453,6 +481,28 @@ export async function deletePayment(id: string): Promise<{ ok: boolean; error?: 
   const guard = await requireProfile({ roles: ["admin", "gestor"] });
   if (!guard.ok) return { ok: false, error: guard.error };
   const { admin, profile } = guard;
+  const [paymentResult, cashflowResult] = await Promise.all([
+    admin.from("fixed_variable_payments")
+      .select("status")
+      .eq("id", id)
+      .eq("company_id", profile.company_id)
+      .maybeSingle(),
+    admin.from("cash_flow_entries")
+      .select("id")
+      .eq("company_id", profile.company_id)
+      .eq("reference_type", "fixed_variable_payment")
+      .eq("reference_id", id)
+      .limit(1)
+      .maybeSingle(),
+  ]);
+  if (paymentResult.error || cashflowResult.error) {
+    return { ok: false, error: "Não foi possível confirmar as dependências do pagamento. Nada foi apagado." };
+  }
+  if (!paymentResult.data) return { ok: true };
+  if (paymentResult.data.status === "pago" || cashflowResult.data) {
+    return { ok: false, error: "Um pagamento pago ou ligado ao caixa não pode ser eliminado. Reverta-o primeiro." };
+  }
+
   const { error } = await admin
     .from("fixed_variable_payments")
     .delete()

@@ -1,10 +1,11 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { getPayments } from "@/app/actions/payments";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { getFinanceLedger } from "@/app/actions/finance-ledger";
 import { getExpenseCategoryCatalog } from "@/app/actions/expense-categories";
 import { FinanceShell } from "@/components/financeiro/finance-shell";
 import { parseFinancePeriod } from "@/lib/finance-period";
-import { PaymentsClient } from "./_components/payments-client";
+import { UnifiedPaymentsClient } from "./_components/unified-payments-client";
 
 export const metadata = { title: "Pagamentos — Escala" };
 
@@ -27,7 +28,12 @@ export default async function PagamentosPage({
   // apenas ler Setembro, e Setembro vazio mostra-se vazio.
   const period = parseFinancePeriod(params.mes);
 
-  const res = await getPayments(period.year, period.month);
+  const admin = createAdminClient();
+  const [res, profileResult] = await Promise.all([
+    getFinanceLedger(period.year, period.month),
+    admin.from("profiles").select("company_id").eq("id", user.id).maybeSingle(),
+  ]);
+  if (!profileResult.data?.company_id) redirect("/login");
 
   // O catálogo é opcional: se não estiver disponível, o campo aparece vazio e
   // "sem categoria" continua a ser uma escolha válida. Uma falha aqui não pode
@@ -41,7 +47,7 @@ export default async function PagamentosPage({
     <FinanceShell
       period={period}
       title="Pagamentos"
-      subtitle="Fixos e variáveis, com estado de pagamento"
+      subtitle="Obrigações e movimentos de caixa, sem duplicar o mesmo pagamento"
     >
       {/*
         🔴 A identidade da vista é o período, não a rota.
@@ -62,11 +68,12 @@ export default async function PagamentosPage({
         `categoria` pertencem à mesma vista mensal e não entram aqui — se
         entrassem, escrever na pesquisa remontaria a vista a cada tecla.
       */}
-      <PaymentsClient
+      <UnifiedPaymentsClient
         key={period.key}
-        categorias={categorias}
-        initialData={res.ok ? res.data : null}
+        categories={categorias}
+        rows={res.ok ? res.rows : []}
         error={res.ok ? null : res.error}
+        companyId={profileResult.data.company_id}
         year={period.year}
         month={period.month}
       />

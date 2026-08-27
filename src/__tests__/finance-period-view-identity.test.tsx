@@ -129,8 +129,8 @@ const textoNoEcra = () => container.textContent ?? "";
 //    receber key — e falha a mostrar Julho, exatamente como o utilizador viu.
 function keyQueAPaginaPassa(dados: ReturnType<typeof dadosDe>): string | undefined {
   const fonte = ler("src/app/(dashboard)/dashboard/financeiro/pagamentos/page.tsx");
-  const inicio = fonte.indexOf("<PaymentsClient");
-  if (inicio < 0) throw new Error("boundary <PaymentsClient> não encontrado na página");
+  const inicio = fonte.indexOf("<UnifiedPaymentsClient");
+  if (inicio < 0) throw new Error("boundary <UnifiedPaymentsClient> não encontrado na página");
 
   const fim = fonte.indexOf("/>", inicio);
   const abertura = fonte.slice(inicio, fim < 0 ? undefined : fim);
@@ -292,7 +292,7 @@ describe("PaymentsClient ao mudar de período", () => {
 // a identidade.
 
 const VISTAS: Array<{ nome: string; ficheiro: string; componente: string }> = [
-  { nome: "Pagamentos",   ficheiro: "pagamentos/page.tsx",   componente: "PaymentsClient" },
+  { nome: "Pagamentos",   ficheiro: "pagamentos/page.tsx",   componente: "UnifiedPaymentsClient" },
   { nome: "Fluxo de Caixa", ficheiro: "fluxo-caixa/page.tsx", componente: "CashFlowClient" },
   { nome: "Contas",       ficheiro: "contas/page.tsx",       componente: "ContasClient" },
   { nome: "Conciliação",  ficheiro: "conciliacao/page.tsx",  componente: "ReconciliationClient" },
@@ -334,15 +334,16 @@ describe("as vistas mensais do Financeiro dão identidade ao período", () => {
 // PARTE C — o que esta correção NÃO tocou
 // ═══════════════════════════════════════════════════════════════════════════
 
-describe("nada de semântica financeira mudou", () => {
+describe("a semântica mensal continua explícita", () => {
   const semComentarios = (s: string) =>
     s.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
 
-  it("PAYMENTS_SERVER_QUERY_CHANGED = NO", () => {
-    // O servidor já estava certo: igualdade exata sobre as colunas de período.
-    const acoes = semComentarios(ler("src/app/actions/payments.ts"));
-    expect(acoes).toMatch(/\.eq\("period_year", year\)/);
-    expect(acoes).toMatch(/\.eq\("period_month", month\)/);
+  it("o ledger separa competência e caixa no servidor", () => {
+    const acoes = semComentarios(ler("src/app/actions/finance-ledger.ts"));
+    expect(acoes).toMatch(/\.eq\("period_year", period\.year\)/);
+    expect(acoes).toMatch(/\.eq\("period_month", period\.month\)/);
+    expect(acoes).toMatch(/\.gte\("date", range\.start\)/);
+    expect(acoes).toMatch(/\.lte\("date", range\.end\)/);
   });
 
   it("nenhuma escrita foi acrescentada ao caminho de navegação", () => {
@@ -356,9 +357,9 @@ describe("nada de semântica financeira mudou", () => {
   it("não se acrescentou um useEffect de sincronização por cima da key", () => {
     // Uma fonte para o reset. Duas seriam duas maneiras de o estado divergir.
     const cliente = semComentarios(
-      ler("src/app/(dashboard)/dashboard/financeiro/pagamentos/_components/payments-client.tsx"),
+      ler("src/app/(dashboard)/dashboard/financeiro/pagamentos/_components/unified-payments-client.tsx"),
     );
-    expect(cliente).not.toMatch(/useEffect\([^)]*setData\(initialData\)/);
+    expect(cliente).not.toMatch(/useEffect\([^)]*setRows\(/);
   });
 
     it("a Folha de Pagamento recebeu a mesma identidade, na integração da #68", () => {

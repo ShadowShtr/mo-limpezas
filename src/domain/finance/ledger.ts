@@ -24,6 +24,8 @@ export interface FinanceLedgerPaymentSource {
   period_year: number;
   period_month: number;
   paid_at: string | null;
+  direct_debit: boolean | null;
+  notes: string | null;
   expense_category_id: string | null;
   category_name: string | null;
   created_at: string;
@@ -43,6 +45,7 @@ export interface FinanceLedgerCashflowSource {
   expense_category_id: string | null;
   category_name: string | null;
   created_at: string;
+  notes: string | null;
 }
 
 export interface FinanceLedgerRow {
@@ -58,6 +61,8 @@ export interface FinanceLedgerRow {
   category_name: string | null;
   origin: string;
   amount_cents: number | null;
+  payment_amount_cents: number | null;
+  cashflow_amount_cents: number | null;
   status: FinanceLedgerStatus;
   payment_status: "pago" | "pendente" | null;
   cashflow_status: "pendente" | "confirmado" | null;
@@ -68,6 +73,8 @@ export interface FinanceLedgerRow {
   competence_year: number | null;
   competence_month: number | null;
   cash_date: string | null;
+  direct_debit: boolean | null;
+  notes: string | null;
   integrity_issue: "linked_amount_mismatch" | "orphan_payment_reference" | null;
 }
 
@@ -123,6 +130,8 @@ function paymentRow(
     category_name: text(payment.category_name),
     origin: payment.kind,
     amount_cents: paymentCents,
+    payment_amount_cents: paymentCents,
+    cashflow_amount_cents: cashCents,
     status: payment.status,
     payment_status: payment.status,
     cashflow_status: linked?.status ?? null,
@@ -133,6 +142,8 @@ function paymentRow(
     competence_year: payment.period_year,
     competence_month: payment.period_month,
     cash_date: linked?.date ?? null,
+    direct_debit: payment.direct_debit,
+    notes: payment.notes,
     integrity_issue:
       linked && paymentCents !== null && cashCents !== paymentCents
         ? "linked_amount_mismatch"
@@ -158,6 +169,8 @@ function cashflowRow(
     category_name: text(cashflow.category_name) ?? text(cashflow.category),
     origin: manual ? "manual" : (text(cashflow.reference_type) ?? "manual"),
     amount_cents: paraCentimos(cashflow.amount),
+    payment_amount_cents: null,
+    cashflow_amount_cents: paraCentimos(cashflow.amount),
     status: cashflow.status === "confirmado" ? "confirmado" : "pendente_confirmacao",
     payment_status: null,
     cashflow_status: cashflow.status,
@@ -168,6 +181,8 @@ function cashflowRow(
     competence_year: null,
     competence_month: null,
     cash_date: cashflow.date,
+    direct_debit: null,
+    notes: cashflow.notes,
     integrity_issue: orphanPaymentReference ? "orphan_payment_reference" : null,
   };
 }
