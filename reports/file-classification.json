@@ -1,12 +1,12 @@
 {
   "generatedBy": "scripts/audit-file-inventory.mjs",
-  "totalFiles": 737,
+  "totalFiles": 738,
   "byStatus": {
-    "MANTER": 716,
+    "MANTER": 717,
     "STANDBY": 21
   },
   "byCategory": {
-    "test": 143,
+    "test": 144,
     "route-ui": 136,
     "migration": 88,
     "lib": 65,
@@ -29,7 +29,7 @@
     "supabase-other": 2
   },
   "byConfidence": {
-    "alta": 718,
+    "alta": 719,
     "média": 13,
     "baixa": 6
   },
@@ -3135,7 +3135,7 @@
       "category": "script",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 7,
+      "consumers": 8,
       "consumerSample": [
         "scripts/lib/migration-drift-guard.mjs",
         "scripts/run-migrations.mjs",
@@ -5769,6 +5769,31 @@
         "sqlWrite": 12,
         "unknownCast": 1,
         "fallbackArray": 1
+      },
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/__tests__/migration-schema-ledger-atomicity.pg.test.ts",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "sqlWrite": 8,
+        "unknownCast": 2
       },
       "action": "nenhuma",
       "reason": "suite de testes — corre por convenção do vitest",
@@ -19945,7 +19970,7 @@
       "sideEffects": [],
       "risks": [],
       "signals": {
-        "sqlWrite": 20
+        "sqlWrite": 22
       },
       "action": "nenhuma",
       "reason": "migration versionada — histórico do schema, nunca se apaga",

@@ -94,7 +94,11 @@
 --   como esquecido.
 -- ============================================================================
 
-BEGIN;
+-- BEGIN; removido: a transacao autoritativa e a do runner de migrations
+-- (scripts/lib/migration-runner-core.mjs: BEGIN -> SQL -> INSERT _migrations -> COMMIT).
+-- Um COMMIT interno fecharia essa transacao cedo e separaria o efeito de schema
+-- da provenance no ledger: uma falha do INSERT deixaria o schema aplicado sem
+-- linha no ledger. Ver docs/handoffs/ e migration-runner-core.mjs.
 
 -- ─── Invariantes do vínculo pagamento → movimento ──────────────────────────
 --
@@ -345,7 +349,7 @@ COMMENT ON FUNCTION public.mark_payment_paid IS
   'nada se já estiver confirmado. Recusa reutilizar um movimento cujo tipo ou '
   'valor não corresponda ao pagamento.';
 
-COMMIT;
+-- COMMIT; removido pelo mesmo motivo: quem faz COMMIT e o runner.
 
 -- ============================================================================
 -- O que esta migration NÃO faz
