@@ -1,21 +1,21 @@
 {
   "generatedBy": "scripts/audit-file-inventory.mjs",
-  "totalFiles": 743,
+  "totalFiles": 747,
   "byStatus": {
-    "MANTER": 722,
+    "MANTER": 726,
     "STANDBY": 21
   },
   "byCategory": {
-    "test": 145,
+    "test": 147,
     "route-ui": 136,
     "migration": 92,
-    "lib": 65,
+    "lib": 66,
     "script": 51,
     "domain": 49,
     "doc": 43,
     "server-action": 42,
     "component": 30,
-    "src-other": 20,
+    "src-other": 21,
     "doc-historico": 16,
     "api-route": 16,
     "config": 12,
@@ -29,7 +29,7 @@
     "supabase-other": 2
   },
   "byConfidence": {
-    "alta": 724,
+    "alta": 728,
     "média": 13,
     "baixa": 6
   },
@@ -6110,6 +6110,68 @@
       "risks": [],
       "signals": {
         "sqlWrite": 3
+      },
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/__tests__/payment-status-trace-runtime.test.ts",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [
+        "supabase"
+      ],
+      "risks": [
+        "service-role"
+      ],
+      "signals": {
+        "supabase": 6,
+        "serviceRole": 1,
+        "sqlWrite": 3,
+        "dynamicImport": 1
+      },
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/__tests__/payment-status-trace.test.ts",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [
+        "env"
+      ],
+      "risks": [
+        "service-role"
+      ],
+      "signals": {
+        "env": 2,
+        "serviceRole": 1,
+        "sqlWrite": 3,
+        "fallbackArray": 4
       },
       "action": "nenhuma",
       "reason": "suite de testes — corre por convenção do vitest",
@@ -12441,11 +12503,11 @@
       "category": "server-action",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 5,
+      "consumers": 6,
       "consumerSample": [
         "src/__tests__/finance-period-view-identity.test.tsx",
         "src/__tests__/financeiro-v2-write-budget.test.ts",
-        "src/app/(dashboard)/dashboard/_components/payments-reminder-banner.tsx"
+        "src/__tests__/payment-status-trace-runtime.test.ts"
       ],
       "autoLoaded": false,
       "referencedBy": [
@@ -12471,7 +12533,7 @@
         "revalidatePath": 5
       },
       "action": "auditar atomicidade (T12/T13)",
-      "reason": "em uso: 5 consumidor(es)",
+      "reason": "em uso: 6 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -15813,7 +15875,7 @@
       "category": "domain",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 26,
+      "consumers": 27,
       "consumerSample": [
         "src/__tests__/update-notice-modal.test.tsx",
         "src/__tests__/update-notices-eligibility.test.ts",
@@ -15828,7 +15890,7 @@
       "risks": [],
       "signals": {},
       "action": "nenhuma",
-      "reason": "em uso: 26 consumidor(es), configuração",
+      "reason": "em uso: 27 consumidor(es), configuração",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -16780,11 +16842,11 @@
       "category": "lib",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 7,
+      "consumers": 8,
       "consumerSample": [
         "src/__tests__/financial-period.test.ts",
-        "src/app/actions/bank-reconciliation.ts",
-        "src/app/actions/cash-flow.ts"
+        "src/__tests__/payment-status-trace-runtime.test.ts",
+        "src/app/actions/bank-reconciliation.ts"
       ],
       "autoLoaded": false,
       "referencedBy": [
@@ -16794,7 +16856,7 @@
       "risks": [],
       "signals": {},
       "action": "nenhuma",
-      "reason": "em uso: 7 consumidor(es)",
+      "reason": "em uso: 8 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -17013,6 +17075,34 @@
       "signals": {},
       "action": "nenhuma",
       "reason": "em uso: 32 consumidor(es)",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/lib/observability/payment-status-trace.ts",
+      "category": "lib",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 2,
+      "consumerSample": [
+        "src/__tests__/payment-status-trace.test.ts",
+        "src/app/actions/payments.ts"
+      ],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "consoleLog": 1,
+        "consoleErr": 2
+      },
+      "action": "nenhuma",
+      "reason": "em uso: 2 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -18273,6 +18363,32 @@
     },
     {
       "path": "src/release-notes/2026-08-27-criar-colaborador-guarda-tudo.ts",
+      "category": "src-other",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 1,
+      "consumerSample": [
+        "src/release-notes/index.ts"
+      ],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "sqlWrite": 1
+      },
+      "action": "nenhuma",
+      "reason": "em uso: 1 consumidor(es)",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/release-notes/2026-08-28-pagamentos-diagnostico-de-falhas.ts",
       "category": "src-other",
       "status": "MANTER",
       "confidence": "alta",

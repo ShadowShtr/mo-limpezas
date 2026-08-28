@@ -340,7 +340,11 @@ describe("🔴 setPaymentStatus usa a RPC, e só a RPC", () => {
   });
 
   it("🔴 um erro da RPC chega ao utilizador, e nada é dado como feito", () => {
-    expect(corpo).toMatch(/if \(!r\.ok\) return \{ ok: false, error: r\.error \}/);
+    // 🔴 A asserção exigia a forma de uma linha. O rasto de observabilidade
+    //    regista a etapa antes de devolver, o que parte o `if` em bloco — a
+    //    garantia é a mesma: o ramo de falha devolve o erro da RPC, e não há
+    //    caminho que o converta em sucesso.
+    expect(corpo).toMatch(/if \(!r\.ok\)[\s\S]{0,400}?return \{ ok: false, error: r\.error \}/);
   });
 
   it("revalida as vistas onde o movimento novo aparece", () => {
