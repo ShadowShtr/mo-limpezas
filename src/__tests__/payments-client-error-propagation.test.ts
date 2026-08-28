@@ -110,8 +110,18 @@ describe("setPaymentStatus — a action continua fail-closed", () => {
   // registar a etapa antes de devolver, o que parte o `if` em bloco — sem mudar
   // nada do que estes testes protegem. Passaram a medir a garantia (o ramo de
   // falha devolve erro) em vez da formatação, que nunca foi o contrato.
+  //
+  // 🔴 A janela é generosa de propósito. Ela mede TEXTO, e por isso
+  //    estreita-se sozinha sempre que alguém acrescenta um comentário dentro
+  //    do ramo — foi o que aconteceu quando o AUTH_GUARD ganhou a nota a
+  //    explicar porque não regista o `paymentId`. Um teste que fica vermelho
+  //    por causa de um comentário protege formatação, não o invariante.
+  //
+  //    A prova a sério de que estes ramos devolvem erro — e de que uma
+  //    excepção é re-lançada em vez de virar `{ ok: false }` — está em
+  //    `payment-status-exception-wiring.test.ts`, que INVOCA a action.
   const ramoDeFalha = (cond: string) =>
-    new RegExp(`if \\(!${cond}\\.ok\\)[\\s\\S]{0,400}?return \\{ ok: false`);
+    new RegExp(`if \\(!${cond}\\.ok\\)[\\s\\S]{0,900}?return \\{ ok: false`);
 
   it("recusa sem permissão", () => {
     expect(corpo).toContain("requireProfile");

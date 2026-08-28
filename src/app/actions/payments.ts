@@ -390,108 +390,129 @@ export async function setPaymentStatus(id: string, status: PaymentStatus): Promi
   //    produção. Não altera comportamento — só diz onde parou.
   const cid = novoCorrelationId();
 
-  const guard = await requireProfile({ roles: ["admin", "gestor"] });
-  if (!guard.ok) {
-    tracePaymentStatus({
-      stage: "PAYMENT_STATUS_AUTH_GUARD", correlationId: cid, targetStatus: status,
-      paymentId: id, code: guard.code, ok: false,
-    });
-    return { ok: false, error: guard.error };
-  }
-  const { admin, profile } = guard;
-
-  // ─── Guarda de período ──────────────────────────────────────────────────────
+  // 🔴 O `try` existe para o rasto, não para mudar o desfecho. Uma excepção
+  //    não prevista — o cliente Supabase a rebentar, uma dependência a
+  //    desaparecer — deixava a base intacta e o log mudo, que é o mesmo
+  //    silêncio que motivou este módulo. Agora fica registada.
   //
-  // A 073 já recusa um mês fechado do lado da base (levanta
-  // `FINANCIAL_PERIOD_CLOSED`, e `interpretarErro` traduz isso). Esta guarda
-  // corre **antes** para dar a mensagem com o nome do mês em vez de a deduzir
-  // de um erro de plpgsql — a garantia continua a ser da base, e nada aqui
-  // substitui a RPC.
-  //
-  // 🔴 A data autoritativa difere entre marcar e desmarcar:
-  //
-  //    · marcar como pago → a data do movimento que vai nascer, `todayInLisbon()`;
-  //    · voltar a pendente → o período do pagamento em si (`period_year`/
-  //      `period_month`), porque o movimento a remover é o que lá está, não um
-  //      que se crie hoje. Usar hoje aqui deixava reverter um pagamento de
-  //      Julho fechado só porque Agosto está aberto.
-  if (status === "pago") {
-    const hoje = todayInLisbon();
-    const p = await assertFinancialPeriodOpen({
-      cliente: admin as unknown as ClientePeriodo,
-      companyId: profile.company_id,
-      data: hoje,
-    });
-    if (!p.ok) {
+  //    E é RE-LANÇADA. Convertê-la em `{ ok: false }` transformaria um erro
+  //    desconhecido numa recusa normal: o chamador deixaria de a distinguir de
+  //    um período fechado, e o Next perderia o erro que devia propagar. A
+  //    observabilidade vê a falha; o comportamento fail-closed fica igual.
+  try {
+    const guard = await requireProfile({ roles: ["admin", "gestor"] });
+    if (!guard.ok) {
+      // 🔴 Sem `paymentId` aqui, de propósito. Nesta etapa a chamada ainda não
+      //    foi autenticada: o `id` é exactamente aquilo que o cliente enviou, e
+      //    mais nada o filtrou. Quem não passa o guard não fica com um canal
+      //    para escrever no nosso log. O `stage` já diz onde parou.
       tracePaymentStatus({
-        stage: "PAYMENT_STATUS_PERIOD_GUARD", correlationId: cid, targetStatus: status,
-        paymentId: id, companyId: profile.company_id, code: "FINANCIAL_PERIOD_CLOSED", ok: false,
+        stage: "PAYMENT_STATUS_AUTH_GUARD", correlationId: cid, targetStatus: status,
+        code: guard.code, ok: false,
       });
-      return { ok: false, error: p.error };
+      return { ok: false, error: guard.error };
+    }
+    const { admin, profile } = guard;
+
+    // ─── Guarda de período ──────────────────────────────────────────────────────
+    //
+    // A 073 já recusa um mês fechado do lado da base (levanta
+    // `FINANCIAL_PERIOD_CLOSED`, e `interpretarErro` traduz isso). Esta guarda
+    // corre **antes** para dar a mensagem com o nome do mês em vez de a deduzir
+    // de um erro de plpgsql — a garantia continua a ser da base, e nada aqui
+    // substitui a RPC.
+    //
+    // 🔴 A data autoritativa difere entre marcar e desmarcar:
+    //
+    //    · marcar como pago → a data do movimento que vai nascer, `todayInLisbon()`;
+    //    · voltar a pendente → o período do pagamento em si (`period_year`/
+    //      `period_month`), porque o movimento a remover é o que lá está, não um
+    //      que se crie hoje. Usar hoje aqui deixava reverter um pagamento de
+    //      Julho fechado só porque Agosto está aberto.
+    if (status === "pago") {
+      const hoje = todayInLisbon();
+      const p = await assertFinancialPeriodOpen({
+        cliente: admin as unknown as ClientePeriodo,
+        companyId: profile.company_id,
+        data: hoje,
+      });
+      if (!p.ok) {
+        tracePaymentStatus({
+          stage: "PAYMENT_STATUS_PERIOD_GUARD", correlationId: cid, targetStatus: status,
+          paymentId: id, companyId: profile.company_id, code: "FINANCIAL_PERIOD_CLOSED", ok: false,
+        });
+        return { ok: false, error: p.error };
+      }
+
+      const r = await marcarPagamentoPago(admin, {
+        companyId: profile.company_id,
+        paymentId: id,
+        // A data do movimento é hoje **em Lisboa**. O processo corre em UTC na
+        // Vercel, e `new Date()` na primeira hora do dia dava o dia anterior.
+        paidOn: hoje,
+      });
+      if (!r.ok) {
+        tracePaymentStatus({
+          stage: "PAYMENT_STATUS_MARK_RPC", correlationId: cid, targetStatus: status,
+          paymentId: id, companyId: profile.company_id, code: r.motivo, ok: false,
+        });
+        return { ok: false, error: r.error };
+      }
+      revalidateCaixa();
+      tracePaymentStatus({
+        stage: "PAYMENT_STATUS_OK", correlationId: cid, targetStatus: status,
+        paymentId: id, companyId: profile.company_id, ok: true,
+      });
+      return { ok: true };
     }
 
-    const r = await marcarPagamentoPago(admin, {
-      companyId: profile.company_id,
-      paymentId: id,
-      // A data do movimento é hoje **em Lisboa**. O processo corre em UTC na
-      // Vercel, e `new Date()` na primeira hora do dia dava o dia anterior.
-      paidOn: hoje,
-    });
-    if (!r.ok) {
-      tracePaymentStatus({
-        stage: "PAYMENT_STATUS_MARK_RPC", correlationId: cid, targetStatus: status,
-        paymentId: id, companyId: profile.company_id, code: r.motivo, ok: false,
+    if (status === "pendente") {
+      const bloqueio = await bloquearSePagamentoEmPeriodoFechado(admin, profile.company_id, id);
+      if (bloqueio) {
+        tracePaymentStatus({
+          stage: "PAYMENT_STATUS_UNMARK_GUARD", correlationId: cid, targetStatus: status,
+          paymentId: id, companyId: profile.company_id, code: "FINANCIAL_PERIOD_CLOSED", ok: false,
+        });
+        return bloqueio;
+      }
+
+      const r = await desmarcarPagamentoPago(admin, {
+        companyId: profile.company_id,
+        paymentId: id,
       });
-      return { ok: false, error: r.error };
+      if (!r.ok) {
+        tracePaymentStatus({
+          stage: "PAYMENT_STATUS_UNMARK_RPC", correlationId: cid, targetStatus: status,
+          paymentId: id, companyId: profile.company_id, code: r.motivo, ok: false,
+        });
+        return { ok: false, error: r.error };
+      }
+      revalidateCaixa();
+      tracePaymentStatus({
+        stage: "PAYMENT_STATUS_OK", correlationId: cid, targetStatus: status,
+        paymentId: id, companyId: profile.company_id, ok: true,
+      });
+      return { ok: true };
     }
-    revalidateCaixa();
-    tracePaymentStatus({
-      stage: "PAYMENT_STATUS_OK", correlationId: cid, targetStatus: status,
-      paymentId: id, companyId: profile.company_id, ok: true,
-    });
+
+    // Outros estados (`cancelado`, …) não geram nem removem caixa: mudam só o
+    // estado do pagamento. Um cancelamento depois de pago teria de decidir o que
+    // fazer ao movimento, e essa decisão não se toma por omissão.
+    const { error } = await admin
+      .from("fixed_variable_payments")
+      .update({ status, updated_at: new Date().toISOString() })
+      .eq("id", id)
+      .eq("company_id", profile.company_id);
+    if (error) return { ok: false, error: error.message };
+    revalidate();
     return { ok: true };
-  }
-
-  if (status === "pendente") {
-    const bloqueio = await bloquearSePagamentoEmPeriodoFechado(admin, profile.company_id, id);
-    if (bloqueio) {
-      tracePaymentStatus({
-        stage: "PAYMENT_STATUS_UNMARK_GUARD", correlationId: cid, targetStatus: status,
-        paymentId: id, companyId: profile.company_id, code: "FINANCIAL_PERIOD_CLOSED", ok: false,
-      });
-      return bloqueio;
-    }
-
-    const r = await desmarcarPagamentoPago(admin, {
-      companyId: profile.company_id,
-      paymentId: id,
-    });
-    if (!r.ok) {
-      tracePaymentStatus({
-        stage: "PAYMENT_STATUS_UNMARK_RPC", correlationId: cid, targetStatus: status,
-        paymentId: id, companyId: profile.company_id, code: r.motivo, ok: false,
-      });
-      return { ok: false, error: r.error };
-    }
-    revalidateCaixa();
+  } catch (error) {
     tracePaymentStatus({
-      stage: "PAYMENT_STATUS_OK", correlationId: cid, targetStatus: status,
-      paymentId: id, companyId: profile.company_id, ok: true,
+      stage: "PAYMENT_STATUS_UNEXPECTED_EXCEPTION", correlationId: cid, targetStatus: status,
+      code: "UNEXPECTED_EXCEPTION", ok: false,
     });
-    return { ok: true };
+    throw error;
   }
-
-  // Outros estados (`cancelado`, …) não geram nem removem caixa: mudam só o
-  // estado do pagamento. Um cancelamento depois de pago teria de decidir o que
-  // fazer ao movimento, e essa decisão não se toma por omissão.
-  const { error } = await admin
-    .from("fixed_variable_payments")
-    .update({ status, updated_at: new Date().toISOString() })
-    .eq("id", id)
-    .eq("company_id", profile.company_id);
-  if (error) return { ok: false, error: error.message };
-  revalidate();
-  return { ok: true };
 }
 
 export async function deletePayment(id: string): Promise<{ ok: boolean; error?: string }> {

@@ -13,6 +13,7 @@ import path from "node:path";
 import {
   novoCorrelationId,
   tracePaymentStatus,
+  PAYMENT_STATUS_CODES,
   type PaymentStatusStage,
 } from "@/lib/observability/payment-status-trace";
 
@@ -100,16 +101,99 @@ describe("🔴 sanitização — o que nunca pode aparecer", () => {
       .toEqual(["cid", "code", "company", "ok", "payment", "stage", "t", "target", "ts"]);
   });
 
-  it("um `code` com texto arbitrário é truncado e achatado", () => {
+  it("um `code` da allowlist passa exactamente como é", () => {
+    const { linhas, restaurar } = capturar();
+    for (const c of PAYMENT_STATUS_CODES) {
+      tracePaymentStatus({
+        stage: "PAYMENT_STATUS_MARK_RPC", correlationId: "c", targetStatus: "pago", code: c, ok: false,
+      });
+    }
+    restaurar();
+    expect(linhas.map((l) => JSON.parse(l).code)).toEqual([...PAYMENT_STATUS_CODES]);
+  });
+
+  // ── TESTES ADVERSARIAIS ───────────────────────────────────────────────────
+  //
+  // 🔴 A versão anterior truncava a 60 caracteres. Truncar limita o TAMANHO da
+  //    fuga, não impede a fuga: os primeiros 60 caracteres de uma mensagem do
+  //    Postgres chegam para levar um IBAN, uma password ou um cabeçalho. Estes
+  //    testes enviam de propósito aquilo que nunca pode sair do outro lado.
+  it("🔴 um `code` arbitrário nunca aparece — nem o seu início", () => {
+    const hostis = [
+      "IBAN PT50 0002 0123 1234 5678 9015 4 — pagamento a fornecedor",
+      "password=segredo-do-cliente",
+      "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.abc.def",
+      "postgres://user:pw@db.example.com:5432/prod",
+      "erro: duplicate key value violates unique constraint (descricao=Renda Julho)",
+      "x".repeat(500),
+    ];
+    for (const hostil of hostis) {
+      const { linhas, restaurar } = capturar();
+      tracePaymentStatus({
+        stage: "PAYMENT_STATUS_MARK_RPC", correlationId: "c", targetStatus: "pago",
+        code: hostil, ok: false,
+      });
+      restaurar();
+      const linha = linhas[0];
+      expect(JSON.parse(linha).code, hostil).toBe("UNKNOWN_CODE");
+      // Nem um pedaço do original: nenhuma palavra de 4+ caracteres sobrevive.
+      for (const palavra of hostil.split(/[^A-Za-z0-9]+/).filter((w) => w.length >= 4)) {
+        expect(linha, `fuga de "${palavra}"`).not.toContain(palavra);
+      }
+    }
+  });
+
+  it("🔴 um `paymentId` hostil não é registado — só UUID entra", () => {
+    const hostis = [
+      "password=segredo-do-cliente",
+      "Bearer eyJhbGciOiJIUzI1NiJ9",
+      "PT50 0002 0123 1234 5678 9015 4",
+      "'; DROP TABLE fixed_variable_payments; --",
+      "22222222-2222-4222-8222", // UUID truncado: continua a não ser UUID
+    ];
+    for (const hostil of hostis) {
+      const { linhas, restaurar } = capturar();
+      tracePaymentStatus({
+        stage: "PAYMENT_STATUS_MARK_RPC", correlationId: "c", targetStatus: "pago",
+        paymentId: hostil, companyId: hostil, ok: false,
+      });
+      restaurar();
+      const l = JSON.parse(linhas[0]);
+      expect(l.payment, hostil).toBeNull();
+      expect(l.company, hostil).toBeNull();
+      for (const palavra of hostil.split(/[^A-Za-z0-9]+/).filter((w) => w.length >= 4)) {
+        expect(linhas[0], `fuga de "${palavra}"`).not.toContain(palavra);
+      }
+    }
+  });
+
+  it("um UUID legítimo continua a ser registado — o diagnóstico não se perdeu", () => {
+    const uuid = "22222222-2222-4222-8222-222222222222";
     const { linhas, restaurar } = capturar();
     tracePaymentStatus({
       stage: "PAYMENT_STATUS_MARK_RPC", correlationId: "c", targetStatus: "pago",
-      code: "erro\ncom quebras\te tabs " + "x".repeat(300), ok: false,
+      paymentId: uuid, companyId: uuid, ok: false,
     });
     restaurar();
-    const code = JSON.parse(linhas[0]).code as string;
-    expect(code.length).toBeLessThanOrEqual(60);
-    expect(code).not.toMatch(/[\n\t]/);
+    const l = JSON.parse(linhas[0]);
+    expect(l.payment).toBe(uuid);
+    expect(l.company).toBe(uuid);
+  });
+
+  it("🔴 um `targetStatus` hostil vira `invalid` — só os dois estados passam", () => {
+    const { linhas, restaurar } = capturar();
+    for (const alvo of ["pago", "pendente", "Bearer segredo-abc", "cancelado", "", "PAGO"]) {
+      tracePaymentStatus({
+        stage: "PAYMENT_STATUS_MARK_RPC", correlationId: "c", targetStatus: alvo, ok: false,
+      });
+    }
+    restaurar();
+    expect(linhas.map((l) => JSON.parse(l).target))
+      .toEqual(["pago", "pendente", "invalid", "invalid", "invalid", "invalid"]);
+    for (const l of linhas) {
+      expect(l).not.toContain("Bearer");
+      expect(l).not.toContain("segredo");
+    }
   });
 
   it("campos ausentes ficam nulos, não indefinidos nem inventados", () => {
