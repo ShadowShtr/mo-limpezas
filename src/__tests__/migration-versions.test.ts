@@ -82,8 +82,14 @@ describe("migrations — a versão identifica uma só migration", () => {
     // `fix/atomic-contract-calendar-sync`, congelada depois do incidente de
     // produção de 2026-08-05, e serão extraídas em PRs isolados.
     //
+    // A 082 está em falta pela mesma razão de fundo — decisão, não acidente:
+    // é a F14-D (mutações financeiras atómicas), que vive na PR #108 e ainda
+    // não entrou. A 083 salta-a de propósito em vez de lhe roubar o número:
+    // duas migrations diferentes com a mesma versão é precisamente o que o
+    // teste acima ("a versão identifica uma só migration") existe para impedir.
+    //
     // O teste continua a existir para apanhar o **próximo** salto.
-    const AUSENTES_CONHECIDAS = [66, 67];
+    const AUSENTES_CONHECIDAS = [66, 67, 82];
 
     const nums = ficheiros()
       .map(versaoSequencial)
