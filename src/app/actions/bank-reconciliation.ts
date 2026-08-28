@@ -265,11 +265,24 @@ export async function confirmMatch(matchId: string): Promise<{ ok: boolean; erro
   if (!match) return { ok: false, error: "Sugestão não encontrada." };
 
   const now = new Date().toISOString();
-  const { error: upErr } = await admin
-    .from("bank_reconciliation_matches")
-    .update({ status: "confirmed", confirmed_by: guard.profile.id, confirmed_at: now })
-    .eq("id", matchId)
-    .eq("company_id", companyId);
+
+  // 🔴 A confirmação passa pela RPC da 082, não por um `update` directo.
+  //
+  //    É a segunda metade de uma correcção de concorrência, e a metade fácil
+  //    de esquecer: **um lock só serializa contra quem o pede**. As mutações
+  //    manuais de um movimento trancam a linha com `FOR UPDATE` antes de
+  //    decidirem se ele é editável; enquanto esta confirmação escrevesse sem
+  //    trancar nada, alguém podia alterar ou apagar o movimento entre a guarda
+  //    e a escrita, e a conciliação ficava a afirmar uma coisa que já não era
+  //    verdade.
+  //
+  //    `confirm_bank_match_atomic` toma o mesmo lock. É aqui que as duas
+  //    operações se encontram — e é isso que as provas de concorrência medem.
+  const { error: upErr } = await admin.rpc("confirm_bank_match_atomic", {
+    p_company_id: companyId,
+    p_match_id: matchId,
+    p_actor_id: guard.profile.id,
+  });
   if (upErr) return { ok: false, error: upErr.message };
 
   // rejeita as restantes sugestões do mesmo movimento

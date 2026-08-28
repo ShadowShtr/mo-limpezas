@@ -1,21 +1,21 @@
 {
   "generatedBy": "scripts/audit-file-inventory.mjs",
-  "totalFiles": 760,
+  "totalFiles": 765,
   "byStatus": {
-    "MANTER": 737,
+    "MANTER": 742,
     "STANDBY": 23
   },
   "byCategory": {
-    "test": 152,
+    "test": 153,
     "route-ui": 136,
-    "migration": 94,
+    "migration": 96,
     "lib": 67,
     "script": 54,
     "domain": 50,
-    "doc": 43,
+    "doc": 44,
     "server-action": 42,
     "component": 30,
-    "src-other": 22,
+    "src-other": 23,
     "doc-historico": 16,
     "api-route": 16,
     "config": 12,
@@ -29,7 +29,7 @@
     "supabase-other": 2
   },
   "byConfidence": {
-    "alta": 739,
+    "alta": 744,
     "média": 15,
     "baixa": 6
   },
@@ -508,6 +508,27 @@
       "sideEffects": [],
       "risks": [],
       "signals": {},
+      "action": "nenhuma",
+      "reason": "documentação",
+      "manualDecision": false
+    },
+    {
+      "path": "docs/F14D-CALL-SITES-PARA-101.md",
+      "category": "doc",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [
+        "service-role"
+      ],
+      "signals": {
+        "serviceRole": 1,
+        "sqlWrite": 2
+      },
       "action": "nenhuma",
       "reason": "documentação",
       "manualDecision": false
@@ -3848,6 +3869,33 @@
         "serviceRole": 1,
         "sqlWrite": 4,
         "fallbackArray": 1
+      },
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/__tests__/atomic-finance-mutations-postgres.test.ts",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [
+        "service-role"
+      ],
+      "signals": {
+        "serviceRole": 8,
+        "sqlWrite": 20
       },
       "action": "nenhuma",
       "reason": "suite de testes — corre por convenção do vitest",
@@ -11720,8 +11768,8 @@
       ],
       "signals": {
         "serverAction": 1,
-        "write": 14,
-        "sqlWrite": 14,
+        "write": 13,
+        "sqlWrite": 15,
         "eslintDisable": 1,
         "anyType": 1,
         "unknownCast": 1,
@@ -16129,7 +16177,7 @@
       "category": "domain",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 28,
+      "consumers": 29,
       "consumerSample": [
         "src/__tests__/update-notice-modal.test.tsx",
         "src/__tests__/update-notices-eligibility.test.ts",
@@ -16144,7 +16192,7 @@
       "risks": [],
       "signals": {},
       "action": "nenhuma",
-      "reason": "em uso: 28 consumidor(es), configuração",
+      "reason": "em uso: 29 consumidor(es), configuração",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -18614,6 +18662,32 @@
       }
     },
     {
+      "path": "src/release-notes/2026-08-27-conciliacao-e-edicoes-em-simultaneo.ts",
+      "category": "src-other",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 1,
+      "consumerSample": [
+        "src/release-notes/index.ts"
+      ],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "sqlWrite": 2
+      },
+      "action": "nenhuma",
+      "reason": "em uso: 1 consumidor(es)",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
       "path": "src/release-notes/2026-08-27-criar-colaborador-corrigido.ts",
       "category": "src-other",
       "status": "MANTER",
@@ -20457,6 +20531,27 @@
       "manualDecision": false
     },
     {
+      "path": "supabase/migrations/082_atomic_finance_mutations.sql",
+      "category": "migration",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [
+        "service-role"
+      ],
+      "signals": {
+        "serviceRole": 8,
+        "sqlWrite": 14
+      },
+      "action": "nenhuma",
+      "reason": "migration versionada — histórico do schema, nunca se apaga",
+      "manualDecision": false
+    },
+    {
       "path": "supabase/migrations/083_payment_authorization_hardening.sql",
       "category": "migration",
       "status": "MANTER",
@@ -20717,6 +20812,24 @@
       "risks": [],
       "signals": {
         "sqlWrite": 19
+      },
+      "action": "nenhuma",
+      "reason": "migration versionada — histórico do schema, nunca se apaga",
+      "manualDecision": false
+    },
+    {
+      "path": "supabase/migrations/rollback/082_atomic_finance_mutations.down.sql",
+      "category": "migration",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "sqlWrite": 6
       },
       "action": "nenhuma",
       "reason": "migration versionada — histórico do schema, nunca se apaga",
