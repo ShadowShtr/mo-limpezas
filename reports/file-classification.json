@@ -1,8 +1,8 @@
 {
   "generatedBy": "scripts/audit-file-inventory.mjs",
-  "totalFiles": 746,
+  "totalFiles": 747,
   "byStatus": {
-    "MANTER": 725,
+    "MANTER": 726,
     "STANDBY": 21
   },
   "byCategory": {
@@ -12,7 +12,7 @@
     "lib": 65,
     "script": 51,
     "domain": 49,
-    "doc": 43,
+    "doc": 44,
     "server-action": 42,
     "component": 30,
     "src-other": 20,
@@ -29,7 +29,7 @@
     "supabase-other": 2
   },
   "byConfidence": {
-    "alta": 727,
+    "alta": 728,
     "média": 13,
     "baixa": 6
   },
@@ -1206,6 +1206,26 @@
         "serviceRole": 4,
         "write": 4,
         "sqlWrite": 19
+      },
+      "action": "nenhuma",
+      "reason": "documentação",
+      "manualDecision": false
+    },
+    {
+      "path": "docs/SECURITY-033-CHARACTERIZATION-REQUIRED.md",
+      "category": "doc",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [
+        "service-role"
+      ],
+      "signals": {
+        "serviceRole": 1
       },
       "action": "nenhuma",
       "reason": "documentação",
@@ -6052,7 +6072,9 @@
       "consumers": 0,
       "consumerSample": [],
       "autoLoaded": false,
-      "referencedBy": [],
+      "referencedBy": [
+        "docs"
+      ],
       "sideEffects": [],
       "risks": [
         "service-role"
