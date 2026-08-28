@@ -110,23 +110,33 @@ describe("setPaymentStatus — a action continua fail-closed", () => {
   // registar a etapa antes de devolver, o que parte o `if` em bloco — sem mudar
   // nada do que estes testes protegem. Passaram a medir a garantia (o ramo de
   // falha devolve erro) em vez da formatação, que nunca foi o contrato.
+  // 🔴 E os comentários saem antes de medir.
+  //
+  //    A janela de 400 caracteres continua a ser formatação disfarçada: basta
+  //    alguém explicar por escrito porque é que o ramo de falha existe para o
+  //    `return` sair da janela e o teste ficar vermelho sobre código correcto.
+  //    Foi o que aconteceu ao documentar de onde vem o código do período.
+  //    Sem os comentários, mede-se a garantia — que é o que a nota acima diz
+  //    ser o contrato.
+  const codigo = corpo.split("\n").filter((l) => !l.trimStart().startsWith("//")).join("\n");
+
   const ramoDeFalha = (cond: string) =>
     new RegExp(`if \\(!${cond}\\.ok\\)[\\s\\S]{0,400}?return \\{ ok: false`);
 
   it("recusa sem permissão", () => {
     expect(corpo).toContain("requireProfile");
-    expect(corpo).toMatch(ramoDeFalha("guard"));
+    expect(codigo).toMatch(ramoDeFalha("guard"));
   });
 
   it("recusa em período financeiro fechado", () => {
     expect(corpo).toContain("assertFinancialPeriodOpen");
-    expect(corpo).toMatch(ramoDeFalha("p"));
+    expect(codigo).toMatch(ramoDeFalha("p"));
   });
 
   it("propaga o erro da RPC canónica em vez de o engolir", () => {
     expect(corpo).toContain("marcarPagamentoPago");
     expect(corpo).toContain("desmarcarPagamentoPago");
-    expect(corpo).toMatch(ramoDeFalha("r"));
+    expect(codigo).toMatch(ramoDeFalha("r"));
   });
 
   it("🔴 nunca devolve ok depois de um erro registado só em consola", () => {

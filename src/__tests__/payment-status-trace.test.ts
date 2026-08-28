@@ -157,8 +157,26 @@ describe("a instrumentação não muda comportamento", () => {
     // 🔴 A captura tem de ser não-gananciosa até ao PRIMEIRO `return`: um
     //    `[\s\S]*?` largo atravessa o bloco seguinte e apanha o `return
     //    { ok: true }` do caminho de sucesso, dando um falso vermelho.
-    const falhas = corpo.match(/ok: false,\s*\}\);\s*return [^;]+;/g) ?? [];
+    //
+    // 🔴 E os comentários saem antes de contar. A regra é «trace de falha
+    //    seguido de saída de erro»; um comentário a explicar *porquê* fica no
+    //    meio dos dois e partia a expressão, dando vermelho a código correcto.
+    //    Uma guarda que se estraga quando alguém documenta o código ensina a
+    //    não documentar.
+    const semComentarios = corpo
+      .split("\n").filter((l) => !l.trimStart().startsWith("//")).join("\n");
+    const falhas = semComentarios.match(/ok: false,\s*\}\);\s*return [^;]+;/g) ?? [];
     expect(falhas.length).toBeGreaterThanOrEqual(5);
+
+    // A excepção inesperada é a única falha que **não** devolve: re-lança. Se
+    // algum dia devolvesse, a UI receberia sucesso por uma operação que
+    // rebentou — e é por isso que se exige explicitamente o `throw`.
+    expect(semComentarios).toMatch(
+      /stage: "PAYMENT_STATUS_UNEXPECTED_EXCEPTION"[\s\S]*?\}\);\s*throw /,
+    );
+    expect(semComentarios).not.toMatch(
+      /stage: "PAYMENT_STATUS_UNEXPECTED_EXCEPTION"[\s\S]*?\}\);\s*return /,
+    );
     for (const f of falhas) {
       expect(f, f).not.toMatch(/return\s*\{\s*ok:\s*true/);
     }
