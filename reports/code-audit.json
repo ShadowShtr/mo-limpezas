@@ -1,13 +1,13 @@
 {
   "inventorySource": "git ls-files",
   "summary": {
-    "repositoryFiles": 758,
-    "textFiles": 745,
-    "sourceFiles": 538,
-    "textLines": 181875,
+    "repositoryFiles": 756,
+    "textFiles": 743,
+    "sourceFiles": 536,
+    "textLines": 181537,
     "typescriptDiagnostics": 0,
     "productionEntries": 71,
-    "unreachableProductionModules": 42,
+    "unreachableProductionModules": 41,
     "exactDuplicateFileGroups": 0
   },
   "highConfidence": {
@@ -17,7 +17,6 @@
   },
   "reviewRequired": {
     "unreachableProductionModules": [
-      "src/app/actions/finance-ledger.ts",
       "src/app/actions/whatsapp.ts",
       "src/domain/billing/billing-compat.ts",
       "src/domain/billing/consumer-parity.ts",
@@ -61,7 +60,6 @@
       "src/types/supabase.ts"
     ],
     "testOnlyModules": [
-      "src/app/actions/finance-ledger.ts",
       "src/domain/billing/billing-compat.ts",
       "src/domain/billing/consumer-parity.ts",
       "src/domain/billing/financial-model.ts",
