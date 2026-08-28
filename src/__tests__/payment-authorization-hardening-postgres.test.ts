@@ -155,6 +155,22 @@ beforeAll(async () => {
       public.companies, public.financial_periods, public.bank_reconciliation_matches
       TO anon, authenticated, service_role;`);
 
+  // 🔴 Privilégios ADVERSARIAIS, plantados de propósito antes da 083.
+  //
+  //    A fixture anterior começava sem TRUNCATE/REFERENCES/TRIGGER, por isso
+  //    uma migration que só revogasse SELECT/INSERT/UPDATE/DELETE passava nos
+  //    testes por sorte: não havia resíduo para deixar para trás. Isso não
+  //    prova que a migration os remove — prova que nunca lá estiveram.
+  //
+  //    Aqui damo-los, para que a prova pós-083 seja sobre remoção real. Em
+  //    produção podem existir por herança (`GRANT ALL`, um role template, uma
+  //    correcção manual antiga) e é exactamente esse o caso que interessa.
+  await cli.query(`
+    GRANT TRUNCATE, REFERENCES, TRIGGER ON public.fixed_variable_payments TO authenticated;
+    GRANT SELECT, INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER
+      ON public.fixed_variable_payments TO anon;
+    GRANT SELECT, INSERT, UPDATE, DELETE ON public.fixed_variable_payments TO PUBLIC;`);
+
   await cli.query("INSERT INTO public.companies(id,name) VALUES($1,'A'),($2,'B')", [EMP_A, EMP_B]);
   await cli.query(`INSERT INTO public.profiles(id,company_id,role) VALUES
     ($1,$5,'colaboradora'),($2,$5,'gestor'),($3,$5,'admin'),($4,$6,'admin')`,
@@ -171,6 +187,31 @@ afterAll(async () => {
 });
 
 describe.sequential("083 — o defeito existe ANTES da migration", () => {
+  // Sem isto, um erro na fixture (grant que não pegou) tornaria a prova de
+  // remoção pós-083 vazia: estaríamos a medir a ausência de algo que nunca
+  // chegou a existir.
+  it("a fixture tem mesmo os privilégios adversariais por remover", async () => {
+    const g = await cli.query(`SELECT
+      has_table_privilege('authenticated','public.fixed_variable_payments','TRUNCATE') a_trunc,
+      has_table_privilege('authenticated','public.fixed_variable_payments','REFERENCES') a_ref,
+      has_table_privilege('authenticated','public.fixed_variable_payments','TRIGGER') a_trg,
+      has_table_privilege('anon','public.fixed_variable_payments','SELECT') an_sel,
+      has_table_privilege('anon','public.fixed_variable_payments','TRUNCATE') an_trunc`);
+    const r = g.rows[0];
+    expect(r.a_trunc).toBe(true);
+    expect(r.a_ref).toBe(true);
+    expect(r.a_trg).toBe(true);
+    expect(r.an_sel).toBe(true);
+    expect(r.an_trunc).toBe(true);
+
+    // E PUBLIC tem grants residuais — o caso mais fácil de esquecer, porque
+    // não aparece ligado a nenhum role nomeado.
+    const pub = await cli.query(`SELECT count(*)::int n FROM (
+      SELECT (aclexplode(relacl)).grantee g FROM pg_class
+       WHERE oid='public.fixed_variable_payments'::regclass) x WHERE g = 0`);
+    expect(pub.rows[0].n).toBeGreaterThan(0);
+  });
+
   it("🔴 colaboradora marca como pago por UPDATE directo, sem gerar caixa", async () => {
     const r = await como("authenticated", COLAB_A, async () => {
       const u = await cli.query(
@@ -309,25 +350,67 @@ describe.sequential("083 — RPC directa fechada por EXECUTE", () => {
 });
 
 describe.sequential("083 — as DUAS camadas, medidas em separado", () => {
-  it("camada GRANTS: privilégio de tabela retirado a authenticated/anon", async () => {
-    const g = await cli.query(`SELECT
-      has_table_privilege('authenticated','public.fixed_variable_payments','UPDATE') a_upd,
-      has_table_privilege('authenticated','public.fixed_variable_payments','INSERT') a_ins,
-      has_table_privilege('authenticated','public.fixed_variable_payments','DELETE') a_del,
-      has_table_privilege('authenticated','public.fixed_variable_payments','SELECT') a_sel,
-      has_table_privilege('anon','public.fixed_variable_payments','SELECT') an_sel,
-      has_table_privilege('service_role','public.fixed_variable_payments','UPDATE') s_upd`);
-    const r = g.rows[0];
-    expect(r.a_upd).toBe(false);
-    expect(r.a_ins).toBe(false);
-    expect(r.a_del).toBe(false);
-    // SELECT fica: quem decide as LINHAS é a policy, não o privilégio.
-    expect(r.a_sel).toBe(true);
-    expect(r.an_sel).toBe(false);
-    expect(r.s_upd).toBe(true);
+  // ── TABLE_GRANT_PROOF ─────────────────────────────────────────────────────
+  //
+  // 🔴 Os SETE privilégios de tabela, um a um, pelo catálogo. A versão
+  //    anterior media quatro (SELECT/INSERT/UPDATE/DELETE) e por isso não
+  //    podia sustentar a conclusão «authenticated = SOMENTE SELECT»:
+  //    TRUNCATE, REFERENCES e TRIGGER ficavam por medir. A fixture agora
+  //    concede-os antes da 083, portanto estes `false` são prova de REMOÇÃO,
+  //    não de ausência histórica.
+  const PRIVILEGIOS = ["SELECT", "INSERT", "UPDATE", "DELETE", "TRUNCATE", "REFERENCES", "TRIGGER"] as const;
+
+  async function acl(role: string) {
+    const cols = PRIVILEGIOS.map(
+      (pv) => `has_table_privilege('${role}','public.fixed_variable_payments','${pv}') "${pv}"`,
+    ).join(", ");
+    const r = await cli.query(`SELECT ${cols}`);
+    return r.rows[0] as Record<string, boolean>;
+  }
+
+  it("TABLE_GRANT_PROOF — authenticated: SOMENTE SELECT", async () => {
+    const a = await acl("authenticated");
+    // Quem decide as LINHAS é a policy; o privilégio só abre a porta da leitura.
+    expect(a.SELECT).toBe(true);
+    expect(a.INSERT).toBe(false);
+    expect(a.UPDATE).toBe(false);
+    expect(a.DELETE).toBe(false);
+    expect(a.TRUNCATE).toBe(false);
+    expect(a.REFERENCES).toBe(false);
+    expect(a.TRIGGER).toBe(false);
   });
 
-  it("camada RLS: sem os grants na equação, o RLS sozinho barra a escrita", async () => {
+  it("TABLE_GRANT_PROOF — anon: NADA", async () => {
+    const a = await acl("anon");
+    for (const pv of PRIVILEGIOS) expect(a[pv], `anon ${pv}`).toBe(false);
+  });
+
+  it("TABLE_GRANT_PROOF — PUBLIC sem grants residuais", async () => {
+    // 🔴 PUBLIC não é um role nomeado: aparece na ACL com grantee = 0. Um
+    //    grant a PUBLIC chega a TODOS os roles, incluindo anon, e escapava a
+    //    qualquer verificação feita só sobre nomes.
+    const r = await cli.query(`SELECT coalesce(string_agg(DISTINCT x.priv, ','), '') AS privs
+      FROM (SELECT (aclexplode(relacl)).grantee AS g,
+                   (aclexplode(relacl)).privilege_type AS priv
+              FROM pg_class WHERE oid = 'public.fixed_variable_payments'::regclass) x
+     WHERE x.g = 0`);
+    expect(r.rows[0].privs).toBe("");
+  });
+
+  it("TABLE_GRANT_PROOF — service_role: o DML canónico, e nada de excesso", async () => {
+    const a = await acl("service_role");
+    expect(a.SELECT).toBe(true);
+    expect(a.INSERT).toBe(true);
+    expect(a.UPDATE).toBe(true);
+    expect(a.DELETE).toBe(true);
+    // Não foi `GRANT ALL`: nada no caminho canónico precisa destes três.
+    expect(a.TRUNCATE).toBe(false);
+    expect(a.REFERENCES).toBe(false);
+    expect(a.TRIGGER).toBe(false);
+  });
+
+  // ── RLS_PROOF ─────────────────────────────────────────────────────────────
+  it("RLS_PROOF — sem os grants na equação, o RLS sozinho barra a escrita", async () => {
     // Devolver o privilégio de tabela isola o RLS: se a escrita passar agora,
     // é porque só o grant a estava a suster — e a policy não protegia nada.
     await cli.query("GRANT INSERT, UPDATE, DELETE ON public.fixed_variable_payments TO authenticated");
@@ -346,6 +429,122 @@ describe.sequential("083 — as DUAS camadas, medidas em separado", () => {
       WHERE schemaname='public' AND tablename='fixed_variable_payments' ORDER BY policyname`);
     expect(p.rows.map((r: { policyname: string }) => r.policyname)).toEqual(["payments_manager_select"]);
     expect(p.rows[0].cmd).toBe("SELECT");
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// TASK 4 — a policy depende do helper SECURITY DEFINER, não de SELECT directo
+// ═══════════════════════════════════════════════════════════════════════════
+//
+// 🔴 A migration afirma que `get_my_role()` foi escolhido em vez de
+//    `(SELECT role FROM profiles WHERE id = auth.uid())` porque
+//    `authenticated` não tem SELECT em `profiles` e a subconsulta rebentaria.
+//
+//    A fixture, porém, CONCEDE SELECT em `profiles` a authenticated. Com esse
+//    grant no lugar, a policy passaria de qualquer das duas formas — e o teste
+//    não distinguia a afirmação da sua negação. Aqui retira-se o grant e
+//    mede-se outra vez: se o SELECT continuar a decidir correctamente, é
+//    porque quem lê `profiles` é o helper, sob o dono, não o chamador.
+describe.sequential("083 — get_my_role sem SELECT directo em profiles", () => {
+  const leitura = () => cli.query("SELECT id FROM public.fixed_variable_payments WHERE id=$1", [PAG_A]);
+
+  async function selectComo(uid: string) {
+    await cli.query("BEGIN");
+    await cli.query("SET LOCAL ROLE authenticated");
+    await cli.query("SELECT set_config('request.jwt.claim.sub',$1,true)", [uid]);
+    let r: { rowCount: number | null; err?: string };
+    try { const q = await leitura(); r = { rowCount: q.rowCount }; }
+    catch (e) { r = { rowCount: null, err: (e as Error).message.split("\n")[0] }; }
+    await cli.query("ROLLBACK");
+    return r;
+  }
+
+  beforeAll(async () => {
+    await cli.query("REVOKE SELECT ON public.profiles FROM authenticated");
+  });
+
+  afterAll(async () => {
+    // Reposto para as verificações seguintes da fixture não mudarem de terreno
+    // a meio — a prova acima já foi feita sem ele.
+    await cli.query("GRANT SELECT ON public.profiles TO authenticated");
+  });
+
+  it("o grant foi mesmo retirado (senão a prova seguinte não vale nada)", async () => {
+    const g = await cli.query(
+      "SELECT has_table_privilege('authenticated','public.profiles','SELECT') s");
+    expect(g.rows[0].s).toBe(false);
+  });
+
+  it("GESTOR_A_PAYMENT_SELECT_A = ALLOWED", async () => {
+    const r = await selectComo(GESTOR_A);
+    expect(r.err).toBeUndefined();
+    expect(r.rowCount).toBe(1);
+  });
+
+  it("ADMIN_A_PAYMENT_SELECT_A = ALLOWED", async () => {
+    const r = await selectComo(ADMIN_A);
+    expect(r.err).toBeUndefined();
+    expect(r.rowCount).toBe(1);
+  });
+
+  it("COLLABORATOR_SELECT = BLOCKED", async () => {
+    const r = await selectComo(COLAB_A);
+    // Bloqueado pela policy (0 linhas), não por erro de permissão em profiles:
+    // um "permission denied for table profiles" aqui provaria o contrário.
+    expect(r.err).toBeUndefined();
+    expect(r.rowCount).toBe(0);
+  });
+
+  it("CROSS_COMPANY_SELECT = BLOCKED", async () => {
+    const r = await selectComo(ADMIN_B);
+    expect(r.err).toBeUndefined();
+    expect(r.rowCount).toBe(0);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// TASK 5 — policy desconhecida = FAIL_CLOSED
+// ═══════════════════════════════════════════════════════════════════════════
+describe.sequential("083 — policy desconhecida faz a migration falhar fechada", () => {
+  it("🔴 083 recusa aplicar sobre estado de policies inesperado, sem alterar nada", async () => {
+    // Cenário adversarial: alguém criou uma policy fora do versionamento.
+    // Note-se que ela é `FOR ALL` — isto é, se a 083 prosseguisse em silêncio,
+    // a escrita ficava reaberta por baixo da policy nova.
+    await cli.query(`CREATE POLICY "policy_fantasma_fora_do_versionamento"
+      ON public.fixed_variable_payments FOR ALL USING (true) WITH CHECK (true)`);
+
+    const antes = await cli.query(`SELECT policyname FROM pg_policies
+      WHERE schemaname='public' AND tablename='fixed_variable_payments' ORDER BY policyname`);
+
+    let erro = "";
+    try {
+      await cli.query(sql("083_payment_authorization_hardening.sql"));
+    } catch (e) { erro = (e as Error).message; }
+
+    // 083 = FAIL, com código estável.
+    expect(erro).toContain("083_UNEXPECTED_PAYMENT_POLICY_STATE");
+
+    // 🔴 Nenhuma alteração parcial persiste: a migration corre numa transação
+    //    implícita, e o RAISE aborta-a inteira. A prova é o estado das
+    //    policies estar exactamente como antes da tentativa — em particular,
+    //    os DROP POLICY que a 083 faz ANTES do RAISE foram desfeitos.
+    const depois = await cli.query(`SELECT policyname FROM pg_policies
+      WHERE schemaname='public' AND tablename='fixed_variable_payments' ORDER BY policyname`);
+    expect(depois.rows.map((r: { policyname: string }) => r.policyname))
+      .toEqual(antes.rows.map((r: { policyname: string }) => r.policyname));
+
+    // E a policy desconhecida NÃO foi apagada pela migration.
+    expect(depois.rows.map((r: { policyname: string }) => r.policyname))
+      .toContain("policy_fantasma_fora_do_versionamento");
+
+    // Limpar o cenário à mão — é o operador humano a decidir, que é
+    // precisamente o que o fail-closed exige — e reaplicar a 083 limpa.
+    await cli.query('DROP POLICY "policy_fantasma_fora_do_versionamento" ON public.fixed_variable_payments');
+    await cli.query(sql("083_payment_authorization_hardening.sql"));
+
+    const final = await cli.query(`SELECT policyname FROM pg_policies
+      WHERE schemaname='public' AND tablename='fixed_variable_payments'`);
+    expect(final.rows.map((r: { policyname: string }) => r.policyname)).toEqual(["payments_manager_select"]);
   });
 });
 

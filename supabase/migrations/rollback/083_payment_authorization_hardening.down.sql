@@ -12,10 +12,33 @@
 --        cash_flow_entries criados = 0
 --
 --    O defeito está provado em PostgreSQL 17 real, não é hipotético. Este
---    ficheiro existe para o ensaio de rollback ser honesto — repor o prestate
---    exacto de policies e grants — e **não** para ser corrido em produção por
---    rotina. Qualquer rollback em produção exige decisão e autorização
---    próprias, com consciência de que reabre este buraco.
+--    ficheiro existe para o ensaio de rollback ser honesto e **não** para ser
+--    corrido em produção por rotina. Qualquer rollback em produção exige
+--    decisão e autorização próprias, com consciência de que reabre este buraco.
+--
+-- ── O que este rollback repõe, e o que NÃO afirma ──────────────────────────
+--
+-- 🔴 EXACT_PRODUCTION_PRESTATE_RESTORED = NOT_CLAIMED
+--
+--    Este ficheiro repõe o **prestate canónico conhecido** — a policy da 037 e
+--    os grants que o ensaio assume — que é o necessário para o rehearsal ser
+--    válido. Não afirma reproduzir o ACL real de produção, porque esse ACL
+--    nunca foi lido: pode ter privilégios herdados (TRUNCATE, REFERENCES,
+--    TRIGGER, grants a PUBLIC) que não estão aqui, e afirmar equivalência sem
+--    os medir seria declarar uma garantia que ninguém verificou.
+--
+--    Antes de qualquer aplicação real da 083 haverá um preflight READ-ONLY de:
+--
+--        · policies em public.fixed_variable_payments
+--        · ACL de tabela (os sete privilégios, incluindo PUBLIC)
+--        · ACL das funções (mark/unmark/helpers)
+--        · ledger/checksum das migrations
+--
+--    Qualquer divergência entre o medido e o assumido aqui:
+--
+--        PRODUCTION_EXECUTION_READY = NO
+--
+--    Essa leitura ainda não foi feita, e não é feita por este ficheiro.
 --
 --    Não é `ROLLBACK_BLOCKED`: é reversível. É `ROLLBACK_UNSAFE_BY_DESIGN`.
 --

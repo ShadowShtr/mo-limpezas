@@ -73,6 +73,51 @@ DROP POLICY IF EXISTS "company members manage fixed variable payments"
 --    `get_my_role()` é `SECURITY DEFINER` e lê `profiles` sob o dono, que é
 --    exactamente o que estas guardas precisam. Medido em PostgreSQL 17.
 DROP POLICY IF EXISTS "payments_manager_select" ON public.fixed_variable_payments;
+
+-- ─── 1b. Estado de policies desconhecido = FAIL_CLOSED ──────────────────────
+--
+-- 🔴 Esta migration conhece exactamente duas policies nesta tabela:
+--
+--        "company members manage fixed variable payments"   (037)
+--        "payments_manager_select"                          (esta migration)
+--
+--    Ambas acabaram de ser removidas acima. Se sobrar QUALQUER outra, então a
+--    base não está no estado que esta migration assume: alguém criou uma
+--    policy fora do versionamento, ou uma migration futura chegou primeiro.
+--
+--    Nesse caso a conclusão «nenhuma policy autoriza escrita a authenticated»
+--    deixa de estar provada — a policy desconhecida pode ser `FOR ALL` e
+--    reabrir exactamente o buraco que a 083 fecha, por baixo da nova.
+--
+--    A resposta é parar, não limpar:
+--
+--        UNKNOWN_POLICY_STATE = FAIL_CLOSED
+--
+--    Apagar uma policy que não conhecemos seria destruir intenção alheia sem a
+--    ler; prosseguir seria declarar uma garantia que não medimos. Quem
+--    encontrar este erro tem de olhar para a policy, decidir, e versionar a
+--    decisão. O RAISE aborta a transação da migration — nada desta migration
+--    fica aplicado pela metade.
+DO $drift$
+DECLARE
+  restantes text;
+  n integer;
+BEGIN
+  SELECT count(*), string_agg(policyname, ', ' ORDER BY policyname)
+    INTO n, restantes
+    FROM pg_policies
+   WHERE schemaname = 'public'
+     AND tablename  = 'fixed_variable_payments';
+
+  IF n > 0 THEN
+    RAISE EXCEPTION
+      '083_UNEXPECTED_PAYMENT_POLICY_STATE: % policy(s) inesperada(s) em public.fixed_variable_payments: %',
+      n, restantes
+      USING HINT = 'A 083 nao apaga policies que nao conhece. Inspeccionar, decidir e versionar a decisao antes de reaplicar.';
+  END IF;
+END
+$drift$;
+
 CREATE POLICY "payments_manager_select"
   ON public.fixed_variable_payments
   FOR SELECT
@@ -92,14 +137,43 @@ ALTER TABLE public.fixed_variable_payments ENABLE ROW LEVEL SECURITY;
 -- O SELECT de `authenticated` fica: quem decide as linhas é a policy acima.
 -- Privilégio de tabela e policy são coisas diferentes, e ambas têm de estar
 -- certas.
-REVOKE INSERT, UPDATE, DELETE ON public.fixed_variable_payments FROM PUBLIC;
-REVOKE INSERT, UPDATE, DELETE ON public.fixed_variable_payments FROM anon;
-REVOKE INSERT, UPDATE, DELETE ON public.fixed_variable_payments FROM authenticated;
-REVOKE SELECT ON public.fixed_variable_payments FROM PUBLIC;
-REVOKE SELECT ON public.fixed_variable_payments FROM anon;
+-- 🔴 Revogar `SELECT, INSERT, UPDATE, DELETE` não fecha a tabela. Um
+--    privilégio de TABLE em PostgreSQL inclui também:
+--
+--        TRUNCATE     — apaga todas as linhas da tabela
+--        REFERENCES   — cria FK contra ela
+--        TRIGGER      — instala trigger sobre ela
+--
+--    Enumerar as quatro operações de DML deixava as outras três por medir: se
+--    alguma existisse em produção — herdada, ou dada por engano — sobrevivia a
+--    esta migration, e a conclusão «authenticated = SOMENTE SELECT» seria
+--    falsa. Um TRUNCATE concedido a `authenticated` apagava a tabela de
+--    pagamentos inteira sem passar por policy nenhuma: RLS **não se aplica a
+--    TRUNCATE**. REFERENCES e TRIGGER também não são filtráveis por RLS.
+--
+--    Por isso a estratégia é fechar tudo e reabrir só o que se justifica, em
+--    vez de enumerar o que se tira: `REVOKE ALL PRIVILEGES` não depende de
+--    sabermos de antemão o que lá estava.
+REVOKE ALL PRIVILEGES ON TABLE public.fixed_variable_payments FROM PUBLIC;
+REVOKE ALL PRIVILEGES ON TABLE public.fixed_variable_payments FROM anon;
+REVOKE ALL PRIVILEGES ON TABLE public.fixed_variable_payments FROM authenticated;
 
-GRANT SELECT ON public.fixed_variable_payments TO authenticated;
-GRANT SELECT, INSERT, UPDATE, DELETE ON public.fixed_variable_payments TO service_role;
+-- `authenticated` recebe SELECT e mais nada. Quem decide as LINHAS é a policy
+-- `payments_manager_select` acima; o privilégio só decide se a operação é
+-- sequer possível. Não recebe INSERT/UPDATE/DELETE — a escrita entra pelo
+-- caminho canónico — nem TRUNCATE/REFERENCES/TRIGGER.
+GRANT SELECT ON TABLE public.fixed_variable_payments TO authenticated;
+
+-- `anon` não recebe privilégio nenhum de tabela: não há caminho legítimo em
+-- que um visitante não autenticado toque em pagamentos. O `REVOKE ALL` acima
+-- é a totalidade da sua ACL, e o teste prova-o pelo catálogo.
+
+-- `service_role` recebe exactamente o DML que o caminho canónico usa, e não
+-- `GRANT ALL`: TRUNCATE/REFERENCES/TRIGGER não são usados por nenhuma Server
+-- Action nem por nenhuma RPC, e concedê-los alargava a superfície sem
+-- necessidade demonstrada. Se um dia forem precisos, entram por GRANT nomeado
+-- e justificado.
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.fixed_variable_payments TO service_role;
 
 -- ─── 3. RPCs de mutação — service_role apenas ───────────────────────────────
 --
