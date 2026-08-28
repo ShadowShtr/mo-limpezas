@@ -2,11 +2,11 @@
   "generatedBy": "scripts/audit-file-inventory.mjs",
   "totalFiles": 762,
   "byStatus": {
-    "MANTER": 738,
-    "STANDBY": 24
+    "MANTER": 739,
+    "STANDBY": 23
   },
   "byCategory": {
-    "test": 152,
+    "test": 153,
     "route-ui": 136,
     "migration": 94,
     "lib": 67,
@@ -15,7 +15,7 @@
     "doc": 43,
     "server-action": 43,
     "component": 30,
-    "src-other": 23,
+    "src-other": 22,
     "doc-historico": 16,
     "api-route": 16,
     "config": 12,
@@ -29,9 +29,9 @@
     "supabase-other": 2
   },
   "byConfidence": {
-    "alta": 740,
+    "alta": 741,
     "média": 15,
-    "baixa": 7
+    "baixa": 6
   },
   "scriptRisk": {
     "SAFE_OFFLINE": 28,
@@ -5009,6 +5009,36 @@
       "risks": [],
       "signals": {
         "sqlWrite": 14
+      },
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/__tests__/finance-ledger-company-scope.test.ts",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [
+        "supabase"
+      ],
+      "risks": [
+        "service-role"
+      ],
+      "signals": {
+        "supabase": 1,
+        "serviceRole": 1,
+        "fallbackArray": 1
       },
       "action": "nenhuma",
       "reason": "suite de testes — corre por convenção do vitest",
@@ -12389,10 +12419,12 @@
     {
       "path": "src/app/actions/finance-ledger.ts",
       "category": "server-action",
-      "status": "STANDBY",
-      "confidence": "baixa",
-      "consumers": 0,
-      "consumerSample": [],
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 1,
+      "consumerSample": [
+        "src/__tests__/finance-ledger-company-scope.test.ts"
+      ],
       "autoLoaded": false,
       "referencedBy": [],
       "sideEffects": [],
@@ -12401,8 +12433,8 @@
         "serverAction": 1,
         "fallbackArray": 2
       },
-      "action": "porta(s) ainda abertas (import dinâmico não resolúvel) — não remover",
-      "reason": "sem consumidor encontrado por análise estática",
+      "action": "nenhuma",
+      "reason": "em uso: 1 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -16154,7 +16186,7 @@
       "category": "domain",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 29,
+      "consumers": 28,
       "consumerSample": [
         "src/__tests__/update-notice-modal.test.tsx",
         "src/__tests__/update-notices-eligibility.test.ts",
@@ -16169,7 +16201,7 @@
       "risks": [],
       "signals": {},
       "action": "nenhuma",
-      "reason": "em uso: 29 consumidor(es), configuração",
+      "reason": "em uso: 28 consumidor(es), configuração",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -18667,32 +18699,6 @@
     },
     {
       "path": "src/release-notes/2026-08-27-criar-colaborador-guarda-tudo.ts",
-      "category": "src-other",
-      "status": "MANTER",
-      "confidence": "alta",
-      "consumers": 1,
-      "consumerSample": [
-        "src/release-notes/index.ts"
-      ],
-      "autoLoaded": false,
-      "referencedBy": [],
-      "sideEffects": [],
-      "risks": [],
-      "signals": {
-        "sqlWrite": 1
-      },
-      "action": "nenhuma",
-      "reason": "em uso: 1 consumidor(es)",
-      "manualDecision": false,
-      "deadCodeDoors": {
-        "frameworkConvention": false,
-        "cliEntrypoint": false,
-        "dynamicImport": true,
-        "allClosed": false
-      }
-    },
-    {
-      "path": "src/release-notes/2026-08-27-pagamentos-leitura-unificada.ts",
       "category": "src-other",
       "status": "MANTER",
       "confidence": "alta",

@@ -34,7 +34,6 @@ import { nota as reposicaoDoAcesso } from "./2026-08-26-reposicao-do-acesso";
 import { nota as colaboradorSoComONome } from "./2026-08-27-colaborador-so-com-o-nome";
 import { nota as criarColaboradorCorrigido } from "./2026-08-27-criar-colaborador-corrigido";
 import { nota as criarColaboradorGuardaTudo } from "./2026-08-27-criar-colaborador-guarda-tudo";
-import { nota as pagamentosLeituraUnificada } from "./2026-08-27-pagamentos-leitura-unificada";
 import { nota as pagamentosDiagnosticoDeFalhas } from "./2026-08-28-pagamentos-diagnostico-de-falhas";
 import { nota as pagamentosSoPelaAplicacao } from "./2026-08-28-pagamentos-so-pela-aplicacao";
 
@@ -55,7 +54,6 @@ export const RELEASE_NOTES: ReleaseNote[] = [
   colaboradorSoComONome,
   criarColaboradorCorrigido,
   criarColaboradorGuardaTudo,
-  pagamentosLeituraUnificada,
   pagamentosDiagnosticoDeFalhas,
   pagamentosSoPelaAplicacao,
 ];

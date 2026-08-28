@@ -4,7 +4,7 @@
     "repositoryFiles": 758,
     "textFiles": 745,
     "sourceFiles": 538,
-    "textLines": 181663,
+    "textLines": 181875,
     "typescriptDiagnostics": 0,
     "productionEntries": 71,
     "unreachableProductionModules": 42,
@@ -61,6 +61,7 @@
       "src/types/supabase.ts"
     ],
     "testOnlyModules": [
+      "src/app/actions/finance-ledger.ts",
       "src/domain/billing/billing-compat.ts",
       "src/domain/billing/consumer-parity.ts",
       "src/domain/billing/financial-model.ts",
