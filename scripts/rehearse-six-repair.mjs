@@ -35,7 +35,7 @@ import pg from "pg";
 const ROOT = path.join(import.meta.dirname, "..");
 const CONTENTOR = "escala-ensaio-six";
 const PORTA = 55480;
-const IMAGEM = "postgres:16-alpine";
+const IMAGEM = "postgres:17-alpine";
 const SENHA = "ensaio-descartavel-sem-valor";
 const URL = `postgresql://postgres:${SENHA}@127.0.0.1:${PORTA}/ensaio`;
 
@@ -173,12 +173,23 @@ async function aplicarCadeia(c) {
 
   // 🔴 A 083 entra na cadeia porque ja esta em producao.
   //
-  //    A reparacao escreve directamente por PostgreSQL, e a 083 fechou o DML
-  //    directo a anon e authenticated e passou as RPC a service_role-only. O
-  //    executor liga-se com a identidade de servico, que a 083 preserva — mas
-  //    isso e uma afirmacao, e afirmacoes sobre permissoes provam-se a correr.
-  //    Sem a 083 aqui, o ensaio provaria a reparacao contra um mundo que ja
-  //    nao existe.
+  //    Ha DOIS caminhos de escrita, e sao coisas diferentes:
+  //
+  //      aplicacao   Server Action -> service_role -> RPC canonica
+  //      reparacao   executor de manutencao autorizado pelo dono
+  //                  -> ligacao PostgreSQL privilegiada e directa
+  //                  -> as seis linhas exactas, com manifesto e guardas
+  //
+  //    Este executor e o segundo. Nao escreve como service_role: usa um
+  //    pg.Client com uma ligacao administrativa. Dizer "identidade de servico"
+  //    era impreciso, e a imprecisao importa — sugeria que a reparacao passava
+  //    pelo mesmo caminho que a 083 governa, quando e um caminho excepcional,
+  //    fora da aplicacao, que so existe sob autorizacao explicita.
+  //
+  //    A 083 nao e enfraquecida por isto: continua a bloquear mutacao pela
+  //    app a PUBLIC, anon e authenticated. Aplica-la aqui prova que a
+  //    reparacao continua a funcionar com ela no lugar — e isso prova-se a
+  //    correr, nao a afirmar.
   await c.query(sqlMigracao("083_payment_authorization_hardening.sql"));
   await c.query(
     `INSERT INTO public._migrations (name, checksum)

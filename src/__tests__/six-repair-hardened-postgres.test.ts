@@ -12,7 +12,7 @@
  * A matriz stale corre campo a campo: para cada um, altera-se **só** esse
  * campo entre o manifesto e a aplicação, e exige-se zero escritas.
  *
- * Requer Docker. Postgres 16 real — a atomicidade, o `ON DELETE RESTRICT` e a
+ * Requer Docker. Postgres 17 real — a atomicidade, o `ON DELETE RESTRICT` e a
  * conciliação não se reproduzem com um duplo em memória.
  */
 import { spawnSync } from "node:child_process";
@@ -149,9 +149,13 @@ async function reset() {
      ON CONFLICT (name) DO NOTHING`);
   await pool.query(readSql("supabase", "migrations", "081_safe_unmark_payment_paid.sql"));
 
-  // 🔴 A 083 tambem, porque ja esta em producao. A reparacao escreve
-  //    directamente por PostgreSQL com a identidade de servico, que a 083
-  //    preserva — mas isso prova-se a correr, nao a afirmar.
+  // 🔴 A 083 tambem, porque ja esta em producao.
+  //
+  //    A reparacao nao escreve como service_role: e um executor de manutencao,
+  //    autorizado caso a caso pelo dono, com ligacao PostgreSQL privilegiada e
+  //    directa. E um caminho excepcional, fora da aplicacao — nao o caminho
+  //    que a 083 governa. Aplicar a 083 aqui prova que ela nao o quebra, e
+  //    prova-se a correr, nao a afirmar.
   await pool.query(readSql("supabase", "migrations", "083_payment_authorization_hardening.sql"));
   await pool.query(
     `INSERT INTO public._migrations(name, checksum)
@@ -222,7 +226,7 @@ beforeAll(async () => {
   const started = docker([
     "run", "--rm", "-d", "--name", CONTAINER,
     "-e", "POSTGRES_HOST_AUTH_METHOD=trust", "-e", "POSTGRES_DB=f14c",
-    "-p", "127.0.0.1::5432", "postgres:16-alpine",
+    "-p", "127.0.0.1::5432", "postgres:17-alpine",
   ]);
   if (started.status !== 0) throw new Error(started.stderr || started.stdout);
   const mapping = docker(["port", CONTAINER, "5432/tcp"]).stdout.trim();
@@ -237,6 +241,22 @@ beforeAll(async () => {
 afterAll(async () => {
   await pool?.end();
   docker(["rm", "-f", CONTAINER]);
+});
+
+describe.sequential("F14-C — o motor é o que se diz que é", () => {
+  it("🔴 corre em PostgreSQL 17, provado pelo servidor e não pelo nome da imagem", async () => {
+    // Um relatório meu declarou «PG17» quando o ficheiro commitado dizia
+    // `postgres:16-alpine`. O nome da imagem estava a uma linha de distância e
+    // não foi lido — e um número de versão afirmado sem medição não vale nada
+    // numa prova de comportamento de base de dados.
+    //
+    // Esta asserção fecha isso pelos dois lados: pergunta a versão ao próprio
+    // servidor, e um dia em que alguém troque a imagem sem querer, fica
+    // vermelha em vez de continuar a dizer 17.
+    const { rows } = await pool.query("SELECT version() AS v, current_setting('server_version') AS sv");
+    expect(rows[0].v).toMatch(/^PostgreSQL 17\./);
+    expect(String(rows[0].sv).split(".")[0]).toBe("17");
+  });
 });
 
 describe.sequential("F14-C — o forward regista a adopção", () => {

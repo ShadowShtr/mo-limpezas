@@ -3402,7 +3402,7 @@
         "service-role"
       ],
       "signals": {
-        "serviceRole": 3,
+        "serviceRole": 4,
         "write": 1,
         "sqlWrite": 19,
         "consoleLog": 15,
@@ -7222,7 +7222,7 @@
         "service-role"
       ],
       "signals": {
-        "serviceRole": 2,
+        "serviceRole": 3,
         "sqlWrite": 24
       },
       "action": "nenhuma",
