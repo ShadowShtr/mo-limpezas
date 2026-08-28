@@ -43,12 +43,48 @@
 --     SECOND_FINANCE_ARCHITECTURE = NO
 --     MIGRATION_DATA_WRITES = 0
 --
--- `SECURITY INVOKER`, como as RPC da 073/079: as políticas de RLS continuam a
--- valer e o isolamento não depende de a função se portar bem. O `p_company_id`
--- é sempre confrontado com a linha, nunca aceite por si só.
+-- ---------------------------------------------------------------------------
+-- De onde vem o isolamento — e de onde NÃO vem
+-- ---------------------------------------------------------------------------
+--
+-- 🔴 Não é do RLS. Dizê-lo seria descrever uma garantia que não existe neste
+--    caminho, e é assim que uma verificação em falta passa despercebida.
+--
+--    As funções são `SECURITY INVOKER` e não elevam privilégio nenhum — isso
+--    está certo e mantém-se. Mas o chamador normal da aplicação é
+--    `service_role`, porque o caminho canónico é
+--
+--        Server Action → requireProfile(admin/gestor) → service_role → RPC
+--
+--    e `service_role` tem `BYPASSRLS`. As políticas não se aplicam. Se um
+--    predicado de empresa cair, não há segunda linha de defesa a apanhá-lo.
+--
+--    O isolamento da aplicação é, e só é:
+--
+--        requireProfile          quem pode pedir
+--      + profile.company_id      resolvido no servidor, nunca vindo do cliente
+--      + predicados explícitos   cada função confronta `p_company_id` com a linha
+--      + EXECUTE restrito        secção 7: só `service_role`
+--
+--    O `p_company_id` é sempre confrontado com a linha, nunca aceite por si só.
+--
+-- ---------------------------------------------------------------------------
+-- A transacção é do runner, não desta migração
+-- ---------------------------------------------------------------------------
+--
+-- 🔴 Este ficheiro não abre nem fecha transacção. É deliberado, e foi medido:
+--    o runner faz `BEGIN → SQL → INSERT public._migrations → COMMIT`, e um
+--    `COMMIT` interno fecharia a transacção dele mais cedo. A partir daí a
+--    escrita no ledger corre fora dela — e se falhar, o efeito de schema fica
+--    aplicado sem registo. É o `SCHEMA_EFFECT != MIGRATION_PROVENANCE` que
+--    esta frente inteira existe para eliminar, e foi o que aconteceu às
+--    079/080/081 até serem corrigidas pelo mesmo motivo.
+--
+--        MIGRATION_SCHEMA_EFFECT + LEDGER_INSERT = UMA transacção, a do runner
+--
+--    Se o registo no ledger falhar, as seis funções e as suas ACL revertem
+--    com ele.
 -- ============================================================================
-
-BEGIN;
 
 -- ─── 1. Alterar o valor de um pagamento ─────────────────────────────────────
 CREATE OR REPLACE FUNCTION public.update_payment_amount_atomic(
@@ -56,7 +92,7 @@ CREATE OR REPLACE FUNCTION public.update_payment_amount_atomic(
   p_payment_id uuid,
   p_amount     numeric
 )
-RETURNS TABLE (payment_id uuid, amount numeric)
+RETURNS TABLE (payment_id uuid, amount numeric, alterou boolean)
 LANGUAGE plpgsql
 SECURITY INVOKER
 AS $fn$
@@ -64,7 +100,13 @@ DECLARE
   v_pag public.fixed_variable_payments%ROWTYPE;
   v_mov uuid;
 BEGIN
-  IF p_amount IS NULL OR p_amount < 0 THEN
+  -- 🔴 `NULL` é um valor legítimo, não um erro.
+  --
+  --    Um pagamento pendente pode existir sem valor — a fatura ainda não
+  --    chegou. Recusar `NULL` aqui tornaria impossível criar ou repor esse
+  --    estado pela aplicação, e seria a função a inventar uma regra de negócio
+  --    que o domínio não tem. Só um valor **negativo** é inválido.
+  IF p_amount IS NOT NULL AND p_amount < 0 THEN
     RAISE EXCEPTION 'PAYMENT_AMOUNT_INVALID' USING ERRCODE = 'check_violation';
   END IF;
 
@@ -80,6 +122,19 @@ BEGIN
     RAISE EXCEPTION 'PAYMENT_NOT_FOUND' USING ERRCODE = 'no_data_found';
   END IF;
 
+  -- 🔴 Valor inalterado não é uma escrita.
+  --
+  --    O formulário reenvia todos os campos, inclusive o valor que não mudou.
+  --    Recusar isso impediria alguém de corrigir a descrição ou as notas de um
+  --    pagamento já pago — uma operação legítima que nada tem que ver com
+  --    dinheiro. `IS NOT DISTINCT FROM` compara com `NULL` de ambos os lados,
+  --    que `=` não faz.
+  IF p_amount IS NOT DISTINCT FROM v_pag.amount THEN
+    RETURN QUERY SELECT p_payment_id, v_pag.amount, false;
+    RETURN;
+  END IF;
+
+  -- Daqui para baixo o valor muda mesmo, e aí sim as guardas valem.
   IF v_pag.status = 'pago' THEN
     RAISE EXCEPTION 'PAYMENT_ALREADY_PAID'
       USING ERRCODE = 'object_not_in_prerequisite_state';
@@ -101,7 +156,7 @@ BEGIN
      SET amount = p_amount
    WHERE id = p_payment_id;
 
-  RETURN QUERY SELECT p_payment_id, p_amount;
+  RETURN QUERY SELECT p_payment_id, p_amount, true;
 END;
 $fn$;
 
@@ -283,14 +338,49 @@ CREATE OR REPLACE FUNCTION public.confirm_bank_match_atomic(
   p_match_id   uuid,
   p_actor_id   uuid
 )
-RETURNS TABLE (match_id uuid, cash_flow_entry_id uuid)
+-- 🔴 Os nomes de saída não podem repetir nomes de coluna: dentro do corpo,
+--    `bank_transaction_id` referia-se ao parâmetro E à coluna, e o PostgreSQL
+--    recusava com «column reference is ambiguous». Daí `transacao_id` e
+--    `movimento_id`.
+RETURNS TABLE (match_id uuid, transacao_id uuid, movimento_id uuid, rejeitadas int)
 LANGUAGE plpgsql
 SECURITY INVOKER
 AS $fn$
 DECLARE
-  v_match public.bank_reconciliation_matches%ROWTYPE;
-  v_mov   public.cash_flow_entries%ROWTYPE;
+  v_match  public.bank_reconciliation_matches%ROWTYPE;
+  v_mov    public.cash_flow_entries%ROWTYPE;
+  v_tx     uuid;
+  v_rejeit int;
 BEGIN
+  -- 🔴 Primeiro a transacção bancária, e só depois tudo o resto.
+  --
+  --    Duas pessoas podem confirmar sugestões **diferentes** da mesma
+  --    transacção bancária. Trancar a correspondência escolhida não as faz
+  --    encontrar-se: são linhas distintas, e cada uma tranca a sua. As duas
+  --    passariam, e a transacção ficava com duas correspondências confirmadas
+  --    — duas verdades incompatíveis sobre o mesmo movimento do banco.
+  --
+  --    A transacção bancária é o ponto de contenção comum: é a única linha que
+  --    ambas têm de tocar. Quem chega primeiro tranca-a; a segunda espera e
+  --    depois vê o estado já escrito.
+  SELECT bank_transaction_id INTO v_tx
+    FROM public.bank_reconciliation_matches
+   WHERE id = p_match_id AND company_id = p_company_id;
+
+  IF v_tx IS NULL THEN
+    RAISE EXCEPTION 'BANK_MATCH_NOT_FOUND' USING ERRCODE = 'no_data_found';
+  END IF;
+
+  PERFORM 1 FROM public.bank_transactions
+   WHERE id = v_tx AND company_id = p_company_id
+   FOR UPDATE;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'BANK_TRANSACTION_NOT_FOUND' USING ERRCODE = 'no_data_found';
+  END IF;
+
+  -- Relê a correspondência **depois** do lock: o que se leu antes de esperar
+  -- pode já não ser verdade.
   SELECT * INTO v_match
     FROM public.bank_reconciliation_matches
    WHERE id = p_match_id AND company_id = p_company_id
@@ -300,9 +390,25 @@ BEGIN
     RAISE EXCEPTION 'BANK_MATCH_NOT_FOUND' USING ERRCODE = 'no_data_found';
   END IF;
 
+  -- Já houve uma confirmação para esta transacção bancária? Então esta perdeu.
+  -- Não se sobrepõe em silêncio: recusa-se, e quem chamou vê o estado final.
+  IF EXISTS (
+    SELECT 1 FROM public.bank_reconciliation_matches
+     WHERE bank_transaction_id = v_tx AND company_id = p_company_id
+       AND status = 'confirmed' AND id <> p_match_id
+  ) THEN
+    RAISE EXCEPTION 'BANK_TRANSACTION_ALREADY_RECONCILED'
+      USING ERRCODE = 'object_not_in_prerequisite_state';
+  END IF;
+
+  IF v_match.status = 'rejected' THEN
+    RAISE EXCEPTION 'BANK_MATCH_REJECTED'
+      USING ERRCODE = 'object_not_in_prerequisite_state';
+  END IF;
+
   IF v_match.cash_flow_entry_id IS NOT NULL THEN
-    -- O mesmo lock que as mutações manuais tomam. Aqui está o encontro: uma das
-    -- duas espera pela outra, e a segunda vê o estado já escrito.
+    -- O mesmo lock que as mutações manuais tomam. É aqui que a conciliação e
+    -- a edição de um movimento se encontram.
     SELECT * INTO v_mov
       FROM public.cash_flow_entries
      WHERE id = v_match.cash_flow_entry_id AND company_id = p_company_id
@@ -318,7 +424,22 @@ BEGIN
      SET status = 'confirmed', confirmed_by = p_actor_id, confirmed_at = now()
    WHERE id = p_match_id;
 
-  RETURN QUERY SELECT p_match_id, v_match.cash_flow_entry_id;
+  -- 🔴 As sugestões restantes e o estado da transacção pertencem a esta
+  --    transacção, não a chamadas seguintes da aplicação. Feitas de fora,
+  --    ficavam sujeitas a falhar depois da confirmação já ter sido gravada —
+  --    e sobrava uma transacção bancária confirmada com sugestões abertas, ou
+  --    por reconciliar.
+  UPDATE public.bank_reconciliation_matches
+     SET status = 'rejected'
+   WHERE bank_transaction_id = v_tx AND company_id = p_company_id
+     AND id <> p_match_id AND status = 'suggested';
+  GET DIAGNOSTICS v_rejeit = ROW_COUNT;
+
+  UPDATE public.bank_transactions
+     SET status = 'reconciled', updated_at = now()
+   WHERE id = v_tx AND company_id = p_company_id;
+
+  RETURN QUERY SELECT p_match_id, v_tx, v_match.cash_flow_entry_id, v_rejeit;
 END;
 $fn$;
 
@@ -382,5 +503,3 @@ REVOKE EXECUTE ON FUNCTION public.confirm_bank_match_atomic(uuid, uuid, uuid) FR
 REVOKE EXECUTE ON FUNCTION public.confirm_bank_match_atomic(uuid, uuid, uuid) FROM anon;
 REVOKE EXECUTE ON FUNCTION public.confirm_bank_match_atomic(uuid, uuid, uuid) FROM authenticated;
 GRANT  EXECUTE ON FUNCTION public.confirm_bank_match_atomic(uuid, uuid, uuid) TO service_role;
-
-COMMIT;

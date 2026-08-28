@@ -1,12 +1,12 @@
 {
   "generatedBy": "scripts/audit-file-inventory.mjs",
-  "totalFiles": 765,
+  "totalFiles": 767,
   "byStatus": {
-    "MANTER": 742,
+    "MANTER": 744,
     "STANDBY": 23
   },
   "byCategory": {
-    "test": 153,
+    "test": 155,
     "route-ui": 136,
     "migration": 96,
     "lib": 67,
@@ -29,7 +29,7 @@
     "supabase-other": 2
   },
   "byConfidence": {
-    "alta": 744,
+    "alta": 746,
     "média": 15,
     "baixa": 6
   },
@@ -521,13 +521,13 @@
       "consumerSample": [],
       "autoLoaded": false,
       "referencedBy": [],
-      "sideEffects": [],
-      "risks": [
-        "service-role"
+      "sideEffects": [
+        "write"
       ],
+      "risks": [],
       "signals": {
-        "serviceRole": 1,
-        "sqlWrite": 2
+        "write": 2,
+        "sqlWrite": 4
       },
       "action": "nenhuma",
       "reason": "documentação",
@@ -3895,7 +3895,7 @@
       ],
       "signals": {
         "serviceRole": 8,
-        "sqlWrite": 20
+        "sqlWrite": 22
       },
       "action": "nenhuma",
       "reason": "suite de testes — corre por convenção do vitest",
@@ -5069,6 +5069,42 @@
       }
     },
     {
+      "path": "src/__tests__/finance-actions-rpc-routing.test.ts",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [
+        "docs"
+      ],
+      "sideEffects": [
+        "supabase",
+        "write"
+      ],
+      "risks": [
+        "service-role"
+      ],
+      "signals": {
+        "supabase": 2,
+        "serviceRole": 1,
+        "write": 5,
+        "sqlWrite": 26,
+        "fallbackArray": 1,
+        "dynamicImport": 1
+      },
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
       "path": "src/__tests__/finance-ledger-read-model.test.ts",
       "category": "test",
       "status": "MANTER",
@@ -5741,6 +5777,33 @@
       "sideEffects": [],
       "risks": [],
       "signals": {},
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/__tests__/migration-082-order-and-atomicity.test.ts",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [
+        "service-role"
+      ],
+      "signals": {
+        "serviceRole": 8,
+        "sqlWrite": 17
+      },
       "action": "nenhuma",
       "reason": "suite de testes — corre por convenção do vitest",
       "manualDecision": false,
@@ -11749,8 +11812,9 @@
       "category": "server-action",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 2,
+      "consumers": 3,
       "consumerSample": [
+        "src/__tests__/finance-actions-rpc-routing.test.ts",
         "src/app/(dashboard)/dashboard/financeiro/conciliacao/_components/reconciliation-client.tsx",
         "src/app/(dashboard)/dashboard/financeiro/conciliacao/page.tsx"
       ],
@@ -11768,8 +11832,8 @@
       ],
       "signals": {
         "serverAction": 1,
-        "write": 13,
-        "sqlWrite": 15,
+        "write": 11,
+        "sqlWrite": 13,
         "eslintDisable": 1,
         "anyType": 1,
         "unknownCast": 1,
@@ -11779,7 +11843,7 @@
         "revalidatePath": 9
       },
       "action": "auditar atomicidade (T12/T13)",
-      "reason": "em uso: 2 consumidor(es)",
+      "reason": "em uso: 3 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -11882,11 +11946,11 @@
       "category": "server-action",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 4,
+      "consumers": 5,
       "consumerSample": [
+        "src/__tests__/finance-actions-rpc-routing.test.ts",
         "src/app/(dashboard)/dashboard/financeiro/contas/_components/contas-client.tsx",
-        "src/app/(dashboard)/dashboard/financeiro/contas/page.tsx",
-        "src/app/(dashboard)/dashboard/financeiro/fluxo-caixa/_components/cash-flow-client.tsx"
+        "src/app/(dashboard)/dashboard/financeiro/contas/page.tsx"
       ],
       "autoLoaded": false,
       "referencedBy": [
@@ -11904,11 +11968,11 @@
       "signals": {
         "supabase": 11,
         "serverAction": 1,
-        "write": 4,
-        "sqlWrite": 6,
+        "write": 2,
+        "sqlWrite": 8,
         "eslintDisable": 3,
         "anyType": 3,
-        "unknownCast": 9,
+        "unknownCast": 8,
         "consoleErr": 2,
         "ignoredError": 3,
         "fallbackZero": 3,
@@ -11916,7 +11980,7 @@
         "revalidatePath": 6
       },
       "action": "auditar atomicidade (T12/T13)",
-      "reason": "em uso: 4 consumidor(es)",
+      "reason": "em uso: 5 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -12775,11 +12839,11 @@
       "category": "server-action",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 6,
+      "consumers": 7,
       "consumerSample": [
+        "src/__tests__/finance-actions-rpc-routing.test.ts",
         "src/__tests__/finance-period-view-identity.test.tsx",
-        "src/__tests__/financeiro-v2-write-budget.test.ts",
-        "src/__tests__/payment-status-trace-runtime.test.ts"
+        "src/__tests__/financeiro-v2-write-budget.test.ts"
       ],
       "autoLoaded": false,
       "referencedBy": [
@@ -12796,7 +12860,7 @@
       "signals": {
         "supabase": 2,
         "serverAction": 1,
-        "write": 7,
+        "write": 5,
         "sqlWrite": 8,
         "unknownCast": 2,
         "ignoredError": 3,
@@ -12805,7 +12869,7 @@
         "revalidatePath": 5
       },
       "action": "auditar atomicidade (T12/T13)",
-      "reason": "em uso: 6 consumidor(es)",
+      "reason": "em uso: 7 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -17168,11 +17232,11 @@
       "category": "lib",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 8,
+      "consumers": 9,
       "consumerSample": [
+        "src/__tests__/finance-actions-rpc-routing.test.ts",
         "src/__tests__/financial-period.test.ts",
-        "src/__tests__/payment-status-trace-runtime.test.ts",
-        "src/app/actions/bank-reconciliation.ts"
+        "src/__tests__/payment-status-trace-runtime.test.ts"
       ],
       "autoLoaded": false,
       "referencedBy": [
@@ -17182,7 +17246,7 @@
       "risks": [],
       "signals": {},
       "action": "nenhuma",
-      "reason": "em uso: 8 consumidor(es)",
+      "reason": "em uso: 9 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -18675,7 +18739,7 @@
       "sideEffects": [],
       "risks": [],
       "signals": {
-        "sqlWrite": 2
+        "sqlWrite": 1
       },
       "action": "nenhuma",
       "reason": "em uso: 1 consumidor(es)",
@@ -20544,8 +20608,8 @@
         "service-role"
       ],
       "signals": {
-        "serviceRole": 8,
-        "sqlWrite": 14
+        "serviceRole": 12,
+        "sqlWrite": 18
       },
       "action": "nenhuma",
       "reason": "migration versionada — histórico do schema, nunca se apaga",

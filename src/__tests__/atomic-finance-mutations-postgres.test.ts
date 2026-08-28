@@ -77,7 +77,9 @@ const BASELINE = `
     WHERE reference_type IS NOT NULL AND reference_id IS NOT NULL;
   CREATE TABLE public.bank_transactions (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(), company_id uuid NOT NULL,
-    status text NOT NULL DEFAULT 'pending');
+    status text NOT NULL DEFAULT 'pending',
+    -- Produção tem esta coluna (043). Faltava aqui, e a RPC escreve-a.
+    updated_at timestamptz NOT NULL DEFAULT now());
   CREATE TABLE public.bank_reconciliation_matches (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(), company_id uuid NOT NULL,
     bank_transaction_id uuid NOT NULL REFERENCES public.bank_transactions(id) ON DELETE CASCADE,
@@ -559,4 +561,94 @@ describe.sequential("082 + 083 — a superfície fica fechada", () => {
           AND cmd <> 'SELECT'`);
     expect(rows[0].n).toBe(0);
   });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Duas sugestões, a mesma transacção bancária
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe.sequential("conciliação — duas sugestões da mesma transacção", () => {
+  async function cenario() {
+    const { rows: bt } = await pool.query(
+      "INSERT INTO bank_transactions(company_id) VALUES($1) RETURNING id::text", [EMPRESA]);
+    const a = await movimentoManual();
+    const b = await movimentoManual();
+    const sug = async (entry: string) => (await pool.query(
+      `INSERT INTO bank_reconciliation_matches
+         (company_id, bank_transaction_id, cash_flow_entry_id, status)
+       VALUES ($1,$2,$3,'suggested') RETURNING id::text`,
+      [EMPRESA, bt[0].id, entry])).rows[0].id as string;
+    return { tx: bt[0].id as string, m1: await sug(a), m2: await sug(b) };
+  }
+
+  it("TWO_MATCHES_SAME_BANK_TX_CONCURRENT: só uma vence, e o estado fica coerente", async () => {
+    // 🔴 Trancar a correspondência escolhida não chega: são linhas diferentes,
+    //    cada uma tranca a sua e as duas passam. A transacção bancária é o
+    //    único ponto que ambas têm de tocar — é lá que se encontram.
+    const { tx, m1, m2 } = await cenario();
+    const a = await ligacao();
+    const b = await ligacao();
+    try {
+      await a.c.query("BEGIN");
+      await a.c.query("SELECT * FROM confirm_bank_match_atomic($1,$2,$3)", [EMPRESA, m1, ACTOR]);
+
+      const bPromise = b.c.query(
+        "SELECT * FROM confirm_bank_match_atomic($1,$2,$3)", [EMPRESA, m2, ACTOR],
+      ).then(() => "confirmou").catch((e: Error) => e.message);
+
+      await esperarBloqueado(b.pid);
+      await a.c.query("COMMIT");
+
+      // A segunda vê o estado já escrito e recusa — não sobrepõe em silêncio.
+      expect(await bPromise).toMatch(/BANK_TRANSACTION_ALREADY_RECONCILED|BANK_MATCH_REJECTED/);
+
+      const { rows } = await pool.query(
+        `SELECT count(*) FILTER (WHERE status='confirmed')::int conf,
+                count(*) FILTER (WHERE status='rejected')::int rej
+           FROM bank_reconciliation_matches WHERE bank_transaction_id=$1`, [tx]);
+      expect(rows[0].conf, "exactamente uma confirmada").toBe(1);
+      expect(rows[0].rej, "a outra sugestão foi rejeitada").toBe(1);
+
+      const { rows: t } = await pool.query(
+        "SELECT status FROM bank_transactions WHERE id=$1", [tx]);
+      expect(t[0].status).toBe("reconciled");
+    } finally {
+      try { await a.c.query("ROLLBACK"); } catch { /* já terminou */ }
+      a.c.release(); b.c.release();
+    }
+  }, 60_000);
+
+  it("🔴 a confirmação é uma transacção só: rejeições e estado do banco incluídos", async () => {
+    // Feitas de fora, estas duas escritas corriam depois da confirmação já
+    // gravada e podiam falhar sozinhas — sobrava uma transacção confirmada com
+    // sugestões abertas, ou por reconciliar.
+    const { tx, m1 } = await cenario();
+    const { rows } = await pool.query(
+      "SELECT * FROM confirm_bank_match_atomic($1,$2,$3)", [EMPRESA, m1, ACTOR]);
+    expect(rows[0].rejeitadas).toBe(1);
+    expect(rows[0].transacao_id).toBe(tx);
+
+    const { rows: est } = await pool.query(
+      `SELECT (SELECT status FROM bank_transactions WHERE id=$1) tx,
+              (SELECT count(*)::int FROM bank_reconciliation_matches
+                WHERE bank_transaction_id=$1 AND status='suggested') abertas`, [tx]);
+    expect(est[0]).toEqual({ tx: "reconciled", abertas: 0 });
+  }, 60_000);
+
+  it("uma segunda confirmação da MESMA sugestão não duplica nada", async () => {
+    const { tx, m1 } = await cenario();
+    await pool.query("SELECT * FROM confirm_bank_match_atomic($1,$2,$3)", [EMPRESA, m1, ACTOR]);
+    await pool.query("SELECT * FROM confirm_bank_match_atomic($1,$2,$3)", [EMPRESA, m1, ACTOR]);
+    const { rows } = await pool.query(
+      `SELECT count(*) FILTER (WHERE status='confirmed')::int n
+         FROM bank_reconciliation_matches WHERE bank_transaction_id=$1`, [tx]);
+    expect(rows[0].n).toBe(1);
+  }, 60_000);
+
+  it("uma correspondência de outra empresa não é alcançável", async () => {
+    const { m1 } = await cenario();
+    await expect(pool.query("SELECT * FROM confirm_bank_match_atomic($1,$2,$3)",
+      ["44444444-4444-4444-8444-444444444444", m1, ACTOR]))
+      .rejects.toThrow(/BANK_MATCH_NOT_FOUND/);
+  }, 60_000);
 });

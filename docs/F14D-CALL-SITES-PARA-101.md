@@ -1,52 +1,73 @@
-# F14-D — os pontos de chamada que a #101 tem de trocar
+# F14-D — os caminhos atómicos já estão ligados. A #101 tem de os preservar.
 
-A migration **082** entrega as RPC atómicas. **Sozinha não corrige nada**: enquanto
-as Server Actions continuarem a fazer `select → decisão → escrita separada`, o
-código corre pelo caminho sem guarda e a corrida mantém-se aberta.
+> **Este documento mudou de propósito.** Antes listava quatro pontos de chamada
+> que a #101 teria de trocar. Deixou de ser verdade: **a #108 liga-os agora**,
+> no `master`. O que a #101 tem de fazer é **não os desligar**.
 
-Este documento existe para que a reconstrução da **#101** não deixe nenhum caminho
-por trocar. É mapa, não autorização: **a #101 não foi tocada nesta frente.**
+## Estado
 
-## O que muda, e porquê
+Estas cinco Server Actions passam pelas RPC atómicas da **082**:
 
-| ficheiro | função | linha na #101 | corrida | RPC a usar |
-|---|---|---|---|---|
-| `src/app/actions/payments.ts` | `updatePayment` | 274 | lê «sem movimento» → B corre `mark_payment_paid` → A grava o valor | `update_payment_amount_atomic(uuid, uuid, numeric)` |
-| `src/app/actions/payments.ts` | `deletePayment` | 480 | lê «sem movimento» → B liga um → A apaga o pagamento | `delete_payment_atomic(uuid, uuid)` |
-| `src/app/actions/cash-flow.ts` | `updateCashFlowEntry` | 244 | lê «sem conciliação» → B confirma → A altera | `update_cashflow_entry_atomic(uuid, uuid, jsonb)` |
-| `src/app/actions/cash-flow.ts` | `deleteCashFlowEntry` | 359 | idem, a apagar | `delete_cashflow_entry_atomic(uuid, uuid)` |
+| ficheiro | função | RPC |
+|---|---|---|
+| `src/app/actions/payments.ts` | `updatePayment` (quando o valor vem no patch) | `update_payment_amount_atomic` |
+| `src/app/actions/payments.ts` | `deletePayment` | `delete_payment_atomic` |
+| `src/app/actions/cash-flow.ts` | `updateCashFlowEntry` | `update_cashflow_entry_atomic` |
+| `src/app/actions/cash-flow.ts` | `deleteCashFlowEntry` | `delete_cashflow_entry_atomic` |
+| `src/app/actions/bank-reconciliation.ts` | `confirmMatch` | `confirm_bank_match_atomic` |
 
-`src/app/actions/bank-reconciliation.ts` → `confirmMatch` **já está trocado nesta
-PR**, porque vive no `master` e não na #101.
+Nenhuma delas faz `select → decisão → escrita separada`. Nenhuma escreve
+directamente na tabela depois de a RPC ter decidido.
 
-## Porque é que o `confirmMatch` não podia ficar para depois
+## O que a #101 não pode reintroduzir
 
-**Um lock só serializa contra quem o pede.** As quatro funções acima trancam a
-linha com `FOR UPDATE` antes de decidirem. Enquanto a confirmação de conciliação
-escrevesse com um `update` directo, sem tomar lock nenhum, trancar do lado do
-movimento não provaria coisa nenhuma — a outra escrita passava ao lado.
+A branch antiga da #101 foi escrita antes desta frente e contém o padrão
+inseguro nas mesmas funções. Durante a reconstrução semântica, **qualquer
+conflito nestes ficheiros resolve-se a favor do `master`.**
 
-É a metade da correcção que é fácil esquecer, e por isso vai junto com a
-migration em vez de ficar para a integração da UI.
+```
+❌  ler o estado → decidir → .update() / .delete()
+✅  chamar a RPC atómica e traduzir o código de erro
+```
 
-## O que a troca não pode alterar
+`BUILD_AHEAD != MERGE_AHEAD` — a #101 foi construída à frente, mas o `master`
+é que é canónico.
 
-- **A mensagem pública.** As RPC levantam códigos técnicos (`PAYMENT_ALREADY_PAID`,
-  `PAYMENT_LINKED_TO_CASHFLOW`, `CASHFLOW_RECONCILED`, `CASHFLOW_MANAGED_BY_ORIGIN`,
-  `CASHFLOW_FIELD_NOT_EDITABLE`); quem clica continua a ler a mesma frase de sempre.
-- **O `company_id`.** Continua a vir de `profile.company_id` e nunca do cliente.
-  Cada RPC recebe-o e confronta-o com a linha — nunca o aceita por si só.
-- **O caminho canónico.** Server Action → `requireProfile(admin/gestor)` →
-  `service_role` → RPC. Nenhuma das seis funções é executável por `PUBLIC`,
-  `anon` ou `authenticated`, e a 082 fecha-as ela própria.
+## Porque é que isto se perde com facilidade
 
-## O que fica coerente no modelo de leitura
+O padrão inseguro **parece** correcto: lê, verifica, escreve. O que falta não
+se vê no código — é o intervalo entre a leitura e a escrita, onde cabe outra
+pessoa. Um `select` seguido de um `update` passa em revisão precisamente porque
+cada linha, isolada, está bem.
 
-Uma mutação bem sucedida tem de deixar o `FinanceLedgerRow` coerente:
+Se um destes caminhos regredir, `src/__tests__/finance-actions-rpc-routing.test.ts`
+fica vermelho. Verificado por mutação: repor o `delete` directo no
+`deletePayment` dá 3 vermelhos; devolver ao `confirmMatch` uma escrita de
+seguimento dá 2.
 
-- alterar o valor de um pagamento **já ligado** é recusado — é isso que impede
-  `payment.amount ≠ cash_flow_entries.amount`, que o razão marcaria como
+## O que a troca não pode alterar, e não alterou
+
+- **A mensagem pública.** As RPC levantam códigos técnicos
+  (`PAYMENT_ALREADY_PAID`, `PAYMENT_LINKED_TO_CASHFLOW`, `CASHFLOW_RECONCILED`,
+  `CASHFLOW_MANAGED_BY_ORIGIN`, `BANK_TRANSACTION_ALREADY_RECONCILED`); quem
+  clica lê uma frase escrita para o caso. A mensagem do PostgreSQL nunca chega
+  ao ecrã.
+- **O `company_id`.** Vem de `profile.company_id` e nunca do cliente. Cada RPC
+  confronta-o com a linha.
+- **Valor nulo e valor inalterado.** Um pagamento pendente pode não ter valor,
+  e o formulário reenvia o valor que não mudou. `update_payment_amount_atomic`
+  trata `NULL` como legítimo e um valor igual como no-op — continua a ser
+  possível corrigir a descrição de um pagamento já pago.
+- **As guardas de período.** Continuam na Server Action, antes da RPC: são elas
+  que dão a mensagem com o nome do mês, que a base não sabe dar.
+
+## Coerência com o razão unificado
+
+Cada recusa mantém o `FinanceLedgerRow` coerente:
+
+- alterar o valor de um pagamento **ligado** é recusado → nunca aparece
   `linked_amount_mismatch`;
-- apagar um pagamento ligado é recusado — evita o `orphan_payment_reference`;
-- nenhuma das RPC cria um segundo movimento para o mesmo pagamento, portanto
+- apagar um pagamento ligado é recusado → nunca aparece
+  `orphan_payment_reference`;
+- nenhuma RPC cria um segundo movimento para o mesmo pagamento →
   `duplicate_payment_link` continua inalcançável pela aplicação.

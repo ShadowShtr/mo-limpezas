@@ -300,22 +300,44 @@ export async function updatePayment(
   const novaCompetencia =
     patch.due_date !== undefined ? competenceFromDueDate(patch.due_date) : null;
 
-  const { error } = novaCompetencia
-    ? await admin
-        .from("fixed_variable_payments")
-        .update({
-          ...patch,
-          updated_at: agora,
-          period_year: novaCompetencia.year,
-          period_month: novaCompetencia.month,
-        })
-        .eq("id", id)
-        .eq("company_id", profile.company_id)
-    : await admin
-        .from("fixed_variable_payments")
-        .update({ ...patch, updated_at: agora })
-        .eq("id", id)
-        .eq("company_id", profile.company_id);
+  // ── O valor passa pela RPC atómica; o resto não ─────────────────────────────
+  //
+  // 🔴 Aqui lia-se o estado e escrevia-se a seguir, em pedidos separados. Entre
+  //    os dois cabia uma marcação como pago: A lê «sem movimento de caixa», B
+  //    corre `mark_payment_paid` e liga um, A grava o novo valor — e fica
+  //    `payment.amount` diferente de `cash_flow_entries.amount`, com o erro a
+  //    aparecer muito depois, na marcação seguinte.
+  //
+  //    `update_payment_amount_atomic` tranca a linha do pagamento — o mesmo
+  //    lock que a marcação toma — e decide já com a linha na mão. Um valor
+  //    inalterado é um no-op: continua a ser possível corrigir a descrição de
+  //    um pagamento já pago, que é uma operação legítima e nada tem que ver
+  //    com dinheiro.
+  const { amount: novoValor, ...semValor } = patch;
+
+  if ("amount" in patch) {
+    const { error: erroValor } = await admin.rpc("update_payment_amount_atomic", {
+      p_company_id: profile.company_id,
+      p_payment_id: id,
+      p_amount: novoValor ?? null,
+    });
+    if (erroValor) return { ok: false, error: mensagemDeValor(erroValor.message) };
+  }
+
+  // 🔴 O `amount` **não** volta a ser escrito aqui. Uma segunda escrita directa
+  //    reabriria o buraco por outro lado: passaria por fora do lock e desfaria
+  //    a decisão que a RPC acabou de tomar.
+  const restante: Record<string, unknown> = { ...semValor, updated_at: agora };
+  if (novaCompetencia) {
+    restante.period_year = novaCompetencia.year;
+    restante.period_month = novaCompetencia.month;
+  }
+
+  const { error } = await admin
+    .from("fixed_variable_payments")
+    .update(restante as never)
+    .eq("id", id)
+    .eq("company_id", profile.company_id);
   if (error) return { ok: false, error: error.message };
   revalidate();
   return { ok: true };
@@ -353,6 +375,40 @@ export async function updatePayment(
  *
  * Devolve `null` quando pode prosseguir. Falha fechada.
  */
+/**
+ * Traduz o código técnico das RPC atómicas para a frase que a pessoa lê.
+ *
+ * 🔴 A mensagem do PostgreSQL **não** vai para o ecrã. Traz o nome da função,
+ *    o `ERRCODE` e às vezes o conteúdo da linha — é ruído para quem clicou e
+ *    superfície a mais para quem não devia ver. O que sai é uma frase escrita
+ *    para o caso, e um código desconhecido dá a frase genérica em vez de
+ *    revelar o interior.
+ */
+/** O mesmo princípio, do lado de apagar. */
+function mensagemDeEliminacao(erro: string): string {
+  if (erro.includes("PAYMENT_LINKED_TO_CASHFLOW")) {
+    return "Este pagamento já tem um movimento no Fluxo de Caixa e não pode ser "
+      + "eliminado. Reverta-o primeiro.";
+  }
+  if (erro.includes("PAYMENT_ALREADY_PAID")) {
+    return "Um pagamento já pago não pode ser eliminado. Reverta-o primeiro.";
+  }
+  return "Não foi possível eliminar o pagamento. Nada foi alterado.";
+}
+
+function mensagemDeValor(erro: string): string {
+  if (erro.includes("PAYMENT_LINKED_TO_CASHFLOW")) {
+    return "Este pagamento já tem um movimento no Fluxo de Caixa. "
+      + "Para alterar o valor, reverta primeiro o pagamento.";
+  }
+  if (erro.includes("PAYMENT_ALREADY_PAID")) {
+    return "Um pagamento já pago não pode mudar de valor. Reverta-o primeiro.";
+  }
+  if (erro.includes("PAYMENT_AMOUNT_INVALID")) return "Valor inválido.";
+  if (erro.includes("PAYMENT_NOT_FOUND")) return "Pagamento não encontrado.";
+  return "Não foi possível alterar o valor. Nada foi alterado.";
+}
+
 async function bloquearSePagamentoEmPeriodoFechado(
   admin: AdminClient,
   companyId: string,
@@ -543,12 +599,22 @@ export async function deletePayment(id: string): Promise<{ ok: boolean; error?: 
   const guard = await requireProfile({ roles: ["admin", "gestor"] });
   if (!guard.ok) return { ok: false, error: guard.error };
   const { admin, profile } = guard;
-  const { error } = await admin
-    .from("fixed_variable_payments")
-    .delete()
-    .eq("id", id)
-    .eq("company_id", profile.company_id);
-  if (error) return { ok: false, error: error.message };
+
+  // 🔴 Apagar passa pela RPC atómica, não por um `delete` directo.
+  //
+  //    O `delete` directo não olhava a nada: apagava um pagamento mesmo que
+  //    entretanto tivesse ganho um movimento de caixa, e sobrava o movimento a
+  //    apontar para uma linha que já não existe — o `orphan_payment_reference`
+  //    que o razão unificado marca. `delete_payment_atomic` tranca a linha
+  //    primeiro, e decide com ela na mão.
+  //
+  //    Apagar o que já não existe continua a ser sucesso: a função devolve
+  //    zero apagados em vez de levantar erro.
+  const { error } = await admin.rpc("delete_payment_atomic", {
+    p_company_id: profile.company_id,
+    p_payment_id: id,
+  });
+  if (error) return { ok: false, error: mensagemDeEliminacao(error.message) };
   revalidate();
   return { ok: true };
 }
