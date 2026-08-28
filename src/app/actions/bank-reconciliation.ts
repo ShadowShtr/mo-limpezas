@@ -250,6 +250,21 @@ export async function searchCashFlowEntries(query: string): Promise<
 
 // ─── Confirmação manual ───────────────────────────────────────────────────────
 
+/** O código técnico da RPC não vai para o ecrã; sai uma frase escrita para o caso. */
+function mensagemDeConciliacao(erro: string): string {
+  if (erro.includes("BANK_TRANSACTION_ALREADY_RECONCILED")) {
+    return "Este movimento do banco já foi conciliado com outra sugestão, "
+      + "entretanto. Recarregue para ver o estado atual.";
+  }
+  if (erro.includes("CASHFLOW_VANISHED_BEFORE_RECONCILE")) {
+    return "O lançamento associado deixou de existir. Nada foi conciliado.";
+  }
+  if (erro.includes("BANK_MATCH_REJECTED")) return "Esta sugestão já tinha sido rejeitada.";
+  if (erro.includes("BANK_MATCH_NOT_FOUND")) return "Sugestão não encontrada.";
+  if (erro.includes("BANK_TRANSACTION_NOT_FOUND")) return "Movimento do banco não encontrado.";
+  return "Não foi possível confirmar a conciliação. Nada foi alterado.";
+}
+
 export async function confirmMatch(matchId: string): Promise<{ ok: boolean; error?: string }> {
   const guard = await requireProfile({ roles: ["admin", "gestor"] });
   if (!guard.ok) return { ok: false, error: guard.error };
@@ -264,28 +279,35 @@ export async function confirmMatch(matchId: string): Promise<{ ok: boolean; erro
     .single();
   if (!match) return { ok: false, error: "Sugestão não encontrada." };
 
-  const now = new Date().toISOString();
-  const { error: upErr } = await admin
-    .from("bank_reconciliation_matches")
-    .update({ status: "confirmed", confirmed_by: guard.profile.id, confirmed_at: now })
-    .eq("id", matchId)
-    .eq("company_id", companyId);
-  if (upErr) return { ok: false, error: upErr.message };
+  // 🔴 A confirmação passa pela RPC da 082, não por um `update` directo.
+  //
+  //    É a segunda metade de uma correcção de concorrência, e a metade fácil
+  //    de esquecer: **um lock só serializa contra quem o pede**. As mutações
+  //    manuais de um movimento trancam a linha com `FOR UPDATE` antes de
+  //    decidirem se ele é editável; enquanto esta confirmação escrevesse sem
+  //    trancar nada, alguém podia alterar ou apagar o movimento entre a guarda
+  //    e a escrita, e a conciliação ficava a afirmar uma coisa que já não era
+  //    verdade.
+  //
+  //    `confirm_bank_match_atomic` toma o mesmo lock. É aqui que as duas
+  //    operações se encontram — e é isso que as provas de concorrência medem.
+  const { error: upErr } = await admin.rpc("confirm_bank_match_atomic", {
+    p_company_id: companyId,
+    p_match_id: matchId,
+    p_actor_id: guard.profile.id,
+  });
+  if (upErr) return { ok: false, error: mensagemDeConciliacao(upErr.message) };
 
-  // rejeita as restantes sugestões do mesmo movimento
-  await admin
-    .from("bank_reconciliation_matches")
-    .update({ status: "rejected" })
-    .eq("bank_transaction_id", match.bank_transaction_id)
-    .eq("company_id", companyId)
-    .neq("id", matchId)
-    .eq("status", "suggested");
-
-  await admin
-    .from("bank_transactions")
-    .update({ status: "reconciled", updated_at: now })
-    .eq("id", match.bank_transaction_id)
-    .eq("company_id", companyId);
+  // 🔴 Aqui estavam duas escritas de seguimento — rejeitar as outras sugestões
+  //    e marcar a transacção bancária como reconciliada. Passaram para dentro
+  //    da RPC, e não por arrumação.
+  //
+  //    Feitas de fora, corriam **depois** de a confirmação já estar gravada, em
+  //    pedidos separados que podiam falhar sozinhos. O que sobrava era uma
+  //    transacção bancária confirmada com sugestões ainda abertas, ou por
+  //    reconciliar — um estado que ninguém escolheu e que nada repunha.
+  //
+  //    Dentro da RPC são a mesma transacção: ou acontece tudo, ou nada.
 
   await auditLog({
     companyId, actorId: guard.profile.id, action: "bank_match_confirmed",

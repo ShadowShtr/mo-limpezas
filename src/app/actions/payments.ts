@@ -2,10 +2,10 @@
 
 import { requireProfile } from "@/lib/auth-guard";
 import { createAdminClient } from "@/lib/supabase/admin";
-import {
-  competenceFromDueDate,
-  resolveCompetence,
-} from "@/domain/finance/payment-competence";
+// `competenceFromDueDate` saiu daqui: a competência passou a ser derivada
+// dentro de `update_payment_atomic`, no mesmo UPDATE que grava o vencimento.
+// Mantê-la importada era deixar duas fontes para a mesma regra.
+import { resolveCompetence } from "@/domain/finance/payment-competence";
 import { revalidatePath } from "next/cache";
 import { todayInLisbon } from "@/lib/lisbon-time";
 import {
@@ -283,40 +283,27 @@ export async function updatePayment(
   if (patch.description !== undefined && !patch.description.trim()) return { ok: false, error: "Descrição inválida." };
   if (patch.amount !== undefined && patch.amount !== null && (!Number.isFinite(patch.amount) || patch.amount < 0)) return { ok: false, error: "Valor inválido." };
 
-  // ── Mudar a data é mudar de mês ─────────────────────────────────────────────
+  // ── Uma edição, uma escrita ─────────────────────────────────────────────────
   //
-  // 🔴 Aqui alterava-se o `due_date` e mais nada. Um pagamento editado de
-  //    15/07 para 15/08 ficava com data de Agosto e competência de Julho: no
-  //    ecrã de Julho continuava a aparecer, e no de Agosto não aparecia.
+  // 🔴 Aqui estavam DUAS escritas: a RPC para o valor e um `update` directo
+  //    para o resto. Uma edição composta podia gravar metade — o valor passava,
+  //    a descrição falhava, a acção devolvia erro, e o valor ficava alterado à
+  //    mesma. Para quem editou, a operação «falhou» e o dinheiro mudou.
   //
-  //    A competência é recalculada no mesmo UPDATE, sobre a mesma linha. O
-  //    pagamento **move-se** entre meses — não é apagado de um e criado no
-  //    outro, por isso o id, os anexos, a conciliação e a auditoria seguem com
-  //    ele. Um registo, um facto económico.
+  //    Nenhuma compensação do lado da aplicação resolve isso de forma fiável.
+  //    A resposta é não haver duas escritas: `update_payment_atomic` tranca a
+  //    linha, decide sobre o valor com ela na mão, recalcula a competência a
+  //    partir do vencimento e grava tudo num só `UPDATE`.
   //
-  //    `due_date` a ser posto a `null` não altera a competência: não há de onde
-  //    a derivar, e apagar o mês deixaria a linha sem pertencer a lado nenhum.
-  const agora = new Date().toISOString();
-  const novaCompetencia =
-    patch.due_date !== undefined ? competenceFromDueDate(patch.due_date) : null;
-
-  const { error } = novaCompetencia
-    ? await admin
-        .from("fixed_variable_payments")
-        .update({
-          ...patch,
-          updated_at: agora,
-          period_year: novaCompetencia.year,
-          period_month: novaCompetencia.month,
-        })
-        .eq("id", id)
-        .eq("company_id", profile.company_id)
-    : await admin
-        .from("fixed_variable_payments")
-        .update({ ...patch, updated_at: agora })
-        .eq("id", id)
-        .eq("company_id", profile.company_id);
-  if (error) return { ok: false, error: error.message };
+  //    A competência move-se com o vencimento — um pagamento editado de 15/07
+  //    para 15/08 tem de mudar de mês —, e um `due_date` posto a `null` não a
+  //    altera: não há de onde a derivar.
+  const { error } = await admin.rpc("update_payment_atomic", {
+    p_company_id: profile.company_id,
+    p_payment_id: id,
+    p_patch: patch,
+  });
+  if (error) return { ok: false, error: mensagemDeValor(error.message) };
   revalidate();
   return { ok: true };
 }
@@ -353,6 +340,40 @@ export async function updatePayment(
  *
  * Devolve `null` quando pode prosseguir. Falha fechada.
  */
+/**
+ * Traduz o código técnico das RPC atómicas para a frase que a pessoa lê.
+ *
+ * 🔴 A mensagem do PostgreSQL **não** vai para o ecrã. Traz o nome da função,
+ *    o `ERRCODE` e às vezes o conteúdo da linha — é ruído para quem clicou e
+ *    superfície a mais para quem não devia ver. O que sai é uma frase escrita
+ *    para o caso, e um código desconhecido dá a frase genérica em vez de
+ *    revelar o interior.
+ */
+/** O mesmo princípio, do lado de apagar. */
+function mensagemDeEliminacao(erro: string): string {
+  if (erro.includes("PAYMENT_LINKED_TO_CASHFLOW")) {
+    return "Este pagamento já tem um movimento no Fluxo de Caixa e não pode ser "
+      + "eliminado. Reverta-o primeiro.";
+  }
+  if (erro.includes("PAYMENT_ALREADY_PAID")) {
+    return "Um pagamento já pago não pode ser eliminado. Reverta-o primeiro.";
+  }
+  return "Não foi possível eliminar o pagamento. Nada foi alterado.";
+}
+
+function mensagemDeValor(erro: string): string {
+  if (erro.includes("PAYMENT_LINKED_TO_CASHFLOW")) {
+    return "Este pagamento já tem um movimento no Fluxo de Caixa. "
+      + "Para alterar o valor, reverta primeiro o pagamento.";
+  }
+  if (erro.includes("PAYMENT_ALREADY_PAID")) {
+    return "Um pagamento já pago não pode mudar de valor. Reverta-o primeiro.";
+  }
+  if (erro.includes("PAYMENT_AMOUNT_INVALID")) return "Valor inválido.";
+  if (erro.includes("PAYMENT_NOT_FOUND")) return "Pagamento não encontrado.";
+  return "Não foi possível alterar o valor. Nada foi alterado.";
+}
+
 async function bloquearSePagamentoEmPeriodoFechado(
   admin: AdminClient,
   companyId: string,
@@ -543,12 +564,22 @@ export async function deletePayment(id: string): Promise<{ ok: boolean; error?: 
   const guard = await requireProfile({ roles: ["admin", "gestor"] });
   if (!guard.ok) return { ok: false, error: guard.error };
   const { admin, profile } = guard;
-  const { error } = await admin
-    .from("fixed_variable_payments")
-    .delete()
-    .eq("id", id)
-    .eq("company_id", profile.company_id);
-  if (error) return { ok: false, error: error.message };
+
+  // 🔴 Apagar passa pela RPC atómica, não por um `delete` directo.
+  //
+  //    O `delete` directo não olhava a nada: apagava um pagamento mesmo que
+  //    entretanto tivesse ganho um movimento de caixa, e sobrava o movimento a
+  //    apontar para uma linha que já não existe — o `orphan_payment_reference`
+  //    que o razão unificado marca. `delete_payment_atomic` tranca a linha
+  //    primeiro, e decide com ela na mão.
+  //
+  //    Apagar o que já não existe continua a ser sucesso: a função devolve
+  //    zero apagados em vez de levantar erro.
+  const { error } = await admin.rpc("delete_payment_atomic", {
+    p_company_id: profile.company_id,
+    p_payment_id: id,
+  });
+  if (error) return { ok: false, error: mensagemDeEliminacao(error.message) };
   revalidate();
   return { ok: true };
 }

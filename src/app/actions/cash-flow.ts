@@ -240,6 +240,28 @@ export async function createCashFlowEntry(
   return { ok: true };
 }
 
+/**
+ * Traduz o código técnico das RPC atómicas para a frase que a pessoa lê.
+ *
+ * 🔴 A mensagem do PostgreSQL não vai para o ecrã: traz o nome da função, o
+ *    `ERRCODE` e por vezes o conteúdo da linha. Um código desconhecido dá a
+ *    frase genérica em vez de revelar o interior.
+ */
+function mensagemDeMovimento(erro: string): string {
+  if (erro.includes("CASHFLOW_RECONCILED")) {
+    return "Este movimento foi conciliado com o extrato bancário e já não pode "
+      + "ser alterado. Reverta a conciliação primeiro.";
+  }
+  if (erro.includes("CASHFLOW_MANAGED_BY_ORIGIN")) {
+    return "Este movimento é gerido na sua origem e não pode ser editado aqui.";
+  }
+  if (erro.includes("CASHFLOW_FIELD_NOT_EDITABLE")) {
+    return "Um dos campos enviados não pode ser alterado neste movimento.";
+  }
+  if (erro.includes("CASHFLOW_NOT_FOUND")) return "Movimento não encontrado.";
+  return "Não foi possível alterar o movimento. Nada foi alterado.";
+}
+
 export async function updateCashFlowEntry(
   id: string,
   data: {
@@ -325,12 +347,24 @@ export async function updateCashFlowEntry(
     ...(expenseCategoryId !== undefined ? { expense_category_id: expenseCategoryId } : {}),
   };
 
-  const { error } = await admin
-    .from("cash_flow_entries")
-    .update(patch as unknown as never)
-    .eq("id", id)
-    .eq("company_id", profile.company_id);
-  if (error) return { ok: false, error: error.message };
+  // 🔴 A escrita final passa pela RPC atómica.
+  //
+  //    O `update` directo lia o estado num pedido e escrevia noutro. Entre os
+  //    dois cabia uma confirmação de conciliação: A lê «não conciliado», B
+  //    confirma, A altera — e a conciliação fica a afirmar uma coisa que já
+  //    não é verdade.
+  //
+  //    `update_cashflow_entry_atomic` tranca a linha do movimento e revalida
+  //    com ela na mão: recusa se entretanto ficou conciliado, e recusa se o
+  //    movimento tem origem (é gerido por ela, não à mão). As guardas de
+  //    período acima continuam onde estavam — dão a mensagem com o nome do mês,
+  //    que a base não sabe dar.
+  const { error } = await admin.rpc("update_cashflow_entry_atomic", {
+    p_company_id: profile.company_id,
+    p_entry_id: id,
+    p_patch: patch,
+  });
+  if (error) return { ok: false, error: mensagemDeMovimento(error.message) };
   revalidatePath("/dashboard/financeiro/fluxo-caixa");
   revalidatePath("/dashboard/financeiro/contas");
   return { ok: true };
@@ -373,15 +407,24 @@ export async function deleteCashFlowEntry(id: string): Promise<{ ok: boolean; er
   });
   if (!periodo.ok) return { ok: false, error: periodo.error };
 
-  // Só apagar entradas manuais (sem reference_type)
-  const { error } = await admin
-    .from("cash_flow_entries")
-    .delete()
-    .eq("id", id)
-    .eq("company_id", profile.company_id)
-    .is("reference_type", null);
+  // 🔴 Só se apagam movimentos manuais — e agora pela RPC atómica.
+  //
+  //    O `.is("reference_type", null)` no `delete` protegia contra apagar um
+  //    movimento com origem, mas não contra a corrida: entre a guarda de
+  //    período e o `delete` cabia uma confirmação de conciliação, e apagar um
+  //    movimento conciliado leva a correspondência à frente pelo
+  //    `ON DELETE CASCADE` — apaga a prova e deixa a transacção bancária a
+  //    dizer que está reconciliada contra uma linha que já não existe.
+  //
+  //    `delete_cashflow_entry_atomic` tranca a linha, recusa se tiver origem e
+  //    recusa se estiver conciliada. Apagar o que já não existe continua a ser
+  //    sucesso, como antes.
+  const { error } = await admin.rpc("delete_cashflow_entry_atomic", {
+    p_company_id: profile.company_id,
+    p_entry_id: id,
+  });
 
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: mensagemDeMovimento(error.message) };
   revalidatePath("/dashboard/financeiro/fluxo-caixa");
   revalidatePath("/dashboard/financeiro/contas");
   return { ok: true };
