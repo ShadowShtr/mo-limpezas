@@ -527,7 +527,7 @@
       "risks": [],
       "signals": {
         "write": 2,
-        "sqlWrite": 4
+        "sqlWrite": 7
       },
       "action": "nenhuma",
       "reason": "documentação",
@@ -5089,8 +5089,8 @@
       "signals": {
         "supabase": 2,
         "serviceRole": 1,
-        "write": 5,
-        "sqlWrite": 26,
+        "write": 6,
+        "sqlWrite": 29,
         "fallbackArray": 1,
         "dynamicImport": 1
       },
@@ -6389,7 +6389,7 @@
       "sideEffects": [],
       "risks": [],
       "signals": {
-        "sqlWrite": 3
+        "sqlWrite": 5
       },
       "action": "nenhuma",
       "reason": "suite de testes — corre por convenção do vitest",
@@ -12860,8 +12860,8 @@
       "signals": {
         "supabase": 2,
         "serverAction": 1,
-        "write": 5,
-        "sqlWrite": 8,
+        "write": 4,
+        "sqlWrite": 9,
         "unknownCast": 2,
         "ignoredError": 3,
         "fallbackZero": 4,

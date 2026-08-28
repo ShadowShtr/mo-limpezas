@@ -114,38 +114,35 @@ const escritas = (tabela: string, tipo: string) =>
 // ═══════════════════════════════════════════════════════════════════════════
 
 describe("pagamentos — o valor e a eliminação passam pela RPC", () => {
-  it("PAYMENT_ACTION_RPC_ROUTING: alterar o valor chama update_payment_amount_atomic", async () => {
-    await updatePayment(ALVO, { amount: 250 });
-    const r = rpcs().find((c) => c.nome === "update_payment_amount_atomic");
-    expect(r, "a RPC do valor não foi chamada").toBeDefined();
-    expect(r!.args).toEqual({ p_company_id: EMPRESA, p_payment_id: ALVO, p_amount: 250 });
+  it("PAYMENT_ACTION_RPC_ROUTING: editar chama update_payment_atomic, uma só vez", async () => {
+    await updatePayment(ALVO, { amount: 250, description: "Nova descrição", due_date: "2026-09-10" });
+    const chamadas = rpcs().filter((c) => c.nome === "update_payment_atomic");
+    expect(chamadas).toHaveLength(1);
+    const args = chamadas[0].args as Record<string, unknown>;
+    expect(args.p_company_id).toBe(EMPRESA);
+    expect(args.p_payment_id).toBe(ALVO);
+    expect(args.p_patch).toEqual({ amount: 250, description: "Nova descrição", due_date: "2026-09-10" });
   });
 
-  it("🔴 e o valor NÃO é escrito outra vez por fora", async () => {
-    // Uma segunda escrita directa passaria por fora do lock e desfaria a
-    // decisão que a RPC acabou de tomar.
+  it("🔴 DIRECT_PAYMENT_UPDATE_COUNT = 0", async () => {
+    // Este ensaio exigia o contrário: que os «outros campos» fossem gravados
+    // por um `update` directo. Estava a consagrar o defeito — duas escritas
+    // para uma edição, e a possibilidade de gravar metade.
     await updatePayment(ALVO, { amount: 250, description: "Nova descrição" });
-    for (const u of escritas("fixed_variable_payments", "update")) {
-      expect(Object.keys(u.patch as object)).not.toContain("amount");
-    }
+    expect(escritas("fixed_variable_payments", "update")).toHaveLength(0);
+    expect(escritas("fixed_variable_payments", "delete")).toHaveLength(0);
   });
 
-  it("os outros campos continuam a ser gravados", async () => {
-    await updatePayment(ALVO, { amount: 250, description: "Nova descrição" });
-    const u = escritas("fixed_variable_payments", "update")[0];
-    expect(u, "os campos restantes não foram gravados").toBeDefined();
-    expect((u.patch as Record<string, unknown>).description).toBe("Nova descrição");
-  });
-
-  it("sem `amount` no patch, a RPC do valor não é chamada", async () => {
+  it("sem `amount` no patch, continua a ser uma só chamada", async () => {
     await updatePayment(ALVO, { description: "Só o texto" });
-    expect(rpcs().find((c) => c.nome === "update_payment_amount_atomic")).toBeUndefined();
+    expect(rpcs().filter((c) => c.nome === "update_payment_atomic")).toHaveLength(1);
+    expect(escritas("fixed_variable_payments", "update")).toHaveLength(0);
   });
 
-  it("NULL_AMOUNT_COMPATIBILITY: pôr o valor a null é legítimo e vai pela RPC", async () => {
+  it("NULL_AMOUNT_COMPATIBILITY: pôr o valor a null vai no mesmo patch", async () => {
     await updatePayment(ALVO, { amount: null });
-    const r = rpcs().find((c) => c.nome === "update_payment_amount_atomic")!;
-    expect((r.args as Record<string, unknown>).p_amount).toBeNull();
+    const r = rpcs().find((c) => c.nome === "update_payment_atomic")!;
+    expect((r.args as Record<string, unknown>).p_patch).toEqual({ amount: null });
   });
 
   it("DELETE_PAYMENT_RPC_ROUTING: apagar chama delete_payment_atomic", async () => {
@@ -222,10 +219,10 @@ describe("APP_ROUTING_MUTATION_PROOF — o caminho directo não volta", () => {
     return src.slice(i, fim === -1 ? undefined : fim);
   };
 
-  it("updatePayment não escreve `amount` directamente", () => {
+  it("updatePayment nao tem `.update(` nenhum", () => {
     const c = corpo(ler("src/app/actions/payments.ts"), "updatePayment");
-    expect(c).toContain("update_payment_amount_atomic");
-    expect(c).not.toMatch(/\.update\(\s*\{[^}]*\bamount\b/);
+    expect(c).toContain("update_payment_atomic");
+    expect(c).not.toMatch(/from(\"fixed_variable_payments\")[\s\S]{0,200}\.update\(/);
   });
 
   it("deletePayment não tem `.delete()`", () => {

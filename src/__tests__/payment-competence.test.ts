@@ -162,13 +162,34 @@ describe("as actions usam a regra, não o mês do ecrã", () => {
   });
 
   it("🔴 updatePayment recalcula a competência ao mudar a data", () => {
+    // 🔴 A regra mudou de sítio, não desapareceu.
+    //
+    //    Vivia aqui, e a acção fazia duas escritas: uma RPC para o valor e um
+    //    `update` directo para o resto — o que deixava uma edição composta
+    //    gravar metade. Passou a haver **uma só** escrita, dentro de
+    //    `update_payment_atomic`, e a competência é derivada lá, no mesmo
+    //    `UPDATE` que grava o vencimento.
+    //
+    //    Este guard exigia `competenceFromDueDate(` no corpo da acção: media a
+    //    localização, não a garantia. Passa a exigir a garantia, e a prova de
+    //    comportamento está em `atomic-finance-mutations-postgres`
+    //    (COMPOSITE_EDIT_SUCCESS e DUE_DATE_NULL_COMPETENCE), contra Postgres real.
     const fonte = actions();
     const i = fonte.indexOf("export async function updatePayment");
     expect(i).toBeGreaterThan(-1);
     const corpo = fonte.slice(i, fonte.indexOf("\n}\n", i));
 
-    expect(corpo).toMatch(/competenceFromDueDate\(/);
-    expect(corpo).toMatch(/period_year/);
+    expect(corpo).toMatch(/update_payment_atomic/);
+    expect(corpo).toMatch(/p_patch:\s*patch/);
+
+    const migracao = fs.readFileSync(
+      path.join(process.cwd(), "supabase/migrations/082_atomic_finance_mutations.sql"), "utf8");
+    const fn = migracao.slice(
+      migracao.indexOf("CREATE OR REPLACE FUNCTION public.update_payment_atomic"));
+    const corpoFn = fn.slice(0, fn.indexOf("$fn$;"));
+    expect(corpoFn).toMatch(/period_year\s*=/);
+    expect(corpoFn).toMatch(/period_month\s*=/);
+    expect(corpoFn).toMatch(/EXTRACT\(YEAR/);
   });
 
   it("a consulta mensal continua a filtrar por competência exata", () => {

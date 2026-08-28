@@ -10,7 +10,7 @@ Estas cinco Server Actions passam pelas RPC atómicas da **082**:
 
 | ficheiro | função | RPC |
 |---|---|---|
-| `src/app/actions/payments.ts` | `updatePayment` (quando o valor vem no patch) | `update_payment_amount_atomic` |
+| `src/app/actions/payments.ts` | `updatePayment` | `update_payment_atomic` |
 | `src/app/actions/payments.ts` | `deletePayment` | `delete_payment_atomic` |
 | `src/app/actions/cash-flow.ts` | `updateCashFlowEntry` | `update_cashflow_entry_atomic` |
 | `src/app/actions/cash-flow.ts` | `deleteCashFlowEntry` | `delete_cashflow_entry_atomic` |
@@ -54,10 +54,16 @@ seguimento dá 2.
   ao ecrã.
 - **O `company_id`.** Vem de `profile.company_id` e nunca do cliente. Cada RPC
   confronta-o com a linha.
-- **Valor nulo e valor inalterado.** Um pagamento pendente pode não ter valor,
-  e o formulário reenvia o valor que não mudou. `update_payment_amount_atomic`
-  trata `NULL` como legítimo e um valor igual como no-op — continua a ser
-  possível corrigir a descrição de um pagamento já pago.
+- **Uma edição é uma escrita.** `update_payment_atomic` recebe o patch inteiro
+  e grava tudo num só `UPDATE`. Não há uma RPC para o valor e um `update` para o
+  resto: essa divisão deixava uma edição composta gravar metade — o valor
+  passava, a descrição falhava, a acção devolvia erro, e o dinheiro mudava à
+  mesma.
+- **Valor nulo e valor inalterado.** Um pagamento pendente pode não ter valor, e
+  o formulário reenvia o valor que não mudou. `NULL` é legítimo e um valor igual
+  é no-op — continua a ser possível corrigir a descrição de um pagamento já pago.
+- **A competência move-se com o vencimento**, dentro do mesmo `UPDATE`; um
+  `due_date` posto a `null` não a altera.
 - **As guardas de período.** Continuam na Server Action, antes da RPC: são elas
   que dão a mensagem com o nome do mês, que a base não sabe dar.
 

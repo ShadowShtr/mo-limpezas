@@ -63,7 +63,10 @@ const BASELINE = `
     recurring boolean NOT NULL DEFAULT false, period_year integer NOT NULL,
     period_month integer NOT NULL, paid_at timestamptz, notes text,
     expense_category_id uuid, attachment_url text, attachment_name text,
-    created_at timestamptz NOT NULL DEFAULT now());
+    direct_debit boolean,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    -- Produção tem estas duas; faltavam aqui e a RPC escreve-as.
+    updated_at timestamptz NOT NULL DEFAULT now());
   CREATE TABLE public.cash_flow_entries (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(), company_id uuid NOT NULL,
     type text NOT NULL CHECK (type IN ('entrada','saida')), amount numeric(10,2) NOT NULL,
@@ -249,7 +252,8 @@ describe.sequential("pagamentos — a guarda e a escrita não se separam", () =>
 
       // B tenta alterar o valor. Tem de esperar — é o mesmo lock.
       const bPromise = b.c.query(
-        "SELECT * FROM update_payment_amount_atomic($1,$2,$3)", [EMPRESA, id, "999.00"],
+        "SELECT * FROM update_payment_atomic($1,$2,$3::jsonb)",
+        [EMPRESA, id, JSON.stringify({ amount: "999.00" })],
       ).then(() => "escreveu").catch((e: Error) => e.message);
 
       await esperarBloqueado(b.pid);
@@ -306,7 +310,8 @@ describe.sequential("pagamentos — a guarda e a escrita não se separam", () =>
 
   it("sem concorrência, alterar e apagar um pagamento livre continua a funcionar", async () => {
     const id = await pagamento("100.00");
-    await pool.query("SELECT * FROM update_payment_amount_atomic($1,$2,$3)", [EMPRESA, id, "250.00"]);
+    await pool.query("SELECT * FROM update_payment_atomic($1,$2,$3::jsonb)",
+      [EMPRESA, id, JSON.stringify({ amount: "250.00" })]);
     const { rows } = await pool.query(
       "SELECT amount::text a FROM fixed_variable_payments WHERE id=$1", [id]);
     expect(rows[0].a).toBe("250.00");
@@ -319,8 +324,8 @@ describe.sequential("pagamentos — a guarda e a escrita não se separam", () =>
   it("um pagamento de outra empresa não é alcançável", async () => {
     const id = await pagamento();
     await expect(
-      pool.query("SELECT * FROM update_payment_amount_atomic($1,$2,$3)",
-        ["44444444-4444-4444-8444-444444444444", id, "1.00"]),
+      pool.query("SELECT * FROM update_payment_atomic($1,$2,$3::jsonb)",
+        ["44444444-4444-4444-8444-444444444444", id, JSON.stringify({ amount: "1.00" })]),
     ).rejects.toThrow(/PAYMENT_NOT_FOUND/);
   });
 });
@@ -489,7 +494,7 @@ describe.sequential("082 + 083 — a superfície fica fechada", () => {
   }
 
   const RPCS = [
-    "public.update_payment_amount_atomic(uuid, uuid, numeric)",
+    "public.update_payment_atomic(uuid, uuid, jsonb)",
     "public.delete_payment_atomic(uuid, uuid)",
     "public.lock_cashflow_for_manual_mutation(uuid, uuid)",
     "public.update_cashflow_entry_atomic(uuid, uuid, jsonb)",
@@ -651,4 +656,88 @@ describe.sequential("conciliação — duas sugestões da mesma transacção", (
       ["44444444-4444-4444-8444-444444444444", m1, ACTOR]))
       .rejects.toThrow(/BANK_MATCH_NOT_FOUND/);
   }, 60_000);
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Uma edição composta é atómica — ou passa toda, ou não passa nenhuma
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe.sequential("edição composta de um pagamento", () => {
+  const editar = (id: string, patch: Record<string, unknown>) =>
+    pool.query("SELECT * FROM update_payment_atomic($1,$2,$3::jsonb)",
+      [EMPRESA, id, JSON.stringify(patch)]);
+
+  const ler = async (id: string) => (await pool.query(
+    `SELECT amount::text a, description d, due_date::text v,
+            period_year py, period_month pm, notes n
+       FROM fixed_variable_payments WHERE id=$1`, [id])).rows[0];
+
+  it("COMPOSITE_EDIT_SUCCESS: valor, descrição e vencimento numa só escrita", async () => {
+    const id = await pagamento("100.00");
+    await editar(id, { amount: "200.00", description: "NOVA", due_date: "2026-09-10" });
+    expect(await ler(id)).toMatchObject({
+      a: "200.00", d: "NOVA", v: "2026-09-10", py: 2026, pm: 9,
+    });
+  });
+
+  it("🔴 COMPOSITE_EDIT_FAILURE_ROLLBACK: se o valor é recusado, a descrição também não muda", async () => {
+    // Era aqui que a versão anterior partia: o valor ia por uma escrita e a
+    // descrição por outra. A recusa do valor devolvia erro, e a descrição
+    // ficava alterada à mesma — meia edição gravada, nenhuma pedida.
+    const id = await pagamento("100.00");
+    await pool.query("SELECT * FROM mark_payment_paid($1,$2,$3)", [EMPRESA, id, "2026-08-15"]);
+    const antes = await ler(id);
+
+    await expect(editar(id, { amount: "200.00", description: "NOVA" }))
+      .rejects.toThrow(/PAYMENT_ALREADY_PAID|PAYMENT_LINKED_TO_CASHFLOW/);
+
+    expect(await ler(id)).toEqual(antes);
+  });
+
+  it("COMPOSITE_EDIT_NULL: pôr o valor a null com outra alteração passa junto", async () => {
+    const id = await pagamento("100.00");
+    await editar(id, { amount: null, notes: "à espera da factura" });
+    const r = await ler(id);
+    expect(r.a).toBeNull();
+    expect(r.n).toBe("à espera da factura");
+  });
+
+  it("UNCHANGED_LINKED_AMOUNT: num pagamento ligado, o valor igual não bloqueia o resto", async () => {
+    // O formulário reenvia tudo, inclusive o valor que não mudou. Recusar isso
+    // impediria corrigir a descrição de um pagamento já pago.
+    const id = await pagamento("100.00");
+    await pool.query("SELECT * FROM mark_payment_paid($1,$2,$3)", [EMPRESA, id, "2026-08-15"]);
+    await editar(id, { amount: "100.00", description: "CORRIGIDA" });
+    expect(await ler(id)).toMatchObject({ a: "100.00", d: "CORRIGIDA" });
+  });
+
+  it("DUE_DATE_NULL_COMPETENCE: apagar o vencimento não mexe na competência", async () => {
+    const id = await pagamento("100.00");
+    const antes = await ler(id);
+    await editar(id, { due_date: null, description: "SEM VENCIMENTO" });
+    const r = await ler(id);
+    expect(r.v).toBeNull();
+    expect(r.d).toBe("SEM VENCIMENTO");
+    expect({ py: r.py, pm: r.pm }).toEqual({ py: antes.py, pm: antes.pm });
+  });
+
+  it("🔴 campos fora da lista branca são recusados", async () => {
+    // Sem isto, um patch com `status` ou `paid_at` contornava as RPC que
+    // existem para governar esses campos — a 083 fecha a porta da frente, e
+    // isto seria uma porta lateral com a chave por dentro.
+    const id = await pagamento("100.00");
+    for (const proibido of [{ status: "pago" }, { paid_at: "2026-08-01" },
+                            { company_id: EMPRESA }, { kind: "fixo" }]) {
+      await expect(editar(id, proibido), Object.keys(proibido)[0])
+        .rejects.toThrow(/PAYMENT_FIELD_NOT_EDITABLE/);
+    }
+  });
+
+  it("um valor negativo é recusado, e nada mais muda", async () => {
+    const id = await pagamento("100.00");
+    const antes = await ler(id);
+    await expect(editar(id, { amount: "-1.00", description: "NOVA" }))
+      .rejects.toThrow(/PAYMENT_AMOUNT_INVALID/);
+    expect(await ler(id)).toEqual(antes);
+  });
 });

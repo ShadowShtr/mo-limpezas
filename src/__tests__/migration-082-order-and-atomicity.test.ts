@@ -44,7 +44,7 @@ const M083 = "083_payment_authorization_hardening.sql";
 
 /** As seis funções que a 082 cria. */
 const FUNCOES_082 = [
-  "public.update_payment_amount_atomic(uuid, uuid, numeric)",
+  "public.update_payment_atomic(uuid, uuid, jsonb)",
   "public.delete_payment_atomic(uuid, uuid)",
   "public.lock_cashflow_for_manual_mutation(uuid, uuid)",
   "public.update_cashflow_entry_atomic(uuid, uuid, jsonb)",
@@ -79,7 +79,10 @@ const BASE = `
     recurring boolean NOT NULL DEFAULT false, period_year integer NOT NULL,
     period_month integer NOT NULL, paid_at timestamptz, notes text,
     expense_category_id uuid, attachment_url text, attachment_name text,
-    created_at timestamptz NOT NULL DEFAULT now());
+    direct_debit boolean,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    -- Produção tem estas duas; faltavam aqui e a RPC escreve-as.
+    updated_at timestamptz NOT NULL DEFAULT now());
   CREATE TABLE public.cash_flow_entries (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(), company_id uuid NOT NULL,
     type text NOT NULL CHECK (type IN ('entrada','saida')), amount numeric(10,2) NOT NULL,

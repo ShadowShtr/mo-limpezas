@@ -24,6 +24,6 @@ DROP FUNCTION IF EXISTS public.delete_cashflow_entry_atomic(uuid, uuid);
 DROP FUNCTION IF EXISTS public.update_cashflow_entry_atomic(uuid, uuid, jsonb);
 DROP FUNCTION IF EXISTS public.lock_cashflow_for_manual_mutation(uuid, uuid);
 DROP FUNCTION IF EXISTS public.delete_payment_atomic(uuid, uuid);
-DROP FUNCTION IF EXISTS public.update_payment_amount_atomic(uuid, uuid, numeric);
+DROP FUNCTION IF EXISTS public.update_payment_atomic(uuid, uuid, jsonb);
 
 COMMIT;

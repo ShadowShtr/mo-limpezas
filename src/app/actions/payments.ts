@@ -2,10 +2,10 @@
 
 import { requireProfile } from "@/lib/auth-guard";
 import { createAdminClient } from "@/lib/supabase/admin";
-import {
-  competenceFromDueDate,
-  resolveCompetence,
-} from "@/domain/finance/payment-competence";
+// `competenceFromDueDate` saiu daqui: a competência passou a ser derivada
+// dentro de `update_payment_atomic`, no mesmo UPDATE que grava o vencimento.
+// Mantê-la importada era deixar duas fontes para a mesma regra.
+import { resolveCompetence } from "@/domain/finance/payment-competence";
 import { revalidatePath } from "next/cache";
 import { todayInLisbon } from "@/lib/lisbon-time";
 import {
@@ -283,62 +283,27 @@ export async function updatePayment(
   if (patch.description !== undefined && !patch.description.trim()) return { ok: false, error: "Descrição inválida." };
   if (patch.amount !== undefined && patch.amount !== null && (!Number.isFinite(patch.amount) || patch.amount < 0)) return { ok: false, error: "Valor inválido." };
 
-  // ── Mudar a data é mudar de mês ─────────────────────────────────────────────
+  // ── Uma edição, uma escrita ─────────────────────────────────────────────────
   //
-  // 🔴 Aqui alterava-se o `due_date` e mais nada. Um pagamento editado de
-  //    15/07 para 15/08 ficava com data de Agosto e competência de Julho: no
-  //    ecrã de Julho continuava a aparecer, e no de Agosto não aparecia.
+  // 🔴 Aqui estavam DUAS escritas: a RPC para o valor e um `update` directo
+  //    para o resto. Uma edição composta podia gravar metade — o valor passava,
+  //    a descrição falhava, a acção devolvia erro, e o valor ficava alterado à
+  //    mesma. Para quem editou, a operação «falhou» e o dinheiro mudou.
   //
-  //    A competência é recalculada no mesmo UPDATE, sobre a mesma linha. O
-  //    pagamento **move-se** entre meses — não é apagado de um e criado no
-  //    outro, por isso o id, os anexos, a conciliação e a auditoria seguem com
-  //    ele. Um registo, um facto económico.
+  //    Nenhuma compensação do lado da aplicação resolve isso de forma fiável.
+  //    A resposta é não haver duas escritas: `update_payment_atomic` tranca a
+  //    linha, decide sobre o valor com ela na mão, recalcula a competência a
+  //    partir do vencimento e grava tudo num só `UPDATE`.
   //
-  //    `due_date` a ser posto a `null` não altera a competência: não há de onde
-  //    a derivar, e apagar o mês deixaria a linha sem pertencer a lado nenhum.
-  const agora = new Date().toISOString();
-  const novaCompetencia =
-    patch.due_date !== undefined ? competenceFromDueDate(patch.due_date) : null;
-
-  // ── O valor passa pela RPC atómica; o resto não ─────────────────────────────
-  //
-  // 🔴 Aqui lia-se o estado e escrevia-se a seguir, em pedidos separados. Entre
-  //    os dois cabia uma marcação como pago: A lê «sem movimento de caixa», B
-  //    corre `mark_payment_paid` e liga um, A grava o novo valor — e fica
-  //    `payment.amount` diferente de `cash_flow_entries.amount`, com o erro a
-  //    aparecer muito depois, na marcação seguinte.
-  //
-  //    `update_payment_amount_atomic` tranca a linha do pagamento — o mesmo
-  //    lock que a marcação toma — e decide já com a linha na mão. Um valor
-  //    inalterado é um no-op: continua a ser possível corrigir a descrição de
-  //    um pagamento já pago, que é uma operação legítima e nada tem que ver
-  //    com dinheiro.
-  const { amount: novoValor, ...semValor } = patch;
-
-  if ("amount" in patch) {
-    const { error: erroValor } = await admin.rpc("update_payment_amount_atomic", {
-      p_company_id: profile.company_id,
-      p_payment_id: id,
-      p_amount: novoValor ?? null,
-    });
-    if (erroValor) return { ok: false, error: mensagemDeValor(erroValor.message) };
-  }
-
-  // 🔴 O `amount` **não** volta a ser escrito aqui. Uma segunda escrita directa
-  //    reabriria o buraco por outro lado: passaria por fora do lock e desfaria
-  //    a decisão que a RPC acabou de tomar.
-  const restante: Record<string, unknown> = { ...semValor, updated_at: agora };
-  if (novaCompetencia) {
-    restante.period_year = novaCompetencia.year;
-    restante.period_month = novaCompetencia.month;
-  }
-
-  const { error } = await admin
-    .from("fixed_variable_payments")
-    .update(restante as never)
-    .eq("id", id)
-    .eq("company_id", profile.company_id);
-  if (error) return { ok: false, error: error.message };
+  //    A competência move-se com o vencimento — um pagamento editado de 15/07
+  //    para 15/08 tem de mudar de mês —, e um `due_date` posto a `null` não a
+  //    altera: não há de onde a derivar.
+  const { error } = await admin.rpc("update_payment_atomic", {
+    p_company_id: profile.company_id,
+    p_payment_id: id,
+    p_patch: patch,
+  });
+  if (error) return { ok: false, error: mensagemDeValor(error.message) };
   revalidate();
   return { ok: true };
 }
