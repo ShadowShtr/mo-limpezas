@@ -1,14 +1,14 @@
 {
   "generatedBy": "scripts/audit-file-inventory.mjs",
-  "totalFiles": 768,
+  "totalFiles": 771,
   "byStatus": {
-    "MANTER": 745,
+    "MANTER": 748,
     "STANDBY": 23
   },
   "byCategory": {
-    "test": 156,
+    "test": 157,
     "route-ui": 136,
-    "migration": 96,
+    "migration": 98,
     "lib": 67,
     "script": 54,
     "domain": 50,
@@ -29,7 +29,7 @@
     "supabase-other": 2
   },
   "byConfidence": {
-    "alta": 747,
+    "alta": 750,
     "média": 15,
     "baixa": 6
   },
@@ -6474,6 +6474,36 @@
         "serviceRole": 1,
         "sqlWrite": 3,
         "fallbackArray": 4
+      },
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/__tests__/payment-table-acl-closure-postgres.test.ts",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [
+        "write"
+      ],
+      "risks": [
+        "service-role"
+      ],
+      "signals": {
+        "serviceRole": 22,
+        "write": 1,
+        "sqlWrite": 60
       },
       "action": "nenhuma",
       "reason": "suite de testes — corre por convenção do vitest",
@@ -20660,6 +20690,27 @@
       "manualDecision": false
     },
     {
+      "path": "supabase/migrations/084_payment_table_acl_closure.sql",
+      "category": "migration",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [
+        "service-role"
+      ],
+      "signals": {
+        "serviceRole": 8,
+        "sqlWrite": 32
+      },
+      "action": "nenhuma",
+      "reason": "migration versionada — histórico do schema, nunca se apaga",
+      "manualDecision": false
+    },
+    {
       "path": "supabase/migrations/20260608_new_features.sql",
       "category": "migration",
       "status": "MANTER",
@@ -20935,6 +20986,27 @@
       "risks": [],
       "signals": {
         "sqlWrite": 9
+      },
+      "action": "nenhuma",
+      "reason": "migration versionada — histórico do schema, nunca se apaga",
+      "manualDecision": false
+    },
+    {
+      "path": "supabase/migrations/rollback/084_payment_table_acl_closure.down.sql",
+      "category": "migration",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [
+        "service-role"
+      ],
+      "signals": {
+        "serviceRole": 3,
+        "sqlWrite": 16
       },
       "action": "nenhuma",
       "reason": "migration versionada — histórico do schema, nunca se apaga",
