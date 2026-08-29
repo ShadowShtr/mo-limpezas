@@ -1,12 +1,12 @@
 {
   "generatedBy": "scripts/audit-file-inventory.mjs",
-  "totalFiles": 771,
+  "totalFiles": 772,
   "byStatus": {
-    "MANTER": 748,
+    "MANTER": 749,
     "STANDBY": 23
   },
   "byCategory": {
-    "test": 157,
+    "test": 158,
     "route-ui": 136,
     "migration": 98,
     "lib": 67,
@@ -29,7 +29,7 @@
     "supabase-other": 2
   },
   "byConfidence": {
-    "alta": 750,
+    "alta": 751,
     "média": 15,
     "baixa": 6
   },
@@ -5142,6 +5142,28 @@
       "signals": {
         "fallbackZero": 2
       },
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/__tests__/finance-pending-cashflow-ui-contract.test.ts",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {},
       "action": "nenhuma",
       "reason": "suite de testes — corre por convenção do vitest",
       "manualDecision": false,
@@ -17364,11 +17386,11 @@
       "category": "lib",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 4,
+      "consumers": 5,
       "consumerSample": [
+        "src/__tests__/finance-pending-cashflow-ui-contract.test.ts",
         "src/__tests__/payment-cashflow-rpc.test.ts",
-        "src/app/actions/payments.ts",
-        "src/lib/finance-rpc/invoice-creation.ts"
+        "src/app/actions/payments.ts"
       ],
       "autoLoaded": false,
       "referencedBy": [
@@ -17378,7 +17400,7 @@
       "risks": [],
       "signals": {},
       "action": "nenhuma",
-      "reason": "em uso: 4 consumidor(es)",
+      "reason": "em uso: 5 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
