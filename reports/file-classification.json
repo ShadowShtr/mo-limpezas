@@ -1,12 +1,12 @@
 {
   "generatedBy": "scripts/audit-file-inventory.mjs",
-  "totalFiles": 767,
+  "totalFiles": 768,
   "byStatus": {
-    "MANTER": 744,
+    "MANTER": 745,
     "STANDBY": 23
   },
   "byCategory": {
-    "test": 155,
+    "test": 156,
     "route-ui": 136,
     "migration": 96,
     "lib": 67,
@@ -29,7 +29,7 @@
     "supabase-other": 2
   },
   "byConfidence": {
-    "alta": 746,
+    "alta": 747,
     "média": 15,
     "baixa": 6
   },
@@ -6391,6 +6391,28 @@
       "signals": {
         "sqlWrite": 5
       },
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/__tests__/payment-status-code-allowlist.test.ts",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {},
       "action": "nenhuma",
       "reason": "suite de testes — corre por convenção do vitest",
       "manualDecision": false,
@@ -16399,7 +16421,7 @@
       "category": "lib",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 23,
+      "consumers": 24,
       "consumerSample": [
         "src/__tests__/auth-revalidation-central.test.ts",
         "src/app/actions/absences.ts",
@@ -16420,7 +16442,7 @@
         "ignoredError": 1
       },
       "action": "nenhuma",
-      "reason": "em uso: 23 consumidor(es)",
+      "reason": "em uso: 24 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -17312,7 +17334,7 @@
       "category": "lib",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 3,
+      "consumers": 4,
       "consumerSample": [
         "src/__tests__/payment-cashflow-rpc.test.ts",
         "src/app/actions/payments.ts",
@@ -17326,7 +17348,7 @@
       "risks": [],
       "signals": {},
       "action": "nenhuma",
-      "reason": "em uso: 3 consumidor(es)",
+      "reason": "em uso: 4 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -17478,8 +17500,9 @@
       "category": "lib",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 2,
+      "consumers": 3,
       "consumerSample": [
+        "src/__tests__/payment-status-code-allowlist.test.ts",
         "src/__tests__/payment-status-trace.test.ts",
         "src/app/actions/payments.ts"
       ],
@@ -17492,7 +17515,7 @@
         "consoleErr": 2
       },
       "action": "nenhuma",
-      "reason": "em uso: 2 consumidor(es)",
+      "reason": "em uso: 3 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,

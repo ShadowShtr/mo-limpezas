@@ -244,6 +244,21 @@ describe("🔴 falha fechada — nunca há caminho antigo", () => {
     expect(r.error).toContain("row-level security");
   });
 
+  it("🔴 uma excepção nomeada da 079 é recusa da base — o nome fica na mensagem, não no motivo", () => {
+    // `CASHFLOW_LINK_AMOUNT_MISMATCH` é levantada dentro do Postgres pela 079.
+    // Chega cá na `message`, e o `motivo` é `recusadoPelaBase` — não o nome da
+    // excepção. A distinção parece pedante e não é: o `motivo` é um conjunto
+    // fechado de cinco valores que o rasto de observabilidade regista tal e
+    // qual, e a `message` é texto arbitrário da base, que ele nunca regista.
+    //
+    // Um mock que devolvesse o nome da excepção como `motivo` estaria a
+    // descrever um sistema que não existe — e um teste assim já viveu em
+    // `payment-status-trace-runtime.test.ts`.
+    const r = interpretarErro({ message: "CASHFLOW_LINK_AMOUNT_MISMATCH", code: "P0001" });
+    expect(r.motivo).toBe("recusadoPelaBase");
+    expect(r.error).toContain("CASHFLOW_LINK_AMOUNT_MISMATCH");
+  });
+
   it.each([
     ["resposta vazia", null],
     ["lista vazia", []],

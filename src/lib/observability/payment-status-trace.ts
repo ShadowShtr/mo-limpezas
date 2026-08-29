@@ -25,6 +25,9 @@
 //    falhar, fechado, com a mesma mensagem para quem clicou.
 // ============================================================================
 
+import type { AuthGuardCode } from "@/lib/auth-guard";
+import type { MotivoFalha } from "@/lib/finance-rpc/payment-cashflow";
+
 /** Onde a operação parou. Cada etapa é distinguível na linha de log. */
 export type PaymentStatusStage =
   | "PAYMENT_STATUS_AUTH_GUARD"
@@ -88,17 +91,94 @@ function estadoSeguro(v: string | null | undefined): string {
   return v === "pago" || v === "pendente" ? v : "invalid";
 }
 
+// Um código técnico, não uma mensagem.
+//
+// 🔴 Uma allowlist de FORMATO não é uma allowlist.
+//
+//    `slice(60)` de uma mensagem do Postgres é 60 caracteres de mensagem do
+//    Postgres — isso já tinha sido corrigido. Mas o que o substituiu,
+//    `/^[A-Za-z0-9_.:-]{1,48}$/`, só verifica que o valor **parece** um
+//    código. E parecer um código não custa nada:
+//
+//        IBAN123456789        passa
+//        CustomerName123      passa
+//        SecretTokenABC       passa
+//
+//    Nenhum destes é um código deste domínio, e qualquer um deles entrava nos
+//    logs inteiro. Um `code` que venha de um caller forjado, ou de uma
+//    biblioteca a devolver algo que não previmos, não tem nada que se pareça
+//    com os treze valores que este sistema emite de verdade.
+//
+//    A regra passa a ser de VALOR: ou o código está no conjunto fechado
+//    abaixo, ou não é o valor original que se regista — é `UNCLASSIFIED_CODE`.
+//    O valor desconhecido nunca é preservado, nem truncado, nem sanitizado
+//    para caber: perde-se, que é o ponto.
+
 /**
- * Um código técnico, não uma mensagem.
+ * Os códigos que `setPaymentStatus` emite hoje, mapeados a partir dos callers
+ * reais e não de uma leitura optimista do tipo.
  *
- * 🔴 Achatar espaços e truncar a 60 não chega: `slice(60)` de uma mensagem do
- *    Postgres continua a ser 60 caracteres de mensagem do Postgres, e é
- *    precisamente aí que aparecem descrições, valores e nomes. A regra passa a
- *    ser de **forma**: se não parecer um código, não é registado de todo.
+ * 🔴 Manter esta lista sincronizada não pode depender de alguém se lembrar.
+ *    Duas das quatro origens são tipadas, e por isso o compilador toma conta
+ *    delas: ver `_CODIGOS_COBREM_*` no fim do bloco. As outras duas — as
+ *    guardas de período, cujo `code` é `string` — são cobertas pelo teste
+ *    `payment-status-code-allowlist`, que varre os literais nos ficheiros de
+ *    origem e falha se aparecer um que não esteja aqui.
  */
+export const CODIGOS_CONHECIDOS = [
+  // src/lib/auth-guard.ts — AUTH_GUARD_CODES
+  "UNAUTHENTICATED",
+  "PROFILE_NOT_FOUND",
+  "FORBIDDEN",
+  // src/lib/finance-period-guard.ts — assertFinancialPeriodOpen
+  "INVALID_DATE",
+  "FINANCIAL_PERIOD_STATE_UNKNOWN",
+  // src/lib/finance-rpc/payment-cashflow.ts — ERRO_PERIODO_FECHADO
+  "FINANCIAL_PERIOD_CLOSED",
+  // src/app/actions/payments.ts — bloquearSePagamentoEmPeriodoFechado
+  "PAYMENT_NOT_FOUND",
+  // src/lib/finance-rpc/payment-cashflow.ts — MotivoFalha
+  "argumentosInvalidos",
+  "rpcEmFalta",
+  "periodoFechado",
+  "recusadoPelaBase",
+  "respostaInesperada",
+  // src/app/actions/payments.ts — o catch de topo
+  "UNEXPECTED_EXCEPTION",
+] as const;
+
+type CodigoConhecido = (typeof CODIGOS_CONHECIDOS)[number];
+
+// ── Guardas de compilação ───────────────────────────────────────────────────
+//
+// 🔴 Um `AuthGuardCode` ou um `MotivoFalha` novo passa a partir a compilação
+//    em vez de aparecer nos logs como `UNCLASSIFIED_CODE` e ninguém perceber
+//    porquê. É o único mecanismo aqui que não depende de vigilância humana.
+//
+//    Os dois imports são `import type` de propósito: `auth-guard` arrasta o
+//    cliente service-role e `next/headers`, e este módulo é um sink de logs —
+//    não pode ganhar dependências de servidor por causa de uma verificação
+//    que desaparece na compilação.
+// 🔴 `[Origem] extends [CodigoConhecido]`, e nao `Origem extends ...`.
+//
+//    Um condicional sobre um parametro de tipo nu DISTRIBUI pela uniao:
+//    `Cobre<"A" | "B">` avalia `Cobre<"A"> | Cobre<"B">`, e `true | never`
+//    colapsa em `true`. A guarda passava desde que UM dos membros estivesse
+//    coberto — ou seja, nunca falhava quando se acrescentava um codigo novo,
+//    que e exactamente o unico caso para que existe. As parentesis rectas
+//    tiram a distribuicao e obrigam a uniao inteira a caber.
+type Cobre<Origem extends string> = [Origem] extends [CodigoConhecido] ? true : never;
+
+const _CODIGOS_COBREM_AUTH_GUARD: Cobre<AuthGuardCode> = true;
+const _CODIGOS_COBREM_MOTIVO_RPC: Cobre<MotivoFalha> = true;
+void _CODIGOS_COBREM_AUTH_GUARD;
+void _CODIGOS_COBREM_MOTIVO_RPC;
+
+const CONJUNTO_CONHECIDO: ReadonlySet<string> = new Set(CODIGOS_CONHECIDOS);
+
 function codigoSeguro(v: string | null | undefined): string | null {
   if (!v) return null;
-  return /^[A-Za-z0-9_.:-]{1,48}$/.test(v) ? v : "UNCLASSIFIED_CODE";
+  return CONJUNTO_CONHECIDO.has(v) ? v : "UNCLASSIFIED_CODE";
 }
 
 /**
@@ -113,7 +193,22 @@ export function tracePaymentStatus(input: PaymentStatusTraceInput): void {
       stage: input.stage,
       cid: input.correlationId,
       target: estadoSeguro(input.targetStatus),
-      payment: idSeguro(input.paymentId),
+      // 🔴 No AUTH_GUARD não se regista pagamento nenhum, venha o que vier.
+      //
+      //    Nesta etapa `requireProfile` ainda não passou: não há sessão
+      //    confirmada, não há empresa resolvida, e o `id` é literalmente o que
+      //    o caller enviou. Registá-lo é registar entrada não autenticada — e
+      //    um UUID válido mas forjado passa por `idSeguro()` sem ficar mais
+      //    seguro por isso, porque a forma nunca disse nada sobre a origem.
+      //
+      //    A garantia vive no SINK e não em cada caller. Uma regra que depende
+      //    de quem chama se lembrar dela é uma regra que já falhou uma vez —
+      //    aqui não há forma de a esquecer, nem de a contornar por engano.
+      //
+      //    UNAUTHENTICATED_INPUT_ID_LOGGED = NO
+      payment: input.stage === "PAYMENT_STATUS_AUTH_GUARD"
+        ? null
+        : idSeguro(input.paymentId),
       // Resolvido no servidor a partir da sessão — mas passa pela mesma peneira.
       // Uma defesa que só se aplica ao que se desconfia não é uma defesa.
       company: idSeguro(input.companyId),

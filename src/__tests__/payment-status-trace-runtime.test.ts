@@ -136,13 +136,40 @@ describe("etapas observáveis em runtime", () => {
   });
 
   it("5. recusa da RPC de marcar → MARK_RPC com o motivo canónico", async () => {
+    // 🔴 Este mock devolvia `motivo: "CASHFLOW_LINK_AMOUNT_MISMATCH"`, e isso
+    //    era impossível em produção.
+    //
+    //    `CASHFLOW_LINK_AMOUNT_MISMATCH` é o nome de uma excepção levantada
+    //    pela 079 dentro do Postgres. Chega ao TypeScript na `message` do erro,
+    //    e `interpretarErro` classifica-a como `recusadoPelaBase` — é esse o
+    //    valor que o `motivo` toma, e `MotivoFalha` só tem cinco. O mock
+    //    fabricava um sexto, e o teste dava por observado um valor que a
+    //    aplicação nunca emite. A classificação real está provada em
+    //    `payment-cashflow-rpc.test.ts`.
+    //
+    //    Enquanto o sanitizador filtrava por FORMA, a diferença não aparecia:
+    //    qualquer MAIÚSCULA_COM_UNDERSCORES passava. Com a allowlist de VALOR,
+    //    um motivo inventado dá `UNCLASSIFIED_CODE` — que é o comportamento
+    //    certo, e foi o que expôs o mock irrealista.
+    rpc.marcar.mockResolvedValue({
+      ok: false, motivo: "recusadoPelaBase", error: "Valores divergentes.",
+    });
+    await setPaymentStatus(PAGAMENTO, "pago");
+    expect(linha()).toMatchObject({
+      stage: "PAYMENT_STATUS_MARK_RPC", code: "recusadoPelaBase",
+    });
+  });
+
+  it("5b. 🔴 um motivo fora de MotivoFalha não é registado tal e qual", async () => {
+    // O reverso do que está acima: se algum dia a RPC devolver algo que não
+    // pertence à união — porque alguém alargou o tipo sem alargar a allowlist,
+    // ou porque a resposta veio deformada — o valor não entra no log.
     rpc.marcar.mockResolvedValue({
       ok: false, motivo: "CASHFLOW_LINK_AMOUNT_MISMATCH", error: "Valores divergentes.",
     });
     await setPaymentStatus(PAGAMENTO, "pago");
-    expect(linha()).toMatchObject({
-      stage: "PAYMENT_STATUS_MARK_RPC", code: "CASHFLOW_LINK_AMOUNT_MISMATCH",
-    });
+    expect(linha().code).toBe("UNCLASSIFIED_CODE");
+    expect(linhas.join("\n")).not.toContain("CASHFLOW_LINK_AMOUNT_MISMATCH");
   });
 
   it("6. desmarcar pagamento inexistente → UNMARK_GUARD + PAYMENT_NOT_FOUND", async () => {
@@ -205,14 +232,32 @@ describe("etapas observáveis em runtime", () => {
 // ═══════════════════════════════════════════════════════════════════════════
 
 describe("um caller forjado não escreve o que quer nos logs", () => {
-  it("11. id forjado com texto/PII não aparece — vira INVALID_UUID", async () => {
+  it("11. 🔴 id forjado com texto/PII no AUTH_GUARD não é registado de todo", async () => {
     // O TypeScript desaparece na compilação: quem chama a Server Action envia
     // o que quiser. A defesa tem de estar no tracer.
+    //
+    // 🔴 A expectativa endureceu: era `INVALID_UUID`, passa a ser `null`.
+    //
+    //    No AUTH_GUARD o `requireProfile` ainda não passou — não há sessão, e
+    //    o id é entrada não autenticada. `INVALID_UUID` já não deixava passar
+    //    o texto, mas continuava a afirmar «veio cá um id, e era mau» sobre uma
+    //    tentativa que nem sequer está autenticada. Nesta etapa não se olha
+    //    para ids, e a ausência é a informação certa.
     const forjado = "Maria Silva maria@exemplo.pt 912345678" as string;
     guardaAuth.resultado = { ok: false, code: "FORBIDDEN", error: "x" };
     await setPaymentStatus(forjado, "pago");
-    expect(linha().payment).toBe("INVALID_UUID");
+    expect(linha().payment).toBeNull();
     expect(linhas.join("\n")).not.toMatch(/Maria|exemplo\.pt|912345678/);
+  });
+
+  it("11b. 🔴 e um UUID válido mas forjado também não, no AUTH_GUARD", async () => {
+    // O caso que `INVALID_UUID` nunca cobriu: um id com a forma certa passava
+    // intacto para o log de uma tentativa não autenticada. A forma nunca disse
+    // nada sobre a origem.
+    guardaAuth.resultado = { ok: false, code: "UNAUTHENTICATED", error: "x" };
+    await setPaymentStatus("0f8fad5b-d9cb-469f-a165-70867728950e", "pago");
+    expect(linha().payment).toBeNull();
+    expect(linhas.join("\n")).not.toContain("0f8fad5b");
   });
 
   it("12. estado alvo forjado não aparece — vira invalid", async () => {
@@ -233,9 +278,16 @@ describe("um caller forjado não escreve o que quer nos logs", () => {
     expect(linhas.join("\n")).not.toMatch(/Silva|1234/);
   });
 
-  it("um id válido passa intacto — a peneira não estraga o caso normal", async () => {
-    guardaAuth.resultado = { ok: false, code: "FORBIDDEN", error: "x" };
+  it("um id válido passa intacto depois da autenticação — a peneira não estraga o caso normal", async () => {
+    // 🔴 A supressão é cirúrgica, e tem de se provar dos dois lados. Se apagasse
+    //    o `payment` em todas as etapas, o rasto deixava de servir para aquilo
+    //    que foi feito: dizer QUAL pagamento parou ONDE. Por isso o caso normal
+    //    mede-se agora numa etapa já autenticada.
+    periodo.assert.mockResolvedValue({
+      ok: false, code: "FINANCIAL_PERIOD_CLOSED", error: "Agosto está fechado.",
+    });
     await setPaymentStatus(PAGAMENTO, "pago");
+    expect(linha().stage).toBe("PAYMENT_STATUS_PERIOD_GUARD");
     expect(linha().payment).toBe(PAGAMENTO);
     expect(linha().target).toBe("pago");
   });
