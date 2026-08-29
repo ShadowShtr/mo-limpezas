@@ -4,6 +4,11 @@
 --
 -- 🔴 ROLLBACK_085_REOPENS_KNOWN_SECURITY_BUG = YES
 -- 🔴 PRODUCTION_ROLLBACK_DEFAULT = FORBIDDEN
+-- 🔴 ROLLBACK_EXACT_ACL_PRESTATE = NO
+--
+--    Este ficheiro reabre a CLASSE de exposição necessária para o ensaio ser
+--    honesto. Não é uma reconstrução integral do ACL histórico, e não o
+--    afirma — ver a nota na secção 1 sobre porque TRUNCATE não volta.
 --
 --    Correr isto devolve a base ao estado do incidente de 2026-08-29:
 --
@@ -48,9 +53,21 @@ BEGIN;
 ALTER VIEW public.teams_with_members    SET (security_invoker = false);
 ALTER VIEW public.monthly_hours_summary SET (security_invoker = false);
 
--- 🔴 É esta a linha que reabre o buraco. Está aqui porque o prestate
---    caracterizado tinha SELECT para `anon` nas duas views, e um rollback que
---    não o reponha não é o prestate — é um terceiro estado que nunca existiu.
+-- 🔴 ROLLBACK_EXACT_ACL_PRESTATE = NO — e é uma escolha, não uma falha.
+--
+--    O prestate real de produção tinha, em cada view, os OITO privilégios de
+--    PG17 (SELECT, INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER,
+--    MAINTAIN) concedidos a `anon`, `authenticated` e `service_role`. Este
+--    rollback devolve APENAS `SELECT`.
+--
+--    Reconstruir o ACL histórico ao pormenor obrigaria a conceder outra vez
+--    TRUNCATE a `anon` — dar a quem não tem sessão o poder de esvaziar
+--    tabelas, e TRUNCATE não passa por RLS nenhum. Ficheiro de rollback
+--    nenhum vale isso. Reabre-se a classe de exposição necessária ao ensaio
+--    (a leitura por `anon`, que é o que a 085 fecha e o que o teste tem de
+--    medir), e não mais do que isso.
+--
+--    Portanto este ficheiro NÃO repõe o prestate exacto, e não o afirma.
 GRANT SELECT ON public.teams_with_members    TO anon, authenticated, service_role;
 GRANT SELECT ON public.monthly_hours_summary TO anon, authenticated, service_role;
 

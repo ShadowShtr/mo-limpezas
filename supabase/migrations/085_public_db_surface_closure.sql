@@ -75,6 +75,9 @@ DECLARE
   v_cfg       text;
   v_args      text;
   v_nome      text;
+  v_papel     text;
+  v_acl       text;
+  v_acl_nulo  boolean;
 BEGIN
   -- 1a. As duas views existem, são views, e AINDA NÃO têm security_invoker.
   FOREACH v_nome IN ARRAY ARRAY['teams_with_members', 'monthly_hours_summary'] LOOP
@@ -146,6 +149,98 @@ BEGIN
           AND p.proname IN ('archive_expired_documents','get_documents_to_archive','detect_schedule_conflicts'))
       USING HINT = 'Um overload inesperado deixaria uma assinatura aberta depois dos REVOKE.';
   END IF;
+
+  -- 1d. 🔴 ACL DO PRESTATE — a guarda que faltava.
+  --
+  --     As verificações acima confirmam a FORMA dos objectos. Nenhuma delas
+  --     olha para os privilégios, e é sobre privilégios que esta migration
+  --     opera. Sem isto, um `REVOKE ALL` convergiria em silêncio sobre um ACL
+  --     que ninguém caracterizou: se alguém tivesse ajustado um grant entre a
+  --     leitura de produção e a aplicação, essa decisão desaparecia sem
+  --     deixar rasto — e o relatório diria «aplicado com sucesso».
+  --
+  --         ACL_MUTADO = UNKNOWN_STATE = FAIL_CLOSED
+  --
+  --     Lê-se `pg_class.relacl` / `pg_proc.proacl` directamente, via
+  --     `aclexplode`, e NÃO apenas `has_*_privilege`. A diferença importa: o
+  --     `has_*` responde «este papel consegue?», que é verdade também por
+  --     herança ou por um grant a PUBLIC — esconde a ORIGEM do privilégio.
+  --     Aqui interessa quem o tem por grant directo, porque é isso que o
+  --     `REVOKE` a seguir vai apagar.
+  FOREACH v_nome IN ARRAY ARRAY['teams_with_members', 'monthly_hours_summary'] LOOP
+    -- Vector caracterizado em produção: anon, authenticated e service_role
+    -- com os OITO privilégios de PG17, por grant directo.
+    FOREACH v_papel IN ARRAY ARRAY['anon', 'authenticated', 'service_role'] LOOP
+      SELECT coalesce(string_agg(DISTINCT a.privilege_type, ',' ORDER BY a.privilege_type), '')
+        INTO v_acl
+        FROM pg_class c
+        LEFT JOIN LATERAL aclexplode(c.relacl) a ON a.grantee = to_regrole(v_papel)::oid
+        JOIN pg_namespace n ON n.oid = c.relnamespace
+       WHERE n.nspname = 'public' AND c.relname = v_nome;
+
+      IF v_acl <> 'DELETE,INSERT,MAINTAIN,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE' THEN
+        RAISE EXCEPTION
+          '085_UNEXPECTED_PUBLIC_SURFACE_STATE: ACL de %.% para % = [%], esperado os 8 privilegios do prestate caracterizado',
+          'public', v_nome, v_papel, v_acl
+          USING HINT = 'O ACL mudou desde a caracterizacao. Reler produccao e decidir antes de reaplicar; a 085 nao normaliza ACL desconhecido.';
+      END IF;
+    END LOOP;
+
+    -- PUBLIC não tinha grant directo nas views. Um grant a PUBLIC aqui chega a
+    -- todos os papéis, incluindo `anon`, e escapa a qualquer verificação feita
+    -- por nome — por isso é medido à parte, por `grantee = 0`.
+    SELECT coalesce(string_agg(DISTINCT a.privilege_type, ',' ORDER BY a.privilege_type), '')
+      INTO v_acl
+      FROM pg_class c
+      LEFT JOIN LATERAL aclexplode(c.relacl) a ON a.grantee = 0
+      JOIN pg_namespace n ON n.oid = c.relnamespace
+     WHERE n.nspname = 'public' AND c.relname = v_nome;
+
+    IF v_acl <> '' THEN
+      RAISE EXCEPTION
+        '085_UNEXPECTED_PUBLIC_SURFACE_STATE: public.% tem grant directo a PUBLIC [%], que o prestate caracterizado nao tinha',
+        v_nome, v_acl;
+    END IF;
+  END LOOP;
+
+  -- Funções: o prestate caracterizado é EXECUTE para PUBLIC, anon,
+  -- authenticated e service_role.
+  --
+  -- 🔴 `proacl IS NULL` NÃO significa «sem grants». Significa o default do
+  --    PostgreSQL: EXECUTE implícito para PUBLIC — e portanto para toda a
+  --    gente. Medido em PG17: com `proacl` a NULL,
+  --    `has_function_privilege('anon', …, 'EXECUTE')` devolve `true` e
+  --    `aclexplode(NULL)` devolve ZERO linhas. Uma guarda que só olhasse para
+  --    `aclexplode` concluiria «nada concedido» exactamente no estado mais
+  --    aberto que existe. É por isso que os dois casos são tratados aqui.
+  FOREACH v_nome IN ARRAY ARRAY['archive_expired_documents', 'get_documents_to_archive', 'detect_schedule_conflicts'] LOOP
+    -- 🔴 `grantee = 0` É o PUBLIC. Não se traduz por `pg_get_userbyid`, que
+    --    para o OID 0 devolve o texto 'unknown (OID=0)' em vez de NULL — um
+    --    `coalesce` sobre ele nunca dispararia.
+    SELECT p.proacl IS NULL,
+           coalesce((SELECT string_agg(DISTINCT CASE WHEN a.grantee = 0 THEN 'PUBLIC'
+                                                     ELSE pg_get_userbyid(a.grantee) END, ',')
+                       FROM aclexplode(p.proacl) a WHERE a.privilege_type = 'EXECUTE'), '')
+      INTO v_acl_nulo, v_acl
+      FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+     WHERE n.nspname = 'public' AND p.proname = v_nome;
+
+    IF v_acl_nulo THEN
+      -- Default do PostgreSQL: EXECUTE para PUBLIC. É o prestate esperado.
+      CONTINUE;
+    END IF;
+
+    -- ACL materializado: então tem de conter explicitamente os quatro.
+    IF NOT (v_acl LIKE '%PUBLIC%'
+            AND v_acl LIKE '%anon%'
+            AND v_acl LIKE '%authenticated%'
+            AND v_acl LIKE '%service_role%') THEN
+      RAISE EXCEPTION
+        '085_UNEXPECTED_PUBLIC_SURFACE_STATE: EXECUTE de %() concedido a [%], esperado PUBLIC+anon+authenticated+service_role',
+        v_nome, v_acl
+        USING HINT = 'Alguem ja mexeu no EXECUTE desta funcao. A 085 nao aplica sobre um ACL que nao caracterizou.';
+    END IF;
+  END LOOP;
 END
 $precondicoes$;
 
@@ -232,22 +327,29 @@ BEGIN
     END IF;
   END LOOP;
 
-  -- 4b. ACL das views: nominal, papel a papel.
+  -- 4b. 🔴 ACL das views: os OITO privilégios, papel a papel.
+  --
+  --     Verificar só o SELECT deixava sete por medir. Um `REVOKE ALL` que não
+  --     tivesse pegado em `UPDATE` ou `TRUNCATE` passaria despercebido — e
+  --     TRUNCATE não passa por RLS nenhum. O prestate tinha os oito
+  --     concedidos, portanto os oito têm de ser afirmados aqui.
   FOR r IN
-    SELECT papel, relname,
-           has_table_privilege(papel, 'public.' || relname, 'SELECT') AS tem
+    SELECT papel, relname, privilegio,
+           has_table_privilege(papel, 'public.' || relname, privilegio) AS tem
       FROM unnest(ARRAY['anon','authenticated','service_role']) AS papel
       CROSS JOIN unnest(ARRAY['teams_with_members','monthly_hours_summary']) AS relname
+      CROSS JOIN unnest(ARRAY['SELECT','INSERT','UPDATE','DELETE',
+                              'TRUNCATE','REFERENCES','TRIGGER','MAINTAIN']) AS privilegio
   LOOP
-    v_esperado := CASE
-      WHEN r.papel = 'service_role' THEN true
-      WHEN r.papel = 'authenticated' AND r.relname = 'teams_with_members' THEN true
-      ELSE false
-    END;
+    v_esperado := (
+      r.privilegio = 'SELECT'
+      AND (r.papel = 'service_role'
+           OR (r.papel = 'authenticated' AND r.relname = 'teams_with_members'))
+    );
     IF r.tem <> v_esperado THEN
       RAISE EXCEPTION
-        '085_SURFACE_CLOSURE_POSTSTATE_FAILED: SELECT %.% = %, esperado %',
-        r.papel, r.relname, r.tem, v_esperado;
+        '085_SURFACE_CLOSURE_POSTSTATE_FAILED: % em %.% para % = %, esperado %',
+        r.privilegio, 'public', r.relname, r.papel, r.tem, v_esperado;
     END IF;
   END LOOP;
 
@@ -270,7 +372,12 @@ BEGIN
   -- 4d. search_path fixado e EXECUTE só para service_role nas três funções.
   FOR r IN
     SELECT p.proname,
-           coalesce(array_to_string(p.proconfig, ','), '') AS cfg,
+           coalesce(array_to_string(p.proconfig, ' | '), '') AS cfg,
+           -- 🔴 O elemento vem do ARRAY `proconfig`, não de uma string já
+           --    juntada: `search_path=pg_catalog, public` contém uma vírgula,
+           --    e parti-la por vírgulas destruiria o próprio valor a comparar.
+           replace(coalesce((SELECT s FROM unnest(p.proconfig) s
+                              WHERE s LIKE 'search_path=%'), ''), ' ', '') AS sp,
            has_function_privilege('anon',          p.oid, 'EXECUTE') AS anon_x,
            has_function_privilege('authenticated', p.oid, 'EXECUTE') AS auth_x,
            has_function_privilege('service_role',  p.oid, 'EXECUTE') AS svc_x
@@ -278,9 +385,15 @@ BEGIN
      WHERE n.nspname = 'public'
        AND p.proname IN ('archive_expired_documents','get_documents_to_archive','detect_schedule_conflicts')
   LOOP
-    IF r.cfg NOT ILIKE '%search_path%' THEN
+    -- 🔴 Valor EXACTO, não «contém search_path». Um `SET search_path = public`
+    --    satisfaria um teste de substring e continuaria a deixar `pg_catalog`
+    --    fora do caminho explícito — precisamente o que se está a corrigir.
+    --    Compara-se o conteúdo semântico (sem espaços), não a formatação, que
+    --    o catálogo pode normalizar.
+    IF r.sp <> 'search_path=pg_catalog,public' THEN
       RAISE EXCEPTION
-        '085_SURFACE_CLOSURE_POSTSTATE_FAILED: % sem search_path fixado (proconfig=%)', r.proname, r.cfg;
+        '085_SURFACE_CLOSURE_POSTSTATE_FAILED: % com search_path inesperado (proconfig=%), esperado pg_catalog, public',
+        r.proname, r.cfg;
     END IF;
     IF r.anon_x OR r.auth_x THEN
       RAISE EXCEPTION

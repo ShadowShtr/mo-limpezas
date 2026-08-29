@@ -161,13 +161,32 @@ const PRESTATE = `
      WHERE s1.scheduled_start::date BETWEEN p_start AND p_end
   $d$;
 
-  -- 🔴 O ACL amplo do prestate, tal como medido em produção.
+  -- 🔴 O ACL do prestate, tal como medido em produção — e medido a sério.
+  --
+  --    A versão anterior desta fixture concedia só SELECT nas views e dizia
+  --    ser «o ACL amplo de produção». Não era: produção tem os OITO
+  --    privilégios de PG17 concedidos a anon, authenticated e service_role em
+  --    cada uma das duas views. Uma fixture mais fechada do que a realidade
+  --    fabrica um prestate mais seguro do que aquele que a migration vai
+  --    encontrar, e a prova «ANTES» deixa de representar seja o que for.
   GRANT USAGE ON SCHEMA public TO anon, authenticated, service_role;
-  GRANT SELECT ON public.teams_with_members, public.monthly_hours_summary
+  GRANT SELECT, INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER, MAINTAIN
+    ON public.teams_with_members, public.monthly_hours_summary
     TO anon, authenticated, service_role;
   GRANT SELECT ON public.profiles, public.teams, public.team_members,
     public.timesheets, public.collaborator_documents, public.services, public.companies
     TO anon, authenticated, service_role;
+
+  -- As três funções ficam com o EXECUTE do prestate: PUBLIC, anon,
+  -- authenticated e service_role. Concedê-lo explicitamente materializa o
+  -- proacl em vez de o deixar NULL — e as duas formas são estados diferentes
+  -- no catálogo, ainda que equivalentes no efeito.
+  GRANT EXECUTE ON FUNCTION public.archive_expired_documents(uuid)
+    TO PUBLIC, anon, authenticated, service_role;
+  GRANT EXECUTE ON FUNCTION public.get_documents_to_archive(uuid)
+    TO PUBLIC, anon, authenticated, service_role;
+  GRANT EXECUTE ON FUNCTION public.detect_schedule_conflicts(date, date)
+    TO PUBLIC, anon, authenticated, service_role;
 `;
 
 /** Corre `fn` sob um papel/identidade e diz se passou ou foi barrado. */
@@ -295,6 +314,42 @@ describe.sequential("085 — o defeito existe ANTES da migration", () => {
     await cli.query("ROLLBACK");
   });
 
+  it("VIEW_PRESTATE_EXACT_PRIVILEGE_VECTOR: os 8 privilégios estão mesmo lá", async () => {
+    // Se a fixture não reproduzir o vector real, as provas «DEPOIS» medem a
+    // remoção de algo que nunca existiu.
+    const a = await cli.query(`SELECT c.relname, pg_get_userbyid(x.grantee) papel,
+        string_agg(DISTINCT x.privilege_type, ',' ORDER BY x.privilege_type) privs
+      FROM pg_class c
+      JOIN pg_namespace n ON n.oid = c.relnamespace
+      CROSS JOIN LATERAL aclexplode(c.relacl) x
+      WHERE n.nspname='public' AND c.relname IN ('teams_with_members','monthly_hours_summary')
+        AND pg_get_userbyid(x.grantee) IN ('anon','authenticated','service_role')
+      GROUP BY c.relname, x.grantee ORDER BY c.relname, papel`);
+    expect(a.rowCount).toBe(6);
+    for (const row of a.rows) {
+      expect(row.privs, `${row.relname}/${row.papel}`)
+        .toBe("DELETE,INSERT,MAINTAIN,REFERENCES,SELECT,TRIGGER,TRUNCATE,UPDATE");
+    }
+  });
+
+  it("FUNCTION_PRESTATE_EXECUTE_VECTOR: PUBLIC+anon+authenticated+service_role", async () => {
+    const f = await cli.query(`SELECT p.proname,
+        has_function_privilege('anon', p.oid, 'EXECUTE') anon_x,
+        has_function_privilege('authenticated', p.oid, 'EXECUTE') auth_x,
+        has_function_privilege('service_role', p.oid, 'EXECUTE') svc_x,
+        has_function_privilege('public', p.oid, 'EXECUTE') pub_x
+      FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
+      WHERE n.nspname='public' AND p.proname IN
+        ('archive_expired_documents','get_documents_to_archive','detect_schedule_conflicts')`);
+    expect(f.rowCount).toBe(3);
+    for (const row of f.rows) {
+      expect(row.anon_x, row.proname).toBe(true);
+      expect(row.auth_x, row.proname).toBe(true);
+      expect(row.svc_x, row.proname).toBe(true);
+      expect(row.pub_x, row.proname).toBe(true);
+    }
+  });
+
   it("as views correm como a dona — o RLS não se aplica", async () => {
     const v = await cli.query(`SELECT relname, coalesce(array_to_string(reloptions,','),'') opts
       FROM pg_class WHERE relname IN ('teams_with_members','monthly_hours_summary')`);
@@ -344,14 +399,19 @@ describe.sequential("085 aplicada — a superfície fecha", () => {
     expect(r.err).toMatch(/permission denied/i);
   });
 
-  it("FUNCTION_SEARCH_PATH_AFTER: as três têm search_path fixado", async () => {
-    const f = await cli.query(`SELECT p.proname, coalesce(array_to_string(p.proconfig,','),'') cfg
+  it("FUNCTION_SEARCH_PATH_EXACT_AFTER: valor exacto pg_catalog, public", async () => {
+    // 🔴 Valor exacto, não «contém search_path»: um `SET search_path = public`
+    //    satisfazia a asserção antiga e deixava `pg_catalog` fora.
+    const f = await cli.query(`SELECT p.proname,
+        replace(coalesce((SELECT s FROM unnest(p.proconfig) s WHERE s LIKE 'search_path=%'), ''), ' ', '') sp
       FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
       WHERE n.nspname='public' AND p.proname IN
         ('archive_expired_documents','get_documents_to_archive','detect_schedule_conflicts')
       ORDER BY p.proname`);
     expect(f.rowCount).toBe(3);
-    for (const row of f.rows) expect(row.cfg, row.proname).toMatch(/search_path/);
+    for (const row of f.rows) {
+      expect(row.sp, row.proname).toBe("search_path=pg_catalog,public");
+    }
   });
 
   it("FUNCTION_EXECUTE_ACL_AFTER: só service_role executa as três", async () => {
@@ -370,23 +430,24 @@ describe.sequential("085 aplicada — a superfície fecha", () => {
     }
   });
 
-  it("VIEW_ACL_AFTER: a ACL final é exactamente a nominal", async () => {
-    const a = await cli.query(`SELECT papel, relname,
-        has_table_privilege(papel, 'public.'||relname, 'SELECT') tem
+  it("VIEW_POSTSTATE_ALL_8_PRIVILEGES: a ACL final é exactamente a nominal", async () => {
+    // 🔴 Os OITO, não só o SELECT. Um REVOKE que não pegasse em UPDATE ou
+    //    TRUNCATE passaria despercebido numa verificação de SELECT — e
+    //    TRUNCATE não passa por RLS nenhum.
+    const a = await cli.query(`SELECT papel, relname, privilegio,
+        has_table_privilege(papel, 'public.'||relname, privilegio) tem
       FROM unnest(ARRAY['anon','authenticated','service_role']) papel
       CROSS JOIN unnest(ARRAY['teams_with_members','monthly_hours_summary']) relname
-      ORDER BY relname, papel`);
-    const mapa = Object.fromEntries(a.rows.map((r: { papel: string; relname: string; tem: boolean }) =>
-      [`${r.relname}:${r.papel}`, r.tem]));
-    // teams_with_members: authenticated mantém-se porque contratos/page.tsx
-    // a lê pelo cliente de sessão.
-    expect(mapa["teams_with_members:anon"]).toBe(false);
-    expect(mapa["teams_with_members:authenticated"]).toBe(true);
-    expect(mapa["teams_with_members:service_role"]).toBe(true);
-    // monthly_hours_summary: zero callers autenticados.
-    expect(mapa["monthly_hours_summary:anon"]).toBe(false);
-    expect(mapa["monthly_hours_summary:authenticated"]).toBe(false);
-    expect(mapa["monthly_hours_summary:service_role"]).toBe(true);
+      CROSS JOIN unnest(ARRAY['SELECT','INSERT','UPDATE','DELETE',
+                              'TRUNCATE','REFERENCES','TRIGGER','MAINTAIN']) privilegio`);
+    expect(a.rowCount).toBe(48);
+    for (const r of a.rows as { papel: string; relname: string; privilegio: string; tem: boolean }[]) {
+      const esperado =
+        r.privilegio === "SELECT" &&
+        (r.papel === "service_role" ||
+          (r.papel === "authenticated" && r.relname === "teams_with_members"));
+      expect(r.tem, `${r.privilegio} ${r.relname}/${r.papel}`).toBe(esperado);
+    }
   });
 
   it("PUBLIC sem grants residuais nas duas views", async () => {
@@ -526,6 +587,66 @@ describe.sequential("085 — precondições fail-closed", () => {
     expect(erro).toMatch(/ja tem search_path/i);
   });
 
+  // ── ACL DIVERGENTE ────────────────────────────────────────────────────────
+  //
+  // 🔴 A forma dos objectos pode estar intacta e o ACL ter mudado. Sem estas
+  //    guardas, a 085 convergia em silêncio e apagava uma decisão de grant que
+  //    nunca caracterizou — e o relatório dizia «aplicado com sucesso».
+
+  /** Estado das duas views e das três funções, para comparar antes/depois. */
+  async function fotografia() {
+    const v = await cli.query(`SELECT relname, coalesce(array_to_string(reloptions,','),'') opts
+      FROM pg_class WHERE relname IN ('teams_with_members','monthly_hours_summary') ORDER BY relname`);
+    const f = await cli.query(`SELECT p.proname, coalesce(array_to_string(p.proconfig,','),'') cfg
+      FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
+      WHERE n.nspname='public' AND p.proname IN
+        ('archive_expired_documents','get_documents_to_archive','detect_schedule_conflicts')
+      ORDER BY p.proname`);
+    return JSON.stringify({ v: v.rows, f: f.rows });
+  }
+
+  it("ACL_DIVERGENCE_VIEW_TEST: um privilégio a menos numa view → FAIL_CLOSED", async () => {
+    await reporPrestate();
+    await cli.query("REVOKE UPDATE ON public.teams_with_members FROM authenticated");
+    const antes = await fotografia();
+
+    let erro = "";
+    try { await aplicar085(); } catch (e) { erro = (e as Error).message; }
+    expect(erro).toContain("085_UNEXPECTED_PUBLIC_SURFACE_STATE");
+
+    // ZERO_PARTIAL_MUTATION: a outra view não ganhou security_invoker e o
+    // search_path das funções não foi tocado.
+    expect(await fotografia()).toBe(antes);
+  });
+
+  it("ACL_DIVERGENCE_VIEW_TEST: grant inesperado a PUBLIC → FAIL_CLOSED, não normalizado", async () => {
+    await reporPrestate();
+    await cli.query("GRANT SELECT ON public.monthly_hours_summary TO PUBLIC");
+    const antes = await fotografia();
+
+    let erro = "";
+    try { await aplicar085(); } catch (e) { erro = (e as Error).message; }
+    expect(erro).toContain("085_UNEXPECTED_PUBLIC_SURFACE_STATE");
+    expect(erro).toMatch(/PUBLIC/);
+
+    // 🔴 E o grant desconhecido continua lá: a 085 não o apaga em silêncio.
+    const pub = await cli.query(`SELECT count(*)::int n FROM pg_class c, aclexplode(c.relacl) a
+      WHERE c.relname='monthly_hours_summary' AND a.grantee = 0`);
+    expect(pub.rows[0].n).toBeGreaterThan(0);
+    expect(await fotografia()).toBe(antes);
+  });
+
+  it("ACL_DIVERGENCE_FUNCTION_TEST: EXECUTE revogado a anon → FAIL_CLOSED", async () => {
+    await reporPrestate();
+    await cli.query("REVOKE EXECUTE ON FUNCTION public.get_documents_to_archive(uuid) FROM anon");
+    const antes = await fotografia();
+
+    let erro = "";
+    try { await aplicar085(); } catch (e) { erro = (e as Error).message; }
+    expect(erro).toContain("085_UNEXPECTED_PUBLIC_SURFACE_STATE");
+    expect(await fotografia()).toBe(antes);
+  });
+
   it("overload inesperado → FAIL_CLOSED (senão ficaria uma assinatura aberta)", async () => {
     await reporPrestate();
     await cli.query(`CREATE FUNCTION public.detect_schedule_conflicts(p_start date)
@@ -560,6 +681,47 @@ describe.sequential("085 — provas de mutação", () => {
     const r = await como("anon", null, () =>
       cli.query("SELECT public.archive_expired_documents($1)", [EMP_A]));
     expect(r.ok).toBe(true);
+  });
+
+  it("SECURITY_MUTATION: um UPDATE concedido depois do hardening é detectável", async () => {
+    // A verificação nominal dos 8 privilégios existe para isto: um grant que
+    // não seja SELECT numa view fechada tem de aparecer.
+    await reporPrestate();
+    await aplicar085();
+    await cli.query("GRANT UPDATE ON public.teams_with_members TO authenticated");
+
+    const a = await cli.query(`SELECT papel, relname, privilegio,
+        has_table_privilege(papel, 'public.'||relname, privilegio) tem
+      FROM unnest(ARRAY['anon','authenticated','service_role']) papel
+      CROSS JOIN unnest(ARRAY['teams_with_members','monthly_hours_summary']) relname
+      CROSS JOIN unnest(ARRAY['SELECT','INSERT','UPDATE','DELETE',
+                              'TRUNCATE','REFERENCES','TRIGGER','MAINTAIN']) privilegio`);
+    const violacoes = (a.rows as { papel: string; relname: string; privilegio: string; tem: boolean }[])
+      .filter((r) => {
+        const esperado =
+          r.privilegio === "SELECT" &&
+          (r.papel === "service_role" ||
+            (r.papel === "authenticated" && r.relname === "teams_with_members"));
+        return r.tem !== esperado;
+      });
+    expect(violacoes).toHaveLength(1);
+    expect(violacoes[0].privilegio).toBe("UPDATE");
+  });
+
+  it("SEARCH_PATH_MUTATION: `SET search_path = public` NÃO satisfaz o estado canónico", async () => {
+    // 🔴 A asserção antiga («contém search_path») aceitava isto. A nova não.
+    await reporPrestate();
+    await aplicar085();
+    await cli.query("ALTER FUNCTION public.detect_schedule_conflicts(date,date) SET search_path = public");
+
+    const f = await cli.query(`SELECT
+        replace(coalesce((SELECT s FROM unnest(p.proconfig) s WHERE s LIKE 'search_path=%'), ''), ' ', '') sp
+      FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
+      WHERE n.nspname='public' AND p.proname='detect_schedule_conflicts'`);
+    // Continua a "conter search_path" — e é exactamente por isso que a
+    // verificação por substring não servia.
+    expect(f.rows[0].sp).toContain("search_path");
+    expect(f.rows[0].sp).not.toBe("search_path=pg_catalog,public");
   });
 
   it("PRECONDITION_MUTATION: o pós-estado apanha um REVOKE que não pegou", async () => {
@@ -601,6 +763,18 @@ describe.sequential("ROLLBACK_085_REOPENS_KNOWN_SECURITY_BUG = YES", () => {
     const escrita = await como("anon", null, () =>
       cli.query("SELECT public.archive_expired_documents($1)", [EMP_A]));
     expect(escrita.ok).toBe(true);
+
+    // 🔴 ROLLBACK_EXACT_ACL_PRESTATE = NO — afirmado, não subentendido.
+    //    O prestate tinha os 8 privilégios; o rollback devolve só SELECT.
+    //    Devolver TRUNCATE a `anon` para "ser exacto" seria dar a quem não tem
+    //    sessão o poder de esvaziar tabelas, e TRUNCATE não passa por RLS.
+    const acl = await cli.query(`SELECT
+        has_table_privilege('anon','public.teams_with_members','SELECT') sel,
+        has_table_privilege('anon','public.teams_with_members','TRUNCATE') trunc,
+        has_table_privilege('anon','public.teams_with_members','UPDATE') upd`);
+    expect(acl.rows[0].sel).toBe(true);
+    expect(acl.rows[0].trunc).toBe(false);
+    expect(acl.rows[0].upd).toBe(false);
 
     // Reaplicar, para o container não ficar num estado inseguro.
     await reporPrestate();

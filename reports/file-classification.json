@@ -6842,8 +6842,8 @@
         "service-role"
       ],
       "signals": {
-        "serviceRole": 14,
-        "sqlWrite": 17,
+        "serviceRole": 23,
+        "sqlWrite": 45,
         "unknownCast": 1
       },
       "action": "nenhuma",
@@ -20770,8 +20770,8 @@
         "service-role"
       ],
       "signals": {
-        "serviceRole": 14,
-        "sqlWrite": 8
+        "serviceRole": 19,
+        "sqlWrite": 19
       },
       "action": "nenhuma",
       "reason": "migration versionada — histórico do schema, nunca se apaga",
@@ -21093,8 +21093,8 @@
         "service-role"
       ],
       "signals": {
-        "serviceRole": 2,
-        "sqlWrite": 6
+        "serviceRole": 3,
+        "sqlWrite": 13
       },
       "action": "nenhuma",
       "reason": "migration versionada — histórico do schema, nunca se apaga",
