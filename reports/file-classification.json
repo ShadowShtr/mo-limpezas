@@ -1,14 +1,14 @@
 {
   "generatedBy": "scripts/audit-file-inventory.mjs",
-  "totalFiles": 771,
+  "totalFiles": 774,
   "byStatus": {
-    "MANTER": 748,
+    "MANTER": 751,
     "STANDBY": 23
   },
   "byCategory": {
-    "test": 157,
+    "test": 158,
     "route-ui": 136,
-    "migration": 98,
+    "migration": 100,
     "lib": 67,
     "script": 54,
     "domain": 50,
@@ -29,7 +29,7 @@
     "supabase-other": 2
   },
   "byConfidence": {
-    "alta": 750,
+    "alta": 753,
     "média": 15,
     "baixa": 6
   },
@@ -6799,6 +6799,34 @@
         "supabase": 2,
         "serviceRole": 4,
         "sqlWrite": 8
+      },
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/__tests__/public-db-surface-closure-postgres.test.ts",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [
+        "service-role"
+      ],
+      "signals": {
+        "serviceRole": 14,
+        "sqlWrite": 17,
+        "unknownCast": 1
       },
       "action": "nenhuma",
       "reason": "suite de testes — corre por convenção do vitest",
@@ -20711,6 +20739,27 @@
       "manualDecision": false
     },
     {
+      "path": "supabase/migrations/085_public_db_surface_closure.sql",
+      "category": "migration",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [
+        "service-role"
+      ],
+      "signals": {
+        "serviceRole": 14,
+        "sqlWrite": 8
+      },
+      "action": "nenhuma",
+      "reason": "migration versionada — histórico do schema, nunca se apaga",
+      "manualDecision": false
+    },
+    {
       "path": "supabase/migrations/20260608_new_features.sql",
       "category": "migration",
       "status": "MANTER",
@@ -21007,6 +21056,27 @@
       "signals": {
         "serviceRole": 3,
         "sqlWrite": 16
+      },
+      "action": "nenhuma",
+      "reason": "migration versionada — histórico do schema, nunca se apaga",
+      "manualDecision": false
+    },
+    {
+      "path": "supabase/migrations/rollback/085_public_db_surface_closure.down.sql",
+      "category": "migration",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [
+        "service-role"
+      ],
+      "signals": {
+        "serviceRole": 2,
+        "sqlWrite": 6
       },
       "action": "nenhuma",
       "reason": "migration versionada — histórico do schema, nunca se apaga",
