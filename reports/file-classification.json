@@ -1,8 +1,8 @@
 {
   "generatedBy": "scripts/audit-file-inventory.mjs",
-  "totalFiles": 774,
+  "totalFiles": 775,
   "byStatus": {
-    "MANTER": 751,
+    "MANTER": 752,
     "STANDBY": 23
   },
   "byCategory": {
@@ -12,7 +12,7 @@
     "lib": 67,
     "script": 54,
     "domain": 50,
-    "doc": 44,
+    "doc": 45,
     "server-action": 42,
     "component": 30,
     "src-other": 23,
@@ -29,7 +29,7 @@
     "supabase-other": 2
   },
   "byConfidence": {
-    "alta": 753,
+    "alta": 754,
     "média": 15,
     "baixa": 6
   },
@@ -1227,6 +1227,24 @@
         "serviceRole": 4,
         "write": 4,
         "sqlWrite": 19
+      },
+      "action": "nenhuma",
+      "reason": "documentação",
+      "manualDecision": false
+    },
+    {
+      "path": "docs/SECURITY-ADVISOR-DEFERRED-FINDINGS.md",
+      "category": "doc",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "sqlWrite": 3
       },
       "action": "nenhuma",
       "reason": "documentação",
