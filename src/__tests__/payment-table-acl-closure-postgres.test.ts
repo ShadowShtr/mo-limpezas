@@ -471,12 +471,30 @@ describe.sequential("084 — UNKNOWN_STATE = FAIL_CLOSED", () => {
     } finally { await limpar(c); }
   }, 120_000);
 
-  it("🔴 checksum da 083 diferente do canónico: recusa", async () => {
+  /**
+   * 🔴 O checksum da 083 é exigido por igualdade exacta — sem excepções.
+   *
+   *    A primeira versão desta guarda só comparava quando o valor tinha forma
+   *    de sha256, para deixar as fixtures gravarem um checksum de conveniência.
+   *    Era um fail-OPEN: `NULL`, texto, ou um valor truncado passavam sem
+   *    verificação — e um ledger nesse estado é justamente o sinal de que
+   *    alguém lhe mexeu à mão, que é o caso para o qual a precondição existe.
+   *
+   *    Os três cenários abaixo são a prova de que a excepção morreu. As
+   *    fixtures gravam o checksum canónico, como produção: uma migration que
+   *    se comporta de outra maneira debaixo do ensaio não é a migration que se
+   *    está a ensaiar.
+   */
+  it.each([
+    ["sha256 válido mas errado", "f".repeat(64)],
+    ["texto sem forma de sha256", "ensaio"],
+    ["sha256 truncado", "056763d8"],
+    ["NULL", null],
+  ])("🔴 checksum da 083 %s: recusa, e não altera nada", async (_n, valor) => {
     const c = await pool.connect();
     try {
       const antes = await estadoPos083(c);
-      await c.query("UPDATE public._migrations SET checksum=$2 WHERE name=$1",
-        [M083, "f".repeat(64)]);
+      await c.query("UPDATE public._migrations SET checksum=$2 WHERE name=$1", [M083, valor]);
 
       await expect(aplicarTexto(c, sql(M084)))
         .rejects.toThrow(/084_UNEXPECTED_PAYMENT_AUTHORIZATION_STATE/);
@@ -484,11 +502,33 @@ describe.sequential("084 — UNKNOWN_STATE = FAIL_CLOSED", () => {
     } finally { await limpar(c); }
   }, 120_000);
 
-  it("um checksum de ensaio (sem forma de sha256) é tolerado — a excepção é estreita", async () => {
+  it("🔴 e o `NULL` recusa por `IS DISTINCT FROM`, não por acaso", async () => {
+    // Com `<>` o PostgreSQL devolveria `NULL` na comparação, o `IF` não
+    // disparava, e a guarda voltava a falhar aberta pela porta do lado — o
+    // mesmo defeito com outra roupa. A asserção é sobre o texto da migration
+    // porque é ali que a escolha vive.
+    //
+    // 🔴 E mede o SQL, não os comentários. A migration explica a forma antiga
+    //    à letra para que se perceba o que mudou; uma varredura que confundisse
+    //    as duas coisas dava vermelho a quem documenta e verde a quem
+    //    reintroduzisse a comparação frouxa sem uma palavra.
+    const codigo = sql(M084)
+      .split("\n")
+      .filter((l) => !l.trimStart().startsWith("--"))
+      .join("\n");
+
+    expect(codigo).toContain("v_checksum IS DISTINCT FROM c_083_checksum");
+    expect(codigo).not.toMatch(/v_checksum\s*<>\s*c_083_checksum/);
+    expect(codigo).not.toMatch(/v_checksum\s*~\s*'\^\[0-9a-f\]\{64\}\$'/);
+  });
+
+  it("o checksum canónico exacto deixa a 084 aplicar-se", async () => {
+    // O contra-exemplo dos quatro acima. Sem ele, uma guarda que recusasse
+    // tudo passaria por «fail-closed» e ninguém dava por isso.
     const c = await pool.connect();
     try {
       await preparar(c);
-      await aplicarComoRunner(c, M083, "ensaio");
+      await aplicarComoRunner(c, M083, CHECKSUM_083);
       await aplicarTexto(c, sql(M084));
       expect(await matriz(c)).toEqual(matrizEsperada());
     } finally { await limpar(c); }

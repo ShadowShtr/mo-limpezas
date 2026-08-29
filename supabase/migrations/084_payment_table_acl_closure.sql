@@ -93,17 +93,35 @@ BEGIN
 
   -- 1b. É a 083 que conhecemos, e não outra com o mesmo nome.
   --
-  -- 🔴 O ensaio local grava checksums de conveniência nas migrations que aplica
-  --    para montar o cenário. A igualdade só se exige quando o ledger traz algo
-  --    com forma de sha256 — o que é sempre o caso do runner real e nunca o das
-  --    fixtures. Sem esta condição, ou o ensaio não corre, ou a fixture tinha de
-  --    inventar o checksum de produção; e isso é pior, porque passava a haver
-  --    dois sítios a afirmar o mesmo valor.
+  -- 🔴 Igualdade exacta, e nada mais brando.
+  --
+  --    A primeira versão desta guarda só comparava quando o valor do ledger
+  --    tinha forma de sha256:
+  --
+  --        IF v_checksum ~ '^[0-9a-f]{64}$' AND v_checksum <> c_083_checksum
+  --
+  --    A intenção era deixar os ensaios locais gravarem um checksum de
+  --    conveniência. O efeito era um fail-OPEN: um ledger com `NULL`, com
+  --    texto, ou com um valor truncado passava sem verificação nenhuma — e um
+  --    ledger nesse estado é exactamente o sinal de que alguém mexeu nele à
+  --    mão, que é o caso para o qual esta precondição existe. A excepção
+  --    abria-se mais larga precisamente onde tinha de fechar.
+  --
+  --    UNKNOWN_STATE = FAIL_CLOSED não admite «excepto quando não sei».
+  --
+  --    `IS DISTINCT FROM` e não `<>`: com `NULL` o operador normal devolve
+  --    `NULL`, o `IF` não dispara, e a guarda voltava a falhar aberta pela
+  --    porta do lado. `IS DISTINCT FROM` trata `NULL` como valor diferente,
+  --    que é o que aqui se quer dizer.
+  --
+  --    E não há caminho especial para testes: as fixtures gravam o checksum
+  --    canónico da 083, como produção. Uma migration que se comporta de outra
+  --    maneira debaixo do ensaio não é a migration que se está a ensaiar.
   SELECT checksum INTO v_checksum
     FROM public._migrations
    WHERE name = '083_payment_authorization_hardening.sql';
 
-  IF v_checksum ~ '^[0-9a-f]{64}$' AND v_checksum <> c_083_checksum THEN
+  IF v_checksum IS DISTINCT FROM c_083_checksum THEN
     RAISE EXCEPTION
       '084_UNEXPECTED_PAYMENT_AUTHORIZATION_STATE: checksum da 083 é %, esperado %',
       v_checksum, c_083_checksum;
