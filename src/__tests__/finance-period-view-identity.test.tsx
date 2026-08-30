@@ -129,8 +129,8 @@ const textoNoEcra = () => container.textContent ?? "";
 //    receber key — e falha a mostrar Julho, exatamente como o utilizador viu.
 function keyQueAPaginaPassa(dados: ReturnType<typeof dadosDe>): string | undefined {
   const fonte = ler("src/app/(dashboard)/dashboard/financeiro/pagamentos/page.tsx");
-  const inicio = fonte.indexOf("<PaymentsClient");
-  if (inicio < 0) throw new Error("boundary <PaymentsClient> não encontrado na página");
+  const inicio = fonte.indexOf("<UnifiedPaymentsClient");
+  if (inicio < 0) throw new Error("boundary <UnifiedPaymentsClient> não encontrado na página");
 
   const fim = fonte.indexOf("/>", inicio);
   const abertura = fonte.slice(inicio, fim < 0 ? undefined : fim);
@@ -292,7 +292,7 @@ describe("PaymentsClient ao mudar de período", () => {
 // a identidade.
 
 const VISTAS: Array<{ nome: string; ficheiro: string; componente: string }> = [
-  { nome: "Pagamentos",   ficheiro: "pagamentos/page.tsx",   componente: "PaymentsClient" },
+  { nome: "Pagamentos",   ficheiro: "pagamentos/page.tsx",   componente: "UnifiedPaymentsClient" },
   { nome: "Fluxo de Caixa", ficheiro: "fluxo-caixa/page.tsx", componente: "CashFlowClient" },
   { nome: "Contas",       ficheiro: "contas/page.tsx",       componente: "ContasClient" },
   { nome: "Conciliação",  ficheiro: "conciliacao/page.tsx",  componente: "ReconciliationClient" },

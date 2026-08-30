@@ -24,6 +24,13 @@ export interface FinanceLedgerPaymentSource {
   period_year: number;
   period_month: number;
   paid_at: string | null;
+  /**
+   * Débito directo e notas — a vista unificada mostra-os e o formulário
+   * edita-os. Opcionais na FONTE: quem não os selecionar continua a produzir
+   * um ledger válido, e a linha fica com `null` em vez de `undefined`.
+   */
+  direct_debit?: boolean | null;
+  notes?: string | null;
   expense_category_id: string | null;
   category_name: string | null;
   created_at: string;
@@ -40,6 +47,7 @@ export interface FinanceLedgerCashflowSource {
   reference_type: string | null;
   reference_id: string | null;
   status: "pendente" | "confirmado";
+  notes?: string | null;
   expense_category_id: string | null;
   category_name: string | null;
   created_at: string;
@@ -58,6 +66,21 @@ export interface FinanceLedgerRow {
   category_name: string | null;
   origin: string;
   amount_cents: number | null;
+  /**
+   * Os dois lados do mesmo movimento, separados de propósito.
+   *
+   * 🔴 `amount_cents` responde «quanto é esta linha». Estes dois respondem
+   *    «quanto é a obrigação» e «quanto saiu de caixa» — e é precisamente
+   *    quando divergem que existe `linked_amount_mismatch`. Colapsá-los num
+   *    só número apagaria a divergência do resumo, que é onde ela tem de
+   *    aparecer: o total por competência usa o valor do pagamento, o total de
+   *    caixa usa o do movimento.
+   */
+  payment_amount_cents: number | null;
+  cashflow_amount_cents: number | null;
+  /** Só existem na linha de pagamento; num movimento manual são `null`. */
+  direct_debit: boolean | null;
+  notes: string | null;
   status: FinanceLedgerStatus;
   payment_status: "pago" | "pendente" | null;
   cashflow_status: "pendente" | "confirmado" | null;
@@ -128,6 +151,10 @@ function paymentRow(
     category_name: text(payment.category_name),
     origin: payment.kind,
     amount_cents: paymentCents,
+    payment_amount_cents: paymentCents,
+    cashflow_amount_cents: cashCents,
+    direct_debit: payment.direct_debit ?? null,
+    notes: text(payment.notes),
     status: payment.status,
     payment_status: payment.status,
     cashflow_status: linked?.status ?? null,
@@ -168,6 +195,12 @@ function cashflowRow(
     category_name: text(cashflow.category_name) ?? text(cashflow.category),
     origin: manual ? "manual" : (text(cashflow.reference_type) ?? "manual"),
     amount_cents: paraCentimos(cashflow.amount),
+    // Uma linha de caixa não tem obrigação por trás: o lado da competência
+    // fica `null` em vez de repetir o valor e fingir que existem dois lados.
+    payment_amount_cents: null,
+    cashflow_amount_cents: paraCentimos(cashflow.amount),
+    direct_debit: null,
+    notes: text(cashflow.notes),
     status: cashflow.status === "confirmado" ? "confirmado" : "pendente_confirmacao",
     payment_status: null,
     cashflow_status: cashflow.status,

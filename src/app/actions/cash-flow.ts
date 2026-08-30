@@ -237,6 +237,10 @@ export async function createCashFlowEntry(
   if (error) return { ok: false, error: error.message };
   revalidatePath("/dashboard/financeiro/fluxo-caixa");
   revalidatePath("/dashboard/financeiro/contas");
+  // A vista unificada de Pagamentos mostra tambem os movimentos de caixa: sem
+  // isto, criar/editar/eliminar um movimento deixava esse ecra a mostrar o
+  // snapshot anterior ate um refresh manual.
+  revalidatePath("/dashboard/financeiro/pagamentos");
   return { ok: true };
 }
 
@@ -367,6 +371,10 @@ export async function updateCashFlowEntry(
   if (error) return { ok: false, error: mensagemDeMovimento(error.message) };
   revalidatePath("/dashboard/financeiro/fluxo-caixa");
   revalidatePath("/dashboard/financeiro/contas");
+  // A vista unificada de Pagamentos mostra tambem os movimentos de caixa: sem
+  // isto, criar/editar/eliminar um movimento deixava esse ecra a mostrar o
+  // snapshot anterior ate um refresh manual.
+  revalidatePath("/dashboard/financeiro/pagamentos");
   return { ok: true };
 }
 
@@ -427,6 +435,10 @@ export async function deleteCashFlowEntry(id: string): Promise<{ ok: boolean; er
   if (error) return { ok: false, error: mensagemDeMovimento(error.message) };
   revalidatePath("/dashboard/financeiro/fluxo-caixa");
   revalidatePath("/dashboard/financeiro/contas");
+  // A vista unificada de Pagamentos mostra tambem os movimentos de caixa: sem
+  // isto, criar/editar/eliminar um movimento deixava esse ecra a mostrar o
+  // snapshot anterior ate um refresh manual.
+  revalidatePath("/dashboard/financeiro/pagamentos");
   return { ok: true };
 }
 

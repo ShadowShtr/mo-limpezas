@@ -142,6 +142,28 @@ const CAPABILITY_CEILING: Record<string, string[]> = {
     "createPayment", "deletePayment",
     "setPaymentStatus", "updatePayment",
   ],
+  // ── Pagamentos, vista unificada (2026-08-30) ──────────────────────────────
+  //
+  // 🔴 Sete capacidades, e o número por si só parece um alargamento. Não é:
+  //    são as MESMAS escritas que já existiam, reunidas num ecrã só.
+  //
+  //      · as quatro de pagamento vinham de `payments-client.tsx` (acima);
+  //      · as três de caixa vinham do ecrã de Fluxo de Caixa.
+  //
+  //    O que muda é onde se clica, não o que a base aceita. Nenhuma action
+  //    nova foi criada para esta vista, e nenhuma delas escreve directamente:
+  //    `updatePayment`/`deletePayment` entram por `update_payment_atomic`/
+  //    `delete_payment_atomic` (082), `setPaymentStatus` pelas RPCs canónicas
+  //    de mark/unmark, e as de caixa por `update_cashflow_entry_atomic`/
+  //    `delete_cashflow_entry_atomic`.
+  //
+  //    Fixado em `src/__tests__/finance-ledger-unified-ui.test.ts` (P25):
+  //    nenhuma mutação financeira directa pode regressar às actions.
+  "src/app/(dashboard)/dashboard/financeiro/pagamentos/_components/unified-payments-client.tsx": [
+    "createCashFlowEntry", "createPayment",
+    "deleteCashFlowEntry", "deletePayment",
+    "setPaymentStatus", "updateCashFlowEntry", "updatePayment",
+  ],
   // `pagamentos/page.tsx` desapareceu deste inventário por não lhe restar
   // nenhuma capacidade de escrita — só chama `getPayments`.
 
