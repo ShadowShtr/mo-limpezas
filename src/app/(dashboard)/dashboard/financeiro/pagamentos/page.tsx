@@ -46,6 +46,46 @@ export default async function PagamentosPage({
     ? catalogo.catalog.categories.map((c) => ({ id: c.id, name: c.name }))
     : [];
 
+  // ═══════════════════════════════════════════════════════════════════════
+  // 🔴 LEDGER_AUTHORITATIVE_READ_FAILED → FINANCIAL_WRITES = DISABLED
+  // ═══════════════════════════════════════════════════════════════════════
+  //
+  //    Lista vazia e erro de leitura são estados DIFERENTES:
+  //
+  //        rows = []      → «não há movimentos neste mês»
+  //        ok = false     → «não sabemos que movimentos existem»
+  //
+  //    Montar a vista mutável com `rows={[]}` colapsa os dois no primeiro, e
+  //    é a versão perigosa: alguém veria um mês aparentemente vazio e criaria
+  //    de novo um pagamento que já lá está, ou marcaria como pago algo cujo
+  //    estado real ninguém leu. A duplicação nasceria da própria UI.
+  //
+  //    Por isso a superfície de escrita não é montada de todo — nem com
+  //    `companyId` vazio, que seria um cliente mutável com identidade falsa.
+  //    O período e a navegação continuam a funcionar: recarregar é seguro.
+  if (!res.ok) {
+    return (
+      <FinanceShell
+        period={period}
+        title="Pagamentos"
+        subtitle="Obrigações e movimentos de caixa, sem duplicar o mesmo pagamento"
+      >
+        <div
+          role="alert"
+          className="rounded-xl border border-amber-300 bg-amber-50 p-5 text-sm text-amber-900"
+        >
+          <p className="font-semibold">Não foi possível carregar os pagamentos deste mês.</p>
+          <p className="mt-1.5">{res.error}</p>
+          <p className="mt-3 text-amber-800">
+            Por segurança, criar e alterar registos está indisponível até a lista
+            carregar — assim não se corre o risco de duplicar um pagamento que já
+            exista. Tente recarregar a página ou escolher outro mês.
+          </p>
+        </div>
+      </FinanceShell>
+    );
+  }
+
   return (
     <FinanceShell
       period={period}
@@ -74,9 +114,9 @@ export default async function PagamentosPage({
       <UnifiedPaymentsClient
         key={period.key}
         categories={categorias}
-        rows={res.ok ? res.rows : []}
-        error={res.ok ? null : res.error}
-        companyId={res.ok ? res.companyId : ""}
+        rows={res.rows}
+        error={null}
+        companyId={res.companyId}
         year={period.year}
         month={period.month}
       />

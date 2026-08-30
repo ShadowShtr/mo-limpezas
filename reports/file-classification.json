@@ -1,12 +1,12 @@
 {
   "generatedBy": "scripts/audit-file-inventory.mjs",
-  "totalFiles": 781,
+  "totalFiles": 782,
   "byStatus": {
-    "MANTER": 758,
+    "MANTER": 759,
     "STANDBY": 23
   },
   "byCategory": {
-    "test": 160,
+    "test": 161,
     "route-ui": 137,
     "migration": 100,
     "lib": 67,
@@ -29,7 +29,7 @@
     "supabase-other": 2
   },
   "byConfidence": {
-    "alta": 760,
+    "alta": 761,
     "média": 15,
     "baixa": 6
   },
@@ -5257,6 +5257,31 @@
       "sideEffects": [],
       "risks": [],
       "signals": {},
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/__tests__/finance-unified-fail-closed.test.tsx",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "sqlWrite": 1,
+        "dynamicImport": 1
+      },
       "action": "nenhuma",
       "reason": "suite de testes — corre por convenção do vitest",
       "manualDecision": false,
@@ -11042,8 +11067,9 @@
       "category": "route-ui",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 1,
+      "consumers": 2,
       "consumerSample": [
+        "src/__tests__/finance-unified-fail-closed.test.tsx",
         "src/app/(dashboard)/dashboard/financeiro/pagamentos/page.tsx"
       ],
       "autoLoaded": false,
@@ -11058,7 +11084,7 @@
         "realtime": 1
       },
       "action": "nenhuma",
-      "reason": "em uso: 1 consumidor(es)",
+      "reason": "em uso: 2 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -15776,9 +15802,10 @@
       "category": "domain",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 2,
+      "consumers": 3,
       "consumerSample": [
         "src/__tests__/finance-ledger-unified-ui.test.ts",
+        "src/__tests__/finance-unified-fail-closed.test.tsx",
         "src/app/(dashboard)/dashboard/financeiro/pagamentos/_components/unified-payments-client.tsx"
       ],
       "autoLoaded": false,
@@ -15789,7 +15816,7 @@
         "fallbackZero": 2
       },
       "action": "nenhuma",
-      "reason": "em uso: 2 consumidor(es)",
+      "reason": "em uso: 3 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -15803,7 +15830,7 @@
       "category": "domain",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 7,
+      "consumers": 8,
       "consumerSample": [
         "src/__tests__/finance-ledger-read-model.test.ts",
         "src/__tests__/finance-ledger-six-repaired.test.ts",
@@ -15819,7 +15846,7 @@
         "fallbackArray": 2
       },
       "action": "nenhuma",
-      "reason": "em uso: 7 consumidor(es)",
+      "reason": "em uso: 8 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,

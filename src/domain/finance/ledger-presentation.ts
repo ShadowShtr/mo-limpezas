@@ -33,7 +33,52 @@ export function originLabel(row: FinanceLedgerRow): string {
   return originLabelFor(row.origin);
 }
 
+// ── Integridade ─────────────────────────────────────────────────────────────
+//
+// 🔴 O read model já detectava as três anomalias; ninguém as mostrava. Uma
+//    linha com `integrity_issue` aparecia como "Pago" ou "Confirmado", e
+//    continuava a oferecer Editar / Marcar / Eliminar. Ou seja: o sistema
+//    sabia que os dois lados não batiam certo e deixava alguém escrever por
+//    cima na mesma — que é como uma divergência de € se torna permanente.
+//
+//    O texto é para quem gere a empresa, não para quem escreveu o SQL: nada
+//    de nomes de tabela, RPC ou coluna.
+
+/** Explicação humana da anomalia. `null` quando a linha está sã. */
+export function integrityWarning(row: FinanceLedgerRow): string | null {
+  switch (row.integrity_issue) {
+    case "linked_amount_mismatch":
+      return "Valor do pagamento diferente do movimento de caixa";
+    case "orphan_payment_reference":
+      return "Movimento ligado a um pagamento que já não existe";
+    case "duplicate_payment_link":
+      return "Mais de um movimento ligado ao mesmo pagamento";
+    default:
+      return null;
+  }
+}
+
+/**
+ * Uma linha degradada não aceita mutação financeira por esta vista.
+ *
+ * 🔴 UNKNOWN_STATE = FAIL_CLOSED. Não se repara automaticamente e não se
+ *    escolhe um lado como verdade: quando o pagamento diz um valor e o caixa
+ *    diz outro, escrever por cima de qualquer um deles apaga a prova de que
+ *    divergiram. Quem decide qual está certo é uma pessoa, na origem.
+ */
+export function canMutateRow(row: FinanceLedgerRow): boolean {
+  return row.integrity_issue === null;
+}
+
+/** Motivo mostrado quando alguém tenta alterar uma linha degradada. */
+export const INTEGRITY_BLOCK_REASON =
+  "Este registo tem uma inconsistência entre Pagamentos e Caixa. "
+  + "Resolva a origem antes de o alterar.";
+
 export function presentationStatus(row: FinanceLedgerRow, today: string): string {
+  // A anomalia vem primeiro: dizer "Pago" sobre uma linha que não fecha seria
+  // afirmar precisamente aquilo que não se sabe.
+  if (row.integrity_issue !== null) return "Verificar";
   if (row.payment_status === "pendente" && row.due_date && row.due_date < today) {
     return "Em atraso";
   }

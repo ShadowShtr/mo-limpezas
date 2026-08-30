@@ -12,6 +12,7 @@ import {
   Plus,
   Trash2,
   X,
+  AlertTriangle,
 } from "lucide-react";
 import type { FinanceLedgerRow } from "@/domain/finance/ledger";
 import {
@@ -24,6 +25,9 @@ import {
   presentationStatus,
   type FinanceGraphMode,
   type FinanceLedgerFilter,
+  canMutateRow,
+  integrityWarning,
+  INTEGRITY_BLOCK_REASON,
 } from "@/domain/finance/ledger-presentation";
 import { createPayment, deletePayment, setPaymentStatus, updatePayment } from "@/app/actions/payments";
 import { createCashFlowEntry, deleteCashFlowEntry, updateCashFlowEntry } from "@/app/actions/cash-flow";
@@ -235,6 +239,9 @@ export function UnifiedPaymentsClient({ rows, error: initialError, categories, c
   }
 
   function remove(row: FinanceLedgerRow) {
+    // Segunda barreira: mesmo que o menu falhasse, uma linha degradada
+    // nunca chega a `deletePayment`/`deleteCashFlowEntry`.
+    if (!canMutateRow(row)) { setError(INTEGRITY_BLOCK_REASON); return; }
     if (row.row_kind === "payment" && row.payment_status === "pendente" && !row.is_linked && row.payment_id) {
       if (confirm(`Eliminar "${row.description}"?`)) mutate(() => deletePayment(row.payment_id!));
       return;
@@ -311,10 +318,26 @@ export function UnifiedPaymentsClient({ rows, error: initialError, categories, c
               <tr>{["Data", "Descrição", "Vencimento", "Categoria", "Origem", "Valor", "Estado", "Ações"].map((label) => <th key={label} className="px-3 py-2.5 font-medium">{label}</th>)}</tr>
             </thead>
             <tbody className="divide-y divide-[var(--color-border)]">
-              {visible.map((row) => (
-                <tr key={row.row_id} className="hover:bg-[var(--color-background)]">
+              {visible.map((row) => {
+                // 🔴 Uma linha em que Pagamentos e Caixa não batem certo não
+                //    aceita escrita por aqui. Não se repara automaticamente
+                //    nem se escolhe um lado como verdade — escrever por cima
+                //    apagaria a prova de que divergiram.
+                const anomalia = integrityWarning(row);
+                const podeAlterar = canMutateRow(row);
+                const bloqueado = () => setError(INTEGRITY_BLOCK_REASON);
+                return (
+                <tr key={row.row_id} className={anomalia ? "bg-amber-50/60" : "hover:bg-[var(--color-background)]"}>
                   <td className="px-3 py-3 tabular-nums">{date(row.date)}</td>
-                  <td className="max-w-[260px] px-3 py-3 font-medium text-[var(--color-text-main)]">{row.description}</td>
+                  <td className="max-w-[260px] px-3 py-3 font-medium text-[var(--color-text-main)]">
+                    {row.description}
+                    {anomalia && (
+                      <span className="mt-1 flex items-start gap-1.5 text-xs font-normal text-amber-800">
+                        <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                        <span>{anomalia}</span>
+                      </span>
+                    )}
+                  </td>
                   <td className="px-3 py-3 tabular-nums">{date(row.due_date)}</td>
                   <td className="px-3 py-3">{row.category_name ?? "Sem categoria"}</td>
                   <td className="px-3 py-3">{originLabel(row)}</td>
@@ -322,13 +345,14 @@ export function UnifiedPaymentsClient({ rows, error: initialError, categories, c
                   <td className="px-3 py-3"><Status label={presentationStatus(row, today)} /></td>
                   <td className="px-3 py-3">
                     <RowMenu label={`Ações de ${row.description}`} actions={[
-                      { label: row.is_manual || row.row_kind === "payment" ? "Editar" : "Gerido na origem", icon: <Pencil className="h-3.5 w-3.5" />, onSelect: () => row.is_manual || row.row_kind === "payment" ? setForm(formFromRow(row)) : setError("Este movimento deve ser alterado na área que o criou.") },
-                      ...(row.row_kind === "payment" && row.payment_id ? [{ label: row.payment_status === "pago" ? "Marcar por pagar" : "Marcar como pago", icon: <Check className="h-3.5 w-3.5" />, onSelect: () => mutate(() => setPaymentStatus(row.payment_id!, row.payment_status === "pago" ? "pendente" : "pago")) }] : []),
-                      { label: row.is_manual || (row.row_kind === "payment" && row.payment_status === "pendente" && !row.is_linked) ? "Eliminar" : "Não pode eliminar", icon: <Trash2 className="h-3.5 w-3.5" />, onSelect: () => remove(row), danger: true },
+                      { label: !podeAlterar ? "Verificar inconsistência" : row.is_manual || row.row_kind === "payment" ? "Editar" : "Gerido na origem", icon: <Pencil className="h-3.5 w-3.5" />, onSelect: () => !podeAlterar ? bloqueado() : row.is_manual || row.row_kind === "payment" ? setForm(formFromRow(row)) : setError("Este movimento deve ser alterado na área que o criou.") },
+                      ...(row.row_kind === "payment" && row.payment_id ? [{ label: !podeAlterar ? "Estado bloqueado" : row.payment_status === "pago" ? "Marcar por pagar" : "Marcar como pago", icon: <Check className="h-3.5 w-3.5" />, onSelect: () => !podeAlterar ? bloqueado() : mutate(() => setPaymentStatus(row.payment_id!, row.payment_status === "pago" ? "pendente" : "pago")) }] : []),
+                      { label: !podeAlterar ? "Não pode eliminar" : row.is_manual || (row.row_kind === "payment" && row.payment_status === "pendente" && !row.is_linked) ? "Eliminar" : "Não pode eliminar", icon: <Trash2 className="h-3.5 w-3.5" />, onSelect: () => !podeAlterar ? bloqueado() : remove(row), danger: true },
                     ]} />
                   </td>
                 </tr>
-              ))}
+                );
+              })}
               {visible.length === 0 && <tr><td colSpan={8} className="px-4 py-12 text-center text-sm text-[var(--color-text-muted)]">Nenhum registo corresponde aos filtros.</td></tr>}
             </tbody>
           </table>
