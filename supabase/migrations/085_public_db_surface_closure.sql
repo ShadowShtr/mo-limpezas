@@ -77,6 +77,7 @@ DECLARE
   v_nome      text;
   v_papel     text;
   v_acl       text;
+  v_extra     text;
   v_acl_nulo  boolean;
 BEGIN
   -- 1a. As duas views existem, são views, e AINDA NÃO têm security_invoker.
@@ -201,6 +202,42 @@ BEGIN
         '085_UNEXPECTED_PUBLIC_SURFACE_STATE: public.% tem grant directo a PUBLIC [%], que o prestate caracterizado nao tinha',
         v_nome, v_acl;
     END IF;
+
+    -- 🔴 CONJUNTO EXACTO DE GRANTEES, não apenas «os esperados estão lá».
+    --
+    --    Verificar que anon/authenticated/service_role têm os 8 privilégios
+    --    não diz nada sobre quem MAIS os tem. Um `custom_role` com SELECT
+    --    passaria por todas as verificações acima, sobreviveria intacto aos
+    --    `REVOKE ... FROM PUBLIC, anon, authenticated, service_role` — que são
+    --    nomeados — e o pós-estado não o veria, porque também só mede os
+    --    papéis conhecidos. A superfície continuaria aberta com um relatório
+    --    a dizer «fechada».
+    --
+    --        GRANTEE_INESPERADO = UNKNOWN_STATE = FAIL_CLOSED
+    --
+    --    O owner é derivado de `pg_class.relowner`, nunca comparado com o nome
+    --    'postgres': em Supabase, num container descartável e numa restauração
+    --    o dono pode ter nomes diferentes, e um nome fixo tornaria a guarda
+    --    frágil onde ela precisa de ser exacta. O owner não é exposição
+    --    pública — está no ACL por natureza e não se lhe toca.
+    SELECT coalesce(string_agg(DISTINCT CASE WHEN a.grantee = 0 THEN 'PUBLIC'
+                                             ELSE pg_get_userbyid(a.grantee) END, ', '), '')
+      INTO v_acl
+      FROM pg_class c
+      JOIN pg_namespace n ON n.oid = c.relnamespace
+      CROSS JOIN LATERAL aclexplode(c.relacl) a
+     WHERE n.nspname = 'public' AND c.relname = v_nome
+       AND a.grantee <> c.relowner
+       AND a.grantee NOT IN (to_regrole('anon')::oid,
+                             to_regrole('authenticated')::oid,
+                             to_regrole('service_role')::oid);
+
+    IF v_acl <> '' THEN
+      RAISE EXCEPTION
+        '085_UNEXPECTED_PUBLIC_SURFACE_STATE: public.% tem grantee(s) inesperado(s) [%] alem do owner e de anon/authenticated/service_role',
+        v_nome, v_acl
+        USING HINT = 'Um REVOKE nomeado nao os fecharia. Caracterizar cada um e decidir antes de reaplicar.';
+    END IF;
   END LOOP;
 
   -- Funções: o prestate caracterizado é EXECUTE para PUBLIC, anon,
@@ -226,20 +263,62 @@ BEGIN
      WHERE n.nspname = 'public' AND p.proname = v_nome;
 
     IF v_acl_nulo THEN
-      -- Default do PostgreSQL: EXECUTE para PUBLIC. É o prestate esperado.
+      -- CASO A — default do PostgreSQL: EXECUTE implícito para PUBLIC, e mais
+      -- ninguém com grant directo. É um dos dois prestates conhecidos, tratado
+      -- explicitamente como tal.
       CONTINUE;
     END IF;
 
-    -- ACL materializado: então tem de conter explicitamente os quatro.
-    IF NOT (v_acl LIKE '%PUBLIC%'
-            AND v_acl LIKE '%anon%'
-            AND v_acl LIKE '%authenticated%'
-            AND v_acl LIKE '%service_role%') THEN
+    -- CASO B — ACL materializado. O conjunto de grantees directos tem de ser
+    -- EXACTAMENTE {owner, PUBLIC, anon, authenticated, service_role}.
+    --
+    -- 🔴 Duas verificações, e ambas são precisas:
+    --
+    --    (i)  nenhum a MAIS — um `custom_rpc_role` com EXECUTE sobreviveria
+    --         aos REVOKE nomeados e o pós-estado não o veria;
+    --    (ii) nenhum a MENOS — é a guarda de divergência que já existia.
+    --
+    --    Comparar por conjunto, e não por `LIKE '%anon%'`: uma verificação
+    --    textual de presença daria verdadeiro para um papel chamado
+    --    `anonimo_legacy` e nunca detectaria um sexto grantee.
+    SELECT coalesce(string_agg(DISTINCT CASE WHEN a.grantee = 0 THEN 'PUBLIC'
+                                             ELSE pg_get_userbyid(a.grantee) END, ', '), '')
+      INTO v_extra
+      FROM pg_proc p
+      JOIN pg_namespace n ON n.oid = p.pronamespace
+      CROSS JOIN LATERAL aclexplode(p.proacl) a
+     WHERE n.nspname = 'public' AND p.proname = v_nome
+       AND a.grantee <> p.proowner
+       AND a.grantee <> 0
+       AND a.grantee NOT IN (to_regrole('anon')::oid,
+                             to_regrole('authenticated')::oid,
+                             to_regrole('service_role')::oid);
+
+    IF v_extra <> '' THEN
       RAISE EXCEPTION
-        '085_UNEXPECTED_PUBLIC_SURFACE_STATE: EXECUTE de %() concedido a [%], esperado PUBLIC+anon+authenticated+service_role',
-        v_nome, v_acl
-        USING HINT = 'Alguem ja mexeu no EXECUTE desta funcao. A 085 nao aplica sobre um ACL que nao caracterizou.';
+        '085_UNEXPECTED_PUBLIC_SURFACE_STATE: %() tem grantee(s) inesperado(s) [%] alem do owner e de PUBLIC/anon/authenticated/service_role',
+        v_nome, v_extra
+        USING HINT = 'Um REVOKE nomeado nao os fecharia. Caracterizar cada um e decidir antes de reaplicar.';
     END IF;
+
+    -- Os quatro esperados têm de estar todos presentes, com EXECUTE.
+    FOREACH v_papel IN ARRAY ARRAY['PUBLIC', 'anon', 'authenticated', 'service_role'] LOOP
+      IF NOT EXISTS (
+        SELECT 1
+          FROM pg_proc p
+          JOIN pg_namespace n ON n.oid = p.pronamespace
+          CROSS JOIN LATERAL aclexplode(p.proacl) a
+         WHERE n.nspname = 'public' AND p.proname = v_nome
+           AND a.privilege_type = 'EXECUTE'
+           AND ((v_papel = 'PUBLIC' AND a.grantee = 0)
+                OR (v_papel <> 'PUBLIC' AND a.grantee = to_regrole(v_papel)::oid))
+      ) THEN
+        RAISE EXCEPTION
+          '085_UNEXPECTED_PUBLIC_SURFACE_STATE: %() sem EXECUTE para %, que o prestate caracterizado tinha (acl=[%])',
+          v_nome, v_papel, v_acl
+          USING HINT = 'Alguem ja mexeu no EXECUTE desta funcao. A 085 nao aplica sobre um ACL que nao caracterizou.';
+      END IF;
+    END LOOP;
   END LOOP;
 END
 $precondicoes$;
@@ -353,6 +432,39 @@ BEGIN
     END IF;
   END LOOP;
 
+  -- 4b-bis. 🔴 ACL DIRECTO EXACTO das views: nenhum grantee fora do nominal.
+  --
+  --     O bloco 4b mede os papéis conhecidos. Não vê um `custom_role` — e é
+  --     precisamente esse que sobreviveria a um `REVOKE` nomeado. Aqui
+  --     pergunta-se o inverso: quem está no ACL que não devia estar?
+  --
+  --     Esperado, por view:
+  --         teams_with_members    → owner, authenticated (SELECT), service_role (SELECT)
+  --         monthly_hours_summary → owner, service_role (SELECT)
+  --
+  --     Owner derivado de `relowner`, nunca por nome.
+  FOR r IN
+    SELECT c.relname,
+           coalesce(string_agg(DISTINCT CASE WHEN a.grantee = 0 THEN 'PUBLIC'
+                                             ELSE pg_get_userbyid(a.grantee) END, ', '), '') AS extra
+      FROM pg_class c
+      JOIN pg_namespace n ON n.oid = c.relnamespace
+      CROSS JOIN LATERAL aclexplode(c.relacl) a
+     WHERE n.nspname = 'public'
+       AND c.relname IN ('teams_with_members', 'monthly_hours_summary')
+       AND a.grantee <> c.relowner
+       AND NOT (a.grantee = to_regrole('service_role')::oid)
+       AND NOT (a.grantee = to_regrole('authenticated')::oid
+                AND c.relname = 'teams_with_members')
+     GROUP BY c.relname
+  LOOP
+    IF r.extra <> '' THEN
+      RAISE EXCEPTION
+        '085_SURFACE_CLOSURE_POSTSTATE_FAILED: % ficou com grantee(s) fora do conjunto nominal [%]',
+        r.relname, r.extra;
+    END IF;
+  END LOOP;
+
   -- 4c. PUBLIC sem grants residuais em nenhuma das views — grantee = 0 não
   --     aparece em nenhuma verificação feita por nome de papel.
   FOR r IN
@@ -403,6 +515,31 @@ BEGIN
     IF NOT r.svc_x THEN
       RAISE EXCEPTION
         '085_SURFACE_CLOSURE_POSTSTATE_FAILED: % deixou de ser executavel por service_role', r.proname;
+    END IF;
+  END LOOP;
+
+  -- 4e. 🔴 ACL DIRECTO EXACTO das funções: só owner e service_role.
+  --
+  --     `has_function_privilege` acima responde por papel conhecido. Não
+  --     responde «e mais quem?». Um `custom_rpc_role` com EXECUTE passaria
+  --     nas três verificações anteriores.
+  FOR r IN
+    SELECT p.proname,
+           coalesce(string_agg(DISTINCT CASE WHEN a.grantee = 0 THEN 'PUBLIC'
+                                             ELSE pg_get_userbyid(a.grantee) END, ', '), '') AS extra
+      FROM pg_proc p
+      JOIN pg_namespace n ON n.oid = p.pronamespace
+      CROSS JOIN LATERAL aclexplode(p.proacl) a
+     WHERE n.nspname = 'public'
+       AND p.proname IN ('archive_expired_documents','get_documents_to_archive','detect_schedule_conflicts')
+       AND a.grantee <> p.proowner
+       AND a.grantee <> to_regrole('service_role')::oid
+     GROUP BY p.proname
+  LOOP
+    IF r.extra <> '' THEN
+      RAISE EXCEPTION
+        '085_SURFACE_CLOSURE_POSTSTATE_FAILED: %() ficou com grantee(s) fora do conjunto nominal [%]',
+        r.proname, r.extra;
     END IF;
   END LOOP;
 END

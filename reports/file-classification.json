@@ -6842,7 +6842,7 @@
         "service-role"
       ],
       "signals": {
-        "serviceRole": 23,
+        "serviceRole": 26,
         "sqlWrite": 45,
         "unknownCast": 1
       },
@@ -20770,7 +20770,7 @@
         "service-role"
       ],
       "signals": {
-        "serviceRole": 19,
+        "serviceRole": 30,
         "sqlWrite": 19
       },
       "action": "nenhuma",

@@ -257,6 +257,8 @@ beforeAll(async () => {
   await cli.query(`
     CREATE ROLE anon NOLOGIN; CREATE ROLE authenticated NOLOGIN;
     CREATE ROLE service_role NOLOGIN BYPASSRLS;
+    -- Papel descartavel, so para os cenarios de grantee inesperado.
+    CREATE ROLE surface_extra NOLOGIN;
     CREATE SCHEMA IF NOT EXISTS auth;
     CREATE OR REPLACE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql STABLE
       AS $u$ SELECT NULLIF(current_setting('request.jwt.claim.sub', true), '')::uuid $u$;
@@ -647,6 +649,51 @@ describe.sequential("085 — precondições fail-closed", () => {
     expect(await fotografia()).toBe(antes);
   });
 
+  // ── GRANTEE INESPERADO ────────────────────────────────────────────────────
+  //
+  // 🔴 O caso que faltava. Verificar que anon/authenticated/service_role têm o
+  //    que se espera não diz nada sobre quem MAIS tem. Um papel à parte com
+  //    SELECT ou EXECUTE passaria por todas as outras guardas, sobreviveria
+  //    intacto aos REVOKE — que são NOMEADOS — e o pós-estado não o veria.
+  //    A superfície ficava aberta com um relatório a dizer «fechada».
+
+  it("VIEW_CUSTOM_ROLE_TEST: grantee extra numa view → FAIL_CLOSED", async () => {
+    await reporPrestate();
+    await cli.query("GRANT SELECT ON public.teams_with_members TO surface_extra");
+    const antes = await fotografia();
+
+    let erro = "";
+    try { await aplicar085(); } catch (e) { erro = (e as Error).message; }
+    expect(erro).toContain("085_UNEXPECTED_PUBLIC_SURFACE_STATE");
+    expect(erro).toMatch(/surface_extra/);
+
+    expect(await fotografia()).toBe(antes);
+
+    // 🔴 E o grant do papel desconhecido continua intacto: a 085 não apaga o
+    //    que não caracterizou — nem sequer para «limpar».
+    const g = await cli.query(
+      "SELECT has_table_privilege('surface_extra','public.teams_with_members','SELECT') t");
+    expect(g.rows[0].t).toBe(true);
+  });
+
+  it("FUNCTION_CUSTOM_ROLE_TEST: grantee extra numa função → FAIL_CLOSED", async () => {
+    await reporPrestate();
+    await cli.query("GRANT EXECUTE ON FUNCTION public.get_documents_to_archive(uuid) TO surface_extra");
+    const antes = await fotografia();
+
+    let erro = "";
+    try { await aplicar085(); } catch (e) { erro = (e as Error).message; }
+    expect(erro).toContain("085_UNEXPECTED_PUBLIC_SURFACE_STATE");
+    expect(erro).toMatch(/surface_extra/);
+
+    expect(await fotografia()).toBe(antes);
+
+    const g = await cli.query(`SELECT has_function_privilege('surface_extra', p.oid, 'EXECUTE') t
+      FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
+      WHERE n.nspname='public' AND p.proname='get_documents_to_archive'`);
+    expect(g.rows[0].t).toBe(true);
+  });
+
   it("overload inesperado → FAIL_CLOSED (senão ficaria uma assinatura aberta)", async () => {
     await reporPrestate();
     await cli.query(`CREATE FUNCTION public.detect_schedule_conflicts(p_start date)
@@ -708,6 +755,48 @@ describe.sequential("085 — provas de mutação", () => {
     expect(violacoes[0].privilegio).toBe("UPDATE");
   });
 
+  it("POSTSTATE_CUSTOM_GRANTEE_DETECTION: um grantee extra depois do hardening é detectado", async () => {
+    await reporPrestate();
+    await aplicar085();
+    await cli.query("GRANT SELECT ON public.monthly_hours_summary TO surface_extra");
+
+    // A verificação nominal completa é a do bloco 4b-bis: quem está no ACL
+    // que não devia estar. Exactamente uma violação.
+    const extra = await cli.query(`SELECT c.relname,
+        string_agg(DISTINCT CASE WHEN a.grantee=0 THEN 'PUBLIC'
+                                 ELSE pg_get_userbyid(a.grantee) END, ', ') viol
+      FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
+      CROSS JOIN LATERAL aclexplode(c.relacl) a
+      WHERE n.nspname='public' AND c.relname IN ('teams_with_members','monthly_hours_summary')
+        AND a.grantee <> c.relowner
+        AND NOT (a.grantee = to_regrole('service_role')::oid)
+        AND NOT (a.grantee = to_regrole('authenticated')::oid AND c.relname='teams_with_members')
+      GROUP BY c.relname`);
+    expect(extra.rowCount).toBe(1);
+    expect(extra.rows[0].relname).toBe("monthly_hours_summary");
+    expect(extra.rows[0].viol).toBe("surface_extra");
+  });
+
+  it("POSTSTATE_CUSTOM_GRANTEE_DETECTION: idem para EXECUTE numa função", async () => {
+    await reporPrestate();
+    await aplicar085();
+    await cli.query("GRANT EXECUTE ON FUNCTION public.detect_schedule_conflicts(date,date) TO surface_extra");
+
+    const extra = await cli.query(`SELECT p.proname,
+        string_agg(DISTINCT CASE WHEN a.grantee=0 THEN 'PUBLIC'
+                                 ELSE pg_get_userbyid(a.grantee) END, ', ') viol
+      FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
+      CROSS JOIN LATERAL aclexplode(p.proacl) a
+      WHERE n.nspname='public' AND p.proname IN
+        ('archive_expired_documents','get_documents_to_archive','detect_schedule_conflicts')
+        AND a.grantee <> p.proowner
+        AND a.grantee <> to_regrole('service_role')::oid
+      GROUP BY p.proname`);
+    expect(extra.rowCount).toBe(1);
+    expect(extra.rows[0].proname).toBe("detect_schedule_conflicts");
+    expect(extra.rows[0].viol).toBe("surface_extra");
+  });
+
   it("SEARCH_PATH_MUTATION: `SET search_path = public` NÃO satisfaz o estado canónico", async () => {
     // 🔴 A asserção antiga («contém search_path») aceitava isto. A nova não.
     await reporPrestate();
@@ -741,7 +830,7 @@ describe.sequential("085 — provas de mutação", () => {
 // ROLLBACK
 // ═══════════════════════════════════════════════════════════════════════════
 describe.sequential("ROLLBACK_085_REOPENS_KNOWN_SECURITY_BUG = YES", () => {
-  it("o rollback repõe o prestate — e reabre a exposição, como está documentado", async () => {
+  it("o rollback reabre a classe de exposição documentada", async () => {
     await reporPrestate();
     await aplicar085();
 
