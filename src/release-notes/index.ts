@@ -37,6 +37,7 @@ import { nota as criarColaboradorGuardaTudo } from "./2026-08-27-criar-colaborad
 import { nota as pagamentosDiagnosticoDeFalhas } from "./2026-08-28-pagamentos-diagnostico-de-falhas";
 import { nota as pagamentosSoPelaAplicacao } from "./2026-08-28-pagamentos-so-pela-aplicacao";
 import { nota as conciliacaoEmSimultaneo } from "./2026-08-27-conciliacao-e-edicoes-em-simultaneo";
+import { nota as pagamentosVistaUnificada } from "./2026-08-30-pagamentos-vista-unificada";
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   financeiroEAnexos,
@@ -58,6 +59,7 @@ export const RELEASE_NOTES: ReleaseNote[] = [
   pagamentosDiagnosticoDeFalhas,
   pagamentosSoPelaAplicacao,
   conciliacaoEmSimultaneo,
+  pagamentosVistaUnificada,
 ];
 
 /** As chaves têm de ser únicas — duas notas com a mesma key partilhariam a leitura. */

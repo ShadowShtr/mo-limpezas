@@ -1,10 +1,10 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { getPayments } from "@/app/actions/payments";
+import { getFinanceLedger } from "@/app/actions/finance-ledger";
 import { getExpenseCategoryCatalog } from "@/app/actions/expense-categories";
 import { FinanceShell } from "@/components/financeiro/finance-shell";
 import { parseFinancePeriod } from "@/lib/finance-period";
-import { PaymentsClient } from "./_components/payments-client";
+import { UnifiedPaymentsClient } from "./_components/unified-payments-client";
 
 export const metadata = { title: "Pagamentos — Escala" };
 
@@ -27,7 +27,16 @@ export default async function PagamentosPage({
   // apenas ler Setembro, e Setembro vazio mostra-se vazio.
   const period = parseFinancePeriod(params.mes);
 
-  const res = await getPayments(period.year, period.month);
+  // 🔴 UMA só resolução de identidade.
+  //
+  //    `getFinanceLedger` já passa por `requireProfile` e devolve, na mesma
+  //    resposta, as linhas e a empresa que o guard apurou. Não há segundo
+  //    lookup a `profiles` aqui — a versão anterior desta página fazia
+  //    `.eq("id", user.id)`, o que assumia `profiles.id = auth.users.id`.
+  //    Essa igualdade é verdade em produção hoje, mas o esquema não a garante:
+  //    existem pessoas sem login, e um `auth_user_id` diferente do `id` é
+  //    possível. Uma vista nova não deve nascer com essa suposição lá dentro.
+  const res = await getFinanceLedger(period.year, period.month);
 
   // O catálogo é opcional: se não estiver disponível, o campo aparece vazio e
   // "sem categoria" continua a ser uma escolha válida. Uma falha aqui não pode
@@ -41,7 +50,7 @@ export default async function PagamentosPage({
     <FinanceShell
       period={period}
       title="Pagamentos"
-      subtitle="Fixos e variáveis, com estado de pagamento"
+      subtitle="Obrigações e movimentos de caixa, sem duplicar o mesmo pagamento"
     >
       {/*
         🔴 A identidade da vista é o período, não a rota.
@@ -62,11 +71,12 @@ export default async function PagamentosPage({
         `categoria` pertencem à mesma vista mensal e não entram aqui — se
         entrassem, escrever na pesquisa remontaria a vista a cada tecla.
       */}
-      <PaymentsClient
+      <UnifiedPaymentsClient
         key={period.key}
-        categorias={categorias}
-        initialData={res.ok ? res.data : null}
+        categories={categorias}
+        rows={res.ok ? res.rows : []}
         error={res.ok ? null : res.error}
+        companyId={res.ok ? res.companyId : ""}
         year={period.year}
         month={period.month}
       />
