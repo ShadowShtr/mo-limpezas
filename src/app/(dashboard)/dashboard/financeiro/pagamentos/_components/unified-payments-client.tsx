@@ -13,6 +13,8 @@ import {
   Trash2,
   X,
   AlertTriangle,
+  Repeat,
+  Zap,
 } from "lucide-react";
 import type { FinanceLedgerRow } from "@/domain/finance/ledger";
 import {
@@ -28,6 +30,9 @@ import {
   canMutateRow,
   integrityWarning,
   INTEGRITY_BLOCK_REASON,
+  financeLedgerCounts,
+  mesPorPreparar,
+  categoryFilterOptions,
 } from "@/domain/finance/ledger-presentation";
 import { createPayment, deletePayment, setPaymentStatus, updatePayment } from "@/app/actions/payments";
 import { createCashFlowEntry, deleteCashFlowEntry, updateCashFlowEntry } from "@/app/actions/cash-flow";
@@ -157,6 +162,9 @@ export function UnifiedPaymentsClient({ rows, error: initialError, categories, c
   const slices = categorySlices(rows, { year, month }, graphMode);
   const graphTotal = slices.reduce((sum, slice) => sum + slice.amount_cents, 0);
   const origins = [...new Set(rows.map((row) => row.origin))].sort();
+  const counts = financeLedgerCounts(rows);
+  const porPreparar = mesPorPreparar(rows);
+  const categoryOptions = categoryFilterOptions(rows, categories);
 
   function mutate(task: () => Promise<{ ok: boolean; error?: string }>, close = false) {
     setError("");
@@ -256,17 +264,60 @@ export function UnifiedPaymentsClient({ rows, error: initialError, categories, c
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
+        {/*
+          🔴 Fixos e Variáveis voltaram a ser separadores, com contagem.
+
+             A vista anterior tinha-os como abas e a unificada dissolveu-os
+             num select de "origem", ao lado de Folha e Cobrança. O dado
+             continuava lá — mas a pergunta «o que se repete todos os meses?»
+             deixou de ter resposta num clique, e é essa a pergunta de quem
+             prepara o mês.
+        */}
         <div className="flex flex-wrap gap-2">
-          {(["todos", "por_pagar", "pagos", "manuais"] as const).map((value) => (
+          {(["todos", "fixos", "variaveis", "por_pagar", "pagos", "manuais"] as const).map((value) => (
             <button key={value} onClick={() => setFilter(value)} className={`rounded-lg border px-3 py-2 text-xs font-medium ${filter === value ? "border-[var(--finance-primary)] bg-[var(--finance-primary-soft)] text-[var(--finance-primary)]" : "border-[var(--color-border)] bg-white text-[var(--color-text-sub)]"}`}>
-              {{ todos: "Todos", por_pagar: "Por pagar", pagos: "Pagos", manuais: "Movimentos manuais" }[value]}
+              {{ todos: "Todos", fixos: "Fixos", variaveis: "Variáveis", por_pagar: "Por pagar", pagos: "Pagos", manuais: "Movimentos manuais" }[value]}
+              <span className="ml-1.5 text-[var(--color-text-muted)]">{counts[value]}</span>
             </button>
           ))}
         </div>
-        <button onClick={() => setForm(emptyForm("payment"))} className="inline-flex items-center gap-2 rounded-lg bg-[var(--finance-primary)] px-3.5 py-2.5 text-sm font-semibold text-white">
-          <Plus className="h-4 w-4" /> Novo registo
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          {/*
+            Criar já com o tipo escolhido, como as duas listas antigas faziam.
+            «Novo fixo» a partir do separador Fixos evita a viagem ao select.
+          */}
+          <button onClick={() => setForm({ ...emptyForm("payment"), kind: "fixo" })} className="inline-flex items-center gap-2 rounded-lg border border-[var(--color-border)] bg-white px-3 py-2.5 text-sm font-medium text-[var(--color-text-sub)]">
+            <Repeat className="h-4 w-4" /> Novo fixo
+          </button>
+          <button onClick={() => setForm({ ...emptyForm("payment"), kind: "variavel" })} className="inline-flex items-center gap-2 rounded-lg border border-[var(--color-border)] bg-white px-3 py-2.5 text-sm font-medium text-[var(--color-text-sub)]">
+            <Zap className="h-4 w-4" /> Novo variável
+          </button>
+          <button onClick={() => setForm(emptyForm("payment"))} className="inline-flex items-center gap-2 rounded-lg bg-[var(--finance-primary)] px-3.5 py-2.5 text-sm font-semibold text-white">
+            <Plus className="h-4 w-4" /> Novo registo
+          </button>
+        </div>
       </div>
+
+      {/*
+        🔴 «Mês por preparar» ≠ «nada a pagar».
+
+           Mostrar os totais a 0,00 € num mês em que ninguém lançou nada
+           afirma que não há despesa. O que se sabe é apenas que ainda não foi
+           registada. A vista anterior distinguia os dois estados; esta tinha
+           perdido a distinção.
+      */}
+      {porPreparar && (
+        <div className="flex items-start gap-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-background)] p-4">
+          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-[var(--color-text-muted)]" />
+          <div className="text-sm">
+            <p className="font-medium text-[var(--color-text-main)]">Mês ainda não preparado</p>
+            <p className="mt-0.5 text-[var(--color-text-muted)]">
+              Não há pagamentos registados neste mês. Isto não quer dizer que não
+              haja nada a pagar — quer dizer que ainda não foi lançado.
+            </p>
+          </div>
+        </div>
+      )}
 
       {(error || initialError) && (
         <div role="alert" className="flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
@@ -301,10 +352,22 @@ export function UnifiedPaymentsClient({ rows, error: initialError, categories, c
       <section className="overflow-hidden rounded-lg border border-[var(--color-border)] bg-white">
         <div className="grid gap-2 border-b border-[var(--color-border)] p-3 md:grid-cols-4">
           <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Pesquisar descrição" className={inputClass} />
+          {/*
+            🔴 As opções saem das LINHAS, não só do catálogo.
+
+               Antes vinham apenas de `categories` (catálogo activo). Uma linha
+               com uma categoria desactivada — ou o catálogo indisponível, que
+               devolve lista vazia sem falhar — deixava de ser filtrável: a
+               tabela mostrava «Manutenção» e o filtro não tinha «Manutenção».
+               Era esse o «a categoria aqui não atualizou».
+
+               A união resolve os dois casos e mantém o catálogo como fonte dos
+               nomes quando ele os tem.
+          */}
           <select value={category} onChange={(event) => setCategory(event.target.value)} className={inputClass}>
             <option value="">Todas as categorias</option>
             <option value="uncategorized">Sem categoria</option>
-            {categories.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+            {categoryOptions.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
           </select>
           <select value={origin} onChange={(event) => setOrigin(event.target.value)} className={inputClass}>
             <option value="">Todas as origens</option>

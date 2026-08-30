@@ -1,6 +1,24 @@
 import type { FinanceLedgerRow } from "@/domain/finance/ledger";
 
-export type FinanceLedgerFilter = "todos" | "por_pagar" | "pagos" | "manuais";
+// 🔴 `fixos` e `variaveis` voltaram a ser filtros de primeira classe.
+//
+//    A vista anterior tinha duas abas com contagem — «Fixos (12)» /
+//    «Variáveis (4)» — e a unificada dissolveu-as num select genérico de
+//    "origem", ao lado de Folha, Cobrança e Serviço. O dado nunca se perdeu
+//    (vive em `row.origin`), mas a SEPARAÇÃO perdeu-se, e era ela que
+//    respondia à pergunta de quem gere: «o que se repete todos os meses, e o
+//    que é só deste mês?».
+//
+//    Um fixo esquecido é uma conta que não se paga; um variável esquecido é
+//    um mês mal fechado. São perguntas diferentes e merecem dois separadores,
+//    não uma linha num dropdown.
+export type FinanceLedgerFilter =
+  | "todos"
+  | "fixos"
+  | "variaveis"
+  | "por_pagar"
+  | "pagos"
+  | "manuais";
 export type FinanceGraphMode = "competencia" | "caixa";
 
 export interface FinanceLedgerMetrics {
@@ -88,14 +106,95 @@ export function presentationStatus(row: FinanceLedgerRow, today: string): string
   return "Confirmado";
 }
 
+/** Uma obrigação que se repete de mês para mês. */
+export const isFixo = (row: FinanceLedgerRow): boolean =>
+  row.row_kind === "payment" && row.origin === "fixo";
+
+/** Uma obrigação pontual deste mês. */
+export const isVariavel = (row: FinanceLedgerRow): boolean =>
+  row.row_kind === "payment" && row.origin === "variavel";
+
 export function filterFinanceLedger(
   rows: FinanceLedgerRow[],
   filter: FinanceLedgerFilter,
 ): FinanceLedgerRow[] {
+  if (filter === "fixos") return rows.filter(isFixo);
+  if (filter === "variaveis") return rows.filter(isVariavel);
   if (filter === "por_pagar") return rows.filter((row) => row.payment_status === "pendente");
   if (filter === "pagos") return rows.filter((row) => row.payment_status === "pago");
   if (filter === "manuais") return rows.filter((row) => row.is_manual);
   return rows;
+}
+
+export interface FinanceLedgerCounts {
+  todos: number;
+  fixos: number;
+  variaveis: number;
+  por_pagar: number;
+  pagos: number;
+  manuais: number;
+}
+
+/**
+ * Contagem por separador, para o número aparecer ao lado do nome como antes.
+ *
+ * 🔴 Conta sobre TODAS as linhas do período, não sobre as filtradas: um
+ *    separador que mostrasse a contagem já filtrada diria sempre o mesmo
+ *    número do que está no ecrã, e deixaria de servir para navegar.
+ */
+export function financeLedgerCounts(rows: FinanceLedgerRow[]): FinanceLedgerCounts {
+  return {
+    todos: rows.length,
+    fixos: rows.filter(isFixo).length,
+    variaveis: rows.filter(isVariavel).length,
+    por_pagar: rows.filter((row) => row.payment_status === "pendente").length,
+    pagos: rows.filter((row) => row.payment_status === "pago").length,
+    manuais: rows.filter((row) => row.is_manual).length,
+  };
+}
+
+/**
+ * As categorias oferecidas no filtro: as do catálogo MAIS as que as linhas
+ * realmente usam.
+ *
+ * 🔴 O filtro só olhava para o catálogo activo. Duas situações rompiam-no:
+ *
+ *      · uma categoria desactivada continua a estar em linhas antigas, e
+ *        `getExpenseCategoryCatalog` só devolve as activas;
+ *      · quando o catálogo está indisponível devolve `[]` sem falhar — e o
+ *        filtro ficava vazio enquanto a tabela mostrava nomes reais.
+ *
+ *    Nos dois casos alguém via «Manutenção» numa linha e não a encontrava no
+ *    filtro. O nome vem do catálogo quando existe; caso contrário, do próprio
+ *    ledger, que já o resolveu com a regra de categoria efectiva.
+ */
+export function categoryFilterOptions(
+  rows: FinanceLedgerRow[],
+  catalog: Array<{ id: string; name: string }>,
+): Array<{ id: string; name: string }> {
+  const porId = new Map(catalog.map((item) => [item.id, item.name]));
+  for (const row of rows) {
+    if (!row.expense_category_id) continue;
+    if (porId.has(row.expense_category_id)) continue;
+    // Sem nome resolvido, mostra-se o que se sabe em vez de esconder a opção.
+    porId.set(row.expense_category_id, row.category_name ?? "Categoria removida");
+  }
+  return [...porId]
+    .map(([id, name]) => ({ id, name }))
+    .sort((a, b) => a.name.localeCompare(b.name, "pt-PT"));
+}
+
+/**
+ * O mês ainda não foi lançado — não é o mesmo que «não há nada a pagar».
+ *
+ * 🔴 A vista anterior distinguia os dois e a unificada perdeu a distinção.
+ *    Mostrar totais a 0,00 € num mês por preparar afirma que não há despesa,
+ *    quando o que se sabe é apenas que ninguém a registou ainda. Ausência de
+ *    dados não é ausência de despesa — e num ecrã financeiro essa diferença
+ *    é a diferença entre «está tudo pago» e «ainda não olhámos para isto».
+ */
+export function mesPorPreparar(rows: FinanceLedgerRow[]): boolean {
+  return !rows.some((row) => row.row_kind === "payment");
 }
 
 const inCompetence = (row: FinanceLedgerRow, year: number, month: number): boolean =>

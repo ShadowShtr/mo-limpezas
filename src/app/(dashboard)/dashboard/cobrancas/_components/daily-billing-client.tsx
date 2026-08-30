@@ -1,9 +1,10 @@
 "use client";
 
+import Link from "next/link";
 import { useState, useEffect, useCallback, useRef } from "react";
 import {
   ChevronLeft, ChevronRight, Loader2, AlertCircle, CalendarDays,
-  CheckCircle2, Euro, Clock, RefreshCw,
+  CheckCircle2, Euro, Clock, RefreshCw, Plus,
 } from "lucide-react";
 import { format, parseISO } from "date-fns";
 import { pt } from "date-fns/locale";
@@ -182,6 +183,25 @@ export function DailyBillingClient({ initialDate, initialData, initialError, com
         </div>
         <div className="flex items-center gap-3">
           <p className="text-sm font-medium text-[var(--color-text-main)] capitalize">{dayLabel}</p>
+          {/*
+            🔴 Adicionar uma cobrança ao dia = agendar o serviço desse dia.
+
+               Esta lista não tem linhas próprias: cada linha É um serviço
+               agendado, e a coluna de cobrança é o estado de pagamento dele.
+               Criar aqui um registo solto produziria uma cobrança sem serviço
+               por trás — dinheiro a existir num sítio e o trabalho noutro,
+               que é a dessincronização que o Financeiro inteiro evita.
+
+               Por isso o botão leva ao calendário JÁ NO DIA em vista, onde a
+               criação de serviço vive (`ServiceCreateSheet`), em vez de
+               duplicar esse formulário aqui. Um caminho de criação, não dois.
+          */}
+          <Link
+            href={`/dashboard/calendario?date=${date}`}
+            className="inline-flex items-center gap-2 rounded-lg bg-[var(--finance-primary)] px-3.5 py-2 text-sm font-semibold text-white transition-colors hover:opacity-90"
+          >
+            <Plus className="w-4 h-4" /> Adicionar cobrança
+          </Link>
           <button
             onClick={() => { setLoading(true); void refresh(); }}
             disabled={loading}
