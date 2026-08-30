@@ -38,6 +38,8 @@ import {
 } from "@/domain/finance/ledger";
 import {
   categoryFilterOptions,
+  categoryKey,
+  categorySlices,
   filterFinanceLedger,
   financeLedgerCounts,
   mesPorPreparar,
@@ -208,6 +210,75 @@ describe("2. categorias não perdem informação", () => {
     expect(opcoes.map((o) => o.id)).toContain("cat-x");
   });
 
+  // ── Categoria LEGADA (texto, sem expense_category_id) ─────────────────────
+  //
+  // 🔴 `cash_flow_entries` tem duas gerações de categoria: a estruturada
+  //    (`expense_category_id` → `expense_categories`) e a legada, texto livre
+  //    em `cash_flow_entries.category`. O ledger já mostrava a legada na
+  //    tabela; o filtro e o gráfico não a conheciam.
+  const legada = (id: string, categoria: string, amount: number): FinanceLedgerCashflowSource => ({
+    ...movimento({ id, amount }),
+    category: categoria,
+    expense_category_id: null,
+    category_name: null,
+  });
+
+  it("🔴 uma categoria LEGADA é filtrável — antes era invisível", () => {
+    const rows = buildFinanceLedger({ payments: [], cashflows: [legada("c1", "despesa", 80)] });
+    // A tabela mostrava «despesa»; o filtro devolvia [] e a linha caía em
+    // «Sem categoria». Duas leituras da mesma coisa, a discordar.
+    expect(rows[0].category_name).toBe("despesa");
+    const opcoes = categoryFilterOptions(rows, []);
+    expect(opcoes.map((o) => o.name)).toContain("despesa");
+  });
+
+  it("🔴 DUAS legadas distintas não colapsam numa fatia só", () => {
+    // Medido antes da correcção: 80 € de «despesa» + 50 € de «fornecedor»
+    // apareciam como 130 € de «fornecedor» — dinheiro atribuído à categoria
+    // errada, num ecrã que existe para dizer onde o dinheiro foi parar.
+    const rows = buildFinanceLedger({
+      payments: [],
+      cashflows: [legada("c1", "despesa", 80), legada("c2", "fornecedor", 50)],
+    });
+    const fatias = categorySlices(rows, { year: 2026, month: 8 }, "caixa");
+    expect(fatias).toHaveLength(2);
+    expect(fatias.find((f) => f.name === "despesa")?.amount_cents).toBe(8_000);
+    expect(fatias.find((f) => f.name === "fornecedor")?.amount_cents).toBe(5_000);
+  });
+
+  it("🔴 tabela, filtro e gráfico usam a MESMA identidade", () => {
+    const rows = buildFinanceLedger({
+      payments: [],
+      cashflows: [legada("c1", "despesa", 80), legada("c2", "fornecedor", 50)],
+    });
+    const chaves = rows.map(categoryKey);
+    // Uma chave por categoria real — nem a mais, nem a menos.
+    expect(new Set(chaves).size).toBe(2);
+    // E cada chave do filtro corresponde a linhas reais.
+    for (const opcao of categoryFilterOptions(rows, [])) {
+      expect(rows.some((row) => categoryKey(row) === opcao.id)).toBe(true);
+    }
+  });
+
+  it("estruturada e legada não colidem no mesmo espaço de chaves", () => {
+    const rows = buildFinanceLedger({
+      payments: [pagamento({ expense_category_id: "despesa", category_name: "Instalações" })],
+      cashflows: [legada("c1", "despesa", 80)],
+    });
+    // Um id estruturado com o mesmo texto de uma legada continua distinto.
+    expect(new Set(rows.map(categoryKey)).size).toBe(2);
+  });
+
+  it("«sem categoria» continua a ser um estado único, não uma opção duplicada", () => {
+    const rows = buildFinanceLedger({
+      payments: [pagamento({ expense_category_id: null, category_name: null })],
+      cashflows: [],
+    });
+    expect(categoryKey(rows[0])).toBe("uncategorized");
+    // Já existe como opção fixa do filtro — não se repete nas derivadas.
+    expect(categoryFilterOptions(rows, []).map((o) => o.id)).not.toContain("uncategorized");
+  });
+
   it("🔴 o nome da categoria aparece na tabela", async () => {
     const el = await mostrar(mesCompleto(), [{ id: "cat-a", name: "Instalações" }]);
     expect(el.textContent ?? "").toContain("Instalações");
@@ -254,21 +325,32 @@ describe("4. Cobranças > Diário tem CTA de adicionar", () => {
     expect(DIARIO).toContain("Adicionar cobrança");
   });
 
-  it("🔴 leva ao calendário JÁ no dia em vista", () => {
-    // Sem a data, cairia na semana corrente e perdia-se o contexto do dia.
-    expect(DIARIO).toMatch(/\/dashboard\/calendario\?date=\$\{date\}/);
+  it("🔴 cria AQUI — sem sair do ecrã para o calendário", () => {
+    // A primeira versão navegava para `/dashboard/calendario?date=...`.
+    // Chegava lá, mas transformava «adicionar» numa viagem, e quem está a
+    // fechar o dia perdia o contexto.
+    expect(DIARIO).toContain("<ServiceCreateSheet");
+    expect(DIARIO).not.toMatch(/\/dashboard\/calendario\?date=/);
   });
 
-  it("🔴 não duplica o formulário de criação de serviço", () => {
+  it("🔴 o formulário abre no DIA EM VISTA, não em «hoje»", () => {
+    // Quem está a fechar o dia 12 cria para o dia 12.
+    expect(DIARIO).toMatch(/date=\{new Date\(`\$\{date\}T12:00:00`\)\}/);
+  });
+
+  it("🔴 reutiliza o componente canónico — não duplica o formulário", () => {
     // Uma linha do Diário É um serviço agendado. Criar aqui um registo solto
     // produziria cobrança sem serviço — dinheiro num sítio, trabalho noutro.
-    //
-    // O que se mede é o USO, não a menção: o comentário do CTA explica porque
-    // é que o `ServiceCreateSheet` fica onde está, e essa explicação vale a
-    // pena manter.
-    expect(DIARIO).not.toMatch(/import[\s\S]{0,80}ServiceCreateSheet/);
-    expect(DIARIO).not.toContain("<ServiceCreateSheet");
+    // O `ServiceCreateSheet` é o mesmo que o calendário e a ficha de cliente
+    // já usam: um caminho de criação, não três cópias dele.
+    expect(DIARIO).toMatch(/from "\.\.\/\.\.\/calendario\/_components\/service-create-sheet"/);
+    // E nenhuma escrita directa a `services` nasceu aqui.
     expect(DIARIO).not.toMatch(/from\("services"\)[\s\S]{0,120}?\.insert\(/);
+  });
+
+  it("depois de criar, a lista do dia é recarregada", () => {
+    // Sem isto o serviço novo só apareceria ao mudar de dia e voltar.
+    expect(DIARIO).toMatch(/onCreated=\{[^}]*refresh\(\)/);
   });
 
   it("os restantes modos do ecrã não foram tocados", () => {

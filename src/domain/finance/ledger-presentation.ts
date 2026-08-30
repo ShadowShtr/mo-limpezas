@@ -153,6 +153,52 @@ export function financeLedgerCounts(rows: FinanceLedgerRow[]): FinanceLedgerCoun
   };
 }
 
+// ── Identidade efectiva de categoria ────────────────────────────────────────
+//
+// 🔴 UMA identidade, usada pela tabela, pelo filtro e pelo gráfico.
+//
+//    Havia três leituras diferentes da mesma coisa, e discordavam:
+//
+//      · a TABELA mostrava `category_name`, que já cai para a categoria
+//        legada em texto (`cash_flow_entries.category`);
+//      · o FILTRO só olhava para `expense_category_id`, logo uma linha
+//        legada — que tem nome mas não tem id — era invisível nas opções e
+//        caía em «Sem categoria»;
+//      · o GRÁFICO agrupava tudo o que não tinha id sob a chave
+//        `"uncategorized"` e dava-lhe o nome da PRIMEIRA linha que
+//        aparecesse. Duas categorias legadas distintas — «despesa» e
+//        «fornecedor» — somavam-se numa fatia só, com o nome de uma delas.
+//        Medido: 80 € + 50 € apareciam como 130 € de «fornecedor».
+//
+//    Isso não é uma imprecisão de etiqueta: é dinheiro atribuído à categoria
+//    errada num ecrã que existe para dizer onde o dinheiro foi parar.
+//
+//    A partir daqui há uma só função a decidir a identidade, e as três
+//    superfícies usam-na. Uma categoria estruturada é identificada pelo seu
+//    `id`; uma legada, pelo seu texto normalizado; ausência é ausência.
+
+/** Prefixo que separa o espaço de nomes legado do dos ids estruturados. */
+const LEGADA = "legacy:";
+
+export const SEM_CATEGORIA = "uncategorized";
+
+/**
+ * A chave estável de uma linha para efeitos de categoria.
+ *
+ * Estruturada → o `id`. Legada → `legacy:<texto normalizado>`. Sem nenhuma →
+ * `uncategorized`. Nunca colide entre os três espaços.
+ */
+export function categoryKey(row: FinanceLedgerRow): string {
+  if (row.expense_category_id) return row.expense_category_id;
+  const legada = row.category_name?.trim().toLocaleLowerCase("pt-PT");
+  return legada ? LEGADA + legada : SEM_CATEGORIA;
+}
+
+/** O nome a mostrar para essa identidade. */
+export function categoryLabel(row: FinanceLedgerRow): string {
+  return row.category_name?.trim() || "Sem categoria";
+}
+
 /**
  * As categorias oferecidas no filtro: as do catálogo MAIS as que as linhas
  * realmente usam.
@@ -174,10 +220,16 @@ export function categoryFilterOptions(
 ): Array<{ id: string; name: string }> {
   const porId = new Map(catalog.map((item) => [item.id, item.name]));
   for (const row of rows) {
-    if (!row.expense_category_id) continue;
-    if (porId.has(row.expense_category_id)) continue;
-    // Sem nome resolvido, mostra-se o que se sabe em vez de esconder a opção.
-    porId.set(row.expense_category_id, row.category_name ?? "Categoria removida");
+    const key = categoryKey(row);
+    // «Sem categoria» já é uma opção fixa do filtro — não se duplica aqui.
+    if (key === SEM_CATEGORIA) continue;
+    if (porId.has(key)) continue;
+    // 🔴 A legada entra pela MESMA porta que a estruturada. Antes era saltada
+    //    por não ter `expense_category_id`, e o nome que a tabela mostrava não
+    //    existia no filtro.
+    porId.set(key, row.expense_category_id
+      ? (row.category_name ?? "Categoria removida")
+      : categoryLabel(row));
   }
   return [...porId]
     .map(([id, name]) => ({ id, name }))
@@ -248,10 +300,14 @@ export function categorySlices(
       ? row.payment_amount_cents
       : row.cashflow_amount_cents;
     if (amount === null || amount <= 0) continue;
-    const key = row.expense_category_id ?? "uncategorized";
+    // 🔴 A MESMA identidade do filtro e da tabela. Antes a chave era
+    //    `expense_category_id ?? "uncategorized"`, o que metia todas as
+    //    categorias legadas no mesmo saco e dava-lhe o nome da primeira linha
+    //    a aparecer — «despesa» e «fornecedor» somavam-se numa fatia só.
+    const key = categoryKey(row);
     const current = totals.get(key) ?? {
       category_id: row.expense_category_id,
-      name: row.category_name ?? "Sem categoria",
+      name: categoryLabel(row),
       amount_cents: 0,
     };
     current.amount_cents += amount;

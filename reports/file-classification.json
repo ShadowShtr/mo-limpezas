@@ -9329,10 +9329,11 @@
       "category": "route-ui",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 2,
+      "consumers": 4,
       "consumerSample": [
         "src/app/(dashboard)/dashboard/calendario/_components/calendar-view.tsx",
-        "src/app/(dashboard)/dashboard/clientes/[id]/_components/interventions-section.tsx"
+        "src/app/(dashboard)/dashboard/clientes/[id]/_components/interventions-section.tsx",
+        "src/app/(dashboard)/dashboard/cobrancas/_components/cobrancas-tabs.tsx"
       ],
       "autoLoaded": false,
       "referencedBy": [],
@@ -9349,7 +9350,7 @@
         "eslintDisable": 5
       },
       "action": "nenhuma",
-      "reason": "em uso: 2 consumidor(es)",
+      "reason": "em uso: 4 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -10009,7 +10010,8 @@
       ],
       "signals": {
         "supabase": 5,
-        "ignoredError": 1
+        "ignoredError": 1,
+        "fallbackArray": 3
       },
       "action": "nenhuma",
       "reason": "em uso: convenção do Next",

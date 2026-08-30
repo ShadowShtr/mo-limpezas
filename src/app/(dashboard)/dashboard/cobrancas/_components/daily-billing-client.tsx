@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useState, useEffect, useCallback, useRef } from "react";
 import {
   ChevronLeft, ChevronRight, Loader2, AlertCircle, CalendarDays,
@@ -9,6 +8,12 @@ import {
 import { format, parseISO } from "date-fns";
 import { pt } from "date-fns/locale";
 import { createClient } from "@/lib/supabase/client";
+import {
+  ServiceCreateSheet,
+  type Client,
+  type Location,
+  type Team,
+} from "../../calendario/_components/service-create-sheet";
 import { safeFormat, isValidIsoDateString } from "@/lib/utils";
 import {
   getDailyBilling,
@@ -54,9 +59,12 @@ interface Props {
   initialData: DailyBillingData | null;
   initialError: string | null;
   companyId: string;
+  clients: Client[];
+  locations: Location[];
+  teams: Team[];
 }
 
-export function DailyBillingClient({ initialDate, initialData, initialError, companyId }: Props) {
+export function DailyBillingClient({ initialDate, initialData, initialError, companyId, clients, locations, teams }: Props) {
   const [date, setDate] = useState(initialDate);
   const [data, setData] = useState<DailyBillingData | null>(initialData);
   const [error, setError] = useState<string | null>(initialError);
@@ -65,6 +73,7 @@ export function DailyBillingClient({ initialDate, initialData, initialError, com
   const [editingId, setEditingId] = useState<string | null>(null);
   const [amountInput, setAmountInput] = useState("");
   const [savingId, setSavingId] = useState<string | null>(null);
+  const [creating, setCreating] = useState(false);
   const dateRef = useRef(date);
   useEffect(() => {
     dateRef.current = date;
@@ -184,24 +193,28 @@ export function DailyBillingClient({ initialDate, initialData, initialError, com
         <div className="flex items-center gap-3">
           <p className="text-sm font-medium text-[var(--color-text-main)] capitalize">{dayLabel}</p>
           {/*
-            🔴 Adicionar uma cobrança ao dia = agendar o serviço desse dia.
+            🔴 Adicionar uma cobrança ao dia = agendar o serviço desse dia,
+               AQUI — sem sair do ecrã.
 
                Esta lista não tem linhas próprias: cada linha É um serviço
                agendado, e a coluna de cobrança é o estado de pagamento dele.
-               Criar aqui um registo solto produziria uma cobrança sem serviço
-               por trás — dinheiro a existir num sítio e o trabalho noutro,
-               que é a dessincronização que o Financeiro inteiro evita.
+               Criar aqui um registo solto produziria cobrança sem serviço por
+               trás — dinheiro num sítio e o trabalho noutro, que é a
+               dessincronização que o Financeiro inteiro evita.
 
-               Por isso o botão leva ao calendário JÁ NO DIA em vista, onde a
-               criação de serviço vive (`ServiceCreateSheet`), em vez de
-               duplicar esse formulário aqui. Um caminho de criação, não dois.
+               A primeira versão deste botão navegava para o calendário no dia
+               certo. Chegava lá, mas transformava «adicionar» numa viagem, e
+               quem está a fechar o dia perdia o contexto. O formulário passa a
+               vir ter com a pessoa — e é o MESMO `ServiceCreateSheet` que o
+               calendário e a ficha de cliente já usam. Um caminho de criação,
+               não três cópias dele.
           */}
-          <Link
-            href={`/dashboard/calendario?date=${date}`}
+          <button
+            onClick={() => setCreating(true)}
             className="inline-flex items-center gap-2 rounded-lg bg-[var(--finance-primary)] px-3.5 py-2 text-sm font-semibold text-white transition-colors hover:opacity-90"
           >
             <Plus className="w-4 h-4" /> Adicionar cobrança
-          </Link>
+          </button>
           <button
             onClick={() => { setLoading(true); void refresh(); }}
             disabled={loading}
@@ -302,6 +315,25 @@ export function DailyBillingClient({ initialDate, initialData, initialError, com
           </div>
         )}
       </div>
+
+      {/*
+        O MESMO componente que o calendário e a ficha de cliente usam. A data
+        é a do dia em vista, não «hoje»: quem está a fechar o dia 12 cria para
+        o dia 12. Depois de criar, recarrega-se a lista — o serviço novo entra
+        já com o seu estado de cobrança por preencher.
+      */}
+      <ServiceCreateSheet
+        open={creating}
+        onClose={() => setCreating(false)}
+        onCreated={() => { setCreating(false); setLoading(true); void refresh(); }}
+        companyId={companyId}
+        date={new Date(`${date}T12:00:00`)}
+        initialStartTime="09:00"
+        initialTeamId={teams[0]?.id ?? ""}
+        clients={clients}
+        locations={locations}
+        teams={teams}
+      />
     </div>
   );
 }

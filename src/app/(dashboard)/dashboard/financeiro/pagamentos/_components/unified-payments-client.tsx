@@ -33,6 +33,7 @@ import {
   financeLedgerCounts,
   mesPorPreparar,
   categoryFilterOptions,
+  categoryKey,
 } from "@/domain/finance/ledger-presentation";
 import { createPayment, deletePayment, setPaymentStatus, updatePayment } from "@/app/actions/payments";
 import { createCashFlowEntry, deleteCashFlowEntry, updateCashFlowEntry } from "@/app/actions/cash-flow";
@@ -149,7 +150,7 @@ export function UnifiedPaymentsClient({ rows, error: initialError, categories, c
   const filtered = useMemo(() => {
     const query = search.trim().toLocaleLowerCase("pt-PT");
     return filterFinanceLedger(rows, filter).filter((row) =>
-      (!category || (row.expense_category_id ?? "uncategorized") === category)
+      (!category || categoryKey(row) === category)
       && (!origin || row.origin === origin)
       && (!query || row.description.toLocaleLowerCase("pt-PT").includes(query)),
     );

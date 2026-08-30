@@ -7,6 +7,7 @@ import type { DailyBillingData } from "@/app/actions/daily-billing";
 import { InvoicesClient } from "./invoices-client";
 import { DailyBillingClient } from "./daily-billing-client";
 import { ClientHistoryClient } from "./client-history-client";
+import type { Client, Location, Team } from "../../calendario/_components/service-create-sheet";
 
 type Tab = "diario" | "faturas" | "cliente";
 
@@ -21,6 +22,10 @@ interface Props {
   dailyDate: string;
   dailyData: DailyBillingData | null;
   dailyError: string | null;
+  /** Listas para criar um serviço a partir do Diário, sem sair do ecrã. */
+  clients: Client[];
+  locations: Location[];
+  teams: Team[];
   /** Vem de `?cliente=` — permite que Top clientes abra já no cliente certo. */
   clienteInicial?: string;
 }
@@ -28,6 +33,7 @@ interface Props {
 export function CobrancasTabs({
   initialInvoices, unbilledServices, companyId, mesParam, year, month, mesLabel,
   dailyDate, dailyData, dailyError, clienteInicial,
+  clients, locations, teams,
 }: Props) {
   // Diário primeiro: é o ecrã de trabalho do dia a dia (lembrar de cobrar).
   // Se vier `?cliente=`, abre já no histórico desse cliente — é o destino de
@@ -69,6 +75,9 @@ export function CobrancasTabs({
           initialData={dailyData}
           initialError={dailyError}
           companyId={companyId}
+          clients={clients}
+          locations={locations}
+          teams={teams}
         />
       )}
 
