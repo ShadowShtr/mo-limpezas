@@ -140,28 +140,42 @@ DECLARE
   v_args       text;
   v_grantees   text[];
   v_cols       text[];
+  v_constraints text[];
+  v_triggers   text[];
+  v_policies   text[];
+  v_acl_bad    text[];
   r_helper     record;
   r_rpc        record;
   r_encontrada record;
-  -- A forma exacta da `manual_charges` que esta migration cria. Só é usada
-  -- quando a tabela já existe — no rehearsal, e na reaplicação.
   c_cols_086   constant text[] := ARRAY[
-    'amount:numeric',
-    'apply_vat:boolean',
-    'charge_date:date',
-    'client_id:uuid',
-    'company_id:uuid',
-    'created_at:timestamp with time zone',
-    'created_by:uuid',
-    'description:text',
-    'id:uuid',
-    'notes:text',
-    'paid_amount:numeric',
-    'paid_at:timestamp with time zone',
-    'payment_status:text',
-    'updated_at:timestamp with time zone',
-    'voided_at:timestamp with time zone',
-    'voided_by:uuid'
+    'amount:numeric(10,2):not_null:(sem_default)',
+    'apply_vat:boolean:not_null:true',
+    'charge_date:date:not_null:(sem_default)',
+    'client_id:uuid:not_null:(sem_default)',
+    'company_id:uuid:not_null:(sem_default)',
+    'created_at:timestamp with time zone:not_null:now()',
+    'created_by:uuid:nullable:(sem_default)',
+    'description:text:not_null:(sem_default)',
+    'id:uuid:not_null:gen_random_uuid()',
+    'notes:text:nullable:(sem_default)',
+    'paid_amount:numeric(10,2):nullable:(sem_default)',
+    'paid_at:timestamp with time zone:nullable:(sem_default)',
+    'payment_status:text:not_null:''nao_informado''::text',
+    'updated_at:timestamp with time zone:not_null:now()',
+    'voided_at:timestamp with time zone:nullable:(sem_default)',
+    'voided_by:uuid:nullable:(sem_default)'
+  ];
+  c_constraints_086 constant text[] := ARRAY[
+    'manual_charges_amount_positivo:c:CHECK ((amount > (0)::numeric))',
+    'manual_charges_client_id_fkey:f:FOREIGN KEY (client_id) REFERENCES clients(id) ON DELETE RESTRICT',
+    'manual_charges_client_mesma_empresa:f:FOREIGN KEY (client_id, company_id) REFERENCES clients(id, company_id) ON DELETE RESTRICT',
+    'manual_charges_company_id_fkey:f:FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE',
+    'manual_charges_created_by_fkey:f:FOREIGN KEY (created_by) REFERENCES profiles(id) ON DELETE SET NULL',
+    'manual_charges_paid_amount_nao_negativo:c:CHECK (((paid_amount IS NULL) OR (paid_amount >= (0)::numeric)))',
+    'manual_charges_payment_status_check:c:CHECK ((payment_status = ANY (ARRAY[''nao_informado''::text, ''sinal_50''::text, ''pago_total''::text])))',
+    'manual_charges_pkey:p:PRIMARY KEY (id)',
+    'manual_charges_void_coerente:c:CHECK (((voided_at IS NULL) = (voided_by IS NULL)))',
+    'manual_charges_voided_by_fkey:f:FOREIGN KEY (voided_by) REFERENCES profiles(id) ON DELETE SET NULL'
   ];
   c_prestate   constant text[] :=
     ARRAY['fixed_variable_payment', 'invoice', 'payroll', 'service_payment'];
@@ -322,19 +336,101 @@ BEGIN
   --    caixa. Produção hoje não a tem (medido); esta guarda existe para o caso
   --    de alguém a criar entretanto.
   --
-  --    Compara-se o conjunto de colunas com tipo. Não é o esquema todo — é o
-  --    que basta para distinguir «a nossa» de «outra qualquer», sem ficar
-  --    vermelho por uma diferença que não muda o significado.
+  --    Compara-se a semântica que sobreviveria ao `IF NOT EXISTS`: colunas
+  --    com nullability/defaults, constraints, trigger, RLS/policies e ACL.
+  --    UNKNOWN_STATE = FAIL_CLOSED.
   IF to_regclass('public.manual_charges') IS NOT NULL THEN
-    SELECT coalesce(array_agg(column_name || ':' || data_type ORDER BY column_name), '{}')
+    SELECT coalesce(array_agg(
+             a.attname || ':' ||
+             format_type(a.atttypid, a.atttypmod) || ':' ||
+             CASE WHEN a.attnotnull THEN 'not_null' ELSE 'nullable' END || ':' ||
+             coalesce(pg_get_expr(d.adbin, d.adrelid), '(sem_default)')
+             ORDER BY a.attname), '{}')
       INTO v_cols
-      FROM information_schema.columns
-     WHERE table_schema = 'public' AND table_name = 'manual_charges';
+      FROM pg_attribute a
+      LEFT JOIN pg_attrdef d ON d.adrelid = a.attrelid AND d.adnum = a.attnum
+     WHERE a.attrelid = 'public.manual_charges'::regclass
+       AND a.attnum > 0
+       AND NOT a.attisdropped;
 
     IF v_cols <> c_cols_086 THEN
       RAISE EXCEPTION
-        '086_UNEXPECTED_MANUAL_CHARGES_STATE: existe uma manual_charges com outra forma. Colunas = %',
+        '086_UNEXPECTED_MANUAL_CHARGES_STATE: colunas/nullability/defaults = %',
         array_to_string(v_cols, ', ');
+    END IF;
+
+    SELECT coalesce(array_agg(conname || ':' || contype::text || ':' || pg_get_constraintdef(oid)
+                              ORDER BY conname), '{}')
+      INTO v_constraints
+      FROM pg_constraint
+     WHERE conrelid = 'public.manual_charges'::regclass;
+
+    IF v_constraints <> c_constraints_086 THEN
+      RAISE EXCEPTION
+        '086_UNEXPECTED_MANUAL_CHARGES_STATE: constraints = %',
+        array_to_string(v_constraints, ' | ');
+    END IF;
+
+    SELECT coalesce(array_agg(t.tgname || ':' || t.tgenabled::text || ':' ||
+                              pg_get_triggerdef(t.oid) ORDER BY t.tgname), '{}')
+      INTO v_triggers
+      FROM pg_trigger t
+     WHERE t.tgrelid = 'public.manual_charges'::regclass
+       AND NOT t.tgisinternal;
+
+    IF v_triggers <> ARRAY[
+      'trg_history:O:CREATE TRIGGER trg_history AFTER DELETE OR UPDATE ON public.manual_charges FOR EACH ROW EXECUTE FUNCTION fn_capture_history()'
+    ] THEN
+      RAISE EXCEPTION
+        '086_UNEXPECTED_MANUAL_CHARGES_STATE: triggers = %',
+        array_to_string(v_triggers, ' | ');
+    END IF;
+
+    IF NOT EXISTS (
+      SELECT 1 FROM pg_class
+       WHERE oid = 'public.manual_charges'::regclass
+         AND relrowsecurity IS TRUE
+    ) THEN
+      RAISE EXCEPTION
+        '086_UNEXPECTED_MANUAL_CHARGES_STATE: RLS nao esta activo';
+    END IF;
+
+    SELECT coalesce(array_agg(policyname || ':' || cmd || ':' || permissive || ':' ||
+                              array_to_string(roles, ',') || ':' || qual
+                              ORDER BY policyname), '{}')
+      INTO v_policies
+      FROM pg_policies
+     WHERE schemaname = 'public'
+       AND tablename = 'manual_charges';
+
+    IF array_length(v_policies, 1) IS DISTINCT FROM 1
+       OR v_policies[1] NOT LIKE 'manual_charges_manager_select:SELECT:PERMISSIVE:%'
+       OR v_policies[1] NOT LIKE '%:public:%'
+       OR v_policies[1] NOT LIKE '%company_id%'
+       OR v_policies[1] NOT LIKE '%get_my_company_id()%'
+       OR v_policies[1] NOT LIKE '%get_my_role()%'
+       OR v_policies[1] NOT LIKE '%admin%'
+       OR v_policies[1] NOT LIKE '%gestor%' THEN
+      RAISE EXCEPTION
+        '086_UNEXPECTED_MANUAL_CHARGES_STATE: policies = %',
+        array_to_string(v_policies, ' | ');
+    END IF;
+
+    SELECT coalesce(array_agg(grantee || ':' || privilege_type ORDER BY grantee, privilege_type), '{}')
+      INTO v_acl_bad
+      FROM information_schema.table_privileges
+     WHERE table_schema = 'public'
+       AND table_name = 'manual_charges'
+       AND NOT (
+         (grantee = 'authenticated' AND privilege_type = 'SELECT')
+         OR (grantee = 'service_role' AND privilege_type IN ('SELECT','INSERT','UPDATE','DELETE'))
+         OR grantee IN (current_user, 'postgres')
+       );
+
+    IF v_acl_bad <> '{}'::text[] THEN
+      RAISE EXCEPTION
+        '086_UNEXPECTED_MANUAL_CHARGES_STATE: ACL inesperado = %',
+        array_to_string(v_acl_bad, ', ');
     END IF;
   END IF;
 
@@ -373,6 +469,22 @@ BEGIN
         RAISE EXCEPTION
           '086_UNEXPECTED_RPC_STATE: public.%(%) existe e não é a desta migration',
           r_rpc.nome, coalesce(r_encontrada.args, '');
+      END IF;
+
+      SELECT coalesce(array_agg(DISTINCT grantee ORDER BY grantee), '{}')
+        INTO v_grantees
+        FROM (
+          SELECT coalesce(nullif((a).grantee::regrole::text, '-'), 'PUBLIC') AS grantee
+            FROM (SELECT aclexplode(proacl) AS a FROM pg_proc WHERE oid = r_encontrada.oid) x
+           WHERE (a).privilege_type = 'EXECUTE'
+        ) g
+       WHERE grantee NOT IN ('PUBLIC', 'anon', 'authenticated', 'service_role',
+                             current_user, 'postgres');
+
+      IF v_grantees <> '{}'::text[] THEN
+        RAISE EXCEPTION
+          '086_UNEXPECTED_RPC_STATE: public.%(%) tem EXECUTE concedido a papel desconhecido: %',
+          r_rpc.nome, coalesce(r_encontrada.args, ''), array_to_string(v_grantees, ', ');
       END IF;
     END LOOP;
   END LOOP;

@@ -1043,6 +1043,80 @@ describe.sequential("086 — UNKNOWN_STATE = FAIL_CLOSED", () => {
     expect(pol.rows[0].n).toBe(0);
   }, 120_000);
 
+  it("🔴 manual_charges com mesmas colunas/tipos mas NOT NULL adulterado: recusa", async () => {
+    await prestate();
+    await aplicar();
+    await alt.query("ALTER TABLE public.manual_charges ALTER COLUMN description DROP NOT NULL");
+
+    await expect(aplicar()).rejects.toThrow(/086_UNEXPECTED_MANUAL_CHARGES_STATE/);
+
+    const col = await alt.query(`
+      SELECT is_nullable
+        FROM information_schema.columns
+       WHERE table_schema='public'
+         AND table_name='manual_charges'
+         AND column_name='description'`);
+    expect(col.rows[0].is_nullable).toBe("YES");
+  }, 120_000);
+
+  it("🔴 manual_charges com mesmas colunas/tipos mas CHECK removido: recusa", async () => {
+    await prestate();
+    await aplicar();
+    await alt.query("ALTER TABLE public.manual_charges DROP CONSTRAINT manual_charges_amount_positivo");
+
+    await expect(aplicar()).rejects.toThrow(/086_UNEXPECTED_MANUAL_CHARGES_STATE/);
+
+    const chk = await alt.query(`
+      SELECT count(*)::int n
+        FROM pg_constraint
+       WHERE conrelid='public.manual_charges'::regclass
+         AND conname='manual_charges_amount_positivo'`);
+    expect(chk.rows[0].n).toBe(0);
+  }, 120_000);
+
+  it("🔴 manual_charges com trigger/policy/grant desconhecido: recusa", async () => {
+    await prestate();
+    await aplicar();
+    await alt.query(`
+      CREATE OR REPLACE FUNCTION public.manual_charges_intruder_trigger()
+      RETURNS trigger LANGUAGE plpgsql AS $x$
+      BEGIN
+        RETURN NEW;
+      END $x$;
+      CREATE TRIGGER trg_manual_charges_intruder
+        BEFORE UPDATE ON public.manual_charges
+        FOR EACH ROW EXECUTE FUNCTION public.manual_charges_intruder_trigger();
+      CREATE POLICY "manual_charges_intruder_select"
+        ON public.manual_charges FOR SELECT USING (true);
+      DO $r$ BEGIN
+        IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname='papel_intruso_tabela')
+        THEN CREATE ROLE papel_intruso_tabela NOLOGIN; END IF;
+      END $r$;
+      GRANT SELECT ON TABLE public.manual_charges TO papel_intruso_tabela;`);
+
+    await expect(aplicar()).rejects.toThrow(/086_UNEXPECTED_MANUAL_CHARGES_STATE/);
+
+    const surv = await alt.query(`
+      SELECT
+        EXISTS (
+          SELECT 1 FROM pg_trigger
+           WHERE tgrelid='public.manual_charges'::regclass
+             AND tgname='trg_manual_charges_intruder'
+        ) AS trigger_presente,
+        EXISTS (
+          SELECT 1 FROM pg_policies
+           WHERE schemaname='public'
+             AND tablename='manual_charges'
+             AND policyname='manual_charges_intruder_select'
+        ) AS policy_presente,
+        has_table_privilege('papel_intruso_tabela','public.manual_charges','SELECT') AS grant_presente`);
+    expect(surv.rows[0]).toEqual({
+      trigger_presente: true,
+      policy_presente: true,
+      grant_presente: true,
+    });
+  }, 120_000);
+
   it("🔴 uma RPC nova com o mesmo nome e outra intenção: recusa, e não a substitui", async () => {
     await prestate();
     await alt.query(`
@@ -1122,6 +1196,28 @@ describe.sequential("086 — UNKNOWN_STATE = FAIL_CLOSED", () => {
       END $x$;`);
 
     await expect(aplicar()).rejects.toThrow(/086_UNEXPECTED_RPC_STATE/);
+  }, 120_000);
+
+  it("🔴 RPC nova com marcador certo e EXECUTE a papel desconhecido: recusa", async () => {
+    await prestate();
+    await alt.query(`
+      CREATE OR REPLACE FUNCTION public.void_manual_charge_atomic(
+        p_company_id uuid, p_charge_id uuid, p_actor uuid)
+      RETURNS TABLE (charge_id uuid) LANGUAGE plpgsql
+      SECURITY INVOKER SET search_path = pg_catalog, public AS $x$
+      BEGIN
+        RAISE EXCEPTION 'MANUAL_CHARGE_HAS_PAYMENT';
+      END $x$;
+      DO $r$ BEGIN
+        IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname='papel_intruso_rpc')
+        THEN CREATE ROLE papel_intruso_rpc NOLOGIN; END IF;
+      END $r$;
+      GRANT EXECUTE ON FUNCTION public.void_manual_charge_atomic(uuid, uuid, uuid)
+        TO papel_intruso_rpc;`);
+
+    await expect(aplicar()).rejects.toThrow(/086_UNEXPECTED_RPC_STATE[\s\S]*papel_intruso_rpc/);
+    expect(await alt.query("SELECT to_regclass('public.manual_charges') AS reg")
+      .then((r) => r.rows[0].reg)).toBeNull();
   }, 120_000);
 
   it("a mesma RPC, mas a NOSSA: reconhecida, e a migration aplica-se", async () => {
