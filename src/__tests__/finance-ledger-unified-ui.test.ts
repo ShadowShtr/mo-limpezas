@@ -40,8 +40,11 @@ const linked = (p: FinanceLedgerPaymentSource = payment(), c: FinanceLedgerCashf
 describe("UNI15–UNI30 — métricas e apresentação unificadas", () => {
   it("UNI15: gráfico Competência usa obligations elegíveis", () => {
     const rows = buildFinanceLedger({ payments: [payment()], cashflows: [] });
+    // `category_key` entrou na fatia para o React ter identidade estável: duas
+    // categorias legadas distintas têm ambas `category_id = null`, e uma key
+    // derivada dele colidia. Numa categoria estruturada, a chave É o id.
     expect(categorySlices(rows, { year: 2026, month: 8 }, "competencia")).toEqual([
-      { category_id: "cat-a", name: "Materiais", amount_cents: 15_000 },
+      { category_key: "cat-a", category_id: "cat-a", name: "Materiais", amount_cents: 15_000 },
     ]);
   });
 

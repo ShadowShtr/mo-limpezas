@@ -454,7 +454,7 @@ function CategoryChart({ slices, total }: { slices: ReturnType<typeof categorySl
   if (slices.length === 0) return <p className="py-10 text-center text-sm text-[var(--color-text-muted)]">Sem gastos neste período.</p>;
   return <div className="flex flex-col items-center gap-5 md:flex-row">
     <div className="grid h-36 w-36 shrink-0 place-items-center rounded-full" style={{ background: `conic-gradient(${gradient})` }}><div className="grid h-20 w-20 place-items-center rounded-full bg-white text-center text-xs font-semibold tabular-nums">{euro(total)}</div></div>
-    <div className="w-full space-y-2">{slices.map((slice, index) => <div key={slice.category_id ?? "none"} className="flex items-center gap-2 text-sm"><span className="h-2.5 w-2.5 rounded-sm" style={{ backgroundColor: COLORS[index % COLORS.length] }} /><span className="flex-1 text-[var(--color-text-sub)]">{slice.name}</span><span className="font-medium tabular-nums">{euro(slice.amount_cents)}</span></div>)}</div>
+    <div className="w-full space-y-2">{slices.map((slice, index) => <div key={slice.category_key} className="flex items-center gap-2 text-sm"><span className="h-2.5 w-2.5 rounded-sm" style={{ backgroundColor: COLORS[index % COLORS.length] }} /><span className="flex-1 text-[var(--color-text-sub)]">{slice.name}</span><span className="font-medium tabular-nums">{euro(slice.amount_cents)}</span></div>)}</div>
   </div>;
 }
 

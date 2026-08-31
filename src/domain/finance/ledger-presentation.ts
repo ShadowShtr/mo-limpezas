@@ -29,6 +29,21 @@ export interface FinanceLedgerMetrics {
 }
 
 export interface FinanceCategorySlice {
+  /**
+   * A identidade EFECTIVA da fatia — a mesma que a tabela e o filtro usam.
+   *
+   * 🔴 Existe porque `category_id` não serve de identidade. Duas categorias
+   *    legadas distintas — «despesa» e «fornecedor» — são fatias diferentes e
+   *    corretas, mas ambas têm `category_id = null`. Uma `key` de React
+   *    derivada dele dava `"none"` às duas: o React passaria a tratá-las como
+   *    a mesma posição e, num rerender com ordem ou valores diferentes, podia
+   *    reutilizar o nó errado — nome de uma com o valor da outra, num ecrã de
+   *    dinheiro.
+   *
+   *    Não é um id de base de dados inventado: é a chave de apresentação.
+   *    `category_id` continua a ser o id estruturado real, ou `null`.
+   */
+  category_key: string;
   category_id: string | null;
   name: string;
   amount_cents: number;
@@ -306,6 +321,7 @@ export function categorySlices(
     //    a aparecer — «despesa» e «fornecedor» somavam-se numa fatia só.
     const key = categoryKey(row);
     const current = totals.get(key) ?? {
+      category_key: key,
       category_id: row.expense_category_id,
       name: categoryLabel(row),
       amount_cents: 0,
