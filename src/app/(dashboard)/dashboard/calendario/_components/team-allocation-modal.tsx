@@ -1,6 +1,35 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+// ============================================================================
+// Alocação de equipas — o rascunho é local, o save é um só
+// ============================================================================
+//
+// 🔴 O que este ecrã fazia antes, e porque estava errado.
+//
+//    `handleDragEnd` chamava `moveCollaboratorToTeam` a meio do gesto. Cada
+//    arrasto era uma escrita, PERMANENTE, em `team_members` — e apagava as
+//    reatribuições diárias da pessoa, e notificava-a no telemóvel. Depois
+//    fazia `fetchData()` para «confirmar».
+//
+//    Consequências reais:
+//
+//      · «Fechar» não desfazia nada, porque já estava gravado;
+//      · «Guardar alocações» só guardava viaturas — as pessoas já lá estavam;
+//      · arrastar para ver como ficava avisava a colaboradora;
+//      · uma decisão já planeada para quinta-feira desaparecia.
+//
+//    A partir daqui: arrastar mexe SÓ no rascunho local. Zero escritas, zero
+//    notificações, zero refetch. Só «Guardar alocações» escreve, e escreve
+//    tudo numa transação.
+//
+// 🔴 A caixa DISPONÍVEL está sempre lá e aceita largar.
+//
+//    Antes era uma lista de quem sobrava. Agora é uma decisão possível: largar
+//    alguém ali põe-na em stand by NAQUELE DIA, sem a tirar da equipa. No dia
+//    seguinte, sem override, volta à equipa permanente.
+// ============================================================================
+
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { format } from "date-fns";
 import { pt } from "date-fns/locale";
 import { X, Loader2, Car, RefreshCw, ChevronDown, User, GripVertical } from "lucide-react";
@@ -8,17 +37,18 @@ import {
   DndContext, DragOverlay, PointerSensor, useSensor, useSensors,
   useDraggable, type DragStartEvent, type DragEndEvent,
 } from "@dnd-kit/core";
-import { createClient } from "@/lib/supabase/client";
+import { carregarDia, guardarDiaEquipas } from "@/app/actions/equipas-r4";
 import {
-  getAllocationsForDate,
-  upsertAllocation,
-  removeAllocation,
-  moveCollaboratorToTeam,
-  type VehicleAllocation,
-} from "@/app/actions/vehicles";
+  equipaEfetivaNoRascunho,
+  rascunhoInicial,
+  rascunhoParaEscrita,
+  rascunhoSujo,
+  type DiaAlocacoes,
+  type LinhaEfetiva,
+  type PessoaBase,
+  type Rascunho,
+} from "@/lib/equipas/tipos";
 import { DroppableColumn } from "./droppable-column";
-
-// ─── Constantes ───────────────────────────────────────────────────────────────
 
 const ABSENCE_LABELS: Record<string, string> = {
   doenca_com_baixa:     "Baixa médica",
@@ -31,53 +61,22 @@ const ABSENCE_LABELS: Record<string, string> = {
   outro:                "Outro",
 };
 
-// ─── Tipos ────────────────────────────────────────────────────────────────────
-
-interface TeamBase {
-  id: string;
-  name: string;
-  color: string;
-}
-
-interface Member {
-  id: string;
-  full_name: string;
-  avatar_url: string | null;
-}
-
-interface TeamWithMembers extends TeamBase {
-  members: Member[];
-}
-
-interface AbsentCollaborator extends Member {
-  absence_type: string;
-}
-
-interface VehicleOption {
-  id: string;
-  model: string;
-  plate: string;
-}
-
-// Estado de alocação por equipa (gerido localmente antes de guardar)
-interface TeamAllocation {
-  vehicleId: string;
-  driverId: string;
-}
+/** O id da zona de largar do stand by. Não é um uuid de equipa, de propósito. */
+export const ZONA_DISPONIVEL = "__disponivel__";
 
 interface Props {
   open: boolean;
   onClose: () => void;
   companyId: string;
   selectedDate: Date;
-  teams: TeamBase[];
+  teams: { id: string; name: string; color: string }[];
 }
 
-// ─── Chip de colaboradora arrastável ────────────────────────────────────────────
+// ─── Chip arrastável ────────────────────────────────────────────────────────
 
 function MemberChip({
-  member, color, fromTeamId, moved,
-}: { member: Member; color: string; fromTeamId: string; moved: boolean }) {
+  member, color, fromTeamId, badge,
+}: { member: PessoaBase; color: string; fromTeamId: string; badge?: string }) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: `member-${member.id}`,
     data: { collaboratorId: member.id, fromTeamId, fullName: member.full_name },
@@ -89,339 +88,276 @@ function MemberChip({
         ref={setNodeRef}
         {...listeners}
         {...attributes}
+        data-testid={`chip-${member.id}`}
         className="inline-flex items-center gap-1 pl-1.5 pr-2 py-0.5 rounded-full text-xs font-medium text-white cursor-grab active:cursor-grabbing touch-none select-none"
         style={{ backgroundColor: color, opacity: isDragging ? 0.4 : 1 }}
-        title={`${member.full_name} — arrasta para outra equipa`}
+        title={badge ? `${member.full_name} — ${badge}` : member.full_name}
       >
         <GripVertical className="w-3 h-3 opacity-70 shrink-0" />
         {member.full_name.split(" ")[0]}
       </span>
-      {moved && (
+      {badge && (
         <span
           className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-amber-500 ring-2 ring-white"
-          title="Movida de outra equipa (só hoje)"
+          title={badge}
         />
       )}
     </span>
   );
 }
 
-// ─── Componente ───────────────────────────────────────────────────────────────
+// ─── Componente ─────────────────────────────────────────────────────────────
 
-export function TeamAllocationModal({
-  open, onClose, companyId, selectedDate, teams,
-}: Props) {
-  const supabase = createClient();
-
+export function TeamAllocationModal({ open, onClose, companyId, selectedDate }: Props) {
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
   );
 
-  const [loading,  setLoading]  = useState(false);
-  const [saving,   setSaving]   = useState(false);
-  const [message,  setMessage]  = useState<{ type: "error" | "success" | "info"; text: string } | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [saving,  setSaving]  = useState(false);
+  const [message, setMessage] = useState<{ type: "error" | "success" | "info"; text: string } | null>(null);
 
-  const [allocated, setAllocated] = useState<TeamWithMembers[]>([]);
-  const [available, setAvailable] = useState<Member[]>([]);
-  const [absent,    setAbsent]    = useState<AbsentCollaborator[]>([]);
-  const [vehicles,  setVehicles]  = useState<VehicleOption[]>([]);
+  const [dia, setDia] = useState<DiaAlocacoes | null>(null);
 
-  // vehicleId + driverId por team
-  const [allocationMap, setAllocationMap] = useState<Record<string, TeamAllocation>>({});
+  // 🔴 Duas fotografias, não uma.
+  //
+  //    `inicial` é o que a base tinha quando o modal abriu — é ele que diz se
+  //    há alterações por guardar, e é para ele que se volta ao descartar.
+  //    `rascunho` é o que o utilizador está a construir.
+  const [inicial,  setInicial]  = useState<Rascunho>({ overrides: {}, viaturas: {} });
+  const [rascunho, setRascunho] = useState<Rascunho>({ overrides: {}, viaturas: {} });
 
-  // Reatribuições do dia: collaboratorId → equipa com que trabalha hoje
-  const [overrideMap, setOverrideMap] = useState<Record<string, string>>({});
-
-  // Chip a ser arrastado (para o overlay)
   const [dragging, setDragging] = useState<{ name: string; color: string } | null>(null);
+  const [confirmarFecho, setConfirmarFecho] = useState(false);
 
-  // ── Derivados ───────────────────────────────────────────────────────────────
+  const sujo = useMemo(() => rascunhoSujo(inicial, rascunho), [inicial, rascunho]);
 
-  // Equipa de origem (home) de cada colaboradora
-  const homeTeamOf = useMemo(() => {
-    const map: Record<string, string> = {};
-    for (const team of allocated) {
-      for (const m of team.members) map[m.id] = team.id;
-    }
-    return map;
-  }, [allocated]);
-
-  // Lista completa de colaboradoras (id → dados)
-  const allMembers = useMemo(() => {
-    const map: Record<string, Member> = {};
-    for (const team of allocated) {
-      for (const m of team.members) map[m.id] = m;
-    }
-    return map;
-  }, [allocated]);
-
-  // Equipa efetiva (override ou origem)
-  function effectiveTeamId(collaboratorId: string): string | undefined {
-    return overrideMap[collaboratorId] ?? homeTeamOf[collaboratorId];
-  }
-
-  // Membros efetivos (que trabalham hoje) por equipa
-  const membersByTeam = useMemo(() => {
-    const map: Record<string, Member[]> = {};
-    for (const team of allocated) map[team.id] = [];
-    for (const id of Object.keys(allMembers)) {
-      const eff = overrideMap[id] ?? homeTeamOf[id];
-      if (eff && map[eff]) map[eff].push(allMembers[id]);
-    }
-    for (const id of Object.keys(map)) {
-      map[id].sort((a, b) => a.full_name.localeCompare(b.full_name));
-    }
-    return map;
-  }, [allocated, allMembers, overrideMap, homeTeamOf]);
-
-  // ── Fetch de dados ao abrir o modal ────────────────────────────────────────
-
-  async function fetchData() {
+  const carregar = useCallback(async () => {
     setLoading(true);
     setMessage(null);
-
     const dateStr = format(selectedDate, "yyyy-MM-dd");
-
-    const [
-      { data: teamsData },
-      { data: membersData },
-      { data: allProfiles },
-      { data: absencesData },
-      { data: vehiclesData },
-    ] = await Promise.all([
-      supabase
-        .from("teams")
-        .select("id, name, color")
-        .eq("company_id", companyId)
-        .eq("active", true)
-        .order("name"),
-
-      supabase
-        .from("team_members")
-        .select("team_id, collaborator_id, profiles(id, full_name, avatar_url)")
-        .in("team_id", teams.map((t) => t.id))
-        .is("left_at", null),
-
-      supabase
-        .from("profiles")
-        .select("id, full_name, avatar_url")
-        .eq("company_id", companyId)
-        .eq("role", "colaborador")
-        .eq("status", "ativo")
-        .order("full_name"),
-
-      supabase
-        .from("absences")
-        .select("collaborator_id, absence_type, profiles(id, full_name, avatar_url)")
-        .eq("company_id", companyId)
-        .lte("starts_on", dateStr)
-        .gte("ends_on", dateStr),
-
-      // Viaturas ativas da empresa
-      supabase
-        .from("vehicles")
-        .select("id, model, plate")
-        .eq("company_id", companyId)
-        .eq("status", "ativo")
-        .order("model"),
-    ]);
-
-    const absentIds = new Set((absencesData ?? []).map((a) => a.collaborator_id));
-    const inTeamIds = new Set((membersData ?? []).map((m) => m.collaborator_id));
-
-    const allocatedTeams: TeamWithMembers[] = (teamsData ?? [])
-      .map((t) => {
-        const teamMemberRows = (membersData ?? []).filter((m) => m.team_id === t.id);
-        const members: Member[] = teamMemberRows
-          .map((m) => {
-            const p = Array.isArray(m.profiles) ? m.profiles[0] : m.profiles;
-            return p ? { id: p.id, full_name: p.full_name, avatar_url: p.avatar_url } : null;
-          })
-          .filter((m): m is Member => m !== null);
-        return { id: t.id, name: t.name, color: t.color, members };
-      })
-      // Ordenação numérica natural: "Equipa 1, 2, 3, 10, 11" (não "1, 10, 11, 2")
-      .sort((a, b) => a.name.localeCompare(b.name, "pt", { numeric: true, sensitivity: "base" }));
-
-    const availableProfiles: Member[] = (allProfiles ?? [])
-      .filter((p) => !inTeamIds.has(p.id) && !absentIds.has(p.id))
-      .map((p) => ({ id: p.id, full_name: p.full_name, avatar_url: p.avatar_url }));
-
-    const absentProfiles: AbsentCollaborator[] = (absencesData ?? [])
-      .map((a) => {
-        const p = Array.isArray(a.profiles) ? a.profiles[0] : a.profiles;
-        return p
-          ? { id: p.id, full_name: p.full_name, avatar_url: p.avatar_url, absence_type: a.absence_type }
-          : null;
-      })
-      .filter((a): a is AbsentCollaborator => a !== null);
-
-    setAllocated(allocatedTeams);
-    setAvailable(availableProfiles);
-    setAbsent(absentProfiles);
-    setVehicles((vehiclesData ?? []) as VehicleOption[]);
-
-    // Carregar alocações de viatura para o dia.
-    try {
-      const existingAllocations = await getAllocationsForDate(dateStr);
-      const map: Record<string, TeamAllocation> = {};
-      for (const alloc of existingAllocations as VehicleAllocation[]) {
-        map[alloc.team_id] = {
-          vehicleId: alloc.vehicle_id,
-          driverId:  alloc.driver_id ?? "",
-        };
-      }
-      setAllocationMap(map);
-
-      // As reatribuições de equipa passaram a ser PERMANENTES (escritas em
-      // team_members), por isso já não se usam overrides diários: a composição
-      // vem toda de team_members (allocated). Mantém o mapa vazio.
-      setOverrideMap({});
-    } catch {
-      // não bloquear se falhar
+    const r = await carregarDia(companyId, dateStr);
+    if (!r.ok) {
+      setMessage({ type: "error", text: r.error });
+      setLoading(false);
+      return;
     }
-
+    const base = rascunhoInicial(r.dia);
+    setDia(r.dia);
+    setInicial(base);
+    setRascunho(base);
     setLoading(false);
-  }
+  }, [companyId, selectedDate]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    if (open) fetchData();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, selectedDate]);
+    if (open) carregar();
+  }, [open, carregar]);
 
-  // ── Handlers de alocação ────────────────────────────────────────────────────
+  // ── Derivados do RASCUNHO ─────────────────────────────────────────────────
 
-  function handleVehicleChange(teamId: string, vehicleId: string) {
-    setAllocationMap((prev) => ({
-      ...prev,
-      [teamId]: { vehicleId, driverId: prev[teamId]?.driverId ?? "" },
-    }));
-  }
+  const pessoaPorId = useMemo(() => {
+    const m: Record<string, PessoaBase> = {};
+    for (const p of dia?.pessoas ?? []) m[p.id] = p;
+    return m;
+  }, [dia]);
 
-  function handleDriverChange(teamId: string, driverId: string) {
-    setAllocationMap((prev) => ({
-      ...prev,
-      [teamId]: { vehicleId: prev[teamId]?.vehicleId ?? "", driverId },
-    }));
-  }
+  const linhaPorId = useMemo(() => {
+    const m: Record<string, LinhaEfetiva> = {};
+    for (const l of dia?.efetiva ?? []) m[l.collaborator_id] = l;
+    return m;
+  }, [dia]);
 
-  // ── Drag & drop de colaboradoras entre equipas ──────────────────────────────
+  /**
+   * Quem está em cada equipa, quem está em stand by, e quem está ausente —
+   * tudo derivado do rascunho.
+   *
+   * 🔴 Uma pessoa aparece numa lista SÓ. Ausente não entra na equipa nem no
+   *    Disponível: uma representação efetiva por pessoa e por dia.
+   */
+  const vista = useMemo(() => {
+    const porEquipa: Record<string, PessoaBase[]> = {};
+    for (const t of dia?.equipas ?? []) porEquipa[t.id] = [];
+    const disponiveis: Array<{ pessoa: PessoaBase; standby: boolean }> = [];
+    const ausentes: Array<{ pessoa: PessoaBase; tipo: string }> = [];
+
+    for (const linha of dia?.efetiva ?? []) {
+      const pessoa = pessoaPorId[linha.collaborator_id];
+      if (!pessoa) continue;
+
+      if (linha.ausente) {
+        ausentes.push({ pessoa, tipo: linha.origem });
+        continue;
+      }
+
+      const equipa = equipaEfetivaNoRascunho(rascunho, linha);
+      if (equipa && porEquipa[equipa]) {
+        porEquipa[equipa].push(pessoa);
+      } else {
+        // 🔴 As duas formas de estar em Disponível, distinguidas.
+        //    `standby` = havia equipa permanente e alguém decidiu que hoje não.
+        const temOverride = Object.prototype.hasOwnProperty
+          .call(rascunho.overrides, linha.collaborator_id);
+        disponiveis.push({
+          pessoa,
+          standby: temOverride && rascunho.overrides[linha.collaborator_id] === null
+                   && linha.permanent_team_id !== null,
+        });
+      }
+    }
+
+    for (const id of Object.keys(porEquipa)) {
+      porEquipa[id].sort((a, b) => a.full_name.localeCompare(b.full_name));
+    }
+    disponiveis.sort((a, b) => a.pessoa.full_name.localeCompare(b.pessoa.full_name));
+    return { porEquipa, disponiveis, ausentes };
+  }, [dia, rascunho, pessoaPorId]);
+
+  // ── Drag: SÓ estado local ─────────────────────────────────────────────────
 
   function handleDragStart(event: DragStartEvent) {
     const data = event.active.data.current as
-      | { collaboratorId: string; fromTeamId: string; fullName: string }
-      | undefined;
+      | { collaboratorId: string; fromTeamId: string; fullName: string } | undefined;
     if (!data) return;
-    const color = allocated.find((t) => t.id === data.fromTeamId)?.color ?? "#16A34A";
-    setDragging({ name: data.fullName, color });
+    const cor = dia?.equipas.find((t) => t.id === data.fromTeamId)?.color ?? "#64748b";
+    setDragging({ name: data.fullName, color: cor });
     setMessage(null);
   }
 
-  async function handleDragEnd(event: DragEndEvent) {
+  /**
+   * 🔴 Aqui não há `await`, não há server action, não há `fetchData()`.
+   *
+   *    É esta função que antes escrevia na base a meio do gesto. Agora só
+   *    calcula o rascunho seguinte. Pode arrastar-se as vezes que quiser.
+   */
+  function handleDragEnd(event: DragEndEvent) {
     setDragging(null);
     const { active, over } = event;
     if (!over || !active.data.current) return;
 
     const { collaboratorId } = active.data.current as { collaboratorId: string };
-    const targetTeamId = over.id as string;
-    const currentTeamId = effectiveTeamId(collaboratorId);
-    if (!targetTeamId || targetTeamId === currentTeamId) return;
+    const alvo = String(over.id);
+    const linha = linhaPorId[collaboratorId];
+    if (!linha) return;
 
-    const homeTeamId = homeTeamOf[collaboratorId] ?? null;
-    const isReset = homeTeamId !== null && targetTeamId === homeTeamId;
+    const actual = equipaEfetivaNoRascunho(rascunho, linha);
+    const destino = alvo === ZONA_DISPONIVEL ? null : alvo;
+    if (actual === destino) return;
 
-    const dateStr = format(selectedDate, "yyyy-MM-dd");
-    const previous = { ...overrideMap };
+    setRascunho((prev) => {
+      const overrides = { ...prev.overrides };
 
-    // Atualização otimista (sem delay)
-    setOverrideMap((prev) => {
-      const next = { ...prev };
-      if (isReset) delete next[collaboratorId];
-      else next[collaboratorId] = targetTeamId;
-      return next;
-    });
-
-    try {
-      const res = await moveCollaboratorToTeam({
-        collaboratorId,
-        teamId: targetTeamId,
-        homeTeamId,
-        date: dateStr,
-      });
-
-      if (!res.ok) {
-        setOverrideMap(previous);
-        setMessage({ type: "error", text: res.error ?? "Erro ao mover colaboradora." });
-        return;
+      // 🔴 Voltar à equipa permanente RETIRA o override, em vez de escrever um
+      //    igual. É a diferença entre «sem decisão para este dia» e «decidido
+      //    que fica onde já estava» — e é o que faz o dia seguinte comportar-se
+      //    como deve.
+      if (destino !== null && destino === linha.permanent_team_id) {
+        delete overrides[collaboratorId];
+      } else {
+        overrides[collaboratorId] = destino;
       }
 
-      const name = allMembers[collaboratorId]?.full_name.split(" ")[0] ?? "Colaboradora";
-      const targetName = allocated.find((t) => t.id === targetTeamId)?.name ?? "equipa";
-      setMessage({
-        type: res.notified ? "success" : "info",
-        text: `${name} → ${targetName} (equipa permanente).${res.notified ? " Avisada no telemóvel." : ""}`,
-      });
-      // Movimento permanente: recarrega a composição real das equipas (team_members)
-      // para refletir a mudança e limpar marcadores de override.
-      await fetchData();
-    } catch {
-      setOverrideMap(previous);
-      setMessage({ type: "error", text: "Erro ao mover colaboradora." });
-    }
+      // A condutora tem de continuar na equipa a que a viatura foi alocada.
+      const viaturas = { ...prev.viaturas };
+      for (const [teamId, v] of Object.entries(viaturas)) {
+        if (v.driverId === collaboratorId && teamId !== destino) {
+          viaturas[teamId] = { ...v, driverId: "" };
+        }
+      }
+      return { overrides, viaturas };
+    });
   }
 
-  // ── Guardar alocações de viatura ────────────────────────────────────────────
+  function definirViatura(teamId: string, vehicleId: string) {
+    setRascunho((prev) => ({
+      ...prev,
+      viaturas: { ...prev.viaturas, [teamId]: { vehicleId, driverId: prev.viaturas[teamId]?.driverId ?? "" } },
+    }));
+  }
+
+  function definirCondutora(teamId: string, driverId: string) {
+    setRascunho((prev) => ({
+      ...prev,
+      viaturas: { ...prev.viaturas, [teamId]: { vehicleId: prev.viaturas[teamId]?.vehicleId ?? "", driverId } },
+    }));
+  }
+
+  // ── Guardar: UMA transação ────────────────────────────────────────────────
 
   async function handleSave() {
+    if (!dia) return;
     setSaving(true);
     setMessage(null);
 
-    const dateStr = format(selectedDate, "yyyy-MM-dd");
+    const escrita = rascunhoParaEscrita(rascunho);
+    const r = await guardarDiaEquipas({
+      companyId,
+      date: dia.date,
+      expectedSnapshot: dia.snapshot,
+      overrides: escrita.overrides,
+      viaturas: escrita.viaturas,
+    });
 
-    try {
-      await Promise.all(
-        allocated.map((team) => {
-          const alloc = allocationMap[team.id];
-          if (!alloc?.vehicleId) {
-            return removeAllocation(team.id, dateStr).catch(() => null);
-          }
-          return upsertAllocation({
-            vehicle_id: alloc.vehicleId,
-            team_id:    team.id,
-            driver_id:  alloc.driverId || null,
-            date:       dateStr,
-          });
-        }),
-      );
-      setMessage({ type: "success", text: "Alocações guardadas." });
-      setTimeout(onClose, 1200);
-    } catch {
-      setMessage({ type: "error", text: "Erro ao guardar alocações." });
-    } finally {
+    if (!r.ok) {
+      // 🔴 Num conflito, o rascunho NÃO se descarta. A pessoa acabou de fazer
+      //    o trabalho; o que ela precisa é de ver o que mudou, não de o perder.
+      setMessage({
+        type: "error",
+        text: r.conflito
+          ? "Estas alocações foram alteradas por outra pessoa. Atualize para rever antes de guardar."
+          : r.error,
+      });
       setSaving(false);
+      return;
     }
+
+    setInicial(rascunho);
+    setDia({ ...dia, snapshot: r.snapshot });
+    setMessage({ type: "success", text: "Alocações guardadas." });
+    setSaving(false);
+    setTimeout(onClose, 900);
+  }
+
+  // ── Fechar com alterações por guardar ─────────────────────────────────────
+
+  function tentarFechar() {
+    if (sujo) { setConfirmarFecho(true); return; }
+    onClose();
+  }
+
+  function descartar() {
+    setRascunho(inicial);
+    setConfirmarFecho(false);
+    onClose();
   }
 
   if (!open) return null;
 
   const dateLabel = format(selectedDate, "EEEE, d 'de' MMMM", { locale: pt });
+  const equipas = dia?.equipas ?? [];
 
   return (
     <>
-      <div className="fixed inset-0 bg-black/40 z-40" onClick={onClose} />
+      <div className="fixed inset-0 bg-black/40 z-40" onClick={tentarFechar} />
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
         <div className="bg-white rounded-xl shadow-2xl w-full max-w-3xl max-h-[90vh] flex flex-col">
 
-          {/* Header */}
           <div className="flex items-center justify-between px-6 py-4 border-b border-[var(--color-border)] shrink-0">
             <div>
               <h2 className="text-base font-semibold text-[var(--color-text-main)]">Alocação de equipas</h2>
               <p className="text-xs text-[var(--color-text-muted)] mt-0.5 capitalize">{dateLabel}</p>
             </div>
             <div className="flex items-center gap-2">
+              {sujo && (
+                <span
+                  data-testid="indicador-por-guardar"
+                  className="text-[11px] font-medium text-amber-700 bg-amber-50 border border-amber-200 rounded-full px-2 py-0.5"
+                >
+                  Alterações por guardar
+                </span>
+              )}
               <button
-                onClick={fetchData}
+                onClick={carregar}
                 disabled={loading}
                 title="Atualizar"
                 className="p-2 rounded-lg border border-[var(--color-border)] text-[var(--color-text-sub)] hover:bg-[var(--color-background)] transition-colors disabled:opacity-50"
@@ -429,7 +365,8 @@ export function TeamAllocationModal({
                 <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
               </button>
               <button
-                onClick={onClose}
+                onClick={tentarFechar}
+                aria-label="Fechar"
                 className="p-2 rounded-lg text-[var(--color-text-muted)] hover:bg-[var(--color-background)] transition-colors"
               >
                 <X className="w-5 h-5" />
@@ -437,7 +374,6 @@ export function TeamAllocationModal({
             </div>
           </div>
 
-          {/* Conteúdo */}
           <div className="flex-1 overflow-auto p-6">
             {loading ? (
               <div className="flex items-center justify-center py-16">
@@ -447,85 +383,86 @@ export function TeamAllocationModal({
               <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
 
-                  {/* Coluna esquerda — EQUIPAS */}
+                  {/* EQUIPAS */}
                   <div>
                     <h3 className="text-xs font-semibold uppercase tracking-wider text-[var(--color-text-muted)] mb-1">
-                      Equipas ({allocated.length})
+                      Equipas ({equipas.length})
                     </h3>
                     <p className="text-[11px] text-[var(--color-text-muted)] mb-3">
-                      Arrasta uma colaboradora para outra equipa — a mudança é permanente (afeta também a aba Equipas) e ela é avisada no telemóvel.
+                      Arrasta à vontade — nada é gravado até carregares em <strong>Guardar alocações</strong>.
+                      As mudanças valem só para este dia; a equipa permanente altera-se em Equipas.
                     </p>
                     <div className="space-y-3">
-                      {allocated.length === 0 && (
+                      {equipas.length === 0 && (
                         <p className="text-sm text-[var(--color-text-muted)] py-4 text-center">
                           Sem equipas configuradas.
                         </p>
                       )}
-                      {allocated.map((team) => {
-                        const alloc = allocationMap[team.id];
-                        const selectedVehicleId = alloc?.vehicleId ?? "";
-                        const selectedDriverId  = alloc?.driverId  ?? "";
-                        const teamMembers = membersByTeam[team.id] ?? [];
-
+                      {equipas.map((team) => {
+                        const alloc = rascunho.viaturas[team.id];
+                        const membros = vista.porEquipa[team.id] ?? [];
                         return (
                           <DroppableColumn
                             key={team.id}
                             id={team.id}
                             className="p-4 rounded-xl border border-[var(--color-border)] bg-[var(--color-background)]"
                           >
-                            {/* Nome da equipa */}
                             <div className="flex items-center gap-2 mb-3">
                               <div className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: team.color }} />
                               <span className="text-sm font-semibold text-[var(--color-text-main)]">{team.name}</span>
                             </div>
 
-                            {/* Membros (arrastáveis) */}
-                            <div className="flex flex-wrap gap-1.5 mb-3 min-h-[26px]">
-                              {teamMembers.length === 0 ? (
+                            <div
+                              data-testid={`equipa-${team.id}`}
+                              className="flex flex-wrap gap-1.5 mb-3 min-h-[26px]"
+                            >
+                              {membros.length === 0 ? (
                                 <span className="text-xs text-[var(--color-text-muted)]">Largar aqui</span>
                               ) : (
-                                teamMembers.map((m) => (
-                                  <MemberChip
-                                    key={m.id}
-                                    member={m}
-                                    color={team.color}
-                                    fromTeamId={team.id}
-                                    moved={(overrideMap[m.id] ?? homeTeamOf[m.id]) !== homeTeamOf[m.id]}
-                                  />
-                                ))
+                                membros.map((m) => {
+                                  const linha = linhaPorId[m.id];
+                                  const deslocada = linha && linha.permanent_team_id !== team.id;
+                                  return (
+                                    <MemberChip
+                                      key={m.id}
+                                      member={m}
+                                      color={team.color}
+                                      fromTeamId={team.id}
+                                      badge={deslocada ? "só hoje" : undefined}
+                                    />
+                                  );
+                                })
                               )}
                             </div>
 
-                            {/* Viatura */}
                             <div className="space-y-2">
                               <div className="relative">
                                 <Car className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[var(--color-text-muted)] pointer-events-none" />
                                 <select
-                                  value={selectedVehicleId}
-                                  onChange={(e) => handleVehicleChange(team.id, e.target.value)}
+                                  aria-label={`Viatura de ${team.name}`}
+                                  value={alloc?.vehicleId ?? ""}
+                                  onChange={(e) => definirViatura(team.id, e.target.value)}
                                   className="w-full appearance-none pl-8 pr-8 py-1.5 rounded-lg border border-[var(--color-border)] text-sm text-[var(--color-text-main)] bg-white focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] focus:border-transparent"
                                 >
                                   <option value="">Sem viatura</option>
-                                  {vehicles.map((v) => (
-                                    <option key={v.id} value={v.id}>
-                                      {v.model} — {v.plate}
-                                    </option>
+                                  {(dia?.viaturasDisponiveis ?? []).map((v) => (
+                                    <option key={v.id} value={v.id}>{v.model} — {v.plate}</option>
                                   ))}
                                 </select>
                                 <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[var(--color-text-muted)] pointer-events-none" />
                               </div>
 
-                              {/* Condutor — só mostra se houver viatura selecionada */}
-                              {selectedVehicleId && (
+                              {alloc?.vehicleId && (
                                 <div className="relative">
                                   <User className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[var(--color-text-muted)] pointer-events-none" />
                                   <select
-                                    value={selectedDriverId}
-                                    onChange={(e) => handleDriverChange(team.id, e.target.value)}
+                                    aria-label={`Condutora de ${team.name}`}
+                                    value={alloc.driverId}
+                                    onChange={(e) => definirCondutora(team.id, e.target.value)}
                                     className="w-full appearance-none pl-8 pr-8 py-1.5 rounded-lg border border-[var(--color-border)] text-sm text-[var(--color-text-main)] bg-white focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] focus:border-transparent"
                                   >
-                                    <option value="">Sem condutor definido</option>
-                                    {teamMembers.map((m) => (
+                                    <option value="">Sem condutora definida</option>
+                                    {membros.map((m) => (
                                       <option key={m.id} value={m.id}>{m.full_name}</option>
                                     ))}
                                   </select>
@@ -538,60 +475,58 @@ export function TeamAllocationModal({
                       })}
                     </div>
 
-                    {/* Aviso se não há viaturas */}
-                    {vehicles.length === 0 && (
+                    {(dia?.viaturasDisponiveis ?? []).length === 0 && (
                       <div className="mt-3 p-3 rounded-lg bg-amber-50 border border-amber-200 text-xs text-amber-700">
                         Sem viaturas ativas. Adiciona em <strong>Viaturas</strong> na sidebar.
                       </div>
                     )}
                   </div>
 
-                  {/* Coluna direita */}
                   <div className="space-y-5">
-                    {/* DISPONÍVEL */}
+                    {/* DISPONÍVEL — sempre visível, sempre a aceitar */}
                     <div>
-                      <h3 className="text-xs font-semibold uppercase tracking-wider text-[var(--color-text-muted)] mb-3">
-                        Disponível ({available.length})
+                      <h3 className="text-xs font-semibold uppercase tracking-wider text-[var(--color-text-muted)] mb-2">
+                        Disponível ({vista.disponiveis.length})
                       </h3>
-                      {available.length === 0 ? (
-                        <p className="text-sm text-[var(--color-text-muted)] py-3 text-center">
-                          Todas as colaboradoras têm equipa.
-                        </p>
-                      ) : (
-                        <>
-                          <p className="text-[11px] text-[var(--color-text-muted)] mb-2">
-                            Arrasta para uma equipa para a adicionar.
-                          </p>
-                          <div className="flex flex-wrap gap-1.5">
-                            {available.map((m) => (
+                      <DroppableColumn
+                        id={ZONA_DISPONIVEL}
+                        className="p-3 rounded-xl border border-dashed border-[var(--color-border)] bg-[var(--color-background)] min-h-[84px]"
+                      >
+                        <div data-testid="zona-disponivel" className="flex flex-wrap gap-1.5">
+                          {vista.disponiveis.length === 0 ? (
+                            <span className="text-xs text-[var(--color-text-muted)]">
+                              Arraste pessoas aqui para deixar em stand by.
+                            </span>
+                          ) : (
+                            vista.disponiveis.map(({ pessoa, standby }) => (
                               <MemberChip
-                                key={m.id}
-                                member={m}
+                                key={pessoa.id}
+                                member={pessoa}
                                 color="#64748b"
                                 fromTeamId=""
-                                moved={false}
+                                badge={standby ? "stand by hoje" : undefined}
                               />
-                            ))}
-                          </div>
-                        </>
-                      )}
+                            ))
+                          )}
+                        </div>
+                      </DroppableColumn>
                     </div>
 
                     {/* AUSENTES */}
-                    {absent.length > 0 && (
+                    {vista.ausentes.length > 0 && (
                       <div>
                         <h3 className="text-xs font-semibold uppercase tracking-wider text-[var(--color-text-muted)] mb-3">
-                          Ausentes ({absent.length})
+                          Ausentes ({vista.ausentes.length})
                         </h3>
-                        <div className="space-y-1.5">
-                          {absent.map((m) => (
-                            <div key={m.id} className="flex items-center gap-2 px-3 py-2 rounded-lg bg-red-50 border border-red-100">
+                        <div className="space-y-1.5" data-testid="zona-ausentes">
+                          {vista.ausentes.map(({ pessoa }) => (
+                            <div key={pessoa.id} className="flex items-center gap-2 px-3 py-2 rounded-lg bg-red-50 border border-red-100">
                               <div className="w-6 h-6 rounded-full bg-red-200 flex items-center justify-center text-xs font-bold text-red-700 shrink-0">
-                                {m.full_name.charAt(0).toUpperCase()}
+                                {pessoa.full_name.charAt(0).toUpperCase()}
                               </div>
-                              <span className="text-sm text-[var(--color-text-main)] flex-1">{m.full_name}</span>
+                              <span className="text-sm text-[var(--color-text-main)] flex-1">{pessoa.full_name}</span>
                               <span className="text-xs text-red-600 font-medium shrink-0">
-                                {ABSENCE_LABELS[m.absence_type] ?? m.absence_type}
+                                {ABSENCE_LABELS[pessoa.id] ?? "Ausente"}
                               </span>
                             </div>
                           ))}
@@ -616,20 +551,22 @@ export function TeamAllocationModal({
             )}
           </div>
 
-          {/* Footer */}
           <div className="border-t border-[var(--color-border)] px-6 py-4 flex items-center gap-3 shrink-0">
             {message && (
-              <span className={`text-sm flex-1 ${
-                message.type === "error" ? "text-red-600"
-                : message.type === "info" ? "text-[var(--color-text-sub)]"
-                : "text-[var(--color-primary)]"
-              }`}>
+              <span
+                data-testid="mensagem"
+                className={`text-sm flex-1 ${
+                  message.type === "error" ? "text-red-600"
+                  : message.type === "info" ? "text-[var(--color-text-sub)]"
+                  : "text-[var(--color-primary)]"
+                }`}
+              >
                 {message.text}
               </span>
             )}
             <div className="ml-auto flex gap-2">
               <button
-                onClick={onClose}
+                onClick={tentarFechar}
                 className="px-4 py-2 rounded-lg border border-[var(--color-border)] text-sm font-medium text-[var(--color-text-sub)] hover:bg-[var(--color-background)] transition-colors"
               >
                 Fechar
@@ -644,9 +581,39 @@ export function TeamAllocationModal({
               </button>
             </div>
           </div>
-
         </div>
       </div>
+
+      {/* 🔴 Fechar com alterações por guardar pergunta. Não grava sozinho:
+             gravar por omissão é decidir pela pessoa numa operação que mexe
+             com onde as colaboradoras vão trabalhar. */}
+      {confirmarFecho && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+          <div className="fixed inset-0 bg-black/40" onClick={() => setConfirmarFecho(false)} />
+          <div className="relative bg-white rounded-xl shadow-2xl w-full max-w-sm p-6" role="dialog" aria-modal="true">
+            <h3 className="text-base font-semibold text-[var(--color-text-main)]">
+              Descartar alterações não guardadas?
+            </h3>
+            <p className="text-sm text-[var(--color-text-sub)] mt-2">
+              As alterações a este dia ainda não foram gravadas. Se fechar agora, perdem-se.
+            </p>
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                onClick={() => setConfirmarFecho(false)}
+                className="px-4 py-2 rounded-lg border border-[var(--color-border)] text-sm font-medium text-[var(--color-text-sub)]"
+              >
+                Continuar a editar
+              </button>
+              <button
+                onClick={descartar}
+                className="px-4 py-2 rounded-lg bg-red-600 text-white text-sm font-semibold"
+              >
+                Descartar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }

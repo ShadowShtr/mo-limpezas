@@ -3,7 +3,7 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
-import { isNoRowsError, logQueryFailure, queryFailure } from "@/lib/query-error";
+import { logQueryFailure } from "@/lib/query-error";
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 
@@ -226,104 +226,37 @@ export async function getDayTeamAssignmentsForDate(date: string): Promise<DayTea
  * (`homeTeamId`), remove a reatribuição — volta à sua equipa.
  * Nunca lança: devolve sempre `{ ok }`.
  */
-export async function moveCollaboratorToTeam(input: {
-  collaboratorId: string;
-  teamId: string;
-  homeTeamId: string | null;
-  date: string;
-}): Promise<{ ok: boolean; error?: string; notified?: boolean }> {
-  try {
-    const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return { ok: false, error: "Não autenticado." };
+// ============================================================================
+// `moveCollaboratorToTeam` foi REMOVIDA (Equipas R4)
+// ============================================================================
+//
+// 🔴 Escrevia a meio do arrasto, e escrevia PERMANENTE. Fechava a pertença
+//    ativa noutras equipas, fazia upsert na de destino, **apagava todas as
+//    reatribuições diárias da colaboradora** — decisões operacionais já
+//    tomadas para outros dias — e notificava-a no telemóvel. Tudo isto por um
+//    gesto, antes de alguém carregar em «Guardar alocações».
+//
+//    Foi substituída por `save_team_day_allocations_atomic` (o dia, numa
+//    transação, sem tocar na composição permanente) e
+//    `save_permanent_team_atomic` (a equipa permanente, com histórico e token
+//    de concorrência), ambas em `src/app/actions/equipas-r4.ts`.
+//
+// 🔴 Não fica cá «por precaução». Uma função exportada que reescreve
+//    `team_members` e apaga overrides continua a ser uma capacidade de escrita
+//    real, mesmo sem chamadores — e uma capacidade sem chamador é exactamente
+//    a que ninguém revê. O inventário de escrita deste repositório existe por
+//    causa de um caso destes.
 
-    const admin = createAdminClient();
-    const { data: actor } = await admin
-      .from("profiles").select("company_id, role").eq("id", user.id).single();
-    if (!actor || !["admin", "gestor"].includes(actor.role)) {
-      return { ok: false, error: "Sem permissão." };
-    }
-    const companyId = actor.company_id;
-
-    const { data: collab, error: collabError } = await admin
-      .from("profiles").select("id, full_name, company_id").eq("id", input.collaboratorId).single();
-    // A verificação de empresa depende desta leitura: sem ela, "inválida".
-    if (collabError && !isNoRowsError(collabError)) {
-      return queryFailure("moveCollaboratorToTeam:collaborator", collabError);
-    }
-    if (!collab || collab.company_id !== companyId) {
-      return { ok: false, error: "Colaboradora inválida." };
-    }
-
-    // Validar que a equipa de destino é da empresa.
-    const { data: targetTeam, error: targetTeamError } = await admin
-      .from("teams")
-      .select("id")
-      .eq("id", input.teamId)
-      .eq("company_id", companyId)
-      .single();
-    if (targetTeamError && !isNoRowsError(targetTeamError)) {
-      return queryFailure("moveCollaboratorToTeam:team", targetTeamError);
-    }
-    if (!targetTeam) return { ok: false, error: "Equipa inválida." };
-
-    // Movimento PERMANENTE: atualiza a composição da equipa (team_members), para
-    // que a aba Equipas e o calendário fiquem sempre iguais.
-    // 1) Fecha qualquer pertença ativa noutras equipas.
-    await admin
-      .from("team_members")
-      .update({ left_at: input.date })
-      .eq("collaborator_id", input.collaboratorId)
-      .is("left_at", null)
-      .neq("team_id", input.teamId);
-
-    // 2) Ativa (ou cria) a pertença à equipa de destino.
-    const { error: upErr } = await admin
-      .from("team_members")
-      .upsert(
-        {
-          team_id: input.teamId,
-          collaborator_id: input.collaboratorId,
-          left_at: null,
-          joined_at: input.date,
-        },
-        { onConflict: "team_id,collaborator_id" },
-      );
-    if (upErr) return { ok: false, error: upErr.message };
-
-    // 3) Limpa reatribuições diárias antigas desta colaboradora (agora obsoletas:
-    //    a mudança passou a ser permanente).
-    await admin
-      .from("collaborator_ride_assignments")
-      .delete()
-      .eq("company_id", companyId)
-      .eq("collaborator_id", input.collaboratorId);
-
-    const isReset = false;
-    const notified = await notifyDayTeam({
-      admin,
-      companyId,
-      collaboratorId: input.collaboratorId,
-      teamId: input.teamId,
-      date: input.date,
-      isReset,
-    });
-
-    // Mudança permanente em team_members → refrescar as telas que dependem da
-    // composição das equipas (aba Equipas, calendário e geração de serviços).
-    revalidatePath("/dashboard/equipas");
-    revalidatePath("/dashboard/calendario");
-
-    return { ok: true, notified };
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : "Erro interno desconhecido";
-    console.error("[moveCollaboratorToTeam] uncaught:", err);
-    return { ok: false, error: msg };
-  }
-}
-
-/** Avisa a colaboradora (in-app + web push) da equipa com que trabalha nesse dia. */
-async function notifyDayTeam(args: {
+/**
+ * Avisa a colaboradora (in-app + web push) da equipa com que trabalha nesse dia.
+ *
+ * 🔴 Passou a ser exportada, e o momento em que é chamada mudou. Antes corria
+ *    dentro do fluxo do arrasto — uma pessoa era avisada de uma mudança que
+ *    ninguém tinha confirmado. Agora só é chamada DEPOIS do batch do dia estar
+ *    commitado, por `guardarDiaEquipas`, e uma falha aqui não pode desfazer o
+ *    que já ficou gravado.
+ */
+export async function notifyDayTeam(args: {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   admin: any;
   companyId: string;

@@ -2,9 +2,9 @@
 
 import { useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Users, Trash2 } from "lucide-react";
+import { Users, Archive } from "lucide-react";
 import { EquipaSheet } from "./sheet";
-import { deleteEquipa } from "@/app/actions/equipas";
+import { arquivarEquipa } from "@/app/actions/equipas-r4";
 
 type Member = { id: string; full_name: string; avatar_url: string | null };
 
@@ -15,6 +15,7 @@ type Equipa = {
   active: boolean;
   leader_id: string | null;
   members: Member[];
+  revision: number;
 };
 
 type Colaborador = {
@@ -35,12 +36,18 @@ export function EquipasGrid({ equipas, colaboradores, companyId }: Props) {
   const router = useRouter();
   const [deleting, startDelete] = useTransition();
 
-  function handleDelete(equipa: Equipa) {
+  // 🔴 Arquivar, não apagar.
+  //
+  //    `DELETE FROM teams` levava atrás, por CASCADE, o histórico inteiro de
+  //    `team_members` e de `vehicle_allocations`, e punha `services.team_id` a
+  //    NULL — um serviço antigo deixava de saber quem o fez. Arquivar responde
+  //    à mesma necessidade («esta equipa já não existe») sem destruir o passado.
+  function handleArchive(equipa: Equipa) {
     if (!window.confirm(
-      `Excluir a equipa "${equipa.name}"?\n\nOs serviços que tinham esta equipa ficam "sem equipa" (não são apagados). Não pode ser desfeito.`,
+      `Arquivar a equipa "${equipa.name}"?\n\nDeixa de aparecer no calendário e quem lá está passa a Disponível. O histórico de serviços e de quem trabalhou nela é preservado.`,
     )) return;
     startDelete(async () => {
-      const res = await deleteEquipa(equipa.id, companyId);
+      const res = await arquivarEquipa(companyId, equipa.id);
       if (!res.ok) { window.alert(res.error); return; }
       router.refresh();
     });
@@ -121,7 +128,7 @@ export function EquipasGrid({ equipas, colaboradores, companyId }: Props) {
                 <p className="text-xs text-[var(--color-text-muted)] mb-4">Sem membros</p>
               )}
 
-              {/* Editar / Excluir */}
+              {/* Editar / Arquivar */}
               <div className="flex items-center gap-2">
                 <EquipaSheet
                   companyId={companyId}
@@ -134,12 +141,12 @@ export function EquipasGrid({ equipas, colaboradores, companyId }: Props) {
                   }
                 />
                 <button
-                  title="Excluir equipa"
+                  title="Arquivar equipa"
                   disabled={deleting}
-                  onClick={() => handleDelete(equipa)}
+                  onClick={() => handleArchive(equipa)}
                   className="p-2 rounded-lg border border-[var(--color-border)] text-[var(--color-text-muted)] hover:text-red-600 hover:bg-red-50 hover:border-red-200 transition-colors disabled:opacity-50"
                 >
-                  <Trash2 className="w-4 h-4" />
+                  <Archive className="w-4 h-4" />
                 </button>
               </div>
             </div>

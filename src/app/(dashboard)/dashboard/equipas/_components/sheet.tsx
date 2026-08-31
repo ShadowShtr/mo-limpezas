@@ -4,7 +4,7 @@ import { useState } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { X, Loader2, Check } from "lucide-react";
-import { saveEquipa } from "@/app/actions/equipas";
+import { guardarEquipaPermanente } from "@/app/actions/equipas-r4";
 
 type Member = { id: string; full_name: string; avatar_url: string | null };
 
@@ -15,6 +15,8 @@ type Equipa = {
   active: boolean;
   leader_id: string | null;
   members: Member[];
+  /** Token de concorrencia da equipa. Vem da view, e volta no save. */
+  revision: number;
 };
 
 type Colaborador = {
@@ -64,17 +66,30 @@ export function EquipaSheet({ trigger, companyId, colaboradores, equipa }: Props
     setLoading(true);
     setMessage(null);
 
-    const result = await saveEquipa(
-      equipa?.id ?? null,
+    // 🔴 Os membros que estavam a ecra quando isto abriu vao com o pedido.
+    //
+    //    A revisao sozinha nao chega: ela acompanha `teams`, e a composicao
+    //    vive em `team_members` — alguem pode acrescentar uma pessoa sem tocar
+    //    na linha da equipa, e a revisao ficaria igual.
+    const result = await guardarEquipaPermanente({
       companyId,
-      { name, color, active, leader_id: leaderId || null },
-      selectedMembers,
-    );
+      teamId: equipa?.id ?? null,
+      expectedRevision: equipa?.revision ?? null,
+      expectedMembers: (equipa?.members ?? []).map((m) => m.id).sort(),
+      name,
+      color,
+      active,
+      leaderId: leaderId || null,
+      memberIds: selectedMembers,
+    });
 
     setLoading(false);
 
     if (!result.ok) {
       setMessage({ type: "error", text: result.error });
+      // Num conflito, reler é a única saída honesta: o que está no ecrã já não
+      // descreve a base, e insistir escreveria por cima de outra pessoa.
+      if (result.conflito) router.refresh();
       return;
     }
 
