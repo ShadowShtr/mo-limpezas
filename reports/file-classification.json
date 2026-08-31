@@ -1,19 +1,19 @@
 {
   "generatedBy": "scripts/audit-file-inventory.mjs",
-  "totalFiles": 793,
+  "totalFiles": 794,
   "byStatus": {
-    "MANTER": 769,
-    "STANDBY": 24
+    "MANTER": 771,
+    "STANDBY": 23
   },
   "byCategory": {
-    "test": 166,
+    "test": 168,
     "route-ui": 137,
     "migration": 101,
     "lib": 69,
     "script": 54,
     "domain": 51,
     "doc": 45,
-    "server-action": 44,
+    "server-action": 43,
     "component": 30,
     "src-other": 26,
     "doc-historico": 16,
@@ -29,8 +29,8 @@
     "supabase-other": 2
   },
   "byConfidence": {
-    "alta": 771,
-    "média": 16,
+    "alta": 773,
+    "média": 15,
     "baixa": 6
   },
   "scriptRisk": {
@@ -5008,7 +5008,56 @@
       }
     },
     {
+      "path": "src/__tests__/equipas-r4-carregar-dia-fail-closed.test.ts",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [
+        "supabase"
+      ],
+      "risks": [],
+      "signals": {
+        "supabase": 2,
+        "dynamicImport": 1
+      },
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
       "path": "src/__tests__/equipas-r4-drag-sem-autosave.test.tsx",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {},
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/__tests__/equipas-r4-legacy-writers-absent.test.ts",
       "category": "test",
       "status": "MANTER",
       "confidence": "alta",
@@ -5044,7 +5093,7 @@
       ],
       "signals": {
         "serviceRole": 3,
-        "sqlWrite": 40
+        "sqlWrite": 59
       },
       "action": "nenhuma",
       "reason": "suite de testes — corre por convenção do vitest",
@@ -12722,11 +12771,11 @@
       "category": "server-action",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 3,
+      "consumers": 4,
       "consumerSample": [
+        "src/__tests__/equipas-r4-carregar-dia-fail-closed.test.ts",
         "src/app/(dashboard)/dashboard/calendario/_components/team-allocation-modal.tsx",
-        "src/app/(dashboard)/dashboard/equipas/_components/grid.tsx",
-        "src/app/(dashboard)/dashboard/equipas/_components/sheet.tsx"
+        "src/app/(dashboard)/dashboard/equipas/_components/grid.tsx"
       ],
       "autoLoaded": false,
       "referencedBy": [],
@@ -12747,45 +12796,7 @@
         "revalidatePath": 5
       },
       "action": "nenhuma",
-      "reason": "em uso: 3 consumidor(es)",
-      "manualDecision": false,
-      "deadCodeDoors": {
-        "frameworkConvention": false,
-        "cliEntrypoint": false,
-        "dynamicImport": true,
-        "allClosed": false
-      }
-    },
-    {
-      "path": "src/app/actions/equipas.ts",
-      "category": "server-action",
-      "status": "STANDBY",
-      "confidence": "média",
-      "consumers": 0,
-      "consumerSample": [],
-      "autoLoaded": false,
-      "referencedBy": [
-        "docs"
-      ],
-      "sideEffects": [
-        "supabase",
-        "write",
-        "revalidatePath(3)"
-      ],
-      "risks": [
-        "erro-de-query-ignorado(2)"
-      ],
-      "signals": {
-        "supabase": 8,
-        "serverAction": 1,
-        "write": 5,
-        "sqlWrite": 6,
-        "ignoredError": 2,
-        "fallbackArray": 1,
-        "revalidatePath": 3
-      },
-      "action": "porta(s) ainda abertas (import dinâmico não resolúvel) — não remover",
-      "reason": "sem consumidor no código, mas referido na documentação",
+      "reason": "em uso: 4 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -13598,11 +13609,11 @@
         "select-*(1)"
       ],
       "signals": {
-        "supabase": 14,
+        "supabase": 12,
         "env": 2,
         "serverAction": 1,
-        "write": 6,
-        "sqlWrite": 5,
+        "write": 4,
+        "sqlWrite": 4,
         "eslintDisable": 2,
         "anyType": 2,
         "unknownCast": 1,
@@ -16782,7 +16793,7 @@
       "category": "lib",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 22,
+      "consumers": 21,
       "consumerSample": [
         "src/__tests__/audit.test.ts",
         "src/app/(dashboard)/dashboard/calendario/_actions/reschedule.ts",
@@ -16810,7 +16821,7 @@
         "consoleErr": 2
       },
       "action": "nenhuma",
-      "reason": "em uso: 22 consumidor(es), script npm, CI, configuração",
+      "reason": "em uso: 21 consumidor(es), script npm, CI, configuração",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -18516,7 +18527,7 @@
       "category": "lib",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 80,
+      "consumers": 79,
       "consumerSample": [
         "src/app/(app)/app/perfil/page.tsx",
         "src/app/(app)/app/servico/[id]/page.tsx",
@@ -18539,7 +18550,7 @@
         "serviceRole": 1
       },
       "action": "nenhuma",
-      "reason": "em uso: 80 consumidor(es)",
+      "reason": "em uso: 79 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -18624,7 +18635,7 @@
       "category": "lib",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 69,
+      "consumers": 68,
       "consumerSample": [
         "src/app/(app)/app/escala/page.tsx",
         "src/app/(app)/app/page.tsx",
@@ -18646,7 +18657,7 @@
         "env": 2
       },
       "action": "nenhuma",
-      "reason": "em uso: 69 consumidor(es), CI, configuração",
+      "reason": "em uso: 68 consumidor(es), CI, configuração",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -21389,7 +21400,7 @@
       ],
       "signals": {
         "serviceRole": 6,
-        "sqlWrite": 33
+        "sqlWrite": 36
       },
       "action": "nenhuma",
       "reason": "migration versionada — histórico do schema, nunca se apaga",
