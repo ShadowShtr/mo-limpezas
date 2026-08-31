@@ -318,7 +318,13 @@ BEGIN
       (now() AT TIME ZONE 'Europe/Lisbon')::date,
       p_service_id, 'service_payment', 'confirmado'
     )
+    -- 🔴 O índice único da 024 é PARCIAL (`WHERE reference_type IS NOT NULL
+    --    AND reference_id IS NOT NULL`), e o Postgres só o infere como árbitro
+    --    se o `ON CONFLICT` repetir a mesma condição. Sem ela: 42P10, «there
+    --    is no unique or exclusion constraint matching the ON CONFLICT
+    --    specification». A 073 já tinha documentado esta armadilha.
     ON CONFLICT (company_id, reference_type, reference_id)
+      WHERE reference_type IS NOT NULL AND reference_id IS NOT NULL
     DO UPDATE SET amount = EXCLUDED.amount,
                   date   = EXCLUDED.date,
                   status = 'confirmado';
@@ -415,7 +421,13 @@ BEGIN
       (now() AT TIME ZONE 'Europe/Lisbon')::date,
       p_charge_id, 'manual_charge', 'confirmado'
     )
+    -- 🔴 O índice único da 024 é PARCIAL (`WHERE reference_type IS NOT NULL
+    --    AND reference_id IS NOT NULL`), e o Postgres só o infere como árbitro
+    --    se o `ON CONFLICT` repetir a mesma condição. Sem ela: 42P10, «there
+    --    is no unique or exclusion constraint matching the ON CONFLICT
+    --    specification». A 073 já tinha documentado esta armadilha.
     ON CONFLICT (company_id, reference_type, reference_id)
+      WHERE reference_type IS NOT NULL AND reference_id IS NOT NULL
     DO UPDATE SET amount = EXCLUDED.amount,
                   date   = EXCLUDED.date,
                   status = 'confirmado';
