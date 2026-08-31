@@ -21376,6 +21376,27 @@
       "manualDecision": false
     },
     {
+      "path": "supabase/migrations/087_equipas_r4.sql",
+      "category": "migration",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [
+        "service-role"
+      ],
+      "signals": {
+        "serviceRole": 7,
+        "sqlWrite": 37
+      },
+      "action": "nenhuma",
+      "reason": "migration versionada — histórico do schema, nunca se apaga",
+      "manualDecision": false
+    },
+    {
       "path": "supabase/migrations/20260608_new_features.sql",
       "category": "migration",
       "status": "MANTER",
@@ -21507,27 +21528,6 @@
       "risks": [],
       "signals": {
         "sqlWrite": 9
-      },
-      "action": "nenhuma",
-      "reason": "migration versionada — histórico do schema, nunca se apaga",
-      "manualDecision": false
-    },
-    {
-      "path": "supabase/migrations/draft/PROVISIONAL_equipas_r4.sql",
-      "category": "migration",
-      "status": "MANTER",
-      "confidence": "alta",
-      "consumers": 0,
-      "consumerSample": [],
-      "autoLoaded": false,
-      "referencedBy": [],
-      "sideEffects": [],
-      "risks": [
-        "service-role"
-      ],
-      "signals": {
-        "serviceRole": 7,
-        "sqlWrite": 37
       },
       "action": "nenhuma",
       "reason": "migration versionada — histórico do schema, nunca se apaga",

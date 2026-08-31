@@ -1,12 +1,9 @@
 -- ============================================================================
--- PROVISIONAL — Equipas R4: três conceitos separados, e um save por transação
+-- 087 — Equipas R4: três conceitos separados, e um save por transação
 -- ============================================================================
 --
--- 🔴 MIGRATION_NUMBER = PROVISIONAL. Este ficheiro vive em `draft/` de
---    propósito: a 086 ainda não está integrada, e atribuir-lhe 087 agora seria
---    reservar um número que pode colidir. O número final atribui-se depois de
---    a #119 ser mesclada e a 086 aplicada — com `BASE_CHANGED =
---    REVALIDATION_REQUIRED` e nova varredura de colisão.
+-- 🔴 MIGRATION_NUMBER = 087. Número atribuído só depois de leitura read-only
+--    fresca do ledger de produção confirmar 086 aplicada e ausência de 087.
 --
 -- ── O defeito que isto fecha ───────────────────────────────────────────────
 --

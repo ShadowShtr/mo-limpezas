@@ -30,7 +30,7 @@ let pool: pg.Pool;
 
 const docker = (a: string[]) => spawnSync("docker", a, { cwd: ROOT, encoding: "utf8" });
 const MIGRATION = readFileSync(
-  join(ROOT, "supabase", "migrations", "draft", "PROVISIONAL_equipas_r4.sql"), "utf8");
+  join(ROOT, "supabase", "migrations", "087_equipas_r4.sql"), "utf8");
 
 const EMP = "11111111-1111-4111-8111-111111111111";
 const T1 = "aaaaaaaa-0000-4000-8000-000000000001";
