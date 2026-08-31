@@ -79,6 +79,12 @@ DECLARE
   v_tipo     text;
   v_n        integer;
   v_dupes    integer;
+  v_revision_nullable text;
+  v_revision_default  text;
+  v_revision_exists   boolean;
+  v_legacy_ok boolean := false;
+  v_r4_ok     boolean := false;
+  v_fn_oid    oid;
   r_tab      record;
 BEGIN
   -- 0a. As tabelas de que isto depende existem.
@@ -94,24 +100,79 @@ BEGIN
     END IF;
   END LOOP;
 
-  -- 0b. `teams.revision` — ausente (criamos) ou já do tipo certo.
+  -- 0b. `teams.revision` — só três mundos aceites:
+  --     A. repo prestate: sem revision e sem triggers de revision;
+  --     B. production legacy exacto: revision int NOT NULL DEFAULT 1 +
+  --        trg_teams_revision -> fn_increment_revision(), bump em todo UPDATE;
+  --     C. R4 poststate exacto: revision int NOT NULL + trigger/função R4.
   --
-  -- 🔴 A direção indicou que produção já tem `teams.revision` e um trigger de
-  --    incremento. O REPOSITÓRIO não o confirma: a 004 não o cria, nenhuma
-  --    migration o acrescenta, e `src/types/database.ts` não o declara em
-  --    `teams.Row`. Não é possível decidir isto sem ler produção.
-  --
-  --    Por isso esta migration funciona nos dois mundos: se a coluna faltar,
-  --    cria-a de forma aditiva; se existir, exige que seja inteira e usa-a. O
-  --    que NÃO faz é assumir. Qualquer outro tipo para tudo — uma coluna
-  --    `revision` de outro tipo é outra coisa com o mesmo nome.
-  SELECT data_type INTO v_tipo
+  SELECT data_type, is_nullable, column_default
+    INTO v_tipo, v_revision_nullable, v_revision_default
     FROM information_schema.columns
    WHERE table_schema = 'public' AND table_name = 'teams' AND column_name = 'revision';
 
-  IF v_tipo IS NOT NULL AND v_tipo NOT IN ('integer', 'bigint', 'smallint') THEN
+  v_revision_exists := v_tipo IS NOT NULL;
+
+  IF v_revision_exists AND v_tipo <> 'integer' THEN
     RAISE EXCEPTION
-      'EQUIPAS_R4_UNEXPECTED_TEAMS_REVISION: teams.revision é % — esperado um inteiro', v_tipo;
+      'EQUIPAS_R4_UNEXPECTED_TEAMS_REVISION: teams.revision é % — esperado integer', v_tipo;
+  END IF;
+
+  SELECT count(*) INTO v_n
+    FROM pg_trigger t
+    JOIN pg_proc p ON p.oid = t.tgfoid
+   WHERE t.tgrelid = 'public.teams'::regclass
+     AND NOT t.tgisinternal
+     AND (
+       t.tgname IN ('trg_teams_revision', 'trg_teams_bump_revision')
+       OR p.proname IN ('fn_increment_revision', 'fn_teams_bump_revision')
+       OR t.tgname ILIKE '%revision%'
+     );
+
+  IF NOT v_revision_exists THEN
+    IF v_n <> 0 THEN
+      RAISE EXCEPTION
+        'EQUIPAS_R4_UNEXPECTED_REVISION_STATE: trigger de revision existe sem teams.revision';
+    END IF;
+  ELSE
+    IF v_revision_nullable <> 'NO' OR coalesce(v_revision_default, '') <> '1' THEN
+      RAISE EXCEPTION
+        'EQUIPAS_R4_UNEXPECTED_TEAMS_REVISION: esperado integer NOT NULL DEFAULT 1, obtido nullable=% default=%',
+        v_revision_nullable, coalesce(v_revision_default, '(sem default)');
+    END IF;
+
+    SELECT (
+      v_n = 1
+      AND EXISTS (
+        SELECT 1
+          FROM pg_trigger t
+          JOIN pg_proc p ON p.oid = t.tgfoid
+         WHERE t.tgrelid = 'public.teams'::regclass
+           AND NOT t.tgisinternal
+           AND t.tgname = 'trg_teams_revision'
+           AND p.proname = 'fn_increment_revision'
+           AND pg_get_functiondef(p.oid) LIKE '%NEW.revision := COALESCE(OLD.revision, 0) + 1%'
+      )
+    ) INTO v_legacy_ok;
+
+    SELECT (
+      v_n = 1
+      AND EXISTS (
+        SELECT 1
+          FROM pg_trigger t
+          JOIN pg_proc p ON p.oid = t.tgfoid
+         WHERE t.tgrelid = 'public.teams'::regclass
+           AND NOT t.tgisinternal
+           AND t.tgname = 'trg_teams_bump_revision'
+           AND p.proname = 'fn_teams_bump_revision'
+           AND pg_get_functiondef(p.oid) LIKE '%to_jsonb(OLD) - ''revision'' - ''updated_at''%'
+      )
+    ) INTO v_r4_ok;
+
+    IF NOT v_legacy_ok AND NOT v_r4_ok THEN
+      RAISE EXCEPTION
+        'EQUIPAS_R4_UNEXPECTED_REVISION_STATE: revision existe mas mecanismo não é legacy exacto nem R4 exacto';
+    END IF;
   END IF;
 
   -- 0c. 🔴 Ninguém pode estar em duas equipas permanentes ao mesmo tempo.
@@ -131,6 +192,20 @@ BEGIN
   IF v_dupes > 0 THEN
     RAISE EXCEPTION
       'EQUIPAS_R4_DUPLICATE_ACTIVE_MEMBERSHIP: % colaborador(es) com pertença ativa a mais de uma equipa. Encerrar as duplicadas com left_at antes de aplicar.',
+      v_dupes;
+  END IF;
+
+  SELECT count(*) INTO v_dupes
+    FROM (
+      SELECT team_id, date
+        FROM public.vehicle_allocations
+       GROUP BY team_id, date
+      HAVING count(*) > 1
+    ) d;
+
+  IF v_dupes > 0 THEN
+    RAISE EXCEPTION
+      'EQUIPAS_R4_DUPLICATE_TEAM_DATE_VEHICLE: % team/date duplicado(s) em vehicle_allocations',
       v_dupes;
   END IF;
 
@@ -171,6 +246,26 @@ $precondicoes$;
 ALTER TABLE public.teams
   ADD COLUMN IF NOT EXISTS revision integer NOT NULL DEFAULT 1;
 
+DROP TRIGGER IF EXISTS trg_teams_revision ON public.teams;
+
+DO $adopt_legacy_revision$
+DECLARE
+  v_oid oid;
+BEGIN
+  SELECT to_regprocedure('public.fn_increment_revision()')::oid INTO v_oid;
+
+  IF v_oid IS NOT NULL
+     AND NOT EXISTS (
+       SELECT 1
+         FROM pg_depend
+        WHERE refobjid = v_oid
+          AND classid = 'pg_trigger'::regclass
+     ) THEN
+    DROP FUNCTION public.fn_increment_revision();
+  END IF;
+END
+$adopt_legacy_revision$;
+
 -- 🔴 O incremento vive num trigger, e não em cada `UPDATE` escrito à mão.
 --    Um token de concorrência que dependa de quem escreve a query lembrar-se
 --    de o incrementar não é um token: é uma convenção, e as convenções não
@@ -196,6 +291,9 @@ DROP TRIGGER IF EXISTS trg_teams_bump_revision ON public.teams;
 CREATE TRIGGER trg_teams_bump_revision
   BEFORE UPDATE ON public.teams
   FOR EACH ROW EXECUTE FUNCTION public.fn_teams_bump_revision();
+
+CREATE UNIQUE INDEX IF NOT EXISTS vehicle_allocations_team_date_unique
+  ON public.vehicle_allocations (team_id, date);
 
 -- ─── 2. team_members — histórico, e uma só pertença ativa ───────────────────
 --
@@ -279,13 +377,13 @@ AS $fn$
     p.id,
     CASE
       WHEN r.id IS NOT NULL THEN r.team_id
-      ELSE tm.team_id
+      ELSE pt.id
     END,
-    tm.team_id,
+    pt.id,
     CASE
       WHEN r.id IS NOT NULL AND r.team_id IS NOT NULL THEN 'override_team'
       WHEN r.id IS NOT NULL                           THEN 'override_standby'
-      WHEN tm.team_id IS NOT NULL                     THEN 'permanent'
+      WHEN pt.id IS NOT NULL                          THEN 'permanent'
       ELSE 'sem_equipa'
     END,
     EXISTS (
@@ -303,8 +401,13 @@ AS $fn$
   LEFT JOIN public.team_members tm
          ON tm.collaborator_id = p.id
         AND tm.left_at IS NULL
+  LEFT JOIN public.teams pt
+         ON pt.id = tm.team_id
+        AND pt.company_id = p_company_id
+        AND pt.active IS TRUE
   WHERE p.company_id = p_company_id
     AND p.status = 'ativo'
+    AND p.role = 'colaborador'
 $fn$;
 
 COMMENT ON FUNCTION public.team_day_effective IS
@@ -315,10 +418,10 @@ COMMENT ON FUNCTION public.team_day_effective IS
 
 -- ─── 5. Snapshot do dia — o token de concorrência do batch ──────────────────
 --
--- 🔴 O snapshot cobre EXACTAMENTE o que o batch escreve: os overrides do dia e
---    as alocações de viatura do dia. Nem mais — incluir a composição permanente
---    faria uma edição na aba Equipas invalidar um save de calendário sem
---    necessidade — nem menos.
+-- 🔴 O snapshot cobre o estado que dá significado ao draft, não só as tabelas
+--    escritas pelo batch. Sem row de override significa "vale a equipa
+--    permanente"; logo mudança de membership permanente, ausência, ou equipa
+--    ativa tem de invalidar o draft aberto.
 CREATE OR REPLACE FUNCTION public.team_day_snapshot(p_company_id uuid, p_date date)
 RETURNS text
 LANGUAGE sql
@@ -329,10 +432,12 @@ AS $fn$
   SELECT md5(
     coalesce((
       SELECT string_agg(
-               r.collaborator_id::text || '>' || coalesce(r.team_id::text, 'STANDBY'),
-               ',' ORDER BY r.collaborator_id)
-        FROM public.collaborator_ride_assignments r
-       WHERE r.company_id = p_company_id AND r.date = p_date
+               e.collaborator_id::text || '>' ||
+               coalesce(e.effective_team_id::text, 'SEM') || '>' ||
+               coalesce(e.permanent_team_id::text, 'SEM') || '>' ||
+               e.origem || '>' || e.ausente::text,
+               ',' ORDER BY e.collaborator_id)
+        FROM public.team_day_effective(p_company_id, p_date) e
     ), '')
     || '|' ||
     coalesce((
@@ -341,6 +446,13 @@ AS $fn$
                ',' ORDER BY v.team_id)
         FROM public.vehicle_allocations v
        WHERE v.company_id = p_company_id AND v.date = p_date
+    ), '')
+    || '|' ||
+    coalesce((
+      SELECT string_agg(t.id::text || '>' || t.name || '>' || t.color || '>' || t.revision::text,
+                        ',' ORDER BY t.id)
+        FROM public.teams t
+       WHERE t.company_id = p_company_id AND t.active IS TRUE
     ), '')
   )
 $fn$;
@@ -374,7 +486,145 @@ DECLARE
   v_atual  text;
   v_ov     integer := 0;
   v_veh    integer := 0;
+  v_bad    text;
 BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM public.profiles p
+     WHERE p.id = p_actor
+       AND p.company_id = p_company_id
+       AND p.role IN ('admin', 'gestor')
+       AND p.status = 'ativo'
+  ) THEN
+    RAISE EXCEPTION 'TEAM_ALLOCATION_ACTOR_NOT_ALLOWED'
+      USING ERRCODE = 'check_violation';
+  END IF;
+
+  WITH o AS (
+    SELECT * FROM jsonb_to_recordset(coalesce(p_overrides, '[]'::jsonb))
+      AS x(collaborator_id uuid, team_id uuid)
+  )
+  SELECT collaborator_id::text INTO v_bad
+    FROM o GROUP BY collaborator_id HAVING count(*) > 1 LIMIT 1;
+  IF v_bad IS NOT NULL THEN
+    RAISE EXCEPTION 'TEAM_ALLOCATION_DUPLICATE_COLLABORATOR: %', v_bad
+      USING ERRCODE = 'check_violation';
+  END IF;
+
+  WITH o AS (
+    SELECT * FROM jsonb_to_recordset(coalesce(p_overrides, '[]'::jsonb))
+      AS x(collaborator_id uuid, team_id uuid)
+  )
+  SELECT collaborator_id::text INTO v_bad
+    FROM o
+   WHERE NOT EXISTS (
+     SELECT 1 FROM public.profiles p
+      WHERE p.id = o.collaborator_id
+        AND p.company_id = p_company_id
+        AND p.role = 'colaborador'
+        AND p.status = 'ativo'
+   )
+   LIMIT 1;
+  IF v_bad IS NOT NULL THEN
+    RAISE EXCEPTION 'TEAM_ALLOCATION_INVALID_COLLABORATOR: %', v_bad
+      USING ERRCODE = 'check_violation';
+  END IF;
+
+  WITH o AS (
+    SELECT * FROM jsonb_to_recordset(coalesce(p_overrides, '[]'::jsonb))
+      AS x(collaborator_id uuid, team_id uuid)
+  )
+  SELECT team_id::text INTO v_bad
+    FROM o
+   WHERE team_id IS NOT NULL
+     AND NOT EXISTS (
+       SELECT 1 FROM public.teams t
+        WHERE t.id = o.team_id
+          AND t.company_id = p_company_id
+          AND t.active IS TRUE
+     )
+   LIMIT 1;
+  IF v_bad IS NOT NULL THEN
+    RAISE EXCEPTION 'TEAM_ALLOCATION_INVALID_TEAM: %', v_bad
+      USING ERRCODE = 'check_violation';
+  END IF;
+
+  WITH a AS (
+    SELECT * FROM jsonb_to_recordset(coalesce(p_vehicles, '[]'::jsonb))
+      AS x(team_id uuid, vehicle_id uuid, driver_id uuid)
+  )
+  SELECT team_id::text INTO v_bad
+    FROM a GROUP BY team_id HAVING count(*) > 1 LIMIT 1;
+  IF v_bad IS NOT NULL THEN
+    RAISE EXCEPTION 'TEAM_ALLOCATION_DUPLICATE_TEAM_VEHICLE: %', v_bad
+      USING ERRCODE = 'check_violation';
+  END IF;
+
+  WITH a AS (
+    SELECT * FROM jsonb_to_recordset(coalesce(p_vehicles, '[]'::jsonb))
+      AS x(team_id uuid, vehicle_id uuid, driver_id uuid)
+  )
+  SELECT vehicle_id::text INTO v_bad
+    FROM a GROUP BY vehicle_id HAVING count(*) > 1 LIMIT 1;
+  IF v_bad IS NOT NULL THEN
+    RAISE EXCEPTION 'TEAM_ALLOCATION_DUPLICATE_VEHICLE: %', v_bad
+      USING ERRCODE = 'check_violation';
+  END IF;
+
+  WITH a AS (
+    SELECT * FROM jsonb_to_recordset(coalesce(p_vehicles, '[]'::jsonb))
+      AS x(team_id uuid, vehicle_id uuid, driver_id uuid)
+  )
+  SELECT coalesce(team_id::text, vehicle_id::text, driver_id::text) INTO v_bad
+    FROM a
+   WHERE NOT EXISTS (
+       SELECT 1 FROM public.teams t
+        WHERE t.id = a.team_id AND t.company_id = p_company_id AND t.active IS TRUE
+     )
+      OR NOT EXISTS (
+       SELECT 1 FROM public.vehicles v
+        WHERE v.id = a.vehicle_id AND v.company_id = p_company_id AND v.status = 'ativo'
+     )
+      OR (
+       a.driver_id IS NOT NULL
+       AND NOT EXISTS (
+         SELECT 1 FROM public.profiles p
+          WHERE p.id = a.driver_id
+            AND p.company_id = p_company_id
+            AND p.role = 'colaborador'
+            AND p.status = 'ativo'
+       )
+     )
+   LIMIT 1;
+  IF v_bad IS NOT NULL THEN
+    RAISE EXCEPTION 'TEAM_ALLOCATION_INVALID_VEHICLE_PAYLOAD: %', v_bad
+      USING ERRCODE = 'check_violation';
+  END IF;
+
+  WITH a AS (
+    SELECT * FROM jsonb_to_recordset(coalesce(p_vehicles, '[]'::jsonb))
+      AS x(team_id uuid, vehicle_id uuid, driver_id uuid)
+  ),
+  o AS (
+    SELECT * FROM jsonb_to_recordset(coalesce(p_overrides, '[]'::jsonb))
+      AS x(collaborator_id uuid, team_id uuid)
+  ),
+  e AS (
+    SELECT e.collaborator_id,
+           CASE WHEN o.collaborator_id IS NOT NULL THEN o.team_id ELSE e.effective_team_id END AS desired_team_id
+      FROM public.team_day_effective(p_company_id, p_date) e
+      LEFT JOIN o ON o.collaborator_id = e.collaborator_id
+  )
+  SELECT a.driver_id::text INTO v_bad
+    FROM a
+    JOIN e ON e.collaborator_id = a.driver_id
+   WHERE a.driver_id IS NOT NULL
+     AND e.desired_team_id IS DISTINCT FROM a.team_id
+   LIMIT 1;
+  IF v_bad IS NOT NULL THEN
+    RAISE EXCEPTION 'TEAM_ALLOCATION_DRIVER_NOT_IN_TEAM: %', v_bad
+      USING ERRCODE = 'check_violation';
+  END IF;
+
   -- 🔴 Lock por empresa + data, e não por empresa.
   --
   --    Dois gestores a editar dias diferentes não têm conflito nenhum, e
@@ -425,11 +675,7 @@ BEGIN
   -- ── Viaturas do dia ──────────────────────────────────────────────────────
   DELETE FROM public.vehicle_allocations v
    WHERE v.company_id = p_company_id
-     AND v.date       = p_date
-     AND NOT EXISTS (
-       SELECT 1 FROM jsonb_array_elements(coalesce(p_vehicles, '[]'::jsonb)) AS a
-        WHERE (a->>'team_id')::uuid = v.team_id
-     );
+     AND v.date       = p_date;
 
   INSERT INTO public.vehicle_allocations
     (company_id, vehicle_id, team_id, driver_id, date)
@@ -494,18 +740,53 @@ BEGIN
     RAISE EXCEPTION 'TEAM_NAME_REQUIRED' USING ERRCODE = 'check_violation';
   END IF;
 
-  -- Todos os membros pedidos têm de ser da empresa. A FK não o garante:
+  IF NOT EXISTS (
+    SELECT 1 FROM public.profiles p
+     WHERE p.id = p_actor
+       AND p.company_id = p_company_id
+       AND p.role IN ('admin', 'gestor')
+       AND p.status = 'ativo'
+  ) THEN
+    RAISE EXCEPTION 'TEAM_ACTOR_NOT_ALLOWED'
+      USING ERRCODE = 'check_violation';
+  END IF;
+
+  IF p_leader_id IS NOT NULL
+     AND NOT EXISTS (
+       SELECT 1 FROM public.profiles p
+        WHERE p.id = p_leader_id
+          AND p.company_id = p_company_id
+          AND p.status = 'ativo'
+     ) THEN
+    RAISE EXCEPTION 'TEAM_LEADER_INVALID'
+      USING ERRCODE = 'check_violation';
+  END IF;
+
+  SELECT m INTO v_intruso
+    FROM unnest(coalesce(p_members, '{}'::uuid[])) AS m
+   GROUP BY m
+  HAVING count(*) > 1
+   LIMIT 1;
+
+  IF v_intruso IS NOT NULL THEN
+    RAISE EXCEPTION 'TEAM_DUPLICATE_MEMBER_PAYLOAD: %', v_intruso
+      USING ERRCODE = 'check_violation';
+  END IF;
+
+  -- Todos os membros pedidos têm de ser colaboradores ativos da empresa. A FK não o garante:
   -- `team_members.collaborator_id` aponta para `profiles`, sem empresa.
   SELECT m INTO v_intruso
     FROM unnest(coalesce(p_members, '{}'::uuid[])) AS m
    WHERE NOT EXISTS (
      SELECT 1 FROM public.profiles p
       WHERE p.id = m AND p.company_id = p_company_id
+        AND p.role = 'colaborador'
+        AND p.status = 'ativo'
    )
    LIMIT 1;
 
   IF v_intruso IS NOT NULL THEN
-    RAISE EXCEPTION 'TEAM_MEMBER_WRONG_COMPANY: %', v_intruso
+    RAISE EXCEPTION 'TEAM_MEMBER_NOT_ACTIVE_COLLABORATOR: %', v_intruso
       USING ERRCODE = 'check_violation';
   END IF;
 
@@ -623,12 +904,52 @@ AS $fn$
 DECLARE
   v_hoje date := (now() AT TIME ZONE 'Europe/Lisbon')::date;
   v_n    integer := 0;
+  v_future_services integer := 0;
+  v_future_overrides integer := 0;
+  v_future_vehicles integer := 0;
 BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM public.profiles p
+     WHERE p.id = p_actor
+       AND p.company_id = p_company_id
+       AND p.role IN ('admin', 'gestor')
+       AND p.status = 'ativo'
+  ) THEN
+    RAISE EXCEPTION 'TEAM_ACTOR_NOT_ALLOWED'
+      USING ERRCODE = 'check_violation';
+  END IF;
+
   PERFORM 1 FROM public.teams
    WHERE id = p_team_id AND company_id = p_company_id FOR UPDATE;
 
   IF NOT FOUND THEN
     RAISE EXCEPTION 'TEAM_NOT_FOUND' USING ERRCODE = 'no_data_found';
+  END IF;
+
+  IF to_regclass('public.services') IS NOT NULL THEN
+    EXECUTE
+      'SELECT count(*) FROM public.services WHERE company_id = $1 AND team_id = $2 AND scheduled_start::date >= $3'
+      INTO v_future_services
+      USING p_company_id, p_team_id, v_hoje;
+  END IF;
+
+  SELECT count(*) INTO v_future_overrides
+    FROM public.collaborator_ride_assignments
+   WHERE company_id = p_company_id
+     AND team_id = p_team_id
+     AND date >= v_hoje;
+
+  SELECT count(*) INTO v_future_vehicles
+    FROM public.vehicle_allocations
+   WHERE company_id = p_company_id
+     AND team_id = p_team_id
+     AND date >= v_hoje;
+
+  IF v_future_services > 0 OR v_future_overrides > 0 OR v_future_vehicles > 0 THEN
+    RAISE EXCEPTION
+      'TEAM_ARCHIVE_BLOCKED_BY_FUTURE_ASSIGNMENTS: services=% overrides=% vehicle_allocations=%',
+      v_future_services, v_future_overrides, v_future_vehicles
+      USING ERRCODE = 'check_violation';
   END IF;
 
   UPDATE public.teams SET active = false
@@ -718,6 +1039,37 @@ BEGIN
 
   IF to_regclass('public.team_members_one_active_per_collaborator') IS NULL THEN
     RAISE EXCEPTION 'EQUIPAS_R4_POSTSTATE_FAILED: indice de pertenca ativa unica ausente';
+  END IF;
+
+  IF to_regclass('public.vehicle_allocations_team_date_unique') IS NULL THEN
+    RAISE EXCEPTION 'EQUIPAS_R4_POSTSTATE_FAILED: UNIQUE(team_id,date) de viaturas ausente';
+  END IF;
+
+  IF (
+    SELECT count(*)
+      FROM pg_trigger t
+      JOIN pg_proc p ON p.oid = t.tgfoid
+     WHERE t.tgrelid = 'public.teams'::regclass
+       AND NOT t.tgisinternal
+       AND (
+         t.tgname ILIKE '%revision%'
+         OR t.tgname = 'trg_teams_bump_revision'
+         OR p.proname IN ('fn_increment_revision', 'fn_teams_bump_revision')
+       )
+  ) <> 1 THEN
+    RAISE EXCEPTION 'EQUIPAS_R4_POSTSTATE_FAILED: esperado exatamente um trigger de revision';
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1
+      FROM pg_trigger t
+      JOIN pg_proc p ON p.oid = t.tgfoid
+     WHERE t.tgrelid = 'public.teams'::regclass
+       AND NOT t.tgisinternal
+       AND t.tgname = 'trg_teams_bump_revision'
+       AND p.proname = 'fn_teams_bump_revision'
+  ) THEN
+    RAISE EXCEPTION 'EQUIPAS_R4_POSTSTATE_FAILED: trigger R4 canónico ausente';
   END IF;
 
   IF EXISTS (

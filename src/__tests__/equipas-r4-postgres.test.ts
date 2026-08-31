@@ -44,6 +44,10 @@ const V1 = "dddddddd-0000-4000-8000-000000000001";
 const V2 = "dddddddd-0000-4000-8000-000000000002";
 const DIA = "2026-08-31";
 const OUTRO_DIA = "2026-09-01";
+const OUTRA_EMP = "22222222-2222-4222-8222-222222222222";
+const OUTRO_COLAB = "eeeeeeee-0000-4000-8000-00000000000e";
+const OUTRO_TEAM = "ffffffff-0000-4000-8000-000000000001";
+const OUTRO_VEH = "99999999-0000-4000-8000-000000000001";
 
 /** O prestate: 004 (teams/team_members), 016 (viaturas), 040 (overrides). */
 const BASELINE = `
@@ -103,6 +107,10 @@ const BASELINE = `
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     company_id uuid NOT NULL, collaborator_id uuid NOT NULL,
     absence_type text NOT NULL, starts_on date NOT NULL, ends_on date NOT NULL);
+  CREATE TABLE public.services (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    company_id uuid NOT NULL, team_id uuid REFERENCES public.teams(id) ON DELETE SET NULL,
+    scheduled_start timestamptz NOT NULL);
 
   -- A view da 010, tal como esta no master: e ela a definicao canonica de
   -- "membro ativo", e ja filtra left_at IS NULL. A migration acrescenta-lhe a
@@ -614,7 +622,7 @@ describe.sequential("🔴 Equipas R4 — concorrência na equipa permanente", ()
     const r0 = (await pool.query("SELECT revision FROM public.teams WHERE id=$1", [T1])).rows[0].revision;
     await expect(guardarEquipa(T1, r0, [A, B].sort(), "Equipa 1",
       [A, "eeeeeeee-0000-4000-8000-00000000000e"]))
-      .rejects.toThrow(/TEAM_MEMBER_WRONG_COMPANY/);
+      .rejects.toThrow(/TEAM_MEMBER_NOT_ACTIVE_COLLABORATOR/);
   });
 });
 
@@ -678,15 +686,64 @@ describe.sequential("Equipas R4 — precondições fail-closed", () => {
       .rejects.toThrow(/EQUIPAS_R4_UNEXPECTED_TEAMS_REVISION/);
   }, 60_000);
 
-  it("🔴 teams.revision já presente e inteira: aceite, e usada", async () => {
-    // O mundo que a direção descreve para produção. A migration tem de
-    // funcionar nos dois, porque o repositório não permite decidir qual é.
+  it("🔴 teams.revision já presente sem mecanismo conhecido: recusa", async () => {
     await pool.query(BASELINE);
     await pool.query(SEED);
-    await pool.query("ALTER TABLE public.teams ADD COLUMN revision integer NOT NULL DEFAULT 7");
+    await pool.query("ALTER TABLE public.teams ADD COLUMN revision integer NOT NULL DEFAULT 1");
+    await expect(pool.query(MIGRATION)).rejects.toThrow(/EQUIPAS_R4_UNEXPECTED_REVISION_STATE/);
+  }, 60_000);
+
+  it("🔴 production legacy revision é adotado sem resetar valores", async () => {
+    await pool.query(BASELINE);
+    await pool.query(SEED);
+    await pool.query(`
+      ALTER TABLE public.teams ADD COLUMN revision integer NOT NULL DEFAULT 1;
+      UPDATE public.teams SET revision = 5 WHERE id='${T1}';
+      CREATE OR REPLACE FUNCTION public.fn_increment_revision()
+      RETURNS trigger LANGUAGE plpgsql AS $fn$
+      BEGIN
+        NEW.revision := COALESCE(OLD.revision, 0) + 1;
+        RETURN NEW;
+      END
+      $fn$;
+      CREATE TRIGGER trg_teams_revision
+        BEFORE UPDATE ON public.teams
+        FOR EACH ROW EXECUTE FUNCTION public.fn_increment_revision();`);
     await pool.query(MIGRATION);
     const r = await pool.query("SELECT revision FROM public.teams WHERE id=$1", [T1]);
-    expect(r.rows[0].revision, "não reinicia o contador de quem já o tinha").toBe(7);
+    expect(r.rows[0].revision).toBe(5);
+    await pool.query("UPDATE public.teams SET name = 'Equipa 1x' WHERE id=$1", [T1]);
+    const r2 = await pool.query("SELECT revision FROM public.teams WHERE id=$1", [T1]);
+    expect(r2.rows[0].revision).toBe(6);
+    await pool.query("UPDATE public.teams SET name = name WHERE id=$1", [T1]);
+    const r3 = await pool.query("SELECT revision FROM public.teams WHERE id=$1", [T1]);
+    expect(r3.rows[0].revision).toBe(6);
+    const trg = await pool.query(`
+      SELECT count(*)::int n FROM pg_trigger t
+       WHERE t.tgrelid='public.teams'::regclass
+         AND NOT t.tgisinternal
+         AND t.tgname ILIKE '%revision%'`);
+    expect(trg.rows[0].n).toBe(1);
+  }, 60_000);
+
+  it("🔴 legacy revision adulterado é recusado antes de alterar", async () => {
+    await pool.query(BASELINE);
+    await pool.query(SEED);
+    await pool.query(`
+      ALTER TABLE public.teams ADD COLUMN revision integer NOT NULL DEFAULT 1;
+      CREATE OR REPLACE FUNCTION public.fn_increment_revision()
+      RETURNS trigger LANGUAGE plpgsql AS $fn$
+      BEGIN
+        NEW.revision := 99;
+        RETURN NEW;
+      END
+      $fn$;
+      CREATE TRIGGER trg_teams_revision
+        BEFORE UPDATE ON public.teams
+        FOR EACH ROW EXECUTE FUNCTION public.fn_increment_revision();`);
+    await expect(pool.query(MIGRATION)).rejects.toThrow(/EQUIPAS_R4_UNEXPECTED_REVISION_STATE/);
+    const still = await pool.query("SELECT to_regprocedure('public.fn_teams_bump_revision()') AS r4");
+    expect(still.rows[0].r4).toBeNull();
   }, 60_000);
 
   it("reaplicar a migration é seguro", async () => {
@@ -696,4 +753,110 @@ describe.sequential("Equipas R4 — precondições fail-closed", () => {
       "SELECT to_regclass('public.team_members_one_active_per_collaborator') AS reg");
     expect(idx.rows[0].reg).not.toBeNull();
   }, 60_000);
+});
+
+describe.sequential("🔴 Equipas R4 — guardas adicionais pedidas pela direção", () => {
+  beforeEach(async () => {
+    await reset();
+    await pool.query(
+      "INSERT INTO public.team_members(team_id,collaborator_id) VALUES($1,$2),($1,$3)", [T1, A, B]);
+  });
+
+  it("admin ativo não entra na equipa efetiva nem pode ser membro permanente", async () => {
+    const e = await efetiva();
+    expect(e.some((r) => r.collaborator_id === GESTOR)).toBe(false);
+    const r0 = (await pool.query("SELECT revision FROM public.teams WHERE id=$1", [T1])).rows[0].revision;
+    await expect(guardarEquipa(T1, r0, [A, B].sort(), "Equipa 1", [A, GESTOR]))
+      .rejects.toThrow(/TEAM_MEMBER_NOT_ACTIVE_COLLABORATOR/);
+  });
+
+  it("payload cross-tenant de override é recusado e não escreve", async () => {
+    await pool.query(`
+      INSERT INTO public.companies(id,name) VALUES('${OUTRA_EMP}','B');
+      INSERT INTO public.profiles(id,company_id,full_name,role,status)
+        VALUES('${OUTRO_COLAB}','${OUTRA_EMP}','Outra','colaborador','ativo');`);
+    const s0 = await snapshot();
+    await expect(guardarDia(s0, [{ collaborator_id: OUTRO_COLAB, team_id: T1 }], []))
+      .rejects.toThrow(/TEAM_ALLOCATION_INVALID_COLLABORATOR/);
+    expect(await snapshot()).toBe(s0);
+  });
+
+  it("payload cross-tenant de team/vehicle/driver é recusado", async () => {
+    await pool.query(`
+      INSERT INTO public.companies(id,name) VALUES('${OUTRA_EMP}','B');
+      INSERT INTO public.profiles(id,company_id,full_name,role,status)
+        VALUES('${OUTRO_COLAB}','${OUTRA_EMP}','Outra','colaborador','ativo');
+      INSERT INTO public.teams(id,company_id,name) VALUES('${OUTRO_TEAM}','${OUTRA_EMP}','Outra equipa');
+      INSERT INTO public.vehicles(id,company_id,model,plate,status)
+        VALUES('${OUTRO_VEH}','${OUTRA_EMP}','Outra','ZZ','ativo');`);
+    const s0 = await snapshot();
+    await expect(guardarDia(s0, [], [{ team_id: OUTRO_TEAM, vehicle_id: V1, driver_id: null }]))
+      .rejects.toThrow(/TEAM_ALLOCATION_INVALID_VEHICLE_PAYLOAD/);
+    await expect(guardarDia(s0, [], [{ team_id: T1, vehicle_id: OUTRO_VEH, driver_id: null }]))
+      .rejects.toThrow(/TEAM_ALLOCATION_INVALID_VEHICLE_PAYLOAD/);
+    await expect(guardarDia(s0, [], [{ team_id: T1, vehicle_id: V1, driver_id: OUTRO_COLAB }]))
+      .rejects.toThrow(/TEAM_ALLOCATION_INVALID_VEHICLE_PAYLOAD/);
+  });
+
+  it("condutor tem de pertencer à equipa efetiva desejada", async () => {
+    const s0 = await snapshot();
+    await expect(guardarDia(s0, [], [{ team_id: T2, vehicle_id: V1, driver_id: A }]))
+      .rejects.toThrow(/TEAM_ALLOCATION_DRIVER_NOT_IN_TEAM/);
+  });
+
+  it("mudança permanente noutra superfície invalida o snapshot do dia", async () => {
+    const s0 = await snapshot();
+    const r0 = (await pool.query("SELECT revision FROM public.teams WHERE id=$1", [T1])).rows[0].revision;
+    await guardarEquipa(T1, r0, [A, B].sort(), "Equipa 1", [A]);
+    await expect(guardarDia(s0, [], []))
+      .rejects.toThrow(/TEAM_ALLOCATION_CONFLICT/);
+  });
+
+  it("ausência criada durante edição invalida o snapshot do dia", async () => {
+    const s0 = await snapshot();
+    await pool.query(
+      `INSERT INTO public.absences(company_id,collaborator_id,absence_type,starts_on,ends_on)
+       VALUES($1,$2,'ferias',$3,$3)`, [EMP, A, DIA]);
+    await expect(guardarDia(s0, [], []))
+      .rejects.toThrow(/TEAM_ALLOCATION_CONFLICT/);
+  });
+
+  it("trocar Team1 de V1 para V2 deixa exatamente uma viatura", async () => {
+    await guardarDia(await snapshot(), [], [{ team_id: T1, vehicle_id: V1, driver_id: null }]);
+    await guardarDia(await snapshot(), [], [{ team_id: T1, vehicle_id: V2, driver_id: null }]);
+    const rows = await pool.query(
+      "SELECT vehicle_id FROM public.vehicle_allocations WHERE company_id=$1 AND date=$2 AND team_id=$3",
+      [EMP, DIA, T1]);
+    expect(rows.rows.map((r: { vehicle_id: string }) => r.vehicle_id)).toEqual([V2]);
+  });
+
+  it("payload com viatura duplicada e team duplicado é recusado", async () => {
+    const s0 = await snapshot();
+    await expect(guardarDia(s0, [], [
+      { team_id: T1, vehicle_id: V1, driver_id: null },
+      { team_id: T2, vehicle_id: V1, driver_id: null },
+    ])).rejects.toThrow(/TEAM_ALLOCATION_DUPLICATE_VEHICLE/);
+    await expect(guardarDia(s0, [], [
+      { team_id: T1, vehicle_id: V1, driver_id: null },
+      { team_id: T1, vehicle_id: V2, driver_id: null },
+    ])).rejects.toThrow(/TEAM_ALLOCATION_DUPLICATE_TEAM_VEHICLE/);
+  });
+
+  it("archive bloqueia serviço futuro e preserva serviço passado", async () => {
+    await pool.query(
+      "INSERT INTO public.services(company_id,team_id,scheduled_start) VALUES($1,$2,'2020-01-01T09:00:00Z')",
+      [EMP, T1]);
+    await pool.query("SELECT * FROM public.archive_team_atomic($1,$2,$3)", [EMP, GESTOR, T1]);
+    const past = await pool.query("SELECT team_id FROM public.services WHERE company_id=$1", [EMP]);
+    expect(past.rows[0].team_id).toBe(T1);
+
+    await reset();
+    await pool.query("INSERT INTO public.team_members(team_id,collaborator_id) VALUES($1,$2)", [T1, A]);
+    await pool.query(
+      "INSERT INTO public.services(company_id,team_id,scheduled_start) VALUES($1,$2,'2099-01-01T09:00:00Z')",
+      [EMP, T1]);
+    await expect(pool.query("SELECT * FROM public.archive_team_atomic($1,$2,$3)", [EMP, GESTOR, T1]))
+      .rejects.toThrow(/TEAM_ARCHIVE_BLOCKED_BY_FUTURE_ASSIGNMENTS/);
+    expect((await pool.query("SELECT active FROM public.teams WHERE id=$1", [T1])).rows[0].active).toBe(true);
+  });
 });

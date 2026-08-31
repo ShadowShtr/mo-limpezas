@@ -159,45 +159,6 @@ export async function getAllocationsForDate(date: string) {
   return data as unknown as VehicleAllocation[];
 }
 
-export async function upsertAllocation(input: {
-  vehicle_id: string;
-  team_id: string;
-  driver_id: string | null;
-  date: string;
-}) {
-  const companyId = await getCompanyId();
-  const admin = createAdminClient();
-
-  const { error } = await admin
-    .from("vehicle_allocations")
-    .upsert(
-      {
-        company_id: companyId,
-        vehicle_id: input.vehicle_id,
-        team_id: input.team_id,
-        driver_id: input.driver_id || null,
-        date: input.date,
-      },
-      { onConflict: "vehicle_id,date" },
-    );
-
-  if (error) throw error;
-}
-
-export async function removeAllocation(teamId: string, date: string) {
-  const companyId = await getCompanyId();
-  const admin = createAdminClient();
-
-  const { error } = await admin
-    .from("vehicle_allocations")
-    .delete()
-    .eq("company_id", companyId)
-    .eq("team_id", teamId)
-    .eq("date", date);
-
-  if (error) throw error;
-}
-
 // ─── Trocar colaboradoras de equipa por dia ─────────────────────────────────────
 
 export interface DayTeamAssignment {

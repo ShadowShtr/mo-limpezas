@@ -1,13 +1,13 @@
 {
   "inventorySource": "git ls-files",
   "summary": {
-    "repositoryFiles": 789,
-    "textFiles": 776,
-    "sourceFiles": 560,
-    "textLines": 192111,
+    "repositoryFiles": 788,
+    "textFiles": 775,
+    "sourceFiles": 561,
+    "textLines": 192457,
     "typescriptDiagnostics": 0,
     "productionEntries": 71,
-    "unreachableProductionModules": 41,
+    "unreachableProductionModules": 40,
     "exactDuplicateFileGroups": 0
   },
   "highConfidence": {
@@ -18,7 +18,6 @@
   "reviewRequired": {
     "unreachableProductionModules": [
       "src/app/(dashboard)/dashboard/financeiro/pagamentos/_components/payments-client.tsx",
-      "src/app/actions/equipas.ts",
       "src/app/actions/whatsapp.ts",
       "src/domain/billing/billing-compat.ts",
       "src/domain/billing/consumer-parity.ts",
@@ -121,7 +120,6 @@
       "src/app/actions/csv-import.ts",
       "src/app/actions/daily-billing.ts",
       "src/app/actions/equipas-r4.ts",
-      "src/app/actions/equipas.ts",
       "src/app/actions/expense-categories.ts",
       "src/app/actions/financial-periods.ts",
       "src/app/actions/intervencoes.ts",

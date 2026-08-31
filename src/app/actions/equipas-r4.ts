@@ -64,7 +64,7 @@ export async function carregarDia(
       admin.from("teams").select("id, name, color, revision")
         .eq("company_id", companyId).eq("active", true).order("name"),
       admin.from("profiles").select("id, full_name, avatar_url")
-        .eq("company_id", companyId).eq("status", "ativo").order("full_name"),
+        .eq("company_id", companyId).eq("status", "ativo").eq("role", "colaborador").order("full_name"),
       admin.from("vehicles").select("id, model, plate")
         .eq("company_id", companyId).eq("status", "ativo").order("model"),
       admin.from("vehicle_allocations").select("team_id, vehicle_id, driver_id")
@@ -72,6 +72,11 @@ export async function carregarDia(
     ]);
 
     if (efetiva.error) return { ok: false, error: efetiva.error.message };
+    if (snapshot.error) return { ok: false, error: snapshot.error.message };
+    if (equipas.error) return { ok: false, error: equipas.error.message };
+    if (pessoas.error) return { ok: false, error: pessoas.error.message };
+    if (viaturas.error) return { ok: false, error: viaturas.error.message };
+    if (alocacoes.error) return { ok: false, error: alocacoes.error.message };
 
     return {
       ok: true,
