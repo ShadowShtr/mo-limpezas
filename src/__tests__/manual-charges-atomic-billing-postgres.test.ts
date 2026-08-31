@@ -311,8 +311,13 @@ describe.sequential("086 — recebimento de cobrança avulsa é atómico", () =>
 
     // Um CHECK impossível na tabela de caixa faz o INSERT rebentar DENTRO da
     // transação da RPC. É a simulação do «segundo passo falhou».
+    //
+    // 🔴 `NOT VALID`: a constraint vale para inserções NOVAS sem validar as
+    //    linhas que já existem. Sem isso o próprio ALTER falhava — testes
+    //    anteriores já deixaram movimentos desta origem — e o teste mediria o
+    //    erro do ALTER em vez do erro da RPC.
     await cli.query(`ALTER TABLE public.cash_flow_entries
-      ADD CONSTRAINT cf_falha_forcada CHECK (reference_type <> 'manual_charge')`);
+      ADD CONSTRAINT cf_falha_forcada CHECK (reference_type <> 'manual_charge') NOT VALID`);
     let erro = "";
     try {
       await cli.query("SELECT * FROM public.set_manual_charge_payment_atomic($1,$2,'pago_total',NULL,$3)",
@@ -359,7 +364,7 @@ describe.sequential("086 — recebimento de serviço é atómico", () => {
     // podia falhar a seguir, deixando «recebido» sem dinheiro nenhum.
     const id = await novoServico(100);
     await cli.query(`ALTER TABLE public.cash_flow_entries
-      ADD CONSTRAINT cf_falha_svc CHECK (reference_type <> 'service_payment')`);
+      ADD CONSTRAINT cf_falha_svc CHECK (reference_type <> 'service_payment') NOT VALID`);
     let erro = "";
     try {
       await cli.query("SELECT * FROM public.set_service_payment_atomic($1,$2,'pago_total',NULL,$3)",
