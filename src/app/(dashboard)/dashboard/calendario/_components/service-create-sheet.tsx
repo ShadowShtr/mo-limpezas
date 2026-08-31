@@ -20,8 +20,8 @@ import {
   isUpholstery,
 } from "@/lib/cleaning-types";
 
-type Client = { id: string; name: string };
-type Location = { id: string; client_id: string; name: string; address: string; hourly_rate: number | null };
+export type Client = { id: string; name: string };
+export type Location = { id: string; client_id: string; name: string; address: string; hourly_rate: number | null };
 
 interface NominatimResult {
   place_id: number;
@@ -33,7 +33,7 @@ interface NominatimResult {
     city?: string; town?: string; village?: string; municipality?: string; county?: string;
   };
 }
-type Team = { id: string; name: string; color: string; member_count?: number };
+export type Team = { id: string; name: string; color: string; member_count?: number };
 
 interface Props {
   open: boolean;
