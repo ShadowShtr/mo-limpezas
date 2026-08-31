@@ -139,6 +139,30 @@ DECLARE
   v_config     text[];
   v_args       text;
   v_grantees   text[];
+  v_cols       text[];
+  r_helper     record;
+  r_rpc        record;
+  r_encontrada record;
+  -- A forma exacta da `manual_charges` que esta migration cria. Só é usada
+  -- quando a tabela já existe — no rehearsal, e na reaplicação.
+  c_cols_086   constant text[] := ARRAY[
+    'amount:numeric',
+    'apply_vat:boolean',
+    'charge_date:date',
+    'client_id:uuid',
+    'company_id:uuid',
+    'created_at:timestamp with time zone',
+    'created_by:uuid',
+    'description:text',
+    'id:uuid',
+    'notes:text',
+    'paid_amount:numeric',
+    'paid_at:timestamp with time zone',
+    'payment_status:text',
+    'updated_at:timestamp with time zone',
+    'voided_at:timestamp with time zone',
+    'voided_by:uuid'
+  ];
   c_prestate   constant text[] :=
     ARRAY['fixed_variable_payment', 'invoice', 'payroll', 'service_payment'];
   c_poststate  constant text[] :=
@@ -258,6 +282,100 @@ BEGIN
       '086_UNEXPECTED_DELETE_SERVICE_STATE: EXECUTE concedido a papel desconhecido: %',
       array_to_string(v_grantees, ', ');
   END IF;
+
+  -- 0e. Os helpers de que o DDL abaixo depende.
+  --
+  -- 🔴 A 086 pendura um trigger em `fn_capture_history` e escreve uma policy
+  --    sobre `get_my_company_id`/`get_my_role`. Se algum deles faltar — ou
+  --    devolver outra coisa — o objecto criado por esta migration nasce a
+  --    apontar para nada, e só se descobre em runtime.
+  --
+  --    Verifica-se a forma mínima indispensável (existe, e devolve o tipo de
+  --    que dependemos), e nada mais. Isto não é uma auditoria do esquema: é a
+  --    lista curta do que ESTA migration consome.
+  FOR r_helper IN
+    SELECT * FROM (VALUES
+      ('fn_capture_history',  'trigger'),
+      ('get_my_company_id',   'uuid'),
+      ('get_my_role',         'text')
+    ) AS h(nome, retorno)
+  LOOP
+    SELECT count(*) INTO v_n
+      FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+     WHERE n.nspname = 'public'
+       AND p.proname = r_helper.nome
+       AND format_type(p.prorettype, NULL) = r_helper.retorno;
+
+    IF v_n < 1 THEN
+      RAISE EXCEPTION
+        '086_MISSING_DEPENDENCY: public.%() com retorno % não existe — a 086 depende dela',
+        r_helper.nome, r_helper.retorno;
+    END IF;
+  END LOOP;
+
+  -- 0f. `manual_charges` — ausente, ou exactamente a desta migration.
+  --
+  -- 🔴 `CREATE TABLE IF NOT EXISTS` é silencioso por desenho: se já existir uma
+  --    tabela com este nome e OUTRA forma, a migration segue em frente, o
+  --    `ALTER`/`GRANT`/policy aplicam-se por cima, e passa a haver uma
+  --    `manual_charges` que não é a nossa a servir de origem a movimentos de
+  --    caixa. Produção hoje não a tem (medido); esta guarda existe para o caso
+  --    de alguém a criar entretanto.
+  --
+  --    Compara-se o conjunto de colunas com tipo. Não é o esquema todo — é o
+  --    que basta para distinguir «a nossa» de «outra qualquer», sem ficar
+  --    vermelho por uma diferença que não muda o significado.
+  IF to_regclass('public.manual_charges') IS NOT NULL THEN
+    SELECT coalesce(array_agg(column_name || ':' || data_type ORDER BY column_name), '{}')
+      INTO v_cols
+      FROM information_schema.columns
+     WHERE table_schema = 'public' AND table_name = 'manual_charges';
+
+    IF v_cols <> c_cols_086 THEN
+      RAISE EXCEPTION
+        '086_UNEXPECTED_MANUAL_CHARGES_STATE: existe uma manual_charges com outra forma. Colunas = %',
+        array_to_string(v_cols, ', ');
+    END IF;
+  END IF;
+
+  -- 0g. As quatro RPCs novas — ausentes, ou exactamente as desta migration.
+  --
+  -- 🔴 `CREATE OR REPLACE FUNCTION` substitui sem perguntar. Uma função com o
+  --    mesmo nome e outra intenção — escrita à mão, ou vinda de um ramo que
+  --    nunca foi mesclado — seria sobrescrita em silêncio, e o que lá estava
+  --    desaparecia sem rasto.
+  --
+  --    O reconhecimento é por três sinais estáveis: os TIPOS dos argumentos, o
+  --    modo de segurança e o `search_path`, e um marcador no corpo que só esta
+  --    família de funções emite. Deliberadamente NÃO se usa o md5 da definição:
+  --    mudaria a cada edição da migration, e a guarda passaria a exigir que o
+  --    ficheiro nunca mais fosse tocado.
+  FOR r_rpc IN
+    SELECT * FROM (VALUES
+      ('set_service_payment_atomic',       'uuid, uuid, text, numeric, uuid', 'SERVICE_PAYMENT_STATUS_INVALID'),
+      ('set_manual_charge_payment_atomic', 'uuid, uuid, text, numeric, uuid', 'MANUAL_CHARGE_STATUS_INVALID'),
+      ('void_manual_charge_atomic',        'uuid, uuid, uuid',                'MANUAL_CHARGE_HAS_PAYMENT'),
+      ('update_manual_charge_atomic',      'uuid, uuid, jsonb, uuid',         'MANUAL_CHARGE_FIELD_NOT_EDITABLE')
+    ) AS f(nome, args, marcador)
+  LOOP
+    FOR r_encontrada IN
+      SELECT p.oid, p.prosecdef, p.proconfig,
+             (SELECT string_agg(format_type(t, NULL), ', ' ORDER BY o)
+                FROM unnest(p.proargtypes) WITH ORDINALITY AS a(t, o)) AS args
+        FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+       WHERE n.nspname = 'public' AND p.proname = r_rpc.nome
+    LOOP
+      IF r_encontrada.args IS DISTINCT FROM r_rpc.args
+         OR r_encontrada.prosecdef IS TRUE
+         OR r_encontrada.proconfig IS NULL
+         OR NOT ('search_path=pg_catalog, public' = ANY(r_encontrada.proconfig))
+         OR position(r_rpc.marcador IN pg_get_functiondef(r_encontrada.oid)) = 0 THEN
+        RAISE EXCEPTION
+          '086_UNEXPECTED_RPC_STATE: public.%(%) existe e não é a desta migration',
+          r_rpc.nome, coalesce(r_encontrada.args, '');
+      END IF;
+    END LOOP;
+  END LOOP;
 END
 $precondicoes$;
 

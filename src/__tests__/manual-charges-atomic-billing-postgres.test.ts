@@ -1009,6 +1009,150 @@ describe.sequential("086 — UNKNOWN_STATE = FAIL_CLOSED", () => {
     expect(g.rows[0].n).toBe(1);
   }, 120_000);
 
+  // ── Os objectos NOVOS da 086 também têm prestate ─────────────────────────
+  //
+  // 🔴 As guardas acima cobrem o que a 086 SUBSTITUI. Falta o outro lado: o que
+  //    ela CRIA.
+  //
+  //    `CREATE TABLE IF NOT EXISTS` e `CREATE OR REPLACE FUNCTION` são
+  //    silenciosos por desenho. Produção hoje não tem nenhum destes objectos
+  //    (medido: ledger 086 = 0, `manual_charges` ausente, as quatro RPC
+  //    ausentes) — e é por isso que a guarda é barata agora e cara depois. Se
+  //    alguém criar qualquer um deles entretanto, a migration passaria por
+  //    cima sem uma palavra.
+  it("🔴 uma manual_charges com OUTRA forma: recusa, e não a altera", async () => {
+    await prestate();
+    await alt.query(`
+      CREATE TABLE public.manual_charges (
+        id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+        company_id uuid NOT NULL,
+        valor_total numeric,          -- nao e amount
+        observacao text);`);
+
+    await expect(aplicar()).rejects.toThrow(/086_UNEXPECTED_MANUAL_CHARGES_STATE/);
+
+    // A tabela intrusa continua exactamente como estava: nada de policy,
+    // nada de trigger, nada de colunas acrescentadas por cima.
+    const cols = await alt.query(
+      `SELECT count(*)::int n FROM information_schema.columns
+        WHERE table_schema='public' AND table_name='manual_charges'`);
+    expect(cols.rows[0].n).toBe(4);
+    const pol = await alt.query(
+      `SELECT count(*)::int n FROM pg_policies
+        WHERE schemaname='public' AND tablename='manual_charges'`);
+    expect(pol.rows[0].n).toBe(0);
+  }, 120_000);
+
+  it("🔴 uma RPC nova com o mesmo nome e outra intenção: recusa, e não a substitui", async () => {
+    await prestate();
+    await alt.query(`
+      CREATE OR REPLACE FUNCTION public.void_manual_charge_atomic(
+        p_company_id uuid, p_charge_id uuid, p_actor uuid)
+      RETURNS TABLE (charge_id uuid) LANGUAGE plpgsql
+      SECURITY INVOKER SET search_path = pg_catalog, public AS $x$
+      BEGIN
+        -- Uma função escrita à mão, com a mesma assinatura e outra intenção.
+        RETURN QUERY SELECT p_charge_id;
+      END $x$;`);
+
+    await expect(aplicar()).rejects.toThrow(/086_UNEXPECTED_RPC_STATE/);
+
+    // 🔴 E continua a ser a dela, não a nossa: o `CREATE OR REPLACE` não correu.
+    const d = await alt.query(
+      `SELECT pg_get_functiondef(p.oid) AS d FROM pg_proc p
+         JOIN pg_namespace n ON n.oid = p.pronamespace
+        WHERE n.nspname='public' AND p.proname='void_manual_charge_atomic'`);
+    expect(d.rows[0].d).toContain("Uma função escrita à mão");
+    expect(d.rows[0].d).not.toContain("MANUAL_CHARGE_HAS_PAYMENT");
+  }, 120_000);
+
+  it("🔴 uma SOBRECARGA da RPC nova, com outros argumentos: recusa", async () => {
+    // O ramo dos ARGUMENTOS, medido em separado. O `CREATE OR REPLACE` da 086
+    // só substitui a assinatura exacta — uma sobrecarga com o mesmo nome
+    // sobreviveria, e o caminho canónico passaria a depender de qual delas o
+    // PostgREST resolve. É o mesmo raciocínio da guarda da `delete_...safe`.
+    //
+    // 🔴 A sobrecarga traz o MARCADOR e o resto todo certo — é uma quase-cópia,
+    //    que é a forma mais perigosa de drift. Assim só o ramo dos argumentos a
+    //    pode apanhar, e a prova é mesmo sobre esse ramo. Uma intrusa
+    //    grosseira teria sido apanhada pelo marcador e não provaria nada.
+    await prestate();
+    await alt.query(`
+      CREATE OR REPLACE FUNCTION public.void_manual_charge_atomic(p_charge_id uuid)
+      RETURNS TABLE (charge_id uuid) LANGUAGE plpgsql
+      SECURITY INVOKER SET search_path = pg_catalog, public AS $x$
+      BEGIN
+        RAISE EXCEPTION 'MANUAL_CHARGE_HAS_PAYMENT';
+      END $x$;`);
+
+    await expect(aplicar()).rejects.toThrow(/086_UNEXPECTED_RPC_STATE/);
+    expect(await alt.query("SELECT to_regclass('public.manual_charges') AS reg")
+      .then((r) => r.rows[0].reg)).toBeNull();
+  }, 120_000);
+
+  it("🔴 uma RPC com o nosso marcador mas SECURITY DEFINER: recusa", async () => {
+    // O ramo do MODO DE SEGURANÇA. Estas RPC são `SECURITY INVOKER` de
+    // propósito — é o que faz o `REVOKE` da secção 11 valer alguma coisa. Uma
+    // cópia `SECURITY DEFINER` corre com os privilégios do dono e torna a ACL
+    // decorativa; sobrescrevê-la em silêncio apagaria a prova de que existiu.
+    await prestate();
+    await alt.query(`
+      CREATE OR REPLACE FUNCTION public.void_manual_charge_atomic(
+        p_company_id uuid, p_charge_id uuid, p_actor uuid)
+      RETURNS TABLE (charge_id uuid) LANGUAGE plpgsql
+      SECURITY DEFINER SET search_path = pg_catalog, public AS $x$
+      BEGIN
+        RAISE EXCEPTION 'MANUAL_CHARGE_HAS_PAYMENT';
+      END $x$;`);
+
+    await expect(aplicar()).rejects.toThrow(/086_UNEXPECTED_RPC_STATE/);
+  }, 120_000);
+
+  it("🔴 uma RPC com o nosso marcador mas outro search_path: recusa", async () => {
+    // O ramo do `search_path`. Sem ele fixo, um esquema no caminho de procura
+    // pode sequestrar um nome de tabela dentro da função.
+    await prestate();
+    await alt.query(`
+      CREATE OR REPLACE FUNCTION public.void_manual_charge_atomic(
+        p_company_id uuid, p_charge_id uuid, p_actor uuid)
+      RETURNS TABLE (charge_id uuid) LANGUAGE plpgsql
+      SECURITY INVOKER SET search_path = public AS $x$
+      BEGIN
+        RAISE EXCEPTION 'MANUAL_CHARGE_HAS_PAYMENT';
+      END $x$;`);
+
+    await expect(aplicar()).rejects.toThrow(/086_UNEXPECTED_RPC_STATE/);
+  }, 120_000);
+
+  it("a mesma RPC, mas a NOSSA: reconhecida, e a migration aplica-se", async () => {
+    // O contra-exemplo. Sem ele, a guarda podia estar apenas a recusar tudo o
+    // que encontrasse, e a reaplicação — que tem de funcionar — ficaria
+    // impossível sem ninguém reparar.
+    await prestate();
+    await aplicar();          // primeira: cria tudo
+    await aplicar();          // segunda: encontra as suas próprias, e passa
+    const f = await alt.query(
+      `SELECT count(*)::int n FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
+        WHERE n.nspname='public' AND p.proname='void_manual_charge_atomic'`);
+    expect(f.rows[0].n).toBe(1);
+  }, 120_000);
+
+  it.each([
+    ["fn_capture_history", "public.fn_capture_history()"],
+    ["get_my_company_id", "public.get_my_company_id()"],
+    ["get_my_role", "public.get_my_role()"],
+  ])("🔴 helper %s em falta: falha legível, e reversão total", async (nome, assinatura) => {
+    await prestate();
+    await alt.query(`DROP FUNCTION ${assinatura} CASCADE`);
+
+    await expect(aplicar()).rejects.toThrow(
+      new RegExp(`086_MISSING_DEPENDENCY[\\s\\S]*${nome}`));
+
+    // A migration depende dele para criar trigger/policy: nada foi criado.
+    expect(await alt.query("SELECT to_regclass('public.manual_charges') AS reg")
+      .then((r) => r.rows[0].reg)).toBeNull();
+  }, 120_000);
+
   it("🔴 e nenhum destes cenários deixou a 086 meio-aplicada", async () => {
     // A prova de conjunto: depois de todas as recusas acima, a última base
     // continua sem a tabela e sem as funções da 086.
