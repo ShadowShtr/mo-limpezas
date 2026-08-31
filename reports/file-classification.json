@@ -1,12 +1,12 @@
 {
   "generatedBy": "scripts/audit-file-inventory.mjs",
-  "totalFiles": 787,
+  "totalFiles": 788,
   "byStatus": {
-    "MANTER": 764,
+    "MANTER": 765,
     "STANDBY": 23
   },
   "byCategory": {
-    "test": 164,
+    "test": 165,
     "route-ui": 137,
     "migration": 101,
     "lib": 67,
@@ -29,7 +29,7 @@
     "supabase-other": 2
   },
   "byConfidence": {
-    "alta": 766,
+    "alta": 767,
     "média": 15,
     "baixa": 6
   },
@@ -3174,11 +3174,11 @@
       "category": "script",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 8,
+      "consumers": 9,
       "consumerSample": [
         "scripts/lib/migration-drift-guard.mjs",
         "scripts/run-migrations.mjs",
-        "src/__tests__/migration-ledger-gap.test.ts"
+        "src/__tests__/migration-086-runner-ledger-atomicity.pg.test.ts"
       ],
       "autoLoaded": false,
       "referencedBy": [
@@ -5921,8 +5921,8 @@
         "service-role"
       ],
       "signals": {
-        "serviceRole": 5,
-        "sqlWrite": 40
+        "serviceRole": 6,
+        "sqlWrite": 61
       },
       "action": "nenhuma",
       "reason": "suite de testes — corre por convenção do vitest",
@@ -5950,6 +5950,36 @@
       "signals": {
         "serviceRole": 8,
         "sqlWrite": 17
+      },
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/__tests__/migration-086-runner-ledger-atomicity.pg.test.ts",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [
+        "service-role",
+        "todo(1)"
+      ],
+      "signals": {
+        "serviceRole": 3,
+        "sqlWrite": 11,
+        "todo": 1,
+        "unknownCast": 3
       },
       "action": "nenhuma",
       "reason": "suite de testes — corre por convenção do vitest",
@@ -21087,8 +21117,8 @@
         "service-role"
       ],
       "signals": {
-        "serviceRole": 9,
-        "sqlWrite": 47
+        "serviceRole": 11,
+        "sqlWrite": 48
       },
       "action": "nenhuma",
       "reason": "migration versionada — histórico do schema, nunca se apaga",

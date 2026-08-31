@@ -28,6 +28,46 @@
 --    serviço, não é um movimento de caixa, não é uma fatura. Passa a ter
 --    tabela própria.
 --
+-- ── 1b. O que ela É, por decisão do proprietário ───────────────────────────
+--
+--    Na interface chama-se **nota de cobrança** (ou «cobrança avulsa»). O nome
+--    técnico `manual_charges` fica; o vocabulário de quem a usa é outro.
+--
+--        MANUAL_CHARGE           = FIRST_CLASS_RECEIVABLE
+--        SERVICE_REQUIRED        = NO
+--        INVOICE_REQUIRED        = NO
+--        CUSTOMER_LINK_REQUIRED  = YES
+--        COMPANY_LINK_REQUIRED   = YES
+--        REPORTABLE              = YES
+--
+-- 🔴 REPORTABLE = YES não é um detalhe, e vale a pena dizê-lo aqui para que
+--    ninguém leia a secção «o que esta migration NÃO faz» ao contrário.
+--
+--    Uma nota de cobrança **entra** no acompanhamento de Cobranças, e há-de
+--    entrar nos relatórios financeiros e nos relatórios por cliente — mesmo
+--    sem serviço nenhum por trás. Não participar de `invoice_items` não é
+--    ficar de fora dos relatórios: é não ser um documento fiscal.
+--
+--    O contrato de leitura, quando a Fase 2 o construir, é por ORIGEM:
+--
+--        billing item · type = service
+--                     · type = manual_charge
+--
+--    As duas somam para «quanto foi cobrado», «quanto foi recebido»,
+--    pendentes, por cliente e por período — e o relatório continua a poder
+--    responder «quanto veio de serviços?» e «quanto veio de notas de
+--    cobrança?» separadamente. A proveniência conserva-se sempre.
+--
+-- 🔴 E NUNCA se converte uma nota de cobrança num serviço só para a fazer
+--    aparecer num relatório. Era essa a alternativa rejeitada acima, e o
+--    motivo não muda por o pedido vir do lado dos relatórios.
+--
+--    `service_id` não existe nesta tabela, e não é esquecimento: a existência
+--    da nota não depende de serviço. Uma referência opcional a `services`, se
+--    algum dia for desejada, é PROVENIÊNCIA separada — e tem de provar, antes
+--    de existir, que não produz dupla cobrança (pagamento de serviço mais
+--    recebimento de nota para a mesma obrigação).
+--
 -- ── 2. Porque é que as RPCs atómicas existem ───────────────────────────────
 --
 -- 🔴 `setServicePayment` NÃO é atómico hoje. Faz:
@@ -65,11 +105,161 @@
 --    · não liga `manual_charges` a `invoice_items`. O modelo de faturas não
 --      tem alocação parcial suficiente para converter um recebimento de
 --      cobrança avulsa em pagamento de fatura sem arriscar contar o mesmo
---      dinheiro duas vezes. Uma cobrança avulsa é uma cobrança financeira
---      independente, e não um documento legal. A integração, se for desejada,
---      é uma extensão explícita e posterior;
+--      dinheiro duas vezes. Uma nota de cobrança é uma cobrança financeira
+--      independente e **reportável**, e não um documento legal. A integração,
+--      se for desejada, é uma extensão explícita e posterior, e tem de provar
+--      que não contabiliza o mesmo recebimento duas vezes.
+--
+--      🔴 Ficar fora de `invoice_items` NÃO é ficar fora dos relatórios —
+--         ver a secção 1b. É a única leitura errada possível deste parágrafo,
+--         e está aqui dita ao contrário de propósito;
 --    · não repara dados: não há dados a reparar.
 -- ============================================================================
+
+-- ─── 0. Precondições — fail-closed antes de sobrescrever o que já existe ────
+--
+-- 🔴 Esta migration não cria só coisas novas: substitui um CHECK que já está em
+--    produção e faz `CREATE OR REPLACE` de uma função da 062. Sobrescrever é
+--    seguro exactamente enquanto o que lá está for o que julgamos que está.
+--
+--    UNKNOWN_STATE = FAIL_CLOSED. Nada é alterado antes destas guardas passarem,
+--    e nenhuma delas «normaliza» o que encontra: divergência levanta, não corrige.
+--
+-- 🔴 Cada guarda aceita DOIS estados: o prestate e o poststate desta própria
+--    migration. Sem isso, reaplicar a 086 — que tem de ser idempotente — falharia
+--    na segunda vez por ter funcionado na primeira. Qualquer terceiro estado é
+--    drift e para tudo.
+DO $precondicoes$
+DECLARE
+  v_tipos      text[];
+  v_idx        text;
+  v_oid        oid;
+  v_n          integer;
+  v_secdef     boolean;
+  v_config     text[];
+  v_args       text;
+  v_grantees   text[];
+  c_prestate   constant text[] :=
+    ARRAY['fixed_variable_payment', 'invoice', 'payroll', 'service_payment'];
+  c_poststate  constant text[] :=
+    ARRAY['fixed_variable_payment', 'invoice', 'manual_charge', 'payroll', 'service_payment'];
+BEGIN
+  -- 0a. O CHECK de `reference_type` é o que a 075 deixou (ou já o desta).
+  --
+  -- Compara-se o CONJUNTO de literais aceites, não o texto do constraint: o
+  -- `pg_get_constraintdef` reformata, e uma guarda que dependesse do formato
+  -- ficaria vermelha por uma diferença de espaços em vez de por uma diferença
+  -- de significado.
+  SELECT coalesce(array_agg(DISTINCT m[1] ORDER BY m[1]), '{}')
+    INTO v_tipos
+    FROM pg_constraint c
+    CROSS JOIN LATERAL
+      regexp_matches(pg_get_constraintdef(c.oid), '''([a-z_]+)''', 'g') AS m
+   WHERE c.conrelid = 'public.cash_flow_entries'::regclass
+     AND c.conname  = 'cash_flow_entries_reference_type_check';
+
+  IF v_tipos <> c_prestate AND v_tipos <> c_poststate THEN
+    RAISE EXCEPTION
+      '086_UNEXPECTED_CASHFLOW_REFERENCE_TYPE_STATE: aceites = %, esperado % (prestate) ou % (já aplicada)',
+      v_tipos, c_prestate, c_poststate;
+  END IF;
+
+  -- 0b. O índice parcial da 024 tem de estar lá, e com o predicado exacto.
+  --
+  -- 🔴 Não é decoração: as duas RPCs desta migration usam-no como árbitro do
+  --    `ON CONFLICT`. Sem ele — ou com outro predicado — o `INSERT` rebenta com
+  --    42P10 em runtime, num caminho de dinheiro, e não aqui.
+  -- 🔴 `to_regclass`, e não `::regclass`. O cast levanta «relation does not
+  --    exist» quando o índice falta — e a guarda passaria a falhar com um erro
+  --    cru do PostgreSQL em vez do nome que diz o que se passa. Fecha nos dois
+  --    casos, mas só um deles é legível para quem estiver a aplicar isto.
+  SELECT pg_get_indexdef(i.indexrelid) INTO v_idx
+    FROM pg_index i
+   WHERE i.indrelid   = 'public.cash_flow_entries'::regclass
+     AND i.indexrelid = to_regclass('public.cash_flow_entries_reference_unique');
+
+  IF v_idx IS NULL
+     OR v_idx NOT LIKE '%UNIQUE%'
+     OR v_idx NOT LIKE '%(company_id, reference_type, reference_id)%'
+     OR v_idx NOT LIKE '%reference_type IS NOT NULL%'
+     OR v_idx NOT LIKE '%reference_id IS NOT NULL%' THEN
+    RAISE EXCEPTION
+      '086_UNEXPECTED_CASHFLOW_REFERENCE_INDEX_STATE: %', coalesce(v_idx, '(ausente)');
+  END IF;
+
+  -- 0c. `delete_calendar_service_safe` é a da 062 (ou já a desta).
+  --
+  -- Uma segunda sobrecarga com o mesmo nome significa que o `CREATE OR REPLACE`
+  -- abaixo deixaria a outra viva, e o caminho canónico passaria a depender de
+  -- qual delas o PostgREST resolve.
+  SELECT count(*) INTO v_n
+    FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+   WHERE n.nspname = 'public' AND p.proname = 'delete_calendar_service_safe';
+
+  IF v_n <> 1 THEN
+    RAISE EXCEPTION
+      '086_UNEXPECTED_DELETE_SERVICE_STATE: % sobrecargas de delete_calendar_service_safe, esperado 1', v_n;
+  END IF;
+
+  SELECT p.oid, p.prosecdef, p.proconfig
+    INTO v_oid, v_secdef, v_config
+    FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+   WHERE n.nspname = 'public' AND p.proname = 'delete_calendar_service_safe';
+
+  -- 🔴 Os TIPOS dos argumentos, vindos de `proargtypes` — não
+  --    `pg_get_function_identity_arguments`, que devolve também os NOMES dos
+  --    parâmetros («p_service_id uuid, p_scope text, …»). A guarda com essa
+  --    função comparava nomes contra tipos e recusava a assinatura correcta,
+  --    o que é o pior modo de falha possível numa precondição: fecha o caminho
+  --    certo e obriga quem a lê a duvidar da base em vez do teste.
+  SELECT string_agg(format_type(t, NULL), ', ' ORDER BY ord)
+    INTO v_args
+    FROM pg_proc p, unnest(p.proargtypes) WITH ORDINALITY AS a(t, ord)
+   WHERE p.oid = v_oid;
+
+  IF v_args IS DISTINCT FROM 'uuid, text, uuid, uuid' THEN
+    RAISE EXCEPTION
+      '086_UNEXPECTED_DELETE_SERVICE_STATE: argumentos = (%), esperado (uuid, text, uuid, uuid)',
+      coalesce(v_args, '(nenhum)');
+  END IF;
+
+  IF v_secdef IS NOT TRUE THEN
+    RAISE EXCEPTION
+      '086_UNEXPECTED_DELETE_SERVICE_STATE: nao e SECURITY DEFINER';
+  END IF;
+
+  IF v_config IS NULL OR NOT ('search_path=public' = ANY(v_config)) THEN
+    RAISE EXCEPTION
+      '086_UNEXPECTED_DELETE_SERVICE_STATE: search_path = %, esperado search_path=public',
+      coalesce(array_to_string(v_config, ','), '(nenhum)');
+  END IF;
+
+  -- 0d. ACL: ninguém com EXECUTE fora do conjunto que esta migration controla.
+  --
+  -- 🔴 O `CREATE OR REPLACE` **preserva** o ACL existente. A secção 11 revoga de
+  --    PUBLIC/anon/authenticated e concede a service_role — mas não sabe nada de
+  --    um papel que alguém tenha concedido à mão. Esse sobreviveria à migration
+  --    em silêncio, que é a definição de drift normalizado sem se dar por ele.
+  --
+  --    A guarda não exige que os papéis conhecidos estejam concedidos (a secção
+  --    11 decide isso). Exige que não haja nenhum desconhecido.
+  SELECT coalesce(array_agg(DISTINCT grantee ORDER BY grantee), '{}')
+    INTO v_grantees
+    FROM (
+      SELECT coalesce(nullif((a).grantee::regrole::text, '-'), 'PUBLIC') AS grantee
+        FROM (SELECT aclexplode(proacl) AS a FROM pg_proc WHERE oid = v_oid) x
+       WHERE (a).privilege_type = 'EXECUTE'
+    ) g
+   WHERE grantee NOT IN ('PUBLIC', 'anon', 'authenticated', 'service_role',
+                         current_user, 'postgres');
+
+  IF v_grantees <> '{}'::text[] THEN
+    RAISE EXCEPTION
+      '086_UNEXPECTED_DELETE_SERVICE_STATE: EXECUTE concedido a papel desconhecido: %',
+      array_to_string(v_grantees, ', ');
+  END IF;
+END
+$precondicoes$;
 
 -- ─── 1. manual_charges — a obrigação de cliente ─────────────────────────────
 CREATE TABLE IF NOT EXISTS public.manual_charges (
@@ -117,9 +307,14 @@ CREATE TABLE IF NOT EXISTS public.manual_charges (
 );
 
 COMMENT ON TABLE public.manual_charges IS
-  'Cobranca avulsa: obrigacao de cliente sem servico por tras. Nao e servico, '
-  'nao e movimento de caixa, nao e fatura. O recebimento entra pelo caixa via '
-  'set_manual_charge_payment_atomic, com reference_type = manual_charge.';
+  'Nota de cobranca (cobranca avulsa): recebivel de cliente de primeira classe, '
+  'sem servico e sem fatura por tras. Nao e servico, nao e movimento de caixa, '
+  'nao e documento fiscal — e uma obrigacao financeira independente e '
+  'REPORTAVEL: entra nas Cobrancas e nos relatorios financeiros e por cliente, '
+  'conservando a origem (type = manual_charge, a par de type = service). '
+  'O recebimento entra pelo caixa via set_manual_charge_payment_atomic, com '
+  'reference_type = manual_charge. Nunca converter numa linha de services para '
+  'a fazer aparecer num relatorio.';
 
 CREATE INDEX IF NOT EXISTS idx_manual_charges_company_date
   ON public.manual_charges (company_id, charge_date);
@@ -240,6 +435,32 @@ BEGIN
       USING ERRCODE = 'check_violation';
   END IF;
 
+  -- 🔴 Estado e valor têm de dizer a mesma coisa.
+  --
+  --    Sem esta guarda a RPC aceitava combinações que deixavam a origem e o
+  --    caixa a afirmar coisas contrárias, e nenhuma das duas errada por si só:
+  --
+  --      `nao_informado` + valor > 0 → nasce movimento de caixa por uma
+  --                                    cobrança que o próprio registo diz não
+  --                                    ter sido recebida;
+  --      `pago_total`    + valor = 0 → o serviço fica marcado como recebido e o
+  --                                    ramo do caixa é o de APAGAR. Recebido no
+  --                                    ecrã, dinheiro nenhum no Fluxo de Caixa.
+  --
+  --    É a mesma classe de dessincronização que a onda 077→085 fecha noutros
+  --    sítios — aqui entrava pela porta dos argumentos.
+  IF p_status = 'nao_informado' AND COALESCE(p_paid_amount, 0) > 0 THEN
+    RAISE EXCEPTION 'SERVICE_PAYMENT_STATUS_AMOUNT_INCOHERENT: nao_informado com valor %', p_paid_amount
+      USING ERRCODE = 'check_violation',
+            HINT = 'Um valor recebido exige um estado de recebimento (sinal_50 ou pago_total).';
+  END IF;
+
+  IF p_status <> 'nao_informado' AND p_paid_amount IS NOT NULL AND p_paid_amount = 0 THEN
+    RAISE EXCEPTION 'SERVICE_PAYMENT_STATUS_AMOUNT_INCOHERENT: % com valor zero', p_status
+      USING ERRCODE = 'check_violation',
+            HINT = 'Para retirar o recebimento, use o estado nao_informado.';
+  END IF;
+
   IF p_actor IS NOT NULL THEN
     PERFORM set_config('app.actor_id', p_actor::text, true);
   END IF;
@@ -297,13 +518,27 @@ BEGIN
     v_recebido := round(v_recebido, 2);
   END IF;
 
+  -- 🔴 A mesma coerência, agora sobre o valor DERIVADO.
+  --
+  --    A guarda dos argumentos não chega: um serviço sem valor nenhum
+  --    (`manual_value` e `calculated_value` a NULL) derivava zero, e
+  --    `pago_total` caía outra vez no ramo de apagar o caixa. A incoerência
+  --    entrava pela porta dos dados em vez da porta dos argumentos, e o efeito
+  --    era exactamente o mesmo.
+  IF p_status <> 'nao_informado' AND v_recebido <= 0 THEN
+    RAISE EXCEPTION 'SERVICE_PAYMENT_STATUS_AMOUNT_INCOHERENT: % sem valor a receber', p_status
+      USING ERRCODE = 'check_violation',
+            HINT = 'O serviço não tem valor. Defina o valor antes de registar o recebimento.';
+  END IF;
+
   UPDATE public.services
      SET payment_status = p_status,
-         paid_amount    = p_paid_amount,
-         paid_at        = CASE
-                            WHEN p_status = 'nao_informado' AND p_paid_amount IS NULL
-                            THEN NULL ELSE now()
-                          END
+         -- 🔴 `nao_informado` significa «sem dinheiro», e o registo tem de o
+         --    dizer sozinho. Um `paid_amount = 0` com `paid_at` preenchido é um
+         --    recebimento de zero euros: uma terceira leitura possível que não
+         --    corresponde a nada. Normaliza-se para NULL.
+         paid_amount    = CASE WHEN p_status = 'nao_informado' THEN NULL ELSE p_paid_amount END,
+         paid_at        = CASE WHEN p_status = 'nao_informado' THEN NULL ELSE now() END
    WHERE id = p_service_id AND company_id = p_company_id;
 
   -- O caixa, no MESMO acto.
@@ -368,6 +603,21 @@ BEGIN
       USING ERRCODE = 'check_violation';
   END IF;
 
+  -- 🔴 Estado e valor têm de dizer a mesma coisa. O raciocínio inteiro está na
+  --    RPC de serviço, secção 6 — a nota de cobrança segue a mesma regra porque
+  --    partilha o mesmo vocabulário de estados de propósito.
+  IF p_status = 'nao_informado' AND COALESCE(p_paid_amount, 0) > 0 THEN
+    RAISE EXCEPTION 'MANUAL_CHARGE_STATUS_AMOUNT_INCOHERENT: nao_informado com valor %', p_paid_amount
+      USING ERRCODE = 'check_violation',
+            HINT = 'Um valor recebido exige um estado de recebimento (sinal_50 ou pago_total).';
+  END IF;
+
+  IF p_status <> 'nao_informado' AND p_paid_amount IS NOT NULL AND p_paid_amount = 0 THEN
+    RAISE EXCEPTION 'MANUAL_CHARGE_STATUS_AMOUNT_INCOHERENT: % com valor zero', p_status
+      USING ERRCODE = 'check_violation',
+            HINT = 'Para retirar o recebimento, use o estado nao_informado.';
+  END IF;
+
   IF p_actor IS NOT NULL THEN
     PERFORM set_config('app.actor_id', p_actor::text, true);
   END IF;
@@ -400,13 +650,20 @@ BEGIN
     v_recebido := round(v_recebido, 2);
   END IF;
 
+  -- A coerência sobre o valor derivado. Aqui o `CHECK amount > 0` da tabela já
+  -- garante um total positivo, portanto esta guarda nunca deve disparar por
+  -- dados — fica porque a garantia é da tabela e não desta função, e uma
+  -- invariante que só vive noutro sítio deixa de valer quando esse sítio muda.
+  IF p_status <> 'nao_informado' AND v_recebido <= 0 THEN
+    RAISE EXCEPTION 'MANUAL_CHARGE_STATUS_AMOUNT_INCOHERENT: % sem valor a receber', p_status
+      USING ERRCODE = 'check_violation';
+  END IF;
+
   UPDATE public.manual_charges
      SET payment_status = p_status,
-         paid_amount    = p_paid_amount,
-         paid_at        = CASE
-                            WHEN p_status = 'nao_informado' AND p_paid_amount IS NULL
-                            THEN NULL ELSE now()
-                          END,
+         -- `nao_informado` significa «sem dinheiro» — ver a nota na RPC de serviço.
+         paid_amount    = CASE WHEN p_status = 'nao_informado' THEN NULL ELSE p_paid_amount END,
+         paid_at        = CASE WHEN p_status = 'nao_informado' THEN NULL ELSE now() END,
          updated_at     = now()
    WHERE id = p_charge_id AND company_id = p_company_id;
 
@@ -518,6 +775,8 @@ DECLARE
   v_chg       public.manual_charges%ROWTYPE;
   v_proibidas text[];
   v_mexe_dinheiro boolean;
+  v_tem_caixa     boolean;
+  v_tem_dinheiro  boolean;
 BEGIN
   IF p_actor IS NOT NULL THEN
     PERFORM set_config('app.actor_id', p_actor::text, true);
@@ -547,13 +806,49 @@ BEGIN
             HINT = 'Esta cobranca foi anulada e nao pode ser editada.';
   END IF;
 
+  -- 🔴 «Tem dinheiro» são TRÊS sinais, não dois.
+  --
+  --    A versão anterior olhava só para `payment_status` e `paid_amount`. Um
+  --    movimento de caixa com estado local limpo — que é precisamente o que uma
+  --    escrita parcial deixa para trás, e o que a `void_manual_charge_atomic`
+  --    já verificava — passava despercebido. O caixa é a terceira testemunha, e
+  --    é a única que fala de dinheiro que já saiu do mundo desta tabela.
+  SELECT EXISTS (
+    SELECT 1 FROM public.cash_flow_entries c
+     WHERE c.company_id     = p_company_id
+       AND c.reference_type = 'manual_charge'
+       AND c.reference_id   = p_charge_id
+  ) INTO v_tem_caixa;
+
+  v_tem_dinheiro := v_chg.payment_status <> 'nao_informado'
+                    OR COALESCE(v_chg.paid_amount, 0) > 0
+                    OR v_tem_caixa;
+
   v_mexe_dinheiro := (p_patch ? 'amount') OR (p_patch ? 'apply_vat');
 
-  IF v_mexe_dinheiro
-     AND (v_chg.payment_status <> 'nao_informado' OR COALESCE(v_chg.paid_amount, 0) > 0) THEN
+  IF v_mexe_dinheiro AND v_tem_dinheiro THEN
     RAISE EXCEPTION 'MANUAL_CHARGE_PAID_AMOUNT_LOCKED'
       USING ERRCODE = 'object_not_in_prerequisite_state',
             HINT = 'Remova o recebimento antes de alterar o valor desta cobranca.';
+  END IF;
+
+  -- 🔴 `client_id` é PROVENIÊNCIA, e não um campo editável como outro qualquer.
+  --
+  --    Mudá-lo depois do recebimento reatribui dinheiro histórico a outro
+  --    cliente: o movimento de caixa já entrou, o extrato do cliente antigo
+  --    perde-o e o do novo ganha uma entrada que nunca lhe pertenceu. Nenhum
+  --    dos dois extratos passa a estar certo, e nada no sistema regista que a
+  --    troca aconteceu.
+  --
+  --    Não se resolve reescrevendo o movimento: o dinheiro foi recebido de
+  --    alguém, e essa é a informação. Quem se enganou no cliente remove o
+  --    recebimento, corrige, e volta a marcar — o mesmo caminho do valor.
+  IF (p_patch ? 'client_id')
+     AND (p_patch->>'client_id') IS DISTINCT FROM v_chg.client_id::text
+     AND v_tem_dinheiro THEN
+    RAISE EXCEPTION 'MANUAL_CHARGE_CLIENT_LOCKED'
+      USING ERRCODE = 'object_not_in_prerequisite_state',
+            HINT = 'Esta cobranca ja tem recebimento. Remova-o antes de mudar o cliente.';
   END IF;
 
   UPDATE public.manual_charges
@@ -625,7 +920,7 @@ BEGIN
      WHERE s.company_id = p_company_id
        AND s.contract_id = v_svc.contract_id
        AND (
-         s.payment_status IS DISTINCT FROM 'nao_informado'
+         COALESCE(s.payment_status, 'nao_informado') <> 'nao_informado'
          OR COALESCE(s.paid_amount, 0) > 0
          OR EXISTS (
            SELECT 1 FROM public.cash_flow_entries c
@@ -645,7 +940,7 @@ BEGIN
      WHERE s.id = p_service_id
        AND s.company_id = p_company_id
        AND (
-         s.payment_status IS DISTINCT FROM 'nao_informado'
+         COALESCE(s.payment_status, 'nao_informado') <> 'nao_informado'
          OR COALESCE(s.paid_amount, 0) > 0
          OR EXISTS (
            SELECT 1 FROM public.cash_flow_entries c
