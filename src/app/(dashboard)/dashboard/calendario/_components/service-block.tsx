@@ -53,12 +53,23 @@ function extractCity(address: string): string {
 
 // ─── Estilos por estado ───────────────────────────────────────────────────────
 
-const STATUS_BG: Record<string, { bg: string; text: string; fallbackBorder: string }> = {
-  agendado:  { bg: "#F0FDF4", text: "#15803D", fallbackBorder: "#16A34A" },
-  em_curso:  { bg: "#FFFBEB", text: "#92400E", fallbackBorder: "#F59E0B" },
-  concluido: { bg: "#F8FAFC", text: "#475569", fallbackBorder: "#94A3B8" },
-  cancelado: { bg: "#FEF2F2", text: "#B91C1C", fallbackBorder: "#DC2626" },
-  falta:     { bg: "#FEF2F2", text: "#B91C1C", fallbackBorder: "#DC2626" },
+// 🔴 `bg` e `cardBg` são coisas diferentes, e é por isso que há duas.
+//
+//    `bg` é o fundo da etiqueta de estado dentro do tooltip — uma pastilha
+//    pequena, que precisa de contraste contra o branco do tooltip.
+//    `cardBg` é o fundo do cartão no calendário.
+//
+//    Usar o mesmo valor nos dois sítios foi o que amarrou uma coisa à outra:
+//    pôr o cartão a branco arrastava a pastilha para branco-sobre-branco e
+//    fazia-a desaparecer. Os estados que continuam com cor no cartão mantêm-na
+//    de propósito — o âmbar diz «em curso» e o vermelho diz «cancelado» de
+//    relance, e isso é informação, não decoração.
+const STATUS_BG: Record<string, { bg: string; cardBg: string; text: string; fallbackBorder: string }> = {
+  agendado:  { bg: "#F0FDF4", cardBg: "#FFFFFF", text: "#15803D", fallbackBorder: "#16A34A" },
+  em_curso:  { bg: "#FFFBEB", cardBg: "#FFFBEB", text: "#92400E", fallbackBorder: "#F59E0B" },
+  concluido: { bg: "#F8FAFC", cardBg: "#F8FAFC", text: "#475569", fallbackBorder: "#94A3B8" },
+  cancelado: { bg: "#FEF2F2", cardBg: "#FEF2F2", text: "#B91C1C", fallbackBorder: "#DC2626" },
+  falta:     { bg: "#FEF2F2", cardBg: "#FEF2F2", text: "#B91C1C", fallbackBorder: "#DC2626" },
 };
 
 // Cor de texto fixa dos cards do calendário (todos os status) — verde bem
@@ -263,7 +274,7 @@ export function ServiceBlock({ service, slotHeight, startHour, teamId, onClick, 
   const overlayStyle: React.CSSProperties = isOverlay ? {
     width: "100%",
     height: `${height - 2}px`,
-    backgroundColor: s.bg,
+    backgroundColor: s.cardBg,
     borderLeft: `3px solid ${borderColor}`,
     border: `1px solid ${borderColor}30`,
     borderLeftWidth: "3px",
@@ -284,7 +295,7 @@ export function ServiceBlock({ service, slotHeight, startHour, teamId, onClick, 
     height: `${visH - 2}px`,
     left: expandW ? "2px" : `calc(${(lane * 100) / lanes}% + 2px)`,
     width: expandW ? "calc(100% - 4px)" : `calc(${100 / lanes}% - 4px)`,
-    backgroundColor: s.bg,
+    backgroundColor: s.cardBg,
     borderLeft: `3px solid ${borderColor}`,
     border: `1px solid ${borderColor}30`,
     borderLeftWidth: "3px",
