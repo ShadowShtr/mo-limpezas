@@ -1,14 +1,14 @@
 {
   "generatedBy": "scripts/audit-file-inventory.mjs",
-  "totalFiles": 785,
+  "totalFiles": 787,
   "byStatus": {
-    "MANTER": 762,
+    "MANTER": 764,
     "STANDBY": 23
   },
   "byCategory": {
-    "test": 163,
+    "test": 164,
     "route-ui": 137,
-    "migration": 100,
+    "migration": 101,
     "lib": 67,
     "script": 54,
     "domain": 51,
@@ -29,7 +29,7 @@
     "supabase-other": 2
   },
   "byConfidence": {
-    "alta": 764,
+    "alta": 766,
     "média": 15,
     "baixa": 6
   },
@@ -5897,6 +5897,33 @@
       "sideEffects": [],
       "risks": [],
       "signals": {},
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/__tests__/manual-charges-atomic-billing-postgres.test.ts",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [
+        "service-role"
+      ],
+      "signals": {
+        "serviceRole": 5,
+        "sqlWrite": 38
+      },
       "action": "nenhuma",
       "reason": "suite de testes — corre por convenção do vitest",
       "manualDecision": false,
@@ -21041,6 +21068,27 @@
       "signals": {
         "serviceRole": 30,
         "sqlWrite": 19
+      },
+      "action": "nenhuma",
+      "reason": "migration versionada — histórico do schema, nunca se apaga",
+      "manualDecision": false
+    },
+    {
+      "path": "supabase/migrations/086_manual_charges_and_atomic_billing.sql",
+      "category": "migration",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [
+        "service-role"
+      ],
+      "signals": {
+        "serviceRole": 9,
+        "sqlWrite": 47
       },
       "action": "nenhuma",
       "reason": "migration versionada — histórico do schema, nunca se apaga",
