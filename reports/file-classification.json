@@ -1,21 +1,21 @@
 {
   "generatedBy": "scripts/audit-file-inventory.mjs",
-  "totalFiles": 794,
+  "totalFiles": 799,
   "byStatus": {
-    "MANTER": 771,
+    "MANTER": 776,
     "STANDBY": 23
   },
   "byCategory": {
-    "test": 168,
+    "test": 171,
     "route-ui": 137,
-    "migration": 101,
+    "migration": 102,
     "lib": 69,
     "script": 54,
     "domain": 51,
     "doc": 45,
     "server-action": 43,
     "component": 30,
-    "src-other": 26,
+    "src-other": 27,
     "doc-historico": 16,
     "api-route": 16,
     "config": 12,
@@ -29,7 +29,7 @@
     "supabase-other": 2
   },
   "byConfidence": {
-    "alta": 773,
+    "alta": 778,
     "média": 15,
     "baixa": 6
   },
@@ -3174,11 +3174,11 @@
       "category": "script",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 8,
+      "consumers": 9,
       "consumerSample": [
         "scripts/lib/migration-drift-guard.mjs",
         "scripts/run-migrations.mjs",
-        "src/__tests__/migration-ledger-gap.test.ts"
+        "src/__tests__/migration-086-runner-ledger-atomicity.pg.test.ts"
       ],
       "autoLoaded": false,
       "referencedBy": [
@@ -5008,6 +5008,28 @@
       }
     },
     {
+      "path": "src/__tests__/equipas-r4-actor-auth-user-id.test.ts",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {},
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
       "path": "src/__tests__/equipas-r4-carregar-dia-fail-closed.test.ts",
       "category": "test",
       "status": "MANTER",
@@ -6031,6 +6053,33 @@
       }
     },
     {
+      "path": "src/__tests__/manual-charges-atomic-billing-postgres.test.ts",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [
+        "service-role"
+      ],
+      "signals": {
+        "serviceRole": 6,
+        "sqlWrite": 68
+      },
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
       "path": "src/__tests__/migration-082-order-and-atomicity.test.ts",
       "category": "test",
       "status": "MANTER",
@@ -6046,6 +6095,36 @@
       "signals": {
         "serviceRole": 8,
         "sqlWrite": 17
+      },
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/__tests__/migration-086-runner-ledger-atomicity.pg.test.ts",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [
+        "service-role",
+        "todo(1)"
+      ],
+      "signals": {
+        "serviceRole": 3,
+        "sqlWrite": 11,
+        "todo": 1,
+        "unknownCast": 3
       },
       "action": "nenhuma",
       "reason": "suite de testes — corre por convenção do vitest",
@@ -16677,7 +16756,7 @@
       "category": "domain",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 32,
+      "consumers": 33,
       "consumerSample": [
         "src/__tests__/update-notice-modal.test.tsx",
         "src/__tests__/update-notices-eligibility.test.ts",
@@ -16692,7 +16771,7 @@
       "risks": [],
       "signals": {},
       "action": "nenhuma",
-      "reason": "em uso: 32 consumidor(es), configuração",
+      "reason": "em uso: 33 consumidor(es), configuração",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -17618,8 +17697,9 @@
       "category": "lib",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 1,
+      "consumers": 2,
       "consumerSample": [
+        "src/__tests__/equipas-r4-actor-auth-user-id.test.ts",
         "src/app/actions/equipas-r4.ts"
       ],
       "autoLoaded": false,
@@ -17630,7 +17710,7 @@
       "risks": [],
       "signals": {},
       "action": "nenhuma",
-      "reason": "em uso: 1 consumidor(es)",
+      "reason": "em uso: 2 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -19401,6 +19481,32 @@
     },
     {
       "path": "src/release-notes/2026-08-31-alocacao-de-equipas-so-guarda-quando-guardas.ts",
+      "category": "src-other",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 1,
+      "consumerSample": [
+        "src/release-notes/index.ts"
+      ],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "sqlWrite": 1
+      },
+      "action": "nenhuma",
+      "reason": "em uso: 1 consumidor(es)",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/release-notes/2026-08-31-calendario-cartoes-com-fundo-branco.ts",
       "category": "src-other",
       "status": "MANTER",
       "confidence": "alta",
@@ -21243,6 +21349,27 @@
       "signals": {
         "serviceRole": 30,
         "sqlWrite": 19
+      },
+      "action": "nenhuma",
+      "reason": "migration versionada — histórico do schema, nunca se apaga",
+      "manualDecision": false
+    },
+    {
+      "path": "supabase/migrations/086_manual_charges_and_atomic_billing.sql",
+      "category": "migration",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [
+        "service-role"
+      ],
+      "signals": {
+        "serviceRole": 13,
+        "sqlWrite": 59
       },
       "action": "nenhuma",
       "reason": "migration versionada — histórico do schema, nunca se apaga",

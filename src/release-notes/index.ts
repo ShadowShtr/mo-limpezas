@@ -40,6 +40,7 @@ import { nota as conciliacaoEmSimultaneo } from "./2026-08-27-conciliacao-e-edic
 import { nota as pagamentosVistaUnificada } from "./2026-08-30-pagamentos-vista-unificada";
 import { nota as pagamentosFixosVariaveisDeVolta } from "./2026-08-30-pagamentos-fixos-variaveis-de-volta";
 import { nota as alocacaoDeEquipasRascunho } from "./2026-08-31-alocacao-de-equipas-so-guarda-quando-guardas";
+import { nota as calendarioCartoesBrancos } from "./2026-08-31-calendario-cartoes-com-fundo-branco";
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   financeiroEAnexos,
@@ -64,6 +65,7 @@ export const RELEASE_NOTES: ReleaseNote[] = [
   pagamentosVistaUnificada,
   pagamentosFixosVariaveisDeVolta,
   alocacaoDeEquipasRascunho,
+  calendarioCartoesBrancos,
 ];
 
 /** As chaves têm de ser únicas — duas notas com a mesma key partilhariam a leitura. */
