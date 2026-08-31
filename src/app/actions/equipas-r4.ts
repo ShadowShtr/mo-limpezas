@@ -222,6 +222,7 @@ export async function guardarEquipaPermanente(input: {
   teamId: string | null;
   expectedRevision: number | null;
   expectedMembers: string[];
+  expectedMembershipSnapshot: string;
   name: string;
   color: string;
   active: boolean;
@@ -246,6 +247,7 @@ export async function guardarEquipaPermanente(input: {
       p_team_id: input.teamId,
       p_expected_revision: input.expectedRevision,
       p_expected_members: input.expectedMembers,
+      p_expected_membership_snapshot: input.expectedMembershipSnapshot,
       p_name: input.name,
       p_color: input.color,
       p_active: input.active,

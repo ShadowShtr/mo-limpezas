@@ -188,6 +188,11 @@ async function snapshot(data = DIA): Promise<string> {
   return rows[0].s as string;
 }
 
+async function membershipSnapshot(): Promise<string> {
+  const { rows } = await pool.query("SELECT public.permanent_membership_snapshot($1) AS s", [EMP]);
+  return rows[0].s as string;
+}
+
 async function efetiva(data = DIA) {
   const { rows } = await pool.query(
     `SELECT collaborator_id, effective_team_id, permanent_team_id, origem, ausente
@@ -203,12 +208,31 @@ const guardarDia = (esperado: string, overrides: unknown[], viaturas: unknown[],
     "SELECT * FROM public.save_team_day_allocations_atomic($1,$2,$3,$4,$5::jsonb,$6::jsonb)",
     [EMP, data, GESTOR, esperado, JSON.stringify(overrides), JSON.stringify(viaturas)]);
 
-const guardarEquipa = (
+async function guardarEquipa(
   teamId: string | null, rev: number | null, esperados: string[],
   nome: string, membros: string[],
-) => pool.query(
-  "SELECT * FROM public.save_permanent_team_atomic($1,$2,$3,$4,$5::uuid[],$6,$7,$8,$9,$10::uuid[])",
-  [EMP, GESTOR, teamId, rev, esperados, nome, "#16A34A", true, null, membros]);
+  expectedMembershipSnapshot?: string,
+) {
+  const expected = expectedMembershipSnapshot ?? await membershipSnapshot();
+  return pool.query(
+    "SELECT * FROM public.save_permanent_team_atomic($1,$2,$3,$4,$5::uuid[],$6,$7,$8,$9,$10,$11::uuid[])",
+    [EMP, GESTOR, teamId, rev, esperados, expected, nome, "#16A34A", true, null, membros]);
+}
+
+async function backendPid(c: pg.PoolClient): Promise<number> {
+  return Number((await c.query("SELECT pg_backend_pid() AS pid")).rows[0].pid);
+}
+
+async function esperarBloqueio(blockedPid: number, blockerPid: number) {
+  const limite = Date.now() + 10_000;
+  while (Date.now() < limite) {
+    const { rows } = await pool.query("SELECT pg_blocking_pids($1) AS pids", [blockedPid]);
+    const pids = rows[0].pids as number[];
+    if (pids.includes(blockerPid)) return;
+    await new Promise((r) => setTimeout(r, 100));
+  }
+  throw new Error(`backend ${blockedPid} não ficou bloqueado por ${blockerPid}`);
+}
 
 // ═══════════════════════════════════════════════════════════════════════════
 
@@ -496,6 +520,93 @@ describe.sequential("🔴 Equipas R4 — dois gestores no mesmo dia", () => {
 
 // ═══════════════════════════════════════════════════════════════════════════
 
+describe.sequential("🔴 Equipas R4 — lock comum daily/permanente", () => {
+  beforeEach(async () => {
+    await reset();
+    await pool.query(
+      "INSERT INTO public.team_members(team_id,collaborator_id) VALUES($1,$2),($1,$3)", [T1, A, B]);
+  });
+
+  it("daily com shared TEAM_CONFIG_LOCK faz o save permanente esperar", async () => {
+    const daily = await pool.connect();
+    const permanent = await pool.connect();
+    try {
+      const dailyPid = await backendPid(daily);
+      const permanentPid = await backendPid(permanent);
+      const s0 = await snapshot();
+      const ms0 = await membershipSnapshot();
+      const revT2 = (await pool.query("SELECT revision FROM public.teams WHERE id=$1", [T2])).rows[0].revision;
+
+      await daily.query("BEGIN");
+      await daily.query(
+        "SELECT * FROM public.save_team_day_allocations_atomic($1,$2,$3,$4,$5::jsonb,'[]'::jsonb)",
+        [EMP, DIA, GESTOR, s0, JSON.stringify([{ collaborator_id: A, team_id: T2 }])]);
+
+      await permanent.query("BEGIN");
+      const permanentSave = permanent.query(
+        "SELECT * FROM public.save_permanent_team_atomic($1,$2,$3,$4,$5::uuid[],$6,$7,$8,$9,$10,$11::uuid[])",
+        [EMP, GESTOR, T2, revT2, [], ms0, "Equipa 2", "#16A34A", true, null, [C]],
+      );
+      await esperarBloqueio(permanentPid, dailyPid);
+
+      await daily.query("COMMIT");
+      await permanentSave;
+      await permanent.query("COMMIT");
+
+      expect(await ativos(T2)).toEqual([C]);
+    } finally {
+      try { await daily.query("ROLLBACK"); } catch { /* já terminou */ }
+      try { await permanent.query("ROLLBACK"); } catch { /* já terminou */ }
+      daily.release();
+      permanent.release();
+    }
+  }, 60_000);
+
+  it("permanente com exclusive TEAM_CONFIG_LOCK faz daily esperar e depois recusar stale", async () => {
+    const permanent = await pool.connect();
+    const daily = await pool.connect();
+    try {
+      const permanentPid = await backendPid(permanent);
+      const dailyPid = await backendPid(daily);
+      const staleDaySnapshot = await snapshot();
+      const revT2 = (await pool.query("SELECT revision FROM public.teams WHERE id=$1", [T2])).rows[0].revision;
+
+      await permanent.query("BEGIN");
+      await permanent.query(
+        "SELECT * FROM public.save_permanent_team_atomic($1,$2,$3,$4,$5::uuid[],$6,$7,$8,$9,$10,$11::uuid[])",
+        [EMP, GESTOR, T2, revT2, [], await membershipSnapshot(), "Equipa 2", "#16A34A", true, null, [A]]);
+
+      await daily.query("BEGIN");
+      const dailySave = daily.query(
+        "SELECT * FROM public.save_team_day_allocations_atomic($1,$2,$3,$4,$5::jsonb,$6::jsonb)",
+        [EMP, DIA, GESTOR, staleDaySnapshot, JSON.stringify([{ collaborator_id: B, team_id: T3 }]), "[]"],
+      ).then(() => "escreveu").catch((e: Error) => e.message);
+      await esperarBloqueio(dailyPid, permanentPid);
+
+      await permanent.query("COMMIT");
+      expect(await dailySave).toMatch(/TEAM_ALLOCATION_CONFLICT/);
+      await daily.query("ROLLBACK");
+
+      const ov = await pool.query(
+        "SELECT count(*)::int n FROM public.collaborator_ride_assignments WHERE company_id=$1 AND date=$2",
+        [EMP, DIA]);
+      const ve = await pool.query(
+        "SELECT count(*)::int n FROM public.vehicle_allocations WHERE company_id=$1 AND date=$2",
+        [EMP, DIA]);
+      expect(ov.rows[0].n).toBe(0);
+      expect(ve.rows[0].n).toBe(0);
+      expect(await ativos(T2)).toEqual([A]);
+    } finally {
+      try { await permanent.query("ROLLBACK"); } catch { /* já terminou */ }
+      try { await daily.query("ROLLBACK"); } catch { /* já terminou */ }
+      permanent.release();
+      daily.release();
+    }
+  }, 60_000);
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+
 describe.sequential("🔴 Equipas R4 — o bug do proprietário, no lado da base", () => {
   beforeEach(async () => {
     await reset();
@@ -623,6 +734,38 @@ describe.sequential("🔴 Equipas R4 — concorrência na equipa permanente", ()
     await expect(guardarEquipa(T1, r0, [A, B].sort(), "Equipa 1",
       [A, "eeeeeeee-0000-4000-8000-00000000000e"]))
       .rejects.toThrow(/TEAM_MEMBER_NOT_ACTIVE_COLLABORATOR/);
+  });
+
+  it("🔴 duas conexões: stale cross-team não move a pessoa silenciosamente", async () => {
+    const g1 = await pool.connect();
+    const g2 = await pool.connect();
+    try {
+      const s0 = await membershipSnapshot();
+      const rB = (await pool.query("SELECT revision FROM public.teams WHERE id=$1", [T2])).rows[0].revision;
+      const rC = (await pool.query("SELECT revision FROM public.teams WHERE id=$1", [T3])).rows[0].revision;
+
+      await g1.query(
+        "SELECT * FROM public.save_permanent_team_atomic($1,$2,$3,$4,$5::uuid[],$6,$7,$8,$9,$10,$11::uuid[])",
+        [EMP, GESTOR, T2, rB, [], s0, "Equipa 2", "#16A34A", true, null, [A]]);
+
+      await expect(g2.query(
+        "SELECT * FROM public.save_permanent_team_atomic($1,$2,$3,$4,$5::uuid[],$6,$7,$8,$9,$10,$11::uuid[])",
+        [EMP, GESTOR, T3, rC, [], s0, "Equipa 3", "#16A34A", true, null, [A]],
+      )).rejects.toThrow(/TEAM_SAVE_CONFLICT/);
+
+      expect(await ativos(T2)).toEqual([A]);
+      expect(await ativos(T3)).toEqual([]);
+
+      const rC2 = (await pool.query("SELECT revision FROM public.teams WHERE id=$1", [T3])).rows[0].revision;
+      await g2.query(
+        "SELECT * FROM public.save_permanent_team_atomic($1,$2,$3,$4,$5::uuid[],$6,$7,$8,$9,$10,$11::uuid[])",
+        [EMP, GESTOR, T3, rC2, [], await membershipSnapshot(), "Equipa 3", "#16A34A", true, null, [A]]);
+      expect(await ativos(T2)).toEqual([]);
+      expect(await ativos(T3)).toEqual([A]);
+    } finally {
+      g1.release();
+      g2.release();
+    }
   });
 });
 

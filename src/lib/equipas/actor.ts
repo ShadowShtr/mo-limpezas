@@ -15,13 +15,11 @@
 //    encontrar a pessoa — e o modo de falha é «sem permissão», que manda quem
 //    investiga procurar no sítio errado.
 //
-// 🔴 O `fallback` pelo `id` fica, e é deliberado.
+// 🔴 Nesta frente nova não há fallback por `profiles.id`.
 //
-//    Retirá-lo agora partiria o login de toda a gente cujo `auth_user_id`
-//    ainda é NULL — que é a maioria. A ordem certa é: preferir a ligação
-//    explícita, aceitar a coincidência histórica, e não fingir que a segunda
-//    não existe. Quando `auth_user_id` estiver preenchido em toda a base, o
-//    fallback sai numa alteração própria, com a sua prova.
+//    A direção confirmou a base real: todos os perfis de gestão têm
+//    `auth_user_id` preenchido. Se essa ligação explícita não resolver, a
+//    frente falha fechada com SEM_PERFIL em vez de aceitar coincidências.
 //
 // Âmbito: esta frente (Equipas R4). NÃO é um refactor global de autenticação.
 // ============================================================================
@@ -55,9 +53,7 @@ const PAPEIS_DE_GESTAO = ["admin", "gestor"];
 /**
  * Resolve o actor a partir do id de autenticação.
  *
- * Duas leituras, por esta ordem, e a razão da ordem importa: se as duas
- * pudessem responder, a ligação explícita é a verdade e a coincidência é o
- * acidente.
+ * A ligação explícita `profiles.auth_user_id` é a única fonte aceite.
  */
 export async function resolverActorEquipas(
   admin: unknown,
@@ -70,31 +66,29 @@ export async function resolverActorEquipas(
   const cliente = admin as ClienteActor;
   const colunas = "id, company_id, role";
 
-  for (const coluna of ["auth_user_id", "id"] as const) {
-    const { data, error } = await cliente
-      .from("profiles").select(colunas).eq(coluna, authUserId).maybeSingle();
+  const { data, error } = await cliente
+    .from("profiles").select(colunas).eq("auth_user_id", authUserId).maybeSingle();
 
-    // 🔴 Um erro de leitura NÃO é «não encontrei». Tratá-los como o mesmo caso
-    //    transformaria uma falha de rede numa mensagem de falta de permissão, e
-    //    a pessoa passaria a ver «sem permissão» por causa da base estar em
-    //    baixo. Falha fechado, mas com o motivo certo.
-    if (error) {
-      return {
-        ok: false,
-        motivo: "ERRO_LEITURA",
-        error: "Não foi possível confirmar a sua conta. Nada foi alterado.",
-      };
-    }
+  // 🔴 Um erro de leitura NÃO é «não encontrei». Tratá-los como o mesmo caso
+  //    transformaria uma falha de rede numa mensagem de falta de permissão, e
+  //    a pessoa passaria a ver «sem permissão» por causa da base estar em
+  //    baixo. Falha fechado, mas com o motivo certo.
+  if (error) {
+    return {
+      ok: false,
+      motivo: "ERRO_LEITURA",
+      error: "Não foi possível confirmar a sua conta. Nada foi alterado.",
+    };
+  }
 
-    if (data) {
-      if (!PAPEIS_DE_GESTAO.includes(data.role)) {
-        return { ok: false, motivo: "SEM_PERMISSAO", error: "Sem permissão." };
-      }
-      return {
-        ok: true,
-        actor: { profileId: data.id, companyId: data.company_id, role: data.role },
-      };
+  if (data) {
+    if (!PAPEIS_DE_GESTAO.includes(data.role)) {
+      return { ok: false, motivo: "SEM_PERMISSAO", error: "Sem permissão." };
     }
+    return {
+      ok: true,
+      actor: { profileId: data.id, companyId: data.company_id, role: data.role },
+    };
   }
 
   return { ok: false, motivo: "SEM_PERFIL", error: "Perfil não encontrado." };

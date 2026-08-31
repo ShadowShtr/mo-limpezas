@@ -31,6 +31,7 @@ interface Props {
   trigger: React.ReactElement;
   companyId: string;
   colaboradores: Colaborador[];
+  membershipSnapshot: string;
   equipa?: Equipa;
 }
 
@@ -39,7 +40,7 @@ const COLORS = [
   "#EF4444", "#EC4899", "#8B5CF6", "#14B8A6", "#F97316",
 ];
 
-export function EquipaSheet({ trigger, companyId, colaboradores, equipa }: Props) {
+export function EquipaSheet({ trigger, companyId, colaboradores, membershipSnapshot, equipa }: Props) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -76,6 +77,7 @@ export function EquipaSheet({ trigger, companyId, colaboradores, equipa }: Props
       teamId: equipa?.id ?? null,
       expectedRevision: equipa?.revision ?? null,
       expectedMembers: (equipa?.members ?? []).map((m) => m.id).sort(),
+      expectedMembershipSnapshot: membershipSnapshot,
       name,
       color,
       active,

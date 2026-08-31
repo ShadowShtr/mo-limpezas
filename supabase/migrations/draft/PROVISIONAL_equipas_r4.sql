@@ -457,6 +457,66 @@ AS $fn$
   )
 $fn$;
 
+-- ─── 5b. Snapshot/locks da configuração permanente ─────────────────────────
+--
+-- O save permanente pode mover uma pessoa que estava ativa noutra equipa. O
+-- token tem de cobrir esse mapa global da empresa, não apenas a equipa aberta.
+CREATE OR REPLACE FUNCTION public.permanent_membership_snapshot(p_company_id uuid)
+RETURNS text
+LANGUAGE sql
+STABLE
+SECURITY INVOKER
+SET search_path = pg_catalog, public
+AS $fn$
+  SELECT md5(coalesce((
+    SELECT string_agg(
+             p.id::text || '>' || coalesce(t.id::text, 'SEM'),
+             ',' ORDER BY p.id
+           )
+      FROM public.profiles p
+      LEFT JOIN public.team_members tm
+             ON tm.collaborator_id = p.id
+            AND tm.left_at IS NULL
+      LEFT JOIN public.teams t
+             ON t.id = tm.team_id
+            AND t.company_id = p_company_id
+            AND t.active IS TRUE
+     WHERE p.company_id = p_company_id
+       AND p.status = 'ativo'
+       AND p.role = 'colaborador'
+  ), ''))
+$fn$;
+
+CREATE OR REPLACE FUNCTION public._team_config_lock_shared(p_company_id uuid)
+RETURNS void
+LANGUAGE sql
+VOLATILE
+SECURITY INVOKER
+SET search_path = pg_catalog, public
+AS $fn$
+  SELECT pg_advisory_xact_lock_shared(hashtext('team_config'), hashtext(p_company_id::text))
+$fn$;
+
+CREATE OR REPLACE FUNCTION public._team_config_lock_exclusive(p_company_id uuid)
+RETURNS void
+LANGUAGE sql
+VOLATILE
+SECURITY INVOKER
+SET search_path = pg_catalog, public
+AS $fn$
+  SELECT pg_advisory_xact_lock(hashtext('team_config'), hashtext(p_company_id::text))
+$fn$;
+
+CREATE OR REPLACE FUNCTION public._team_day_lock_exclusive(p_company_id uuid, p_date date)
+RETURNS void
+LANGUAGE sql
+VOLATILE
+SECURITY INVOKER
+SET search_path = pg_catalog, public
+AS $fn$
+  SELECT pg_advisory_xact_lock(hashtext('team_day:' || p_company_id::text), hashtext(p_date::text))
+$fn$;
+
 -- ─── 6. RPC — guardar o dia inteiro numa só transação ───────────────────────
 --
 -- 🔴 Uma transação, não N escritas em `Promise.all`.
@@ -625,15 +685,11 @@ BEGIN
       USING ERRCODE = 'check_violation';
   END IF;
 
-  -- 🔴 Lock por empresa + data, e não por empresa.
-  --
-  --    Dois gestores a editar dias diferentes não têm conflito nenhum, e
-  --    bloqueá-los um ao outro seria inventar contenção onde não existe. A
-  --    chave é o par, e é por isso que são dois inteiros no advisory lock.
-  PERFORM pg_advisory_xact_lock(
-    hashtext('team_day:' || p_company_id::text),
-    hashtext(p_date::text)
-  );
+  -- Ordem obrigatória: configuração da empresa primeiro, dia depois. O shared
+  -- lock deixa dois dias diferentes correrem em paralelo, mas impede que uma
+  -- alteração permanente atravesse a validação/escrita do batch diário.
+  PERFORM public._team_config_lock_shared(p_company_id);
+  PERFORM public._team_day_lock_exclusive(p_company_id, p_date);
 
   -- Depois do lock: recalcular. Antes do lock, o valor podia mudar entre a
   -- leitura e a decisão, que é o próprio TOCTOU que isto fecha.
@@ -704,12 +760,15 @@ $fn$;
 --    equipa apagaria um facto verdadeiro.
 --    Quem sai fica com `left_at` de hoje.
 --    Quem entra ganha uma linha nova.
+DROP FUNCTION IF EXISTS public.save_permanent_team_atomic(uuid, uuid, uuid, integer, uuid[], text, text, boolean, uuid, uuid[]);
+
 CREATE OR REPLACE FUNCTION public.save_permanent_team_atomic(
   p_company_id       uuid,
   p_actor            uuid,
   p_team_id          uuid,          -- NULL = criar
   p_expected_revision integer,      -- NULL quando p_team_id é NULL
   p_expected_members  uuid[],       -- pertenças ativas que quem editou viu
+  p_expected_membership_snapshot text,
   p_name             text,
   p_color            text,
   p_active           boolean,
@@ -735,6 +794,7 @@ DECLARE
   v_out      integer := 0;
   v_rev      integer;
   v_intruso  uuid;
+  v_membership_snapshot text;
 BEGIN
   IF p_name IS NULL OR btrim(p_name) = '' THEN
     RAISE EXCEPTION 'TEAM_NAME_REQUIRED' USING ERRCODE = 'check_violation';
@@ -788,6 +848,15 @@ BEGIN
   IF v_intruso IS NOT NULL THEN
     RAISE EXCEPTION 'TEAM_MEMBER_NOT_ACTIVE_COLLABORATOR: %', v_intruso
       USING ERRCODE = 'check_violation';
+  END IF;
+
+  PERFORM public._team_config_lock_exclusive(p_company_id);
+
+  v_membership_snapshot := public.permanent_membership_snapshot(p_company_id);
+  IF p_expected_membership_snapshot IS DISTINCT FROM v_membership_snapshot THEN
+    RAISE EXCEPTION 'TEAM_SAVE_CONFLICT'
+      USING ERRCODE = 'serialization_failure',
+            HINT = 'As pertenças permanentes foram alteradas por outra pessoa. Atualize para rever antes de guardar.';
   END IF;
 
   IF p_team_id IS NULL THEN
@@ -919,6 +988,8 @@ BEGIN
       USING ERRCODE = 'check_violation';
   END IF;
 
+  PERFORM public._team_config_lock_exclusive(p_company_id);
+
   PERFORM 1 FROM public.teams
    WHERE id = p_team_id AND company_id = p_company_id FOR UPDATE;
 
@@ -996,7 +1067,8 @@ SELECT
     ) FILTER (WHERE p.id IS NOT NULL),
     '[]'
   ) AS members,
-  t.revision
+  t.revision,
+  public.permanent_membership_snapshot(t.company_id) AS membership_snapshot
 FROM public.teams t
 LEFT JOIN public.team_members tm ON tm.team_id = t.id AND tm.left_at IS NULL
 LEFT JOIN public.profiles p ON p.id = tm.collaborator_id
@@ -1012,16 +1084,22 @@ GRANT  EXECUTE ON FUNCTION public.team_day_effective(uuid, date) TO service_role
 REVOKE ALL PRIVILEGES ON FUNCTION public.team_day_snapshot(uuid, date) FROM PUBLIC, anon, authenticated;
 GRANT  EXECUTE ON FUNCTION public.team_day_snapshot(uuid, date) TO service_role;
 
+REVOKE ALL PRIVILEGES ON FUNCTION public.permanent_membership_snapshot(uuid) FROM PUBLIC, anon, authenticated;
+GRANT  EXECUTE ON FUNCTION public.permanent_membership_snapshot(uuid) TO service_role;
+
 REVOKE ALL PRIVILEGES ON FUNCTION public.save_team_day_allocations_atomic(uuid, date, uuid, text, jsonb, jsonb) FROM PUBLIC, anon, authenticated;
 GRANT  EXECUTE ON FUNCTION public.save_team_day_allocations_atomic(uuid, date, uuid, text, jsonb, jsonb) TO service_role;
 
-REVOKE ALL PRIVILEGES ON FUNCTION public.save_permanent_team_atomic(uuid, uuid, uuid, integer, uuid[], text, text, boolean, uuid, uuid[]) FROM PUBLIC, anon, authenticated;
-GRANT  EXECUTE ON FUNCTION public.save_permanent_team_atomic(uuid, uuid, uuid, integer, uuid[], text, text, boolean, uuid, uuid[]) TO service_role;
+REVOKE ALL PRIVILEGES ON FUNCTION public.save_permanent_team_atomic(uuid, uuid, uuid, integer, uuid[], text, text, text, boolean, uuid, uuid[]) FROM PUBLIC, anon, authenticated;
+GRANT  EXECUTE ON FUNCTION public.save_permanent_team_atomic(uuid, uuid, uuid, integer, uuid[], text, text, text, boolean, uuid, uuid[]) TO service_role;
 
 REVOKE ALL PRIVILEGES ON FUNCTION public.archive_team_atomic(uuid, uuid, uuid) FROM PUBLIC, anon, authenticated;
 GRANT  EXECUTE ON FUNCTION public.archive_team_atomic(uuid, uuid, uuid) TO service_role;
 
 REVOKE ALL PRIVILEGES ON FUNCTION public.fn_teams_bump_revision() FROM PUBLIC, anon, authenticated;
+REVOKE ALL PRIVILEGES ON FUNCTION public._team_config_lock_shared(uuid) FROM PUBLIC, anon, authenticated;
+REVOKE ALL PRIVILEGES ON FUNCTION public._team_config_lock_exclusive(uuid) FROM PUBLIC, anon, authenticated;
+REVOKE ALL PRIVILEGES ON FUNCTION public._team_day_lock_exclusive(uuid, date) FROM PUBLIC, anon, authenticated;
 
 -- ─── 10. Pós-estado — a migration verifica-se a si própria ──────────────────
 DO $posestado$

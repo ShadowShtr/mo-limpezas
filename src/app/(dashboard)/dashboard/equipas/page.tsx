@@ -15,10 +15,10 @@ export default async function EquipasPage() {
   const { data: me } = await admin
     .from("profiles")
     .select("company_id")
-    .eq("id", user!.id)
+    .eq("auth_user_id", user!.id)
     .single();
 
-  const [equipasRes, colaboradoresRes] = await Promise.all([
+  const [equipasRes, colaboradoresRes, membershipSnapshotRes] = await Promise.all([
     admin
       .from("teams_with_members")
       .select("*")
@@ -30,6 +30,7 @@ export default async function EquipasPage() {
       .eq("role", "colaborador")
       .eq("status", "ativo")
       .order("full_name"),
+    admin.rpc("permanent_membership_snapshot", { p_company_id: me?.company_id ?? "" }),
   ]);
 
   const equipas = [...(equipasRes.data ?? [])].sort((a, b) =>
@@ -53,6 +54,7 @@ export default async function EquipasPage() {
             <EquipaSheet
               companyId={me?.company_id ?? ""}
               colaboradores={colaboradoresRes.data ?? []}
+              membershipSnapshot={(membershipSnapshotRes.data as string | null) ?? ""}
               trigger={
                 <button className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[var(--color-primary)] text-white text-sm font-medium hover:bg-[var(--color-primary-hover)] transition-colors">
                   <Plus className="w-4 h-4" />
@@ -68,6 +70,7 @@ export default async function EquipasPage() {
           equipas={equipas}
           colaboradores={colaboradoresRes.data ?? []}
           companyId={me?.company_id ?? ""}
+          membershipSnapshot={(membershipSnapshotRes.data as string | null) ?? ""}
         />
       </div>
     </div>

@@ -90,6 +90,7 @@ async function montarFolha(equipa = EQUIPA_COM_DOIS) {
       <EquipaSheet
         companyId={EMP}
         colaboradores={COLABORADORES}
+        membershipSnapshot="membership-s0"
         equipa={equipa}
         trigger={<button>Editar equipa</button>}
       />,
@@ -136,7 +137,8 @@ describe("🔴 remover um membro na aba Equipas — o cenário do proprietário"
 
     expect(guardarEquipaPermanente).toHaveBeenCalledTimes(1);
     const payload = guardarEquipaPermanente.mock.calls[0][0] as {
-      teamId: string; expectedRevision: number; expectedMembers: string[]; memberIds: string[];
+      teamId: string; expectedRevision: number; expectedMembers: string[];
+      expectedMembershipSnapshot: string; memberIds: string[];
     };
 
     expect(payload.teamId).toBe(T1);
@@ -151,6 +153,7 @@ describe("🔴 remover um membro na aba Equipas — o cenário do proprietário"
     //    quem editou vão também.
     expect(payload.expectedRevision).toBe(3);
     expect(payload.expectedMembers).toEqual([A, B].sort());
+    expect(payload.expectedMembershipSnapshot).toBe("membership-s0");
   });
 
   it("🔴 depois de guardar, a página é RELIDA — a contagem não se corrige só localmente", async () => {
@@ -185,7 +188,12 @@ describe("🔴 o cartão da equipa conta pertenças ACTIVAS", () => {
   it("com duas pessoas, diz «2 membros»", async () => {
     await act(async () => {
       root.render(
-        <EquipasGrid equipas={[EQUIPA_COM_DOIS]} colaboradores={COLABORADORES} companyId={EMP} />,
+        <EquipasGrid
+          equipas={[EQUIPA_COM_DOIS]}
+          colaboradores={COLABORADORES}
+          companyId={EMP}
+          membershipSnapshot="membership-s0"
+        />,
       );
     });
     expect(container.textContent).toContain("2 membros");
@@ -199,7 +207,12 @@ describe("🔴 o cartão da equipa conta pertenças ACTIVAS", () => {
     // conta o que ela devolve.
     await act(async () => {
       root.render(
-        <EquipasGrid equipas={[EQUIPA_COM_UM]} colaboradores={COLABORADORES} companyId={EMP} />,
+        <EquipasGrid
+          equipas={[EQUIPA_COM_UM]}
+          colaboradores={COLABORADORES}
+          companyId={EMP}
+          membershipSnapshot="membership-s1"
+        />,
       );
     });
     expect(container.textContent).toContain("1 membro");
@@ -214,7 +227,12 @@ describe("🔴 o cartão da equipa conta pertenças ACTIVAS", () => {
 
     await act(async () => {
       root.render(
-        <EquipasGrid equipas={[EQUIPA_COM_DOIS]} colaboradores={COLABORADORES} companyId={EMP} />,
+        <EquipasGrid
+          equipas={[EQUIPA_COM_DOIS]}
+          colaboradores={COLABORADORES}
+          companyId={EMP}
+          membershipSnapshot="membership-s0"
+        />,
       );
     });
 

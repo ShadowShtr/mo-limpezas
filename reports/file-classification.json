@@ -1883,7 +1883,7 @@
       ],
       "sideEffects": [
         "supabase",
-        "revalidatePath(39)"
+        "revalidatePath(38)"
       ],
       "risks": [
         "debugger"
@@ -1892,7 +1892,7 @@
         "supabase": 1,
         "sqlWrite": 26,
         "debugger": 6,
-        "revalidatePath": 39
+        "revalidatePath": 38
       },
       "action": "nenhuma",
       "reason": "configuração/infra",
@@ -5093,7 +5093,7 @@
       ],
       "signals": {
         "serviceRole": 3,
-        "sqlWrite": 59
+        "sqlWrite": 60
       },
       "action": "nenhuma",
       "reason": "suite de testes — corre por convenção do vitest",
@@ -21399,8 +21399,8 @@
         "service-role"
       ],
       "signals": {
-        "serviceRole": 6,
-        "sqlWrite": 36
+        "serviceRole": 7,
+        "sqlWrite": 37
       },
       "action": "nenhuma",
       "reason": "migration versionada — histórico do schema, nunca se apaga",

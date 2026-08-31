@@ -30,9 +30,10 @@ interface Props {
   equipas: Equipa[];
   colaboradores: Colaborador[];
   companyId: string;
+  membershipSnapshot: string;
 }
 
-export function EquipasGrid({ equipas, colaboradores, companyId }: Props) {
+export function EquipasGrid({ equipas, colaboradores, companyId, membershipSnapshot }: Props) {
   const router = useRouter();
   const [deleting, startDelete] = useTransition();
 
@@ -133,6 +134,7 @@ export function EquipasGrid({ equipas, colaboradores, companyId }: Props) {
                 <EquipaSheet
                   companyId={companyId}
                   colaboradores={colaboradores}
+                  membershipSnapshot={membershipSnapshot}
                   equipa={{ ...equipa, members }}
                   trigger={
                     <button className="flex-1 text-sm text-[var(--color-text-sub)] py-1.5 rounded-lg border border-[var(--color-border)] hover:bg-[var(--color-background)] transition-colors font-medium">
