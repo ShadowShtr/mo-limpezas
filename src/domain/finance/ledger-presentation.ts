@@ -131,6 +131,11 @@ export const isFixo = (row: FinanceLedgerRow): boolean =>
 export const isVariavel = (row: FinanceLedgerRow): boolean =>
   row.row_kind === "payment" && row.origin === "variavel";
 
+const inCompetence = (row: FinanceLedgerRow, year: number, month: number): boolean =>
+  row.row_kind === "payment"
+  && row.competence_year === year
+  && row.competence_month === month;
+
 const isSelectedPeriodPayment = (
   row: FinanceLedgerRow,
   period: { year: number; month: number } | null,
@@ -275,14 +280,12 @@ export function categoryFilterOptions(
  *    dados não é ausência de despesa — e num ecrã financeiro essa diferença
  *    é a diferença entre «está tudo pago» e «ainda não olhámos para isto».
  */
-export function mesPorPreparar(rows: FinanceLedgerRow[]): boolean {
-  return !rows.some((row) => row.row_kind === "payment");
+export function mesPorPreparar(
+  rows: FinanceLedgerRow[],
+  period: { year: number; month: number },
+): boolean {
+  return !rows.some((row) => inCompetence(row, period.year, period.month));
 }
-
-const inCompetence = (row: FinanceLedgerRow, year: number, month: number): boolean =>
-  row.row_kind === "payment"
-  && row.competence_year === year
-  && row.competence_month === month;
 
 const inCashPeriod = (row: FinanceLedgerRow, year: number, month: number): boolean =>
   Boolean(row.cashflow_id && row.cash_date?.startsWith(`${year}-${String(month).padStart(2, "0")}-`));

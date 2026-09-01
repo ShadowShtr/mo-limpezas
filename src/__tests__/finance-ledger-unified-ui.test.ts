@@ -275,7 +275,8 @@ describe("UNI15–UNI30 — métricas e apresentação unificadas", () => {
 
   it("Fixos/Variáveis mostram todos os registos do período sem paginação implícita", () => {
     const source = read("src/app/(dashboard)/dashboard/financeiro/pagamentos/_components/unified-payments-client.tsx");
-    expect(source).toContain('const unpaginated = filter === "fixos" || filter === "variaveis"');
+    expect(source).toContain('const specializedMode = filter === "fixos" || filter === "variaveis"');
+    expect(source).toContain("const unpaginated = specializedMode");
     expect(source).toContain("const visible = unpaginated ? filtered");
   });
 });

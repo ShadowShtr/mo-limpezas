@@ -134,6 +134,7 @@ export function UnifiedPaymentsClient({ rows, error: initialError, categories, c
   const [formError, setFormError] = useState("");
   const [error, setError] = useState(initialError);
   const today = todayInLisbon();
+  const specializedMode = filter === "fixos" || filter === "variaveis";
 
   // 🔴 Sem subscricao Realtime, e isso e uma decisao medida.
   //
@@ -152,12 +153,12 @@ export function UnifiedPaymentsClient({ rows, error: initialError, categories, c
     const query = search.trim().toLocaleLowerCase("pt-PT");
     return sortFinanceLedgerForView(filterFinanceLedger(rows, filter, { year, month }), filter).filter((row) =>
       (!category || categoryKey(row) === category)
-      && (!origin || row.origin === origin)
+      && (specializedMode || !origin || row.origin === origin)
       && (!query || row.description.toLocaleLowerCase("pt-PT").includes(query)),
     );
-  }, [rows, filter, category, origin, search, year, month]);
+  }, [rows, filter, category, origin, search, specializedMode, year, month]);
 
-  const unpaginated = filter === "fixos" || filter === "variaveis";
+  const unpaginated = specializedMode;
   const pages = unpaginated ? 1 : Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const currentPage = Math.min(page, pages);
   const visible = unpaginated ? filtered : paginateFinanceLedger(filtered, currentPage, PAGE_SIZE);
@@ -166,7 +167,7 @@ export function UnifiedPaymentsClient({ rows, error: initialError, categories, c
   const graphTotal = slices.reduce((sum, slice) => sum + slice.amount_cents, 0);
   const origins = [...new Set(rows.map((row) => row.origin))].sort();
   const counts = financeLedgerCounts(rows, { year, month });
-  const porPreparar = mesPorPreparar(rows);
+  const porPreparar = mesPorPreparar(rows, { year, month });
   const categoryOptions = categoryFilterOptions(rows, categories);
 
   function mutate(task: () => Promise<{ ok: boolean; error?: string }>, close = false) {
@@ -377,7 +378,7 @@ export function UnifiedPaymentsClient({ rows, error: initialError, categories, c
             <option value="uncategorized">Sem categoria</option>
             {categoryOptions.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
           </select>
-          <select value={origin} onChange={(event) => setOrigin(event.target.value)} className={inputClass}>
+          <select disabled={specializedMode} value={specializedMode ? "" : origin} onChange={(event) => setOrigin(event.target.value)} className={`${inputClass} ${specializedMode ? "bg-slate-50 opacity-70" : ""}`}>
             <option value="">Todas as origens</option>
             {origins.map((item) => <option key={item} value={item}>{originLabelFor(item)}</option>)}
           </select>
@@ -453,7 +454,7 @@ function Status({ label }: { label: string }) {
 }
 
 function DirectDebitBadge({ value }: { value: boolean | null }) {
-  if (value === null) return <span className="text-[var(--color-text-muted)]">Não definido</span>;
+  if (value === null) return <span className="text-[var(--color-text-muted)]">—</span>;
   return <span className={`inline-flex rounded-md px-2 py-1 text-xs font-medium ${value ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-700"}`}>{value ? "Sim" : "Não"}</span>;
 }
 
