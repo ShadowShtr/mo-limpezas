@@ -49,6 +49,19 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ refresh: () => {}, push: () => {}, replace: () => {} }),
 }));
 
+vi.mock("@/components/attachments/attachments-field", () => ({
+  AttachmentsField: () => <div data-testid="attachments-field" />,
+}));
+
+const paymentActions = vi.hoisted(() => ({
+  createPayment: vi.fn(async () => ({ ok: true })),
+  deletePayment: vi.fn(async () => ({ ok: true })),
+  setPaymentStatus: vi.fn(async () => ({ ok: true })),
+  updatePayment: vi.fn(async () => ({ ok: true })),
+}));
+
+vi.mock("@/app/actions/payments", () => paymentActions);
+
 const ROOT = process.cwd();
 const ler = (rel: string) => fs.readFileSync(path.join(ROOT, rel), "utf8");
 
@@ -59,6 +72,10 @@ beforeEach(() => {
   container = document.createElement("div");
   document.body.appendChild(container);
   root = createRoot(container);
+  paymentActions.createPayment.mockClear();
+  paymentActions.deletePayment.mockClear();
+  paymentActions.setPaymentStatus.mockClear();
+  paymentActions.updatePayment.mockClear();
 });
 
 afterEach(() => {
@@ -94,6 +111,7 @@ const mesCompleto = () => buildFinanceLedger({
 async function mostrar(
   rows: ReturnType<typeof buildFinanceLedger>,
   categories: Array<{ id: string; name: string }> = [],
+  period = { year: 2026, month: 8 },
 ) {
   const { UnifiedPaymentsClient } = await import(
     "@/app/(dashboard)/dashboard/financeiro/pagamentos/_components/unified-payments-client"
@@ -105,12 +123,55 @@ async function mostrar(
         error={null}
         categories={categories}
         companyId="11111111-1111-4111-8111-111111111111"
-        year={2026}
-        month={8}
+        year={period.year}
+        month={period.month}
       />,
     );
   });
   return container;
+}
+
+async function clickText(text: string) {
+  const button = [...document.querySelectorAll("button")]
+    .find((item) => item.textContent?.includes(text));
+  if (!button) throw new Error(`botao nao encontrado: ${text}`);
+  await act(async () => button.click());
+}
+
+async function changeSelect(label: string, value: string) {
+  const select = [...document.querySelectorAll("select")]
+    .find((item) => [...item.options].some((option) => option.textContent === label || option.value === label));
+  if (!select) throw new Error(`select nao encontrado: ${label}`);
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")?.set?.call(select, value);
+    select.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+}
+
+async function openEdit(description: string) {
+  const actions = [...document.querySelectorAll<HTMLButtonElement>("button[aria-label]")]
+    .find((item) => item.getAttribute("aria-label")?.includes(description));
+  if (!actions) throw new Error(`acoes nao encontradas: ${description}`);
+  await act(async () => actions.click());
+  await clickText("Editar");
+}
+
+async function submitModal() {
+  const button = [...document.querySelectorAll("button")].find((item) => item.textContent?.includes("Guardar"));
+  if (!button) throw new Error("botao Guardar nao encontrado");
+  await act(async () => {
+    button.click();
+    await Promise.resolve();
+  });
+}
+
+async function changeInputByValue(current: string, next: string) {
+  const input = [...document.querySelectorAll("input")].find((item) => item.value === current);
+  if (!input) throw new Error(`input nao encontrado: ${current}`);
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(input, next);
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  });
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -135,6 +196,25 @@ describe("1. fixos e variáveis voltam a ser separadores", () => {
   it("🔴 o filtro Fixos mostra só os fixos — e todos eles", () => {
     const fixos = filterFinanceLedger(mesCompleto(), "fixos");
     expect(fixos.map((r) => r.description).sort()).toEqual(["Renda", "Seguro"]);
+  });
+
+  it("🔴 Origem=Variável não esvazia o separador Fixos", async () => {
+    const rows = buildFinanceLedger({
+      payments: [
+        pagamento({ id: "fixo-visible", kind: "fixo", description: "Fixo visível" }),
+        pagamento({ id: "var-hidden", kind: "variavel", description: "Variável escondida" }),
+      ],
+      cashflows: [],
+    });
+    const el = await mostrar(rows);
+    await changeSelect("variavel", "variavel");
+    await clickText("Fixos");
+    const texto = el.textContent ?? "";
+    expect(texto).toContain("Fixo visível");
+    expect(texto).not.toContain("Variável escondida");
+    const origem = [...el.querySelectorAll("select")]
+      .find((item) => [...item.options].some((option) => option.textContent === "Todas as origens"));
+    expect(origem?.disabled).toBe(true);
   });
 
   it("🔴 o filtro Variáveis mostra só os variáveis", () => {
@@ -311,14 +391,117 @@ describe("3. «mês por preparar» ≠ «nada a pagar»", () => {
   it("um mês só com movimentos manuais continua por preparar", () => {
     // Há caixa, mas nenhuma obrigação lançada: a distinção mantém-se.
     const rows = buildFinanceLedger({ payments: [], cashflows: [movimento()] });
-    expect(mesPorPreparar(rows)).toBe(true);
+    expect(mesPorPreparar(rows, { year: 2026, month: 8 })).toBe(true);
+  });
+
+  it("🔴 cashflow de Setembro ligado a obrigação de Agosto não prepara Setembro", () => {
+    const rows = buildFinanceLedger({
+      payments: [pagamento({ id: "p-ago", period_year: 2026, period_month: 8 })],
+      cashflows: [movimento({
+        id: "c-set",
+        date: "2026-09-02",
+        reference_type: "fixed_variable_payment",
+        reference_id: "p-ago",
+      })],
+    });
+    expect(mesPorPreparar(rows, { year: 2026, month: 9 })).toBe(true);
+
+    const withSeptember = buildFinanceLedger({
+      payments: [
+        pagamento({ id: "p-ago", period_year: 2026, period_month: 8 }),
+        pagamento({ id: "p-set", period_year: 2026, period_month: 9 }),
+      ],
+      cashflows: [],
+    });
+    expect(mesPorPreparar(withSeptember, { year: 2026, month: 9 })).toBe(false);
   });
 });
 
 // ═══════════════════════════════════════════════════════════════════════════
 // 4. COBRANÇAS — CTA no Diário
 // ═══════════════════════════════════════════════════════════════════════════
-describe("4. Cobranças > Diário tem CTA de adicionar", () => {
+describe("4. provas DOM/runtime do P0 fixos/variáveis", () => {
+  it("NULL AMOUNT — FIXO: editar descrição envia amount null", async () => {
+    await mostrar(buildFinanceLedger({
+      payments: [pagamento({ id: "p-null-fixo", kind: "fixo", description: "Fixo sem valor", amount: null, status: "pendente" })],
+      cashflows: [],
+    }));
+    await openEdit("Fixo sem valor");
+    await changeInputByValue("Fixo sem valor", "Fixo sem valor editado");
+    await submitModal();
+    expect(paymentActions.updatePayment).toHaveBeenCalledWith("p-null-fixo", expect.objectContaining({
+      description: "Fixo sem valor editado",
+      amount: null,
+    }));
+  });
+
+  it("NULL AMOUNT — VARIÁVEL: editar descrição envia amount null", async () => {
+    await mostrar(buildFinanceLedger({
+      payments: [pagamento({ id: "p-null-var", kind: "variavel", description: "Variável sem valor", amount: null, status: "pendente" })],
+      cashflows: [],
+    }));
+    await openEdit("Variável sem valor");
+    await changeInputByValue("Variável sem valor", "Variável sem valor editada");
+    await submitModal();
+    expect(paymentActions.updatePayment).toHaveBeenCalledWith("p-null-var", expect.objectContaining({
+      description: "Variável sem valor editada",
+      amount: null,
+    }));
+  });
+
+  it("Natureza: criação editável, edição read-only", async () => {
+    await mostrar(buildFinanceLedger({
+      payments: [pagamento({ id: "p-nature", kind: "fixo", description: "Natureza bloqueada" })],
+      cashflows: [],
+    }));
+    await clickText("Novo registo");
+    const createNature = [...document.querySelectorAll("select")]
+      .find((item) => [...item.options].some((option) => option.value === "fixo") && item.value === "variavel");
+    expect(createNature?.disabled).toBe(false);
+    await clickText("Cancelar");
+    await openEdit("Natureza bloqueada");
+    const editNature = [...document.querySelectorAll("select")]
+      .find((item) => [...item.options].some((option) => option.value === "fixo") && item.value === "fixo");
+    expect(editNature?.disabled).toBe(true);
+  });
+
+  it("Débito direto: Sim/Não/— aparecem e edição preserva valor", async () => {
+    const el = await mostrar(buildFinanceLedger({
+      payments: [
+        pagamento({ id: "p-dd-sim", kind: "fixo", description: "DD sim", direct_debit: true, sort_order: 1 }),
+        pagamento({ id: "p-dd-nao", kind: "fixo", description: "DD nao", direct_debit: false, sort_order: 2 }),
+        pagamento({ id: "p-dd-null", kind: "fixo", description: "DD null", direct_debit: null, sort_order: 3 }),
+      ],
+      cashflows: [],
+    }));
+    await clickText("Fixos");
+    const rows = [...el.querySelectorAll("tbody tr")];
+    expect(rows.map((row) => row.children[5]?.textContent)).toEqual(["Sim", "Não", "—"]);
+    await openEdit("DD sim");
+    await changeInputByValue("DD sim", "DD sim editado");
+    await submitModal();
+    expect(paymentActions.updatePayment).toHaveBeenCalledWith("p-dd-sim", expect.objectContaining({
+      direct_debit: true,
+    }));
+  });
+
+  it("25 variáveis da competência aparecem sem paginação", async () => {
+    const payments = Array.from({ length: 25 }, (_, index) => pagamento({
+      id: `p-var-${index + 1}`,
+      kind: "variavel",
+      description: `Variável ${String(index + 1).padStart(2, "0")}`,
+      sort_order: index + 1,
+    }));
+    const el = await mostrar(buildFinanceLedger({ payments, cashflows: [] }));
+    await clickText("Variáveis");
+    for (let i = 1; i <= 25; i += 1) {
+      expect(el.textContent ?? "").toContain(`Variável ${String(i).padStart(2, "0")}`);
+    }
+    expect(el.textContent ?? "").toContain("Todos os 25 registos");
+  });
+});
+
+describe("5. Cobranças > Diário tem CTA de adicionar", () => {
   const DIARIO = ler("src/app/(dashboard)/dashboard/cobrancas/_components/daily-billing-client.tsx");
 
   it("🔴 o botão «Adicionar cobrança» existe", () => {

@@ -41,6 +41,7 @@ import { nota as pagamentosVistaUnificada } from "./2026-08-30-pagamentos-vista-
 import { nota as pagamentosFixosVariaveisDeVolta } from "./2026-08-30-pagamentos-fixos-variaveis-de-volta";
 import { nota as calendarioCartoesBrancos } from "./2026-08-31-calendario-cartoes-com-fundo-branco";
 import { nota as equipasGuardamEmLote } from "./2026-09-01-equipas-guardam-em-lote";
+import { nota as pagamentosFixosVariaveisParidade } from "./2026-09-01-pagamentos-fixos-variaveis-paridade";
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   financeiroEAnexos,
@@ -66,6 +67,7 @@ export const RELEASE_NOTES: ReleaseNote[] = [
   pagamentosFixosVariaveisDeVolta,
   calendarioCartoesBrancos,
   equipasGuardamEmLote,
+  pagamentosFixosVariaveisParidade,
 ];
 
 /** As chaves têm de ser únicas — duas notas com a mesma key partilhariam a leitura. */
