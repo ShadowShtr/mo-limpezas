@@ -53,7 +53,7 @@ export type Database = {
         Relationships: [];
       };
       teams: {
-        Row: { id: string; company_id: string; name: string; color: string; leader_id: string | null; active: boolean; vehicle: string | null; created_at: string; updated_at: string };
+        Row: { id: string; company_id: string; name: string; color: string; leader_id: string | null; active: boolean; vehicle: string | null; revision: number; created_at: string; updated_at: string };
         Insert: { company_id: string; name: string; color?: string; leader_id?: string | null; active?: boolean; vehicle?: string | null };
         Update: { name?: string; color?: string; leader_id?: string | null; active?: boolean; vehicle?: string | null };
         Relationships: [];
@@ -206,9 +206,9 @@ export type Database = {
         Relationships: [];
       };
       collaborator_ride_assignments: {
-        Row: { id: string; company_id: string; collaborator_id: string; team_id: string; date: string; assigned_by: string | null; created_at: string; updated_at: string };
-        Insert: { company_id: string; collaborator_id: string; team_id: string; date: string; assigned_by?: string | null; id?: string };
-        Update: { team_id?: string; assigned_by?: string | null };
+        Row: { id: string; company_id: string; collaborator_id: string; team_id: string | null; date: string; assigned_by: string | null; created_at: string; updated_at: string };
+        Insert: { company_id: string; collaborator_id: string; team_id: string | null; date: string; assigned_by?: string | null; id?: string };
+        Update: { team_id?: string | null; assigned_by?: string | null };
         Relationships: [];
       };
       building_cards: {
@@ -337,7 +337,7 @@ export type Database = {
         Relationships: [];
       };
       teams_with_members: {
-        Row: { id: string; company_id: string; name: string; color: string; active: boolean; leader_id: string | null; members: Array<{ id: string; full_name: string; avatar_url: string | null; phone: string | null }> };
+        Row: { id: string; company_id: string; name: string; color: string; active: boolean; leader_id: string | null; members: Array<{ id: string; full_name: string; avatar_url: string | null; phone: string | null }>; revision: number };
         Relationships: [];
       };
     };
