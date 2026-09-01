@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { requireProfile } from "@/lib/auth-guard";
+import { database086Client } from "@/types/database-086";
 
 export type ManualChargePaymentStatus = "nao_informado" | "sinal_50" | "pago_total";
 
@@ -34,6 +35,7 @@ export async function createManualCharge(
     const guard = await requireProfile({ roles: ["admin", "gestor"] });
     if (!guard.ok) return { ok: false, error: guard.error };
     const { admin, profile } = guard;
+    const db = database086Client(admin);
 
     if (!/^\d{4}-\d{2}-\d{2}$/.test(input.chargeDate)) {
       return { ok: false, error: "Data inválida." };
@@ -56,7 +58,7 @@ export async function createManualCharge(
 
     // Criar a obrigação NÃO cria serviço, invoice_item nem movimento de caixa.
     // O caixa só nasce quando o recebimento passa pelo RPC atómico.
-    const { data, error } = await admin
+    const { data, error } = await db
       .from("manual_charges")
       .insert({
         company_id: profile.company_id,
