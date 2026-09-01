@@ -172,6 +172,7 @@ async function reset() {
   //    ordem deixaria seis RPC de mutação financeira abertas ao PUBLIC, e a
   //    083 passaria à mesma.
   await pool.query(readSql("supabase", "migrations", "083_payment_authorization_hardening.sql"));
+  await pool.query(readSql("supabase", "migrations", "088_payment_competence_idempotent_edit.sql"));
   await pool.query("INSERT INTO companies(id,name) VALUES($1,'Ensaio')", [EMPRESA]);
   await pool.query(
     `INSERT INTO financial_periods(company_id, year, month, status)
@@ -719,6 +720,20 @@ describe.sequential("edição composta de um pagamento", () => {
     expect(r.v).toBeNull();
     expect(r.d).toBe("SEM VENCIMENTO");
     expect({ py: r.py, pm: r.pm }).toEqual({ py: antes.py, pm: antes.pm });
+  });
+
+  it("DUE_DATE_SAME_COMPETENCE: reenviar o mesmo vencimento não regrida um legado", async () => {
+    const id = await pagamento("100.00");
+    await pool.query("UPDATE fixed_variable_payments SET due_date='2026-09-10' WHERE id=$1", [id]);
+    await editar(id, { due_date: "2026-09-10", notes: "mantém agosto" });
+    expect(await ler(id)).toMatchObject({ v: "2026-09-10", py: 2026, pm: 8, n: "mantém agosto" });
+  });
+
+  it("DUE_DATE_CHANGED_COMPETENCE: alterar o vencimento acompanha o novo mês", async () => {
+    const id = await pagamento("100.00");
+    await pool.query("UPDATE fixed_variable_payments SET due_date='2026-09-10' WHERE id=$1", [id]);
+    await editar(id, { due_date: "2026-10-10" });
+    expect(await ler(id)).toMatchObject({ v: "2026-10-10", py: 2026, pm: 10 });
   });
 
   it("🔴 campos fora da lista branca são recusados", async () => {

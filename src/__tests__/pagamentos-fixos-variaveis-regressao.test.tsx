@@ -421,7 +421,7 @@ describe("3. «mês por preparar» ≠ «nada a pagar»", () => {
 // 4. COBRANÇAS — CTA no Diário
 // ═══════════════════════════════════════════════════════════════════════════
 describe("4. provas DOM/runtime do P0 fixos/variáveis", () => {
-  it("NULL AMOUNT — FIXO: editar descrição envia amount null", async () => {
+  it("NULL AMOUNT — FIXO: editar descrição não reenvia amount null", async () => {
     await mostrar(buildFinanceLedger({
       payments: [pagamento({ id: "p-null-fixo", kind: "fixo", description: "Fixo sem valor", amount: null, status: "pendente" })],
       cashflows: [],
@@ -429,13 +429,10 @@ describe("4. provas DOM/runtime do P0 fixos/variáveis", () => {
     await openEdit("Fixo sem valor");
     await changeInputByValue("Fixo sem valor", "Fixo sem valor editado");
     await submitModal();
-    expect(paymentActions.updatePayment).toHaveBeenCalledWith("p-null-fixo", expect.objectContaining({
-      description: "Fixo sem valor editado",
-      amount: null,
-    }));
+    expect(paymentActions.updatePayment).toHaveBeenCalledWith("p-null-fixo", { description: "Fixo sem valor editado" });
   });
 
-  it("NULL AMOUNT — VARIÁVEL: editar descrição envia amount null", async () => {
+  it("NULL AMOUNT — VARIÁVEL: editar descrição não reenvia amount null", async () => {
     await mostrar(buildFinanceLedger({
       payments: [pagamento({ id: "p-null-var", kind: "variavel", description: "Variável sem valor", amount: null, status: "pendente" })],
       cashflows: [],
@@ -443,10 +440,7 @@ describe("4. provas DOM/runtime do P0 fixos/variáveis", () => {
     await openEdit("Variável sem valor");
     await changeInputByValue("Variável sem valor", "Variável sem valor editada");
     await submitModal();
-    expect(paymentActions.updatePayment).toHaveBeenCalledWith("p-null-var", expect.objectContaining({
-      description: "Variável sem valor editada",
-      amount: null,
-    }));
+    expect(paymentActions.updatePayment).toHaveBeenCalledWith("p-null-var", { description: "Variável sem valor editada" });
   });
 
   it("Natureza: criação editável, edição read-only", async () => {
@@ -480,9 +474,7 @@ describe("4. provas DOM/runtime do P0 fixos/variáveis", () => {
     await openEdit("DD sim");
     await changeInputByValue("DD sim", "DD sim editado");
     await submitModal();
-    expect(paymentActions.updatePayment).toHaveBeenCalledWith("p-dd-sim", expect.objectContaining({
-      direct_debit: true,
-    }));
+    expect(paymentActions.updatePayment).toHaveBeenCalledWith("p-dd-sim", { description: "DD sim editado" });
   });
 
   it("25 variáveis da competência aparecem sem paginação", async () => {

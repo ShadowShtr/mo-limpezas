@@ -41,6 +41,7 @@ import { createCashFlowEntry, deleteCashFlowEntry, updateCashFlowEntry } from "@
 import { AttachmentsField } from "@/components/attachments/attachments-field";
 import { RowMenu } from "@/components/financeiro/v2/primitives";
 import { todayInLisbon } from "@/lib/lisbon-time";
+import { buildPaymentUpdatePatch } from "@/domain/finance/payment-edit-patch";
 
 export interface LedgerCategoryOption { id: string; name: string }
 
@@ -207,14 +208,14 @@ export function UnifiedPaymentsClient({ rows, error: initialError, categories, c
     if (form.type === "payment") {
       const directDebit = form.directDebit === "" ? null : form.directDebit === "sim";
       if (form.row?.payment_id) {
-        const patch = {
-          description: form.description.trim(),
-          due_date: form.dueDate || null,
-          expense_category_id: categoryId,
-          direct_debit: directDebit,
-          notes,
-          ...(form.row.payment_status === "pago" ? {} : { amount }),
-        };
+        const patch = buildPaymentUpdatePatch(form.row, {
+          description: form.description,
+          amount,
+          dueDate: form.dueDate,
+          categoryId: form.categoryId,
+          directDebit: form.directDebit,
+          notes: form.notes,
+        }, form.row.payment_status !== "pago");
         mutate(() => updatePayment(form.row!.payment_id!, patch), true);
       } else {
         mutate(() => createPayment({
