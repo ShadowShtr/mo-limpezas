@@ -1,15 +1,15 @@
 {
   "generatedBy": "scripts/audit-file-inventory.mjs",
-  "totalFiles": 789,
+  "totalFiles": 800,
   "byStatus": {
-    "MANTER": 766,
+    "MANTER": 777,
     "STANDBY": 23
   },
   "byCategory": {
-    "test": 165,
+    "test": 173,
     "route-ui": 137,
-    "migration": 101,
-    "lib": 67,
+    "migration": 102,
+    "lib": 69,
     "script": 54,
     "domain": 51,
     "doc": 45,
@@ -29,7 +29,7 @@
     "supabase-other": 2
   },
   "byConfidence": {
-    "alta": 768,
+    "alta": 779,
     "média": 15,
     "baixa": 6
   },
@@ -3071,7 +3071,7 @@
       "category": "script",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 9,
+      "consumers": 10,
       "consumerSample": [
         "scripts/lib/migration-reconciliation.mjs",
         "scripts/lib/migration-runner-core.mjs",
@@ -3174,11 +3174,11 @@
       "category": "script",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 9,
+      "consumers": 10,
       "consumerSample": [
         "scripts/lib/migration-drift-guard.mjs",
         "scripts/run-migrations.mjs",
-        "src/__tests__/migration-086-runner-ledger-atomicity.pg.test.ts"
+        "src/__tests__/equipas-r4-runner-ledger-atomicity.pg.test.ts"
       ],
       "autoLoaded": false,
       "referencedBy": [
@@ -4997,6 +4997,206 @@
       "sideEffects": [],
       "risks": [],
       "signals": {},
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/__tests__/equipas-r4-actor-auth-user-id.test.ts",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {},
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/__tests__/equipas-r4-carregar-dia-fail-closed.test.ts",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [
+        "supabase"
+      ],
+      "risks": [],
+      "signals": {
+        "supabase": 2,
+        "dynamicImport": 1
+      },
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/__tests__/equipas-r4-drag-sem-autosave.test.tsx",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {},
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/__tests__/equipas-r4-legacy-writers-absent.test.ts",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {},
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/__tests__/equipas-r4-page-fail-closed.test.tsx",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [
+        "supabase"
+      ],
+      "risks": [],
+      "signals": {
+        "supabase": 2,
+        "dynamicImport": 1
+      },
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/__tests__/equipas-r4-postgres.test.ts",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [
+        "service-role"
+      ],
+      "signals": {
+        "serviceRole": 7,
+        "sqlWrite": 65
+      },
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/__tests__/equipas-r4-remover-membro.test.tsx",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "sqlWrite": 3,
+        "unknownCast": 4
+      },
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/__tests__/equipas-r4-runner-ledger-atomicity.pg.test.ts",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [
+        "service-role"
+      ],
+      "signals": {
+        "serviceRole": 3,
+        "sqlWrite": 16,
+        "unknownCast": 2
+      },
       "action": "nenhuma",
       "reason": "suite de testes — corre por convenção do vitest",
       "manualDecision": false,
@@ -9512,27 +9712,25 @@
       "category": "route-ui",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 1,
+      "consumers": 2,
       "consumerSample": [
+        "src/__tests__/equipas-r4-drag-sem-autosave.test.tsx",
         "src/app/(dashboard)/dashboard/calendario/_components/calendar-view.tsx"
       ],
       "autoLoaded": false,
       "referencedBy": [
         "docs"
       ],
-      "sideEffects": [
-        "supabase"
-      ],
+      "sideEffects": [],
       "risks": [],
       "signals": {
-        "supabase": 2,
         "clientComponent": 1,
-        "sqlWrite": 2,
-        "eslintDisable": 2,
+        "sqlWrite": 1,
+        "eslintDisable": 1,
         "fallbackArray": 8
       },
       "action": "nenhuma",
-      "reason": "em uso: 1 consumidor(es)",
+      "reason": "em uso: 2 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -10670,8 +10868,9 @@
       "category": "route-ui",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 1,
+      "consumers": 2,
       "consumerSample": [
+        "src/__tests__/equipas-r4-remover-membro.test.tsx",
         "src/app/(dashboard)/dashboard/equipas/page.tsx"
       ],
       "autoLoaded": false,
@@ -10680,10 +10879,11 @@
       "risks": [],
       "signals": {
         "clientComponent": 1,
+        "sqlWrite": 1,
         "eslintDisable": 1
       },
       "action": "nenhuma",
-      "reason": "em uso: 1 consumidor(es)",
+      "reason": "em uso: 2 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -10697,8 +10897,9 @@
       "category": "route-ui",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 2,
+      "consumers": 3,
       "consumerSample": [
+        "src/__tests__/equipas-r4-remover-membro.test.tsx",
         "src/app/(dashboard)/dashboard/equipas/_components/grid.tsx",
         "src/app/(dashboard)/dashboard/equipas/page.tsx"
       ],
@@ -10711,10 +10912,10 @@
       "signals": {
         "clientComponent": 1,
         "eslintDisable": 1,
-        "fallbackArray": 1
+        "fallbackArray": 2
       },
       "action": "nenhuma",
-      "reason": "em uso: 2 consumidor(es)",
+      "reason": "em uso: 3 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -10728,8 +10929,10 @@
       "category": "route-ui",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 0,
-      "consumerSample": [],
+      "consumers": 1,
+      "consumerSample": [
+        "src/__tests__/equipas-r4-page-fail-closed.test.tsx"
+      ],
       "autoLoaded": true,
       "referencedBy": [
         "docs"
@@ -10738,17 +10941,14 @@
         "supabase"
       ],
       "risks": [
-        "erro-de-query-ignorado(1)",
         "select-*(1)"
       ],
       "signals": {
         "supabase": 5,
-        "selectStar": 1,
-        "ignoredError": 1,
-        "fallbackArray": 3
+        "selectStar": 1
       },
       "action": "nenhuma",
-      "reason": "em uso: convenção do Next",
+      "reason": "em uso: convenção do Next, 1 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": true,
@@ -12700,38 +12900,36 @@
       }
     },
     {
-      "path": "src/app/actions/equipas.ts",
+      "path": "src/app/actions/equipas-r4.ts",
       "category": "server-action",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 2,
+      "consumers": 4,
       "consumerSample": [
-        "src/app/(dashboard)/dashboard/equipas/_components/grid.tsx",
-        "src/app/(dashboard)/dashboard/equipas/_components/sheet.tsx"
+        "src/__tests__/equipas-r4-carregar-dia-fail-closed.test.ts",
+        "src/app/(dashboard)/dashboard/calendario/_components/team-allocation-modal.tsx",
+        "src/app/(dashboard)/dashboard/equipas/_components/grid.tsx"
       ],
       "autoLoaded": false,
-      "referencedBy": [
-        "docs"
-      ],
+      "referencedBy": [],
       "sideEffects": [
         "supabase",
-        "write",
-        "revalidatePath(3)"
+        "revalidatePath(5)"
       ],
       "risks": [
         "erro-de-query-ignorado(2)"
       ],
       "signals": {
-        "supabase": 8,
+        "supabase": 14,
         "serverAction": 1,
-        "write": 5,
-        "sqlWrite": 6,
+        "sqlWrite": 3,
         "ignoredError": 2,
-        "fallbackArray": 1,
-        "revalidatePath": 3
+        "fallbackZero": 3,
+        "fallbackArray": 8,
+        "revalidatePath": 5
       },
-      "action": "auditar atomicidade (T12/T13)",
-      "reason": "em uso: 2 consumidor(es)",
+      "action": "nenhuma",
+      "reason": "em uso: 4 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -13524,9 +13722,9 @@
       "confidence": "alta",
       "consumers": 3,
       "consumerSample": [
-        "src/app/(dashboard)/dashboard/calendario/_components/team-allocation-modal.tsx",
         "src/app/(dashboard)/dashboard/viaturas/_components/vehicles-client.tsx",
-        "src/app/(dashboard)/dashboard/viaturas/page.tsx"
+        "src/app/(dashboard)/dashboard/viaturas/page.tsx",
+        "src/app/actions/equipas-r4.ts"
       ],
       "autoLoaded": false,
       "referencedBy": [
@@ -13536,27 +13734,27 @@
         "supabase",
         "env",
         "write",
-        "revalidatePath(5)"
+        "revalidatePath(3)"
       ],
       "risks": [
-        "erro-de-query-ignorado(2)",
+        "erro-de-query-ignorado(1)",
         "any(2)",
         "select-*(1)"
       ],
       "signals": {
-        "supabase": 17,
+        "supabase": 12,
         "env": 2,
         "serverAction": 1,
-        "write": 9,
-        "sqlWrite": 7,
+        "write": 4,
+        "sqlWrite": 4,
         "eslintDisable": 2,
         "anyType": 2,
         "unknownCast": 1,
-        "consoleErr": 2,
+        "consoleErr": 1,
         "selectStar": 1,
-        "ignoredError": 2,
+        "ignoredError": 1,
         "fallbackArray": 1,
-        "revalidatePath": 5,
+        "revalidatePath": 3,
         "dynamicImport": 2
       },
       "action": "auditar atomicidade (T12/T13)",
@@ -17549,6 +17747,62 @@
       }
     },
     {
+      "path": "src/lib/equipas/actor.ts",
+      "category": "lib",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 3,
+      "consumerSample": [
+        "src/__tests__/equipas-r4-actor-auth-user-id.test.ts",
+        "src/app/(dashboard)/dashboard/equipas/page.tsx",
+        "src/app/actions/equipas-r4.ts"
+      ],
+      "autoLoaded": false,
+      "referencedBy": [
+        "docs"
+      ],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {},
+      "action": "nenhuma",
+      "reason": "em uso: 3 consumidor(es)",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/lib/equipas/tipos.ts",
+      "category": "lib",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 2,
+      "consumerSample": [
+        "src/app/(dashboard)/dashboard/calendario/_components/team-allocation-modal.tsx",
+        "src/app/actions/equipas-r4.ts"
+      ],
+      "autoLoaded": false,
+      "referencedBy": [
+        "ci",
+        "docs"
+      ],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {},
+      "action": "nenhuma",
+      "reason": "em uso: 2 consumidor(es), CI",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": true,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
       "path": "src/lib/finance-format.ts",
       "category": "lib",
       "status": "MANTER",
@@ -18445,7 +18699,7 @@
       "category": "lib",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 15,
+      "consumers": 14,
       "consumerSample": [
         "src/app/(app)/app/perfil/_components/change-password-section.tsx",
         "src/app/(app)/app/perfil/_components/sign-out-button.tsx",
@@ -18466,7 +18720,7 @@
         "env": 2
       },
       "action": "nenhuma",
-      "reason": "em uso: 15 consumidor(es), CI",
+      "reason": "em uso: 14 consumidor(es), CI",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -21145,6 +21399,27 @@
       "signals": {
         "serviceRole": 13,
         "sqlWrite": 59
+      },
+      "action": "nenhuma",
+      "reason": "migration versionada — histórico do schema, nunca se apaga",
+      "manualDecision": false
+    },
+    {
+      "path": "supabase/migrations/087_equipas_r4.sql",
+      "category": "migration",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [
+        "service-role"
+      ],
+      "signals": {
+        "serviceRole": 10,
+        "sqlWrite": 37
       },
       "action": "nenhuma",
       "reason": "migration versionada — histórico do schema, nunca se apaga",
