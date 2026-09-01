@@ -5,34 +5,68 @@ import { Header } from "@/components/layout/header";
 import { EquipasGrid } from "./_components/grid";
 import { EquipaSheet } from "./_components/sheet";
 import { Plus, Car } from "lucide-react";
+import { resolverActorEquipas } from "@/lib/equipas/actor";
+
+function EquipasFailClosed() {
+  return (
+    <div>
+      <Header title="Equipas" subtitle="Não foi possível carregar" />
+      <div className="px-4 py-5 sm:p-6 lg:px-8 mx-auto max-w-[1400px]">
+        <div role="alert" className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800">
+          Não foi possível confirmar os dados de Equipas. Nada foi alterado.
+          <div className="mt-3">
+            <Link
+              href="/dashboard/equipas"
+              className="inline-flex items-center rounded-md border border-red-300 bg-white px-3 py-2 text-sm font-medium text-red-800 hover:bg-red-100"
+            >
+              Tentar novamente
+            </Link>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default async function EquipasPage() {
   const supabase = await createClient();
   const admin = createAdminClient();
 
-  const { data: { user } } = await supabase.auth.getUser();
+  const { data: { user }, error: userError } = await supabase.auth.getUser();
+  if (userError || !user) return <EquipasFailClosed />;
 
-  const { data: me } = await admin
-    .from("profiles")
-    .select("company_id")
-    .eq("id", user!.id)
-    .single();
+  const resolucao = await resolverActorEquipas(admin, user.id);
+  if (!resolucao.ok) return <EquipasFailClosed />;
 
-  const [equipasRes, colaboradoresRes] = await Promise.all([
+  const companyId = resolucao.actor.companyId;
+
+  const [equipasRes, colaboradoresRes, membershipSnapshotRes] = await Promise.all([
     admin
       .from("teams_with_members")
       .select("*")
-      .eq("company_id", me?.company_id ?? ""),
+      .eq("company_id", companyId),
     admin
       .from("profiles")
       .select("id, full_name, avatar_url, role, status")
-      .eq("company_id", me?.company_id ?? "")
+      .eq("company_id", companyId)
       .eq("role", "colaborador")
       .eq("status", "ativo")
       .order("full_name"),
+    admin.rpc("permanent_membership_snapshot", { p_company_id: companyId }),
   ]);
 
-  const equipas = [...(equipasRes.data ?? [])].sort((a, b) =>
+  if (
+    equipasRes.error
+    || colaboradoresRes.error
+    || membershipSnapshotRes.error
+    || typeof membershipSnapshotRes.data !== "string"
+    || !Array.isArray(equipasRes.data)
+    || !Array.isArray(colaboradoresRes.data)
+  ) {
+    return <EquipasFailClosed />;
+  }
+
+  const equipas = [...equipasRes.data].sort((a, b) =>
     (a.name as string).localeCompare(b.name as string, "pt", { numeric: true, sensitivity: "base" })
   );
 
@@ -51,8 +85,9 @@ export default async function EquipasPage() {
               Viaturas
             </Link>
             <EquipaSheet
-              companyId={me?.company_id ?? ""}
-              colaboradores={colaboradoresRes.data ?? []}
+              companyId={companyId}
+              colaboradores={colaboradoresRes.data}
+              membershipSnapshot={membershipSnapshotRes.data}
               trigger={
                 <button className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[var(--color-primary)] text-white text-sm font-medium hover:bg-[var(--color-primary-hover)] transition-colors">
                   <Plus className="w-4 h-4" />
@@ -66,8 +101,9 @@ export default async function EquipasPage() {
       <div className="px-4 py-5 sm:p-6 lg:px-8 mx-auto max-w-[1400px]">
         <EquipasGrid
           equipas={equipas}
-          colaboradores={colaboradoresRes.data ?? []}
-          companyId={me?.company_id ?? ""}
+          colaboradores={colaboradoresRes.data}
+          companyId={companyId}
+          membershipSnapshot={membershipSnapshotRes.data}
         />
       </div>
     </div>
