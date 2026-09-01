@@ -31,6 +31,7 @@ export interface FinanceLedgerPaymentSource {
    */
   direct_debit?: boolean | null;
   notes?: string | null;
+  sort_order?: number | null;
   expense_category_id: string | null;
   category_name: string | null;
   created_at: string;
@@ -81,6 +82,7 @@ export interface FinanceLedgerRow {
   /** Só existem na linha de pagamento; num movimento manual são `null`. */
   direct_debit: boolean | null;
   notes: string | null;
+  sort_order: number | null;
   status: FinanceLedgerStatus;
   payment_status: "pago" | "pendente" | null;
   cashflow_status: "pendente" | "confirmado" | null;
@@ -155,6 +157,7 @@ function paymentRow(
     cashflow_amount_cents: cashCents,
     direct_debit: payment.direct_debit ?? null,
     notes: text(payment.notes),
+    sort_order: payment.sort_order ?? null,
     status: payment.status,
     payment_status: payment.status,
     cashflow_status: linked?.status ?? null,
@@ -201,6 +204,7 @@ function cashflowRow(
     cashflow_amount_cents: paraCentimos(cashflow.amount),
     direct_debit: null,
     notes: text(cashflow.notes),
+    sort_order: null,
     status: cashflow.status === "confirmado" ? "confirmado" : "pendente_confirmacao",
     payment_status: null,
     cashflow_status: cashflow.status,

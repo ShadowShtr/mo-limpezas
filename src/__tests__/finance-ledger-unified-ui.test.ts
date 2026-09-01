@@ -14,6 +14,7 @@ import {
   originLabelFor,
   paginateFinanceLedger,
   presentationStatus,
+  sortFinanceLedgerForView,
 } from "@/domain/finance/ledger-presentation";
 
 const ROOT = process.cwd();
@@ -91,6 +92,24 @@ describe("UNI15–UNI30 — métricas e apresentação unificadas", () => {
     expect(financeLedgerMetrics(rows, { year: 2026, month: 8 }, "2026-08-10").due_cents).toBe(12_345);
   });
 
+  it("conta pendentes e atrasados sem perder métricas em euros", () => {
+    const rows = buildFinanceLedger({
+      payments: [
+        payment({ id: "p1", amount: 10, due_date: "2026-08-01", status: "pendente" }),
+        payment({ id: "p2", amount: null, due_date: "2026-08-30", status: "pendente" }),
+        payment({ id: "p3", amount: 20, status: "pago" }),
+      ],
+      cashflows: [],
+    });
+    expect(financeLedgerMetrics(rows, { year: 2026, month: 8 }, "2026-08-15")).toMatchObject({
+      due_cents: 1_000,
+      paid_cents: 2_000,
+      overdue_cents: 1_000,
+      pending_count: 2,
+      overdue_count: 1,
+    });
+  });
+
   it("pago mede competência sem depender do cashflow", () => {
     const rows = buildFinanceLedger({ payments: [payment({ status: "pago" })], cashflows: [] });
     expect(financeLedgerMetrics(rows, { year: 2026, month: 8 }, "2026-08-30").paid_cents).toBe(15_000);
@@ -110,6 +129,33 @@ describe("UNI15–UNI30 — métricas e apresentação unificadas", () => {
     expect(filterFinanceLedger(rows, "por_pagar").map((row) => row.row_id)).toEqual(["payment:p1"]);
     expect(filterFinanceLedger(rows, "pagos").map((row) => row.row_id)).toEqual(["payment:p2"]);
     expect(filterFinanceLedger(rows, "manuais").map((row) => row.row_id)).toEqual(["cashflow:c1"]);
+  });
+
+  it("Fixos/Variáveis filtram por competência, não por caixa do mês", () => {
+    const rows = buildFinanceLedger({
+      payments: [
+        payment({ id: "p-ago", kind: "fixo", period_month: 8 }),
+        payment({ id: "p-jul", kind: "fixo", period_month: 7 }),
+      ],
+      cashflows: [
+        cashflow({ id: "c-jul", date: "2026-08-05", reference_type: "fixed_variable_payment", reference_id: "p-jul" }),
+      ],
+    });
+    expect(filterFinanceLedger(rows, "fixos", { year: 2026, month: 8 }).map((row) => row.row_id))
+      .toEqual(["payment:p-ago"]);
+  });
+
+  it("Fixos/Variáveis ordenam por sort_order, descrição e identidade", () => {
+    const rows = buildFinanceLedger({
+      payments: [
+        payment({ id: "p3", kind: "fixo", description: "Zoo", sort_order: 2 }),
+        payment({ id: "p2", kind: "fixo", description: "Alfa", sort_order: 1 }),
+        payment({ id: "p1", kind: "fixo", description: "Beta", sort_order: 1 }),
+      ],
+      cashflows: [],
+    });
+    expect(sortFinanceLedgerForView(rows, "fixos").map((row) => row.description))
+      .toEqual(["Alfa", "Beta", "Zoo"]);
   });
 
   it("origens técnicas têm rótulos humanos", () => {
@@ -213,10 +259,23 @@ describe("UNI15–UNI30 — métricas e apresentação unificadas", () => {
 
   it("a página expõe colunas e tipos de criação definidos pelo produto", () => {
     const source = read("src/app/(dashboard)/dashboard/financeiro/pagamentos/_components/unified-payments-client.tsx");
-    for (const label of ["Data", "Descrição", "Vencimento", "Categoria", "Origem", "Valor", "Estado", "Ações"]) {
+    for (const label of ["Data", "Descrição", "Vencimento", "Categoria", "Origem", "Débito direto", "Valor", "Estado", "Ações"]) {
       expect(source).toContain(`"${label}"`);
     }
     for (const type of ["Conta a pagar", "Saída manual", "Entrada manual"]) expect(source).toContain(type);
     expect(source).not.toContain("Categoria de despesa");
+  });
+
+  it("edição de pagamento não permite alterar Natureza nem força valor preenchido", () => {
+    const source = read("src/app/(dashboard)/dashboard/financeiro/pagamentos/_components/unified-payments-client.tsx");
+    expect(source).toContain('disabled={Boolean(form.row)} value={form.kind}');
+    expect(source).toContain('const amount = amountText === "" ? null');
+    expect(source).toContain('form.type === "payment" ? "Valor (€)" : "Valor (€) *"');
+  });
+
+  it("Fixos/Variáveis mostram todos os registos do período sem paginação implícita", () => {
+    const source = read("src/app/(dashboard)/dashboard/financeiro/pagamentos/_components/unified-payments-client.tsx");
+    expect(source).toContain('const unpaginated = filter === "fixos" || filter === "variaveis"');
+    expect(source).toContain("const visible = unpaginated ? filtered");
   });
 });

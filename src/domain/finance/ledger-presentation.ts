@@ -26,6 +26,8 @@ export interface FinanceLedgerMetrics {
   paid_cents: number;
   overdue_cents: number;
   cash_output_cents: number;
+  pending_count: number;
+  overdue_count: number;
 }
 
 export interface FinanceCategorySlice {
@@ -129,12 +131,22 @@ export const isFixo = (row: FinanceLedgerRow): boolean =>
 export const isVariavel = (row: FinanceLedgerRow): boolean =>
   row.row_kind === "payment" && row.origin === "variavel";
 
+const isSelectedPeriodPayment = (
+  row: FinanceLedgerRow,
+  period: { year: number; month: number } | null,
+): boolean => !period || (
+  row.row_kind === "payment"
+  && row.competence_year === period.year
+  && row.competence_month === period.month
+);
+
 export function filterFinanceLedger(
   rows: FinanceLedgerRow[],
   filter: FinanceLedgerFilter,
+  period: { year: number; month: number } | null = null,
 ): FinanceLedgerRow[] {
-  if (filter === "fixos") return rows.filter(isFixo);
-  if (filter === "variaveis") return rows.filter(isVariavel);
+  if (filter === "fixos") return rows.filter((row) => isFixo(row) && isSelectedPeriodPayment(row, period));
+  if (filter === "variaveis") return rows.filter((row) => isVariavel(row) && isSelectedPeriodPayment(row, period));
   if (filter === "por_pagar") return rows.filter((row) => row.payment_status === "pendente");
   if (filter === "pagos") return rows.filter((row) => row.payment_status === "pago");
   if (filter === "manuais") return rows.filter((row) => row.is_manual);
@@ -157,11 +169,14 @@ export interface FinanceLedgerCounts {
  *    separador que mostrasse a contagem já filtrada diria sempre o mesmo
  *    número do que está no ecrã, e deixaria de servir para navegar.
  */
-export function financeLedgerCounts(rows: FinanceLedgerRow[]): FinanceLedgerCounts {
+export function financeLedgerCounts(
+  rows: FinanceLedgerRow[],
+  period: { year: number; month: number } | null = null,
+): FinanceLedgerCounts {
   return {
     todos: rows.length,
-    fixos: rows.filter(isFixo).length,
-    variaveis: rows.filter(isVariavel).length,
+    fixos: rows.filter((row) => isFixo(row) && isSelectedPeriodPayment(row, period)).length,
+    variaveis: rows.filter((row) => isVariavel(row) && isSelectedPeriodPayment(row, period)).length,
     por_pagar: rows.filter((row) => row.payment_status === "pendente").length,
     pagos: rows.filter((row) => row.payment_status === "pago").length,
     manuais: rows.filter((row) => row.is_manual).length,
@@ -281,12 +296,18 @@ export function financeLedgerMetrics(
   let paid = 0;
   let overdue = 0;
   let cashOutput = 0;
+  let pendingCount = 0;
+  let overdueCount = 0;
   for (const row of rows) {
     if (inCompetence(row, period.year, period.month)) {
       const amount = row.payment_amount_cents ?? 0;
       if (row.payment_status === "pendente") {
         due += amount;
-        if (row.due_date && row.due_date < today) overdue += amount;
+        pendingCount += 1;
+        if (row.due_date && row.due_date < today) {
+          overdue += amount;
+          overdueCount += 1;
+        }
       } else if (row.payment_status === "pago") {
         paid += amount;
       }
@@ -295,7 +316,26 @@ export function financeLedgerMetrics(
       cashOutput += row.cashflow_amount_cents ?? 0;
     }
   }
-  return { due_cents: due, paid_cents: paid, overdue_cents: overdue, cash_output_cents: cashOutput };
+  return {
+    due_cents: due,
+    paid_cents: paid,
+    overdue_cents: overdue,
+    cash_output_cents: cashOutput,
+    pending_count: pendingCount,
+    overdue_count: overdueCount,
+  };
+}
+
+export function sortFinanceLedgerForView(
+  rows: FinanceLedgerRow[],
+  filter: FinanceLedgerFilter,
+): FinanceLedgerRow[] {
+  if (filter !== "fixos" && filter !== "variaveis") return rows;
+  return [...rows].sort((a, b) =>
+    (a.sort_order ?? Number.MAX_SAFE_INTEGER) - (b.sort_order ?? Number.MAX_SAFE_INTEGER)
+    || a.description.localeCompare(b.description, "pt-PT")
+    || a.row_id.localeCompare(b.row_id),
+  );
 }
 
 export function categorySlices(

@@ -44,9 +44,9 @@ const cashflow = (patch: Partial<FinanceLedgerCashflowSource> = {}): FinanceLedg
 
 describe("finance unified read model", () => {
   it("UNI01: payment sem cashflow é uma obrigação", () => {
-    const rows = buildFinanceLedger({ payments: [payment()], cashflows: [] });
+    const rows = buildFinanceLedger({ payments: [payment({ sort_order: 7 })], cashflows: [] });
     expect(rows).toHaveLength(1);
-    expect(rows[0]).toMatchObject({ row_id: "payment:payment-1", cashflow_id: null, is_linked: false });
+    expect(rows[0]).toMatchObject({ row_id: "payment:payment-1", cashflow_id: null, is_linked: false, sort_order: 7 });
   });
 
   it("UNI02/UNI12: payment e cashflow persistidamente ligados aparecem uma vez", () => {

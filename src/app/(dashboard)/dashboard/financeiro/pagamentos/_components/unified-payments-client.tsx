@@ -34,6 +34,7 @@ import {
   mesPorPreparar,
   categoryFilterOptions,
   categoryKey,
+  sortFinanceLedgerForView,
 } from "@/domain/finance/ledger-presentation";
 import { createPayment, deletePayment, setPaymentStatus, updatePayment } from "@/app/actions/payments";
 import { createCashFlowEntry, deleteCashFlowEntry, updateCashFlowEntry } from "@/app/actions/cash-flow";
@@ -149,21 +150,22 @@ export function UnifiedPaymentsClient({ rows, error: initialError, categories, c
 
   const filtered = useMemo(() => {
     const query = search.trim().toLocaleLowerCase("pt-PT");
-    return filterFinanceLedger(rows, filter).filter((row) =>
+    return sortFinanceLedgerForView(filterFinanceLedger(rows, filter, { year, month }), filter).filter((row) =>
       (!category || categoryKey(row) === category)
       && (!origin || row.origin === origin)
       && (!query || row.description.toLocaleLowerCase("pt-PT").includes(query)),
     );
-  }, [rows, filter, category, origin, search]);
+  }, [rows, filter, category, origin, search, year, month]);
 
-  const pages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const unpaginated = filter === "fixos" || filter === "variaveis";
+  const pages = unpaginated ? 1 : Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const currentPage = Math.min(page, pages);
-  const visible = paginateFinanceLedger(filtered, currentPage, PAGE_SIZE);
+  const visible = unpaginated ? filtered : paginateFinanceLedger(filtered, currentPage, PAGE_SIZE);
   const metrics = financeLedgerMetrics(rows, { year, month }, today);
   const slices = categorySlices(rows, { year, month }, graphMode);
   const graphTotal = slices.reduce((sum, slice) => sum + slice.amount_cents, 0);
   const origins = [...new Set(rows.map((row) => row.origin))].sort();
-  const counts = financeLedgerCounts(rows);
+  const counts = financeLedgerCounts(rows, { year, month });
   const porPreparar = mesPorPreparar(rows);
   const categoryOptions = categoryFilterOptions(rows, categories);
 
@@ -188,8 +190,13 @@ export function UnifiedPaymentsClient({ rows, error: initialError, categories, c
       setFormError("Descrição obrigatória.");
       return;
     }
-    const amount = Number(form.amount.replace(",", "."));
-    if (!Number.isFinite(amount) || amount <= 0) {
+    const amountText = form.amount.trim();
+    const amount = amountText === "" ? null : Number(amountText.replace(",", "."));
+    if (amount !== null && (!Number.isFinite(amount) || amount < 0)) {
+      setFormError("Indique um valor válido.");
+      return;
+    }
+    if (form.type !== "payment" && (amount === null || amount <= 0)) {
       setFormError("Indique um valor superior a zero.");
       return;
     }
@@ -227,7 +234,7 @@ export function UnifiedPaymentsClient({ rows, error: initialError, categories, c
     if (form.row?.cashflow_id) {
       mutate(() => updateCashFlowEntry(form.row!.cashflow_id!, {
         description: form.description.trim(),
-        amount,
+        amount: amount!,
         date: form.date,
         status: form.cashStatus,
         expenseCategoryId: categoryId,
@@ -236,7 +243,7 @@ export function UnifiedPaymentsClient({ rows, error: initialError, categories, c
     } else {
       mutate(() => createCashFlowEntry(companyId, {
         type: form.type === "manual_output" ? "saida" : "entrada",
-        amount,
+        amount: amount!,
         description: form.description.trim(),
         category: form.type === "manual_output" ? "despesa" : "outro",
         date: form.date,
@@ -327,9 +334,9 @@ export function UnifiedPaymentsClient({ rows, error: initialError, categories, c
       )}
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Metric label="Por pagar" value={euro(metrics.due_cents)} />
+        <Metric label="Por pagar" value={euro(metrics.due_cents)} detail={`${metrics.pending_count} pendentes`} />
         <Metric label="Já pago" value={euro(metrics.paid_cents)} />
-        <Metric label="Em atraso" value={euro(metrics.overdue_cents)} alert />
+        <Metric label="Em atraso" value={euro(metrics.overdue_cents)} detail={`${metrics.overdue_count} em atraso`} alert />
         <Metric label="Saídas do período" value={euro(metrics.cash_output_cents)} />
       </div>
 
@@ -379,7 +386,7 @@ export function UnifiedPaymentsClient({ rows, error: initialError, categories, c
         <div className="overflow-x-auto">
           <table className="w-full min-w-[980px] text-sm">
             <thead className="bg-[var(--color-background)] text-left text-xs uppercase text-[var(--color-text-muted)]">
-              <tr>{["Data", "Descrição", "Vencimento", "Categoria", "Origem", "Valor", "Estado", "Ações"].map((label) => <th key={label} className="px-3 py-2.5 font-medium">{label}</th>)}</tr>
+              <tr>{["Data", "Descrição", "Vencimento", "Categoria", "Origem", "Débito direto", "Valor", "Estado", "Ações"].map((label) => <th key={label} className="px-3 py-2.5 font-medium">{label}</th>)}</tr>
             </thead>
             <tbody className="divide-y divide-[var(--color-border)]">
               {visible.map((row) => {
@@ -405,6 +412,7 @@ export function UnifiedPaymentsClient({ rows, error: initialError, categories, c
                   <td className="px-3 py-3 tabular-nums">{date(row.due_date)}</td>
                   <td className="px-3 py-3">{row.category_name ?? "Sem categoria"}</td>
                   <td className="px-3 py-3">{originLabel(row)}</td>
+                  <td className="px-3 py-3">{row.row_kind === "payment" ? <DirectDebitBadge value={row.direct_debit} /> : "—"}</td>
                   <td className={`px-3 py-3 font-semibold tabular-nums ${row.direction === "entrada" ? "text-emerald-700" : "text-[var(--color-text-main)]"}`}>{row.direction === "entrada" ? "+" : "−"}{euro(row.amount_cents)}</td>
                   <td className="px-3 py-3"><Status label={presentationStatus(row, today)} /></td>
                   <td className="px-3 py-3">
@@ -417,12 +425,12 @@ export function UnifiedPaymentsClient({ rows, error: initialError, categories, c
                 </tr>
                 );
               })}
-              {visible.length === 0 && <tr><td colSpan={8} className="px-4 py-12 text-center text-sm text-[var(--color-text-muted)]">Nenhum registo corresponde aos filtros.</td></tr>}
+              {visible.length === 0 && <tr><td colSpan={9} className="px-4 py-12 text-center text-sm text-[var(--color-text-muted)]">Nenhum registo corresponde aos filtros.</td></tr>}
             </tbody>
           </table>
         </div>
         <div className="flex items-center justify-between border-t border-[var(--color-border)] px-3 py-2.5">
-          <span className="text-xs text-[var(--color-text-muted)]">Página {currentPage} de {pages}</span>
+          <span className="text-xs text-[var(--color-text-muted)]">{unpaginated ? `Todos os ${filtered.length} registos` : `Página ${currentPage} de ${pages}`}</span>
           <div className="flex gap-1">
             <button aria-label="Página anterior" disabled={currentPage === 1} onClick={() => setPage(currentPage - 1)} className="rounded-lg border border-[var(--color-border)] p-2 disabled:opacity-40"><ChevronLeft className="h-4 w-4" /></button>
             <button aria-label="Página seguinte" disabled={currentPage === pages} onClick={() => setPage(currentPage + 1)} className="rounded-lg border border-[var(--color-border)] p-2 disabled:opacity-40"><ChevronRight className="h-4 w-4" /></button>
@@ -435,13 +443,18 @@ export function UnifiedPaymentsClient({ rows, error: initialError, categories, c
   );
 }
 
-function Metric({ label, value, alert = false }: { label: string; value: string; alert?: boolean }) {
-  return <div className="rounded-lg border border-[var(--color-border)] bg-white p-4"><p className="text-xs text-[var(--color-text-muted)]">{label}</p><p className={`mt-1 text-lg font-semibold tabular-nums ${alert ? "text-red-700" : "text-[var(--color-text-main)]"}`}>{value}</p></div>;
+function Metric({ label, value, detail, alert = false }: { label: string; value: string; detail?: string; alert?: boolean }) {
+  return <div className="rounded-lg border border-[var(--color-border)] bg-white p-4"><p className="text-xs text-[var(--color-text-muted)]">{label}</p><p className={`mt-1 text-lg font-semibold tabular-nums ${alert ? "text-red-700" : "text-[var(--color-text-main)]"}`}>{value}</p>{detail && <p className="mt-1 text-xs text-[var(--color-text-muted)]">{detail}</p>}</div>;
 }
 
 function Status({ label }: { label: string }) {
   const color = label === "Em atraso" ? "bg-red-50 text-red-700" : label === "Pago" || label === "Confirmado" ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700";
   return <span className={`inline-flex rounded-md px-2 py-1 text-xs font-medium ${color}`}>{label}</span>;
+}
+
+function DirectDebitBadge({ value }: { value: boolean | null }) {
+  if (value === null) return <span className="text-[var(--color-text-muted)]">Não definido</span>;
+  return <span className={`inline-flex rounded-md px-2 py-1 text-xs font-medium ${value ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-700"}`}>{value ? "Sim" : "Não"}</span>;
 }
 
 function CategoryChart({ slices, total }: { slices: ReturnType<typeof categorySlices>; total: number }) {
@@ -467,10 +480,10 @@ function EntryModal({ form, setForm, categories, pending, error, onSubmit }: { f
       <div className="flex items-center justify-between border-b border-[var(--color-border)] px-5 py-4"><h2 className="text-base font-semibold">{form.row ? "Editar registo" : "Novo registo"}</h2><button aria-label="Fechar" onClick={() => setForm(null)}><X className="h-5 w-5" /></button></div>
       <form onSubmit={onSubmit} className="space-y-4 p-5">
         <Field label="Tipo *"><select disabled={Boolean(form.row)} value={form.type} onChange={(event) => update({ type: event.target.value as EntryType })} className={inputClass}><option value="payment">Conta a pagar</option><option value="manual_output">Saída manual</option><option value="manual_input">Entrada manual</option></select></Field>
-        {form.type === "payment" && <Field label="Natureza"><select value={form.kind} onChange={(event) => update({ kind: event.target.value as FormState["kind"] })} className={inputClass}><option value="variavel">Variável</option><option value="fixo">Fixo</option></select></Field>}
+        {form.type === "payment" && <Field label="Natureza"><select disabled={Boolean(form.row)} value={form.kind} onChange={(event) => update({ kind: event.target.value as FormState["kind"] })} className={`${inputClass} ${form.row ? "bg-slate-50 opacity-70" : ""}`}><option value="variavel">Variável</option><option value="fixo">Fixo</option></select></Field>}
         <Field label="Descrição *"><input autoFocus value={form.description} onChange={(event) => update({ description: event.target.value })} className={inputClass} /></Field>
         <div className="grid grid-cols-2 gap-3">
-          <Field label="Valor (€) *"><input inputMode="decimal" disabled={paid} value={form.amount} onChange={(event) => update({ amount: event.target.value })} className={`${inputClass} ${paid ? "bg-slate-50 opacity-70" : ""}`} />{paid && <p className="mt-1 text-xs text-[var(--color-text-muted)]">Reverta o pagamento antes de alterar o valor.</p>}</Field>
+          <Field label={form.type === "payment" ? "Valor (€)" : "Valor (€) *"}><input inputMode="decimal" disabled={paid} value={form.amount} onChange={(event) => update({ amount: event.target.value })} className={`${inputClass} ${paid ? "bg-slate-50 opacity-70" : ""}`} />{paid && <p className="mt-1 text-xs text-[var(--color-text-muted)]">Reverta o pagamento antes de alterar o valor.</p>}</Field>
           {form.type === "payment" ? <Field label="Vencimento"><input type="date" value={form.dueDate} onChange={(event) => update({ dueDate: event.target.value })} className={inputClass} /></Field> : <Field label="Data"><input required type="date" value={form.date} onChange={(event) => update({ date: event.target.value })} className={inputClass} /></Field>}
         </div>
         <Field label="Categoria"><select value={form.categoryId} onChange={(event) => update({ categoryId: event.target.value })} className={inputClass}><option value="">Sem categoria</option>{categories.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></Field>
