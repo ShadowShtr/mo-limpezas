@@ -60,8 +60,8 @@ export interface DiaAlocacoes {
   viaturasDisponiveis: ViaturaBase[];
   efetiva: LinhaEfetiva[];
   viaturas: ViaturaDia[];
-  /** Metadados da mesma ausência que `team_day_effective` usa para `ausente`. */
-  ausencias: AusenciaDia[];
+  /** Opcional para não alterar o contrato do modal R4; a vista espelho enriquece-o. */
+  ausencias?: AusenciaDia[];
 }
 
 export interface Rascunho {
