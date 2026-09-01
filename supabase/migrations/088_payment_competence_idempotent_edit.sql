@@ -10,10 +10,19 @@
 DO $precondicoes$
 DECLARE
   v_fn oid;
+  v_fn_count integer;
   v_tabela boolean;
   v_due boolean;
   v_period_year boolean;
   v_period_month boolean;
+  v_is_invoker boolean;
+  v_is_plpgsql boolean;
+  v_is_set_returning boolean;
+  v_is_function boolean;
+  v_args text;
+  v_result text;
+  v_acl text[];
+  v_body_hash text;
 BEGIN
   SELECT to_regclass('public.fixed_variable_payments') IS NOT NULL INTO v_tabela;
   SELECT EXISTS (
@@ -31,16 +40,43 @@ BEGIN
      WHERE table_schema = 'public' AND table_name = 'fixed_variable_payments'
        AND column_name = 'period_month'
   ) INTO v_period_month;
-  SELECT p.oid INTO v_fn
+  SELECT count(*) INTO v_fn_count
     FROM pg_proc p
     JOIN pg_namespace n ON n.oid = p.pronamespace
-   WHERE n.nspname = 'public'
-     AND p.proname = 'update_payment_atomic'
+   WHERE n.nspname = 'public' AND p.proname = 'update_payment_atomic';
+
+  SELECT p.oid, p.proretset,
+         p.prosecdef = false,
+         l.lanname = 'plpgsql',
+         pg_get_function_identity_arguments(p.oid),
+         pg_get_function_result(p.oid),
+         p.prokind = 'f',
+         md5(regexp_replace(regexp_replace(pg_get_functiondef(p.oid), E'--[^\r\n]*', '', 'g'), '[[:space:]]+', '', 'g')),
+         ARRAY(
+           SELECT CASE WHEN x.grantee = 0 THEN 'PUBLIC'
+                       ELSE x.grantee::regrole::text END || ':' || x.privilege_type
+             FROM aclexplode(COALESCE(p.proacl, acldefault('f', p.proowner))) x
+            ORDER BY 1
+         )
+    INTO v_fn, v_is_set_returning, v_is_invoker, v_is_plpgsql, v_args, v_result,
+         v_is_function, v_body_hash, v_acl
+    FROM pg_proc p
+    JOIN pg_namespace n ON n.oid = p.pronamespace
+    JOIN pg_language l ON l.oid = p.prolang
+   WHERE n.nspname = 'public' AND p.proname = 'update_payment_atomic'
      AND pg_get_function_identity_arguments(p.oid) = 'p_company_id uuid, p_payment_id uuid, p_patch jsonb';
 
   IF NOT (coalesce(v_tabela, false) AND coalesce(v_due, false)
       AND coalesce(v_period_year, false) AND coalesce(v_period_month, false)
-      AND v_fn IS NOT NULL) THEN
+      AND v_fn_count = 1 AND v_fn IS NOT NULL
+      AND coalesce(v_is_set_returning, false)
+      AND coalesce(v_is_invoker, false)
+      AND coalesce(v_is_plpgsql, false)
+      AND coalesce(v_is_function, false)
+      AND v_args = 'p_company_id uuid, p_payment_id uuid, p_patch jsonb'
+      AND v_result = 'TABLE(payment_id uuid, valor_alterou boolean)'
+      AND v_body_hash = 'fdb9af8955ad0252139f673cbdf5d21e'
+      AND v_acl = ARRAY['postgres:EXECUTE', 'service_role:EXECUTE']) THEN
     RAISE EXCEPTION 'PAYMENT_COMPETENCE_088_PRECONDITION_FAILED';
   END IF;
 END;

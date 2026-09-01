@@ -1,12 +1,12 @@
 {
   "generatedBy": "scripts/audit-file-inventory.mjs",
-  "totalFiles": 808,
+  "totalFiles": 809,
   "byStatus": {
-    "MANTER": 785,
+    "MANTER": 786,
     "STANDBY": 23
   },
   "byCategory": {
-    "test": 175,
+    "test": 176,
     "route-ui": 137,
     "migration": 104,
     "lib": 69,
@@ -29,7 +29,7 @@
     "supabase-other": 2
   },
   "byConfidence": {
-    "alta": 787,
+    "alta": 788,
     "média": 15,
     "baixa": 6
   },
@@ -3071,7 +3071,7 @@
       "category": "script",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 10,
+      "consumers": 11,
       "consumerSample": [
         "scripts/lib/migration-reconciliation.mjs",
         "scripts/lib/migration-runner-core.mjs",
@@ -3174,7 +3174,7 @@
       "category": "script",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 10,
+      "consumers": 11,
       "consumerSample": [
         "scripts/lib/migration-drift-guard.mjs",
         "scripts/run-migrations.mjs",
@@ -6180,6 +6180,33 @@
         "sqlWrite": 11,
         "todo": 1,
         "unknownCast": 3
+      },
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/__tests__/migration-088-runner-ledger-atomicity.pg.test.ts",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [
+        "service-role"
+      ],
+      "signals": {
+        "serviceRole": 4,
+        "sqlWrite": 4
       },
       "action": "nenhuma",
       "reason": "suite de testes — corre por convenção do vitest",
@@ -21586,7 +21613,7 @@
         "service-role"
       ],
       "signals": {
-        "serviceRole": 1,
+        "serviceRole": 2,
         "sqlWrite": 2
       },
       "action": "nenhuma",
