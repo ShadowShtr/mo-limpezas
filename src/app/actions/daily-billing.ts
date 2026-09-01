@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { requireProfile } from "@/lib/auth-guard";
 import { addDaysToDateString, toLisbonTimestamp } from "@/lib/lisbon-time";
+import { database086Client } from "@/types/database-086";
 
 export type DailyBillingType = "service" | "manual_charge";
 
@@ -85,6 +86,7 @@ async function _getDailyBilling(
   const guard = await requireProfile({ roles: ["admin", "gestor"] });
   if (!guard.ok) return { ok: false, error: guard.error };
   const { admin, profile } = guard;
+  const db086 = database086Client(admin);
   const companyId = profile.company_id;
 
   if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return { ok: false, error: "Data inválida." };
@@ -116,14 +118,14 @@ async function _getDailyBilling(
       .neq("status", "cancelado")
       .or("payment_status.is.null,payment_status.neq.pago_total")
       .order("scheduled_start", { ascending: false }),
-    admin
+    db086
       .from("manual_charges")
       .select(MANUAL_COLS)
       .eq("company_id", companyId)
       .eq("charge_date", dateStr)
       .is("voided_at", null)
       .order("created_at"),
-    admin
+    db086
       .from("manual_charges")
       .select(MANUAL_COLS)
       .eq("company_id", companyId)
