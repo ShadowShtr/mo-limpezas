@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { AlertCircle, CalendarDays, Loader2, RefreshCw, UserRoundX } from "lucide-react";
 import { carregarDiaEspelho } from "@/app/actions/equipas-dia-espelho";
 import type { DiaAlocacoes, LinhaEfetiva } from "@/lib/equipas/tipos";
@@ -19,9 +19,38 @@ export function EquipasDiaEfetivo({ companyId, initialDate }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
+  // ═══════════════════════════════════════════════════════════════════════
+  // 🔴 SÓ O PEDIDO MAIS RECENTE PODE ESCREVER ESTADO
+  // ═══════════════════════════════════════════════════════════════════════
+  //
+  //    `clearTimeout` no cleanup do efeito só cancela um `load` que ainda não
+  //    começou. Depois de `carregarDiaEspelho(A)` partir, mudar de A para B
+  //    deixa dois pedidos em voo, e a rede não promete ordem:
+  //
+  //        pede A → pede B → responde B → setDia(B) → responde A → setDia(A)
+  //
+  //    O ecrã ficava com a composição de A por baixo de um input a dizer B.
+  //    Era exactamente o estado stale que esta vista existe para não ter.
+  //
+  //    O contador é monotónico e vive num ref, fora do ciclo de render: cada
+  //    chamada leva o seu número, e ao voltar compara-se com o último emitido.
+  //    Uma resposta obsoleta não toca em `dia`, `error` nem `loading` — nem
+  //    sequer para desligar o spinner, senão o ecrã dir-se-ia carregado
+  //    enquanto o pedido bom ainda vinha a caminho.
+  //
+  //    Fica no `load`, e não dentro do efeito, de propósito: o botão Atualizar
+  //    chama o mesmo `load`. Uma flag local ao efeito deixava o refresh manual
+  //    a competir na mesma, que é metade do defeito por corrigir.
+  const ultimoPedido = useRef(0);
+
   const load = useCallback(async (target: string) => {
+    const pedido = ultimoPedido.current + 1;
+    ultimoPedido.current = pedido;
     setLoading(true);
+
     const result = await carregarDiaEspelho(companyId, target);
+    if (pedido !== ultimoPedido.current) return;
+
     if (result.ok) {
       setDia(result.dia);
       setError(null);
@@ -36,6 +65,10 @@ export function EquipasDiaEfetivo({ companyId, initialDate }: Props) {
     const timer = window.setTimeout(() => { void load(date); }, 0);
     return () => window.clearTimeout(timer);
   }, [date, load]);
+
+  // Desmontar invalida o que estiver em voo: a resposta que chegar depois já
+  // não tem ecrã onde aterrar.
+  useEffect(() => () => { ultimoPedido.current += 1; }, []);
 
   const personById = new Map((dia?.pessoas ?? []).map((person) => [person.id, person]));
   const effective = dia?.efetiva ?? [];
