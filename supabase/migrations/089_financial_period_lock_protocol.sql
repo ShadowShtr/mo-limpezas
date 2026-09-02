@@ -67,6 +67,7 @@ BEGIN
   SELECT EXISTS (
     SELECT 1 FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
      WHERE n.nspname = 'public' AND p.proname = 'is_financial_period_open'
+       AND pg_get_function_identity_arguments(p.oid) = 'p_company_id uuid, p_year integer, p_month integer'
   ) INTO v_fn;
 
   IF NOT (coalesce(v_tabela, false) AND coalesce(v_fn, false)) THEN
@@ -170,10 +171,7 @@ AS $fn$
 BEGIN
   PERFORM public.lock_financial_period(p_company_id, p_year, p_month);
 
-  IF NOT public.is_financial_period_open(
-       p_company_id,
-       make_date(p_year, p_month, 1)
-     ) THEN
+  IF NOT public.is_financial_period_open(p_company_id, p_year, p_month) THEN
     RAISE EXCEPTION 'FINANCIAL_PERIOD_CLOSED: %-%', p_year, lpad(p_month::text, 2, '0')
       USING ERRCODE = 'P0001';
   END IF;
@@ -239,7 +237,7 @@ BEGIN
   -- lock descreve um passado, não o estado que vai ser gravado.
   PERFORM public.lock_financial_period(p_company_id, p_year, p_month);
 
-  IF NOT public.is_financial_period_open(p_company_id, make_date(p_year, p_month, 1)) THEN
+  IF NOT public.is_financial_period_open(p_company_id, p_year, p_month) THEN
     RETURN QUERY SELECT false, jsonb_build_object('ja_fechado', true);
     RETURN;
   END IF;
@@ -286,7 +284,7 @@ BEGIN
 
   PERFORM public.lock_financial_period(p_company_id, p_year, p_month);
 
-  IF public.is_financial_period_open(p_company_id, make_date(p_year, p_month, 1)) THEN
+  IF public.is_financial_period_open(p_company_id, p_year, p_month) THEN
     RETURN false;
   END IF;
 

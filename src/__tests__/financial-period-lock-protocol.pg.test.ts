@@ -80,13 +80,12 @@ async function baseline() {
     );
 
     -- A semântica da 071: sem linha 'closed', o mês está aberto.
-    CREATE FUNCTION public.is_financial_period_open(p_company_id uuid, p_data date)
+    CREATE FUNCTION public.is_financial_period_open(p_company_id uuid, p_year integer, p_month integer)
     RETURNS boolean LANGUAGE sql STABLE AS $$
       SELECT NOT EXISTS (
         SELECT 1 FROM public.financial_periods
          WHERE company_id = p_company_id
-           AND year = extract(year from p_data)::int
-           AND month = extract(month from p_data)::int
+           AND year = p_year AND month = p_month
            AND status = 'closed'
       );
     $$;
@@ -97,7 +96,7 @@ async function baseline() {
 }
 
 const aberto = async (ano: number, mes: number, empresa = EMPRESA) =>
-  (await pool.query("select public.is_financial_period_open($1, make_date($2,$3,1)) as v", [empresa, ano, mes])).rows[0].v;
+  (await pool.query("select public.is_financial_period_open($1, $2, $3) as v", [empresa, ano, mes])).rows[0].v;
 
 const nPagamentos = async () =>
   Number((await pool.query("select count(*) n from public.fixed_variable_payments")).rows[0].n);
@@ -358,6 +357,100 @@ describe("089 — writer e fecho serializam pelo mesmo recurso", () => {
     await Promise.all([ciclo(), ciclo(), ciclo()]);
     expect(await nPagamentos()).toBe(18);
   }, 180_000);
+
+  it("G · close vs manual_charge: a cobrança recusa depois do fecho", async () => {
+    // 🔴 `manual_charges` NAO tem guarda de período hoje — nem na action nem na
+    //    086. Este teste prova o protocolo, e serve de forma ao writer quando
+    //    ele passar a usá-lo. Enquanto não passar, uma cobrança entra num mês
+    //    fechado sem nada a impedir.
+    const fecho = await ligacao();
+    const writer = await ligacao();
+
+    await fecho.query("BEGIN");
+    await fecho.query("SELECT * FROM public.close_financial_period_atomic($1, 2026, 9, $2)", [EMPRESA, ACTOR]);
+
+    const promessa = (async () => {
+      await writer.query("BEGIN");
+      try {
+        await writer.query("SELECT public.assert_financial_period_open_locked($1, 2026, 9)", [EMPRESA]);
+        await writer.query(
+          `INSERT INTO public.manual_charges (company_id, charge_date, amount)
+           VALUES ($1, date '2026-09-15', 100)`, [EMPRESA]);
+        await writer.query("COMMIT");
+        return "escreveu";
+      } catch (erro) {
+        await writer.query("ROLLBACK").catch(() => {});
+        return String((erro as Error).message);
+      }
+    })();
+    await new Promise((r) => setTimeout(r, 400));
+    await fecho.query("COMMIT");
+
+    expect(await promessa).toMatch(/FINANCIAL_PERIOD_CLOSED/);
+    expect(Number((await pool.query("select count(*) n from public.manual_charges")).rows[0].n)).toBe(0);
+
+    await fecho.end();
+    await writer.end();
+  }, 120_000);
+
+  it("H · close vs pagamento: zero escrita parcial", async () => {
+    const fecho = await ligacao();
+    const writer = await ligacao();
+
+    await fecho.query("BEGIN");
+    await fecho.query("SELECT * FROM public.close_financial_period_atomic($1, 2026, 9, $2)", [EMPRESA, ACTOR]);
+
+    const promessa = (async () => {
+      await writer.query("BEGIN");
+      try {
+        await writer.query("SELECT public.assert_financial_period_open_locked($1, 2026, 9)", [EMPRESA]);
+        await writer.query(
+          `INSERT INTO public.cash_flow_entries (company_id, type, amount, date)
+           VALUES ($1, 'saida', 50, date '2026-09-20')`, [EMPRESA]);
+        await writer.query(
+          `INSERT INTO public.fixed_variable_payments (company_id, kind, description, amount, status, period_year, period_month)
+           VALUES ($1, 'fixo', 'pago', 50, 'pago', 2026, 9)`, [EMPRESA]);
+        await writer.query("COMMIT");
+        return "escreveu";
+      } catch (erro) {
+        await writer.query("ROLLBACK").catch(() => {});
+        return String((erro as Error).message);
+      }
+    })();
+    await new Promise((r) => setTimeout(r, 400));
+    await fecho.query("COMMIT");
+
+    expect(await promessa).toMatch(/FINANCIAL_PERIOD_CLOSED/);
+    // Nem o caixa, nem o pagamento: o par entra inteiro ou não entra.
+    expect(await nPagamentos()).toBe(0);
+    expect(Number((await pool.query("select count(*) n from public.cash_flow_entries")).rows[0].n)).toBe(0);
+
+    await fecho.end();
+    await writer.end();
+  }, 120_000);
+
+  it("período sem linha em financial_periods é aberto, e o lock funciona na mesma", async () => {
+    // A semântica é «sem linha = aberto». Um SELECT ... FOR UPDATE não teria
+    // linha para bloquear, e duas sessões inseririam a primeira em paralelo.
+    expect(Number((await pool.query("select count(*) n from public.financial_periods")).rows[0].n)).toBe(0);
+    expect(await aberto(2027, 3)).toBe(true);
+
+    const a = await ligacao();
+    await a.query("BEGIN");
+    await a.query("SELECT public.assert_financial_period_open_locked($1, 2027, 3)", [EMPRESA]);
+
+    const b = await ligacao();
+    const promessa = b.query("SELECT * FROM public.close_financial_period_atomic($1, 2027, 3, $2)", [EMPRESA, ACTOR]);
+    await new Promise((r) => setTimeout(r, 300));
+    await a.query("COMMIT");
+    const r = await promessa;
+
+    expect(r.rows[0].fechado).toBe(true);
+    expect(Number((await pool.query("select count(*) n from public.financial_periods")).rows[0].n)).toBe(1);
+
+    await a.end();
+    await b.end();
+  }, 120_000);
 
   it("o checklist é recontado sob o lock, não aceite de fora", async () => {
     // Um bloqueador que aparece DEPOIS de alguém ter olhado para o checklist
