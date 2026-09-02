@@ -1,12 +1,12 @@
 {
   "generatedBy": "scripts/audit-file-inventory.mjs",
-  "totalFiles": 809,
+  "totalFiles": 811,
   "byStatus": {
-    "MANTER": 786,
+    "MANTER": 788,
     "STANDBY": 23
   },
   "byCategory": {
-    "test": 176,
+    "test": 178,
     "route-ui": 137,
     "migration": 104,
     "lib": 69,
@@ -29,7 +29,7 @@
     "supabase-other": 2
   },
   "byConfidence": {
-    "alta": 788,
+    "alta": 790,
     "média": 15,
     "baixa": 6
   },
@@ -5904,6 +5904,31 @@
       "manualDecision": false
     },
     {
+      "path": "src/__tests__/helpers/pg-container.ts",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 2,
+      "consumerSample": [
+        "src/__tests__/migration-088-runner-ledger-atomicity.pg.test.ts",
+        "src/__tests__/pg-container-helper.test.ts"
+      ],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {},
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
       "path": "src/__tests__/helpers/production-baseline.ts",
       "category": "test",
       "status": "MANTER",
@@ -7170,6 +7195,28 @@
         "ignoredError": 1,
         "dynamicImport": 26
       },
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/__tests__/pg-container-helper.test.ts",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {},
       "action": "nenhuma",
       "reason": "suite de testes — corre por convenção do vitest",
       "manualDecision": false,
