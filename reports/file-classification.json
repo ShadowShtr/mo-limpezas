@@ -6243,7 +6243,9 @@
       "consumers": 0,
       "consumerSample": [],
       "autoLoaded": false,
-      "referencedBy": [],
+      "referencedBy": [
+        "ci"
+      ],
       "sideEffects": [],
       "risks": [
         "service-role"
@@ -6257,7 +6259,7 @@
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
-        "cliEntrypoint": false,
+        "cliEntrypoint": true,
         "dynamicImport": true,
         "allClosed": false
       }
@@ -16318,6 +16320,7 @@
       ],
       "autoLoaded": false,
       "referencedBy": [
+        "ci",
         "docs"
       ],
       "sideEffects": [],
@@ -16326,11 +16329,11 @@
         "fallbackArray": 2
       },
       "action": "nenhuma",
-      "reason": "em uso: 10 consumidor(es)",
+      "reason": "em uso: 10 consumidor(es), CI",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
-        "cliEntrypoint": false,
+        "cliEntrypoint": true,
         "dynamicImport": true,
         "allClosed": false
       }

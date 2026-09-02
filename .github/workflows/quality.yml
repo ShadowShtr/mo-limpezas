@@ -106,10 +106,14 @@ jobs:
         run: npm run lint:strict
 
       - name: Testes
-        # Os testes PostgreSQL reais lançam containers isolados com nomes
-        # próprios. Serializar os ficheiros impede colisões/terminações do
-        # Docker no runner sem desligar nenhum teste.
-        run: npm test -- --no-file-parallelism
+        # O teste 088 real lança o seu próprio PostgreSQL e corre num processo
+        # separado abaixo; a suite restante mantém a concorrência normal.
+        run: npm test -- --exclude=src/__tests__/migration-088-runner-ledger-atomicity.pg.test.ts
+
+      - name: Teste PostgreSQL real da migration 088
+        # Isolado para não herdar memória/conexões das outras suites. Não é
+        # um skip: o teste é executado explicitamente e deve passar.
+        run: npm test -- src/__tests__/migration-088-runner-ledger-atomicity.pg.test.ts
 
       - name: Auditoria do código
         # Falha se aparecer um risco de confiança alta: artefacto capaz de
