@@ -1,0 +1,3 @@
+# STATUS=NO_FRESH_READ_ONLY_SELECT; counts are documented in historical-finance-summary.md
+id,origin,storage_path,physical_state,classification
+
