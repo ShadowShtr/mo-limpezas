@@ -4,8 +4,10 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { Header } from "@/components/layout/header";
 import { EquipasGrid } from "./_components/grid";
 import { EquipaSheet } from "./_components/sheet";
+import { EquipasDiaEfetivo } from "./_components/effective-day";
 import { Plus, Car } from "lucide-react";
 import { resolverActorEquipas } from "@/lib/equipas/actor";
+import { todayInLisbon } from "@/lib/lisbon-time";
 
 function EquipasFailClosed() {
   return (
@@ -99,6 +101,15 @@ export default async function EquipasPage() {
         }
       />
       <div className="px-4 py-5 sm:p-6 lg:px-8 mx-auto max-w-[1400px]">
+        <EquipasDiaEfetivo companyId={companyId} initialDate={todayInLisbon()} />
+
+        <div className="mb-3 mt-7">
+          <h2 className="text-sm font-semibold text-[var(--color-text-main)]">Composição permanente</h2>
+          <p className="mt-1 text-xs text-[var(--color-text-muted)]">
+            Esta é a base das equipas. Alterações só de um dia aparecem acima e não mudam silenciosamente esta composição.
+          </p>
+        </div>
+
         <EquipasGrid
           equipas={equipas}
           colaboradores={colaboradoresRes.data}

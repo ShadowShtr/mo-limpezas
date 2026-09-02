@@ -1,21 +1,21 @@
 {
   "generatedBy": "scripts/audit-file-inventory.mjs",
-  "totalFiles": 811,
+  "totalFiles": 818,
   "byStatus": {
-    "MANTER": 788,
+    "MANTER": 795,
     "STANDBY": 23
   },
   "byCategory": {
-    "test": 178,
-    "route-ui": 137,
+    "test": 181,
+    "route-ui": 138,
     "migration": 104,
-    "lib": 69,
+    "lib": 70,
     "script": 54,
     "domain": 52,
     "doc": 45,
-    "server-action": 43,
+    "server-action": 44,
     "component": 30,
-    "src-other": 29,
+    "src-other": 30,
     "doc-historico": 16,
     "api-route": 16,
     "config": 12,
@@ -29,7 +29,7 @@
     "supabase-other": 2
   },
   "byConfidence": {
-    "alta": 790,
+    "alta": 797,
     "média": 15,
     "baixa": 6
   },
@@ -4987,6 +4987,72 @@
     },
     {
       "path": "src/__tests__/email-templates.test.ts",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {},
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/__tests__/equipas-ausencias-display.test.ts",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {},
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/__tests__/equipas-dia-espelho-contract.test.ts",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {},
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/__tests__/equipas-dia-espelho-race.test.tsx",
       "category": "test",
       "status": "MANTER",
       "confidence": "alta",
@@ -10982,6 +11048,34 @@
       }
     },
     {
+      "path": "src/app/(dashboard)/dashboard/equipas/_components/effective-day.tsx",
+      "category": "route-ui",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 2,
+      "consumerSample": [
+        "src/__tests__/equipas-dia-espelho-race.test.tsx",
+        "src/app/(dashboard)/dashboard/equipas/page.tsx"
+      ],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "clientComponent": 1,
+        "fallbackArray": 2
+      },
+      "action": "nenhuma",
+      "reason": "em uso: 2 consumidor(es)",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
       "path": "src/app/(dashboard)/dashboard/equipas/_components/grid.tsx",
       "category": "route-ui",
       "status": "MANTER",
@@ -13018,11 +13112,38 @@
       }
     },
     {
+      "path": "src/app/actions/equipas-dia-espelho.ts",
+      "category": "server-action",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 1,
+      "consumerSample": [
+        "src/app/(dashboard)/dashboard/equipas/_components/effective-day.tsx"
+      ],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "serverAction": 1,
+        "fallbackArray": 1
+      },
+      "action": "nenhuma",
+      "reason": "em uso: 1 consumidor(es)",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
       "path": "src/app/actions/equipas-r4.ts",
       "category": "server-action",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 4,
+      "consumers": 5,
       "consumerSample": [
         "src/__tests__/equipas-r4-carregar-dia-fail-closed.test.ts",
         "src/app/(dashboard)/dashboard/calendario/_components/team-allocation-modal.tsx",
@@ -13047,7 +13168,7 @@
         "revalidatePath": 5
       },
       "action": "nenhuma",
-      "reason": "em uso: 4 consumidor(es)",
+      "reason": "em uso: 5 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -16953,7 +17074,7 @@
       "category": "domain",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 35,
+      "consumers": 36,
       "consumerSample": [
         "src/__tests__/update-notice-modal.test.tsx",
         "src/__tests__/update-notices-eligibility.test.ts",
@@ -16968,7 +17089,7 @@
       "risks": [],
       "signals": {},
       "action": "nenhuma",
-      "reason": "em uso: 35 consumidor(es), configuração",
+      "reason": "em uso: 36 consumidor(es), configuração",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -17111,7 +17232,7 @@
       "category": "lib",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 25,
+      "consumers": 26,
       "consumerSample": [
         "src/__tests__/auth-revalidation-central.test.ts",
         "src/app/actions/absences.ts",
@@ -17132,7 +17253,7 @@
         "ignoredError": 1
       },
       "action": "nenhuma",
-      "reason": "em uso: 25 consumidor(es)",
+      "reason": "em uso: 26 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -17918,14 +18039,41 @@
       }
     },
     {
+      "path": "src/lib/equipas/ausencias.ts",
+      "category": "lib",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 5,
+      "consumerSample": [
+        "src/__tests__/equipas-ausencias-display.test.ts",
+        "src/__tests__/equipas-dia-espelho-race.test.tsx",
+        "src/app/(dashboard)/dashboard/equipas/_components/effective-day.tsx"
+      ],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {},
+      "action": "nenhuma",
+      "reason": "em uso: 5 consumidor(es)",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
       "path": "src/lib/equipas/tipos.ts",
       "category": "lib",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 2,
+      "consumers": 5,
       "consumerSample": [
+        "src/__tests__/equipas-dia-espelho-race.test.tsx",
         "src/app/(dashboard)/dashboard/calendario/_components/team-allocation-modal.tsx",
-        "src/app/actions/equipas-r4.ts"
+        "src/app/(dashboard)/dashboard/equipas/_components/effective-day.tsx"
       ],
       "autoLoaded": false,
       "referencedBy": [
@@ -17936,7 +18084,7 @@
       "risks": [],
       "signals": {},
       "action": "nenhuma",
-      "reason": "em uso: 2 consumidor(es), CI",
+      "reason": "em uso: 5 consumidor(es), CI",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -18219,7 +18367,7 @@
       "category": "lib",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 33,
+      "consumers": 35,
       "consumerSample": [
         "src/__tests__/lisbon-time.test.ts",
         "src/app/(app)/app/ausencias/_components/ausencias-client.tsx",
@@ -18233,7 +18381,7 @@
       "risks": [],
       "signals": {},
       "action": "nenhuma",
-      "reason": "em uso: 33 consumidor(es)",
+      "reason": "em uso: 35 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -19757,6 +19905,32 @@
     },
     {
       "path": "src/release-notes/2026-09-01-pagamentos-fixos-variaveis-paridade.ts",
+      "category": "src-other",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 1,
+      "consumerSample": [
+        "src/release-notes/index.ts"
+      ],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "sqlWrite": 1
+      },
+      "action": "nenhuma",
+      "reason": "em uso: 1 consumidor(es)",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/release-notes/2026-09-02-equipas-espelho-ausencias.ts",
       "category": "src-other",
       "status": "MANTER",
       "confidence": "alta",
