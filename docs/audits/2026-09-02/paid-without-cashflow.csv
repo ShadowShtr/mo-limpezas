@@ -1,0 +1,3 @@
+# STATUS=NO_FRESH_READ_ONLY_SELECT; counts are documented in historical-finance-summary.md
+id,kind,period_year,period_month,paid_at,amount,classification
+

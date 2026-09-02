@@ -1,0 +1,7 @@
+branch,sha,merged_into_master,ahead,behind,contains_unique_commits,last_commit,class
+_temp_ignore,e9b01db73e1bacb2c49a000c1867f846dbd248de,YES,0,0,NO,"Merge pull request #126 from ShadowShtr/hotfix/payment-competence-idempotent-edit",SAFE_TO_DELETE
+do-not-use,e9b01db73e1bacb2c49a000c1867f846dbd248de,YES,0,0,NO,"Merge pull request #126 from ShadowShtr/hotfix/payment-competence-idempotent-edit",SAFE_TO_DELETE
+ignore-me,e9b01db73e1bacb2c49a000c1867f846dbd248de,YES,0,0,NO,"Merge pull request #126 from ShadowShtr/hotfix/payment-competence-idempotent-edit",SAFE_TO_DELETE
+sanity-temp,e9b01db73e1bacb2c49a000c1867f846dbd248de,YES,0,0,NO,"Merge pull request #126 from ShadowShtr/hotfix/payment-competence-idempotent-edit",SAFE_TO_DELETE
+x-temp,e9b01db73e1bacb2c49a000c1867f846dbd248de,YES,0,0,NO,"Merge pull request #126 from ShadowShtr/hotfix/payment-competence-idempotent-edit",SAFE_TO_DELETE
+zzz-temp,e9b01db73e1bacb2c49a000c1867f846dbd248de,YES,0,0,NO,"Merge pull request #126 from ShadowShtr/hotfix/payment-competence-idempotent-edit",SAFE_TO_DELETE
