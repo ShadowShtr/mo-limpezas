@@ -6884,7 +6884,9 @@
       "consumers": 0,
       "consumerSample": [],
       "autoLoaded": false,
-      "referencedBy": [],
+      "referencedBy": [
+        "ci"
+      ],
       "sideEffects": [],
       "risks": [
         "service-role"
@@ -6898,7 +6900,7 @@
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
-        "cliEntrypoint": false,
+        "cliEntrypoint": true,
         "dynamicImport": true,
         "allClosed": false
       }
