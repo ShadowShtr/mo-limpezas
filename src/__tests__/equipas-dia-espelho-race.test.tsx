@@ -177,6 +177,59 @@ describe("Equipas — resposta obsoleta não escreve estado", () => {
     expect(input.value).toBe(DIA_B);
   });
 
+  it("A → B → C com respostas fora de ordem: fica sempre C", async () => {
+    // Três em voo, e a resolver na pior ordem possível: C, depois A, depois B.
+    // A ordem é controlada pelo teste, não por temporização — o defeito não se
+    // prova com sorte.
+    const DIA_C = "2026-09-12";
+    const pedidoA = adiada<{ ok: true; dia: DiaEspelho }>();
+    const pedidoB = adiada<{ ok: true; dia: DiaEspelho }>();
+    const pedidoC = adiada<{ ok: true; dia: DiaEspelho }>();
+    carregarDiaEspelho
+      .mockReturnValueOnce(pedidoA.promise)
+      .mockReturnValueOnce(pedidoB.promise)
+      .mockReturnValueOnce(pedidoC.promise);
+
+    const input = await montar();
+    await escolherData(input, DIA_B);
+    await escolherData(input, DIA_C);
+    expect(carregarDiaEspelho).toHaveBeenCalledTimes(3);
+
+    await act(async () => { pedidoC.resolve({ ok: true, dia: dia(DIA_C, "PESSOA_DE_C") }); });
+    expect(container.textContent).toContain("PESSOA_DE_C");
+
+    await act(async () => { pedidoA.resolve({ ok: true, dia: dia(DIA_A, "PESSOA_DE_A") }); });
+    await act(async () => { pedidoB.resolve({ ok: true, dia: dia(DIA_B, "PESSOA_DE_B") }); });
+
+    expect(container.textContent).toContain("PESSOA_DE_C");
+    expect(container.textContent).not.toContain("PESSOA_DE_A");
+    expect(container.textContent).not.toContain("PESSOA_DE_B");
+    expect(input.value).toBe(DIA_C);
+  });
+
+  it("o spinner não fica preso quando só chegam respostas obsoletas", async () => {
+    // Se uma resposta obsoleta desligasse o spinner, o ecrã dir-se-ia pronto
+    // com o pedido bom ainda a caminho. Se nenhuma o desligasse, ficaria preso
+    // para sempre. Tem de ser exactamente a última a mandar.
+    const pedidoA = adiada<{ ok: true; dia: DiaEspelho }>();
+    const pedidoB = adiada<{ ok: false; error: string }>();
+    carregarDiaEspelho
+      .mockReturnValueOnce(pedidoA.promise)
+      .mockReturnValueOnce(pedidoB.promise);
+
+    const input = await montar();
+    await escolherData(input, DIA_B);
+
+    const botao = () => container.querySelector('button[aria-label="Atualizar composição efetiva"]') as HTMLButtonElement;
+    await act(async () => { pedidoA.resolve({ ok: true, dia: dia(DIA_A, "PESSOA_DE_A") }); });
+    expect(botao().disabled, "resposta obsoleta não pode desligar o spinner").toBe(true);
+
+    // O pedido em curso falha — e é ele que tem direito a desligar o spinner.
+    await act(async () => { pedidoB.resolve({ ok: false, error: "FALHA_DE_B" }); });
+    expect(botao().disabled, "o pedido mais recente desliga o spinner, mesmo falhando").toBe(false);
+    expect(container.textContent).toContain("FALHA_DE_B");
+  });
+
   it("resposta obsoleta não desliga o spinner do pedido em curso", async () => {
     // Se `setLoading(false)` escapasse à guarda, o ecrã dir-se-ia carregado
     // enquanto o pedido bom ainda vinha a caminho.
