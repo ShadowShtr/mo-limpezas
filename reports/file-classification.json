@@ -1,14 +1,14 @@
 {
   "generatedBy": "scripts/audit-file-inventory.mjs",
-  "totalFiles": 818,
+  "totalFiles": 820,
   "byStatus": {
-    "MANTER": 795,
+    "MANTER": 797,
     "STANDBY": 23
   },
   "byCategory": {
     "test": 181,
     "route-ui": 138,
-    "migration": 104,
+    "migration": 106,
     "lib": 70,
     "script": 54,
     "domain": 52,
@@ -29,7 +29,7 @@
     "supabase-other": 2
   },
   "byConfidence": {
-    "alta": 797,
+    "alta": 799,
     "média": 15,
     "baixa": 6
   },
@@ -21842,6 +21842,24 @@
       "manualDecision": false
     },
     {
+      "path": "supabase/migrations/089_realtime_manual_charges.sql",
+      "category": "migration",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "sqlWrite": 4
+      },
+      "action": "nenhuma",
+      "reason": "migration versionada — histórico do schema, nunca se apaga",
+      "manualDecision": false
+    },
+    {
       "path": "supabase/migrations/20260608_new_features.sql",
       "category": "migration",
       "status": "MANTER",
@@ -22180,6 +22198,24 @@
       "signals": {
         "serviceRole": 1,
         "sqlWrite": 2
+      },
+      "action": "nenhuma",
+      "reason": "migration versionada — histórico do schema, nunca se apaga",
+      "manualDecision": false
+    },
+    {
+      "path": "supabase/migrations/rollback/089_realtime_manual_charges.down.sql",
+      "category": "migration",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "sqlWrite": 3
       },
       "action": "nenhuma",
       "reason": "migration versionada — histórico do schema, nunca se apaga",
