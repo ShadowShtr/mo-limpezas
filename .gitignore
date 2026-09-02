@@ -67,3 +67,7 @@ supabase/.temp/
 # versionado — ver docs/SNAPSHOT-T07-COMPATIBILIDADE.md.
 /tmp/
 *-snapshot.json
+
+# Estado local do CLI do Supabase — nunca deve ser versionado.
+supabase/.branches/
+supabase/.temp/
