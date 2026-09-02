@@ -58,6 +58,11 @@ scripts/_*.mjs
 
 # Supabase CLI — cache/estado local temporário (regenerado pelo CLI)
 supabase/.temp/
+# Estado local do CLI: qual a branch do Supabase que este checkout tem
+# seleccionada. Ja entrou uma vez numa feature branch por arrasto de um
+# `git add -A` depois de um `supabase start`, e nao pertence a historia
+# de nenhuma frente.
+supabase/.branches/
 
 # Backups de dados reais (export completo da BD) - nunca commitar
 /backups/
