@@ -4,7 +4,6 @@
  * A base e o runner são reais. O único erro injectado é o INSERT da linha
  * 088 no ledger; o wrapper não intercepta nenhuma query de schema.
  */
-import { spawnSync } from "node:child_process";
 import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -12,16 +11,15 @@ import pg from "pg";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { runMigrations } from "../../scripts/lib/migration-runner-core.mjs";
 import { checksumForNewMigration } from "../../scripts/lib/migration-checksum.mjs";
+import { startPostgresContainer, type PostgresContainer } from "./helpers/pg-container";
 
 const ROOT = process.cwd();
 const FILE = "088_payment_competence_idempotent_edit.sql";
 const PRESTATE_HASH = "fdb9af8955ad0252139f673cbdf5d21e";
 const POSTSTATE_HASH = "a227a222d9a94852c5b3e086a6a31c78";
 const CONTAINER = `mig088-${process.pid}`;
-let port = 0;
 let pool: pg.Pool;
-
-const docker = (args: string[]) => spawnSync("docker", args, { cwd: ROOT, encoding: "utf8" });
+let container: PostgresContainer;
 
 function baselineFromExistingPostgresSuite(): string {
   const source = readFileSync(join(ROOT, "src/__tests__/atomic-finance-mutations-postgres.test.ts"), "utf8");
@@ -29,14 +27,6 @@ function baselineFromExistingPostgresSuite(): string {
   const match = source.match(new RegExp("const BASELINE = " + tick + "([\\s\\S]*?)" + tick + ";"));
   if (!match) throw new Error("BASELINE PostgreSQL não encontrado.");
   return match[1];
-}
-
-async function waitForPostgres() {
-  for (let i = 0; i < 180; i++) {
-    if (docker(["exec", CONTAINER, "pg_isready", "-U", "postgres", "-d", "atomic"]).status === 0) return;
-    await new Promise((resolve) => setTimeout(resolve, 300));
-  }
-  throw new Error("PostgreSQL 17 não ficou pronto.");
 }
 
 async function applyPrestate() {
@@ -98,20 +88,22 @@ async function run088(failingLedger = false) {
 }
 
 beforeAll(async () => {
-  docker(["rm", "-f", CONTAINER]);
-  const started = docker(["run", "--rm", "-d", "--name", CONTAINER, "--memory=512m", "--memory-swap=512m", "--cpus=1", "--shm-size=64m", "-e", "POSTGRES_HOST_AUTH_METHOD=trust", "-e", "POSTGRES_DB=atomic", "-p", "127.0.0.1::5432", "postgres:17-alpine", "-c", "shared_buffers=16MB", "-c", "max_connections=20", "-c", "work_mem=1MB", "-c", "maintenance_work_mem=16MB"]);
-  if (started.status !== 0) throw new Error(started.stderr || started.stdout);
-  const mapping = docker(["port", CONTAINER, "5432/tcp"]).stdout.trim();
-  port = Number(mapping.slice(mapping.lastIndexOf(":") + 1));
-  await waitForPostgres();
-  pool = new pg.Pool({ host: "127.0.0.1", port, user: "postgres", database: "atomic", max: 4 });
+  container = await startPostgresContainer({
+    name: CONTAINER,
+    database: "atomic",
+    memory: "512m",
+    cpus: "1",
+    shmSize: "64m",
+    serverFlags: ["shared_buffers=16MB", "max_connections=20", "work_mem=1MB", "maintenance_work_mem=16MB"],
+  });
+  pool = new pg.Pool({ ...container.connection, max: 4 });
 }, 180_000);
 
 beforeEach(async () => { await applyPrestate(); });
 
 afterAll(async () => {
   await pool?.end();
-  docker(["rm", "-f", CONTAINER]);
+  container?.stop();
 });
 
 describe.sequential("088 — runner e prestate", () => {
