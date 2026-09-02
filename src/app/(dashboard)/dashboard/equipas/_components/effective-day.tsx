@@ -32,7 +32,10 @@ export function EquipasDiaEfetivo({ companyId, initialDate }: Props) {
     setLoading(false);
   }, [companyId]);
 
-  useEffect(() => { void load(date); }, [date, load]);
+  useEffect(() => {
+    const timer = window.setTimeout(() => { void load(date); }, 0);
+    return () => window.clearTimeout(timer);
+  }, [date, load]);
 
   const personById = new Map((dia?.pessoas ?? []).map((person) => [person.id, person]));
   const effective = dia?.efetiva ?? [];
