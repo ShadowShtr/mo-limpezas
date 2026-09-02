@@ -131,6 +131,7 @@ BEGIN
       AND p.kind = 'fixo'
       AND p.recurring IS TRUE
       AND p.recurrence_state = 'CONFIGURED'
+      AND p.source_id IS NULL
       AND p.recurrence_anchor_date <= v_month_end
   ), eligible AS (
     SELECT c.*,
@@ -166,9 +167,9 @@ BEGIN
       e.series_id, p_actor, e.expense_category_id,
       e.recurrence_interval_months, e.recurrence_anchor_date
     FROM eligible e
-    -- Se duas linhas legadas da mesma série forem configuradas por engano, o
-    -- unique index continua a ser a última barreira. Não escolhemos uma por
-    -- heurística; o conflito faz a transação falhar.
+    -- Só a linha-raiz (`source_id IS NULL`) é candidata. As linhas já
+    -- materializadas guardam a mesma identidade de série, mas não podem voltar
+    -- a gerar descendentes quando se atravessa um novo ano.
     RETURNING id, source_id, fixed_variable_payments.description,
               fixed_variable_payments.due_date
   )

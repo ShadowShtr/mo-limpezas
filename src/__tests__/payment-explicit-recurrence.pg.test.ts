@@ -14,10 +14,18 @@ let port = 0;
 let pool: pg.Pool;
 
 const COMPANY = "11111111-1111-4111-8111-111111111111";
+const OTHER_COMPANY = "22222222-2222-4222-8222-222222222222";
 const ACTOR = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 const ROOT_PAYMENT = "10000000-0000-4000-8000-000000000001";
+const OTHER_PAYMENT = "20000000-0000-4000-8000-000000000001";
+const NON_RECURRING_PAYMENT = "10000000-0000-4000-8000-000000000002";
 
 const docker = (args: string[]) => spawnSync("docker", args, { cwd: ROOT, encoding: "utf8" });
+
+function pgDate(value: Date | string): string {
+  const date = value instanceof Date ? value : new Date(value);
+  return [date.getFullYear(), String(date.getMonth() + 1).padStart(2, "0"), String(date.getDate()).padStart(2, "0")].join("-");
+}
 
 async function waitForPostgres() {
   for (let i = 0; i < 180; i++) {
@@ -61,10 +69,10 @@ async function baseline() {
     INSERT INTO public.fixed_variable_payments(
       id, company_id, kind, description, amount, due_date, recurring,
       period_year, period_month, created_by
-    ) VALUES (
-      '${ROOT_PAYMENT}', '${COMPANY}', 'fixo', 'Renda', 100, '2026-08-31', true,
-      2026, 8, '${ACTOR}'
-    );
+    ) VALUES
+      ('${ROOT_PAYMENT}', '${COMPANY}', 'fixo', 'Renda', 100, '2026-08-31', true, 2026, 8, '${ACTOR}'),
+      ('${OTHER_PAYMENT}', '${OTHER_COMPANY}', 'fixo', 'Outra renda', 80, '2026-08-31', true, 2026, 8, '${ACTOR}'),
+      ('${NON_RECURRING_PAYMENT}', '${COMPANY}', 'variavel', 'Compra única', 25, '2026-08-31', false, 2026, 8, '${ACTOR}');
   `);
 }
 
@@ -131,12 +139,26 @@ describe.sequential("089 — recorrência explícita", () => {
     expect(ledger.rows[0].checksum).toBe(checksumForNewMigration(readFileSync(join(ROOT, "supabase/migrations", FILE), "utf8")));
   });
 
+  it("distingue NOT_RECURRING e mantém isolamento por company", async () => {
+    expect((await run089()).exitCode).toBe(0);
+    const states = await pool.query("SELECT id, recurrence_state FROM public.fixed_variable_payments WHERE id IN ($1, $2) ORDER BY id", [ROOT_PAYMENT, NON_RECURRING_PAYMENT]);
+    expect(states.rows).toEqual([
+      { id: ROOT_PAYMENT, recurrence_state: "LEGACY_RECURRENCE_UNKNOWN" },
+      { id: NON_RECURRING_PAYMENT, recurrence_state: "NOT_RECURRING" },
+    ]);
+    await pool.query("UPDATE public.fixed_variable_payments SET recurrence_interval_months=1, recurrence_anchor_date='2026-08-31' WHERE id IN ($1, $2)", [ROOT_PAYMENT, OTHER_PAYMENT]);
+    const made = await pool.query("SELECT * FROM public.prepare_recurring_payments_month_atomic($1,2026,9,$2)", [COMPANY, ACTOR]);
+    expect(made.rows).toHaveLength(1);
+    const otherCompany = await pool.query("SELECT count(*)::int AS n FROM public.fixed_variable_payments WHERE company_id=$1 AND period_year=2026 AND period_month=9", [OTHER_COMPANY]);
+    expect(otherCompany.rows[0].n).toBe(0);
+  });
+
   it("mensal respeita dia âncora e clamp do fim do mês", async () => {
     expect((await run089()).exitCode).toBe(0);
     await pool.query("UPDATE public.fixed_variable_payments SET recurrence_interval_months=1, recurrence_anchor_date='2026-08-31' WHERE id=$1", [ROOT_PAYMENT]);
     const made = await pool.query("SELECT * FROM public.prepare_recurring_payments_month_atomic($1,2026,9,$2)", [COMPANY, ACTOR]);
     expect(made.rows).toHaveLength(1);
-    expect(String(made.rows[0].due_date).slice(0, 10)).toBe("2026-09-30");
+    expect(pgDate(made.rows[0].due_date)).toBe("2026-09-30");
   });
 
   it("trimestral só cai no mês correto e atravessa o ano", async () => {
@@ -145,10 +167,10 @@ describe.sequential("089 — recorrência explícita", () => {
     expect((await pool.query("SELECT * FROM public.prepare_recurring_payments_month_atomic($1,2026,10,$2)", [COMPANY, ACTOR])).rows).toHaveLength(0);
     const nov = await pool.query("SELECT * FROM public.prepare_recurring_payments_month_atomic($1,2026,11,$2)", [COMPANY, ACTOR]);
     expect(nov.rows).toHaveLength(1);
-    expect(String(nov.rows[0].due_date).slice(0, 10)).toBe("2026-11-30");
+    expect(pgDate(nov.rows[0].due_date)).toBe("2026-11-30");
     const fev = await pool.query("SELECT * FROM public.prepare_recurring_payments_month_atomic($1,2027,2,$2)", [COMPANY, ACTOR]);
     expect(fev.rows).toHaveLength(1);
-    expect(String(fev.rows[0].due_date).slice(0, 10)).toBe("2027-02-28");
+    expect(pgDate(fev.rows[0].due_date)).toBe("2027-02-28");
   });
 
   it("duplo clique e concorrência são idempotentes", async () => {
@@ -163,15 +185,15 @@ describe.sequential("089 — recorrência explícita", () => {
     expect(count.rows[0].n).toBe(1);
   });
 
-  it("falha de um candidato faz rollback do mês inteiro", async () => {
+  it("linhas materializadas não voltam a candidatar-se", async () => {
     expect((await run089()).exitCode).toBe(0);
     await pool.query("UPDATE public.fixed_variable_payments SET recurrence_interval_months=1, recurrence_anchor_date='2026-08-31' WHERE id=$1", [ROOT_PAYMENT]);
-    const second = "10000000-0000-4000-8000-000000000002";
-    await pool.query(`INSERT INTO public.fixed_variable_payments(id,company_id,kind,description,amount,due_date,recurring,period_year,period_month,source_id,recurrence_interval_months,recurrence_anchor_date)
-      VALUES($1,$2,'fixo','Duplicado de série',50,'2026-07-31',true,2026,7,$3,1,'2026-08-31')`, [second, COMPANY, ROOT_PAYMENT]);
-    await expect(pool.query("SELECT * FROM public.prepare_recurring_payments_month_atomic($1,2026,9,$2)", [COMPANY, ACTOR])).rejects.toThrow();
-    const count = await pool.query("SELECT count(*)::int AS n FROM public.fixed_variable_payments WHERE period_year=2026 AND period_month=9", []);
-    expect(count.rows[0].n).toBe(0);
+    const september = await pool.query("SELECT * FROM public.prepare_recurring_payments_month_atomic($1,2026,9,$2)", [COMPANY, ACTOR]);
+    const october = await pool.query("SELECT * FROM public.prepare_recurring_payments_month_atomic($1,2026,10,$2)", [COMPANY, ACTOR]);
+    expect(september.rows).toHaveLength(1);
+    expect(october.rows).toHaveLength(1);
+    const count = await pool.query("SELECT count(*)::int AS n FROM public.fixed_variable_payments WHERE source_id=$1", [ROOT_PAYMENT]);
+    expect(count.rows[0].n).toBe(2);
   });
 
   it("falha exclusiva do ledger reverte schema e função", async () => {

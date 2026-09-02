@@ -142,6 +142,11 @@ const CAPABILITY_CEILING: Record<string, string[]> = {
     "createPayment", "deletePayment",
     "setPaymentStatus", "updatePayment",
   ],
+  // A preparação recorrente é uma escrita nova e deliberada: só o botão de
+  // confirmação a dispara, depois de preview e confirmação explícitos.
+  "src/app/(dashboard)/dashboard/financeiro/pagamentos/_components/prepare-recurring-month.tsx": [
+    "configurePaymentRecurrence", "prepareRecurringPaymentsMonth",
+  ],
   // ── Pagamentos, vista unificada (2026-08-30) ──────────────────────────────
   //
   // 🔴 Sete capacidades, e o número por si só parece um alargamento. Não é:

@@ -2,7 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 import { requireProfile } from "@/lib/auth-guard";
-import { assertFinancialPeriodOpen } from "@/lib/finance-period-guard";
+import { assertFinancialPeriodOpen, type ClientePeriodo } from "@/lib/finance-period-guard";
+import { database089Client } from "@/types/database-089";
 
 export interface RecurrencePreviewItem {
   id: string;
@@ -65,7 +66,8 @@ export async function previewRecurringPaymentsMonth(
   if (month < 1 || month > 12 || year < 2000 || year > 2200) return { ok: false, error: "Período inválido." };
 
   const { admin, profile } = guard;
-  const { data, error } = await admin
+  const db089 = database089Client(admin);
+  const { data, error } = await db089
     .from("fixed_variable_payments")
     .select("id, source_id, description, amount, due_date, recurring, period_year, period_month, recurrence_interval_months, recurrence_anchor_date, recurrence_state")
     .eq("company_id", profile.company_id)
@@ -74,7 +76,7 @@ export async function previewRecurringPaymentsMonth(
     .order("description");
   if (error) return { ok: false, error: error.message };
 
-  const rows = (data ?? []) as unknown as PaymentRecurrenceRow[];
+  const rows = (data ?? []) as PaymentRecurrenceRow[];
   const existingSeries = new Set(
     rows
       .filter((row) => row.period_year === year && row.period_month === month)
@@ -122,12 +124,13 @@ export async function configurePaymentRecurrence(input: {
   const guard = await requireProfile({ roles: ["admin", "gestor"] });
   if (!guard.ok) return { ok: false, error: guard.error };
   const { admin, profile } = guard;
+  const db089 = database089Client(admin);
   if (!Number.isInteger(input.intervalMonths) || input.intervalMonths <= 0) {
     return { ok: false, error: "Periodicidade inválida." };
   }
   if (!/^\d{4}-\d{2}-\d{2}$/.test(input.anchorDate)) return { ok: false, error: "Data âncora inválida." };
 
-  const { data: payment, error: readError } = await admin
+  const { data: payment, error: readError } = await db089
     .from("fixed_variable_payments")
     .select("id, kind, recurring, period_year, period_month")
     .eq("company_id", profile.company_id)
@@ -139,15 +142,15 @@ export async function configurePaymentRecurrence(input: {
   }
 
   const periodDate = `${payment.period_year}-${String(payment.period_month).padStart(2, "0")}-01`;
-  const open = await assertFinancialPeriodOpen({ cliente: admin, companyId: profile.company_id, data: periodDate });
+  const open = await assertFinancialPeriodOpen({ cliente: admin as unknown as ClientePeriodo, companyId: profile.company_id, data: periodDate });
   if (!open.ok) return { ok: false, error: open.error };
 
-  const { error } = await admin
+  const { error } = await db089
     .from("fixed_variable_payments")
     .update({
       recurrence_interval_months: input.intervalMonths,
       recurrence_anchor_date: input.anchorDate,
-    } as never)
+    })
     .eq("company_id", profile.company_id)
     .eq("id", input.paymentId);
   if (error) return { ok: false, error: error.message };
@@ -165,7 +168,7 @@ export async function prepareRecurringPaymentsMonth(
   const { admin, profile } = guard;
 
   const targetDateValue = `${year}-${String(month).padStart(2, "0")}-01`;
-  const open = await assertFinancialPeriodOpen({ cliente: admin, companyId: profile.company_id, data: targetDateValue });
+  const open = await assertFinancialPeriodOpen({ cliente: admin as unknown as ClientePeriodo, companyId: profile.company_id, data: targetDateValue });
   if (!open.ok) return { ok: false, error: open.error };
 
   const { data, error } = await admin.rpc("prepare_recurring_payments_month_atomic", {
