@@ -113,7 +113,7 @@ const IGNORED_ERROR_CEILING: Record<string, number> = {
   "src/app/(dashboard)/dashboard/financeiro/page.tsx": 1,
   "src/app/(dashboard)/dashboard/relatorios/page.tsx": 1,
   "src/app/actions/cash-flow.ts": 3,
-  "src/app/actions/daily-billing.ts": 8,
+  "src/app/actions/daily-billing.ts": 0,
   "src/app/actions/financial-dashboard.ts": 2,
   // 13 → 6. Sete erros de consulta deixaram de ser ignorados em
   // `generateInvoices`: avenças, contratos ativos, locais de preço fixo,

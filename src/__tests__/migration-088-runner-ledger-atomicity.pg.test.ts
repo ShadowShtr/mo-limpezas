@@ -99,12 +99,12 @@ async function run088(failingLedger = false) {
 
 beforeAll(async () => {
   docker(["rm", "-f", CONTAINER]);
-  const started = docker(["run", "--rm", "-d", "--name", CONTAINER, "--memory=512m", "--memory-swap=512m", "--cpus=1", "--shm-size=64m", "-e", "POSTGRES_HOST_AUTH_METHOD=trust", "-e", "POSTGRES_DB=atomic", "-p", "127.0.0.1::5432", "postgres:17-alpine", "-c", "shared_buffers=16MB", "-c", "max_connections=20", "-c", "work_mem=1MB", "-c", "maintenance_work_mem=16MB"]);
+  const started = docker(["run", "--rm", "-d", "--name", CONTAINER, "--memory=384m", "--memory-swap=384m", "--cpus=0.5", "--shm-size=32m", "-e", "POSTGRES_HOST_AUTH_METHOD=trust", "-e", "POSTGRES_DB=atomic", "-p", "127.0.0.1::5432", "postgres:17-alpine", "-c", "shared_buffers=8MB", "-c", "max_connections=10", "-c", "work_mem=1MB", "-c", "maintenance_work_mem=8MB"]);
   if (started.status !== 0) throw new Error(started.stderr || started.stdout);
   const mapping = docker(["port", CONTAINER, "5432/tcp"]).stdout.trim();
   port = Number(mapping.slice(mapping.lastIndexOf(":") + 1));
   await waitForPostgres();
-  pool = new pg.Pool({ host: "127.0.0.1", port, user: "postgres", database: "atomic", max: 4 });
+  pool = new pg.Pool({ host: "127.0.0.1", port, user: "postgres", database: "atomic", max: 1 });
 }, 180_000);
 
 beforeEach(async () => { await applyPrestate(); });
