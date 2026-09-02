@@ -14,10 +14,8 @@ import {
   type HistoricoCliente,
 } from "@/domain/finance-v2/client-history";
 import type { FactoFatura, Fonte } from "@/domain/finance-v2/aggregate";
-
-function cents(value: number): number {
-  return Math.round(value * 100) / 100;
-}
+import { applyVat } from "@/domain/billing/vat";
+import { eurosToCents } from "@/domain/billing/money";
 
 export async function getClientFinancialHistory(
   input: { clientId: string; year: number },
@@ -66,21 +64,30 @@ export async function getClientFinancialHistory(
         })),
       };
 
-  const vatRate = Number(settingsResult.data?.vat_rate ?? 23);
+  if (settingsResult.error) return { ok: false, error: settingsResult.error.message };
+  const vatRate = Number(settingsResult.data?.vat_rate);
+  if (!Number.isFinite(vatRate) || vatRate < 0) {
+    return { ok: false, error: "Taxa de IVA indisponível." };
+  }
   const notas: Fonte<FactoNotaCobranca> = manualResult.error
     ? { ok: false, erro: manualResult.error.message }
     : {
         ok: true,
         factos: (manualResult.data ?? []).map((r) => {
           const base = Number(r.amount);
-          const total = cents(base * (r.apply_vat ? 1 + vatRate / 100 : 1));
+          const baseCents = eurosToCents(base);
+          if (baseCents == null) throw new Error("Montante da cobrança avulsa inválido.");
+          const total = applyVat(baseCents, {
+            applyVat: r.apply_vat,
+            ratePct: vatRate,
+          }).grossCents / 100;
           const explicit = r.paid_amount == null ? null : Number(r.paid_amount);
           const received = explicit != null
-            ? cents(explicit)
+            ? Math.round(explicit * 100) / 100
             : r.payment_status === "pago_total"
               ? total
               : r.payment_status === "sinal_50"
-                ? cents(total / 2)
+                ? Math.round(total * 50) / 100
                 : 0;
           return {
             id: r.id,
@@ -93,7 +100,6 @@ export async function getClientFinancialHistory(
         }),
       };
 
-  if (settingsResult.error) return { ok: false, error: settingsResult.error.message };
   return { ok: true, data: montarHistoricoCliente(faturas, input.clientId, input.year, undefined, notas) };
 }
 
