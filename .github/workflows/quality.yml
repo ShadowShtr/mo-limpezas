@@ -106,10 +106,10 @@ jobs:
         run: npm run lint:strict
 
       - name: Testes
-        # Os testes PostgreSQL reais lançam containers isolados. Dois workers
-        # mantêm a concorrência útil sem permitir que a matriz inteira de
-        # containers seja terminada pelo limite de recursos do runner.
-        run: npm test -- --maxWorkers=2 --minWorkers=2
+        # Os testes PostgreSQL reais lançam containers isolados com nomes
+        # próprios. Serializar os ficheiros impede colisões/terminações do
+        # Docker no runner sem desligar nenhum teste.
+        run: npm test -- --no-file-parallelism
 
       - name: Auditoria do código
         # Falha se aparecer um risco de confiança alta: artefacto capaz de
