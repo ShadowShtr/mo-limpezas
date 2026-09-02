@@ -1,35 +1,35 @@
 {
   "generatedBy": "scripts/audit-file-inventory.mjs",
-  "totalFiles": 816,
+  "totalFiles": 824,
   "byStatus": {
-    "MANTER": 793,
+    "MANTER": 801,
     "STANDBY": 23
   },
   "byCategory": {
-    "test": 179,
-    "route-ui": 137,
-    "migration": 108,
+    "test": 181,
+    "route-ui": 138,
+    "migration": 110,
     "lib": 69,
     "script": 54,
     "domain": 52,
     "doc": 45,
-    "server-action": 43,
+    "server-action": 44,
     "component": 30,
-    "src-other": 29,
+    "src-other": 30,
     "doc-historico": 16,
     "api-route": 16,
     "config": 12,
     "asset": 8,
     "report": 4,
     "script-historico": 4,
+    "types": 3,
     "other": 2,
     "ci": 2,
-    "types": 2,
     "sql-frozen": 2,
     "supabase-other": 2
   },
   "byConfidence": {
-    "alta": 795,
+    "alta": 803,
     "média": 15,
     "baixa": 6
   },
@@ -3071,7 +3071,7 @@
       "category": "script",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 11,
+      "consumers": 12,
       "consumerSample": [
         "scripts/lib/migration-reconciliation.mjs",
         "scripts/lib/migration-runner-core.mjs",
@@ -3174,7 +3174,7 @@
       "category": "script",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 11,
+      "consumers": 12,
       "consumerSample": [
         "scripts/lib/migration-drift-guard.mjs",
         "scripts/run-migrations.mjs",
@@ -5935,11 +5935,11 @@
       "category": "test",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 3,
+      "consumers": 4,
       "consumerSample": [
         "src/__tests__/financial-period-lock-protocol.pg.test.ts",
         "src/__tests__/migration-088-runner-ledger-atomicity.pg.test.ts",
-        "src/__tests__/pg-container-helper.test.ts"
+        "src/__tests__/payment-explicit-recurrence.pg.test.ts"
       ],
       "autoLoaded": false,
       "referencedBy": [],
@@ -6252,7 +6252,9 @@
       "consumers": 0,
       "consumerSample": [],
       "autoLoaded": false,
-      "referencedBy": [],
+      "referencedBy": [
+        "ci"
+      ],
       "sideEffects": [],
       "risks": [
         "service-role"
@@ -6266,7 +6268,7 @@
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
-        "cliEntrypoint": false,
+        "cliEntrypoint": true,
         "dynamicImport": true,
         "allClosed": false
       }
@@ -6917,6 +6919,62 @@
       "sideEffects": [],
       "risks": [],
       "signals": {},
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/__tests__/payment-explicit-recurrence.pg.test.ts",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [
+        "ci"
+      ],
+      "sideEffects": [],
+      "risks": [
+        "service-role"
+      ],
+      "signals": {
+        "serviceRole": 1,
+        "sqlWrite": 10
+      },
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": true,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/__tests__/payment-recurrence-explicit-runtime.test.ts",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [
+        "write"
+      ],
+      "risks": [],
+      "signals": {
+        "write": 3,
+        "sqlWrite": 3
+      },
       "action": "nenhuma",
       "reason": "suite de testes — corre por convenção do vitest",
       "manualDecision": false,
@@ -11521,6 +11579,32 @@
       }
     },
     {
+      "path": "src/app/(dashboard)/dashboard/financeiro/pagamentos/_components/prepare-recurring-month.tsx",
+      "category": "route-ui",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 1,
+      "consumerSample": [
+        "src/app/(dashboard)/dashboard/financeiro/pagamentos/page.tsx"
+      ],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "clientComponent": 1
+      },
+      "action": "nenhuma",
+      "reason": "em uso: 1 consumidor(es)",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
       "path": "src/app/(dashboard)/dashboard/financeiro/pagamentos/_components/unified-payments-client.tsx",
       "category": "route-ui",
       "status": "MANTER",
@@ -13513,6 +13597,37 @@
       },
       "action": "auditar atomicidade (T12/T13)",
       "reason": "em uso: 4 consumidor(es)",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/app/actions/payment-recurrence.ts",
+      "category": "server-action",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 1,
+      "consumerSample": [
+        "src/app/(dashboard)/dashboard/financeiro/pagamentos/_components/prepare-recurring-month.tsx"
+      ],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [
+        "revalidatePath(4)"
+      ],
+      "risks": [],
+      "signals": {
+        "serverAction": 1,
+        "sqlWrite": 1,
+        "fallbackArray": 1,
+        "revalidatePath": 4
+      },
+      "action": "nenhuma",
+      "reason": "em uso: 1 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -16295,6 +16410,7 @@
       ],
       "autoLoaded": false,
       "referencedBy": [
+        "ci",
         "docs"
       ],
       "sideEffects": [],
@@ -16303,11 +16419,11 @@
         "fallbackArray": 2
       },
       "action": "nenhuma",
-      "reason": "em uso: 10 consumidor(es)",
+      "reason": "em uso: 10 consumidor(es), CI",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
-        "cliEntrypoint": false,
+        "cliEntrypoint": true,
         "dynamicImport": true,
         "allClosed": false
       }
@@ -16981,7 +17097,7 @@
       "category": "domain",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 35,
+      "consumers": 36,
       "consumerSample": [
         "src/__tests__/update-notice-modal.test.tsx",
         "src/__tests__/update-notices-eligibility.test.ts",
@@ -16996,7 +17112,7 @@
       "risks": [],
       "signals": {},
       "action": "nenhuma",
-      "reason": "em uso: 35 consumidor(es), configuração",
+      "reason": "em uso: 36 consumidor(es), configuração",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -17139,7 +17255,7 @@
       "category": "lib",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 25,
+      "consumers": 26,
       "consumerSample": [
         "src/__tests__/auth-revalidation-central.test.ts",
         "src/app/actions/absences.ts",
@@ -17160,7 +17276,7 @@
         "ignoredError": 1
       },
       "action": "nenhuma",
-      "reason": "em uso: 25 consumidor(es)",
+      "reason": "em uso: 26 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -19810,6 +19926,32 @@
       }
     },
     {
+      "path": "src/release-notes/2026-09-02-pagamentos-recorrencia-explicita.ts",
+      "category": "src-other",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 1,
+      "consumerSample": [
+        "src/release-notes/index.ts"
+      ],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "sqlWrite": 1
+      },
+      "action": "nenhuma",
+      "reason": "em uso: 1 consumidor(es)",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
       "path": "src/release-notes/index.ts",
       "category": "src-other",
       "status": "MANTER",
@@ -19840,11 +19982,41 @@
       }
     },
     {
+      "path": "src/types/database-091.ts",
+      "category": "types",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 1,
+      "consumerSample": [
+        "src/app/actions/payment-recurrence.ts"
+      ],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [
+        "supabase"
+      ],
+      "risks": [],
+      "signals": {
+        "supabase": 1,
+        "sqlWrite": 4,
+        "unknownCast": 1
+      },
+      "action": "nenhuma",
+      "reason": "em uso: 1 consumidor(es)",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
       "path": "src/types/database.ts",
       "category": "types",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 25,
+      "consumers": 26,
       "consumerSample": [
         "src/__tests__/billing-boundaries.test.ts",
         "src/__tests__/contract-occurrences.test.ts",
@@ -19863,7 +20035,7 @@
         "sqlWrite": 89
       },
       "action": "nenhuma",
-      "reason": "em uso: 25 consumidor(es)",
+      "reason": "em uso: 26 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -21735,6 +21907,27 @@
       "manualDecision": false
     },
     {
+      "path": "supabase/migrations/091_payment_explicit_recurrence.sql",
+      "category": "migration",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [
+        "service-role"
+      ],
+      "signals": {
+        "serviceRole": 2,
+        "sqlWrite": 10
+      },
+      "action": "nenhuma",
+      "reason": "migration versionada — histórico do schema, nunca se apaga",
+      "manualDecision": false
+    },
+    {
       "path": "supabase/migrations/20260608_new_features.sql",
       "category": "migration",
       "status": "MANTER",
@@ -22109,6 +22302,24 @@
       "risks": [],
       "signals": {
         "sqlWrite": 3
+      },
+      "action": "nenhuma",
+      "reason": "migration versionada — histórico do schema, nunca se apaga",
+      "manualDecision": false
+    },
+    {
+      "path": "supabase/migrations/rollback/091_payment_explicit_recurrence.down.sql",
+      "category": "migration",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "sqlWrite": 8
       },
       "action": "nenhuma",
       "reason": "migration versionada — histórico do schema, nunca se apaga",

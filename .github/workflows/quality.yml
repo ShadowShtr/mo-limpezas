@@ -106,7 +106,18 @@ jobs:
         run: npm run lint:strict
 
       - name: Testes
-        run: npm test
+        # Os testes PostgreSQL reais das migrations 088 e 089 lançam os seus
+        # próprios servidores e devem correr isolados, para não disputar
+        # memória/conexões com a suite.
+        run: npm test -- --exclude=src/__tests__/migration-088-runner-ledger-atomicity.pg.test.ts --exclude=src/__tests__/payment-explicit-recurrence.pg.test.ts
+
+      - name: Teste PostgreSQL real da migration 088
+        # Não é um skip: a suite específica é executada explicitamente.
+        run: npm test -- src/__tests__/migration-088-runner-ledger-atomicity.pg.test.ts
+
+      - name: Teste PostgreSQL real da migration 091
+        # Não é um skip: a suite específica é executada explicitamente.
+        run: npm test -- src/__tests__/payment-explicit-recurrence.pg.test.ts
 
       - name: Auditoria do código
         # Falha se aparecer um risco de confiança alta: artefacto capaz de
