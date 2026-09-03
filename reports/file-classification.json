@@ -1,12 +1,12 @@
 {
   "generatedBy": "scripts/audit-file-inventory.mjs",
-  "totalFiles": 870,
+  "totalFiles": 871,
   "byStatus": {
-    "MANTER": 847,
+    "MANTER": 848,
     "STANDBY": 23
   },
   "byCategory": {
-    "test": 201,
+    "test": 202,
     "route-ui": 140,
     "migration": 122,
     "lib": 72,
@@ -29,7 +29,7 @@
     "supabase-other": 2
   },
   "byConfidence": {
-    "alta": 849,
+    "alta": 850,
     "média": 15,
     "baixa": 6
   },
@@ -6439,7 +6439,7 @@
       "category": "test",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 11,
+      "consumers": 12,
       "consumerSample": [
         "src/__tests__/bank-reconciliation-period-atomic.pg.test.ts",
         "src/__tests__/cashflow-period-atomic.pg.test.ts",
@@ -7860,6 +7860,30 @@
       "sideEffects": [],
       "risks": [],
       "signals": {},
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/__tests__/pgcrypto-extension-schema-parity.pg.test.ts",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "sqlWrite": 2
+      },
       "action": "nenhuma",
       "reason": "suite de testes — corre por convenção do vitest",
       "manualDecision": false,
