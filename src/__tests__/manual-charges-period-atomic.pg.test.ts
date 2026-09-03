@@ -551,6 +551,301 @@ describe("091 — concorrência writer vs fecho", () => {
   }, 120_000);
 });
 
+// ============================================================================
+// TRÊS períodos numa operação — o caso que o par não cobria
+// ============================================================================
+//
+// Receber uma cobrança que JÁ tem um movimento de caixa noutro mês toca em
+// três meses de uma vez:
+//
+//   · o mês da cobrança;
+//   · o mês do movimento que já lá está e vai ser reescrito;
+//   · o mês de hoje, que é a data nova desse movimento.
+//
+// A versão anterior desta migration bloqueava dois e descobria o terceiro
+// depois — dentro do ramo que remove o recebimento — e adquiria-o fora da
+// ordem canónica. É esse o defeito que estes casos fixam.
+describe("091 — N períodos numa só operação", () => {
+  /** Um movimento de caixa já existente para a cobrança, com data à escolha. */
+  const semearCaixa = (cobranca: string, data: string, valor = 50) =>
+    pool.query(
+      `INSERT INTO public.cash_flow_entries
+         (company_id, type, amount, description, category, date, reference_id, reference_type, status)
+       VALUES ($1, 'entrada', $2, 'semeado', 'faturacao', $3::date, $4, 'manual_charge', 'confirmado')`,
+      [EMPRESA, valor, data, cobranca],
+    );
+
+  const dataDoCaixa = async (cobranca: string) =>
+    (
+      await pool.query(
+        `SELECT to_char(date, 'YYYY-MM-DD') d FROM public.cash_flow_entries
+          WHERE reference_type = 'manual_charge' AND reference_id = $1`,
+        [cobranca],
+      )
+    ).rows[0]?.d as string | undefined;
+
+  it("receber uma cobrança com caixa NOUTRO mês protege os TRÊS meses", async () => {
+    const [anoHoje, mesHoje] = await mesDeHoje();
+    const cobranca = await semearCobranca("2026-01-15");
+    await semearCaixa(cobranca, "2026-02-10");
+
+    // Os três são distintos: Janeiro (cobrança), Fevereiro (caixa antigo) e o
+    // mês corrente (data nova do movimento).
+    expect([2026, 1]).not.toEqual([anoHoje, mesHoje]);
+    expect([2026, 2]).not.toEqual([anoHoje, mesHoje]);
+
+    const c = await ligacao();
+    await c.query("BEGIN");
+    await c.query("SELECT * FROM public.set_manual_charge_payment_atomic($1, $2, 'pago_total', NULL, $3)", [
+      EMPRESA,
+      cobranca,
+      ACTOR,
+    ]);
+
+    // Enquanto a transação vive, NENHUM dos três fecha.
+    const fechos = await Promise.all(
+      ([[2026, 1], [2026, 2], [anoHoje, mesHoje]] as const).map(async ([ano, mes]) => {
+        const f = await ligacao();
+        return { f, p: f.query("SELECT * FROM public.close_financial_period_atomic($1, $2, $3, $4)", [EMPRESA, ano, mes, ACTOR]) };
+      }),
+    );
+    await new Promise((r) => setTimeout(r, 400));
+
+    const abertos = await pool.query(
+      `SELECT count(*)::int n FROM public.financial_periods WHERE status = 'closed'`,
+    );
+    expect(abertos.rows[0].n).toBe(0);
+
+    await c.query("COMMIT");
+    await Promise.all(fechos.map(({ p }) => p.catch(() => null)));
+    await Promise.all(fechos.map(({ f }) => f.end()));
+    await c.end();
+  }, 120_000);
+
+  it("🔴 o mês do CAIXA ANTIGO fechado ⇒ ZERO ESCRITA nos dois lados", async () => {
+    const cobranca = await semearCobranca("2026-01-15");
+    await semearCaixa(cobranca, "2026-02-10");
+    await fechar(2026, 2);
+
+    await expect(
+      pool.query("SELECT * FROM public.set_manual_charge_payment_atomic($1, $2, 'pago_total', NULL, $3)", [
+        EMPRESA,
+        cobranca,
+        ACTOR,
+      ]),
+    ).rejects.toThrow(/FINANCIAL_PERIOD_CLOSED: 2026-02/);
+
+    // Nem a cobrança nem o movimento antigo mudaram.
+    const { rows } = await pool.query("SELECT payment_status, paid_amount FROM public.manual_charges WHERE id = $1", [
+      cobranca,
+    ]);
+    expect(rows[0].payment_status).toBe("nao_informado");
+    expect(rows[0].paid_amount).toBeNull();
+    expect(await dataDoCaixa(cobranca)).toBe("2026-02-10");
+    expect(await nCaixa()).toBe(1);
+  }, 120_000);
+
+  it("🔴 RETIRAR o recebimento com o mês do movimento fechado ⇒ ZERO ESCRITA", async () => {
+    const cobranca = await semearCobranca("2026-01-15");
+    await semearCaixa(cobranca, "2026-02-10");
+    await pool.query(
+      "UPDATE public.manual_charges SET payment_status = 'pago_total', paid_amount = 50, paid_at = now() WHERE id = $1",
+      [cobranca],
+    );
+    await fechar(2026, 2);
+
+    await expect(
+      pool.query("SELECT * FROM public.set_manual_charge_payment_atomic($1, $2, 'nao_informado', NULL, $3)", [
+        EMPRESA,
+        cobranca,
+        ACTOR,
+      ]),
+    ).rejects.toThrow(/FINANCIAL_PERIOD_CLOSED: 2026-02/);
+
+    expect(await nCaixa()).toBe(1);
+    const { rows } = await pool.query("SELECT payment_status FROM public.manual_charges WHERE id = $1", [cobranca]);
+    expect(rows[0].payment_status).toBe("pago_total");
+  }, 120_000);
+
+  it("retirar o recebimento NÃO exige o mês corrente aberto — nada é escrito com a data de hoje", async () => {
+    // Uma correcção de um recebimento errado não pode ficar refém do fecho do
+    // mês em que ela é feita: a operação só apaga movimentos com datas
+    // próprias, e não escreve nada datado de hoje.
+    const [anoHoje, mesHoje] = await mesDeHoje();
+    const cobranca = await semearCobranca("2026-01-15");
+    await semearCaixa(cobranca, "2026-02-10");
+    await pool.query(
+      "UPDATE public.manual_charges SET payment_status = 'pago_total', paid_amount = 50, paid_at = now() WHERE id = $1",
+      [cobranca],
+    );
+    await fechar(anoHoje, mesHoje);
+
+    await pool.query("SELECT * FROM public.set_manual_charge_payment_atomic($1, $2, 'nao_informado', NULL, $3)", [
+      EMPRESA,
+      cobranca,
+      ACTOR,
+    ]);
+
+    expect(await nCaixa()).toBe(0);
+    const { rows } = await pool.query("SELECT payment_status, paid_amount FROM public.manual_charges WHERE id = $1", [
+      cobranca,
+    ]);
+    expect(rows[0].payment_status).toBe("nao_informado");
+    expect(rows[0].paid_amount).toBeNull();
+  }, 120_000);
+
+  it("🔴 RECEBER com o mês corrente fechado continua a ser recusado", async () => {
+    // A contrapartida do caso anterior: quando há dinheiro a entrar HOJE, o mês
+    // de hoje é economicamente relevante e tem de estar aberto.
+    const [anoHoje, mesHoje] = await mesDeHoje();
+    const cobranca = await semearCobranca("2026-01-15");
+    await fechar(anoHoje, mesHoje);
+
+    await expect(
+      pool.query("SELECT * FROM public.set_manual_charge_payment_atomic($1, $2, 'pago_total', NULL, $3)", [
+        EMPRESA,
+        cobranca,
+        ACTOR,
+      ]),
+    ).rejects.toThrow(/FINANCIAL_PERIOD_CLOSED/);
+    expect(await nCaixa()).toBe(0);
+  }, 120_000);
+
+  it("ordens de descoberta inversas em simultâneo: deadlock zero", async () => {
+    // Duas cobranças cujos conjuntos de períodos são o MESMO, mas descobertos
+    // por ordens opostas: uma tem a cobrança em Janeiro e o caixa em Fevereiro,
+    // a outra o inverso. Se a ordem de aquisição fosse a ordem de descoberta,
+    // isto era um ciclo de espera.
+    const c1 = await semearCobranca("2026-01-15");
+    await semearCaixa(c1, "2026-02-10");
+    const c2 = await semearCobranca("2026-02-15");
+    await semearCaixa(c2, "2026-01-10");
+
+    const receber = async (cobranca: string, marca: string) => {
+      const c = await ligacao();
+      try {
+        await c.query("BEGIN");
+        await c.query("SELECT * FROM public.set_manual_charge_payment_atomic($1, $2, 'pago_total', NULL, $3)", [
+          EMPRESA,
+          cobranca,
+          ACTOR,
+        ]);
+        await new Promise((r) => setTimeout(r, 200));
+        await c.query("COMMIT");
+        return marca;
+      } finally {
+        await c.end();
+      }
+    };
+
+    const r = await Promise.all([receber(c1, "T1"), receber(c2, "T2")]);
+    expect(r).toEqual(["T1", "T2"]);
+    expect(await nCaixa()).toBe(2);
+  }, 120_000);
+
+  it("nenhum lock de período é adquirido depois da primeira escrita", async () => {
+    // A prova estrutural do protocolo: quando a operação começa a escrever, o
+    // conjunto de locks da transação já está completo. Se aparecesse um lock
+    // novo a seguir, era o defeito de volta com outra roupa.
+    const cobranca = await semearCobranca("2026-01-15");
+    await semearCaixa(cobranca, "2026-02-10");
+
+    const c = await ligacao();
+    await c.query("BEGIN");
+    await c.query("SELECT * FROM public.set_manual_charge_payment_atomic($1, $2, 'pago_total', NULL, $3)", [
+      EMPRESA,
+      cobranca,
+      ACTOR,
+    ]);
+    const [anoHoje, mesHoje] = await mesDeHoje();
+    const { rows } = await c.query(
+      `SELECT objid::bigint AS chave FROM pg_locks
+        WHERE locktype = 'advisory' AND pid = pg_backend_pid() ORDER BY objid`,
+    );
+    const chaves = rows.map((r) => Number(r.chave));
+    expect(chaves).toEqual([...new Set([202601, 202602, anoHoje * 100 + mesHoje])].sort((a, b) => a - b));
+    await c.query("ROLLBACK");
+    await c.end();
+  }, 120_000);
+});
+
+// ============================================================================
+// Cross-company — o `service_role` passa por cima do RLS, esta guarda não
+// ============================================================================
+//
+// Estas RPCs correm pelo `createAdminClient()`. Nenhuma política de RLS as
+// trava. A pergunta «este cliente é desta empresa?» tem de ser respondida
+// dentro da função, e é isso que se prova aqui.
+describe("091 — CROSS_COMPANY_WRITE = 0", () => {
+  const CLIENTE_ALHEIO = "dddddddd-dddd-4ddd-8ddd-dddddddddddd";
+
+  beforeEach(async () => {
+    await pool.query("INSERT INTO public.clients (id, company_id, name) VALUES ($1, $2, 'Cliente de B')", [
+      CLIENTE_ALHEIO,
+      OUTRA,
+    ]);
+  });
+
+  it("🔴 criar com cliente de OUTRA empresa é recusado, e não escreve nada", async () => {
+    await expect(
+      pool.query(
+        "SELECT * FROM public.create_manual_charge_atomic($1, $2, '2026-09-10'::date, 'alheia', 100, true, NULL, $3)",
+        [EMPRESA, CLIENTE_ALHEIO, ACTOR],
+      ),
+    ).rejects.toThrow(/MANUAL_CHARGE_CLIENT_FOREIGN/);
+
+    expect(await nCobrancas()).toBe(0);
+  }, 120_000);
+
+  it("🔴 e recusa ANTES de tocar no período — a guarda não depende do mês", async () => {
+    // Com o mês fechado a recusa viria de qualquer maneira. O que interessa é
+    // que com o mês ABERTO também vem, e é esta a única razão pela qual vem.
+    await expect(
+      pool.query(
+        "SELECT * FROM public.create_manual_charge_atomic($1, $2, '2026-09-10'::date, 'alheia', 100, true, NULL, $3)",
+        [EMPRESA, CLIENTE_ALHEIO, ACTOR],
+      ),
+    ).rejects.toThrow(/MANUAL_CHARGE_CLIENT_FOREIGN/);
+    expect(await nCobrancas()).toBe(0);
+  }, 120_000);
+
+  it("🔴 editar para um cliente de OUTRA empresa é recusado", async () => {
+    const cobranca = await semearCobranca("2026-09-10");
+
+    await expect(
+      pool.query("SELECT * FROM public.update_manual_charge_atomic($1, $2, $3::jsonb, $4)", [
+        EMPRESA,
+        cobranca,
+        JSON.stringify({ client_id: CLIENTE_ALHEIO }),
+        ACTOR,
+      ]),
+    ).rejects.toThrow(/MANUAL_CHARGE_CLIENT_FOREIGN/);
+
+    const { rows } = await pool.query("SELECT client_id FROM public.manual_charges WHERE id = $1", [cobranca]);
+    expect(rows[0].client_id).toBe(CLIENTE);
+  }, 120_000);
+
+  it("um cliente inexistente é recusado pela mesma guarda, e não pela chave estrangeira", async () => {
+    // A diferença importa: a FK dá um erro de constraint depois de a função ter
+    // chegado ao INSERT. A guarda recusa antes, com nome próprio.
+    await expect(
+      pool.query(
+        "SELECT * FROM public.create_manual_charge_atomic($1, $2, '2026-09-10'::date, 'fantasma', 100, true, NULL, $3)",
+        [EMPRESA, "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee", ACTOR],
+      ),
+    ).rejects.toThrow(/MANUAL_CHARGE_CLIENT_FOREIGN/);
+    expect(await nCobrancas()).toBe(0);
+  }, 120_000);
+
+  it("o cliente da própria empresa continua a passar", async () => {
+    await pool.query(
+      "SELECT * FROM public.create_manual_charge_atomic($1, $2, '2026-09-10'::date, 'legítima', 100, true, NULL, $3)",
+      [EMPRESA, CLIENTE, ACTOR],
+    );
+    expect(await nCobrancas()).toBe(1);
+  }, 120_000);
+});
+
 describe("091 — superfície", () => {
   const FUNCOES: ReadonlyArray<readonly [string, string]> = [
     ["create_manual_charge_atomic", "uuid, uuid, date, text, numeric, boolean, text, uuid"],

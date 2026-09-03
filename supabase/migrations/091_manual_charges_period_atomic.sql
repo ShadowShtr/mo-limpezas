@@ -32,7 +32,7 @@
 -- outro — que é a definição do problema resolvido.
 --
 -- ---------------------------------------------------------------------------
--- 🔴 Duas datas, e não uma
+-- 🔴 Até TRÊS datas, e não uma
 -- ---------------------------------------------------------------------------
 --
 -- A tentação é assumir `payment date == charge date`. Não é o que a 086 faz:
@@ -42,10 +42,15 @@
 --     `(now() AT TIME ZONE 'Europe/Lisbon')::date` — a data em que o dinheiro
 --     entrou.
 --
--- Uma cobrança de Julho recebida em Agosto move dinheiro em Agosto. Os DOIS
--- meses são economicamente relevantes, e é por isso que `set_manual_charge_
--- payment_atomic` bloqueia o par e não um só — mesmo quando calham no mesmo
--- mês, caso em que `lock_financial_periods_pair` faz um lock só.
+-- Uma cobrança de Julho recebida em Agosto move dinheiro em Agosto. E retirar
+-- esse recebimento em Setembro apaga um movimento de Agosto a partir de
+-- Setembro: um TERCEIRO mês entra em jogo, e só se descobre depois de olhar
+-- para o caixa que já lá está.
+--
+-- Por isso `set_manual_charge_payment_atomic` não bloqueia um par: monta o
+-- conjunto completo de datas da operação e entrega-o de uma vez ao protocolo
+-- de N períodos da 090, que ordena, deduplica e adquire tudo antes de validar.
+-- Datas que caiam no mesmo mês dão um lock lógico só.
 --
 -- ---------------------------------------------------------------------------
 -- Compatibilidade — EXPAND FIRST
@@ -76,6 +81,8 @@ BEGIN
     FROM (VALUES
       ('assert_financial_period_open_locked',       'p_company_id uuid, p_year integer, p_month integer'),
       ('assert_financial_periods_open_locked_pair', 'p_company_id uuid, p_year_a integer, p_month_a integer, p_year_b integer, p_month_b integer'),
+      ('assert_financial_periods_open_locked_many', 'p_company_id uuid, p_keys integer[]'),
+      ('assert_financial_period_dates_open_locked', 'p_company_id uuid, p_dates date[]'),
       ('set_manual_charge_payment_atomic',          'p_company_id uuid, p_charge_id uuid, p_status text, p_paid_amount numeric, p_actor uuid'),
       ('update_manual_charge_atomic',               'p_company_id uuid, p_charge_id uuid, p_patch jsonb, p_actor uuid'),
       ('void_manual_charge_atomic',                 'p_company_id uuid, p_charge_id uuid, p_actor uuid')
@@ -92,6 +99,13 @@ BEGIN
 
   IF to_regclass('public.manual_charges') IS NULL THEN
     RAISE EXCEPTION 'MANUAL_CHARGES_PERIOD_091_PRECONDITION_FAILED: tabela manual_charges ausente';
+  END IF;
+
+  -- `clients` entra nas precondições porque a validação de empresa do cliente
+  -- passa a viver aqui: sem a tabela, a guarda não existiria e a função
+  -- escreveria na mesma.
+  IF to_regclass('public.clients') IS NULL THEN
+    RAISE EXCEPTION 'MANUAL_CHARGES_PERIOD_091_PRECONDITION_FAILED: tabela clients ausente';
   END IF;
 END
 $precondicoes$;
@@ -136,6 +150,30 @@ BEGIN
   -- constraint. Aqui a recusa tem nome próprio, como as outras da 086.
   IF p_amount IS NULL OR p_amount <= 0 THEN
     RAISE EXCEPTION 'MANUAL_CHARGE_AMOUNT_INVALID' USING ERRCODE = 'check_violation';
+  END IF;
+
+  -- 🔴 O cliente TEM de ser da empresa — e quem responde por isso é esta
+  --    função, não o RLS.
+  --
+  --    Esta RPC é chamada pelo `createAdminClient()`, ou seja pelo
+  --    `service_role`, que passa por cima de qualquer política. Uma validação
+  --    que só exista em RLS não é validação nenhuma neste caminho. E a guarda
+  --    na server action — «o cliente pertence ao profile.company_id» — continua
+  --    a ser certa, mas é a guarda de UM chamador: qualquer outro que apareça,
+  --    ou um `p_company_id` trocado por engano, escreveria uma cobrança de uma
+  --    empresa contra o cliente de outra, com o extracto do cliente errado a
+  --    passar a incluir dinheiro que nunca foi dele.
+  --
+  --    A chave estrangeira de `manual_charges.client_id` garante que o cliente
+  --    EXISTE. Não garante que seja desta empresa — é essa a diferença que esta
+  --    verificação fecha, e é a razão de ela viver na base.
+  IF NOT EXISTS (
+    SELECT 1 FROM public.clients c
+     WHERE c.id = p_client_id AND c.company_id = p_company_id
+  ) THEN
+    RAISE EXCEPTION 'MANUAL_CHARGE_CLIENT_FOREIGN'
+      USING ERRCODE = 'raise_exception',
+            HINT = 'O cliente indicado nao pertence a esta empresa.';
   END IF;
 
   IF p_actor IS NOT NULL THEN
@@ -275,6 +313,19 @@ BEGIN
             HINT = 'Esta cobranca ja tem recebimento. Remova-o antes de mudar o cliente.';
   END IF;
 
+  -- A mesma regra da criação: um `client_id` novo tem de ser desta empresa.
+  -- Sem isto, a edição seria a porta que a criação fechou.
+  IF (p_patch ? 'client_id')
+     AND (p_patch->>'client_id') IS DISTINCT FROM v_chg.client_id::text
+     AND NOT EXISTS (
+       SELECT 1 FROM public.clients c
+        WHERE c.id = (p_patch->>'client_id')::uuid AND c.company_id = p_company_id
+     ) THEN
+    RAISE EXCEPTION 'MANUAL_CHARGE_CLIENT_FOREIGN'
+      USING ERRCODE = 'raise_exception',
+            HINT = 'O cliente indicado nao pertence a esta empresa.';
+  END IF;
+
   UPDATE public.manual_charges
      SET description = COALESCE(p_patch->>'description', description),
          charge_date = COALESCE((p_patch->>'charge_date')::date, charge_date),
@@ -289,16 +340,66 @@ BEGIN
 END;
 $fn$;
 
--- ─── 3. Recebimento, com o período da cobrança E o do caixa ─────────────────
+-- ─── 3. Recebimento, com TODOS os períodos que a operação toca ──────────────
 --
 -- `CREATE OR REPLACE` da função da 086, preservando toda a lógica de estados,
 -- de coerência estado/valor, do IVA por `company_settings`, do `ON CONFLICT`
 -- parcial da 024 e da remoção do movimento quando o recebimento é retirado.
 --
--- 🔴 Os DOIS períodos. A cobrança pertence a `charge_date`; o movimento de
---    caixa nasce com a data de hoje em Lisboa. Uma cobrança de Julho recebida
---    em Agosto toca em Julho e em Agosto, e fechar qualquer um dos dois tem de
---    impedir a operação inteira.
+-- ---------------------------------------------------------------------------
+-- 🔴 Três períodos, não dois — e todos conhecidos ANTES do primeiro lock
+-- ---------------------------------------------------------------------------
+--
+-- As datas economicamente relevantes desta operação são até três:
+--
+--   · `charge_date` — o mês do facto;
+--   · a data de HOJE em Lisboa — o mês em que o dinheiro entra, e só quando
+--     de facto vai entrar um movimento;
+--   · a data de CADA movimento de caixa que já existe ligado a esta cobrança,
+--     que foi criado noutro dia e pode ser um TERCEIRO mês.
+--
+-- A versão anterior desta função bloqueava o par (cobrança + hoje) e só
+-- DEPOIS, dentro do ramo que remove o recebimento, descobria e bloqueava o mês
+-- do movimento antigo. Isso é adquirir um subconjunto antes de conhecer o
+-- conjunto — precisamente o que reintroduz o deadlock:
+--
+--     T1 tem Julho, Agosto  →  descobre Setembro  →  pede Setembro
+--     T2 tem Agosto, Julho  →  descobre Setembro  →  pede Setembro
+--
+-- Aqui o conjunto inteiro é montado primeiro e entregue de uma vez a
+-- `assert_financial_period_dates_open_locked`, que ordena, deduplica e adquire
+-- tudo por ordem canónica antes de validar seja o que for.
+--
+-- ---------------------------------------------------------------------------
+-- 🔴 Ler `cash_flow_entries` ANTES do lock de período é seguro — e porquê
+-- ---------------------------------------------------------------------------
+--
+-- A premissa não é «ninguém escreve ali»: é que todo o writer dos movimentos
+-- de caixa ligados a esta cobrança passa primeiro por
+-- `SELECT ... FROM manual_charges ... FOR UPDATE` sobre a MESMA linha. São
+-- três, e são todos deste ficheiro: esta função, `update_manual_charge_atomic`
+-- e `void_manual_charge_atomic`. Enquanto esta transação segura a linha,
+-- nenhum deles chega a ler, quanto mais a escrever.
+--
+-- Logo, a lista de datas lida sob o lock de linha é a lista que ainda vai
+-- existir quando os locks de período forem adquiridos. E, mesmo que a premissa
+-- viesse a partir-se por um writer novo, o DELETE final é o mesmo predicado do
+-- SELECT: um movimento que aparecesse depois seria apagado sem o seu mês estar
+-- trancado, e é essa a razão de a premissa ter de ser mantida por quem
+-- acrescentar writers — não uma nota de conveniência.
+--
+-- Nenhuma escrita acontece antes de todos os períodos estarem trancados e
+-- validados.
+--
+-- ---------------------------------------------------------------------------
+-- 🔴 HOJE só entra no conjunto quando HOJE recebe alguma coisa
+-- ---------------------------------------------------------------------------
+--
+-- Retirar um recebimento não escreve nada com a data de hoje: apaga movimentos
+-- que têm datas próprias. Trancar o mês corrente nesse caso não protegeria
+-- nada e recusaria uma operação legítima — não se pode corrigir um recebimento
+-- errado só porque o mês corrente já fechou. O valor a receber é conhecido
+-- antes de qualquer lock, portanto a decisão é exacta e não uma aproximação.
 CREATE OR REPLACE FUNCTION public.set_manual_charge_payment_atomic(
   p_company_id  uuid,
   p_charge_id   uuid,
@@ -317,7 +418,8 @@ DECLARE
   v_total    numeric := 0;
   v_recebido numeric := 0;
   v_data_caixa date := (now() AT TIME ZONE 'Europe/Lisbon')::date;
-  v_data_mov date;
+  v_datas_caixa date[];
+  v_datas date[];
 BEGIN
   IF p_status NOT IN ('nao_informado', 'sinal_50', 'pago_total') THEN
     RAISE EXCEPTION 'MANUAL_CHARGE_STATUS_INVALID: %', p_status
@@ -357,26 +459,18 @@ BEGIN
     RAISE EXCEPTION 'MANUAL_CHARGE_NOT_FOUND' USING ERRCODE = 'no_data_found';
   END IF;
 
-  -- 🔴 Os dois períodos, trancados antes de qualquer escrita.
-  --
-  --    `payment date == charge date` é falso neste domínio: o movimento de
-  --    caixa usa a data de hoje. Quando calham no mesmo mês,
-  --    `lock_financial_periods_pair` faz um lock só.
-  PERFORM public.assert_financial_periods_open_locked_pair(
-    p_company_id,
-    EXTRACT(YEAR  FROM v_chg.charge_date)::integer,
-    EXTRACT(MONTH FROM v_chg.charge_date)::integer,
-    EXTRACT(YEAR  FROM v_data_caixa)::integer,
-    EXTRACT(MONTH FROM v_data_caixa)::integer
-  );
-
-  -- Uma cobrança anulada não recebe dinheiro.
+  -- Uma cobrança anulada não recebe dinheiro. Recusar aqui — antes dos locks de
+  -- período — evita serializar meses para depois não fazer nada.
   IF v_chg.voided_at IS NOT NULL THEN
     RAISE EXCEPTION 'MANUAL_CHARGE_VOIDED'
       USING ERRCODE = 'object_not_in_prerequisite_state',
             HINT = 'Esta cobranca foi anulada e nao aceita recebimentos.';
   END IF;
 
+  -- ── O valor, calculado antes dos locks ────────────────────────────────────
+  --
+  -- Não é optimização: é o que torna exacta a decisão de incluir, ou não, o mês
+  -- corrente no conjunto de períodos. Nada disto escreve.
   IF p_paid_amount IS NOT NULL THEN
     v_recebido := p_paid_amount;
   ELSIF p_status IN ('sinal_50', 'pago_total') THEN
@@ -397,6 +491,23 @@ BEGIN
     RAISE EXCEPTION 'MANUAL_CHARGE_STATUS_AMOUNT_INCOHERENT: % sem valor a receber', p_status
       USING ERRCODE = 'check_violation';
   END IF;
+
+  -- ── O conjunto COMPLETO de períodos, e só depois os locks ─────────────────
+  --
+  -- Lido sob o `FOR UPDATE` da cobrança, pelas razões acima.
+  SELECT array_agg(c.date) INTO v_datas_caixa
+    FROM public.cash_flow_entries c
+   WHERE c.company_id     = p_company_id
+     AND c.reference_type = 'manual_charge'
+     AND c.reference_id   = p_charge_id;
+
+  v_datas := ARRAY[v_chg.charge_date] || COALESCE(v_datas_caixa, ARRAY[]::date[]);
+
+  IF v_recebido > 0 THEN
+    v_datas := v_datas || v_data_caixa;
+  END IF;
+
+  PERFORM public.assert_financial_period_dates_open_locked(p_company_id, v_datas);
 
   UPDATE public.manual_charges
      SET payment_status = p_status,
@@ -428,27 +539,8 @@ BEGIN
                   date   = EXCLUDED.date,
                   status = 'confirmado';
   ELSE
-    -- 🔴 Retirar o recebimento apaga um movimento que pode ser de OUTRO mês.
-    --
-    --    O par acima trancou o mês da cobrança e o de HOJE. Mas o movimento a
-    --    apagar foi criado quando o dinheiro entrou, e essa data pode ser
-    --    anterior às duas — apagar dinheiro de um mês fechado é exactamente o
-    --    que o protocolo existe para impedir. Tranca-se o mês de cada
-    --    movimento que vai desaparecer, antes de o apagar.
-    FOR v_data_mov IN
-      SELECT c.date
-        FROM public.cash_flow_entries c
-       WHERE c.company_id     = p_company_id
-         AND c.reference_type = 'manual_charge'
-         AND c.reference_id   = p_charge_id
-    LOOP
-      PERFORM public.assert_financial_period_open_locked(
-        p_company_id,
-        EXTRACT(YEAR  FROM v_data_mov)::integer,
-        EXTRACT(MONTH FROM v_data_mov)::integer
-      );
-    END LOOP;
-
+    -- Os meses destes movimentos já vêm trancados de cima, junto com todos os
+    -- outros. Não há aquisição de lock a partir daqui.
     DELETE FROM public.cash_flow_entries
      WHERE company_id = p_company_id
        AND reference_type = 'manual_charge'

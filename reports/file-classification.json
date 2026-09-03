@@ -6366,13 +6366,16 @@
       "consumerSample": [],
       "autoLoaded": false,
       "referencedBy": [],
-      "sideEffects": [],
+      "sideEffects": [
+        "supabase"
+      ],
       "risks": [
         "service-role"
       ],
       "signals": {
-        "serviceRole": 4,
-        "sqlWrite": 13
+        "supabase": 1,
+        "serviceRole": 5,
+        "sqlWrite": 18
       },
       "action": "nenhuma",
       "reason": "suite de testes — corre por convenção do vitest",
@@ -22051,13 +22054,16 @@
       "consumerSample": [],
       "autoLoaded": false,
       "referencedBy": [],
-      "sideEffects": [],
+      "sideEffects": [
+        "supabase"
+      ],
       "risks": [
         "service-role"
       ],
       "signals": {
-        "serviceRole": 4,
-        "sqlWrite": 12
+        "supabase": 1,
+        "serviceRole": 5,
+        "sqlWrite": 15
       },
       "action": "nenhuma",
       "reason": "migration versionada — histórico do schema, nunca se apaga",
