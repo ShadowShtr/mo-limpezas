@@ -40,6 +40,7 @@ import { nota as calendarioCartoesBrancos } from "./2026-08-31-calendario-cartoe
 import { nota as equipasGuardamEmLote } from "./2026-09-01-equipas-guardam-em-lote";
 import { nota as pagamentosFixosVariaveisParidade } from "./2026-09-01-pagamentos-fixos-variaveis-paridade";
 import { nota as edicaoPagamentosSegura } from "./2026-09-01-edicao-pagamentos-segura";
+import { nota as clientesPesquisaContratos } from "./2026-09-02-clientes-pesquisa-contratos";
 import { nota as equipasEspelhoAusencias } from "./2026-09-02-equipas-espelho-ausencias";
 
 export const RELEASE_NOTES: ReleaseNote[] = [
@@ -68,6 +69,7 @@ export const RELEASE_NOTES: ReleaseNote[] = [
   equipasGuardamEmLote,
   pagamentosFixosVariaveisParidade,
   edicaoPagamentosSegura,
+  clientesPesquisaContratos,
   equipasEspelhoAusencias,
 ];
 
