@@ -284,3 +284,11 @@ public.cash_flow_entries.revision = ausente
 É a mesma família de drift que `docs/LEDGER-RECONCILIATION-PENDING.md` já
 regista. A 094 agora adota explicitamente a RPC órfã, sem promover a sua origem
 desconhecida a uma migration histórica.
+
+## Revalidação do runtime final — 2026-09-03
+
+O schema canónico mantém `SCHEMA_WRITERS_LOCKED = 29/29`. A branch final de
+runtime roteia `25/29` writers através das RPCs atómicas, incluindo fecho e
+reabertura de períodos. Os quatro entrypoints de `manual_charges` não existem
+no master atual; por isso `FIN_PERIOD_DOMAIN_COMPLETE = NO` e não se declara a
+entrega financeira completa.
