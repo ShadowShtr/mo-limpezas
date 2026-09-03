@@ -93,7 +93,8 @@ beforeAll(async () => {
       scheduled_start timestamptz NOT NULL, scheduled_end timestamptz NOT NULL, hourly_rate numeric,
       calculated_value numeric, apply_vat boolean, num_people integer, status text, cleaning_type text,
       payment_status text, upholstery_type text, upholstery_notes text, upholstery_units numeric,
-      upholstery_unit_price numeric, is_exception boolean DEFAULT false, contract_synced_at timestamptz,
+      upholstery_unit_price numeric, original_date date NULL,
+      is_exception boolean NOT NULL DEFAULT false, contract_synced_at timestamptz NULL,
       created_by uuid REFERENCES profiles(id)
     );
     CREATE TABLE audit_logs (
@@ -111,6 +112,32 @@ afterAll(async () => {
 
 describe("RPC candidata de intervenções em PostgreSQL real", () => {
   beforeEach(resetData, 30_000);
+
+  it("mantém no fixture a forma mínima exigida de services", async () => {
+    const result = await query<{
+      column_name: string;
+      data_type: string;
+      is_nullable: string;
+      column_default: string | null;
+    }>(
+      "SELECT column_name,data_type,is_nullable,column_default FROM information_schema.columns WHERE table_schema='public' AND table_name='services' AND column_name=ANY($1::text[]) ORDER BY column_name",
+      [["original_date", "is_exception", "contract_synced_at"]],
+    );
+    expect(result.rows).toHaveLength(3);
+    expect(result.rows.find((row) => row.column_name === "original_date")).toMatchObject({
+      data_type: "date",
+      is_nullable: "YES",
+    });
+    expect(result.rows.find((row) => row.column_name === "is_exception")).toMatchObject({
+      data_type: "boolean",
+      is_nullable: "NO",
+    });
+    expect(result.rows.find((row) => row.column_name === "is_exception")?.column_default).toContain("false");
+    expect(result.rows.find((row) => row.column_name === "contract_synced_at")).toMatchObject({
+      data_type: "timestamp with time zone",
+      is_nullable: "YES",
+    });
+  }, 30_000);
 
   it("faz commit conjunto de contrato, equipa, data, horário e auditoria", async () => {
     await call();

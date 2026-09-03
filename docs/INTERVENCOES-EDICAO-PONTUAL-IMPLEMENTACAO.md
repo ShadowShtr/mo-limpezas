@@ -12,6 +12,50 @@ LOCAL_HEAD = 14cdbf523752aed39b59c633a2b92c3127ac24e4
 WORKTREE_STATUS = limpo no início; alterações isoladas na branch de intervenção
 ```
 
+## Revalidacao dos gates #145/#146
+
+```text
+MASTER_SHA = 1daec61b26c41dccd64e103b4a7c73c3cc65682a
+
+PR145_OLD_HEAD = dee1cf42285c91165d07720cc45f912cd5a66dbd
+PR145_NEW_HEAD = b1810695d238f4d6bc4b54549f95b5d96ad31842
+PR145_FUNCTIONAL_CODE_CHANGED = NO
+PR145_GENERATED_FILES = reports/file-classification.json, reports/code-audit.json
+PR145_SECOND_GENERATION_DIFF = 0; hashes identicos
+PR145_CI = IN_PROGRESS apos novo push
+PR145_MERGED = NO
+
+PR146_OLD_HEAD = 16d1406d13e7f90c7ce3fc13d3deb46bd9369b6d
+PR146_NEW_HEAD = PENDING_COMMIT
+PR146_PREVIOUS_FAILURE_CLASSIFICATION = TEST_PRESTATE_INCOMPLETE
+PR146_DB_FIRST_REQUIRED = YES
+PR146_NOT_MERGEABLE_UNTIL_SCHEMA_NUMBERED_AND_APPLIED = YES
+PR146_MIGRATION_NUMBER = NONE
+
+RPC_TABLE_DEPENDENCIES = contracts, locations, teams, services, audit_logs
+RPC_COLUMN_DEPENDENCIES = contract revision/patch fields; location hourly_rate; team company_id; services scheduling, financial, status, is_exception, contract_synced_at; audit_logs actor/meta
+RPC_CONSTRAINT_DEPENDENCIES = company/location/team/service/audit foreign keys; services status/is_exception guards
+RPC_TRIGGER_DEPENDENCIES = NONE_IDENTIFIED_IN_CANDIDATE_SQL
+RPC_FUNCTION_DEPENDENCIES = jsonb_array_elements, regexp_replace, hashtextextended, now, jsonb_build_object
+
+TEST_PRESTATE_SCOPE = services.original_date date NULL; services.is_exception boolean NOT NULL DEFAULT false; services.contract_synced_at timestamptz NULL; required foreign keys and RPC columns
+PR146_FIXTURE_FIXED = YES
+PR146_POSTGRES = PASS
+PR146_POSTGRES_TESTS = 8/8
+PR146_POSTGRES_REQUIRED_SKIPPED = 0
+PR146_TYPECHECK = PASS
+PR146_DIFF_CHECK = PASS
+
+PRODUCTION_SCHEMA_READ = confirmed: original_date date nullable; is_exception boolean NOT NULL DEFAULT false; contract_synced_at timestamptz nullable
+PRODUCTION_WRITES = 0
+PRODUCTION_MIGRATIONS = 0
+MERGES = 0
+MANUAL_DEPLOYS = 0
+
+BLOCKER = #146 remains DB_FIRST_REQUIRED; candidate SQL is unnumbered and unapplied. #145 awaits CI and technical direction.
+NEXT_RECOMMENDED_ACTION = technical direction reviews the new heads and CI; no merge or migration in this round
+```
+
 Foram lidos `AGENTS.md`, `CLAUDE.md`, a auditoria anterior e todos os `.md` do projeto. `INSTRUCOES_OPERACIONAIS_DO_PROJETO.md` não existe neste checkout.
 
 ## A — Client search
