@@ -19,12 +19,12 @@ Foram lidos `AGENTS.md`, `CLAUDE.md`, a auditoria anterior e todos os `.md` do p
 ```text
 CLIENT_SEARCH_BASE = 1daec61b26c41dccd64e103b4a7c73c3cc65682a
 CLIENT_SEARCH_BRANCH = feat/contratos-cliente-pesquisavel
-CLIENT_SEARCH_HEAD = e9b01db73e1bacb2c49a000c1867f846dbd248de
+CLIENT_SEARCH_HEAD = dee1cf42285c91165d07720cc45f912cd5a66dbd
 CLIENT_SEARCH_PR = não aberta
 
 FILE_OVERLAP_DETECTED = YES
 REUSE_EXISTING_COMPONENT = não decidido
-CLIENT_SEARCH = não integrado nesta ronda; worktree separado contém alterações não integradas
+CLIENT_SEARCH = implementado e revalidado em branch separada
 ACCENT_INSENSITIVE = não revalidado nesta branch
 CLIENT_SELECTION = não revalidado nesta branch
 LOCAL_RESET = não revalidado nesta branch
@@ -33,9 +33,9 @@ COPY_MODE = não revalidado nesta branch
 FIXED_CLIENT = não revalidado nesta branch
 KEYBOARD_MOBILE = não revalidado nesta branch
 
-CLIENT_SEARCH_TESTS = não executados nesta branch
+CLIENT_SEARCH_TESTS = 26/26
 CLIENT_SEARCH_CI = não aguardado
-CLIENT_SEARCH_READY = NO — overlap no mesmo sheet.tsx; Parte A parada conforme direção
+CLIENT_SEARCH_READY = YES localmente; push/PR pendentes de autenticação GitHub
 ```
 
 O worktree `feat/contratos-cliente-pesquisavel` permanece intocado por esta implementação.
@@ -45,7 +45,7 @@ O worktree `feat/contratos-cliente-pesquisavel` permanece intocado por esta impl
 ```text
 INTERVENTION_BASE = 1daec61b26c41dccd64e103b4a7c73c3cc65682a
 INTERVENTION_BRANCH = fix/intervencao-edicao-pontual
-INTERVENTION_HEAD = 3f1ea64 (commit de implementação + prova PostgreSQL real)
+INTERVENTION_HEAD = 786e6ce (último estado validado antes deste relatório)
 INTERVENTION_PR = não aberta; push bloqueado por SEC_E_NO_CREDENTIALS
 
 AUDIT_ROOT_CAUSE_RECONFIRMED = YES
@@ -202,9 +202,12 @@ CLIENT_SEARCH_IMPLEMENTED = YES
 CLIENT_SEARCH_BRANCH = feat/contratos-cliente-pesquisavel
 CLIENT_SEARCH_HEAD = 46fe901
 CLIENT_SEARCH_TESTS = 26/26
-CLIENT_SEARCH_BUILD = não executado nesta branch
+CLIENT_SEARCH_BUILD = BLOCKED_ENVIRONMENT — mesmo prebuild npm EACCES ao obter tsx
 CLIENT_SEARCH_PUSH = bloqueado por SEC_E_NO_CREDENTIALS
 CLIENT_SEARCH_PR = não aberta
+
+CLIENT_SEARCH_PATCH_BACKUP = C:\Users\tecno\Documents\Codex\2026-08-31\mol\handoff-artifacts\contratos-2026-09-03-final\patches
+CLIENT_SEARCH_BUNDLE_BACKUP = C:\Users\tecno\Documents\Codex\2026-08-31\mol\handoff-artifacts\contratos-2026-09-03-final\contratos.bundle
 
 PRODUCTION_WRITES = 0
 PRODUCTION_MIGRATIONS = 0
