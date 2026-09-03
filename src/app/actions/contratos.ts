@@ -21,7 +21,7 @@ export interface ContratoInput {
   weekdays: number[] | null;
   schedule_days: ScheduleDay[];
   starts_on: string;
-  ends_on?: string;
+  ends_on?: string | null;
   status: string;
   notes?: string;
   cleaning_type?: string | null;

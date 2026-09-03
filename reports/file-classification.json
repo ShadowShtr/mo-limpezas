@@ -1,8 +1,8 @@
 {
   "generatedBy": "scripts/audit-file-inventory.mjs",
-  "totalFiles": 824,
+  "totalFiles": 825,
   "byStatus": {
-    "MANTER": 801,
+    "MANTER": 802,
     "STANDBY": 23
   },
   "byCategory": {
@@ -14,7 +14,7 @@
     "domain": 52,
     "doc": 45,
     "server-action": 44,
-    "src-other": 31,
+    "src-other": 32,
     "component": 30,
     "doc-historico": 16,
     "api-route": 16,
@@ -29,7 +29,7 @@
     "supabase-other": 2
   },
   "byConfidence": {
-    "alta": 803,
+    "alta": 804,
     "média": 15,
     "baixa": 6
   },
@@ -17148,7 +17148,7 @@
       "category": "domain",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 37,
+      "consumers": 38,
       "consumerSample": [
         "src/__tests__/update-notice-modal.test.tsx",
         "src/__tests__/update-notices-eligibility.test.ts",
@@ -17163,7 +17163,7 @@
       "risks": [],
       "signals": {},
       "action": "nenhuma",
-      "reason": "em uso: 37 consumidor(es), configuração",
+      "reason": "em uso: 38 consumidor(es), configuração",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -17945,11 +17945,11 @@
       "category": "lib",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 4,
+      "consumers": 5,
       "consumerSample": [
+        "src/__tests__/contrato-sheet-fields.test.ts",
         "src/__tests__/reversao-guards.test.ts",
-        "src/app/actions/clientes.ts",
-        "src/app/actions/contratos.ts"
+        "src/app/actions/clientes.ts"
       ],
       "autoLoaded": false,
       "referencedBy": [
@@ -17961,7 +17961,7 @@
         "sqlWrite": 2
       },
       "action": "nenhuma",
-      "reason": "em uso: 4 consumidor(es)",
+      "reason": "em uso: 5 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -20031,6 +20031,32 @@
     },
     {
       "path": "src/release-notes/2026-09-02-equipas-espelho-ausencias.ts",
+      "category": "src-other",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 1,
+      "consumerSample": [
+        "src/release-notes/index.ts"
+      ],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "sqlWrite": 1
+      },
+      "action": "nenhuma",
+      "reason": "em uso: 1 consumidor(es)",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/release-notes/2026-09-03-intervencoes-sem-data-de-fim.ts",
       "category": "src-other",
       "status": "MANTER",
       "confidence": "alta",
