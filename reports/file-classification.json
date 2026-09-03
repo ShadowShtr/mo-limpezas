@@ -21905,7 +21905,7 @@
       "signals": {
         "supabase": 1,
         "serviceRole": 13,
-        "sqlWrite": 5
+        "sqlWrite": 9
       },
       "action": "nenhuma",
       "reason": "migration versionada — histórico do schema, nunca se apaga",
