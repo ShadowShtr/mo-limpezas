@@ -113,6 +113,54 @@ BEGIN
 END
 $precondicoes$;
 
+-- ─── 🔴 A colisão de nome que uma leitura de produção encontrou ─────────────
+--
+-- `set_invoice_status_atomic` é nova NESTE repositório. Não é nova na BASE.
+--
+-- Uma leitura read-only de produção (2026-09-03) encontrou lá uma função com
+-- este nome e outra assinatura:
+--
+--     set_invoice_status_atomic(
+--       p_invoice_id uuid, p_company_id uuid, p_actor uuid, p_status text,
+--       p_payment_method text, p_mutation_id uuid, p_expected_revision integer
+--     ) RETURNS jsonb  —  SECURITY DEFINER
+--
+-- Vem da linha F14/078 («domain mutation, change event e sequência»), que vive
+-- na PR #74 e NÃO está no master. Usa `public.domain_mutations` para
+-- idempotência e `invoices.revision` para bloqueio optimista — duas coisas que
+-- existem na base e em migration nenhuma deste repositório.
+--
+-- 🔴 O que aconteceria sem esta guarda, e é o pior desfecho possível:
+--
+--    O PostgreSQL não substituiria nada. Assinaturas diferentes dão uma
+--    SOBRECARGA — passariam a existir DUAS funções com o mesmo nome. O runtime
+--    continuaria a chamar a antiga, sem protecção de período, e o ecrã diria
+--    que a migration correu bem. Uma segunda verdade sobre a mesma operação, e
+--    silenciosa.
+--
+-- Por isso esta migration RECUSA aplicar-se sobre uma base que tenha uma versão
+-- que ela não conhece. Reconciliar as duas exige decidir o que fazer à
+-- idempotência por `domain_mutations` e ao `expected_revision` — e isso é uma
+-- decisão de arquitectura, não uma linha de SQL a mais.
+DO $colisao$
+DECLARE
+  v_outras text[];
+BEGIN
+  SELECT array_agg(pg_get_function_identity_arguments(p.oid)) INTO v_outras
+    FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+   WHERE n.nspname = 'public'
+     AND p.proname = 'set_invoice_status_atomic'
+     AND pg_get_function_identity_arguments(p.oid)
+         <> 'p_company_id uuid, p_invoice_id uuid, p_status text, p_paid_on date, p_payment_method text, p_actor uuid';
+
+  IF v_outras IS NOT NULL THEN
+    RAISE EXCEPTION
+      'INVOICES_PERIOD_094_SIGNATURE_COLLISION: já existe set_invoice_status_atomic com outra assinatura — %. Aplicar esta migration criaria uma SOBRECARGA e deixaria o runtime a chamar a versão sem protecção de período. Reconcilie a linha F14/078 primeiro.',
+      v_outras;
+  END IF;
+END
+$colisao$;
+
 -- ─── 1. Criar a fatura, sob o lock da emissão E do período facturado ────────
 --
 -- `CREATE OR REPLACE` da função da 072, com tudo o que ela fazia preservado.

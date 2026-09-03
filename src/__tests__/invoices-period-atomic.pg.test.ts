@@ -616,6 +616,34 @@ describe("094 — superfície", () => {
     }
   }, 120_000);
 
+  it("🔴 recusa aplicar-se sobre uma base que já tenha `set_invoice_status_atomic` com outra assinatura", async () => {
+    // Uma leitura read-only de produção (2026-09-03) encontrou lá esta função
+    // com sete argumentos, `RETURNS jsonb` e `SECURITY DEFINER` — a versão da
+    // linha F14/078, que vive na PR #74 e não no master.
+    //
+    // Sem esta guarda, o PostgreSQL não substituiria nada: criaria uma
+    // SOBRECARGA. Passariam a existir duas funções com o mesmo nome, o runtime
+    // continuaria a chamar a antiga — sem protecção de período — e a migration
+    // diria que correu bem.
+    await pool.query(`
+      CREATE OR REPLACE FUNCTION public.set_invoice_status_atomic(
+        p_invoice_id uuid, p_company_id uuid, p_actor uuid, p_status text,
+        p_payment_method text DEFAULT NULL, p_mutation_id uuid DEFAULT gen_random_uuid(),
+        p_expected_revision integer DEFAULT NULL
+      ) RETURNS jsonb LANGUAGE sql SECURITY DEFINER AS 'SELECT ''{}''::jsonb';
+    `);
+
+    const sql = readFileSync(join(ROOT, "supabase/migrations/094_invoices_period_atomic.sql"), "utf8");
+    await expect(pool.query(sql)).rejects.toThrow(/094_SIGNATURE_COLLISION/);
+
+    // E a versão estranha continua lá, intacta: a migration não lhe tocou.
+    const { rows } = await pool.query(
+      `SELECT count(*)::int n FROM pg_proc p JOIN pg_namespace n2 ON n2.oid = p.pronamespace
+        WHERE n2.nspname = 'public' AND p.proname = 'set_invoice_status_atomic'`,
+    );
+    expect(rows[0].n).toBe(2);
+  }, 120_000);
+
   it("a precondição recusa se a fundação 090 não estiver aplicada", async () => {
     await pool.query("DROP FUNCTION IF EXISTS public.assert_financial_period_dates_open_locked(uuid, date[]) CASCADE");
     const sql = readFileSync(join(ROOT, "supabase/migrations/094_invoices_period_atomic.sql"), "utf8");
