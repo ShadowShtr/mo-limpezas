@@ -2,6 +2,7 @@
 
 import { requireProfile } from "@/lib/auth-guard";
 import { auditLog } from "@/lib/audit";
+import { readBankCashflowResult } from "@/lib/atomic-rpc-results";
 import { isValidCashFlowAmount } from "@/lib/cash-flow-integrity";
 import { generateSuggestions } from "@/lib/bank-import/reconcile-db";
 import { revalidatePath } from "next/cache";
@@ -446,7 +447,7 @@ export async function createEntryFromTransaction(bankTransactionId: string, opts
   const category = (opts?.category ?? (tx.direction === "credit" ? "faturacao" : "despesa")) as
     "faturacao" | "salario" | "despesa" | "fornecedor" | "outro";
 
-  const { error: entryErr } = await admin.rpc("create_cashflow_from_bank_transaction_atomic", {
+  const { data: linhas, error: entryErr } = await admin.rpc("create_cashflow_from_bank_transaction_atomic", {
     p_company_id: companyId,
     p_bank_tx_id: bankTransactionId,
     p_category: category,
@@ -454,10 +455,21 @@ export async function createEntryFromTransaction(bankTransactionId: string, opts
   });
   if (entryErr) return { ok: false, error: entryErr.message };
 
+  // A entidade criada é o MOVIMENTO DE CAIXA, e é o id dele que a auditoria
+  // tem de referir. Registar aqui o `bankTransactionId` apontava o registo
+  // para uma linha que esta operação não criou — quem fosse seguir o rasto
+  // do movimento não o encontrava. O `match_id` acompanha como metadado.
+  const criado = readBankCashflowResult(linhas);
+  if (!criado.ok) return criado;
+
   await auditLog({
     companyId, actorId: guard.profile.id, action: "bank_entry_created",
-    entityType: "cash_flow_entry", entityId: bankTransactionId,
-    meta: { bank_transaction_id: bankTransactionId }, source: "dashboard",
+    entityType: "cash_flow_entry", entityId: criado.entryId,
+    meta: {
+      bank_transaction_id: bankTransactionId,
+      match_id: criado.matchId,
+    },
+    source: "dashboard",
   }, admin);
 
   revalidatePath(RECON_PATH);

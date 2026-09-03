@@ -1,12 +1,12 @@
 {
   "generatedBy": "scripts/audit-file-inventory.mjs",
-  "totalFiles": 870,
+  "totalFiles": 872,
   "byStatus": {
-    "MANTER": 847,
+    "MANTER": 849,
     "STANDBY": 23
   },
   "byCategory": {
-    "test": 201,
+    "test": 202,
     "route-ui": 140,
     "migration": 122,
     "lib": 72,
@@ -14,7 +14,7 @@
     "domain": 52,
     "doc": 46,
     "server-action": 44,
-    "src-other": 33,
+    "src-other": 34,
     "component": 30,
     "doc-historico": 16,
     "api-route": 16,
@@ -29,7 +29,7 @@
     "supabase-other": 2
   },
   "byConfidence": {
-    "alta": 849,
+    "alta": 851,
     "média": 15,
     "baixa": 6
   },
@@ -549,7 +549,7 @@
       ],
       "signals": {
         "serviceRole": 1,
-        "sqlWrite": 25,
+        "sqlWrite": 26,
         "todo": 1
       },
       "action": "nenhuma",
@@ -5617,6 +5617,30 @@
       "signals": {
         "serviceRole": 3,
         "sqlWrite": 5
+      },
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/__tests__/fin-period-runtime-inventory.test.ts",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "sqlWrite": 1
       },
       "action": "nenhuma",
       "reason": "suite de testes — corre por convenção do vitest",
@@ -13440,21 +13464,21 @@
       "sideEffects": [
         "supabase",
         "write",
-        "revalidatePath(8)"
+        "revalidatePath(6)"
       ],
       "risks": [
-        "erro-de-query-ignorado(5)"
+        "erro-de-query-ignorado(4)"
       ],
       "signals": {
-        "supabase": 19,
+        "supabase": 18,
         "serverAction": 1,
-        "write": 10,
-        "sqlWrite": 13,
+        "write": 6,
+        "sqlWrite": 10,
         "unknownCast": 1,
-        "ignoredError": 5,
+        "ignoredError": 4,
         "fallbackZero": 1,
-        "fallbackArray": 2,
-        "revalidatePath": 8
+        "fallbackArray": 1,
+        "revalidatePath": 6
       },
       "action": "auditar atomicidade (T12/T13)",
       "reason": "em uso: 3 consumidor(es)",
@@ -17737,7 +17761,7 @@
       "category": "domain",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 39,
+      "consumers": 40,
       "consumerSample": [
         "src/__tests__/update-notice-modal.test.tsx",
         "src/__tests__/update-notices-eligibility.test.ts",
@@ -17752,7 +17776,7 @@
       "risks": [],
       "signals": {},
       "action": "nenhuma",
-      "reason": "em uso: 39 consumidor(es), configuração",
+      "reason": "em uso: 40 consumidor(es), configuração",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -17853,7 +17877,7 @@
       "category": "lib",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 19,
+      "consumers": 20,
       "consumerSample": [
         "src/__tests__/audit.test.ts",
         "src/app/(dashboard)/dashboard/calendario/_actions/reschedule.ts",
@@ -17881,7 +17905,7 @@
         "consoleErr": 2
       },
       "action": "nenhuma",
-      "reason": "em uso: 19 consumidor(es), script npm, CI, configuração",
+      "reason": "em uso: 20 consumidor(es), script npm, CI, configuração",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -20698,6 +20722,32 @@
     },
     {
       "path": "src/release-notes/2026-09-03-correcao-guardar-intervencoes.ts",
+      "category": "src-other",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 1,
+      "consumerSample": [
+        "src/release-notes/index.ts"
+      ],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "sqlWrite": 1
+      },
+      "action": "nenhuma",
+      "reason": "em uso: 1 consumidor(es)",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/release-notes/2026-09-03-historico-clientes-preservado.ts",
       "category": "src-other",
       "status": "MANTER",
       "confidence": "alta",

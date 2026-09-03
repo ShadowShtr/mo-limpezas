@@ -3,6 +3,8 @@
 import { requireProfile } from "@/lib/auth-guard";
 import { revalidatePath } from "next/cache";
 import { addDaysToDateString, toLisbonTimestamp } from "@/lib/lisbon-time";
+import { auditLog } from "@/lib/audit";
+import { readServicePaymentResult } from "@/lib/atomic-rpc-results";
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 
@@ -219,7 +221,22 @@ async function _setServicePayment(
     return { ok: false, error: "Valor recebido inválido." };
   }
 
-  const { error } = await admin.rpc("set_service_payment_atomic", {
+  // O estado ANTERIOR tem de ser lido antes da RPC: depois dela já não existe,
+  // e sem ele a auditoria não diz de onde é que o pagamento veio.
+  const { data: antes, error: antesErr } = await admin
+    .from("services")
+    .select("payment_status")
+    .eq("id", serviceId)
+    .eq("company_id", companyId)
+    .maybeSingle();
+  // Uma leitura falhada e um serviço inexistente não são a mesma coisa:
+  // engolir o erro daria "Serviço inválido." a quem tem o serviço à frente.
+  if (antesErr) {
+    return { ok: false, error: "Não foi possível confirmar o estado atual do serviço. Atualize a página e tente novamente." };
+  }
+  if (!antes) return { ok: false, error: "Serviço inválido." };
+
+  const { data: linhas, error } = await admin.rpc("set_service_payment_atomic", {
     p_company_id: companyId,
     p_service_id: serviceId,
     p_status: status,
@@ -227,6 +244,27 @@ async function _setServicePayment(
     p_actor: profile.id,
   });
   if (error) return { ok: false, error: error.message };
+
+  // A RPC é a autoridade económica: o valor que entrou em caixa é o que ELA
+  // gravou, não um número recalculado aqui. Recalcular em TypeScript era
+  // exatamente a segunda fonte da mesma regra que a 097 veio fechar — e a
+  // auditoria passaria a registar um valor que a base pode não ter.
+  const confirmacao = readServicePaymentResult(linhas, serviceId);
+  if (!confirmacao.ok) return confirmacao;
+
+  await auditLog({
+    companyId,
+    actorId: profile.id,
+    action: "billing.payment_status_changed",
+    entityType: "service",
+    entityId: serviceId,
+    meta: {
+      from: antes.payment_status,
+      to: status,
+      paid_amount: paidAmount ?? null,
+      cash_flow_amount: confirmacao.cashAmount,
+    },
+  }, admin);
 
   revalidatePath("/dashboard/cobrancas");
   revalidatePath("/dashboard/financeiro");

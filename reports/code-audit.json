@@ -1,10 +1,10 @@
 {
   "inventorySource": "git ls-files",
   "summary": {
-    "repositoryFiles": 866,
-    "textFiles": 853,
-    "sourceFiles": 600,
-    "textLines": 212374,
+    "repositoryFiles": 868,
+    "textFiles": 855,
+    "sourceFiles": 604,
+    "textLines": 212104,
     "typescriptDiagnostics": 0,
     "productionEntries": 71,
     "unreachableProductionModules": 40,
@@ -142,7 +142,6 @@
       "src/__tests__/recurrence-engine.test.ts",
       "src/app/(app)/app/escala/page.tsx",
       "src/app/actions/invoices.ts",
-      "src/app/actions/payroll.ts",
       "src/domain/finance-v2/aggregate.ts",
       "src/domain/scheduling/civil-date.ts",
       "src/lib/bank-import/reconcile-db.ts",
