@@ -1,7 +1,6 @@
 "use server";
 
 import { requireProfile } from "@/lib/auth-guard";
-import { assertFinancialPeriodOpen, type ClientePeriodo } from "@/lib/finance-period-guard";
 import { auditLog } from "@/lib/audit";
 import { isValidCashFlowAmount } from "@/lib/cash-flow-integrity";
 import { generateSuggestions } from "@/lib/bank-import/reconcile-db";
@@ -333,28 +332,12 @@ export async function rejectMatch(matchId: string): Promise<{ ok: boolean; error
     .single();
   if (!match) return { ok: false, error: "Sugestão não encontrada." };
 
-  const { error } = await admin
-    .from("bank_reconciliation_matches")
-    .update({ status: "rejected" })
-    .eq("id", matchId)
-    .eq("company_id", companyId);
+  const { error } = await admin.rpc("reject_bank_match_atomic", {
+    p_company_id: companyId,
+    p_match_id: matchId,
+    p_actor_id: guard.profile.id,
+  });
   if (error) return { ok: false, error: error.message };
-
-  // se o movimento não tiver mais sugestões ativas, volta a 'pending'
-  const { count } = await admin
-    .from("bank_reconciliation_matches")
-    .select("id", { count: "exact", head: true })
-    .eq("bank_transaction_id", match.bank_transaction_id)
-    .eq("company_id", companyId)
-    .in("status", ["suggested", "confirmed"]);
-  if ((count ?? 0) === 0) {
-    await admin
-      .from("bank_transactions")
-      .update({ status: "pending", updated_at: new Date().toISOString() })
-      .eq("id", match.bank_transaction_id)
-      .eq("company_id", companyId)
-      .eq("status", "matched");
-  }
 
   await auditLog({
     companyId, actorId: guard.profile.id, action: "bank_match_rejected",
@@ -379,37 +362,13 @@ export async function manualMatch(bankTransactionId: string, cashFlowEntryId: st
   if (!tx) return { ok: false, error: "Movimento não encontrado." };
   if (!entry) return { ok: false, error: "Lançamento não encontrado." };
 
-  const now = new Date().toISOString();
-  const { error } = await admin
-    .from("bank_reconciliation_matches")
-    .upsert(
-      {
-        company_id: companyId,
-        bank_transaction_id: bankTransactionId,
-        cash_flow_entry_id: cashFlowEntryId,
-        match_score: 100,
-        match_reason: "associação manual",
-        status: "confirmed",
-        confirmed_by: guard.profile.id,
-        confirmed_at: now,
-      },
-      { onConflict: "bank_transaction_id,cash_flow_entry_id" },
-    );
+  const { error } = await admin.rpc("manual_bank_match_atomic", {
+    p_company_id: companyId,
+    p_bank_tx_id: bankTransactionId,
+    p_entry_id: cashFlowEntryId,
+    p_actor_id: guard.profile.id,
+  });
   if (error) return { ok: false, error: error.message };
-
-  // rejeita outras sugestões e marca reconciliado
-  await admin
-    .from("bank_reconciliation_matches")
-    .update({ status: "rejected" })
-    .eq("bank_transaction_id", bankTransactionId)
-    .eq("company_id", companyId)
-    .neq("cash_flow_entry_id", cashFlowEntryId)
-    .eq("status", "suggested");
-  await admin
-    .from("bank_transactions")
-    .update({ status: "reconciled", updated_at: now })
-    .eq("id", bankTransactionId)
-    .eq("company_id", companyId);
 
   await auditLog({
     companyId, actorId: guard.profile.id, action: "bank_match_manual",
@@ -436,11 +395,12 @@ export async function ignoreTransaction(bankTransactionId: string, ignore = true
   if (!tx) return { ok: false, error: "Movimento não encontrado." };
   if (tx.status === "reconciled") return { ok: false, error: "Movimento já conciliado." };
 
-  const { error } = await admin
-    .from("bank_transactions")
-    .update({ status: ignore ? "ignored" : "pending", updated_at: new Date().toISOString() })
-    .eq("id", bankTransactionId)
-    .eq("company_id", companyId);
+  const { error } = await admin.rpc("set_bank_transaction_ignored_atomic", {
+    p_company_id: companyId,
+    p_bank_tx_id: bankTransactionId,
+    p_ignorar: ignore,
+    p_actor_id: guard.profile.id,
+  });
   if (error) return { ok: false, error: error.message };
 
   await auditLog({
@@ -483,53 +443,20 @@ export async function createEntryFromTransaction(bankTransactionId: string, opts
   //    o efeito económico, não a localização.
   //
   //    Se alguma delas passar a escrever em `cash_flow_entries`, entra no lock.
-  const periodo = await assertFinancialPeriodOpen({
-    cliente: admin as unknown as ClientePeriodo,
-    companyId,
-    data: String(tx.transaction_date),
-  });
-  if (!periodo.ok) return { ok: false, error: periodo.error };
-
   const category = (opts?.category ?? (tx.direction === "credit" ? "faturacao" : "despesa")) as
     "faturacao" | "salario" | "despesa" | "fornecedor" | "outro";
 
-  const { data: entry, error: entryErr } = await admin
-    .from("cash_flow_entries")
-    .insert({
-      company_id: companyId,
-      type: tx.direction === "credit" ? "entrada" : "saida",
-      amount: tx.amount,
-      description: tx.description || "Movimento bancário",
-      category,
-      date: tx.transaction_date,
-      status: "confirmado",
-      notes: "Criado a partir de conciliação bancária",
-      created_by: guard.profile.id,
-    })
-    .select("id")
-    .single();
-  if (entryErr || !entry) return { ok: false, error: entryErr?.message ?? "Falha ao criar lançamento." };
-
-  const now = new Date().toISOString();
-  await admin.from("bank_reconciliation_matches").insert({
-    company_id: companyId,
-    bank_transaction_id: bankTransactionId,
-    cash_flow_entry_id: entry.id,
-    match_score: 100,
-    match_reason: "lançamento criado a partir do movimento",
-    status: "confirmed",
-    confirmed_by: guard.profile.id,
-    confirmed_at: now,
+  const { error: entryErr } = await admin.rpc("create_cashflow_from_bank_transaction_atomic", {
+    p_company_id: companyId,
+    p_bank_tx_id: bankTransactionId,
+    p_category: category,
+    p_actor_id: guard.profile.id,
   });
-  await admin
-    .from("bank_transactions")
-    .update({ status: "reconciled", updated_at: now })
-    .eq("id", bankTransactionId)
-    .eq("company_id", companyId);
+  if (entryErr) return { ok: false, error: entryErr.message };
 
   await auditLog({
     companyId, actorId: guard.profile.id, action: "bank_entry_created",
-    entityType: "cash_flow_entry", entityId: entry.id,
+    entityType: "cash_flow_entry", entityId: bankTransactionId,
     meta: { bank_transaction_id: bankTransactionId }, source: "dashboard",
   }, admin);
 
@@ -557,12 +484,11 @@ export async function deleteImport(importId: string): Promise<{ ok: boolean; err
     .single();
   if (!imp) return { ok: false, error: "Importação não encontrada." };
 
-  // bank_transactions e bank_reconciliation_matches têm ON DELETE CASCADE.
-  const { error } = await admin
-    .from("bank_statement_imports")
-    .delete()
-    .eq("id", importId)
-    .eq("company_id", companyId);
+  const { error } = await admin.rpc("delete_bank_import_atomic", {
+    p_company_id: companyId,
+    p_import_id: importId,
+    p_actor_id: guard.profile.id,
+  });
   if (error) return { ok: false, error: error.message };
 
   await auditLog({

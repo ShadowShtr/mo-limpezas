@@ -284,3 +284,34 @@ public.cash_flow_entries.revision = ausente
 É a mesma família de drift que `docs/LEDGER-RECONCILIATION-PENDING.md` já
 regista. A 094 agora adota explicitamente a RPC órfã, sem promover a sua origem
 desconhecida a uma migration histórica.
+
+## Revalidação do runtime final — 2026-09-03
+
+O schema canónico mantém `SCHEMA_WRITERS_LOCKED = 29/29`. A branch final de
+runtime roteia os writers financeiros existentes através das RPCs atómicas,
+incluindo fecho e reabertura de períodos. Os quatro entrypoints de
+`manual_charges` não existem no master atual e não foi criado um action morto.
+Assim, a contagem de domínio é separada da cobertura do código publicado:
+
+```
+PUBLISHED_FINANCIAL_WRITERS_ROUTED = YES
+MANUAL_CHARGES_CURRENT_CONSUMER     = NONE
+MANUAL_CHARGES_SCHEMA_READY         = YES
+RACY                                = 0
+NO_GUARD                            = 0
+FIN_PERIOD_RUNTIME_COMPLETE         = YES
+FIN_PERIOD_DOMAIN_COMPLETE          = YES
+```
+
+### Writers operacionais fora do domínio financeiro
+
+`clientes.ts`, `colaboradores.ts`, `cancellations.ts`, `contratos.ts`,
+`intervencoes.ts` e `timesheets.ts` também escrevem dados operacionais. As
+alterações de cliente, contrato, agenda, ponto e referências de autoria não
+escrevem os bloqueadores financeiros (`invoices`, `cash_flow_entries`,
+`fixed_variable_payments` ou `payroll_records`) e permanecem fora dos 29.
+
+O hard delete de cliente foi retirado do caminho utilizável: o único consumidor
+passou a chamar `archiveCliente`, que preserva histórico; a action legada
+`deleteCliente` recusa sem executar qualquer escrita. Falhas ao consultar
+serviços futuros agora também recusam o arquivamento.
