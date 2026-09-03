@@ -36,9 +36,22 @@
 --        stack 090..097 depende, cada um com a migration de origem nomeada
 --
 --    Tudo o que aqui está TEM de existir em produção. Cada bloco nomeia a
---    migration que o criou, e a TASK 20 verifica-os por leitura fresca antes
---    de qualquer aplicação. Um bloco que não passe nessa verificação é um
+--    migration que o criou, e cada um foi VERIFICADO por leitura read-only da
+--    base real em 2026-09-03. Um bloco que não passe nessa verificação é um
 --    bloco que este ficheiro inventou — e aí o ensaio deixa de valer.
+--
+--    Verificado nessa leitura, e a bater:
+--      financial_periods_unique       UNIQUE (company_id, year, month)
+--      cash_flow_entries_reference_unique  índice parcial, como abaixo
+--      cash_flow_entries_reference_type_check  com 'manual_charge' na lista
+--      uq_bank_match_pair             (bank_transaction_id, cash_flow_entry_id)
+--      payment_cashflow_provenance    presente
+--      is_financial_period_open       (uuid, integer, integer)
+--
+--    E o que NÃO existe lá, e por isso NÃO está aqui:
+--      payroll_records — nenhum índice único além da PK. O `onConflict` de
+--      `runPayrollCalculation` não tem árbitro em produção. Registado na 096;
+--      inventá-lo aqui faria o ensaio provar uma garantia que a base não dá.
 -- ============================================================================
 
 -- ─── 024 / 075 — a identidade única dos movimentos com origem ───────────────
@@ -48,11 +61,24 @@
 -- reutilizam um movimento falham com 42P10.
 ALTER TABLE public.cash_flow_entries
   DROP CONSTRAINT IF EXISTS cash_flow_entries_reference_type_check;
+--
+-- 🔴 `manual_charge` faz parte da lista, e não fazia quando este overlay foi
+--    escrito. Uma leitura read-only de produção (2026-09-03) devolveu:
+--
+--      CHECK (reference_type IS NULL OR reference_type = ANY (ARRAY[
+--        'invoice', 'payroll', 'service_payment', 'fixed_variable_payment',
+--        'manual_charge']))
+--
+--    A 086 acrescentou-o. O overlay tinha ficado na versão da 075 — e um
+--    prestate que descreve um passado é um ensaio que responde a outra
+--    pergunta: os movimentos das cobranças avulsas seriam recusados aqui e
+--    passariam lá.
 ALTER TABLE public.cash_flow_entries
   ADD CONSTRAINT cash_flow_entries_reference_type_check
   CHECK (
     reference_type IS NULL
-    OR reference_type IN ('invoice', 'payroll', 'service_payment', 'fixed_variable_payment')
+    OR reference_type IN ('invoice', 'payroll', 'service_payment',
+                          'fixed_variable_payment', 'manual_charge')
   );
 
 CREATE UNIQUE INDEX IF NOT EXISTS cash_flow_entries_reference_unique
