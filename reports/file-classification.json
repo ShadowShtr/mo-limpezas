@@ -1,20 +1,20 @@
 {
   "generatedBy": "scripts/audit-file-inventory.mjs",
-  "totalFiles": 825,
+  "totalFiles": 829,
   "byStatus": {
-    "MANTER": 802,
+    "MANTER": 806,
     "STANDBY": 23
   },
   "byCategory": {
-    "test": 182,
+    "test": 183,
     "route-ui": 140,
     "migration": 106,
-    "lib": 70,
+    "lib": 72,
     "script": 54,
     "domain": 52,
     "doc": 45,
     "server-action": 44,
-    "src-other": 32,
+    "src-other": 33,
     "component": 30,
     "doc-historico": 16,
     "api-route": 16,
@@ -29,7 +29,7 @@
     "supabase-other": 2
   },
   "byConfidence": {
-    "alta": 804,
+    "alta": 808,
     "média": 15,
     "baixa": 6
   },
@@ -7931,6 +7931,30 @@
       }
     },
     {
+      "path": "src/__tests__/schedule-days.test.ts",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "sqlWrite": 3
+      },
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
       "path": "src/__tests__/scripts-eol-policy.test.ts",
       "category": "test",
       "status": "MANTER",
@@ -13011,7 +13035,7 @@
         "serverAction": 1,
         "write": 10,
         "sqlWrite": 13,
-        "unknownCast": 1,
+        "unknownCast": 3,
         "ignoredError": 11,
         "fallbackZero": 3,
         "fallbackArray": 6
@@ -17148,7 +17172,7 @@
       "category": "domain",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 38,
+      "consumers": 39,
       "consumerSample": [
         "src/__tests__/update-notice-modal.test.tsx",
         "src/__tests__/update-notices-eligibility.test.ts",
@@ -17163,7 +17187,7 @@
       "risks": [],
       "signals": {},
       "action": "nenhuma",
-      "reason": "em uso: 38 consumidor(es), configuração",
+      "reason": "em uso: 39 consumidor(es), configuração",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -17873,6 +17897,33 @@
       "signals": {
         "supabase": 2,
         "fallbackArray": 1
+      },
+      "action": "nenhuma",
+      "reason": "em uso: 2 consumidor(es)",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/lib/contract-write-confirmation.ts",
+      "category": "lib",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 2,
+      "consumerSample": [
+        "src/__tests__/schedule-days.test.ts",
+        "src/app/actions/contratos.ts"
+      ],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "sqlWrite": 1
       },
       "action": "nenhuma",
       "reason": "em uso: 2 consumidor(es)",
@@ -18923,6 +18974,31 @@
       },
       "action": "nenhuma",
       "reason": "em uso: 6 consumidor(es)",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/lib/schedule-days.ts",
+      "category": "lib",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 2,
+      "consumerSample": [
+        "src/__tests__/schedule-days.test.ts",
+        "src/lib/contract-write-confirmation.ts"
+      ],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {},
+      "action": "nenhuma",
+      "reason": "em uso: 2 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -20056,6 +20132,32 @@
       }
     },
     {
+      "path": "src/release-notes/2026-09-03-correcao-guardar-intervencoes.ts",
+      "category": "src-other",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 1,
+      "consumerSample": [
+        "src/release-notes/index.ts"
+      ],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "sqlWrite": 1
+      },
+      "action": "nenhuma",
+      "reason": "em uso: 1 consumidor(es)",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
       "path": "src/release-notes/2026-09-03-intervencoes-sem-data-de-fim.ts",
       "category": "src-other",
       "status": "MANTER",
@@ -20116,7 +20218,7 @@
       "category": "types",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 25,
+      "consumers": 26,
       "consumerSample": [
         "src/__tests__/billing-boundaries.test.ts",
         "src/__tests__/contract-occurrences.test.ts",
@@ -20135,7 +20237,7 @@
         "sqlWrite": 89
       },
       "action": "nenhuma",
-      "reason": "em uso: 25 consumidor(es)",
+      "reason": "em uso: 26 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
