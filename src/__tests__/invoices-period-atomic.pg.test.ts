@@ -39,7 +39,12 @@ async function baseline() {
     DROP EXTENSION IF EXISTS pgcrypto CASCADE;
     DROP SCHEMA IF EXISTS public CASCADE;
     CREATE SCHEMA public;
-    CREATE EXTENSION pgcrypto;
+    -- 🔴 A pgcrypto vive em 'extensions', como no Supabase real. Criá-la sem
+    --    'WITH SCHEMA' punha 'digest' em 'public' e fazia a 094 passar contra
+    --    um pré-estado que produção não tem — foi exactamente esse o false
+    --    green desta frente.
+    CREATE SCHEMA IF NOT EXISTS extensions;
+    CREATE EXTENSION pgcrypto WITH SCHEMA extensions;
 
     CREATE TABLE public.financial_periods (
       id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -216,7 +221,8 @@ beforeAll(async () => {
     serverFlags: ["shared_buffers=16MB", "max_connections=25", "work_mem=1MB", "maintenance_work_mem=8MB"],
   });
   pool = new pg.Pool({ ...container.connection, max: 4 });
-  await pool.query("CREATE EXTENSION IF NOT EXISTS pgcrypto");
+  await pool.query("CREATE SCHEMA IF NOT EXISTS extensions");
+  await pool.query("CREATE EXTENSION IF NOT EXISTS pgcrypto WITH SCHEMA extensions");
   await pool.query(`
     DO $$ BEGIN CREATE ROLE anon; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
     DO $$ BEGIN CREATE ROLE authenticated; EXCEPTION WHEN duplicate_object THEN NULL; END $$;

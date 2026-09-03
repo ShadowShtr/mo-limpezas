@@ -121,7 +121,12 @@ beforeAll(async () => {
   // A forma real: andaime do Supabase (papéis, `auth`), o dump do schema, os
   // helpers legados e os grants.
   await pool.query(baselineCompleto());
-  await pool.query("CREATE EXTENSION IF NOT EXISTS pgcrypto");
+  // 🔴 A pgcrypto no schema `extensions`, como no Supabase real — e NÃO em
+  //    `public`. Foi a omissão do `WITH SCHEMA` que deixou a 094 passar aqui
+  //    dependendo de `public.digest`, que produção não tem. A prova explícita
+  //    desta paridade está no primeiro teste, antes de a cadeia ser aplicada.
+  await pool.query("CREATE SCHEMA IF NOT EXISTS extensions");
+  await pool.query("CREATE EXTENSION IF NOT EXISTS pgcrypto WITH SCHEMA extensions");
   await pool.query("INSERT INTO public._migrations (name) VALUES ('077_secure_migrations_ledger.sql')");
 
   // O overlay canónico: tudo o que o dump não traz e a stack 090..097 exige.
@@ -145,6 +150,23 @@ afterAll(async () => {
 });
 
 describe("shadow — a cadeia aplica sobre a forma real de produção", () => {
+  // ───────────────────────────────────────────────────────────────────────────
+  // 🔴 A paridade da pgcrypto, afirmada ANTES de tudo o resto.
+  //
+  // Se este ensaio voltar a instalar `digest` em `public`, a 094 passa aqui e
+  // parte em produção — foi assim que o defeito sobreviveu a um shadow verde.
+  // Afirmar as duas metades (ausente de `public`, presente em `extensions`)
+  // torna essa regressão impossível de passar despercebida.
+  // ───────────────────────────────────────────────────────────────────────────
+  it("🔴 pgcrypto está em `extensions` e NÃO em `public`, como em produção", async () => {
+    const { rows } = await pool.query(`
+      SELECT to_regprocedure('public.digest(bytea,text)')::text     AS publico,
+             to_regprocedure('extensions.digest(bytea,text)')::text AS extensao
+    `);
+    expect(rows[0].publico).toBeNull();
+    expect(rows[0].extensao).not.toBeNull();
+  });
+
   it("090 → 097 aplicam, por ordem, sobre o schema real", async () => {
     // Se o `beforeAll` chegou aqui, aplicaram. Este teste existe para que a
     // falha apareça com nome próprio em vez de como «beforeAll rebentou».
