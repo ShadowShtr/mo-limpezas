@@ -196,6 +196,34 @@ $fn$;
 -- lock do par passam a ser invocações dela — não implementações paralelas —
 -- para que não existam duas ordens de aquisição no mesmo sistema.
 
+-- ---------------------------------------------------------------------------
+-- 🔴 A ordem entre locks de LINHA e locks de PERÍODO — e porque é sempre esta
+-- ---------------------------------------------------------------------------
+--
+-- Quase todos os writers precisam das duas coisas: trancar as linhas em que
+-- vão mexer (`SELECT ... FOR UPDATE`) e trancar os meses que vão tocar. A
+-- ordem entre as duas famílias tem de ser a MESMA em todo o sistema, senão
+-- volta a haver ciclo — desta vez entre um lock de linha e um advisory:
+--
+--     T1 tem a linha, espera pelo mês  ·  T2 tem o mês, espera pela linha
+--
+-- A convenção é:
+--
+--     1. LINHAS primeiro (`FOR UPDATE`), pela ordem que a operação exigir;
+--     2. PERÍODOS depois, todos de uma vez, em ordem canónica;
+--     3. só então escrever.
+--
+-- E é esta e não a inversa por uma razão concreta: as datas que determinam os
+-- períodos estão NAS LINHAS. Só depois de as ter trancadas é que o conjunto de
+-- períodos é conhecido e estável — se fosse lido antes, podia mudar debaixo dos
+-- pés entre a leitura e a aquisição.
+--
+-- O outro lado do ciclo não existe por construção: o fecho
+-- (`close_financial_period_atomic`) adquire o advisory lock e depois só LÊ, com
+-- `SELECT` simples e sem `FOR UPDATE` nenhum. Nunca espera por um lock de
+-- linha, portanto nunca fecha o ciclo. Quem acrescentar `FOR UPDATE` ao
+-- caminho do fecho parte esta garantia, e é por isso que fica escrito aqui.
+
 -- ─── Datas → conjunto canónico de chaves ────────────────────────────────────
 --
 -- A maior parte dos writers tem datas, não pares ano/mês. Esta função é a
