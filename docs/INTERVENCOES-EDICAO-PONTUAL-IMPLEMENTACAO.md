@@ -46,7 +46,7 @@ O worktree `feat/contratos-cliente-pesquisavel` permanece intocado por esta impl
 INTERVENTION_BASE = 1daec61b26c41dccd64e103b4a7c73c3cc65682a
 INTERVENTION_BRANCH = fix/intervencao-edicao-pontual
 INTERVENTION_HEAD = 13756d5 (commit de implementação)
-INTERVENTION_PR = não aberta
+INTERVENTION_PR = não aberta; push bloqueado por SEC_E_NO_CREDENTIALS
 
 AUDIT_ROOT_CAUSE_RECONFIRMED = YES
 REAL_SAVE_PATH = ContratoSheet.handleSubmit -> updateContrato -> apply_contract_change_atomic (candidata)
@@ -132,7 +132,7 @@ DEPLOY = 0
 Os failures da suite completa foram ambientais ou preexistentes: Docker sem acesso, timeouts de suites pesadas/CLI e o guard de rede `verify-target-guard`. O teste PGlite que excedeu o hook padrão sob carga foi corrigido e passou isoladamente com timeout explícito.
 
 ```text
-BLOCKER = schema candidate ainda sem número/aplicação, prova real de duas sessões pendente, Parte A bloqueada por overlap e PR/push ainda não abertos
+BLOCKER = schema candidate ainda sem número/aplicação, prova real de duas sessões pendente, Parte A bloqueada por overlap e push/PR bloqueados por credenciais GitHub ausentes
 NEXT_ACTION = devolver tudo à direção técnica
 ```
 
