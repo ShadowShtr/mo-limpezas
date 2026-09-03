@@ -20,7 +20,7 @@ Foram lidos `AGENTS.md`, `CLAUDE.md`, a auditoria anterior e todos os `.md` do p
 CLIENT_SEARCH_BASE = 1daec61b26c41dccd64e103b4a7c73c3cc65682a
 CLIENT_SEARCH_BRANCH = feat/contratos-cliente-pesquisavel
 CLIENT_SEARCH_HEAD = dee1cf42285c91165d07720cc45f912cd5a66dbd
-CLIENT_SEARCH_PR = não aberta
+CLIENT_SEARCH_PR = https://github.com/ShadowShtr/mo-limpezas/pull/145 (Draft)
 
 FILE_OVERLAP_DETECTED = YES
 REUSE_EXISTING_COMPONENT = não decidido
@@ -35,7 +35,7 @@ KEYBOARD_MOBILE = não revalidado nesta branch
 
 CLIENT_SEARCH_TESTS = 26/26
 CLIENT_SEARCH_CI = não aguardado
-CLIENT_SEARCH_READY = YES localmente; push/PR pendentes de autenticação GitHub
+CLIENT_SEARCH_READY = YES localmente; Draft PR #145 aberta
 ```
 
 O worktree `feat/contratos-cliente-pesquisavel` permanece intocado por esta implementação.
@@ -46,7 +46,7 @@ O worktree `feat/contratos-cliente-pesquisavel` permanece intocado por esta impl
 INTERVENTION_BASE = 1daec61b26c41dccd64e103b4a7c73c3cc65682a
 INTERVENTION_BRANCH = fix/intervencao-edicao-pontual
 INTERVENTION_HEAD = 786e6ce (último estado validado antes deste relatório)
-INTERVENTION_PR = não aberta; push bloqueado por SEC_E_NO_CREDENTIALS
+INTERVENTION_PR = https://github.com/ShadowShtr/mo-limpezas/pull/146 (Draft)
 
 AUDIT_ROOT_CAUSE_RECONFIRMED = YES
 REAL_SAVE_PATH = ContratoSheet.handleSubmit -> updateContrato -> apply_contract_change_atomic (candidata)
@@ -186,8 +186,8 @@ SECRETS = PASS
 AUDIT = PASS — diagnostics vazio/highConfidence vazio
 DIFF_CHECK = PASS
 
-INTERVENTION_PUSH = BLOQUEADO — SEC_E_NO_CREDENTIALS / token gh inválido
-INTERVENTION_PR = não aberta
+INTERVENTION_PUSH = PASS — push normal sem force-push
+INTERVENTION_PR = https://github.com/ShadowShtr/mo-limpezas/pull/146 (Draft)
 
 OVERLAP_FILE = src/app/(dashboard)/dashboard/contratos/_components/sheet.tsx
 OVERLAP_WORKTREE = C:\Users\tecno\Documents\Codex\2026-08-31\mol\work\contratos-cliente-pesquisavel
@@ -203,8 +203,8 @@ CLIENT_SEARCH_BRANCH = feat/contratos-cliente-pesquisavel
 CLIENT_SEARCH_HEAD = 46fe901
 CLIENT_SEARCH_TESTS = 26/26
 CLIENT_SEARCH_BUILD = BLOCKED_ENVIRONMENT — mesmo prebuild npm EACCES ao obter tsx
-CLIENT_SEARCH_PUSH = bloqueado por SEC_E_NO_CREDENTIALS
-CLIENT_SEARCH_PR = não aberta
+CLIENT_SEARCH_PUSH = PASS — push normal sem force-push
+CLIENT_SEARCH_PR = https://github.com/ShadowShtr/mo-limpezas/pull/145 (Draft)
 
 CLIENT_SEARCH_PATCH_BACKUP = C:\Users\tecno\Documents\Codex\2026-08-31\mol\handoff-artifacts\contratos-2026-09-03-final\patches
 CLIENT_SEARCH_BUNDLE_BACKUP = C:\Users\tecno\Documents\Codex\2026-08-31\mol\handoff-artifacts\contratos-2026-09-03-final\contratos.bundle
