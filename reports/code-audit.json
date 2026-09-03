@@ -1,14 +1,10 @@
 {
   "inventorySource": "git ls-files",
   "summary": {
-    "repositoryFiles": 827,
-    "textFiles": 814,
-    "sourceFiles": 585,
-<<<<<<< HEAD
-    "textLines": 202296,
-=======
-    "textLines": 201502,
->>>>>>> a7bbb66 (feat(runtime): fechar e reabrir o período pelas RPCs atómicas da 090)
+    "repositoryFiles": 828,
+    "textFiles": 815,
+    "sourceFiles": 586,
+    "textLines": 202447,
     "typescriptDiagnostics": 0,
     "productionEntries": 71,
     "unreachableProductionModules": 40,

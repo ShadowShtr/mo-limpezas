@@ -1,8 +1,8 @@
 {
   "generatedBy": "scripts/audit-file-inventory.mjs",
-  "totalFiles": 831,
+  "totalFiles": 832,
   "byStatus": {
-    "MANTER": 808,
+    "MANTER": 809,
     "STANDBY": 23
   },
   "byCategory": {
@@ -14,8 +14,8 @@
     "domain": 52,
     "doc": 45,
     "server-action": 44,
+    "src-other": 31,
     "component": 30,
-    "src-other": 30,
     "doc-historico": 16,
     "api-route": 16,
     "config": 12,
@@ -29,7 +29,7 @@
     "supabase-other": 2
   },
   "byConfidence": {
-    "alta": 810,
+    "alta": 811,
     "média": 15,
     "baixa": 6
   },
@@ -17233,7 +17233,7 @@
       "category": "domain",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 36,
+      "consumers": 37,
       "consumerSample": [
         "src/__tests__/update-notice-modal.test.tsx",
         "src/__tests__/update-notices-eligibility.test.ts",
@@ -17248,7 +17248,7 @@
       "risks": [],
       "signals": {},
       "action": "nenhuma",
-      "reason": "em uso: 36 consumidor(es), configuração",
+      "reason": "em uso: 37 consumidor(es), configuração",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -20090,6 +20090,32 @@
     },
     {
       "path": "src/release-notes/2026-09-02-equipas-espelho-ausencias.ts",
+      "category": "src-other",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 1,
+      "consumerSample": [
+        "src/release-notes/index.ts"
+      ],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "sqlWrite": 1
+      },
+      "action": "nenhuma",
+      "reason": "em uso: 1 consumidor(es)",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/release-notes/2026-09-03-fecho-mes-mais-seguro.ts",
       "category": "src-other",
       "status": "MANTER",
       "confidence": "alta",
