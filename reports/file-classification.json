@@ -3,6 +3,7 @@
 <<<<<<< HEAD
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
 =======
 <<<<<<< HEAD
 <<<<<<< HEAD
@@ -16,12 +17,15 @@
 =======
   "totalFiles": 860,
 >>>>>>> 58a87e1 (chore(097): regenerar os inventários versionados)
+=======
+  "totalFiles": 861,
+>>>>>>> 2501833 (test(shadow): a pilha 090..097 inteira sobre a forma real, com o prestate numa fonte só)
   "byStatus": {
-    "MANTER": 837,
+    "MANTER": 838,
     "STANDBY": 23
   },
   "byCategory": {
-    "test": 198,
+    "test": 199,
     "route-ui": 138,
     "migration": 122,
     "lib": 70,
@@ -85,6 +89,7 @@
 <<<<<<< HEAD
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
     "alta": 834,
 =======
 <<<<<<< HEAD
@@ -112,6 +117,9 @@
 =======
     "alta": 839,
 >>>>>>> 58a87e1 (chore(097): regenerar os inventários versionados)
+=======
+    "alta": 840,
+>>>>>>> 2501833 (test(shadow): a pilha 090..097 inteira sobre a forma real, com o prestate numa fonte só)
     "média": 15,
     "baixa": 6
   },
@@ -5674,7 +5682,7 @@
       ],
       "signals": {
         "serviceRole": 3,
-        "sqlWrite": 9
+        "sqlWrite": 4
       },
       "action": "nenhuma",
       "reason": "suite de testes — corre por convenção do vitest",
@@ -6446,6 +6454,24 @@
       "risks": [],
       "signals": {
         "sqlWrite": 4
+      },
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false
+    },
+    {
+      "path": "src/__tests__/fixtures/production-financial-prestate.sql",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "sqlWrite": 13
       },
       "action": "nenhuma",
       "reason": "suite de testes — corre por convenção do vitest",
