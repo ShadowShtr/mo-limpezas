@@ -147,8 +147,8 @@ BRANCH = fix/intervencao-edicao-pontual
 HEAD = 3f1ea64
 COMMITS = 14cdbf5, 13756d5, 29de0f6, 2333a00, 3f1ea64
 
-PATCH_BACKUP = C:\Users\tecno\Documents\Codex\2026-08-31\mol\handoff-artifacts\intervencao-2026-09-03\patches
-BUNDLE_BACKUP = C:\Users\tecno\Documents\Codex\2026-08-31\mol\handoff-artifacts\intervencao-2026-09-03\intervencao.bundle
+PATCH_BACKUP = C:\Users\tecno\Documents\Codex\2026-08-31\mol\handoff-artifacts\intervencao-2026-09-03-final\patches
+BUNDLE_BACKUP = C:\Users\tecno\Documents\Codex\2026-08-31\mol\handoff-artifacts\intervencao-2026-09-03-final\intervencao.bundle
 
 ROOT_CAUSE = múltiplas escritas independentes em updateContrato permitiam estado parcial
 ATOMIC_RPC_CANDIDATE = docs/INTERVENTION_ATOMIC_SCHEMA_CANDIDATE.sql
