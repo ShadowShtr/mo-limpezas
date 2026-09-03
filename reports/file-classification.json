@@ -1,15 +1,15 @@
 {
   "generatedBy": "scripts/audit-file-inventory.mjs",
-  "totalFiles": 872,
+  "totalFiles": 874,
   "byStatus": {
-    "MANTER": 849,
+    "MANTER": 851,
     "STANDBY": 23
   },
   "byCategory": {
-    "test": 202,
+    "test": 203,
     "route-ui": 140,
     "migration": 122,
-    "lib": 72,
+    "lib": 73,
     "script": 60,
     "domain": 52,
     "doc": 46,
@@ -29,7 +29,7 @@
     "supabase-other": 2
   },
   "byConfidence": {
-    "alta": 851,
+    "alta": 853,
     "média": 15,
     "baixa": 6
   },
@@ -4087,6 +4087,30 @@
       "signals": {
         "serviceRole": 8,
         "sqlWrite": 24
+      },
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/__tests__/atomic-rpc-results.test.ts",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "sqlWrite": 5
       },
       "action": "nenhuma",
       "reason": "suite de testes — corre por convenção do vitest",
@@ -17836,6 +17860,32 @@
       },
       "action": "nenhuma",
       "reason": "em uso: 2 consumidor(es)",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/lib/atomic-rpc-results.ts",
+      "category": "lib",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 3,
+      "consumerSample": [
+        "src/__tests__/atomic-rpc-results.test.ts",
+        "src/app/actions/bank-reconciliation.ts",
+        "src/app/actions/daily-billing.ts"
+      ],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {},
+      "action": "nenhuma",
+      "reason": "em uso: 3 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
