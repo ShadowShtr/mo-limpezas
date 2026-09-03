@@ -1,21 +1,21 @@
 {
   "generatedBy": "scripts/audit-file-inventory.mjs",
-  "totalFiles": 821,
+  "totalFiles": 828,
   "byStatus": {
-    "MANTER": 798,
+    "MANTER": 805,
     "STANDBY": 23
   },
   "byCategory": {
-    "test": 181,
+    "test": 184,
     "route-ui": 138,
     "migration": 106,
     "lib": 70,
     "script": 54,
-    "domain": 52,
-    "doc": 46,
+    "domain": 53,
+    "doc": 48,
     "server-action": 44,
+    "src-other": 31,
     "component": 30,
-    "src-other": 30,
     "doc-historico": 16,
     "api-route": 16,
     "config": 12,
@@ -29,7 +29,7 @@
     "supabase-other": 2
   },
   "byConfidence": {
-    "alta": 800,
+    "alta": 807,
     "média": 15,
     "baixa": 6
   },
@@ -1024,6 +1024,49 @@
       "sideEffects": [],
       "risks": [],
       "signals": {},
+      "action": "nenhuma",
+      "reason": "documentação",
+      "manualDecision": false
+    },
+    {
+      "path": "docs/INTERVENCOES-EDICAO-PONTUAL-IMPLEMENTACAO.md",
+      "category": "doc",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [
+        "docs"
+      ],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "sqlWrite": 1
+      },
+      "action": "nenhuma",
+      "reason": "documentação",
+      "manualDecision": false
+    },
+    {
+      "path": "docs/INTERVENTION_ATOMIC_SCHEMA_CANDIDATE.sql",
+      "category": "doc",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [
+        "docs"
+      ],
+      "sideEffects": [],
+      "risks": [
+        "service-role"
+      ],
+      "signals": {
+        "serviceRole": 1,
+        "sqlWrite": 9
+      },
       "action": "nenhuma",
       "reason": "documentação",
       "manualDecision": false
@@ -3915,6 +3958,32 @@
       }
     },
     {
+      "path": "src/__tests__/atomic-contract-plan.test.ts",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [
+        "docs"
+      ],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "sqlWrite": 1
+      },
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
       "path": "src/__tests__/atomic-finance-mutations-postgres.test.ts",
       "category": "test",
       "status": "MANTER",
@@ -6133,6 +6202,61 @@
       "signals": {
         "sqlWrite": 1,
         "fallbackArray": 1
+      },
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/__tests__/intervention-atomic-candidate-postgres.test.ts",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [
+        "docs"
+      ],
+      "sideEffects": [],
+      "risks": [
+        "service-role"
+      ],
+      "signals": {
+        "serviceRole": 1,
+        "sqlWrite": 7
+      },
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/__tests__/intervention-atomic-candidate.test.ts",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [
+        "docs"
+      ],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "sqlWrite": 9
       },
       "action": "nenhuma",
       "reason": "suite de testes — corre por convenção do vitest",
@@ -16796,15 +16920,14 @@
       }
     },
     {
-      "path": "src/domain/scheduling/civil-date.ts",
+      "path": "src/domain/scheduling/atomic-contract-plan.ts",
       "category": "domain",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 21,
+      "consumers": 2,
       "consumerSample": [
-        "src/__tests__/civil-date.test.ts",
-        "src/__tests__/recurrence-compat.test.ts",
-        "src/app/(dashboard)/dashboard/contratos/_components/sheet.tsx"
+        "src/__tests__/atomic-contract-plan.test.ts",
+        "src/app/actions/contratos.ts"
       ],
       "autoLoaded": false,
       "referencedBy": [
@@ -16814,7 +16937,35 @@
       "risks": [],
       "signals": {},
       "action": "nenhuma",
-      "reason": "em uso: 21 consumidor(es)",
+      "reason": "em uso: 2 consumidor(es)",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/domain/scheduling/civil-date.ts",
+      "category": "domain",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 23,
+      "consumerSample": [
+        "src/__tests__/atomic-contract-plan.test.ts",
+        "src/__tests__/civil-date.test.ts",
+        "src/__tests__/recurrence-compat.test.ts"
+      ],
+      "autoLoaded": false,
+      "referencedBy": [
+        "docs"
+      ],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {},
+      "action": "nenhuma",
+      "reason": "em uso: 23 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -16911,11 +17062,11 @@
       "category": "domain",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 5,
+      "consumers": 7,
       "consumerSample": [
+        "src/__tests__/atomic-contract-plan.test.ts",
         "src/__tests__/billing-boundaries.test.ts",
-        "src/__tests__/occurrence-projection.test.ts",
-        "src/__tests__/reconciliation.test.ts"
+        "src/__tests__/occurrence-projection.test.ts"
       ],
       "autoLoaded": false,
       "referencedBy": [
@@ -16929,7 +17080,7 @@
         "env": 1
       },
       "action": "nenhuma",
-      "reason": "em uso: 5 consumidor(es)",
+      "reason": "em uso: 7 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -16975,8 +17126,9 @@
       "category": "domain",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 2,
+      "consumers": 4,
       "consumerSample": [
+        "src/__tests__/atomic-contract-plan.test.ts",
         "src/__tests__/reconciliation.test.ts",
         "src/app/actions/contratos.ts"
       ],
@@ -16991,7 +17143,7 @@
         "fallbackArray": 3
       },
       "action": "nenhuma",
-      "reason": "em uso: 2 consumidor(es)",
+      "reason": "em uso: 4 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -17091,7 +17243,7 @@
       "category": "domain",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 36,
+      "consumers": 37,
       "consumerSample": [
         "src/__tests__/update-notice-modal.test.tsx",
         "src/__tests__/update-notices-eligibility.test.ts",
@@ -17106,7 +17258,7 @@
       "risks": [],
       "signals": {},
       "action": "nenhuma",
-      "reason": "em uso: 36 consumidor(es), configuração",
+      "reason": "em uso: 37 consumidor(es), configuração",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -19957,6 +20109,34 @@
       ],
       "autoLoaded": false,
       "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "sqlWrite": 1
+      },
+      "action": "nenhuma",
+      "reason": "em uso: 1 consumidor(es)",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/release-notes/2026-09-03-intervencoes-pontuais.ts",
+      "category": "src-other",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 1,
+      "consumerSample": [
+        "src/release-notes/index.ts"
+      ],
+      "autoLoaded": false,
+      "referencedBy": [
+        "docs"
+      ],
       "sideEffects": [],
       "risks": [],
       "signals": {

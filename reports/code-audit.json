@@ -1,11 +1,11 @@
 {
   "inventorySource": "git ls-files",
   "summary": {
-    "repositoryFiles": 817,
-    "textFiles": 804,
-    "sourceFiles": 587,
-    "textLines": 198436,
-    "typescriptDiagnostics": 0,
+    "repositoryFiles": 824,
+    "textFiles": 811,
+    "sourceFiles": 588,
+    "textLines": 199141,
+    "typescriptDiagnostics": 1,
     "productionEntries": 71,
     "unreachableProductionModules": 37,
     "exactDuplicateFileGroups": 0
@@ -142,5 +142,15 @@
       "src/lib/payroll-calc.ts"
     ]
   },
-  "diagnostics": []
+  "diagnostics": [
+    {
+      "code": 2344,
+      "category": "Error",
+      "message": "Type 'T' does not satisfy the constraint 'QueryResultRow'.",
+      "location": {
+        "file": "src/__tests__/intervention-atomic-candidate-real-postgres.test.ts",
+        "line": 38
+      }
+    }
+  ]
 }
