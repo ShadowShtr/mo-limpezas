@@ -5594,7 +5594,7 @@
       ],
       "signals": {
         "serviceRole": 3,
-        "sqlWrite": 4
+        "sqlWrite": 5
       },
       "action": "nenhuma",
       "reason": "suite de testes — corre por convenção do vitest",
@@ -6379,11 +6379,13 @@
       "consumers": 0,
       "consumerSample": [],
       "autoLoaded": false,
-      "referencedBy": [],
+      "referencedBy": [
+        "docs"
+      ],
       "sideEffects": [],
       "risks": [],
       "signals": {
-        "sqlWrite": 13
+        "sqlWrite": 14
       },
       "action": "nenhuma",
       "reason": "suite de testes — corre por convenção do vitest",
@@ -6631,7 +6633,7 @@
       ],
       "signals": {
         "serviceRole": 3,
-        "sqlWrite": 12
+        "sqlWrite": 23
       },
       "action": "nenhuma",
       "reason": "suite de testes — corre por convenção do vitest",
@@ -22544,7 +22546,7 @@
       ],
       "signals": {
         "serviceRole": 3,
-        "sqlWrite": 16
+        "sqlWrite": 17
       },
       "action": "nenhuma",
       "reason": "migration versionada — histórico do schema, nunca se apaga",

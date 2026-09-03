@@ -4,7 +4,7 @@
     "repositoryFiles": 857,
     "textFiles": 844,
     "sourceFiles": 591,
-    "textLines": 211319,
+    "textLines": 211619,
     "typescriptDiagnostics": 0,
     "productionEntries": 71,
     "unreachableProductionModules": 40,
@@ -137,6 +137,7 @@
     "dateRiskCandidates": [
       "src/__tests__/civil-date.test.ts",
       "src/__tests__/finance-categoria-identidade-e-resumo.test.tsx",
+      "src/__tests__/invoices-period-atomic.pg.test.ts",
       "src/__tests__/migration-schema-ledger-atomicity.pg.test.ts",
       "src/__tests__/recurrence-engine.test.ts",
       "src/app/(app)/app/escala/page.tsx",
