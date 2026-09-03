@@ -1,5 +1,5 @@
 // ============================================================================
-// PRODUCTION-PARITY SHADOW — 078, 090, 091 e 094 sobre a forma real do schema
+// PRODUCTION-PARITY SHADOW — 090..097 sobre a forma real do schema
 // ============================================================================
 //
 // As suites da 090 e da 091 provam o protocolo sobre um palco mínimo: as
@@ -16,6 +16,29 @@
 // READ-ONLY da forma real (tabelas, colunas, FKs, RLS, políticas — zero
 // linhas), e aplica-se por cima a cadeia que produção tem hoje mais a que esta
 // ronda propõe.
+//
+// ---------------------------------------------------------------------------
+// 🔴 O dump NÃO é paridade completa, e dizê-lo importa
+// ---------------------------------------------------------------------------
+//
+// Traz tabelas, colunas, PK/FK, RLS e políticas. NÃO traz constraints CHECK,
+// NÃO traz índices, NÃO traz funções, e não traz tabelas criadas depois da
+// leitura que o gerou. Chamar-lhe «paridade» sem esta ressalva seria uma
+// afirmação falsa — e a stack 090..097 depende de várias dessas coisas.
+//
+// O que falta vive num sítio SÓ, versionado:
+//
+//     PRODUCTION_SHADOW_BASE_SCOPE
+//       = tabelas + colunas + PK/FK + RLS + políticas
+//         (`fixtures/production-schema-shape.sql`, leitura read-only)
+//
+//     PRODUCTION_SHADOW_OVERLAY
+//       = `fixtures/production-financial-prestate.sql`
+//         (constraints, índices e tabelas pós-dump, cada um com a migration
+//          de origem nomeada)
+//
+// Isto começou como `ALTER TABLE` espalhados por dentro desta suite. É assim
+// que duas suites acabam a ensaiar mundos diferentes sem ninguém dar por isso.
 //
 // 🔴 Nada aqui toca em produção. É um contentor descartável.
 // ============================================================================
@@ -57,7 +80,34 @@ const CADEIA = [
   "supabase/migrations/078_domain_mutation_change_event_foundation.sql",
   "supabase/migrations/090_financial_period_lock_protocol.sql",
   "supabase/migrations/091_manual_charges_period_atomic.sql",
+  "supabase/migrations/092_payments_period_atomic.sql",
+  "supabase/migrations/093_cashflow_period_atomic.sql",
   "supabase/migrations/094_invoices_period_atomic.sql",
+  "supabase/migrations/095_bank_reconciliation_period_atomic.sql",
+  "supabase/migrations/096_payroll_period_atomic.sql",
+  "supabase/migrations/097_service_payment_period_atomic.sql",
+] as const;
+
+/**
+ * O que produção tem HOJE e que a cadeia vai substituir.
+ *
+ * 🔴 Sem isto, cada `CREATE OR REPLACE` criaria uma função nova em vez de
+ *    substituir, e as precondições — que são metade do valor destas migrations
+ *    — nunca seriam exercitadas contra o schema real.
+ *
+ *    São extraídos das próprias migrations que os definem, por geradores, e não
+ *    escritos à mão: uma cópia manual diverge no dia em que alguém corrigir a
+ *    origem e não o fixture.
+ */
+const PRE_ESTADO = [
+  "src/__tests__/fixtures/073-is-financial-period-open.sql",
+  "src/__tests__/fixtures/086-manual-charges-table.sql",
+  "src/__tests__/fixtures/086-manual-charges-rpcs.sql",
+  "src/__tests__/fixtures/pre-092-payment-rpcs.sql",
+  "src/__tests__/fixtures/pre-093-cashflow-rpcs.sql",
+  "src/__tests__/fixtures/pre-094-invoice-rpc.sql",
+  "src/__tests__/fixtures/pre-095-bank-rpc.sql",
+  "src/__tests__/fixtures/pre-097-service-payment-rpc.sql",
 ] as const;
 
 beforeAll(async () => {
@@ -74,50 +124,15 @@ beforeAll(async () => {
   await pool.query("CREATE EXTENSION IF NOT EXISTS pgcrypto");
   await pool.query("INSERT INTO public._migrations (name) VALUES ('077_secure_migrations_ledger.sql')");
 
-  // 🔴 O dump da forma NÃO traz constraints CHECK nem índices — só tabelas,
-  //    colunas, FKs, RLS e políticas (ver o cabeçalho de
-  //    `helpers/production-baseline.ts`). Duas coisas que produção tem, que a
-  //    086 exige como pré-estado, e que por isso entram aqui à mão:
-  //
-  //      · o CHECK de `reference_type` como a 075 o deixou;
-  //      · o índice único PARCIAL da 024, que os `ON CONFLICT` inferem.
-  //
-  //    Sem elas, a precondição da 086 recusa — e recusa com razão. O que
-  //    faltava era o palco, não a migration.
-  await pool.query(`
-    ALTER TABLE public.cash_flow_entries
-      DROP CONSTRAINT IF EXISTS cash_flow_entries_reference_type_check;
-    ALTER TABLE public.cash_flow_entries
-      ADD CONSTRAINT cash_flow_entries_reference_type_check
-      CHECK (
-        reference_type IS NULL
-        OR reference_type IN ('invoice', 'payroll', 'service_payment', 'fixed_variable_payment')
-      );
-
-    CREATE UNIQUE INDEX IF NOT EXISTS cash_flow_entries_reference_unique
-      ON public.cash_flow_entries (company_id, reference_type, reference_id)
-      WHERE reference_type IS NOT NULL AND reference_id IS NOT NULL;
-
-    -- O UNIQUE que a 071 pos em financial_periods. E o arbitro do
-    -- ON CONFLICT de close_financial_period_atomic: sem ele, «there is no
-    -- unique or exclusion constraint matching the ON CONFLICT specification».
-    ALTER TABLE public.financial_periods
-      DROP CONSTRAINT IF EXISTS financial_periods_unique;
-    ALTER TABLE public.financial_periods
-      ADD CONSTRAINT financial_periods_unique UNIQUE (company_id, year, month);
-  `);
+  // O overlay canónico: tudo o que o dump não traz e a stack 090..097 exige.
+  // Uma fonte só, versionada, com cada bloco a nomear a migration de origem.
   await pool.query(ler("src/__tests__/fixtures/production-financial-prestate.sql"));
 
-  // A precondição da 090 exige `is_financial_period_open` com a assinatura
-  // exacta — produção tem-na desde a 073, e o dump da forma não traz funções.
-  await pool.query(ler("src/__tests__/fixtures/073-is-financial-period-open.sql"));
-
-  // O que a 086 deixou em produção e que a 091 vai substituir: a tabela
-  // `manual_charges` (com as suas FKs reais) e as três RPCs, extraídas da
-  // própria 086 pelo mesmo gerador que a suite da 091 usa.
-  await pool.query(ler("src/__tests__/fixtures/086-manual-charges-table.sql"));
-  await pool.query(ler("src/__tests__/fixtures/086-manual-charges-rpcs.sql"));
-  await pool.query(ler("src/__tests__/fixtures/pre-094-invoice-rpc.sql"));
+  // O pré-estado das funções que a cadeia substitui, extraído das migrations
+  // que as definem.
+  for (const fixture of PRE_ESTADO) {
+    await pool.query(ler(fixture));
+  }
 
   for (const migration of CADEIA) {
     await pool.query(ler(migration));
@@ -130,16 +145,20 @@ afterAll(async () => {
 });
 
 describe("shadow — a cadeia aplica sobre a forma real de produção", () => {
-  it("078 → 090 → 091 → 094 aplicam sem erro sobre o schema real", async () => {
+  it("090 → 097 aplicam, por ordem, sobre o schema real", async () => {
     // Se o `beforeAll` chegou aqui, aplicaram. Este teste existe para que a
     // falha apareça com nome próprio em vez de como «beforeAll rebentou».
     const { rows } = await pool.query("SELECT current_database() db");
     expect(rows[0].db).toBe("finshadow");
   }, 300_000);
 
-  it("as oito funções da 090 existem com a assinatura do contrato", async () => {
+  it("as doze funções da 090 existem com a assinatura do contrato", async () => {
     const esperado: ReadonlyArray<readonly [string, string]> = [
       ["financial_period_lock_key", "p_year integer, p_month integer"],
+      ["financial_period_lock_keys", "p_dates date[]"],
+      ["lock_financial_periods_many", "p_company_id uuid, p_keys integer[]"],
+      ["assert_financial_periods_open_locked_many", "p_company_id uuid, p_keys integer[]"],
+      ["assert_financial_period_dates_open_locked", "p_company_id uuid, p_dates date[]"],
       ["lock_financial_period", "p_company_id uuid, p_year integer, p_month integer"],
       [
         "lock_financial_periods_pair",
@@ -197,13 +216,19 @@ describe("shadow — a cadeia aplica sobre a forma real de produção", () => {
     }
   }, 120_000);
 
-  it("nenhuma função nova é SECURITY DEFINER", async () => {
+  it("apenas a RPC canónica de invoice é SECURITY DEFINER", async () => {
     const { rows } = await pool.query(
       `SELECT p.proname FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
         WHERE n.nspname='public' AND p.prosecdef
-          AND (p.proname LIKE '%financial_period%' OR p.proname LIKE '%manual_charge%')`,
+          AND (p.proname LIKE '%financial_period%'
+            OR p.proname LIKE '%manual_charge%'
+            OR p.proname LIKE '%payment%'
+            OR p.proname LIKE '%cashflow%'
+            OR p.proname LIKE '%invoice%'
+            OR p.proname LIKE '%bank_%'
+            OR p.proname LIKE '%payroll%')`,
     );
-    expect(rows.map((r) => r.proname)).toEqual([]);
+    expect(rows.map((r) => r.proname)).toEqual(["set_invoice_status_atomic"]);
   }, 120_000);
 
   it("a superfície fica fechada a anon e authenticated, e aberta a service_role", async () => {
@@ -220,6 +245,32 @@ describe("shadow — a cadeia aplica sobre a forma real de produção", () => {
       "public.update_manual_charge_atomic(uuid, uuid, jsonb, uuid)",
       "public.set_manual_charge_payment_atomic(uuid, uuid, text, numeric, uuid)",
       "public.void_manual_charge_atomic(uuid, uuid, uuid)",
+      "public.financial_period_lock_keys(date[])",
+      "public.lock_financial_periods_many(uuid, integer[])",
+      "public.assert_financial_periods_open_locked_many(uuid, integer[])",
+      "public.assert_financial_period_dates_open_locked(uuid, date[])",
+      "public.create_payment_atomic(uuid, text, text, numeric, date, integer, integer, uuid, boolean, text, uuid)",
+      "public.update_payment_atomic(uuid, uuid, jsonb)",
+      "public.mark_payment_paid(uuid, uuid, date)",
+      "public.unmark_payment_paid(uuid, uuid)",
+      "public.delete_payment_atomic(uuid, uuid)",
+      "public.set_payment_status_atomic(uuid, uuid, text, uuid)",
+      "public.create_cashflow_entry_atomic(uuid, text, numeric, text, text, date, text, text, uuid, uuid)",
+      "public.update_cashflow_entry_atomic(uuid, uuid, jsonb)",
+      "public.delete_cashflow_entry_atomic(uuid, uuid)",
+      "public.set_invoice_status_atomic(uuid, uuid, uuid, text, text, uuid, integer)",
+      "public.delete_invoice_atomic(uuid, uuid, uuid)",
+      "public.confirm_bank_match_atomic(uuid, uuid, uuid)",
+      "public.reject_bank_match_atomic(uuid, uuid, uuid)",
+      "public.manual_bank_match_atomic(uuid, uuid, uuid, uuid)",
+      "public.set_bank_transaction_ignored_atomic(uuid, uuid, boolean, uuid)",
+      "public.create_cashflow_from_bank_transaction_atomic(uuid, uuid, text, uuid)",
+      "public.delete_bank_import_atomic(uuid, uuid, uuid)",
+      "public.upsert_payroll_records_atomic(uuid, integer, integer, jsonb, uuid)",
+      "public.adjust_payroll_record_atomic(uuid, uuid, jsonb, uuid)",
+      "public.approve_payroll_records_atomic(uuid, uuid[], uuid)",
+      "public.mark_payroll_paid_atomic(uuid, uuid[], date, uuid)",
+      "public.set_service_payment_atomic(uuid, uuid, text, numeric, uuid)",
     ];
 
     for (const alvo of alvos) {

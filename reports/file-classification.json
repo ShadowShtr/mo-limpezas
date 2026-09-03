@@ -1,16 +1,16 @@
 {
   "generatedBy": "scripts/audit-file-inventory.mjs",
-  "totalFiles": 855,
+  "totalFiles": 861,
   "byStatus": {
-    "MANTER": 832,
+    "MANTER": 838,
     "STANDBY": 23
   },
   "byCategory": {
-    "test": 196,
+    "test": 199,
     "route-ui": 138,
-    "migration": 120,
+    "migration": 122,
     "lib": 70,
-    "script": 59,
+    "script": 60,
     "domain": 52,
     "doc": 46,
     "server-action": 44,
@@ -29,12 +29,12 @@
     "supabase-other": 2
   },
   "byConfidence": {
-    "alta": 834,
+    "alta": 840,
     "média": 15,
     "baixa": 6
   },
   "scriptRisk": {
-    "SAFE_OFFLINE": 33,
+    "SAFE_OFFLINE": 34,
     "ADMIN_GUARDED_WRITE": 11,
     "WRITE_CAPABLE": 9,
     "ADMIN_READ": 6
@@ -543,9 +543,14 @@
       "autoLoaded": false,
       "referencedBy": [],
       "sideEffects": [],
-      "risks": [],
+      "risks": [
+        "service-role",
+        "todo(1)"
+      ],
       "signals": {
-        "sqlWrite": 23
+        "serviceRole": 1,
+        "sqlWrite": 25,
+        "todo": 1
       },
       "action": "nenhuma",
       "reason": "documentação",
@@ -2772,6 +2777,31 @@
     },
     {
       "path": "scripts/gen-095-fixture.mjs",
+      "category": "script",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "consoleLog": 1
+      },
+      "action": "nenhuma",
+      "reason": "ferramenta offline, sem acesso à base",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": true,
+        "dynamicImport": true,
+        "allClosed": false
+      },
+      "scriptRisk": "SAFE_OFFLINE"
+    },
+    {
+      "path": "scripts/gen-097-fixture.mjs",
       "category": "script",
       "status": "MANTER",
       "confidence": "alta",
@@ -5564,7 +5594,7 @@
       ],
       "signals": {
         "serviceRole": 3,
-        "sqlWrite": 9
+        "sqlWrite": 5
       },
       "action": "nenhuma",
       "reason": "suite de testes — corre por convenção do vitest",
@@ -6306,6 +6336,24 @@
       "manualDecision": false
     },
     {
+      "path": "src/__tests__/fixtures/pre-097-service-payment-rpc.sql",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "sqlWrite": 5
+      },
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false
+    },
+    {
       "path": "src/__tests__/fixtures/production-078-partial-shape.json",
       "category": "test",
       "status": "MANTER",
@@ -6318,6 +6366,26 @@
       "risks": [],
       "signals": {
         "sqlWrite": 4
+      },
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false
+    },
+    {
+      "path": "src/__tests__/fixtures/production-financial-prestate.sql",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [
+        "docs"
+      ],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "sqlWrite": 14
       },
       "action": "nenhuma",
       "reason": "suite de testes — corre por convenção do vitest",
@@ -6349,7 +6417,7 @@
       "category": "test",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 10,
+      "consumers": 11,
       "consumerSample": [
         "src/__tests__/bank-reconciliation-period-atomic.pg.test.ts",
         "src/__tests__/cashflow-period-atomic.pg.test.ts",
@@ -6565,7 +6633,7 @@
       ],
       "signals": {
         "serviceRole": 3,
-        "sqlWrite": 12
+        "sqlWrite": 23
       },
       "action": "nenhuma",
       "reason": "suite de testes — corre por convenção do vitest",
@@ -8435,6 +8503,33 @@
         "sqlWrite": 28,
         "unknownCast": 1,
         "fallbackArray": 3
+      },
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/__tests__/service-payment-period-atomic.pg.test.ts",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [
+        "service-role"
+      ],
+      "signals": {
+        "serviceRole": 3,
+        "sqlWrite": 14
       },
       "action": "nenhuma",
       "reason": "suite de testes — corre por convenção do vitest",
@@ -22451,7 +22546,7 @@
       ],
       "signals": {
         "serviceRole": 3,
-        "sqlWrite": 16
+        "sqlWrite": 17
       },
       "action": "nenhuma",
       "reason": "migration versionada — histórico do schema, nunca se apaga",
@@ -22497,6 +22592,27 @@
         "serviceRole": 4,
         "write": 1,
         "sqlWrite": 18
+      },
+      "action": "nenhuma",
+      "reason": "migration versionada — histórico do schema, nunca se apaga",
+      "manualDecision": false
+    },
+    {
+      "path": "supabase/migrations/097_service_payment_period_atomic.sql",
+      "category": "migration",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [
+        "service-role"
+      ],
+      "signals": {
+        "serviceRole": 1,
+        "sqlWrite": 10
       },
       "action": "nenhuma",
       "reason": "migration versionada — histórico do schema, nunca se apaga",
@@ -22986,6 +23102,22 @@
       "signals": {
         "sqlWrite": 4
       },
+      "action": "nenhuma",
+      "reason": "migration versionada — histórico do schema, nunca se apaga",
+      "manualDecision": false
+    },
+    {
+      "path": "supabase/migrations/rollback/097_service_payment_period_atomic.down.sql",
+      "category": "migration",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {},
       "action": "nenhuma",
       "reason": "migration versionada — histórico do schema, nunca se apaga",
       "manualDecision": false
