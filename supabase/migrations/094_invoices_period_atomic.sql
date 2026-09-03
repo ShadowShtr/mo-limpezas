@@ -122,8 +122,30 @@ BEGIN
     RAISE EXCEPTION 'INVOICES_PERIOD_094_PRECONDITION_FAILED: fundações de mutation/evento ou reconciliação ausentes';
   END IF;
 
-  IF to_regprocedure('public.digest(bytea,text)') IS NULL THEN
-    RAISE EXCEPTION 'INVOICES_PERIOD_094_PRECONDITION_FAILED: pgcrypto.digest(bytea,text) ausente';
+  -- 🔴 `digest` vive em `extensions`, NÃO em `public`.
+  --
+  --    Num projeto Supabase a `pgcrypto` é instalada no schema `extensions`, e
+  --    a leitura read-only de produção confirma-o:
+  --
+  --        to_regprocedure('public.digest(bytea,text)')      →  NULL
+  --        to_regprocedure('extensions.digest(bytea,text)')  →  PRESENTE
+  --
+  --    Esta precondição pedia `public.digest` e a função abaixo chamava-a. Nada
+  --    disso existe em produção: a 094 pararia — e pararia DEPOIS de 090..093
+  --    já estarem aplicadas, que é o pior instante para uma cadeia parar.
+  --
+  --    Passou despercebido porque as suites faziam `CREATE EXTENSION pgcrypto`
+  --    sem `WITH SCHEMA extensions`, instalando `digest` em `public` no
+  --    contentor descartável. O ensaio confirmava a migration contra uma forma
+  --    que produção não tem. `pgcrypto-extension-schema-parity.pg.test.ts` fixa
+  --    as duas metades, a nova e a antiga, para que não volte.
+  --
+  --    A correção é qualificar explicitamente. NÃO se cria um wrapper
+  --    `public.digest`, NÃO se move a extensão e NÃO se acrescenta `extensions`
+  --    ao `search_path` da função: as três esconderiam a dependência em vez de
+  --    a declarar, e a superfície pública do projeto não cresce por isto.
+  IF to_regprocedure('extensions.digest(bytea,text)') IS NULL THEN
+    RAISE EXCEPTION 'INVOICES_PERIOD_094_PRECONDITION_FAILED: extensions.digest(bytea,text) ausente';
   END IF;
 
   IF to_regclass('public.cash_flow_entries_reference_unique') IS NULL THEN
@@ -395,7 +417,15 @@ BEGIN
   -- O recibo é trancado antes de ler ou escrever o domínio. Um retry exacto
   -- devolve o resultado guardado; a mesma mutation_id com outra intenção falha.
   PERFORM public.lock_domain_mutation(p_company_id, p_mutation_id);
-  v_request_hash := encode(public.digest(convert_to(jsonb_build_object(
+  -- 🔴 `extensions.digest`, qualificado à mão e de propósito.
+  --
+  --    O `SET search_path` desta função é `pg_catalog, public` e fica como
+  --    está: acrescentar-lhe `extensions` faria a chamada resolver sozinha, mas
+  --    ao custo de a dependência deixar de estar escrita onde é usada — e de
+  --    alargar o que esta função SECURITY DEFINER passa a ver. A qualificação
+  --    explícita diz exactamente de onde vem a função, e é a razão de a
+  --    precondição acima verificar essa mesma assinatura.
+  v_request_hash := encode(extensions.digest(convert_to(jsonb_build_object(
     'operation', 'set_invoice_status_atomic',
     'invoice_id', p_invoice_id,
     'company_id', p_company_id,
