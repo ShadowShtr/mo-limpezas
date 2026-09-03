@@ -188,7 +188,28 @@ vi.mock("@/lib/supabase/server", () => ({
 }));
 
 vi.mock("@/lib/supabase/admin", () => ({
-  createAdminClient: () => ({ from: (table: string) => makeBuilder(table) }),
+  createAdminClient: () => ({
+    from: (table: string) => makeBuilder(table),
+    rpc: async (name: string, args: Record<string, unknown>) => {
+      if (name === "upsert_payroll_records_atomic") {
+        escritas.push({ table: "payroll_records", op: "upsert", payload: args.p_records, filtros: [] });
+        return { data: [{ gravados: Array.isArray(args.p_records) ? args.p_records.length : 0, preservados: 0 }], error: null };
+      }
+      if (name === "adjust_payroll_record_atomic") {
+        escritas.push({ table: "payroll_records", op: "update", payload: args.p_patch, filtros: [["status", "rascunho"]] });
+        return { data: [{ record_id: args.p_record_id }], error: null };
+      }
+      if (name === "approve_payroll_records_atomic") {
+        escritas.push({ table: "payroll_records", op: "update", payload: { status: "aprovado" }, filtros: [["status", "rascunho"]] });
+        return { data: [{ aprovados: Array.isArray(args.p_ids) ? args.p_ids.length : 0, ja_aprovados: 0 }], error: null };
+      }
+      if (name === "mark_payroll_paid_atomic") {
+        escritas.push({ table: "payroll_records", op: "update", payload: { status: "pago" }, filtros: [] });
+        return { data: [{ pagos: Array.isArray(args.p_ids) ? args.p_ids.length : 0, movimentos: 0 }], error: null };
+      }
+      return { data: null, error: null };
+    },
+  }),
 }));
 
 vi.mock("next/cache", () => ({ revalidatePath: () => {} }));
