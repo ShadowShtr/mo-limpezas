@@ -31,7 +31,6 @@
 import { revalidatePath } from "next/cache";
 
 import { requireProfile } from "@/lib/auth-guard";
-import { auditLog } from "@/lib/audit";
 // ⚠️ `ClientePeriodo` é a forma mínima que a guarda declara. O `AdminClient`
 //    real satisfaz-na, mas os tipos gerados do PostgREST são profundos e
 //    verificá-los contra ela faz o compilador rebentar com TS2589 («Type
@@ -40,10 +39,9 @@ import { auditLog } from "@/lib/audit";
 //    `interpretarLinhaPeriodo`.
 import { lerEstadoPeriodo, type ClientePeriodo } from "@/lib/finance-period-guard";
 import {
-  ACAO_PERIODO_FECHADO,
-  ACAO_PERIODO_REABERTO,
   agregarChecklist,
-  interpretarLinhaPeriodo,
+  descreverBloqueadores,
+  interpretarResultadoFecho,
   itemContagem,
   itemFalhaDeLeitura,
   nomePeriodo,
@@ -260,82 +258,65 @@ export async function closeFinancialPeriod(entrada: { year: number; month: numbe
   if (!v.ok) return { ok: false, error: v.error };
   const periodo = v.periodo;
 
-  // Estado actual primeiro: fechar um mês já fechado é um no-op, não um erro,
-  // e não deve mexer no `closed_at` original (perder-se-ia a data real do
-  // fecho por causa de um duplo-clique).
-  const atual = await lerEstadoPeriodo(admin as unknown as ClientePeriodo, profile.company_id, periodo);
-  if (!atual.ok) {
+  // ─── A autoridade passou para a base ────────────────────────────────────
+  //
+  // 🔴 Isto era, até à 090, três viagens separadas:
+  //
+  //        lê estado  →  calcula o checklist  →  upsert 'closed'
+  //
+  //    Entre quaisquer duas cabia a transação de um writer. O mês fechava com
+  //    um checklist calculado antes de alguém lhe acrescentar um pendente, ou
+  //    uma escrita entrava num mês que acabara de fechar. Nenhum dos dois lados
+  //    via o outro.
+  //
+  //    `close_financial_period_atomic` faz tudo sob o mesmo advisory lock que
+  //    os writers adquirem: bloqueia, revalida o estado, reconta os
+  //    bloqueadores, grava o fecho e a linha de auditoria — uma transação só.
+  //
+  //    O checklist do ecrã continua a existir e continua a ser informativo. O
+  //    que deixou de haver é um caminho em que ele seja a última palavra.
+  const { data, error } = await admin.rpc("close_financial_period_atomic", {
+    p_company_id: profile.company_id,
+    p_year: periodo.year,
+    p_month: periodo.month,
+    // `p_actor` é o perfil da sessão, nunca um valor do browser: aceitar um
+    // actor do cliente permitia atribuir o fecho a outra pessoa.
+    p_actor: profile.id,
+  });
+
+  if (error) {
     return {
       ok: false,
       code: "FINANCIAL_PERIOD_STATE_UNKNOWN",
       error: "Não foi possível confirmar o estado do período. Nada foi alterado.",
     };
   }
-  if (atual.estado.status === "closed") {
-    return { ok: true, status: "closed", jaEstavaFechado: true };
-  }
 
-  // 🔴 Bloqueadores recalculados aqui, no servidor, no momento da escrita.
-  //    O checklist do modal não é aceite como prova.
-  const checklist = await getFinancialCloseChecklist(periodo);
-  if (!checklist.ok) return { ok: false, error: checklist.error };
-  if (!checklist.checklist.podeFechar) {
-    const nomes = checklist.checklist.bloqueadores.map((b) => b.rotulo).join("; ");
-    return {
-      ok: false,
-      code: "FINANCIAL_PERIOD_BLOCKED",
-      error: `Não foi possível fechar ${nomePeriodo(periodo)}: ${nomes}.`,
-    };
-  }
-
-  // `closed_at` é `now()` da base e `closed_by` é o perfil da sessão — nenhum
-  // dos dois vem do browser. Um `closed_by` aceite do cliente permitia
-  // atribuir o fecho a outra pessoa.
-  const linha = {
-    company_id: profile.company_id,
-    year: periodo.year,
-    month: periodo.month,
-    status: "closed" as const,
-    closed_at: new Date().toISOString(),
-    closed_by: profile.id,
-    // Fechar de novo limpa a marca de reabertura anterior: o que fica registado
-    // é o estado corrente, e o histórico completo vive em `audit_logs`.
-    reopened_at: null,
-    reopened_by: null,
-    reopen_reason: null,
-    updated_at: new Date().toISOString(),
-  };
-
-  // `UNIQUE (company_id, year, month)` (071) serializa dois fechos
-  // simultâneos: o segundo colide e o `onConflict` resolve para o mesmo
-  // estado final em vez de rebentar com um erro de constraint que a gestora
-  // não saberia interpretar.
-  const { data, error } = await admin
-    .from("financial_periods")
-    .upsert(linha, { onConflict: "company_id,year,month" })
-    .select("status, closed_at, closed_by, reopened_at, reopen_reason")
-    .maybeSingle();
-
-  if (error) return { ok: false, error: error.message };
-
-  const final = interpretarLinhaPeriodo(data);
-  if (final.status !== "closed") {
+  const resultado = interpretarResultadoFecho(data);
+  if (!resultado.ok) {
     return { ok: false, error: "O período não ficou fechado. Nada foi dado como concluído." };
   }
 
-  await auditLog({
-    companyId: profile.company_id,
-    actorId: profile.id,
-    action: ACAO_PERIODO_FECHADO,
-    entityType: "financial_period",
-    entityId: `${periodo.year}-${String(periodo.month).padStart(2, "0")}`,
-    // Só identidade do período e do actor. Nenhum valor financeiro: quem fechou
-    // e quando é o que importa auditar, e os números vivem nas suas tabelas.
-    meta: { year: periodo.year, month: periodo.month },
-  }, admin);
+  if (resultado.fechado) {
+    // A auditoria já foi gravada dentro da transação da RPC — não se repete
+    // aqui. Duas linhas para um fecho só diriam que aconteceu duas vezes.
+    revalidarFinanceiro();
+    return { ok: true, status: "closed", jaEstavaFechado: false };
+  }
 
-  revalidarFinanceiro();
-  return { ok: true, status: "closed", jaEstavaFechado: false };
+  // Já estava fechado: no-op, não erro. Um duplo-clique não pode reescrever o
+  // `closed_at` original nem gerar uma segunda linha de auditoria.
+  if (resultado.jaFechado) {
+    return { ok: true, status: "closed", jaEstavaFechado: true };
+  }
+
+  // Bloqueadores. A RPC devolve as contagens por chave; a frase para a gestora
+  // é montada aqui, onde vivem os rótulos em português.
+  return {
+    ok: false,
+    code: "FINANCIAL_PERIOD_BLOCKED",
+    error: `Não foi possível fechar ${nomePeriodo(periodo)}: ${descreverBloqueadores(resultado.bloqueadores)}.`,
+  };
 }
 
 // ─── Reabrir ─────────────────────────────────────────────────────────────────
@@ -361,8 +342,22 @@ export async function reopenFinancialPeriod(entrada: {
   const m = validarMotivoReabertura(entrada.reason);
   if (!m.ok) return { ok: false, error: m.error };
 
-  const atual = await lerEstadoPeriodo(admin as unknown as ClientePeriodo, profile.company_id, periodo);
-  if (!atual.ok) {
+  // 🔴 Reabrir participa do MESMO protocolo que fechar e que os writers.
+  //
+  //    Sem isso, um writer podia ver o mês fechado, recusar, e a reabertura
+  //    entrar logo a seguir — dando uma recusa que já não correspondia a nada.
+  //
+  //    A RPC valida o motivo, adquire o lock, revalida o estado, reabre e grava
+  //    a auditoria com o motivo — tudo numa transação.
+  const { data, error } = await admin.rpc("reopen_financial_period_atomic", {
+    p_company_id: profile.company_id,
+    p_year: periodo.year,
+    p_month: periodo.month,
+    p_actor: profile.id,
+    p_reason: m.motivo,
+  });
+
+  if (error) {
     return {
       ok: false,
       code: "FINANCIAL_PERIOD_STATE_UNKNOWN",
@@ -370,46 +365,16 @@ export async function reopenFinancialPeriod(entrada: {
     };
   }
 
-  // Já aberto — não há nada para reabrir. Não criar linha só para registar uma
-  // reabertura que não aconteceu: ficaria um `reopened_at` sem `closed_at`
-  // correspondente, um estado que não quer dizer nada.
-  if (atual.estado.status === "open") {
+  // `true` = reabriu agora. `false` = já estava aberto, e aí não se cria linha
+  // nenhuma: ficaria um `reopened_at` sem `closed_at` correspondente, um estado
+  // que não quer dizer nada.
+  if (data === true) {
+    revalidarFinanceiro();
+    return { ok: true, status: "open", jaEstavaAberto: false };
+  }
+  if (data === false) {
     return { ok: true, status: "open", jaEstavaAberto: true };
   }
 
-  const { data, error } = await admin
-    .from("financial_periods")
-    .update({
-      status: "open",
-      reopened_at: new Date().toISOString(),
-      reopened_by: profile.id,
-      reopen_reason: m.motivo,
-      updated_at: new Date().toISOString(),
-    })
-    .eq("company_id", profile.company_id)
-    .eq("year", periodo.year)
-    .eq("month", periodo.month)
-    .select("status, closed_at, closed_by, reopened_at, reopen_reason")
-    .maybeSingle();
-
-  if (error) return { ok: false, error: error.message };
-
-  const final = interpretarLinhaPeriodo(data);
-  if (final.status !== "open") {
-    return { ok: false, error: "O período não ficou reaberto. Nada foi dado como concluído." };
-  }
-
-  await auditLog({
-    companyId: profile.company_id,
-    actorId: profile.id,
-    action: ACAO_PERIODO_REABERTO,
-    entityType: "financial_period",
-    entityId: `${periodo.year}-${String(periodo.month).padStart(2, "0")}`,
-    // O motivo é o ponto da auditoria: seis meses depois, é o que explica
-    // porque é que os números daquele mês mudaram.
-    meta: { year: periodo.year, month: periodo.month, reason: m.motivo },
-  }, admin);
-
-  revalidarFinanceiro();
-  return { ok: true, status: "open", jaEstavaAberto: false };
+  return { ok: false, error: "O período não ficou reaberto. Nada foi dado como concluído." };
 }

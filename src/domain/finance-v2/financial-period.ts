@@ -292,3 +292,82 @@ export function itemContagem(
     detalhe: contagem > 0 ? detalheQuandoHa : "Nada a assinalar.",
   };
 }
+
+// ─── O resultado do fecho atómico ────────────────────────────────────────────
+//
+// `close_financial_period_atomic` (090) devolve uma linha com `fechado` e
+// `bloqueadores`. Interpretar essa resposta é lógica pura, e vive aqui para
+// poder ser testada sem base de dados nenhuma — como o resto deste ficheiro.
+
+/** Contagem por chave de bloqueador, tal como a RPC a devolve. */
+export type BloqueadoresFecho = Record<string, number>;
+
+export type ResultadoFecho =
+  | { ok: true; fechado: true }
+  | { ok: true; fechado: false; jaFechado: true }
+  | { ok: true; fechado: false; jaFechado: false; bloqueadores: BloqueadoresFecho }
+  | { ok: false };
+
+/**
+ * Lê a resposta da RPC sem confiar na forma dela.
+ *
+ * 🔴 Nada aqui assume que o que veio da base tem o feitio esperado. Um
+ *    `data` inesperado dá `ok: false` — que a action traduz em «não ficou
+ *    fechado, nada foi dado como concluído» — em vez de um `undefined` a
+ *    propagar-se e a acabar como um fecho dado por bom.
+ */
+export function interpretarResultadoFecho(data: unknown): ResultadoFecho {
+  // O PostgREST devolve `RETURNS TABLE` como array de linhas.
+  const linha = Array.isArray(data) ? data[0] : data;
+  if (!linha || typeof linha !== "object") return { ok: false };
+
+  const r = linha as Record<string, unknown>;
+  if (typeof r.fechado !== "boolean") return { ok: false };
+
+  if (r.fechado) return { ok: true, fechado: true };
+
+  const bruto = r.bloqueadores;
+  if (!bruto || typeof bruto !== "object") return { ok: false };
+
+  const b = bruto as Record<string, unknown>;
+  if (b.ja_fechado === true) return { ok: true, fechado: false, jaFechado: true };
+
+  // Só as chaves com contagem numérica. Uma chave com outro tipo é ruído, e
+  // somá-la ao relatório dava um número que ninguém sabe interpretar.
+  const bloqueadores: BloqueadoresFecho = {};
+  for (const [chave, valor] of Object.entries(b)) {
+    if (typeof valor === "number" && valor > 0) bloqueadores[chave] = valor;
+  }
+
+  return { ok: true, fechado: false, jaFechado: false, bloqueadores };
+}
+
+/**
+ * Os rótulos das chaves que `financial_period_blockers` devolve.
+ *
+ * 🔴 Têm de acompanhar as chaves da RPC. Uma chave nova na base sem rótulo aqui
+ *    aparece à gestora pelo nome técnico — feio, mas honesto: é melhor do que
+ *    desaparecer da frase e o fecho ser recusado sem explicação.
+ *
+ * 🔴 E são as MESMAS chaves de `getFinancialCloseChecklist`. Não é coincidência
+ *    nem estilo: enquanto a RPC dizia `saidas_sem_categoria` e o ecrã dizia
+ *    `despesas_sem_categoria`, este mapa era uma tabela de tradução entre dois
+ *    nomes para a mesma coisa — e uma chave acrescentada de um lado nunca
+ *    chegaria ao outro. A 090 alinhou o vocabulário; este mapa passa a ser só
+ *    chave técnica → frase, sem tradução pelo meio.
+ */
+const ROTULO_BLOQUEADOR: Record<string, string> = {
+  faturas_rascunho: "faturas em rascunho",
+  despesas_sem_categoria: "despesas sem categoria",
+  movimentos_por_conciliar: "movimentos bancários por conciliar",
+  pagamentos_pendentes: "pagamentos pendentes",
+};
+
+/** A frase que a gestora lê, a partir das contagens da RPC. */
+export function descreverBloqueadores(bloqueadores: BloqueadoresFecho): string {
+  const partes = Object.entries(bloqueadores)
+    .filter(([, total]) => total > 0)
+    .map(([chave, total]) => `${total} ${ROTULO_BLOQUEADOR[chave] ?? chave}`);
+
+  return partes.length > 0 ? partes.join("; ") : "há pendências por resolver";
+}
