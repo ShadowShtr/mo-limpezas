@@ -3,9 +3,9 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Search, MoreHorizontal, MapPin, Trash2 } from "lucide-react";
+import { Search, MoreHorizontal, MapPin, Archive } from "lucide-react";
 import { ClienteSheet } from "./sheet";
-import { deleteCliente } from "@/app/actions/clientes";
+import { archiveCliente } from "@/app/actions/clientes";
 import { usePagination, Pagination } from "@/components/ui/pagination";
 
 type Cliente = {
@@ -28,14 +28,14 @@ export function ClientesTable({ clientes, companyId }: Props) {
   const router = useRouter();
   const [search, setSearch] = useState("");
   const [filterActive, setFilterActive] = useState("todos");
-  const [deleting, startDelete] = useTransition();
+  const [archiving, startArchive] = useTransition();
 
-  function handleDelete(c: Cliente) {
+  function handleArchive(c: Cliente) {
     if (!window.confirm(
-      `Excluir o cliente "${c.name}"?\n\nIsto apaga os locais, intervenções, serviços futuros e faturas deste cliente. Esta ação não pode ser desfeita.`,
+      `Arquivar o cliente "${c.name}"?\n\nO histórico será preservado e o cliente ficará inativo.`,
     )) return;
-    startDelete(async () => {
-      const res = await deleteCliente(c.id);
+    startArchive(async () => {
+      const res = await archiveCliente(c.id);
       if (!res.ok) { window.alert(res.error); return; }
       router.refresh();
     });
@@ -143,12 +143,12 @@ export function ClientesTable({ clientes, companyId }: Props) {
                         }
                       />
                       <button
-                        title="Excluir cliente"
-                        disabled={deleting}
-                        onClick={() => handleDelete(c)}
+                        title="Arquivar cliente"
+                        disabled={archiving}
+                        onClick={() => handleArchive(c)}
                         className="p-1.5 rounded-lg text-[var(--color-text-muted)] hover:text-red-600 hover:bg-red-50 transition-colors disabled:opacity-50"
                       >
-                        <Trash2 className="w-4 h-4" />
+                        <Archive className="w-4 h-4" />
                       </button>
                     </div>
                   </td>
