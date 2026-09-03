@@ -1,16 +1,16 @@
 {
   "generatedBy": "scripts/audit-file-inventory.mjs",
-  "totalFiles": 837,
+  "totalFiles": 842,
   "byStatus": {
-    "MANTER": 814,
+    "MANTER": 819,
     "STANDBY": 23
   },
   "byCategory": {
-    "test": 189,
+    "test": 191,
     "route-ui": 138,
-    "migration": 112,
+    "migration": 114,
     "lib": 70,
-    "script": 56,
+    "script": 57,
     "domain": 52,
     "doc": 46,
     "server-action": 44,
@@ -29,12 +29,12 @@
     "supabase-other": 2
   },
   "byConfidence": {
-    "alta": 816,
+    "alta": 821,
     "média": 15,
     "baixa": 6
   },
   "scriptRisk": {
-    "SAFE_OFFLINE": 30,
+    "SAFE_OFFLINE": 31,
     "ADMIN_GUARDED_WRITE": 11,
     "WRITE_CAPABLE": 9,
     "ADMIN_READ": 6
@@ -2721,6 +2721,31 @@
       "scriptRisk": "SAFE_OFFLINE"
     },
     {
+      "path": "scripts/gen-093-fixture.mjs",
+      "category": "script",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "consoleLog": 1
+      },
+      "action": "nenhuma",
+      "reason": "ferramenta offline, sem acesso à base",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": true,
+        "dynamicImport": true,
+        "allClosed": false
+      },
+      "scriptRisk": "SAFE_OFFLINE"
+    },
+    {
       "path": "scripts/gen-credenciais-pdf.mjs",
       "category": "script",
       "status": "MANTER",
@@ -4309,6 +4334,33 @@
       "signals": {
         "sqlWrite": 14,
         "fallbackArray": 1
+      },
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/__tests__/cashflow-period-atomic.pg.test.ts",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [
+        "service-role"
+      ],
+      "signals": {
+        "serviceRole": 3,
+        "sqlWrite": 11
       },
       "action": "nenhuma",
       "reason": "suite de testes — corre por convenção do vitest",
@@ -6123,6 +6175,24 @@
       "manualDecision": false
     },
     {
+      "path": "src/__tests__/fixtures/pre-093-cashflow-rpcs.sql",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "sqlWrite": 3
+      },
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false
+    },
+    {
       "path": "src/__tests__/fixtures/production-078-partial-shape.json",
       "category": "test",
       "status": "MANTER",
@@ -6166,11 +6236,11 @@
       "category": "test",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 6,
+      "consumers": 7,
       "consumerSample": [
+        "src/__tests__/cashflow-period-atomic.pg.test.ts",
         "src/__tests__/fin-period-production-shadow.pg.test.ts",
-        "src/__tests__/financial-period-lock-protocol.pg.test.ts",
-        "src/__tests__/manual-charges-period-atomic.pg.test.ts"
+        "src/__tests__/financial-period-lock-protocol.pg.test.ts"
       ],
       "autoLoaded": false,
       "referencedBy": [],
@@ -22179,6 +22249,27 @@
       "manualDecision": false
     },
     {
+      "path": "supabase/migrations/093_cashflow_period_atomic.sql",
+      "category": "migration",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [
+        "service-role"
+      ],
+      "signals": {
+        "serviceRole": 3,
+        "sqlWrite": 4
+      },
+      "action": "nenhuma",
+      "reason": "migration versionada — histórico do schema, nunca se apaga",
+      "manualDecision": false
+    },
+    {
       "path": "supabase/migrations/20260608_new_features.sql",
       "category": "migration",
       "status": "MANTER",
@@ -22578,6 +22669,24 @@
     },
     {
       "path": "supabase/migrations/rollback/092_payments_period_atomic.down.sql",
+      "category": "migration",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "sqlWrite": 2
+      },
+      "action": "nenhuma",
+      "reason": "migration versionada — histórico do schema, nunca se apaga",
+      "manualDecision": false
+    },
+    {
+      "path": "supabase/migrations/rollback/093_cashflow_period_atomic.down.sql",
       "category": "migration",
       "status": "MANTER",
       "confidence": "alta",
