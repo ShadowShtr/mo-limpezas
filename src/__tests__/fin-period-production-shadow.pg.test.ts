@@ -69,13 +69,15 @@ const ler = (p: string) => readFileSync(join(ROOT, p), "utf8");
  *    049, …), porque o dump da forma traz tabelas e políticas mas não traz
  *    funções.
  *
- *    O que se ensaia é o que a direcção vai autorizar aplicar: 090 e 091,
+ *    O que se ensaia é o que a direcção vai autorizar aplicar: 078, 090, 091
+ *    e 094,
  *    sobre uma base que já tem o que produção tem. O pré-estado da 086 —
  *    `manual_charges` e as três RPCs — é montado abaixo a partir do mesmo
  *    fixture extraído que a suite da 091 usa, para as duas partirem do mesmo
  *    sítio.
  */
 const CADEIA = [
+  "supabase/migrations/078_domain_mutation_change_event_foundation.sql",
   "supabase/migrations/090_financial_period_lock_protocol.sql",
   "supabase/migrations/091_manual_charges_period_atomic.sql",
   "supabase/migrations/092_payments_period_atomic.sql",
@@ -119,6 +121,8 @@ beforeAll(async () => {
   // A forma real: andaime do Supabase (papéis, `auth`), o dump do schema, os
   // helpers legados e os grants.
   await pool.query(baselineCompleto());
+  await pool.query("CREATE EXTENSION IF NOT EXISTS pgcrypto");
+  await pool.query("INSERT INTO public._migrations (name) VALUES ('077_secure_migrations_ledger.sql')");
 
   // O overlay canónico: tudo o que o dump não traz e a stack 090..097 exige.
   // Uma fonte só, versionada, com cada bloco a nomear a migration de origem.

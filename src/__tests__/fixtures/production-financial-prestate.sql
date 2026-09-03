@@ -48,10 +48,9 @@
 --      payment_cashflow_provenance    presente
 --      is_financial_period_open       (uuid, integer, integer)
 --
---    E o que NÃO existe lá, e por isso NÃO está aqui:
---      payroll_records — nenhum índice único além da PK. O `onConflict` de
---      `runPayrollCalculation` não tem árbitro em produção. Registado na 096;
---      inventá-lo aqui faria o ensaio provar uma garantia que a base não dá.
+--    PAYROLL_UNIQUE_EFFECT = PRESENT: leitura read-only confirmou em produção
+--    a constraint abaixo. A origem/migration que a criou continua UNKNOWN;
+--    o overlay apenas reproduz o prestate observado.
 -- ============================================================================
 
 -- ─── 024 / 075 — a identidade única dos movimentos com origem ───────────────
@@ -147,3 +146,6 @@ BEGIN
     CHECK (period_month BETWEEN 1 AND 12);
 EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
+ALTER TABLE public.payroll_records
+  ADD CONSTRAINT payroll_records_company_id_collaborator_id_period_year_period_month_key
+  UNIQUE (company_id, collaborator_id, period_year, period_month);

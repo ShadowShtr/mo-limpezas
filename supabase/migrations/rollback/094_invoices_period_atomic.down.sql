@@ -23,7 +23,7 @@
 --
 -- 🔴 FORWARD_FIX_PREFERRED = YES.
 
-DROP FUNCTION IF EXISTS public.set_invoice_status_atomic(uuid, uuid, text, date, text, uuid);
+DROP FUNCTION IF EXISTS public.set_invoice_status_atomic(uuid, uuid, uuid, text, text, uuid, integer);
 DROP FUNCTION IF EXISTS public.delete_invoice_atomic(uuid, uuid, uuid);
 
 -- `create_invoice_with_items` NÃO é removida aqui. Reponha-a reaplicando a 072.

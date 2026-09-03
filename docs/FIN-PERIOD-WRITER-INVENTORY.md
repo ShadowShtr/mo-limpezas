@@ -176,6 +176,17 @@ A pergunta que a 090 tinha de responder para deixar de ser um protocolo de par:
 canónica recebe uma lista e não um par, e é por isso que a 090 passou a
 `lock_financial_periods_many`.
 
+## Prestate financeiro observado
+
+Leitura read-only do schema de produção confirmou a constraint única
+`(company_id, collaborator_id, period_year, period_month)` em
+`payroll_records`.
+
+`PAYROLL_UNIQUE_EFFECT = PRESENT` · `PAYROLL_UNIQUE_PROVENANCE = UNKNOWN`.
+Não se cria constraint duplicada nem se atribui migration até existir origem
+canónica comprovada. O prestate usado nos ensaios está em
+`src/__tests__/fixtures/production-financial-prestate.sql`.
+
 ## Agrupamento das migrations de adopção
 
 Agrupado por coerência transaccional e de rollback, não por ficheiro de action:
