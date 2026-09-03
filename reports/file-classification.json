@@ -1,5 +1,7 @@
 {
   "generatedBy": "scripts/audit-file-inventory.mjs",
+<<<<<<< HEAD
+<<<<<<< HEAD
   "totalFiles": 852,
   "byStatus": {
     "MANTER": 829,
@@ -11,6 +13,26 @@
     "migration": 118,
     "lib": 70,
     "script": 59,
+=======
+  "totalFiles": 847,
+=======
+  "totalFiles": 852,
+>>>>>>> 3219b60 (feat(096): segurança de período da folha, e a P0B fechada)
+  "byStatus": {
+    "MANTER": 829,
+    "STANDBY": 23
+  },
+  "byCategory": {
+    "test": 195,
+    "route-ui": 138,
+    "migration": 118,
+    "lib": 70,
+<<<<<<< HEAD
+    "script": 58,
+>>>>>>> a21ea74 (feat(095): conciliação bancária dentro do protocolo de período)
+=======
+    "script": 59,
+>>>>>>> 3219b60 (feat(096): segurança de período da folha, e a P0B fechada)
     "domain": 52,
     "doc": 46,
     "server-action": 44,
@@ -29,12 +51,28 @@
     "supabase-other": 2
   },
   "byConfidence": {
+<<<<<<< HEAD
+<<<<<<< HEAD
     "alta": 831,
+=======
+    "alta": 826,
+>>>>>>> a21ea74 (feat(095): conciliação bancária dentro do protocolo de período)
+=======
+    "alta": 831,
+>>>>>>> 3219b60 (feat(096): segurança de período da folha, e a P0B fechada)
     "média": 15,
     "baixa": 6
   },
   "scriptRisk": {
+<<<<<<< HEAD
+<<<<<<< HEAD
     "SAFE_OFFLINE": 33,
+=======
+    "SAFE_OFFLINE": 32,
+>>>>>>> a21ea74 (feat(095): conciliação bancária dentro do protocolo de período)
+=======
+    "SAFE_OFFLINE": 33,
+>>>>>>> 3219b60 (feat(096): segurança de período da folha, e a P0B fechada)
     "ADMIN_GUARDED_WRITE": 11,
     "WRITE_CAPABLE": 9,
     "ADMIN_READ": 6
@@ -2771,6 +2809,10 @@
       "scriptRisk": "SAFE_OFFLINE"
     },
     {
+<<<<<<< HEAD
+<<<<<<< HEAD
+=======
+>>>>>>> 3219b60 (feat(096): segurança de período da folha, e a P0B fechada)
       "path": "scripts/gen-095-fixture.mjs",
       "category": "script",
       "status": "MANTER",
@@ -2796,6 +2838,11 @@
       "scriptRisk": "SAFE_OFFLINE"
     },
     {
+<<<<<<< HEAD
+=======
+>>>>>>> a21ea74 (feat(095): conciliação bancária dentro do protocolo de período)
+=======
+>>>>>>> 3219b60 (feat(096): segurança de período da folha, e a P0B fechada)
       "path": "scripts/gen-credenciais-pdf.mjs",
       "category": "script",
       "status": "MANTER",
@@ -6288,6 +6335,10 @@
       "manualDecision": false
     },
     {
+<<<<<<< HEAD
+<<<<<<< HEAD
+=======
+>>>>>>> 3219b60 (feat(096): segurança de período da folha, e a P0B fechada)
       "path": "src/__tests__/fixtures/pre-095-bank-rpc.sql",
       "category": "test",
       "status": "MANTER",
@@ -6306,6 +6357,11 @@
       "manualDecision": false
     },
     {
+<<<<<<< HEAD
+=======
+>>>>>>> a21ea74 (feat(095): conciliação bancária dentro do protocolo de período)
+=======
+>>>>>>> 3219b60 (feat(096): segurança de período da folha, e a P0B fechada)
       "path": "src/__tests__/fixtures/production-078-partial-shape.json",
       "category": "test",
       "status": "MANTER",
@@ -6349,7 +6405,15 @@
       "category": "test",
       "status": "MANTER",
       "confidence": "alta",
+<<<<<<< HEAD
+<<<<<<< HEAD
       "consumers": 9,
+=======
+      "consumers": 8,
+>>>>>>> a21ea74 (feat(095): conciliação bancária dentro do protocolo de período)
+=======
+      "consumers": 9,
+>>>>>>> 3219b60 (feat(096): segurança de período da folha, e a P0B fechada)
       "consumerSample": [
         "src/__tests__/bank-reconciliation-period-atomic.pg.test.ts",
         "src/__tests__/cashflow-period-atomic.pg.test.ts",
@@ -22431,6 +22495,10 @@
       "manualDecision": false
     },
     {
+<<<<<<< HEAD
+<<<<<<< HEAD
+=======
+>>>>>>> 3219b60 (feat(096): segurança de período da folha, e a P0B fechada)
       "path": "supabase/migrations/095_bank_reconciliation_period_atomic.sql",
       "category": "migration",
       "status": "MANTER",
@@ -22452,6 +22520,11 @@
       "manualDecision": false
     },
     {
+<<<<<<< HEAD
+=======
+>>>>>>> a21ea74 (feat(095): conciliação bancária dentro do protocolo de período)
+=======
+>>>>>>> 3219b60 (feat(096): segurança de período da folha, e a P0B fechada)
       "path": "supabase/migrations/20260608_new_features.sql",
       "category": "migration",
       "status": "MANTER",
@@ -22904,6 +22977,10 @@
       "manualDecision": false
     },
     {
+<<<<<<< HEAD
+<<<<<<< HEAD
+=======
+>>>>>>> 3219b60 (feat(096): segurança de período da folha, e a P0B fechada)
       "path": "supabase/migrations/rollback/095_bank_reconciliation_period_atomic.down.sql",
       "category": "migration",
       "status": "MANTER",
@@ -22922,6 +22999,11 @@
       "manualDecision": false
     },
     {
+<<<<<<< HEAD
+=======
+>>>>>>> a21ea74 (feat(095): conciliação bancária dentro do protocolo de período)
+=======
+>>>>>>> 3219b60 (feat(096): segurança de período da folha, e a P0B fechada)
       "path": "supabase/seed.sql",
       "category": "supabase-other",
       "status": "MANTER",
