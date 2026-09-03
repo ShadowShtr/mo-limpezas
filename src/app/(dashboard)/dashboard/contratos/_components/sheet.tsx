@@ -421,7 +421,9 @@ export function ContratoSheet({
         weekdays: (frequency === "weekly" || frequency === "biweekly" || frequency === "triweekly") ? selectedWeekdays : null,
         schedule_days: buildScheduleDays(),
         starts_on: startsOn,
-        ends_on: endsOn || undefined,
+        // Campo crítico: vazio significa remover a data de fim, não que a
+        // página tenha falhado a carregá-la.
+        ends_on: endsOn || null,
         status,
         notes: notes || undefined,
         cleaning_type: cleaningType || null,
