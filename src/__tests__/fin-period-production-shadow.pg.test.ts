@@ -216,7 +216,7 @@ describe("shadow — a cadeia aplica sobre a forma real de produção", () => {
     }
   }, 120_000);
 
-  it("nenhuma função nova é SECURITY DEFINER", async () => {
+  it("apenas a RPC canónica de invoice é SECURITY DEFINER", async () => {
     const { rows } = await pool.query(
       `SELECT p.proname FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
         WHERE n.nspname='public' AND p.prosecdef
@@ -228,7 +228,7 @@ describe("shadow — a cadeia aplica sobre a forma real de produção", () => {
             OR p.proname LIKE '%bank_%'
             OR p.proname LIKE '%payroll%')`,
     );
-    expect(rows.map((r) => r.proname)).toEqual([]);
+    expect(rows.map((r) => r.proname)).toEqual(["set_invoice_status_atomic"]);
   }, 120_000);
 
   it("a superfície fica fechada a anon e authenticated, e aberta a service_role", async () => {
@@ -258,7 +258,7 @@ describe("shadow — a cadeia aplica sobre a forma real de produção", () => {
       "public.create_cashflow_entry_atomic(uuid, text, numeric, text, text, date, text, text, uuid, uuid)",
       "public.update_cashflow_entry_atomic(uuid, uuid, jsonb)",
       "public.delete_cashflow_entry_atomic(uuid, uuid)",
-      "public.set_invoice_status_atomic(uuid, uuid, text, date, text, uuid)",
+      "public.set_invoice_status_atomic(uuid, uuid, uuid, text, text, uuid, integer)",
       "public.delete_invoice_atomic(uuid, uuid, uuid)",
       "public.confirm_bank_match_atomic(uuid, uuid, uuid)",
       "public.reject_bank_match_atomic(uuid, uuid, uuid)",
