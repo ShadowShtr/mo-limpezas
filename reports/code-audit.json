@@ -1,13 +1,13 @@
 {
   "inventorySource": "git ls-files",
   "summary": {
-    "repositoryFiles": 816,
-    "textFiles": 803,
-    "sourceFiles": 582,
-    "textLines": 198204,
+    "repositoryFiles": 817,
+    "textFiles": 804,
+    "sourceFiles": 587,
+    "textLines": 198436,
     "typescriptDiagnostics": 0,
     "productionEntries": 71,
-    "unreachableProductionModules": 40,
+    "unreachableProductionModules": 37,
     "exactDuplicateFileGroups": 0
   },
   "highConfidence": {
@@ -47,10 +47,7 @@
       "src/domain/reports/reports-compat.ts",
       "src/domain/scheduling/horizons.ts",
       "src/domain/scheduling/legacy-recurrence.ts",
-      "src/domain/scheduling/occurrence-identity.ts",
-      "src/domain/scheduling/occurrence-projection.ts",
       "src/domain/scheduling/occurrence-repair.ts",
-      "src/domain/scheduling/reconciliation.ts",
       "src/domain/scheduling/recurrence-compat.ts",
       "src/lib/bank-import/pdf.ts",
       "src/lib/bank-import/xlsx.ts",
@@ -88,10 +85,7 @@
       "src/domain/reports/reports-compat.ts",
       "src/domain/scheduling/horizons.ts",
       "src/domain/scheduling/legacy-recurrence.ts",
-      "src/domain/scheduling/occurrence-identity.ts",
-      "src/domain/scheduling/occurrence-projection.ts",
       "src/domain/scheduling/occurrence-repair.ts",
-      "src/domain/scheduling/reconciliation.ts",
       "src/domain/scheduling/recurrence-compat.ts",
       "src/lib/finance-write-surface.ts"
     ],

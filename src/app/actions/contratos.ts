@@ -3,14 +3,16 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { maxReferenceNumber } from "@/lib/services/reference";
-import { auditLog } from "@/lib/audit";
 import { hasOverlappingMonthlyContract } from "@/lib/contract-overlap";
 import { isValidIsoDateString, isValidFiniteNumber } from "@/lib/utils";
-import { getOccurrences, DOW_TO_KEY } from "@/lib/contract-occurrences";
+import { getOccurrences } from "@/lib/contract-occurrences";
 import { assertCriticalFieldsLoaded, CRITICAL_FIELDS_BLOCKED_MESSAGE } from "@/lib/critical-fields";
-import { calculateServiceValue } from "@/lib/service-value";
 import { revalidateBusinessPaths } from "@/lib/revalidate-business";
 import type { ScheduleDay } from "@/types/database";
+import { projectOccurrence, type ContractProjectionFields, type ServiceProjection } from "@/domain/scheduling/occurrence-projection";
+import { reconcileContract } from "@/domain/scheduling/reconciliation";
+import { toAtomicServicePlan, type AtomicServicePlanItem } from "@/domain/scheduling/atomic-contract-plan";
+import type { ServiceRecord } from "@/domain/scheduling/occurrence-identity";
 
 export interface ContratoInput {
   location_id: string;
@@ -259,93 +261,6 @@ async function generateServicesForContract(
 }
 
 /**
- * Reescreve os serviços FUTUROS ainda `agendado` deste contrato segundo o padrão
- * atual: equipa, hora de início/fim e valor (por dia da semana). Garante que ao
- * mudar a equipa/horário no contrato a alteração se replica em TODAS as ocorrências
- * futuras, não só nas que ainda não tinham sido geradas. Não toca em exceções
- * movidas à mão (is_exception) nem em ocorrências passadas/em curso/concluídas.
- */
-async function updateFutureServiceValuesForContract(
-  admin: ReturnType<typeof createAdminClient>,
-  contractId: string,
-  companyId: string,
-  hourlyRate: number | null,
-  scheduleDays: ScheduleDay[],
-  fixedPrice: number | null = null,
-  fixedMonthly = false,
-  applyVat = false,
-) {
-  const fixed = fixedPrice != null && fixedPrice > 0 ? parseFloat(fixedPrice.toFixed(2)) : null;
-  const { data: services } = await admin
-    .from("services")
-    .select("id, scheduled_start, team_id, is_exception")
-    .eq("company_id", companyId)
-    .eq("contract_id", contractId)
-    .eq("status", "agendado")
-    .gte("scheduled_start", new Date().toISOString());
-
-  const defaultSchedule = scheduleDays?.[0];
-  if (!defaultSchedule) return;
-
-  // Tamanhos das equipas do padrão (para o cálculo por pessoa).
-  const teamSizes = await getTeamSizes(
-    admin,
-    (scheduleDays ?? []).map((s) => s.team_id ?? "").filter(Boolean),
-  );
-
-  for (const service of services ?? []) {
-    if (service.is_exception) continue;
-
-    const dateStr = (service.scheduled_start as string).slice(0, 10);
-    // Dia da semana estável a partir da data (meio-dia UTC evita desvios de fuso).
-    const dow = new Date(`${dateStr}T12:00:00Z`).getUTCDay();
-    const dayKey = DOW_TO_KEY[dow];
-    const schedule = scheduleDays.find((s) => s.day === dayKey) ?? defaultSchedule;
-
-    const endTime = addMins(schedule.start_time, schedule.duration_min);
-    const people = resolvePeople(schedule, teamSizes);
-    const calculatedValue = calculateServiceValue({
-      durationMin: schedule.duration_min,
-      hourlyRate,
-      numPeople: people,
-      manualValue: null,
-      fixedMonthly,
-      contractFixedPrice: fixed,
-      upholsteryUnits: null,
-      upholsteryUnitPrice: null,
-    });
-
-    const syncUpdate = {
-      team_id: schedule.team_id || null,
-      scheduled_start: toLisbonTimestamp(dateStr, schedule.start_time),
-      scheduled_end: toLisbonTimestamp(dateStr, endTime),
-      hourly_rate: fixedMonthly || fixed != null ? null : hourlyRate,
-      calculated_value: calculatedValue,
-      apply_vat: applyVat,
-      num_people: people,
-    };
-
-    // contract_synced_at declara ao trigger trg_services_mark_exception (migração
-    // 059) que este update é a sincronização legítima do contrato — sem ele, o
-    // trigger marcaria a ocorrência como exceção manual e as próximas sincronizações
-    // deixariam de a atualizar. Fallback sem a coluna enquanto a 059 não estiver
-    // aplicada (PGRST204/42703 = coluna desconhecida).
-    const { error: syncErr } = await admin
-      .from("services")
-      .update({ ...syncUpdate, contract_synced_at: new Date().toISOString() })
-      .eq("id", service.id)
-      .eq("company_id", companyId);
-    if (syncErr && (syncErr.code === "PGRST204" || syncErr.code === "42703")) {
-      await admin
-        .from("services")
-        .update(syncUpdate)
-        .eq("id", service.id)
-        .eq("company_id", companyId);
-    }
-  }
-}
-
-/**
  * Apaga TODOS os serviços futuros ainda `agendado` deste contrato, sem exceção
  * (incl. ocorrências movidas à mão). Usado quando o contrato deixa de estar
  * ativo (pausado/cancelado/excluído) — nesse ponto a série inteira pára, não
@@ -370,61 +285,167 @@ export async function removeFutureScheduledServices(
   return deleted?.length ?? 0;
 }
 
+type AtomicContractSnapshot = {
+  id: string;
+  updated_at: string;
+  excluded_dates: string[] | null;
+  location_id: string;
+  name: string | null;
+  frequency: string;
+  interval_days: number;
+  weekdays: number[] | null;
+  schedule_days: ScheduleDay[];
+  starts_on: string;
+  ends_on: string | null;
+  status: string;
+  notes: string | null;
+  cleaning_type: string | null;
+  payment_status: string | null;
+  upholstery_type: string | null;
+  upholstery_notes: string | null;
+  upholstery_units: number | null;
+  upholstery_unit_price: number | null;
+  fixed_price: number | null;
+  fixed_monthly: boolean;
+  apply_vat: boolean;
+  num_people: number | null;
+};
+
+function asServiceStatus(value: string): ServiceRecord["status"] {
+  if (["agendado", "em_curso", "concluido", "cancelado", "falta", "sem_cobertura"].includes(value)) {
+    return value as ServiceRecord["status"];
+  }
+  return "agendado";
+}
+
 /**
- * Apaga serviços FUTUROS ainda `agendado` deste contrato que já não correspondem
- * ao padrão atual (início mudou para mais tarde, fim antecipado, dia da semana
- * alterado, frequência alterada). Nunca toca em ocorrências passadas, em curso,
- * concluídas, faltas, canceladas, nem em exceções movidas à mão (is_exception).
- *
- * Quando o contrato deixa de estar "ativo" (pausado/cancelado), a comparação
- * por padrão deixa de fazer sentido — sem isto, um contrato arquivado com o
- * mesmo horário de sempre não tinha NENHUMA data "inválida" e as visitas
- * futuras já geradas ficavam órfãs no calendário como "Agendado" para sempre.
- * Nesse caso remove tudo o que ainda está por acontecer, sem exceção.
+ * Lê o estado futuro e constrói somente intenções. A aplicação dessas
+ * intenções fica no RPC candidato, no mesmo commit do contrato.
  */
-async function reconcileFutureServicesForContract(
+async function buildAtomicServicePlan(
   admin: ReturnType<typeof createAdminClient>,
-  contractId: string,
+  snapshot: AtomicContractSnapshot,
   companyId: string,
-  contract: Parameters<typeof getOccurrences>[0],
-  status: string,
-) {
-  if (status !== "ativo") {
-    await removeFutureScheduledServices(admin, contractId, companyId);
-    return;
+  hourlyRate: number | null,
+): Promise<AtomicServicePlanItem[]> {
+  const today = new Date();
+  const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  const windowEnd = new Date(today.getFullYear(), today.getMonth() + 6, 0, 23, 59, 59);
+  const contract: ContractProjectionFields = {
+    id: snapshot.id,
+    companyId,
+    locationId: snapshot.location_id,
+    fixedMonthly: snapshot.fixed_monthly,
+    fixedPrice: snapshot.fixed_price,
+    upholsteryType: snapshot.upholstery_type,
+    upholsteryNotes: snapshot.upholstery_notes,
+    upholsteryUnits: snapshot.upholstery_units,
+    upholsteryUnitPrice: snapshot.upholstery_unit_price,
+    cleaningType: snapshot.cleaning_type,
+    paymentStatus: snapshot.payment_status,
+    applyVat: snapshot.apply_vat,
+    hourlyRate,
+  };
+  const teamIds = snapshot.schedule_days.map((day) => day.team_id ?? "").filter(Boolean);
+  const teamSizes = await getTeamSizes(admin, teamIds);
+  const expected = new Map<string, ServiceProjection>();
+
+  if (snapshot.status === "ativo") {
+    for (const { date, schedule } of getOccurrences({
+      frequency: snapshot.frequency,
+      weekdays: snapshot.weekdays,
+      interval_days: snapshot.interval_days,
+      schedule_days: snapshot.schedule_days,
+      starts_on: snapshot.starts_on,
+      ends_on: snapshot.ends_on,
+      excluded_dates: snapshot.excluded_dates,
+    }, todayStart, windowEnd)) {
+      const civil = toLocalDateStr(date);
+      expected.set(civil, projectOccurrence({
+        contract,
+        occurrenceDate: civil,
+        schedule,
+        teamSize: schedule.team_id ? teamSizes.get(schedule.team_id) ?? 1 : null,
+      }));
+    }
   }
 
-  const now = new Date();
-  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  // Janela ampla (6 meses) para cobrir o que o cron mensal possa ter gerado.
-  const windowEnd = new Date(now.getFullYear(), now.getMonth() + 6, 0, 23, 59, 59);
-
-  // Conjunto de datas válidas (YYYY-MM-DD) segundo o padrão atual.
-  const validDates = new Set(
-    getOccurrences(contract, todayStart, windowEnd).map(({ date }) => toLocalDateStr(date)),
-  );
-
-  const { data: future } = await admin
+  const { data: rows, error } = await admin
     .from("services")
-    .select("id, scheduled_start, is_exception")
+    .select("id, contract_id, scheduled_start, status, is_exception, original_date, created_at, location_id, team_id, scheduled_end, hourly_rate, calculated_value, apply_vat, num_people, cleaning_type, payment_status, upholstery_type, upholstery_notes, upholstery_units, upholstery_unit_price")
     .eq("company_id", companyId)
-    .eq("contract_id", contractId)
+    .eq("contract_id", snapshot.id)
     .eq("status", "agendado")
     .gte("scheduled_start", todayStart.toISOString());
+  if (error) throw new Error(`Falha ao ler serviços futuros: ${error.message}`);
 
-  const toDelete = (future ?? [])
-    .filter((s) => !s.is_exception)
-    .filter((s) => !validDates.has((s.scheduled_start as string).slice(0, 10)))
-    .map((s) => s.id);
-
-  if (toDelete.length > 0) {
-    await admin
-      .from("services")
-      .delete()
-      .eq("company_id", companyId)
-      .eq("contract_id", contractId)
-      .in("id", toDelete);
+  const actual: ServiceRecord[] = (rows ?? []).map((row) => ({
+    id: row.id,
+    companyId,
+    contractId: row.contract_id,
+    occurrenceDate: row.scheduled_start.slice(0, 10),
+    scheduledDate: row.scheduled_start.slice(0, 10),
+    status: asServiceStatus(row.status),
+    isException: row.is_exception,
+    originalDate: row.original_date,
+    createdAt: row.created_at,
+  }));
+  const actualProjections: Record<string, Partial<ServiceProjection>> = {};
+  for (const row of rows ?? []) {
+    actualProjections[row.id] = {
+      companyId,
+      contractId: snapshot.id,
+      locationId: row.location_id,
+      occurrenceDate: row.scheduled_start.slice(0, 10),
+      scheduledStart: row.scheduled_start,
+      scheduledEnd: row.scheduled_end,
+      teamId: row.team_id,
+      hourlyRate: row.hourly_rate,
+      calculatedValue: row.calculated_value,
+      applyVat: row.apply_vat,
+      numPeople: row.num_people,
+      cleaningType: row.cleaning_type,
+      paymentStatus: row.payment_status,
+      upholsteryType: row.upholstery_type,
+      upholsteryNotes: row.upholstery_notes,
+      upholsteryUnits: row.upholstery_units,
+      upholsteryUnitPrice: row.upholstery_unit_price,
+      status: "agendado",
+    };
   }
+
+  return toAtomicServicePlan(reconcileContract({
+    contractStatus: snapshot.status as "ativo" | "pausado" | "cancelado",
+    expected,
+    actual,
+    actualProjections,
+    excludedDates: snapshot.excluded_dates,
+  }), expected);
+}
+
+function atomicContractPatch(input: Omit<ContratoInput, "company_id" | "created_by">) {
+  return {
+    location_id: input.location_id,
+    name: input.name ?? null,
+    frequency: input.frequency,
+    interval_days: input.interval_days,
+    weekdays: input.weekdays,
+    schedule_days: input.schedule_days,
+    starts_on: input.starts_on,
+    ends_on: input.ends_on ?? null,
+    status: input.status,
+    notes: input.notes ?? null,
+    cleaning_type: input.cleaning_type ?? null,
+    payment_status: input.payment_status ?? null,
+    upholstery_type: input.upholstery_type ?? null,
+    upholstery_notes: input.upholstery_notes ?? null,
+    upholstery_units: input.upholstery_units ?? null,
+    upholstery_unit_price: input.upholstery_unit_price ?? null,
+    fixed_price: input.fixed_price ?? null,
+    fixed_monthly: input.fixed_monthly ?? false,
+    apply_vat: input.apply_vat ?? false,
+    num_people: input.num_people ?? null,
+  };
 }
 
 // ─── Actions ─────────────────────────────────────────────────────────────────
@@ -616,6 +637,92 @@ export async function updateContrato(id: string, input: Omit<ContratoInput, "com
     }
   }
 
+  const { data: current, error: currentError } = await admin
+    .from("contracts")
+    .select("id, updated_at, excluded_dates, location_id, name, frequency, interval_days, weekdays, schedule_days, starts_on, ends_on, status, notes, cleaning_type, payment_status, upholstery_type, upholstery_notes, upholstery_units, upholstery_unit_price, fixed_price, fixed_monthly, apply_vat, num_people")
+    .eq("id", id)
+    .eq("company_id", profile.company_id)
+    .single();
+  if (currentError || !current) {
+    return { ok: false as const, error: currentError?.message ?? "Intervenção não encontrada." };
+  }
+
+  const { data: currentLocation, error: currentLocationError } = await admin
+    .from("locations")
+    .select("hourly_rate")
+    .eq("id", input.location_id)
+    .eq("company_id", profile.company_id)
+    .single();
+  if (currentLocationError || !currentLocation) {
+    return { ok: false as const, error: currentLocationError?.message ?? "Local invalido." };
+  }
+
+  const effectiveHourlyRate = input.hourly_rate !== undefined
+    ? input.hourly_rate
+    : currentLocation.hourly_rate;
+  const nextSnapshot: AtomicContractSnapshot = {
+    ...current,
+    ...atomicContractPatch(input),
+  };
+  let plan: AtomicServicePlanItem[];
+  try {
+    plan = await buildAtomicServicePlan(admin, nextSnapshot, profile.company_id, effectiveHourlyRate);
+  } catch (error) {
+    return { ok: false as const, error: error instanceof Error ? error.message : "Não foi possível preparar a alteração." };
+  }
+
+  const financialBefore = {
+    fixed_price: current.fixed_price,
+    fixed_monthly: current.fixed_monthly,
+    apply_vat: current.apply_vat,
+  };
+  const financialAfter = {
+    fixed_price: input.fixed_price ?? null,
+    fixed_monthly: input.fixed_monthly ?? false,
+    apply_vat: input.apply_vat ?? false,
+  };
+  const auditMeta = JSON.stringify(financialBefore) !== JSON.stringify(financialAfter)
+    ? { action: "contrato_valor_alterado", before: financialBefore, after: financialAfter, source: "dashboard" }
+    : null;
+
+  // O RPC candidato é a única fronteira de escrita desta edição. Até a sua
+  // migration ser numerada/aplicada, esta branch é deliberadamente não
+  // mergeável (DB_FIRST_REQUIRED).
+  const atomicRpc = admin.rpc as unknown as (
+    fn: string,
+    args: Record<string, unknown>,
+  ) => Promise<{ data: unknown; error: { message: string; code?: string } | null }>;
+  // A RPC candidata aplica contract_synced_at = now() para que a sincronização
+  // legítima não transforme a ocorrência numa exceção manual.
+  const { error: atomicError } = await atomicRpc("apply_contract_change_atomic", {
+    p_company_id: profile.company_id,
+    p_contract_id: id,
+    p_expected_updated_at: current.updated_at,
+    p_contract_patch: atomicContractPatch(input),
+    p_update_location_hourly_rate: !input.fixed_monthly
+      && !(input.fixed_price != null && input.fixed_price > 0)
+      && input.hourly_rate !== undefined,
+    p_location_hourly_rate: input.hourly_rate ?? null,
+    p_plan: plan,
+    p_actor_id: user.id,
+    p_audit_meta: auditMeta,
+  });
+  if (atomicError) {
+    const error = atomicError.code === "40001" || atomicError.message.includes("STALE_CONFLICT")
+      ? "A intervenção foi alterada noutra sessão. Atualize a página e tente novamente."
+      : atomicError.message;
+    return { ok: false as const, error };
+  }
+
+  revalidateBusinessPaths({
+    clientId: location.client_id,
+    scopes: ["contratos", "calendario", "clientes", "cobrancas"],
+  });
+  return { ok: true as const };
+
+  /* Legacy path intentionally disabled: its independent PostgREST writes are
+     the bug fixed by the DB-first RPC candidate. */
+  /*
   // Só toca no valor/hora do local quando o contrato é faturado por hora E o
   // formulário enviou o campo — ver o mesmo guard em createContrato (Causa 7).
   const isHourlyUpdate = !input.fixed_monthly && !(input.fixed_price != null && input.fixed_price > 0);
@@ -805,6 +912,7 @@ export async function updateContrato(id: string, input: Omit<ContratoInput, "com
     scopes: ["contratos", "calendario", "clientes", "cobrancas"],
   });
   return { ok: true as const };
+  */
 }
 
 export async function deleteContrato(id: string) {

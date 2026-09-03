@@ -1,8 +1,8 @@
 {
   "generatedBy": "scripts/audit-file-inventory.mjs",
-  "totalFiles": 820,
+  "totalFiles": 821,
   "byStatus": {
-    "MANTER": 797,
+    "MANTER": 798,
     "STANDBY": 23
   },
   "byCategory": {
@@ -12,7 +12,7 @@
     "lib": 70,
     "script": 54,
     "domain": 52,
-    "doc": 45,
+    "doc": 46,
     "server-action": 44,
     "component": 30,
     "src-other": 30,
@@ -29,7 +29,7 @@
     "supabase-other": 2
   },
   "byConfidence": {
-    "alta": 799,
+    "alta": 800,
     "média": 15,
     "baixa": 6
   },
@@ -1008,6 +1008,22 @@
       "signals": {
         "sqlWrite": 8
       },
+      "action": "nenhuma",
+      "reason": "documentação",
+      "manualDecision": false
+    },
+    {
+      "path": "docs/INTERVENCOES-EDICAO-PONTUAL-AUDITORIA.md",
+      "category": "doc",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {},
       "action": "nenhuma",
       "reason": "documentação",
       "manualDecision": false
@@ -12930,17 +12946,17 @@
         "write"
       ],
       "risks": [
-        "erro-de-query-ignorado(11)"
+        "erro-de-query-ignorado(9)"
       ],
       "signals": {
-        "supabase": 16,
+        "supabase": 15,
         "serverAction": 1,
-        "write": 10,
-        "sqlWrite": 13,
-        "unknownCast": 1,
-        "ignoredError": 11,
+        "write": 7,
+        "sqlWrite": 9,
+        "unknownCast": 2,
+        "ignoredError": 9,
         "fallbackZero": 3,
-        "fallbackArray": 6
+        "fallbackArray": 5
       },
       "action": "auditar atomicidade (T12/T13)",
       "reason": "em uso: 5 consumidor(es)",
@@ -16865,7 +16881,7 @@
       "category": "domain",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 7,
+      "consumers": 8,
       "consumerSample": [
         "scripts/diagnose-occurrence-identity.ts",
         "scripts/plan-occurrence-repair.ts",
@@ -16881,7 +16897,7 @@
         "fallbackArray": 1
       },
       "action": "nenhuma",
-      "reason": "em uso: 7 consumidor(es)",
+      "reason": "em uso: 8 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -16895,7 +16911,7 @@
       "category": "domain",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 4,
+      "consumers": 5,
       "consumerSample": [
         "src/__tests__/billing-boundaries.test.ts",
         "src/__tests__/occurrence-projection.test.ts",
@@ -16913,7 +16929,7 @@
         "env": 1
       },
       "action": "nenhuma",
-      "reason": "em uso: 4 consumidor(es)",
+      "reason": "em uso: 5 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -16959,9 +16975,10 @@
       "category": "domain",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 1,
+      "consumers": 2,
       "consumerSample": [
-        "src/__tests__/reconciliation.test.ts"
+        "src/__tests__/reconciliation.test.ts",
+        "src/app/actions/contratos.ts"
       ],
       "autoLoaded": false,
       "referencedBy": [
@@ -16974,7 +16991,7 @@
         "fallbackArray": 3
       },
       "action": "nenhuma",
-      "reason": "em uso: 1 consumidor(es)",
+      "reason": "em uso: 2 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -17190,7 +17207,7 @@
       "category": "lib",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 21,
+      "consumers": 20,
       "consumerSample": [
         "src/__tests__/audit.test.ts",
         "src/app/(dashboard)/dashboard/calendario/_actions/reschedule.ts",
@@ -17218,7 +17235,7 @@
         "consoleErr": 2
       },
       "action": "nenhuma",
-      "reason": "em uso: 21 consumidor(es), script npm, CI, configuração",
+      "reason": "em uso: 20 consumidor(es), script npm, CI, configuração",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -18892,7 +18909,7 @@
       "category": "lib",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 8,
+      "consumers": 7,
       "consumerSample": [
         "src/__tests__/billing-boundaries.test.ts",
         "src/__tests__/service-value.test.ts",
@@ -18906,7 +18923,7 @@
       "risks": [],
       "signals": {},
       "action": "nenhuma",
-      "reason": "em uso: 8 consumidor(es)",
+      "reason": "em uso: 7 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
