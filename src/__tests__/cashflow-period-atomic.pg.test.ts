@@ -395,7 +395,7 @@ describe("093 — concorrência writer vs fecho", () => {
 
     expect(await nCaixa()).toBe(1);
     expect(r.rows[0].fechado).toBe(false);
-    expect(r.rows[0].bloqueadores.saidas_sem_categoria).toBe(1);
+    expect(r.rows[0].bloqueadores.despesas_sem_categoria).toBe(1);
 
     await writer.end();
     await fecho.end();
