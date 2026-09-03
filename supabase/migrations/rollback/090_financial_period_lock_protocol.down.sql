@@ -23,6 +23,10 @@
 DROP FUNCTION IF EXISTS public.reopen_financial_period_atomic(uuid, integer, integer, uuid, text);
 DROP FUNCTION IF EXISTS public.close_financial_period_atomic(uuid, integer, integer, uuid);
 DROP FUNCTION IF EXISTS public.financial_period_blockers(uuid, integer, integer);
+DROP FUNCTION IF EXISTS public.assert_financial_period_dates_open_locked(uuid, date[]);
+DROP FUNCTION IF EXISTS public.assert_financial_periods_open_locked_many(uuid, integer[]);
+DROP FUNCTION IF EXISTS public.lock_financial_periods_many(uuid, integer[]);
+DROP FUNCTION IF EXISTS public.financial_period_lock_keys(date[]);
 DROP FUNCTION IF EXISTS public.assert_financial_periods_open_locked_pair(uuid, integer, integer, integer, integer);
 DROP FUNCTION IF EXISTS public.assert_financial_period_open_locked(uuid, integer, integer);
 DROP FUNCTION IF EXISTS public.lock_financial_periods_pair(uuid, integer, integer, integer, integer);

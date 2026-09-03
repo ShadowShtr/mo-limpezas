@@ -492,9 +492,13 @@ describe("090 — writer e fecho serializam pelo mesmo recurso", () => {
 // correcta exposta ao `anon` é uma porta aberta no browser. Nenhuma das duas
 // coisas se vê a ler o SQL — só se prova a perguntar ao catálogo.
 describe("090 — superfície: assinaturas exactas e permissões", () => {
-  /** As oito funções da fundação, com a assinatura que o contrato fixa. */
+  /** As doze funções da fundação, com a assinatura que o contrato fixa. */
   const ASSINATURAS: ReadonlyArray<readonly [string, string]> = [
     ["financial_period_lock_key", "p_year integer, p_month integer"],
+    ["financial_period_lock_keys", "p_dates date[]"],
+    ["lock_financial_periods_many", "p_company_id uuid, p_keys integer[]"],
+    ["assert_financial_periods_open_locked_many", "p_company_id uuid, p_keys integer[]"],
+    ["assert_financial_period_dates_open_locked", "p_company_id uuid, p_dates date[]"],
     ["lock_financial_period", "p_company_id uuid, p_year integer, p_month integer"],
     [
       "lock_financial_periods_pair",
@@ -652,6 +656,355 @@ describe("090 — source e target: os dois meses protegidos", () => {
     expect(recusou).toBe(true);
     expect(Number((await pool.query("select count(*) n from public.cash_flow_entries")).rows[0].n)).toBe(0);
     await c.end();
+  }, 120_000);
+});
+
+// ============================================================================
+// N períodos — o conjunto inteiro conhecido ANTES da primeira aquisição
+// ============================================================================
+//
+// O par prova o par. Não prova três, e é em três que o defeito volta: uma
+// transação que adquire um subconjunto, descobre mais um período e o pede
+// fora de ordem reintroduz o ciclo de espera que a ordem canónica existia
+// para eliminar.
+//
+// Estes casos exigem a regra inteira: descobrir todos → ordenar → adquirir
+// todos → validar todos → só então escrever.
+describe("090 — protocolo de N períodos", () => {
+  /** As chaves efectivamente adquiridas, pela ordem em que o foram. */
+  const bloquear = async (chaves: number[], empresa = EMPRESA) =>
+    (await pool.query("SELECT public.lock_financial_periods_many($1, $2::integer[]) AS chaves", [empresa, chaves]))
+      .rows[0].chaves as number[];
+
+  it("1 · três períodos na mesma operação ficam todos protegidos", async () => {
+    const c = await ligacao();
+    await c.query("BEGIN");
+    await c.query("SELECT public.assert_financial_periods_open_locked_many($1, ARRAY[202607, 202608, 202609])", [
+      EMPRESA,
+    ]);
+
+    // Enquanto a transação vive, nenhum dos TRÊS fecha.
+    const fechos = [7, 8, 9].map(async (mes) => {
+      const f = await ligacao();
+      const p = f.query("SELECT * FROM public.close_financial_period_atomic($1, 2026, $2, $3)", [EMPRESA, mes, ACTOR]);
+      return { f, p };
+    });
+    const pendentes = await Promise.all(fechos);
+    await new Promise((r) => setTimeout(r, 400));
+
+    expect(await aberto(2026, 7)).toBe(true);
+    expect(await aberto(2026, 8)).toBe(true);
+    expect(await aberto(2026, 9)).toBe(true);
+
+    await c.query("COMMIT");
+    await Promise.all(pendentes.map(({ p }) => p));
+    await Promise.all(pendentes.map(({ f }) => f.end()));
+    await c.end();
+  }, 120_000);
+
+  it("2 · duplicados à entrada dão um lock lógico só", async () => {
+    expect(await bloquear([202608, 202608, 202608])).toEqual([202608]);
+
+    // O conjunto devolvido podia estar certo e a aquisição repetida na mesma.
+    // Quem responde é o catálogo, e tem de responder DENTRO da transação.
+    const c = await ligacao();
+    await c.query("BEGIN");
+    await c.query("SELECT public.lock_financial_periods_many($1, ARRAY[202608, 202608, 202608])", [EMPRESA]);
+    const { rows } = await c.query(
+      `SELECT count(*)::int AS n FROM pg_locks
+        WHERE locktype = 'advisory' AND pid = pg_backend_pid() AND objid = 202608`,
+    );
+    expect(rows[0].n).toBe(1);
+    await c.query("ROLLBACK");
+    await c.end();
+  }, 120_000);
+
+  it("3 · entrada fora de ordem é adquirida por ordem canónica", async () => {
+    expect(await bloquear([202612, 202601, 202607])).toEqual([202601, 202607, 202612]);
+    // Anos diferentes ordenam pelo ano, não pelo mês.
+    expect(await bloquear([202701, 202612])).toEqual([202612, 202701]);
+  }, 120_000);
+
+  it("4/5/6 · T1 Jul-Ago-Set e T2 Set-Ago-Jul em simultâneo: deadlock zero", async () => {
+    const a = await ligacao();
+    const b = await ligacao();
+
+    const operar = async (c: pg.Client, chaves: number[], marca: string) => {
+      await c.query("BEGIN");
+      await c.query("SELECT public.assert_financial_periods_open_locked_many($1, $2::integer[])", [EMPRESA, chaves]);
+      // Trabalho a sério entre a aquisição e o COMMIT: sem isto as duas
+      // transações podiam nem se cruzar, e o teste não provava nada.
+      await new Promise((r) => setTimeout(r, 200));
+      await c.query(
+        `INSERT INTO public.cash_flow_entries (company_id, type, amount, date)
+         VALUES ($1, 'saida', 5, date '2026-08-15')`,
+        [EMPRESA],
+      );
+      await c.query("COMMIT");
+      return marca;
+    };
+
+    const [ra, rb] = await Promise.all([
+      operar(a, [202607, 202608, 202609], "T1"),
+      operar(b, [202609, 202608, 202607], "T2"),
+    ]);
+
+    expect([ra, rb]).toEqual(["T1", "T2"]);
+    expect(Number((await pool.query("select count(*) n from public.cash_flow_entries")).rows[0].n)).toBe(2);
+
+    await a.end();
+    await b.end();
+  }, 120_000);
+
+  it("6b · quatro transações com subconjuntos sobrepostos e ordens diferentes: deadlock zero", async () => {
+    // O caso do mundo real não é o par simétrico: é meia dúzia de operações
+    // com listas parcialmente sobrepostas, cada uma construída por um call
+    // site diferente. Se a ordem canónica não for global, é aqui que parte.
+    const listas = [
+      [202607, 202608, 202609],
+      [202609, 202607],
+      [202608, 202610, 202607],
+      [202610, 202609, 202608, 202607],
+    ];
+
+    const correr = async (chaves: number[], i: number) => {
+      const c = await ligacao();
+      try {
+        await c.query("BEGIN");
+        await c.query("SELECT public.assert_financial_periods_open_locked_many($1, $2::integer[])", [EMPRESA, chaves]);
+        await new Promise((r) => setTimeout(r, 120));
+        await c.query(
+          `INSERT INTO public.cash_flow_entries (company_id, type, amount, date)
+           VALUES ($1, 'saida', $2, date '2026-08-15')`,
+          [EMPRESA, i + 1],
+        );
+        await c.query("COMMIT");
+        return "ok";
+      } finally {
+        await c.end();
+      }
+    };
+
+    const resultados = await Promise.all(listas.map(correr));
+    expect(resultados).toEqual(["ok", "ok", "ok", "ok"]);
+    expect(Number((await pool.query("select count(*) n from public.cash_flow_entries")).rows[0].n)).toBe(4);
+  }, 120_000);
+
+  it("7/8/9 · qualquer um dos três fechado ⇒ zero escrita", async () => {
+    for (const mesFechado of [7, 8, 9]) {
+      await pool.query("DELETE FROM public.cash_flow_entries");
+      await pool.query("DELETE FROM public.financial_periods");
+      await pool.query("SELECT * FROM public.close_financial_period_atomic($1, 2026, $2, $3)", [
+        EMPRESA,
+        mesFechado,
+        ACTOR,
+      ]);
+
+      const c = await ligacao();
+      await c.query("BEGIN");
+      let erro = "";
+      try {
+        await c.query("SELECT public.assert_financial_periods_open_locked_many($1, ARRAY[202607, 202608, 202609])", [
+          EMPRESA,
+        ]);
+        await c.query(
+          `INSERT INTO public.cash_flow_entries (company_id, type, amount, date)
+           VALUES ($1, 'saida', 5, date '2026-08-15')`,
+          [EMPRESA],
+        );
+        await c.query("COMMIT");
+      } catch (e) {
+        erro = String((e as Error).message);
+        await c.query("ROLLBACK").catch(() => {});
+      }
+      await c.end();
+
+      expect(erro, `mês ${mesFechado} fechado tem de recusar`).toMatch(
+        new RegExp(`FINANCIAL_PERIOD_CLOSED: 2026-0${mesFechado}`),
+      );
+      expect(Number((await pool.query("select count(*) n from public.cash_flow_entries")).rows[0].n)).toBe(0);
+    }
+  }, 180_000);
+
+  it("10 · rollback depois de TODOS os locks não deixa efeito nem lock pendurado", async () => {
+    const c = await ligacao();
+    await c.query("BEGIN");
+    await c.query("SELECT public.assert_financial_periods_open_locked_many($1, ARRAY[202607, 202608, 202609])", [
+      EMPRESA,
+    ]);
+    await c.query(
+      `INSERT INTO public.cash_flow_entries (company_id, type, amount, date)
+       VALUES ($1, 'saida', 5, date '2026-08-15')`,
+      [EMPRESA],
+    );
+    await c.query("ROLLBACK");
+
+    expect(Number((await pool.query("select count(*) n from public.cash_flow_entries")).rows[0].n)).toBe(0);
+
+    // `pg_advisory_xact_lock` liberta no fim da transação, commit ou rollback.
+    // Se ficasse pendurado, este fecho ficaria a esperar para sempre.
+    const r = await pool.query("SELECT * FROM public.close_financial_period_atomic($1, 2026, 8, $2)", [EMPRESA, ACTOR]);
+    expect(r.rows[0].fechado).toBe(true);
+    await c.end();
+  }, 120_000);
+
+  it("11 · empresas diferentes com a mesma lista não competem", async () => {
+    const a = await ligacao();
+    await a.query("BEGIN");
+    await a.query("SELECT public.assert_financial_periods_open_locked_many($1, ARRAY[202607, 202608, 202609])", [
+      EMPRESA,
+    ]);
+
+    // A outra empresa passa sem esperar. Um timeout curto prova-o: se
+    // competisse, isto expirava em vez de devolver.
+    const b = await ligacao();
+    await b.query("BEGIN");
+    await b.query("SET LOCAL lock_timeout = '2s'");
+    await b.query("SELECT public.assert_financial_periods_open_locked_many($1, ARRAY[202607, 202608, 202609])", [
+      OUTRA,
+    ]);
+    await b.query("COMMIT");
+
+    await a.query("COMMIT");
+    await a.end();
+    await b.end();
+  }, 120_000);
+
+  it("12 · períodos diferentes da mesma empresa não competem", async () => {
+    const a = await ligacao();
+    await a.query("BEGIN");
+    await a.query("SELECT public.assert_financial_periods_open_locked_many($1, ARRAY[202601, 202602])", [EMPRESA]);
+
+    const b = await ligacao();
+    await b.query("BEGIN");
+    await b.query("SET LOCAL lock_timeout = '2s'");
+    await b.query("SELECT public.assert_financial_periods_open_locked_many($1, ARRAY[202611, 202612])", [EMPRESA]);
+    await b.query("COMMIT");
+
+    await a.query("COMMIT");
+    await a.end();
+    await b.end();
+  }, 120_000);
+
+  it("13 · entrada inválida falha FECHADO, e não silenciosamente aberta", async () => {
+    // Mês fora de 1..12: a chave 202613 é aritmeticamente possível e
+    // semanticamente lixo. Aceitá-la daria um recurso de lock que writer
+    // nenhum voltaria a calcular da mesma maneira.
+    await expect(bloquear([202613])).rejects.toThrow(/FINANCIAL_PERIOD_LOCK_INVALID_MONTH: 13/);
+    await expect(bloquear([202600])).rejects.toThrow(/FINANCIAL_PERIOD_LOCK_INVALID_MONTH: 0/);
+    await expect(bloquear([-5])).rejects.toThrow(/FINANCIAL_PERIOD_LOCK_INVALID_MONTH/);
+
+    // Conjunto vazio é recusa, não no-op: escrever sem período protegido é
+    // exactamente o que o protocolo existe para impedir.
+    await expect(bloquear([])).rejects.toThrow(/FINANCIAL_PERIOD_LOCK_EMPTY_SET/);
+    await expect(
+      pool.query("SELECT public.lock_financial_periods_many($1, NULL::integer[])", [EMPRESA]),
+    ).rejects.toThrow(/FINANCIAL_PERIOD_LOCK_INVALID_ARGS/);
+    await expect(
+      pool.query("SELECT public.lock_financial_periods_many($1, ARRAY[202608, NULL]::integer[])", [EMPRESA]),
+    ).rejects.toThrow(/FINANCIAL_PERIOD_LOCK_INVALID_ARGS/);
+    await expect(
+      pool.query("SELECT public.lock_financial_periods_many(NULL, ARRAY[202608])"),
+    ).rejects.toThrow(/FINANCIAL_PERIOD_LOCK_INVALID_ARGS/);
+
+    // Uma chave inválida NO MEIO recusa antes de adquirir seja o que for.
+    await expect(bloquear([202607, 202699, 202609])).rejects.toThrow(/INVALID_MONTH: 99/);
+  }, 120_000);
+
+  it("13b · uma chave inválida no meio não deixa nenhum lock adquirido", async () => {
+    const c = await ligacao();
+    await c.query("BEGIN");
+    await c.query("SELECT public.lock_financial_periods_many($1, ARRAY[202607, 202699])", [EMPRESA]).catch(() => {});
+    // A transação está em estado de erro; o que interessa é que Julho não
+    // ficou trancado por ninguém depois do ROLLBACK.
+    await c.query("ROLLBACK");
+    await c.end();
+
+    const r = await pool.query("SELECT * FROM public.close_financial_period_atomic($1, 2026, 7, $2)", [EMPRESA, ACTOR]);
+    expect(r.rows[0].fechado).toBe(true);
+  }, 120_000);
+});
+
+// ============================================================================
+// Datas → períodos: a ponte que os writers usam
+// ============================================================================
+describe("090 — datas como entrada do protocolo", () => {
+  const chaves = async (datas: (string | null)[]) =>
+    (await pool.query("SELECT public.financial_period_lock_keys($1::date[]) AS k", [datas])).rows[0].k as number[];
+
+  it("converte, deduplica e ordena", async () => {
+    expect(await chaves(["2026-09-30", "2026-07-01", "2026-09-02"])).toEqual([202607, 202609]);
+  }, 120_000);
+
+  it("datas NULL são descartadas — uma data que não existe não nomeia período", async () => {
+    expect(await chaves([null, "2026-08-10", null])).toEqual([202608]);
+    expect(await chaves([null, null])).toEqual([]);
+    expect((await pool.query("SELECT public.financial_period_lock_keys(NULL::date[]) AS k")).rows[0].k).toEqual([]);
+  }, 120_000);
+
+  it("lista só de NULLs falha FECHADO na hora de bloquear", async () => {
+    await expect(
+      pool.query("SELECT public.assert_financial_period_dates_open_locked($1, ARRAY[NULL]::date[])", [EMPRESA]),
+    ).rejects.toThrow(/FINANCIAL_PERIOD_LOCK_EMPTY_SET/);
+  }, 120_000);
+
+  it("o atalho por datas dá a mesma garantia que as chaves", async () => {
+    await pool.query("SELECT * FROM public.close_financial_period_atomic($1, 2026, 7, $2)", [EMPRESA, ACTOR]);
+
+    await expect(
+      pool.query("SELECT public.assert_financial_period_dates_open_locked($1, ARRAY['2026-08-10','2026-07-20']::date[])", [
+        EMPRESA,
+      ]),
+    ).rejects.toThrow(/FINANCIAL_PERIOD_CLOSED: 2026-07/);
+
+    await pool.query("SELECT public.assert_financial_period_dates_open_locked($1, ARRAY['2026-08-10','2026-09-20']::date[])", [
+      EMPRESA,
+    ]);
+  }, 120_000);
+});
+
+// ============================================================================
+// Uma convenção só: par e singular são invocações da primitiva
+// ============================================================================
+//
+// Duas implementações da ordem de aquisição seriam duas ordens, e bastava isso
+// para o deadlock voltar entre um writer que usa o par e outro que usa a lista.
+describe("090 — o par e o singular não têm ordem própria", () => {
+  it("o par produz exactamente a ordem canónica da lista", async () => {
+    // Se o par tivesse implementação própria, esta equivalência era acidental.
+    const c = await ligacao();
+    await c.query("BEGIN");
+    await c.query("SELECT public.lock_financial_periods_pair($1, 2026, 9, 2026, 7)", [EMPRESA]);
+    const { rows } = await c.query(
+      `SELECT objid FROM pg_locks
+        WHERE locktype = 'advisory' AND pid = pg_backend_pid() AND objid IN (202607, 202609)
+        ORDER BY objid`,
+    );
+    expect(rows.map((r) => Number(r.objid))).toEqual([202607, 202609]);
+    await c.query("ROLLBACK");
+    await c.end();
+  }, 120_000);
+
+  it("o par com o mesmo mês dos dois lados adquire um recurso só", async () => {
+    const c = await ligacao();
+    await c.query("BEGIN");
+    await c.query("SELECT public.lock_financial_periods_pair($1, 2026, 7, 2026, 7)", [EMPRESA]);
+    const { rows } = await c.query(
+      `SELECT count(*)::int AS n FROM pg_locks
+        WHERE locktype = 'advisory' AND pid = pg_backend_pid() AND objid = 202607`,
+    );
+    expect(rows[0].n).toBe(1);
+    await c.query("ROLLBACK");
+    await c.end();
+  }, 120_000);
+
+  it("o singular continua a recusar mês inválido", async () => {
+    await expect(pool.query("SELECT public.lock_financial_period($1, 2026, 13)", [EMPRESA])).rejects.toThrow(
+      /FINANCIAL_PERIOD_LOCK_INVALID_MONTH/,
+    );
+    await expect(pool.query("SELECT public.assert_financial_period_open_locked($1, 2026, 0)", [EMPRESA])).rejects.toThrow(
+      /FINANCIAL_PERIOD_LOCK_INVALID_MONTH/,
+    );
   }, 120_000);
 });
 

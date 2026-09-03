@@ -156,12 +156,194 @@ BEGIN
 END;
 $fn$;
 
--- ─── Dois meses, em ordem canónica ──────────────────────────────────────────
+-- ─── N meses, em ordem canónica ─────────────────────────────────────────────
 --
--- Mover um lançamento de Julho para Agosto toca em dois períodos. Duas sessões
--- a fazer o movimento inverso, cada uma a bloquear pela sua ordem, dão deadlock.
--- Ordenar sempre pelo mesmo critério — o ano-mês crescente — elimina-o por
--- construção, e não por sorte de temporização.
+-- ---------------------------------------------------------------------------
+-- 🔴 Porque é que o par não chega
+-- ---------------------------------------------------------------------------
+--
+-- Uma operação económica pode tocar em MAIS do que dois meses. Retirar o
+-- recebimento de uma cobrança avulsa é o caso que obrigou a escrever isto:
+--
+--   · o mês da `charge_date` — o facto;
+--   · o mês de HOJE — a data com que o caixa teria sido escrito;
+--   · o mês do movimento de caixa que já lá está e vai ser apagado, que foi
+--     criado noutro dia e pode ser um TERCEIRO mês.
+--
+-- Bloquear os dois primeiros e só depois descobrir o terceiro devolve o
+-- deadlock por outra porta:
+--
+--     T1 adquire Julho, Agosto  →  descobre Setembro  →  pede Setembro
+--     T2 adquire Agosto, Julho  →  descobre Setembro  →  pede Setembro
+--
+-- Cada transação adquiriu um SUBCONJUNTO antes de conhecer o conjunto todo. A
+-- ordem canónica dentro de cada chamada não salva nada: o que tem de estar
+-- ordenado é a sequência global de aquisições da transação, e isso só é
+-- possível se o conjunto inteiro for conhecido ANTES da primeira aquisição.
+--
+-- Daí a regra, e é uma regra, não uma preferência:
+--
+--     descobrir TODOS os períodos  →  ordenar  →  adquirir TODOS
+--     →  validar TODOS  →  só então escrever.
+--
+-- Nunca «adquirir alguns, descobrir mais um, adquirir fora de ordem».
+--
+-- ---------------------------------------------------------------------------
+-- A convenção, num sítio só
+-- ---------------------------------------------------------------------------
+--
+-- `lock_financial_periods_many` é a primitiva canónica. O lock de um mês e o
+-- lock do par passam a ser invocações dela — não implementações paralelas —
+-- para que não existam duas ordens de aquisição no mesmo sistema.
+
+-- ─── Datas → conjunto canónico de chaves ────────────────────────────────────
+--
+-- A maior parte dos writers tem datas, não pares ano/mês. Esta função é a
+-- ponte, e é onde a normalização acontece uma vez só.
+--
+-- 🔴 Datas NULL são DESCARTADAS, de propósito. Metade dos writers financeiros
+--    tem datas opcionais — um pagamento por liquidar não tem data de
+--    liquidação — e uma data que não existe não nomeia período nenhum. O que
+--    NÃO é aceitável é o conjunto ficar vazio: isso significaria escrever sem
+--    período nenhum protegido, e quem recusa esse caso é
+--    `lock_financial_periods_many`, abaixo.
+CREATE OR REPLACE FUNCTION public.financial_period_lock_keys(
+  p_dates date[]
+)
+RETURNS integer[]
+LANGUAGE sql
+IMMUTABLE
+SECURITY INVOKER
+AS $fn$
+  SELECT COALESCE(
+    array_agg(DISTINCT public.financial_period_lock_key(
+      EXTRACT(YEAR FROM d)::integer, EXTRACT(MONTH FROM d)::integer
+    )),
+    ARRAY[]::integer[]
+  )
+  FROM unnest(COALESCE(p_dates, ARRAY[]::date[])) AS d
+  WHERE d IS NOT NULL;
+$fn$;
+
+COMMENT ON FUNCTION public.financial_period_lock_keys(date[]) IS
+  'Datas → conjunto único de chaves de período. Datas NULL são descartadas; o conjunto vazio é recusado por quem bloqueia.';
+
+-- ─── Adquirir N meses, em ordem canónica ────────────────────────────────────
+--
+-- Devolve o conjunto que efectivamente bloqueou, por ordem de aquisição. Não é
+-- decoração: é a única forma de um teste provar que a ordem foi a canónica e
+-- que os duplicados deram um lock lógico só.
+CREATE OR REPLACE FUNCTION public.lock_financial_periods_many(
+  p_company_id uuid,
+  p_keys integer[]
+)
+RETURNS integer[]
+LANGUAGE plpgsql
+SECURITY INVOKER
+AS $fn$
+DECLARE
+  v_chave  integer;
+  v_chaves integer[];
+BEGIN
+  IF p_company_id IS NULL THEN
+    RAISE EXCEPTION 'FINANCIAL_PERIOD_LOCK_INVALID_ARGS';
+  END IF;
+
+  -- Validar ANTES de adquirir o primeiro lock. Uma chave inválida descoberta a
+  -- meio deixaria a transação com locks adquiridos e um erro por cima — o
+  -- rollback devolve-os, mas o diagnóstico fica pior e a regra «todos ou
+  -- nenhum» deixaria de ser verdade à letra.
+  IF p_keys IS NULL OR array_position(p_keys, NULL) IS NOT NULL THEN
+    RAISE EXCEPTION 'FINANCIAL_PERIOD_LOCK_INVALID_ARGS';
+  END IF;
+
+  -- 🔴 Conjunto vazio é recusa, não no-op. Um writer que chegue aqui sem
+  --    período nenhum está prestes a escrever sem protecção: falhar fechado é
+  --    a única resposta que não inventa uma garantia que não existe.
+  IF cardinality(p_keys) = 0 THEN
+    RAISE EXCEPTION 'FINANCIAL_PERIOD_LOCK_EMPTY_SET';
+  END IF;
+
+  FOREACH v_chave IN ARRAY p_keys LOOP
+    IF v_chave < 100 OR (v_chave % 100) < 1 OR (v_chave % 100) > 12 THEN
+      RAISE EXCEPTION 'FINANCIAL_PERIOD_LOCK_INVALID_MONTH: %', v_chave % 100;
+    END IF;
+  END LOOP;
+
+  -- Único e ordenado. A entrada pode vir por qualquer ordem e com repetições:
+  -- é precisamente isso que os call sites produzem quando juntam datas de
+  -- origens diferentes, e é aqui que deixa de importar.
+  SELECT array_agg(k ORDER BY k) INTO v_chaves
+    FROM (SELECT DISTINCT unnest(p_keys) AS k) AS s;
+
+  FOREACH v_chave IN ARRAY v_chaves LOOP
+    PERFORM public.lock_financial_period(
+      p_company_id, v_chave / 100, v_chave % 100
+    );
+  END LOOP;
+
+  RETURN v_chaves;
+END;
+$fn$;
+
+-- ─── Bloquear e exigir aberto, na mesma transação ───────────────────────────
+--
+-- É esta a função que os writers passam a chamar. Depois de voltar sem erro,
+-- nenhum dos meses pode fechar até a transação terminar — porque quem os
+-- fechar tem de adquirir os mesmos locks.
+--
+-- 🔴 TODOS os locks primeiro, e só depois TODAS as perguntas. Validar à medida
+--    que se bloqueia deixaria uma janela em que o primeiro mês está validado e
+--    o último ainda livre para fechar.
+CREATE OR REPLACE FUNCTION public.assert_financial_periods_open_locked_many(
+  p_company_id uuid,
+  p_keys integer[]
+)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY INVOKER
+AS $fn$
+DECLARE
+  v_chaves integer[];
+  v_chave  integer;
+BEGIN
+  v_chaves := public.lock_financial_periods_many(p_company_id, p_keys);
+
+  FOREACH v_chave IN ARRAY v_chaves LOOP
+    IF NOT public.is_financial_period_open(p_company_id, v_chave / 100, v_chave % 100) THEN
+      RAISE EXCEPTION 'FINANCIAL_PERIOD_CLOSED: %-%',
+        v_chave / 100, lpad((v_chave % 100)::text, 2, '0')
+        USING ERRCODE = 'P0001';
+    END IF;
+  END LOOP;
+END;
+$fn$;
+
+-- ─── As mesmas garantias, a partir de datas ─────────────────────────────────
+--
+-- O atalho que a maioria dos writers usa: entrega-se a lista de datas
+-- economicamente relevantes da operação inteira — origem, destino, caixa novo,
+-- caixa antigo — e o protocolo trata do resto.
+CREATE OR REPLACE FUNCTION public.assert_financial_period_dates_open_locked(
+  p_company_id uuid,
+  p_dates date[]
+)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY INVOKER
+AS $fn$
+BEGIN
+  PERFORM public.assert_financial_periods_open_locked_many(
+    p_company_id, public.financial_period_lock_keys(p_dates)
+  );
+END;
+$fn$;
+
+-- ─── Um mês e dois meses: invocações da primitiva, não cópias dela ──────────
+--
+-- Ficam porque são legíveis no call site e porque as suites existentes falam
+-- esta linguagem. O que não fica é uma segunda implementação da ordem de
+-- aquisição: por baixo é sempre `lock_financial_periods_many`.
 CREATE OR REPLACE FUNCTION public.lock_financial_periods_pair(
   p_company_id uuid,
   p_year_a integer,
@@ -173,30 +355,14 @@ RETURNS void
 LANGUAGE plpgsql
 SECURITY INVOKER
 AS $fn$
-DECLARE
-  v_a integer := public.financial_period_lock_key(p_year_a, p_month_a);
-  v_b integer := public.financial_period_lock_key(p_year_b, p_month_b);
 BEGIN
-  IF v_a = v_b THEN
-    PERFORM public.lock_financial_period(p_company_id, p_year_a, p_month_a);
-    RETURN;
-  END IF;
-
-  IF v_a < v_b THEN
-    PERFORM public.lock_financial_period(p_company_id, p_year_a, p_month_a);
-    PERFORM public.lock_financial_period(p_company_id, p_year_b, p_month_b);
-  ELSE
-    PERFORM public.lock_financial_period(p_company_id, p_year_b, p_month_b);
-    PERFORM public.lock_financial_period(p_company_id, p_year_a, p_month_a);
-  END IF;
+  PERFORM public.lock_financial_periods_many(p_company_id, ARRAY[
+    public.financial_period_lock_key(p_year_a, p_month_a),
+    public.financial_period_lock_key(p_year_b, p_month_b)
+  ]);
 END;
 $fn$;
 
--- ─── Bloquear e exigir aberto, na mesma transação ───────────────────────────
---
--- É esta a função que os writers passam a chamar. Depois de voltar sem erro, o
--- mês não pode fechar até a transação terminar — porque quem o fechar tem de
--- adquirir o mesmo lock.
 CREATE OR REPLACE FUNCTION public.assert_financial_period_open_locked(
   p_company_id uuid,
   p_year integer,
@@ -207,20 +373,12 @@ LANGUAGE plpgsql
 SECURITY INVOKER
 AS $fn$
 BEGIN
-  PERFORM public.lock_financial_period(p_company_id, p_year, p_month);
-
-  IF NOT public.is_financial_period_open(p_company_id, p_year, p_month) THEN
-    RAISE EXCEPTION 'FINANCIAL_PERIOD_CLOSED: %-%', p_year, lpad(p_month::text, 2, '0')
-      USING ERRCODE = 'P0001';
-  END IF;
+  PERFORM public.assert_financial_periods_open_locked_many(p_company_id, ARRAY[
+    public.financial_period_lock_key(p_year, p_month)
+  ]);
 END;
 $fn$;
 
--- ─── Os dois meses de um movimento de data, ambos abertos ───────────────────
---
--- Mover um facto de Julho para Agosto altera os dois meses. Validar só o
--- destino deixava um caminho para modificar um mês fechado por arrastamento —
--- e validar os dois em chamadas separadas reabria a corrida entre elas.
 CREATE OR REPLACE FUNCTION public.assert_financial_periods_open_locked_pair(
   p_company_id uuid,
   p_year_a integer,
@@ -233,22 +391,10 @@ LANGUAGE plpgsql
 SECURITY INVOKER
 AS $fn$
 BEGIN
-  -- Os dois locks primeiro, em ordem canónica. Só depois as duas perguntas:
-  -- assim não há instante em que um dos meses esteja validado e o outro ainda
-  -- livre para fechar.
-  PERFORM public.lock_financial_periods_pair(
-    p_company_id, p_year_a, p_month_a, p_year_b, p_month_b
-  );
-
-  IF NOT public.is_financial_period_open(p_company_id, p_year_a, p_month_a) THEN
-    RAISE EXCEPTION 'FINANCIAL_PERIOD_CLOSED: %-%', p_year_a, lpad(p_month_a::text, 2, '0')
-      USING ERRCODE = 'P0001';
-  END IF;
-
-  IF NOT public.is_financial_period_open(p_company_id, p_year_b, p_month_b) THEN
-    RAISE EXCEPTION 'FINANCIAL_PERIOD_CLOSED: %-%', p_year_b, lpad(p_month_b::text, 2, '0')
-      USING ERRCODE = 'P0001';
-  END IF;
+  PERFORM public.assert_financial_periods_open_locked_many(p_company_id, ARRAY[
+    public.financial_period_lock_key(p_year_a, p_month_a),
+    public.financial_period_lock_key(p_year_b, p_month_b)
+  ]);
 END;
 $fn$;
 
@@ -431,6 +577,10 @@ $fn$;
 REVOKE ALL PRIVILEGES ON FUNCTION public.financial_period_lock_key(integer, integer) FROM PUBLIC, anon, authenticated;
 REVOKE ALL PRIVILEGES ON FUNCTION public.lock_financial_period(uuid, integer, integer) FROM PUBLIC, anon, authenticated;
 REVOKE ALL PRIVILEGES ON FUNCTION public.lock_financial_periods_pair(uuid, integer, integer, integer, integer) FROM PUBLIC, anon, authenticated;
+REVOKE ALL PRIVILEGES ON FUNCTION public.financial_period_lock_keys(date[]) FROM PUBLIC, anon, authenticated;
+REVOKE ALL PRIVILEGES ON FUNCTION public.lock_financial_periods_many(uuid, integer[]) FROM PUBLIC, anon, authenticated;
+REVOKE ALL PRIVILEGES ON FUNCTION public.assert_financial_periods_open_locked_many(uuid, integer[]) FROM PUBLIC, anon, authenticated;
+REVOKE ALL PRIVILEGES ON FUNCTION public.assert_financial_period_dates_open_locked(uuid, date[]) FROM PUBLIC, anon, authenticated;
 REVOKE ALL PRIVILEGES ON FUNCTION public.assert_financial_period_open_locked(uuid, integer, integer) FROM PUBLIC, anon, authenticated;
 REVOKE ALL PRIVILEGES ON FUNCTION public.assert_financial_periods_open_locked_pair(uuid, integer, integer, integer, integer) FROM PUBLIC, anon, authenticated;
 REVOKE ALL PRIVILEGES ON FUNCTION public.financial_period_blockers(uuid, integer, integer) FROM PUBLIC, anon, authenticated;
@@ -440,6 +590,10 @@ REVOKE ALL PRIVILEGES ON FUNCTION public.reopen_financial_period_atomic(uuid, in
 GRANT EXECUTE ON FUNCTION public.financial_period_lock_key(integer, integer) TO postgres, service_role;
 GRANT EXECUTE ON FUNCTION public.lock_financial_period(uuid, integer, integer) TO postgres, service_role;
 GRANT EXECUTE ON FUNCTION public.lock_financial_periods_pair(uuid, integer, integer, integer, integer) TO postgres, service_role;
+GRANT EXECUTE ON FUNCTION public.financial_period_lock_keys(date[]) TO postgres, service_role;
+GRANT EXECUTE ON FUNCTION public.lock_financial_periods_many(uuid, integer[]) TO postgres, service_role;
+GRANT EXECUTE ON FUNCTION public.assert_financial_periods_open_locked_many(uuid, integer[]) TO postgres, service_role;
+GRANT EXECUTE ON FUNCTION public.assert_financial_period_dates_open_locked(uuid, date[]) TO postgres, service_role;
 GRANT EXECUTE ON FUNCTION public.assert_financial_period_open_locked(uuid, integer, integer) TO postgres, service_role;
 GRANT EXECUTE ON FUNCTION public.assert_financial_periods_open_locked_pair(uuid, integer, integer, integer, integer) TO postgres, service_role;
 GRANT EXECUTE ON FUNCTION public.financial_period_blockers(uuid, integer, integer) TO postgres, service_role;
@@ -459,6 +613,10 @@ BEGIN
       ('financial_period_lock_key',                 'p_year integer, p_month integer'),
       ('lock_financial_period',                     'p_company_id uuid, p_year integer, p_month integer'),
       ('lock_financial_periods_pair',               'p_company_id uuid, p_year_a integer, p_month_a integer, p_year_b integer, p_month_b integer'),
+      ('financial_period_lock_keys',                 'p_dates date[]'),
+      ('lock_financial_periods_many',                'p_company_id uuid, p_keys integer[]'),
+      ('assert_financial_periods_open_locked_many',  'p_company_id uuid, p_keys integer[]'),
+      ('assert_financial_period_dates_open_locked',  'p_company_id uuid, p_dates date[]'),
       ('assert_financial_period_open_locked',       'p_company_id uuid, p_year integer, p_month integer'),
       ('assert_financial_periods_open_locked_pair', 'p_company_id uuid, p_year_a integer, p_month_a integer, p_year_b integer, p_month_b integer'),
       ('financial_period_blockers',                 'p_company_id uuid, p_year integer, p_month integer'),
