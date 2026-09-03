@@ -1,5 +1,5 @@
 // ============================================================================
-// PRODUCTION-PARITY SHADOW — 090 e 091 sobre a forma real do schema
+// PRODUCTION-PARITY SHADOW — 078, 090, 091 e 094 sobre a forma real do schema
 // ============================================================================
 //
 // As suites da 090 e da 091 provam o protocolo sobre um palco mínimo: as
@@ -46,15 +46,18 @@ const ler = (p: string) => readFileSync(join(ROOT, p), "utf8");
  *    049, …), porque o dump da forma traz tabelas e políticas mas não traz
  *    funções.
  *
- *    O que se ensaia é o que a direcção vai autorizar aplicar: 090 e 091,
+ *    O que se ensaia é o que a direcção vai autorizar aplicar: 078, 090, 091
+ *    e 094,
  *    sobre uma base que já tem o que produção tem. O pré-estado da 086 —
  *    `manual_charges` e as três RPCs — é montado abaixo a partir do mesmo
  *    fixture extraído que a suite da 091 usa, para as duas partirem do mesmo
  *    sítio.
  */
 const CADEIA = [
+  "supabase/migrations/078_domain_mutation_change_event_foundation.sql",
   "supabase/migrations/090_financial_period_lock_protocol.sql",
   "supabase/migrations/091_manual_charges_period_atomic.sql",
+  "supabase/migrations/094_invoices_period_atomic.sql",
 ] as const;
 
 beforeAll(async () => {
@@ -68,6 +71,8 @@ beforeAll(async () => {
   // A forma real: andaime do Supabase (papéis, `auth`), o dump do schema, os
   // helpers legados e os grants.
   await pool.query(baselineCompleto());
+  await pool.query("CREATE EXTENSION IF NOT EXISTS pgcrypto");
+  await pool.query("INSERT INTO public._migrations (name) VALUES ('077_secure_migrations_ledger.sql')");
 
   // 🔴 O dump da forma NÃO traz constraints CHECK nem índices — só tabelas,
   //    colunas, FKs, RLS e políticas (ver o cabeçalho de
@@ -101,6 +106,7 @@ beforeAll(async () => {
     ALTER TABLE public.financial_periods
       ADD CONSTRAINT financial_periods_unique UNIQUE (company_id, year, month);
   `);
+  await pool.query(ler("src/__tests__/fixtures/production-financial-prestate.sql"));
 
   // A precondição da 090 exige `is_financial_period_open` com a assinatura
   // exacta — produção tem-na desde a 073, e o dump da forma não traz funções.
@@ -111,6 +117,7 @@ beforeAll(async () => {
   // própria 086 pelo mesmo gerador que a suite da 091 usa.
   await pool.query(ler("src/__tests__/fixtures/086-manual-charges-table.sql"));
   await pool.query(ler("src/__tests__/fixtures/086-manual-charges-rpcs.sql"));
+  await pool.query(ler("src/__tests__/fixtures/pre-094-invoice-rpc.sql"));
 
   for (const migration of CADEIA) {
     await pool.query(ler(migration));
@@ -123,7 +130,7 @@ afterAll(async () => {
 });
 
 describe("shadow — a cadeia aplica sobre a forma real de produção", () => {
-  it("086 → 090 → 091 aplicam sem erro sobre o schema real", async () => {
+  it("078 → 090 → 091 → 094 aplicam sem erro sobre o schema real", async () => {
     // Se o `beforeAll` chegou aqui, aplicaram. Este teste existe para que a
     // falha apareça com nome próprio em vez de como «beforeAll rebentou».
     const { rows } = await pool.query("SELECT current_database() db");
