@@ -11,6 +11,7 @@ import { nextOccurrences } from "@/domain/scheduling/recurrence-engine";
 import { toLocalDate } from "@/domain/scheduling/civil-date";
 import type { ScheduleDay } from "@/types/database";
 import type { ContratosTableRow } from "../page";
+import { ClienteSearchSelect } from "./cliente-search-select";
 import {
   CLEANING_TYPES,
   PAYMENT_STATUSES,
@@ -505,20 +506,12 @@ export function ContratoSheet({
               {/* Cliente → Local */}
               <div className="grid grid-cols-2 gap-3">
                 <Field label="Cliente *">
-                  <div className="relative">
-                    <select
-                      value={clienteId}
-                      onChange={(e) => { setClienteId(e.target.value); setLocalId(""); }}
-                      disabled={!!fixedClientId}
-                      className={SELECT_CLS + (fixedClientId ? " opacity-70 cursor-not-allowed" : "")}
-                    >
-                      <option value="">Selecionar...</option>
-                      {clientes.map((c) => (
-                        <option key={c.id} value={c.id}>{c.name}</option>
-                      ))}
-                    </select>
-                    <ChevronDown className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--color-text-muted)]" />
-                  </div>
+                  <ClienteSearchSelect
+                    clientes={clientes}
+                    value={clienteId}
+                    fixedClientId={fixedClientId}
+                    onChange={(id) => { setClienteId(id); setLocalId(""); }}
+                  />
                 </Field>
                 <Field label="Local *">
                   <div className="relative">
