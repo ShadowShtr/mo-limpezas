@@ -26,9 +26,6 @@ import { nota as financeiroMudaDeMes } from "./2026-08-25-financeiro-muda-de-mes
 import { nota as pagamentosNoMesCerto } from "./2026-08-26-pagamentos-no-mes-certo";
 import { nota as categoriasEMenu } from "./2026-08-26-categorias-e-menu-dos-pagamentos";
 import { nota as categoriaDasSaidas } from "./2026-08-26-categoria-das-saidas";
-// 🔴 Retirada — ver `src/release-note-withdrawals/`. Continua aqui de propósito:
-//    a `key` liga aos registos de leitura, e tirá-la do catálogo deixava-os a
-//    apontar para coisa nenhuma. Deixou de ser oferecida, não de existir.
 import { nota as colaboradorApenasComNome } from "./2026-08-26-colaborador-apenas-com-nome";
 import { nota as reposicaoDoAcesso } from "./2026-08-26-reposicao-do-acesso";
 import { nota as colaboradorSoComONome } from "./2026-08-27-colaborador-so-com-o-nome";
@@ -44,6 +41,7 @@ import { nota as equipasGuardamEmLote } from "./2026-09-01-equipas-guardam-em-lo
 import { nota as pagamentosFixosVariaveisParidade } from "./2026-09-01-pagamentos-fixos-variaveis-paridade";
 import { nota as edicaoPagamentosSegura } from "./2026-09-01-edicao-pagamentos-segura";
 import { nota as clientesPesquisaContratos } from "./2026-09-02-clientes-pesquisa-contratos";
+import { nota as equipasEspelhoAusencias } from "./2026-09-02-equipas-espelho-ausencias";
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   financeiroEAnexos,
@@ -72,6 +70,7 @@ export const RELEASE_NOTES: ReleaseNote[] = [
   pagamentosFixosVariaveisParidade,
   edicaoPagamentosSegura,
   clientesPesquisaContratos,
+  equipasEspelhoAusencias,
 ];
 
 /** As chaves têm de ser únicas — duas notas com a mesma key partilhariam a leitura. */
