@@ -1,17 +1,10 @@
 {
   "inventorySource": "git ls-files",
   "summary": {
-<<<<<<< HEAD
-    "repositoryFiles": 827,
-    "textFiles": 814,
-    "sourceFiles": 585,
-    "textLines": 202296,
-=======
-    "repositoryFiles": 828,
-    "textFiles": 815,
+    "repositoryFiles": 833,
+    "textFiles": 820,
     "sourceFiles": 586,
-    "textLines": 202448,
->>>>>>> a517d9e (feat(092): pagamentos fixos e variáveis dentro do protocolo de período)
+    "textLines": 204756,
     "typescriptDiagnostics": 0,
     "productionEntries": 71,
     "unreachableProductionModules": 40,
