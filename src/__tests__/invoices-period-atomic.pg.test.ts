@@ -176,6 +176,18 @@ const movimento = async (id: string) =>
     )
   ).rows[0];
 
+/**
+ * A data civil de Lisboa, lida do MESMO servidor que a 094 usa.
+ *
+ * A migration grava `(now() AT TIME ZONE 'Europe/Lisbon')::date`. Comparar isso
+ * com `new Date().toISOString()` mede outro fuso: às 23:30 UTC já é o dia
+ * seguinte em Lisboa, e o ensaio falhava por meia hora de diferença — não por
+ * defeito no código. Lido daqui, a asserção passa a comparar o que a migration
+ * decidiu contra a mesma noção de "hoje".
+ */
+const hojeLisboa = async () =>
+  (await pool.query(`SELECT to_char((now() AT TIME ZONE 'Europe/Lisbon')::date, 'YYYY-MM-DD') d`)).rows[0].d as string;
+
 const ITENS = JSON.stringify([{ description: "Limpeza", quantity: 1, unit_price: 100, total: 100, sort_order: 0 }]);
 
 /** Cria uma fatura pela RPC, com emissão e período à escolha. */
@@ -381,7 +393,7 @@ describe("094 — STATUS: a fatura e o caixa numa escrita só", () => {
     const m = await movimento(id);
     expect(m.type).toBe("entrada");
     expect(Number(m.amount)).toBe(100);
-    expect(m.d).toBe(new Date().toISOString().slice(0, 10));
+    expect(m.d).toBe(await hojeLisboa());
     expect(m.description).toContain("Cliente");
   }, 120_000);
 
@@ -407,7 +419,7 @@ describe("094 — STATUS: a fatura e o caixa numa escrita só", () => {
     expect(replay.replay).toBe(true);
     expect(await nCaixa()).toBe(1);
     expect((await fatura(id)).paid_at).toEqual(primeiro.paid_at);
-    expect((await movimento(id)).d).toBe(new Date().toISOString().slice(0, 10));
+    expect((await movimento(id)).d).toBe(await hojeLisboa());
   }, 120_000);
 
   it("recusa reutilizar a mesma mutation_id com outra intenção", async () => {

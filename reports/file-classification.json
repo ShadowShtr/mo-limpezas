@@ -1,12 +1,12 @@
 {
   "generatedBy": "scripts/audit-file-inventory.mjs",
-  "totalFiles": 874,
+  "totalFiles": 879,
   "byStatus": {
-    "MANTER": 851,
+    "MANTER": 856,
     "STANDBY": 23
   },
   "byCategory": {
-    "test": 203,
+    "test": 204,
     "route-ui": 140,
     "migration": 122,
     "lib": 73,
@@ -20,7 +20,7 @@
     "api-route": 16,
     "config": 12,
     "asset": 8,
-    "report": 4,
+    "report": 8,
     "script-historico": 4,
     "other": 2,
     "ci": 2,
@@ -29,7 +29,7 @@
     "supabase-other": 2
   },
   "byConfidence": {
-    "alta": 853,
+    "alta": 858,
     "média": 15,
     "baixa": 6
   },
@@ -1888,6 +1888,114 @@
       "signals": {
         "supabase": 1,
         "sqlWrite": 1
+      },
+      "action": "nenhuma",
+      "reason": "configuração/infra",
+      "manualDecision": false
+    },
+    {
+      "path": "reports/code-audit.json",
+      "category": "report",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [
+        "npm",
+        "ci",
+        "config",
+        "docs"
+      ],
+      "sideEffects": [
+        "supabase"
+      ],
+      "risks": [],
+      "signals": {
+        "supabase": 1,
+        "sqlWrite": 1
+      },
+      "action": "nenhuma",
+      "reason": "configuração/infra",
+      "manualDecision": false
+    },
+    {
+      "path": "reports/code-audit.json",
+      "category": "report",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [
+        "npm",
+        "ci",
+        "config",
+        "docs"
+      ],
+      "sideEffects": [
+        "supabase"
+      ],
+      "risks": [],
+      "signals": {
+        "supabase": 1,
+        "sqlWrite": 1
+      },
+      "action": "nenhuma",
+      "reason": "configuração/infra",
+      "manualDecision": false
+    },
+    {
+      "path": "reports/file-classification.json",
+      "category": "report",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [
+        "docs"
+      ],
+      "sideEffects": [
+        "supabase",
+        "revalidatePath(38)"
+      ],
+      "risks": [
+        "debugger"
+      ],
+      "signals": {
+        "supabase": 1,
+        "sqlWrite": 26,
+        "debugger": 6,
+        "revalidatePath": 38
+      },
+      "action": "nenhuma",
+      "reason": "configuração/infra",
+      "manualDecision": false
+    },
+    {
+      "path": "reports/file-classification.json",
+      "category": "report",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [
+        "docs"
+      ],
+      "sideEffects": [
+        "supabase",
+        "revalidatePath(38)"
+      ],
+      "risks": [
+        "debugger"
+      ],
+      "signals": {
+        "supabase": 1,
+        "sqlWrite": 26,
+        "debugger": 6,
+        "revalidatePath": 38
       },
       "action": "nenhuma",
       "reason": "configuração/infra",
@@ -6487,7 +6595,7 @@
       "category": "test",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 11,
+      "consumers": 12,
       "consumerSample": [
         "src/__tests__/bank-reconciliation-period-atomic.pg.test.ts",
         "src/__tests__/cashflow-period-atomic.pg.test.ts",
@@ -7908,6 +8016,30 @@
       "sideEffects": [],
       "risks": [],
       "signals": {},
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/__tests__/pgcrypto-extension-schema-parity.pg.test.ts",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "sqlWrite": 2
+      },
       "action": "nenhuma",
       "reason": "suite de testes — corre por convenção do vitest",
       "manualDecision": false,
