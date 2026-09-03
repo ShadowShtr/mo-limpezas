@@ -43,6 +43,7 @@ import { nota as edicaoPagamentosSegura } from "./2026-09-01-edicao-pagamentos-s
 import { nota as clientesPesquisaContratos } from "./2026-09-02-clientes-pesquisa-contratos";
 import { nota as equipasEspelhoAusencias } from "./2026-09-02-equipas-espelho-ausencias";
 import { nota as intervencoesSemDataDeFim } from "./2026-09-03-intervencoes-sem-data-de-fim";
+import { nota as correcaoGuardarIntervencoes } from "./2026-09-03-correcao-guardar-intervencoes";
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   financeiroEAnexos,
@@ -73,6 +74,7 @@ export const RELEASE_NOTES: ReleaseNote[] = [
   clientesPesquisaContratos,
   equipasEspelhoAusencias,
   intervencoesSemDataDeFim,
+  correcaoGuardarIntervencoes,
 ];
 
 /** As chaves têm de ser únicas — duas notas com a mesma key partilhariam a leitura. */

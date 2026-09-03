@@ -188,7 +188,9 @@ describe("guardas adicionais (060_guardas_adicionais.sql) e painel de recuperaç
 
   it("updateContrato confirma pós-gravação os campos financeiros (read-after-write)", () => {
     const contratos = readFileSync(join(SRC, "app", "actions", "contratos.ts"), "utf8");
-    expect(contratos).toContain("não foi confirmada na base de dados");
+    const confirmation = readFileSync(join(SRC, "lib", "contract-write-confirmation.ts"), "utf8");
+    expect(contratos).toContain("contractWriteMismatchMessage");
+    expect(confirmation).toContain("não correspondeu ao valor esperado");
   });
 });
 
@@ -328,11 +330,10 @@ describe("auditoria F — campos operacionais, delete atómico e actor", () => {
   });
 
   it("read-after-write do contrato cobre os campos operacionais", () => {
-    const src = readFileSync(join(SRC, "app", "actions", "contratos.ts"), "utf8");
-    expect(src).toContain("campos divergentes");
+    const confirmation = readFileSync(join(SRC, "lib", "contract-write-confirmation.ts"), "utf8");
+    expect(confirmation).toContain("campos divergentes");
     for (const f of ["cleaning_type", "payment_status", "upholstery_notes", "schedule_days", "num_people"]) {
-      const rawSection = src.slice(src.indexOf("Read-after-write COMPLETO"));
-      expect(rawSection, `read-after-write sem ${f}`).toContain(f);
+      expect(confirmation, `read-after-write sem ${f}`).toContain(f);
     }
   });
 

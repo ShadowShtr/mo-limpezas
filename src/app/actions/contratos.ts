@@ -10,6 +10,7 @@ import { getOccurrences, DOW_TO_KEY } from "@/lib/contract-occurrences";
 import { assertCriticalFieldsLoaded, CRITICAL_FIELDS_BLOCKED_MESSAGE } from "@/lib/critical-fields";
 import { calculateServiceValue } from "@/lib/service-value";
 import { revalidateBusinessPaths } from "@/lib/revalidate-business";
+import { contractWriteDivergences, contractWriteMismatchMessage } from "@/lib/contract-write-confirmation";
 import type { ScheduleDay } from "@/types/database";
 
 export interface ContratoInput {
@@ -670,41 +671,18 @@ export async function updateContrato(id: string, input: Omit<ContratoInput, "com
   // campo persistido divergir do enviado (trigger/constraint a intervir,
   // corrida com outra sessão), o utilizador fica a saber em vez de ver
   // "sucesso" com um valor diferente na base. (Auditoria F, Falha 5.)
-  const num = (v: unknown) => (v == null ? null : Number(v));
-  const intended: Record<string, unknown> = {
-    fixed_price: num(input.fixed_price ?? null),
-    fixed_monthly: input.fixed_monthly ?? false,
-    apply_vat: input.apply_vat ?? false,
-    cleaning_type: input.cleaning_type ?? null,
-    payment_status: input.payment_status ?? null,
-    upholstery_type: input.upholstery_type ?? null,
-    upholstery_notes: input.upholstery_notes ?? null,
-    upholstery_units: num(input.upholstery_units ?? null),
-    upholstery_unit_price: num(input.upholstery_unit_price ?? null),
-    num_people: num(input.num_people ?? null),
-    status: input.status,
-    schedule_days: JSON.stringify(input.schedule_days ?? null),
-  };
-  const persisted: Record<string, unknown> = {
-    fixed_price: num(saved.fixed_price),
-    fixed_monthly: saved.fixed_monthly,
-    apply_vat: saved.apply_vat,
-    cleaning_type: saved.cleaning_type ?? null,
-    payment_status: saved.payment_status ?? null,
-    upholstery_type: saved.upholstery_type ?? null,
-    upholstery_notes: saved.upholstery_notes ?? null,
-    upholstery_units: num(saved.upholstery_units),
-    upholstery_unit_price: num(saved.upholstery_unit_price),
-    num_people: num(saved.num_people),
-    status: saved.status,
-    schedule_days: JSON.stringify(saved.schedule_days ?? null),
-  };
-  const divergentes = Object.keys(intended).filter((k) => intended[k] !== persisted[k]);
+  //
+  // A comparação vive em `contract-write-confirmation.ts`: normaliza os dois
+  // lados com o MESMO mapa de campos e compara `schedule_days` pelo conteúdo,
+  // porque o JSONB volta do Postgres com as chaves noutra ordem e o
+  // `JSON.stringify` que aqui estava acusava divergência numa gravação
+  // correta — era o que impedia guardar horário/equipa de uma intervenção.
+  const divergentes = contractWriteDivergences(
+    input as unknown as Record<string, unknown>,
+    saved as unknown as Record<string, unknown>,
+  );
   if (divergentes.length > 0) {
-    return {
-      ok: false as const,
-      error: `A alteração não foi confirmada na base de dados (campos divergentes: ${divergentes.join(", ")}). Nada foi considerado gravado — atualize a página e tente novamente.`,
-    };
+    return { ok: false as const, error: contractWriteMismatchMessage(divergentes) };
   }
 
   // Auditoria do valor financeiro do contrato (avença/IVA) — só quando algo
