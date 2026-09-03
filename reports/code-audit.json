@@ -4,7 +4,11 @@
     "repositoryFiles": 827,
     "textFiles": 814,
     "sourceFiles": 585,
-    "textLines": 202445,
+<<<<<<< HEAD
+    "textLines": 202296,
+=======
+    "textLines": 201502,
+>>>>>>> a7bbb66 (feat(runtime): fechar e reabrir o período pelas RPCs atómicas da 090)
     "typescriptDiagnostics": 0,
     "productionEntries": 71,
     "unreachableProductionModules": 40,

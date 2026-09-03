@@ -13493,19 +13493,16 @@
         "docs"
       ],
       "sideEffects": [
-        "write",
         "revalidatePath(1)"
       ],
       "risks": [],
       "signals": {
         "serverAction": 1,
-        "write": 2,
-        "sqlWrite": 1,
-        "unknownCast": 3,
+        "unknownCast": 1,
         "fallbackZero": 1,
         "revalidatePath": 1
       },
-      "action": "auditar atomicidade (T12/T13)",
+      "action": "nenhuma",
       "reason": "em uso: 2 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
@@ -17352,7 +17349,7 @@
       "category": "lib",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 21,
+      "consumers": 20,
       "consumerSample": [
         "src/__tests__/audit.test.ts",
         "src/app/(dashboard)/dashboard/calendario/_actions/reschedule.ts",
@@ -17380,7 +17377,7 @@
         "consoleErr": 2
       },
       "action": "nenhuma",
-      "reason": "em uso: 21 consumidor(es), script npm, CI, configuração",
+      "reason": "em uso: 20 consumidor(es), script npm, CI, configuração",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,

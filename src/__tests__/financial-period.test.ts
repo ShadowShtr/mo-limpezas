@@ -18,7 +18,9 @@ import {
   ERRO_PERIODO_FECHADO,
   MIN_CARACTERES_MOTIVO,
   agregarChecklist,
+  descreverBloqueadores,
   interpretarLinhaPeriodo,
+  interpretarResultadoFecho,
   itemContagem,
   itemFalhaDeLeitura,
   mensagemPeriodoFechado,
@@ -428,5 +430,102 @@ describe("🔴 a guarda é READ-ONLY", () => {
       "utf8",
     );
     expect(fonte).not.toMatch(/\.insert\(|\.update\(|\.delete\(|\.upsert\(/);
+  });
+});
+
+// ============================================================================
+// A resposta do fecho atómico (090) — lógica pura
+// ============================================================================
+//
+// `closeFinancialPeriod` deixou de ler-calcular-escrever em três viagens e
+// passou a chamar `close_financial_period_atomic`. O que sobra do lado do
+// TypeScript é interpretar a resposta — e é isso que se testa aqui, sem base
+// de dados nenhuma.
+//
+// 🔴 O ponto destes testes é a resposta INESPERADA. Um `data` com outra forma
+//    não pode acabar como «fechado com sucesso»: é isso que transformaria uma
+//    falha silenciosa da base num mês dado por encerrado.
+describe("interpretarResultadoFecho", () => {
+  it("fechou: a linha diz fechado = true", () => {
+    const r = interpretarResultadoFecho([{ fechado: true, bloqueadores: {} }]);
+    expect(r).toEqual({ ok: true, fechado: true });
+  });
+
+  it("já estava fechado: no-op, não erro", () => {
+    const r = interpretarResultadoFecho([{ fechado: false, bloqueadores: { ja_fechado: true } }]);
+    expect(r).toEqual({ ok: true, fechado: false, jaFechado: true });
+  });
+
+  it("bloqueadores: devolve as contagens", () => {
+    const r = interpretarResultadoFecho([
+      { fechado: false, bloqueadores: { faturas_rascunho: 2, pagamentos_pendentes: 1 } },
+    ]);
+    expect(r).toEqual({
+      ok: true,
+      fechado: false,
+      jaFechado: false,
+      bloqueadores: { faturas_rascunho: 2, pagamentos_pendentes: 1 },
+    });
+  });
+
+  it("aceita a linha fora do array — o PostgREST devolve as duas formas", () => {
+    expect(interpretarResultadoFecho({ fechado: true, bloqueadores: {} })).toEqual({ ok: true, fechado: true });
+  });
+
+  it("contagens a zero não entram na lista", () => {
+    const r = interpretarResultadoFecho([{ fechado: false, bloqueadores: { faturas_rascunho: 0 } }]);
+    expect(r).toEqual({ ok: true, fechado: false, jaFechado: false, bloqueadores: {} });
+  });
+
+  it("🔴 resposta inesperada NUNCA vira sucesso", () => {
+    for (const mau of [
+      null,
+      undefined,
+      [],
+      "fechado",
+      42,
+      [{}],
+      [{ fechado: "sim" }],
+      [{ fechado: false }],
+      [{ fechado: false, bloqueadores: null }],
+      [{ fechado: false, bloqueadores: "nenhum" }],
+    ]) {
+      expect(interpretarResultadoFecho(mau), JSON.stringify(mau) ?? "undefined").toEqual({ ok: false });
+    }
+  });
+
+  it("valores não numéricos nos bloqueadores são ignorados, não somados", () => {
+    const r = interpretarResultadoFecho([
+      { fechado: false, bloqueadores: { faturas_rascunho: 1, lixo: "muito", outro: null } },
+    ]);
+    expect(r).toEqual({ ok: true, fechado: false, jaFechado: false, bloqueadores: { faturas_rascunho: 1 } });
+  });
+});
+
+describe("descreverBloqueadores", () => {
+  it("traduz as chaves da RPC para a frase da gestora", () => {
+    expect(descreverBloqueadores({ faturas_rascunho: 2 })).toBe("2 faturas em rascunho");
+    expect(descreverBloqueadores({ saidas_sem_categoria: 1 })).toBe("1 despesas sem categoria");
+    expect(descreverBloqueadores({ movimentos_bancarios_pendentes: 3 })).toBe(
+      "3 movimentos bancários por conciliar",
+    );
+    expect(descreverBloqueadores({ pagamentos_pendentes: 5 })).toBe("5 pagamentos pendentes");
+  });
+
+  it("junta vários com ponto e vírgula", () => {
+    const frase = descreverBloqueadores({ faturas_rascunho: 2, pagamentos_pendentes: 1 });
+    expect(frase).toContain("2 faturas em rascunho");
+    expect(frase).toContain("1 pagamentos pendentes");
+    expect(frase).toContain("; ");
+  });
+
+  it("uma chave sem rótulo aparece pelo nome técnico, e não desaparece", () => {
+    // Feio, mas honesto: um bloqueador novo na base que ninguém traduziu ainda
+    // tem de aparecer na frase. Desaparecer daria uma recusa sem explicação.
+    expect(descreverBloqueadores({ chave_nova_da_base: 4 })).toBe("4 chave_nova_da_base");
+  });
+
+  it("sem bloqueadores dá uma frase genérica em vez de vazio", () => {
+    expect(descreverBloqueadores({})).toBe("há pendências por resolver");
   });
 });
