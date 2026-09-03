@@ -75,10 +75,19 @@ extracto pode atravessar meses, e a cascata apaga tudo de uma vez.
 
 | # | Writer | Caminho de escrita | Períodos que toca | Estado |
 |---|---|---|---|---|
-| 19 | `calculateAndSavePayroll` | UPSERT em `payroll_records` | `period_year`/`period_month` | `NO_GUARD` |
-| 20 | `adjustPayrollRecord` | UPDATE de `payroll_records` | `period_year`/`period_month` | `NO_GUARD` |
-| 21 | `approvePayrollRecords` | UPDATE de `status` | `period_year`/`period_month` | `NO_GUARD` |
-| 22 | `markPayrollPaid` | UPDATE de `payroll_records` + INSERT em `cash_flow_entries` | competência da folha + data do movimento | `NO_GUARD` |
+| 19 | `calculateAndSavePayroll` | guarda na action + UPSERT em `payroll_records` | `period_year`/`period_month` | `RACY` |
+| 20 | `adjustPayrollRecord` | guarda na action + UPDATE | `period_year`/`period_month` | `RACY` |
+| 21 | `approvePayrollRecords` | guarda na action + UPDATE de `status` | competências de TODO o lote | `RACY` |
+| 22 | `markPayrollPaid` | guarda na action + UPDATE + INSERT em `cash_flow_entries`, **em viagens separadas** | competências do lote + data do movimento | `RACY` |
+
+🔴 **Correcção.** A primeira versão deste inventário classificou os quatro como
+`NO_GUARD`. Está errado: `bloquearSePeriodoFechado` e
+`bloquearSePeriodoFechadoPorIds` existem e correm antes de cada escrita. São
+`RACY` — a guarda está na action, uma viagem antes.
+
+`markPayrollPaid` tem um segundo defeito, que o próprio ficheiro admitia por
+resolver (a P0B): o `update` da folha e o `insert` do caixa são duas escritas
+separadas. A 096 fecha-o.
 
 ### Pagamento de serviços — `src/app/actions/daily-billing.ts`
 
@@ -106,15 +115,49 @@ dois — a RPC e o caminho que a substitui.
 | 28 | `close_financial_period_atomic` | 090 | `LOCKED_ATOMIC` |
 | 29 | `reopen_financial_period_atomic` | 090 | `LOCKED_ATOMIC` |
 
-## Contagem
+## Contagem — depois da adopção 091..097
 
 ```
 WRITER_INVENTORY_TOTAL      = 32   (29 numerados + 3 não sensíveis agrupados)
 PERIOD_SENSITIVE_TOTAL      = 29
-LOCKED_ATOMIC               = 6    (091 × 4, 090 × 2)
-RACY                        = 8    (3, 4, 7, 8, 9, 11, 12, 17)
-NO_GUARD                    = 15   (1, 2, 5, 6, 10, 13, 14, 15, 16, 18, 19, 20, 21, 22, 23)
-NOT_PERIOD_SENSITIVE        = 3
+
+Antes desta frente:
+  LOCKED_ATOMIC             = 0
+  RACY                      = 12   (3, 4, 7, 8, 9, 11, 12, 17, 19, 20, 21, 22)
+  NO_GUARD                  = 17   (1, 2, 5, 6, 10, 13, 14, 15, 16, 18, 23, 24..29)
+  NOT_PERIOD_SENSITIVE      = 3
+
+Depois de 090..097, ao nível do SCHEMA:
+  LOCKED_ATOMIC             = 29
+  RACY                      = 0
+  NO_GUARD                  = 0
+  NOT_PERIOD_SENSITIVE      = 3
+```
+
+🔴 **`ao nível do SCHEMA` não é uma ressalva de estilo.** Sete writers têm hoje
+uma RPC protegida que o runtime publicado **ainda não chama** — escreve
+directamente da server action. Enquanto assim for, a protecção existe na base e
+não está no caminho que a aplicação usa:
+
+| Writer | RPC que passa a existir | `MUST_CALL` |
+|---|---|---|
+| `createPayment` | `create_payment_atomic` | sim |
+| `setPaymentStatus` (`cancelado`) | `set_payment_status_atomic` | sim |
+| `createCashFlowEntry` | `create_cashflow_entry_atomic` | sim |
+| `updateInvoiceStatus` | `set_invoice_status_atomic` | sim |
+| `deleteInvoice` | `delete_invoice_atomic` | sim |
+| `rejectMatch`, `manualMatch`, `ignoreTransaction`, `createEntryFromTransaction`, `deleteImport` | as cinco novas da 095 | sim |
+| `calculateAndSavePayroll`, `adjustPayrollRecord`, `approvePayrollRecords`, `markPayrollPaid` | as quatro da 096 | sim |
+| `setServicePayment` | `set_service_payment_atomic` (existe desde a 086, e o runtime **nunca** a chamou) | sim |
+| `createManualCharge` | `create_manual_charge_atomic` | sim |
+
+`FIN_PERIOD_DOMAIN_COMPLETE` só passa a `YES` quando estas substituições
+estiverem feitas — é a PR de runtime, e é ela que fecha a frente. Até lá:
+
+```
+FIN_PERIOD_SCHEMA_COMPLETE  = YES
+FIN_PERIOD_RUNTIME_COMPLETE = NO
+FIN_PERIOD_DOMAIN_COMPLETE  = NO
 ```
 
 ## Maior conjunto de períodos numa única operação económica
@@ -139,13 +182,13 @@ Agrupado por coerência transaccional e de rollback, não por ficheiro de action
 
 | Migration | Domínio | Writers |
 |---|---|---|
-| 091 | Cobranças avulsas | 24–27 · **feito** |
-| 092 | Pagamentos fixos e variáveis | 1–6 |
-| 093 | Fluxo de caixa directo | 7–9 |
-| 094 | Faturas | 10–12 |
-| 095 | Conciliação bancária | 13–18 |
-| 096 | Folha — segurança de período apenas | 19–22 |
-| 097 | Pagamento de serviços | 23 |
+| 091 | Cobranças avulsas | 24–27 · **feito** (PR #137) |
+| 092 | Pagamentos fixos e variáveis | 1–6 · **feito** (PR #139) |
+| 093 | Fluxo de caixa directo | 7–9 · **feito** (PR #140) |
+| 094 | Faturas | 10–12 · **feito** (PR #141) |
+| 095 | Conciliação bancária | 13–18 · **feito** (PR #142) |
+| 096 | Folha — segurança de período apenas | 19–22 · **feito** (PR #143) |
+| 097 | Pagamento de serviços | 23 · **feito** (PR #144) |
 
 A recorrência **não** tem número reservado: recebe `NEXT_FREE_MIGRATION` depois
 de esta lista estar fechada.

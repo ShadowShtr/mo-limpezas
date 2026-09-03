@@ -1,6 +1,11 @@
 {
   "generatedBy": "scripts/audit-file-inventory.mjs",
 <<<<<<< HEAD
+<<<<<<< HEAD
+=======
+<<<<<<< HEAD
+<<<<<<< HEAD
+>>>>>>> bf275b0 (feat(097): pagamento de serviços dentro do protocolo de período)
   "totalFiles": 855,
 =======
 <<<<<<< HEAD
@@ -22,6 +27,7 @@
 =======
   "totalFiles": 852,
 >>>>>>> 3219b60 (feat(096): segurança de período da folha, e a P0B fechada)
+<<<<<<< HEAD
   "byStatus": {
     "MANTER": 829,
     "STANDBY": 23
@@ -30,6 +36,19 @@
     "test": 195,
     "route-ui": 138,
     "migration": 118,
+=======
+=======
+  "totalFiles": 855,
+>>>>>>> d70cfce (feat(097): pagamento de serviços dentro do protocolo de período)
+  "byStatus": {
+    "MANTER": 832,
+    "STANDBY": 23
+  },
+  "byCategory": {
+    "test": 196,
+    "route-ui": 138,
+    "migration": 120,
+>>>>>>> bf275b0 (feat(097): pagamento de serviços dentro do protocolo de período)
     "lib": 70,
 <<<<<<< HEAD
     "script": 58,
@@ -56,18 +75,31 @@
   },
   "byConfidence": {
 <<<<<<< HEAD
+<<<<<<< HEAD
     "alta": 834,
 =======
 <<<<<<< HEAD
 <<<<<<< HEAD
     "alta": 831,
 =======
+=======
+<<<<<<< HEAD
+<<<<<<< HEAD
+    "alta": 834,
+=======
+>>>>>>> bf275b0 (feat(097): pagamento de serviços dentro do protocolo de período)
     "alta": 826,
 >>>>>>> a21ea74 (feat(095): conciliação bancária dentro do protocolo de período)
 =======
     "alta": 831,
 >>>>>>> 3219b60 (feat(096): segurança de período da folha, e a P0B fechada)
+<<<<<<< HEAD
 >>>>>>> 79f3b6c (feat(096): segurança de período da folha, e a P0B fechada)
+=======
+=======
+    "alta": 834,
+>>>>>>> d70cfce (feat(097): pagamento de serviços dentro do protocolo de período)
+>>>>>>> bf275b0 (feat(097): pagamento de serviços dentro do protocolo de período)
     "média": 15,
     "baixa": 6
   },
@@ -589,9 +621,12 @@
       "autoLoaded": false,
       "referencedBy": [],
       "sideEffects": [],
-      "risks": [],
+      "risks": [
+        "todo(1)"
+      ],
       "signals": {
-        "sqlWrite": 23
+        "sqlWrite": 25,
+        "todo": 1
       },
       "action": "nenhuma",
       "reason": "documentação",
@@ -6414,18 +6449,31 @@
       "status": "MANTER",
       "confidence": "alta",
 <<<<<<< HEAD
+<<<<<<< HEAD
       "consumers": 10,
 =======
 <<<<<<< HEAD
 <<<<<<< HEAD
       "consumers": 9,
 =======
+=======
+<<<<<<< HEAD
+<<<<<<< HEAD
+      "consumers": 10,
+=======
+>>>>>>> bf275b0 (feat(097): pagamento de serviços dentro do protocolo de período)
       "consumers": 8,
 >>>>>>> a21ea74 (feat(095): conciliação bancária dentro do protocolo de período)
 =======
       "consumers": 9,
 >>>>>>> 3219b60 (feat(096): segurança de período da folha, e a P0B fechada)
+<<<<<<< HEAD
 >>>>>>> 79f3b6c (feat(096): segurança de período da folha, e a P0B fechada)
+=======
+=======
+      "consumers": 10,
+>>>>>>> d70cfce (feat(097): pagamento de serviços dentro do protocolo de período)
+>>>>>>> bf275b0 (feat(097): pagamento de serviços dentro do protocolo de período)
       "consumerSample": [
         "src/__tests__/bank-reconciliation-period-atomic.pg.test.ts",
         "src/__tests__/cashflow-period-atomic.pg.test.ts",
@@ -22560,6 +22608,12 @@
     },
     {
 <<<<<<< HEAD
+<<<<<<< HEAD
+=======
+<<<<<<< HEAD
+=======
+>>>>>>> d70cfce (feat(097): pagamento de serviços dentro do protocolo de período)
+>>>>>>> bf275b0 (feat(097): pagamento de serviços dentro do protocolo de período)
       "path": "supabase/migrations/096_payroll_period_atomic.sql",
       "category": "migration",
       "status": "MANTER",
@@ -22584,13 +22638,21 @@
       "manualDecision": false
     },
     {
+<<<<<<< HEAD
 =======
+=======
+>>>>>>> bf275b0 (feat(097): pagamento de serviços dentro do protocolo de período)
 <<<<<<< HEAD
 =======
 >>>>>>> a21ea74 (feat(095): conciliação bancária dentro do protocolo de período)
 =======
 >>>>>>> 3219b60 (feat(096): segurança de período da folha, e a P0B fechada)
+<<<<<<< HEAD
 >>>>>>> 79f3b6c (feat(096): segurança de período da folha, e a P0B fechada)
+=======
+=======
+>>>>>>> d70cfce (feat(097): pagamento de serviços dentro do protocolo de período)
+>>>>>>> bf275b0 (feat(097): pagamento de serviços dentro do protocolo de período)
       "path": "supabase/migrations/20260608_new_features.sql",
       "category": "migration",
       "status": "MANTER",
@@ -23066,6 +23128,12 @@
     },
     {
 <<<<<<< HEAD
+<<<<<<< HEAD
+=======
+<<<<<<< HEAD
+=======
+>>>>>>> d70cfce (feat(097): pagamento de serviços dentro do protocolo de período)
+>>>>>>> bf275b0 (feat(097): pagamento de serviços dentro do protocolo de período)
       "path": "supabase/migrations/rollback/096_payroll_period_atomic.down.sql",
       "category": "migration",
       "status": "MANTER",
@@ -23084,13 +23152,21 @@
       "manualDecision": false
     },
     {
+<<<<<<< HEAD
 =======
+=======
+>>>>>>> bf275b0 (feat(097): pagamento de serviços dentro do protocolo de período)
 <<<<<<< HEAD
 =======
 >>>>>>> a21ea74 (feat(095): conciliação bancária dentro do protocolo de período)
 =======
 >>>>>>> 3219b60 (feat(096): segurança de período da folha, e a P0B fechada)
+<<<<<<< HEAD
 >>>>>>> 79f3b6c (feat(096): segurança de período da folha, e a P0B fechada)
+=======
+=======
+>>>>>>> d70cfce (feat(097): pagamento de serviços dentro do protocolo de período)
+>>>>>>> bf275b0 (feat(097): pagamento de serviços dentro do protocolo de período)
       "path": "supabase/seed.sql",
       "category": "supabase-other",
       "status": "MANTER",
