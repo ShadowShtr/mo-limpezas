@@ -21,10 +21,12 @@ const CONTAINER = `invper-${process.pid}`;
 const EMPRESA = "11111111-1111-4111-8111-111111111111";
 const OUTRA = "22222222-2222-4222-8222-222222222222";
 const CLIENTE = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
+const CLIENTE_OUTRA = "dddddddd-dddd-4ddd-8ddd-dddddddddddd";
 const ACTOR = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 
 let container: PostgresContainer;
 let pool: pg.Pool;
+let mutationSequence = 0;
 
 async function ligacao() {
   const c = new pg.Client({ ...container.connection });
@@ -34,8 +36,10 @@ async function ligacao() {
 
 async function baseline() {
   await pool.query(`
+    DROP EXTENSION IF EXISTS pgcrypto CASCADE;
     DROP SCHEMA IF EXISTS public CASCADE;
     CREATE SCHEMA public;
+    CREATE EXTENSION pgcrypto;
 
     CREATE TABLE public.financial_periods (
       id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -47,6 +51,8 @@ async function baseline() {
       updated_at timestamptz NOT NULL DEFAULT now(),
       UNIQUE (company_id, year, month)
     );
+    CREATE TABLE public._migrations (name text PRIMARY KEY);
+    INSERT INTO public._migrations (name) VALUES ('077_secure_migrations_ledger.sql');
     CREATE TABLE public.audit_logs (
       id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
       company_id uuid NOT NULL, actor_id uuid NOT NULL, action text NOT NULL,
@@ -55,7 +61,7 @@ async function baseline() {
       created_at timestamptz NOT NULL DEFAULT now()
     );
     CREATE TABLE public.companies (id uuid PRIMARY KEY, name text NOT NULL);
-    CREATE TABLE public.profiles (id uuid PRIMARY KEY, company_id uuid, full_name text);
+    CREATE TABLE public.profiles (id uuid PRIMARY KEY, company_id uuid, full_name text, role text NOT NULL DEFAULT 'gestor');
     CREATE TABLE public.clients (id uuid PRIMARY KEY, company_id uuid NOT NULL, name text NOT NULL);
     CREATE TABLE public.services (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), company_id uuid);
     CREATE TABLE public.bank_transactions (
@@ -87,7 +93,8 @@ async function baseline() {
       notes text,
       created_by uuid REFERENCES public.profiles(id),
       created_at timestamptz DEFAULT now(),
-      updated_at timestamptz DEFAULT now()
+      updated_at timestamptz DEFAULT now(),
+      revision integer NOT NULL DEFAULT 1
     );
 
     CREATE TABLE public.invoice_items (
@@ -107,22 +114,28 @@ async function baseline() {
       description text, category text, date date NOT NULL,
       expense_category_id uuid, reference_id uuid, reference_type text,
       status text NOT NULL DEFAULT 'confirmado',
+      created_by uuid,
       created_at timestamptz DEFAULT now()
     );
-    CREATE UNIQUE INDEX cash_flow_ref_unico
+    CREATE UNIQUE INDEX cash_flow_entries_reference_unique
       ON public.cash_flow_entries (company_id, reference_type, reference_id)
       WHERE reference_type IS NOT NULL AND reference_id IS NOT NULL;
+    CREATE TABLE public.bank_reconciliation_matches (
+      id uuid PRIMARY KEY DEFAULT gen_random_uuid(), company_id uuid NOT NULL,
+      bank_transaction_id uuid, cash_flow_entry_id uuid, status text NOT NULL DEFAULT 'suggested'
+    );
 
     CREATE FUNCTION public.is_financial_period_open(p_company_id uuid, p_year integer, p_month integer)
     RETURNS boolean LANGUAGE sql STABLE AS 'SELECT NOT EXISTS (SELECT 1 FROM public.financial_periods WHERE company_id = p_company_id AND year = p_year AND month = p_month AND status = ''closed'')';
   `);
 
   await pool.query(readFileSync(join(ROOT, "src/__tests__/fixtures/pre-094-invoice-rpc.sql"), "utf8"));
+  await pool.query(readFileSync(join(ROOT, "supabase/migrations/078_domain_mutation_change_event_foundation.sql"), "utf8"));
   await pool.query(readFileSync(join(ROOT, "supabase/migrations/090_financial_period_lock_protocol.sql"), "utf8"));
   await pool.query(readFileSync(join(ROOT, "supabase/migrations/094_invoices_period_atomic.sql"), "utf8"));
 
   await pool.query("INSERT INTO public.companies (id, name) VALUES ($1, 'A'), ($2, 'B')", [EMPRESA, OUTRA]);
-  await pool.query("INSERT INTO public.profiles (id, company_id, full_name) VALUES ($1, $2, 'Gestora')", [
+  await pool.query("INSERT INTO public.profiles (id, company_id, full_name, role) VALUES ($1, $2, 'Gestora', 'gestor')", [
     ACTOR,
     EMPRESA,
   ]);
@@ -203,6 +216,7 @@ beforeAll(async () => {
     serverFlags: ["shared_buffers=16MB", "max_connections=25", "work_mem=1MB", "maintenance_work_mem=8MB"],
   });
   pool = new pg.Pool({ ...container.connection, max: 4 });
+  await pool.query("CREATE EXTENSION IF NOT EXISTS pgcrypto");
   await pool.query(`
     DO $$ BEGIN CREATE ROLE anon; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
     DO $$ BEGIN CREATE ROLE authenticated; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
@@ -216,8 +230,28 @@ afterAll(async () => {
 });
 
 beforeEach(async () => {
+  mutationSequence = 0;
   await baseline();
 });
+
+function novaMutationId() {
+  mutationSequence += 1;
+  return `00000000-0000-4000-8000-${mutationSequence.toString(16).padStart(12, "0")}`;
+}
+
+async function mudarEstado(
+  invoiceId: string,
+  status: string,
+  expectedRevision: number,
+  paymentMethod: string | null = null,
+  mutationId = novaMutationId(),
+) {
+  const { rows } = await pool.query(
+    "SELECT public.set_invoice_status_atomic($1,$2,$3,$4,$5,$6,$7) AS result",
+    [invoiceId, EMPRESA, ACTOR, status, paymentMethod, mutationId, expectedRevision],
+  );
+  return rows[0].result as Record<string, unknown>;
+}
 
 describe("094 — CREATE: emissão e período facturado", () => {
   it("mês aberto: cria a fatura e as linhas, com o número da 072", async () => {
@@ -326,11 +360,12 @@ describe("094 — CREATE: emissão e período facturado", () => {
 describe("094 — STATUS: a fatura e o caixa numa escrita só", () => {
   it("marcar como pago cria o movimento na mesma transação", async () => {
     const id = await criar("2026-09-05", ["2026-09-01", "2026-09-30"]);
-    const { rows } = await pool.query(
-      "SELECT * FROM public.set_invoice_status_atomic($1, $2, 'pago', '2026-09-20'::date, 'transferencia', $3)",
-      [EMPRESA, id, ACTOR],
-    );
-    expect(rows[0].cash_entry_id).toBeTruthy();
+    const result = await mudarEstado(id, "pago", 1, "transferencia");
+    expect(result.ok).toBe(true);
+    expect((result.cash_flow_entry as Record<string, unknown>).id).toBeTruthy();
+    expect(result.event).toBeTruthy();
+    expect((await pool.query("SELECT count(*)::int n FROM public.domain_mutations")).rows[0].n).toBe(1);
+    expect((await pool.query("SELECT count(*)::int n FROM public.company_change_events")).rows[0].n).toBe(1);
 
     const f = await fatura(id);
     expect(f.status).toBe("pago");
@@ -340,22 +375,16 @@ describe("094 — STATUS: a fatura e o caixa numa escrita só", () => {
     const m = await movimento(id);
     expect(m.type).toBe("entrada");
     expect(Number(m.amount)).toBe(100);
-    expect(m.d).toBe("2026-09-20");
+    expect(m.d).toBe(new Date().toISOString().slice(0, 10));
     expect(m.description).toContain("Cliente");
   }, 120_000);
 
   it("voltar atrás limpa o pagamento e remove o movimento", async () => {
     const id = await criar("2026-09-05", ["2026-09-01", "2026-09-30"]);
-    await pool.query("SELECT * FROM public.set_invoice_status_atomic($1, $2, 'pago', '2026-09-20'::date, NULL, $3)", [
-      EMPRESA,
-      id,
-      ACTOR,
-    ]);
-    const { rows } = await pool.query(
-      "SELECT * FROM public.set_invoice_status_atomic($1, $2, 'pendente', NULL, NULL, $3)",
-      [EMPRESA, id, ACTOR],
-    );
-    expect(rows[0].movimentos_removidos).toBe(1);
+    await mudarEstado(id, "pago", 1);
+    const result = await mudarEstado(id, "pendente", 2);
+    expect(result.ok).toBe(true);
+    expect(result.cash_flow_entry).toBeNull();
     const f = await fatura(id);
     expect(f.status).toBe("pendente");
     expect(f.paid_at).toBeNull();
@@ -365,42 +394,48 @@ describe("094 — STATUS: a fatura e o caixa numa escrita só", () => {
 
   it("repetir «pago» não duplica o movimento nem reescreve `paid_at`", async () => {
     const id = await criar("2026-09-05", ["2026-09-01", "2026-09-30"]);
-    await pool.query("SELECT * FROM public.set_invoice_status_atomic($1, $2, 'pago', '2026-09-20'::date, NULL, $3)", [
-      EMPRESA,
-      id,
-      ACTOR,
-    ]);
+    const mutationId = novaMutationId();
+    await mudarEstado(id, "pago", 1, null, mutationId);
     const primeiro = await fatura(id);
-    await pool.query("SELECT * FROM public.set_invoice_status_atomic($1, $2, 'pago', '2026-09-25'::date, NULL, $3)", [
-      EMPRESA,
-      id,
-      ACTOR,
-    ]);
+    const replay = await mudarEstado(id, "pago", 1, null, mutationId);
+    expect(replay.replay).toBe(true);
     expect(await nCaixa()).toBe(1);
     expect((await fatura(id)).paid_at).toEqual(primeiro.paid_at);
-    // A data do movimento é a do dia em que o dinheiro entrou. Reescrevê-la
-    // mudaria o mês onde o valor conta.
-    expect((await movimento(id)).d).toBe("2026-09-20");
+    expect((await movimento(id)).d).toBe(new Date().toISOString().slice(0, 10));
+  }, 120_000);
+
+  it("recusa reutilizar a mesma mutation_id com outra intenção", async () => {
+    const id = await criar("2026-09-05", ["2026-09-01", "2026-09-30"]);
+    const mutationId = novaMutationId();
+    await mudarEstado(id, "pago", 1, null, mutationId);
+    const result = await mudarEstado(id, "pendente", 2, null, mutationId);
+    expect(result).toMatchObject({ ok: false, code: "MUTATION_REUSE_CONFLICT" });
+    expect((await fatura(id)).status).toBe("pago");
+    expect(await nCaixa()).toBe(1);
   }, 120_000);
 
   it("🔴 o mês do MOVIMENTO EXISTENTE é protegido ao voltar atrás — o quarto período", async () => {
-    // Fatura emitida e facturada em Setembro, paga em Outubro. Voltar a
-    // pendente apaga um movimento de Outubro: Outubro muda de conteúdo.
+    // O prestate pode conter um movimento legado numa data diferente da
+    // emissão. A remoção tem de proteger também esse quarto período.
     const id = await criar("2026-09-05", ["2026-09-01", "2026-09-30"]);
-    await pool.query("SELECT * FROM public.set_invoice_status_atomic($1, $2, 'pago', '2026-10-03'::date, NULL, $3)", [
-      EMPRESA,
-      id,
-      ACTOR,
-    ]);
+    await pool.query(
+      `UPDATE public.invoices
+          SET status = 'pago', paid_at = '2026-10-05T12:00:00Z',
+              payment_method = 'transferencia', revision = 2
+        WHERE id = $1`,
+      [id],
+    );
+    await pool.query(
+      `INSERT INTO public.cash_flow_entries
+         (company_id, type, amount, description, category, date,
+          reference_id, reference_type, status, created_by)
+       VALUES ($1, 'entrada', 100, 'legado', 'faturacao', '2026-10-05',
+          $2, 'invoice', 'confirmado', $3)`,
+      [EMPRESA, id, ACTOR],
+    );
     await fechar(2026, 10);
 
-    await expect(
-      pool.query("SELECT * FROM public.set_invoice_status_atomic($1, $2, 'pendente', NULL, NULL, $3)", [
-        EMPRESA,
-        id,
-        ACTOR,
-      ]),
-    ).rejects.toThrow(/FINANCIAL_PERIOD_CLOSED: 2026-10/);
+    await expect(mudarEstado(id, "pendente", 2)).rejects.toThrow(/FINANCIAL_PERIOD_CLOSED: 2026-10/);
 
     expect(await nCaixa()).toBe(1);
     expect((await fatura(id)).status).toBe("pago");
@@ -409,42 +444,100 @@ describe("094 — STATUS: a fatura e o caixa numa escrita só", () => {
   it("🔴 o mês do PERÍODO FACTURADO fechado impede mudar o estado", async () => {
     const id = await criar("2026-09-05", ["2026-07-01", "2026-07-31"]);
     await fechar(2026, 7);
-    await expect(
-      pool.query("SELECT * FROM public.set_invoice_status_atomic($1, $2, 'pago', '2026-09-20'::date, NULL, $3)", [
-        EMPRESA,
-        id,
-        ACTOR,
-      ]),
-    ).rejects.toThrow(/FINANCIAL_PERIOD_CLOSED: 2026-07/);
+    await expect(mudarEstado(id, "pago", 1)).rejects.toThrow(/FINANCIAL_PERIOD_CLOSED: 2026-07/);
     expect((await fatura(id)).status).toBe("rascunho");
     expect(await nCaixa()).toBe(0);
   }, 120_000);
 
+  it("revisão stale recusa antes de qualquer escrita de negócio", async () => {
+    const id = await criar("2026-09-05", ["2026-09-01", "2026-09-30"]);
+    const result = await mudarEstado(id, "pago", 99);
+    expect(result).toMatchObject({ ok: false, code: "REVISION_CONFLICT", current_revision: 1 });
+    expect((await fatura(id)).status).toBe("rascunho");
+    expect((await fatura(id)).revision).toBe(1);
+    expect(await nCaixa()).toBe(0);
+    expect((await pool.query("SELECT count(*)::int n FROM public.company_change_events")).rows[0].n).toBe(0);
+    expect((await pool.query("SELECT count(*)::int n FROM public.audit_logs")).rows[0].n).toBe(0);
+  }, 120_000);
+
+  it("recusa remover movimento reconciliado sem alterar fatura nem caixa", async () => {
+    const id = await criar("2026-09-05", ["2026-09-01", "2026-09-30"]);
+    await mudarEstado(id, "pago", 1);
+    const cash = await movimento(id);
+    await pool.query(
+      `INSERT INTO public.bank_reconciliation_matches
+         (company_id, cash_flow_entry_id, status) VALUES ($1, $2, 'reconciled')`,
+      [EMPRESA, cash.id],
+    );
+
+    const result = await mudarEstado(id, "pendente", 2);
+    expect(result).toMatchObject({ ok: false, code: "RECONCILED_CASHFLOW" });
+    expect((await fatura(id)).status).toBe("pago");
+    expect(await nCaixa()).toBe(1);
+  }, 120_000);
+
+  it("falha depois do UPDATE faz rollback da fatura, caixa e recibo", async () => {
+    const id = await criar("2026-09-05", ["2026-09-01", "2026-09-30"]);
+    await pool.query(`
+      CREATE FUNCTION public.fail_invoice_cash_insert() RETURNS trigger
+      LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'INJECTED_CASHFLOW_FAILURE'; END $$;
+      CREATE TRIGGER fail_invoice_cash_insert
+      BEFORE INSERT ON public.cash_flow_entries
+      FOR EACH ROW EXECUTE FUNCTION public.fail_invoice_cash_insert();
+    `);
+
+    await expect(mudarEstado(id, "pago", 1)).rejects.toThrow(/INJECTED_CASHFLOW_FAILURE/);
+    expect((await fatura(id)).status).toBe("rascunho");
+    expect((await fatura(id)).revision).toBe(1);
+    expect(await nCaixa()).toBe(0);
+    expect((await pool.query("SELECT count(*)::int n FROM public.domain_mutations")).rows[0].n).toBe(0);
+
+    await pool.query("DROP TRIGGER fail_invoice_cash_insert ON public.cash_flow_entries");
+    await pool.query("DROP FUNCTION public.fail_invoice_cash_insert()");
+  }, 120_000);
+
   it("uma fatura a zero não gera movimento nenhum", async () => {
     const id = await semear({ emissao: "2026-09-05", periodo: ["2026-09-01", "2026-09-30"], total: 0 });
-    const { rows } = await pool.query(
-      "SELECT * FROM public.set_invoice_status_atomic($1, $2, 'pago', '2026-09-20'::date, NULL, $3)",
-      [EMPRESA, id, ACTOR],
-    );
-    expect(rows[0].cash_entry_id).toBeNull();
+    const result = await mudarEstado(id, "pago", 1);
+    expect(result.cash_flow_entry).toBeNull();
     expect((await fatura(id)).status).toBe("pago");
     expect(await nCaixa()).toBe(0);
   }, 120_000);
 
   it("recusa estados fora do CHECK da tabela, e fatura inexistente", async () => {
     const id = await criar("2026-09-05", ["2026-09-01", "2026-09-30"]);
-    await expect(
-      pool.query("SELECT * FROM public.set_invoice_status_atomic($1, $2, 'inventado', NULL, NULL, NULL)", [
-        EMPRESA,
-        id,
-      ]),
-    ).rejects.toThrow(/INVOICE_STATUS_INVALID/);
-    await expect(
-      pool.query("SELECT * FROM public.set_invoice_status_atomic($1, $2, 'pago', NULL, NULL, NULL)", [
-        EMPRESA,
-        "77777777-7777-4777-8777-777777777777",
-      ]),
-    ).rejects.toThrow(/INVOICE_NOT_FOUND/);
+    expect(await mudarEstado(id, "inventado", 1)).toMatchObject({ ok: false, code: "INVALID_INPUT" });
+    expect(await mudarEstado("77777777-7777-4777-8777-777777777777", "pago", 1)).toMatchObject({
+      ok: false,
+      code: "NOT_FOUND",
+    });
+  }, 120_000);
+
+  it("não permite que um actor de uma empresa altere a fatura de outra", async () => {
+    const id = (
+      await pool.query(
+        `INSERT INTO public.clients (id, company_id, name) VALUES ($1, $2, 'Outro cliente') RETURNING id`,
+        [CLIENTE_OUTRA, OUTRA],
+      )
+    ).rows[0].id;
+    const { rows } = await pool.query(
+      `INSERT INTO public.invoices
+         (company_id, client_id, invoice_number, invoice_date, period_start, period_end, total)
+       VALUES ($1, $2, 'B2026/001', '2026-09-05', '2026-09-01', '2026-09-30', 100)
+       RETURNING id`,
+      [OUTRA, id],
+    );
+
+    const result = (
+      await pool.query(
+        "SELECT public.set_invoice_status_atomic($1,$2,$3,$4,$5,$6,$7) AS result",
+        [rows[0].id, OUTRA, ACTOR, "pago", null, novaMutationId(), 1],
+      )
+    ).rows[0].result;
+    expect(result).toMatchObject({ ok: false, code: "FORBIDDEN_ACTOR" });
+    const other = await pool.query("SELECT status, revision FROM public.invoices WHERE id = $1", [rows[0].id]);
+    expect(other.rows[0]).toEqual({ status: "rascunho", revision: 1 });
+    expect(await nCaixa()).toBe(0);
   }, 120_000);
 });
 
@@ -553,11 +646,10 @@ describe("094 — concorrência writer vs fecho", () => {
       const c = await ligacao();
       try {
         await c.query("BEGIN");
-        await c.query("SELECT * FROM public.set_invoice_status_atomic($1, $2, 'pago', '2026-08-10'::date, NULL, $3)", [
-          EMPRESA,
-          id,
-          ACTOR,
-        ]);
+        await c.query(
+          "SELECT public.set_invoice_status_atomic($1,$2,$3,'pago',NULL,$4,$5)",
+          [id, EMPRESA, ACTOR, novaMutationId(), 1],
+        );
         await new Promise((r) => setTimeout(r, 200));
         await c.query("COMMIT");
         return marca;
@@ -569,6 +661,35 @@ describe("094 — concorrência writer vs fecho", () => {
     expect(await Promise.all([pagar(a, "A"), pagar(b, "B")])).toEqual(["A", "B"]);
     expect(await nCaixa()).toBe(2);
   }, 120_000);
+
+  it("duas mutações concorrentes da mesma fatura deixam uma só escrita", async () => {
+    const id = await criar("2026-09-05", ["2026-09-01", "2026-09-30"]);
+    const executar = async (mutationId: string) => {
+      const c = await ligacao();
+      try {
+        await c.query("BEGIN");
+        const { rows } = await c.query(
+          "SELECT public.set_invoice_status_atomic($1,$2,$3,'pago',NULL,$4,1) AS result",
+          [id, EMPRESA, ACTOR, mutationId],
+        );
+        await c.query("COMMIT");
+        return rows[0].result as Record<string, unknown>;
+      } finally {
+        await c.end();
+      }
+    };
+
+    const resultados = await Promise.all([
+      executar("00000000-0000-4000-8000-000000000101"),
+      executar("00000000-0000-4000-8000-000000000102"),
+    ]);
+    expect(resultados.filter((r) => r.ok === true)).toHaveLength(1);
+    expect(resultados.filter((r) => r.code === "REVISION_CONFLICT")).toHaveLength(1);
+    expect((await fatura(id)).status).toBe("pago");
+    expect((await fatura(id)).revision).toBe(2);
+    expect(await nCaixa()).toBe(1);
+    expect((await pool.query("SELECT count(*)::int n FROM public.company_change_events")).rows[0].n).toBe(1);
+  }, 120_000);
 });
 
 describe("094 — superfície", () => {
@@ -577,7 +698,7 @@ describe("094 — superfície", () => {
       "create_invoice_with_items",
       "p_company_id uuid, p_client_id uuid, p_prefix text, p_year integer, p_invoice_date date, p_due_date date, p_period_start date, p_period_end date, p_subtotal numeric, p_vat_rate numeric, p_vat_amount numeric, p_total numeric, p_items jsonb",
     ],
-    ["set_invoice_status_atomic", "p_company_id uuid, p_invoice_id uuid, p_status text, p_paid_on date, p_payment_method text, p_actor uuid"],
+    ["set_invoice_status_atomic", "p_invoice_id uuid, p_company_id uuid, p_actor uuid, p_status text, p_payment_method text, p_mutation_id uuid, p_expected_revision integer"],
     ["delete_invoice_atomic", "p_company_id uuid, p_invoice_id uuid, p_actor uuid"],
   ];
 
@@ -593,13 +714,13 @@ describe("094 — superfície", () => {
     }
   }, 120_000);
 
-  it("nenhuma é SECURITY DEFINER, e anon/authenticated não executam", async () => {
+  it("preserva SECURITY DEFINER apenas na RPC canónica e fecha o ACL público", async () => {
     const { rows: def } = await pool.query(
       `SELECT p.proname FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
         WHERE n.nspname = 'public' AND p.prosecdef AND p.proname = ANY($1::text[])`,
       [ASSINATURAS.map(([n]) => n)],
     );
-    expect(def.map((r) => r.proname)).toEqual([]);
+    expect(def.map((r) => r.proname)).toEqual(["set_invoice_status_atomic"]);
 
     for (const [nome, assinatura] of ASSINATURAS) {
       const tipos = assinatura
@@ -616,15 +737,7 @@ describe("094 — superfície", () => {
     }
   }, 120_000);
 
-  it("🔴 recusa aplicar-se sobre uma base que já tenha `set_invoice_status_atomic` com outra assinatura", async () => {
-    // Uma leitura read-only de produção (2026-09-03) encontrou lá esta função
-    // com sete argumentos, `RETURNS jsonb` e `SECURITY DEFINER` — a versão da
-    // linha F14/078, que vive na PR #74 e não no master.
-    //
-    // Sem esta guarda, o PostgreSQL não substituiria nada: criaria uma
-    // SOBRECARGA. Passariam a existir duas funções com o mesmo nome, o runtime
-    // continuaria a chamar a antiga — sem protecção de período — e a migration
-    // diria que correu bem.
+  it("adopta o prestate de produção de sete argumentos sem criar overload", async () => {
     await pool.query(`
       CREATE OR REPLACE FUNCTION public.set_invoice_status_atomic(
         p_invoice_id uuid, p_company_id uuid, p_actor uuid, p_status text,
@@ -634,9 +747,27 @@ describe("094 — superfície", () => {
     `);
 
     const sql = readFileSync(join(ROOT, "supabase/migrations/094_invoices_period_atomic.sql"), "utf8");
-    await expect(pool.query(sql)).rejects.toThrow(/094_SIGNATURE_COLLISION/);
+    await pool.query(sql);
+    const { rows } = await pool.query(
+      `SELECT count(*)::int n FROM pg_proc p JOIN pg_namespace n2 ON n2.oid = p.pronamespace
+        WHERE n2.nspname = 'public' AND p.proname = 'set_invoice_status_atomic'`,
+    );
+    expect(rows[0].n).toBe(1);
+    expect(await mudarEstado(await criar("2026-09-05", ["2026-09-01", "2026-09-30"]), "pago", 1)).toMatchObject({
+      ok: true,
+    });
+  }, 120_000);
 
-    // E a versão estranha continua lá, intacta: a migration não lhe tocou.
+  it("recusa qualquer overload inesperado antes de tocar no domínio", async () => {
+    await pool.query(`
+      CREATE FUNCTION public.set_invoice_status_atomic(
+        p_company_id uuid, p_invoice_id uuid, p_status text,
+        p_paid_on date, p_payment_method text, p_actor uuid
+      ) RETURNS jsonb LANGUAGE sql SECURITY DEFINER AS 'SELECT ''{}''::jsonb';
+    `);
+
+    const sql = readFileSync(join(ROOT, "supabase/migrations/094_invoices_period_atomic.sql"), "utf8");
+    await expect(pool.query(sql)).rejects.toThrow(/094_UNEXPECTED_OVERLOAD/);
     const { rows } = await pool.query(
       `SELECT count(*)::int n FROM pg_proc p JOIN pg_namespace n2 ON n2.oid = p.pronamespace
         WHERE n2.nspname = 'public' AND p.proname = 'set_invoice_status_atomic'`,
