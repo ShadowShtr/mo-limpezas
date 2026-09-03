@@ -41,6 +41,7 @@ import { nota as equipasGuardamEmLote } from "./2026-09-01-equipas-guardam-em-lo
 import { nota as pagamentosFixosVariaveisParidade } from "./2026-09-01-pagamentos-fixos-variaveis-paridade";
 import { nota as edicaoPagamentosSegura } from "./2026-09-01-edicao-pagamentos-segura";
 import { nota as equipasEspelhoAusencias } from "./2026-09-02-equipas-espelho-ausencias";
+import { nota as intervencoesPontuais } from "./2026-09-03-intervencoes-pontuais";
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   financeiroEAnexos,
@@ -69,6 +70,7 @@ export const RELEASE_NOTES: ReleaseNote[] = [
   pagamentosFixosVariaveisParidade,
   edicaoPagamentosSegura,
   equipasEspelhoAusencias,
+  intervencoesPontuais,
 ];
 
 /** As chaves têm de ser únicas — duas notas com a mesma key partilhariam a leitura. */
