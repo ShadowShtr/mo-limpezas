@@ -315,3 +315,59 @@ O hard delete de cliente foi retirado do caminho utilizável: o único consumido
 passou a chamar `archiveCliente`, que preserva histórico; a action legada
 `deleteCliente` recusa sem executar qualquer escrita. Falhas ao consultar
 serviços futuros agora também recusam o arquivamento.
+
+## Reconstrução canónica sobre o master de 2026-09-03 (157ef32)
+
+O master mudou duas vezes depois de a pilha ter sido escrita — `#148` (data de
+fim vazia) e `#149` (comparação semântica de `schedule_days`). `BASE_CHANGED`,
+logo as provas da ronda anterior não valem por si: foram **reexecutadas** nesta
+árvore, e é a essas que os números abaixo se referem.
+
+O transporte não foi um rebase das oito PRs. O incremento real de cada uma foi
+mapeado contra a base comum `1daec61b`: o conjunto 090→097 é **aditivo puro**,
+41 ficheiros todos novos face ao master, sem um único ficheiro em comum com as
+duas hotfixes. `src/app/actions/contratos.ts` não faz parte dele. As hotfixes
+ficam intactas por construção, não por resolução de conflito — verificado
+ficheiro a ficheiro contra `157ef32`.
+
+```
+SCHEMA_CANONICAL_HEAD   = integration/schema-090-097-canonical
+RUNTIME_CANONICAL_HEAD  = integration/fin-period-runtime-canonical
+POSTGRES_REQUIRED_SKIPPED = 0
+SECOND_GENERATION_DIFF    = 0
+HOTFIXES_148_149_PRESERVED = YES
+```
+
+### Os dois blockers de auditoria, fechados
+
+A ronda anterior encaminhou os writers para as RPCs mas perdeu pelo caminho o
+registo do que elas fizeram. Nenhum dos dois defeitos se via no ecrã.
+
+**`setServicePayment`** chamava `set_service_payment_atomic` e deitava fora o
+retorno; a auditoria `billing.payment_status_changed` tinha desaparecido. Volta,
+com `cash_flow_amount` a vir do `cash_amount` **da RPC** — recalcular o valor em
+TypeScript seria repor a segunda fonte da mesma regra que a 097 veio fechar.
+
+**`createEntryFromTransaction`** auditava `entityType: "cash_flow_entry"` com
+`entityId: bankTransactionId`: o registo apontava para uma linha que a operação
+não criou. Passa a usar o `entry_id` devolvido pela 095, com o `match_id` nos
+metadados.
+
+`src/lib/atomic-rpc-results.ts` lê as duas respostas fail-closed — uma forma
+inesperada não é sucesso, porque quem chamou deixa de saber o que ficou gravado.
+
+```
+SERVICE_PAYMENT_AUDIT_RESTORED  = YES
+SERVICE_PAYMENT_CASH_FROM_RPC   = YES
+BANK_AUDIT_ENTITY_IS_ENTRY_ID   = YES
+RPC_SHAPE_FAIL_CLOSED           = YES
+```
+
+### O que continua por verificar nesta ronda
+
+A leitura read-only do ledger de produção **não foi reexecutada aqui**. Os
+números da secção de 2026-09-03 acima (`LEDGER_COUNT = 90`, `090..097_PRESENT =
+NO`) são os dessa leitura, não de uma nova. O que se confirmou diretamente nesta
+ronda foi o repositório: o master vai até `089`, e `090..097` continuam ausentes
+dele. A leitura fresca do ledger pertence à fase DB-first, com autorização
+própria — e é lá que tem de ser feita antes de qualquer aplicação.
