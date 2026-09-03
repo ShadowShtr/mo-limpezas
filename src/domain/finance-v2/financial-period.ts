@@ -348,11 +348,18 @@ export function interpretarResultadoFecho(data: unknown): ResultadoFecho {
  * 🔴 Têm de acompanhar as chaves da RPC. Uma chave nova na base sem rótulo aqui
  *    aparece à gestora pelo nome técnico — feio, mas honesto: é melhor do que
  *    desaparecer da frase e o fecho ser recusado sem explicação.
+ *
+ * 🔴 E são as MESMAS chaves de `getFinancialCloseChecklist`. Não é coincidência
+ *    nem estilo: enquanto a RPC dizia `saidas_sem_categoria` e o ecrã dizia
+ *    `despesas_sem_categoria`, este mapa era uma tabela de tradução entre dois
+ *    nomes para a mesma coisa — e uma chave acrescentada de um lado nunca
+ *    chegaria ao outro. A 090 alinhou o vocabulário; este mapa passa a ser só
+ *    chave técnica → frase, sem tradução pelo meio.
  */
 const ROTULO_BLOQUEADOR: Record<string, string> = {
   faturas_rascunho: "faturas em rascunho",
-  saidas_sem_categoria: "despesas sem categoria",
-  movimentos_bancarios_pendentes: "movimentos bancários por conciliar",
+  despesas_sem_categoria: "despesas sem categoria",
+  movimentos_por_conciliar: "movimentos bancários por conciliar",
   pagamentos_pendentes: "pagamentos pendentes",
 };
 

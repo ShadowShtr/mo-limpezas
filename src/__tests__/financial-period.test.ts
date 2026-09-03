@@ -505,11 +505,21 @@ describe("interpretarResultadoFecho", () => {
 describe("descreverBloqueadores", () => {
   it("traduz as chaves da RPC para a frase da gestora", () => {
     expect(descreverBloqueadores({ faturas_rascunho: 2 })).toBe("2 faturas em rascunho");
-    expect(descreverBloqueadores({ saidas_sem_categoria: 1 })).toBe("1 despesas sem categoria");
-    expect(descreverBloqueadores({ movimentos_bancarios_pendentes: 3 })).toBe(
-      "3 movimentos bancários por conciliar",
-    );
+    expect(descreverBloqueadores({ despesas_sem_categoria: 1 })).toBe("1 despesas sem categoria");
+    expect(descreverBloqueadores({ movimentos_por_conciliar: 3 })).toBe("3 movimentos bancários por conciliar");
     expect(descreverBloqueadores({ pagamentos_pendentes: 5 })).toBe("5 pagamentos pendentes");
+  });
+
+  it("🔴 as chaves são as MESMAS de `getFinancialCloseChecklist`", () => {
+    // Enquanto a RPC dizia `saidas_sem_categoria` e o ecrã dizia
+    // `despesas_sem_categoria`, este mapa era uma tradução entre dois nomes
+    // para a mesma coisa — e uma chave acrescentada de um lado nunca chegava ao
+    // outro. Este caso existe para que essa divergência não volte em silêncio.
+    const doEcra = ["faturas_rascunho", "despesas_sem_categoria", "movimentos_por_conciliar", "pagamentos_pendentes"];
+    for (const chave of doEcra) {
+      // Uma chave sem rótulo cai no fallback e sai pelo nome técnico.
+      expect(descreverBloqueadores({ [chave]: 1 }), chave).not.toContain(chave);
+    }
   });
 
   it("junta vários com ponto e vírgula", () => {
