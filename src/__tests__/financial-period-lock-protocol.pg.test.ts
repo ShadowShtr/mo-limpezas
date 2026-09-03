@@ -660,6 +660,140 @@ describe("090 — source e target: os dois meses protegidos", () => {
 });
 
 // ============================================================================
+// Os quatro bloqueadores — o contrato com `getFinancialCloseChecklist`
+// ============================================================================
+//
+// O ecrã e o fecho contam a mesma coisa em sítios diferentes. Se as regras
+// divergirem, o ecrã diz «pode fechar» e o fecho recusa — ou, pior, o
+// contrário: o ecrã mostra um pendente e o mês fecha na mesma.
+//
+// Não basta comparar os nomes das chaves. O que tem de coincidir é, para cada
+// uma: a TABELA, o ESTADO exigido, a DATA ECONÓMICA por que se filtra, a
+// condição de CATEGORIA quando existe, e a guarda de EMPRESA.
+//
+// Cada caso abaixo semeia linhas de FRONTEIRA — mês anterior, mês seguinte,
+// outra empresa, outro estado, categoria preenchida — e exige que só a linha do
+// mês certo conte. Uma condição alterada de um lado sem o outro parte aqui.
+describe("090 — contrato dos bloqueadores com o checklist do ecrã", () => {
+  /**
+   * As quatro chaves, com o vocabulário do ecrã.
+   *
+   * 🔴 Esta lista é o contrato. `getFinancialCloseChecklist` usa exactamente
+   *    estas quatro, e `financial_period_blockers` também — uma chave que
+   *    apareça só de um lado chegaria ao utilizador sem nome, ou não chegaria
+   *    de todo.
+   */
+  const CHAVES = [
+    "faturas_rascunho",
+    "despesas_sem_categoria",
+    "movimentos_por_conciliar",
+    "pagamentos_pendentes",
+  ] as const;
+
+  const bloqueadores = async (ano = 2026, mes = 9) => {
+    const { rows } = await pool.query(
+      "SELECT chave, total::int FROM public.financial_period_blockers($1, $2, $3) ORDER BY chave",
+      [EMPRESA, ano, mes],
+    );
+    return Object.fromEntries(rows.map((r) => [r.chave, r.total])) as Record<string, number>;
+  };
+
+  it("devolve exactamente as quatro chaves do ecrã, e nenhuma outra", async () => {
+    expect(Object.keys(await bloqueadores()).sort()).toEqual([...CHAVES].sort());
+  }, 120_000);
+
+  it("faturas_rascunho: `invoices`, status rascunho, por `period_start`, da empresa", async () => {
+    await pool.query(
+      `INSERT INTO public.invoices (company_id, status, period_start) VALUES
+         ($1, 'rascunho', date '2026-09-01'),   -- primeiro dia do mês: conta
+         ($1, 'rascunho', date '2026-09-30'),   -- último dia do mês: conta
+         ($1, 'rascunho', date '2026-08-31'),   -- mês anterior: não
+         ($1, 'rascunho', date '2026-10-01'),   -- mês seguinte: não
+         ($1, 'emitida',  date '2026-09-15'),   -- outro estado: não
+         ($2, 'rascunho', date '2026-09-15')   -- outra empresa: não
+      `,
+      [EMPRESA, OUTRA],
+    );
+    expect((await bloqueadores()).faturas_rascunho).toBe(2);
+  }, 120_000);
+
+  it("despesas_sem_categoria: `cash_flow_entries`, saída, sem categoria, por `date`", async () => {
+    await pool.query(
+      `INSERT INTO public.cash_flow_entries (company_id, type, amount, date, expense_category_id) VALUES
+         ($1, 'saida',   10, date '2026-09-01', NULL),  -- conta
+         ($1, 'saida',   10, date '2026-09-30', NULL),  -- conta
+         ($1, 'saida',   10, date '2026-08-31', NULL),  -- mês anterior: não
+         ($1, 'saida',   10, date '2026-10-01', NULL),  -- mês seguinte: não
+         ($1, 'entrada', 10, date '2026-09-15', NULL),  -- entrada: não
+         ($1, 'saida',   10, date '2026-09-15', $3),    -- com categoria: não
+         ($2, 'saida',   10, date '2026-09-15', NULL)  -- outra empresa: não
+      `,
+      [EMPRESA, OUTRA, "dddddddd-dddd-4ddd-8ddd-dddddddddddd"],
+    );
+    expect((await bloqueadores()).despesas_sem_categoria).toBe(2);
+  }, 120_000);
+
+  it("movimentos_por_conciliar: `bank_transactions`, status `pending`, por `transaction_date`", async () => {
+    // ⚠️ Esta tabela foge à convenção das outras: a coluna é
+    //    `transaction_date` e o estado é `pending` em inglês. É por isso que
+    //    tem caso próprio — foi aqui que uma cópia distraída poderia escrever
+    //    `date` ou `pendente` e passar a contar zero para sempre.
+    await pool.query(
+      `INSERT INTO public.bank_transactions (company_id, status, transaction_date) VALUES
+         ($1, 'pending',    date '2026-09-01'),
+         ($1, 'pending',    date '2026-09-30'),
+         ($1, 'pending',    date '2026-08-31'),
+         ($1, 'pending',    date '2026-10-01'),
+         ($1, 'reconciled', date '2026-09-15'),
+         ($1, 'pendente',   date '2026-09-15'),
+         ($2, 'pending',    date '2026-09-15')`,
+      [EMPRESA, OUTRA],
+    );
+    expect((await bloqueadores()).movimentos_por_conciliar).toBe(2);
+  }, 120_000);
+
+  it("pagamentos_pendentes: `fixed_variable_payments`, por COMPETÊNCIA e não por data", async () => {
+    // 🔴 O único dos quatro que não filtra por uma data: filtra por
+    //    `period_year`/`period_month`. Trocar isto por uma data seria mudar o
+    //    significado do bloqueador sem que nada o dissesse.
+    await pool.query(
+      `INSERT INTO public.fixed_variable_payments
+         (company_id, kind, description, amount, status, period_year, period_month) VALUES
+         ($1, 'fixo', 'a', 10, 'pendente',  2026, 9),
+         ($1, 'fixo', 'b', 10, 'pendente',  2026, 8),
+         ($1, 'fixo', 'c', 10, 'pendente',  2026, 10),
+         ($1, 'fixo', 'd', 10, 'pendente',  2025, 9),
+         ($1, 'fixo', 'e', 10, 'pago',      2026, 9),
+         ($1, 'fixo', 'f', 10, 'cancelado', 2026, 9),
+         ($2, 'fixo', 'g', 10, 'pendente',  2026, 9)`,
+      [EMPRESA, OUTRA],
+    );
+    expect((await bloqueadores()).pagamentos_pendentes).toBe(1);
+  }, 120_000);
+
+  it("mês sem nada devolve as quatro chaves a zero, e o fecho passa", async () => {
+    const b = await bloqueadores();
+    expect(Object.values(b)).toEqual([0, 0, 0, 0]);
+    const r = await pool.query("SELECT * FROM public.close_financial_period_atomic($1, 2026, 9, $2)", [EMPRESA, ACTOR]);
+    expect(r.rows[0].fechado).toBe(true);
+  }, 120_000);
+
+  it("Fevereiro fecha no dia 28 — o limite do mês não é uma constante", async () => {
+    // O checklist do ecrã usa `YYYY-MM-31` e apoia-se na comparação
+    // lexicográfica; a RPC usa `+ interval '1 month - 1 day'`. Implementações
+    // diferentes, e é preciso que respondam o mesmo no mês curto.
+    await pool.query(
+      `INSERT INTO public.invoices (company_id, status, period_start) VALUES
+         ($1, 'rascunho', date '2026-02-28'),
+         ($1, 'rascunho', date '2026-03-01')`,
+      [EMPRESA],
+    );
+    expect((await bloqueadores(2026, 2)).faturas_rascunho).toBe(1);
+    expect((await bloqueadores(2026, 3)).faturas_rascunho).toBe(1);
+  }, 120_000);
+});
+
+// ============================================================================
 // N períodos — o conjunto inteiro conhecido ANTES da primeira aquisição
 // ============================================================================
 //

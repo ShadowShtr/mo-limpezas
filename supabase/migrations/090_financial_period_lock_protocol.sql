@@ -436,6 +436,21 @@ $fn$;
 -- 🔴 As chaves e as condições têm de acompanhar `getFinancialCloseChecklist`.
 --    Implementações diferentes são aceitáveis; regras diferentes não são — o
 --    ecrã diria «pode fechar» e o fecho recusaria, ou pior, o contrário.
+--
+-- 🔴 E as CHAVES são as do ecrã, à letra.
+--
+--    A primeira versão desta função inventou duas: `saidas_sem_categoria` onde
+--    o ecrã diz `despesas_sem_categoria`, e `movimentos_bancarios_pendentes`
+--    onde o ecrã diz `movimentos_por_conciliar`. As condições eram as mesmas —
+--    a divergência era só de vocabulário — e é exactamente por isso que era
+--    perigosa: obrigava o runtime a manter uma tabela de tradução entre dois
+--    nomes para a mesma coisa, e uma chave nova de um lado passaria a aparecer
+--    ao utilizador sem nome nenhum do outro.
+--
+--    Uma coisa, um nome. As quatro chaves aqui são as quatro chaves de
+--    `getFinancialCloseChecklist`, e a suite da 090 fixa-as uma a uma com
+--    linhas de fronteira — mês anterior, mês seguinte, outra empresa, outro
+--    estado — para que uma condição alterada de um lado sem o outro falhe.
 CREATE OR REPLACE FUNCTION public.financial_period_blockers(
   p_company_id uuid,
   p_year integer,
@@ -455,13 +470,13 @@ AS $fn$
    WHERE i.company_id = p_company_id AND i.status = 'rascunho'
      AND i.period_start >= l.inicio AND i.period_start <= l.fim
   UNION ALL
-  SELECT 'saidas_sem_categoria', count(*)
+  SELECT 'despesas_sem_categoria', count(*)
     FROM public.cash_flow_entries e, limites l
    WHERE e.company_id = p_company_id AND e.type = 'saida'
      AND e.expense_category_id IS NULL
      AND e.date >= l.inicio AND e.date <= l.fim
   UNION ALL
-  SELECT 'movimentos_bancarios_pendentes', count(*)
+  SELECT 'movimentos_por_conciliar', count(*)
     FROM public.bank_transactions b, limites l
    WHERE b.company_id = p_company_id AND b.status = 'pending'
      AND b.transaction_date >= l.inicio AND b.transaction_date <= l.fim

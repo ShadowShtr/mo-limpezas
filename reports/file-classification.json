@@ -5918,7 +5918,7 @@
       ],
       "signals": {
         "serviceRole": 4,
-        "sqlWrite": 20
+        "sqlWrite": 25
       },
       "action": "nenhuma",
       "reason": "suite de testes — corre por convenção do vitest",
