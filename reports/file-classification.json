@@ -1,18 +1,18 @@
 {
   "generatedBy": "scripts/audit-file-inventory.mjs",
-  "totalFiles": 831,
+  "totalFiles": 837,
   "byStatus": {
-    "MANTER": 808,
+    "MANTER": 814,
     "STANDBY": 23
   },
   "byCategory": {
-    "test": 187,
+    "test": 189,
     "route-ui": 138,
-    "migration": 110,
+    "migration": 112,
     "lib": 70,
-    "script": 55,
+    "script": 56,
     "domain": 52,
-    "doc": 45,
+    "doc": 46,
     "server-action": 44,
     "component": 30,
     "src-other": 30,
@@ -29,12 +29,12 @@
     "supabase-other": 2
   },
   "byConfidence": {
-    "alta": 810,
+    "alta": 816,
     "média": 15,
     "baixa": 6
   },
   "scriptRisk": {
-    "SAFE_OFFLINE": 29,
+    "SAFE_OFFLINE": 30,
     "ADMIN_GUARDED_WRITE": 11,
     "WRITE_CAPABLE": 9,
     "ADMIN_READ": 6
@@ -528,6 +528,24 @@
       "signals": {
         "write": 2,
         "sqlWrite": 7
+      },
+      "action": "nenhuma",
+      "reason": "documentação",
+      "manualDecision": false
+    },
+    {
+      "path": "docs/FIN-PERIOD-WRITER-INVENTORY.md",
+      "category": "doc",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "sqlWrite": 23
       },
       "action": "nenhuma",
       "reason": "documentação",
@@ -2665,6 +2683,31 @@
       "risks": [],
       "signals": {
         "consoleLog": 3
+      },
+      "action": "nenhuma",
+      "reason": "ferramenta offline, sem acesso à base",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": true,
+        "dynamicImport": true,
+        "allClosed": false
+      },
+      "scriptRisk": "SAFE_OFFLINE"
+    },
+    {
+      "path": "scripts/gen-092-fixture.mjs",
+      "category": "script",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "consoleLog": 1
       },
       "action": "nenhuma",
       "reason": "ferramenta offline, sem acesso à base",
@@ -6062,6 +6105,24 @@
       "manualDecision": false
     },
     {
+      "path": "src/__tests__/fixtures/pre-092-payment-rpcs.sql",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "sqlWrite": 27
+      },
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false
+    },
+    {
       "path": "src/__tests__/fixtures/production-078-partial-shape.json",
       "category": "test",
       "status": "MANTER",
@@ -6105,7 +6166,7 @@
       "category": "test",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 5,
+      "consumers": 6,
       "consumerSample": [
         "src/__tests__/fin-period-production-shadow.pg.test.ts",
         "src/__tests__/financial-period-lock-protocol.pg.test.ts",
@@ -7281,6 +7342,33 @@
       "signals": {
         "write": 1,
         "sqlWrite": 2
+      },
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/__tests__/payments-period-atomic.pg.test.ts",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [
+        "service-role"
+      ],
+      "signals": {
+        "serviceRole": 4,
+        "sqlWrite": 16
       },
       "action": "nenhuma",
       "reason": "suite de testes — corre por convenção do vitest",
@@ -22070,6 +22158,27 @@
       "manualDecision": false
     },
     {
+      "path": "supabase/migrations/092_payments_period_atomic.sql",
+      "category": "migration",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [
+        "service-role"
+      ],
+      "signals": {
+        "serviceRole": 6,
+        "sqlWrite": 47
+      },
+      "action": "nenhuma",
+      "reason": "migration versionada — histórico do schema, nunca se apaga",
+      "manualDecision": false
+    },
+    {
       "path": "supabase/migrations/20260608_new_features.sql",
       "category": "migration",
       "status": "MANTER",
@@ -22462,6 +22571,24 @@
       "risks": [],
       "signals": {
         "sqlWrite": 1
+      },
+      "action": "nenhuma",
+      "reason": "migration versionada — histórico do schema, nunca se apaga",
+      "manualDecision": false
+    },
+    {
+      "path": "supabase/migrations/rollback/092_payments_period_atomic.down.sql",
+      "category": "migration",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "sqlWrite": 2
       },
       "action": "nenhuma",
       "reason": "migration versionada — histórico do schema, nunca se apaga",
