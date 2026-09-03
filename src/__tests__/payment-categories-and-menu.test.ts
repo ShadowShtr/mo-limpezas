@@ -116,7 +116,9 @@ describe("categoria nos pagamentos", () => {
     const corpo = a.slice(i, a.indexOf("\n}\n", i));
     expect(corpo).toMatch(/resolveCompetence\(\{[\s\S]*?dueDate: input\.due_date/);
     // A competência nunca é derivada da categoria.
-    expect(corpo).not.toMatch(/period_(year|month)[^;]*category/i);
+    expect(corpo).toMatch(/p_period_year:\s*competencia\.year/);
+    expect(corpo).toMatch(/p_period_month:\s*competencia\.month/);
+    expect(corpo).not.toMatch(/p_period_(year|month):\s*[^,\n]*category/i);
   });
 
   it("11. a etiqueta da categoria não cria uma coluna nova", () => {
