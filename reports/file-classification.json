@@ -544,9 +544,11 @@
       "referencedBy": [],
       "sideEffects": [],
       "risks": [
+        "service-role",
         "todo(1)"
       ],
       "signals": {
+        "serviceRole": 1,
         "sqlWrite": 25,
         "todo": 1
       },

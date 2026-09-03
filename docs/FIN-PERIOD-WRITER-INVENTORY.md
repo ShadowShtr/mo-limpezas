@@ -192,3 +192,85 @@ Agrupado por coerência transaccional e de rollback, não por ficheiro de action
 
 A recorrência **não** tem número reservado: recebe `NEXT_FREE_MIGRATION` depois
 de esta lista estar fechada.
+
+
+## Verificação READ-ONLY de produção — 2026-09-03
+
+Leitura pela ligação directa, com `SET default_transaction_read_only = on` na
+sessão. **Zero escritas.** Nenhuma migration aplicada, nenhuma linha tocada.
+
+### Estado do ledger
+
+```
+LEDGER_COUNT      = 90
+090_PRESENT       = NO
+091_PRESENT       = NO
+092..097_PRESENT  = NO
+financial_periods = 0 linhas   (todos os meses abertos)
+```
+
+### O prestate que o shadow assume, confirmado na base real
+
+| Objecto | Produção |
+|---|---|
+| `financial_periods_unique` | `UNIQUE (company_id, year, month)` ✅ |
+| `cash_flow_entries_reference_unique` | índice único **parcial** ✅ |
+| `cash_flow_entries_reference_type_check` | inclui `manual_charge` ✅ |
+| `uq_bank_match_pair` | `(bank_transaction_id, cash_flow_entry_id)` ✅ |
+| `payment_cashflow_provenance` | presente ✅ |
+| `is_financial_period_open` | `(uuid, integer, integer)` ✅ |
+| `audit_logs` | `id`/`meta`/`created_at`/`entity_type` com os defaults esperados ✅ |
+| grants | `postgres, service_role` nas RPCs financeiras ✅ |
+
+As **15 funções** que a pilha 090..097 substitui existem em produção com a
+assinatura EXACTA que cada migration assume, e nenhuma é `SECURITY DEFINER`.
+`DIVERGENCIAS = 0`.
+
+### 🔴 Dois achados que mudam decisões
+
+**1. `set_invoice_status_atomic` já existe — com outra assinatura.**
+
+```
+set_invoice_status_atomic(
+  p_invoice_id uuid, p_company_id uuid, p_actor uuid, p_status text,
+  p_payment_method text, p_mutation_id uuid, p_expected_revision integer
+) RETURNS jsonb   — SECURITY DEFINER
+```
+
+É da linha F14/078 («domain mutation, change event e sequência»), que vive na
+PR #74 e **não está no master**. Usa `public.domain_mutations` para
+idempotência e `invoices.revision` para bloqueio optimista — ambos presentes na
+base, ambos ausentes das migrations deste repositório.
+
+Aplicar a 094 como estava criaria uma **sobrecarga**, não uma substituição:
+duas funções com o mesmo nome, o runtime a continuar na antiga sem protecção de
+período, e a migration a dizer que correu bem. A 094 passa a **recusar-se** com
+`INVOICES_PERIOD_094_SIGNATURE_COLLISION`.
+
+`BLOCKER: 094 não é aplicável a produção hoje.` Reconciliar exige decidir o que
+fazer à idempotência por `domain_mutations` e ao `expected_revision` — decisão
+de arquitectura, não uma linha de SQL.
+
+**2. `payroll_records` não tem índice único além da chave primária.**
+
+`runPayrollCalculation` faz
+`upsert(..., { onConflict: "company_id,collaborator_id,period_year,period_month" })`.
+Sem árbitro, esse caminho falha com **42P10 em produção**. Confirmado por
+leitura: o único índice único da tabela é `payroll_records_pkey`.
+
+Não é resolvido pela 096 — criar a restrição exige decidir o que fazer a
+duplicados existentes, e isso é decisão de dados. `upsert_payroll_records_atomic`
+não depende dela.
+
+### O que existe na base e em migration nenhuma
+
+```
+public.domain_mutations        = presente
+public.invoices.revision       = presente
+public.domain_change_events    = ausente
+public.cash_flow_entries.revision = ausente
+```
+
+É a mesma família de drift que `docs/LEDGER-RECONCILIATION-PENDING.md` já
+regista. Nada nesta frente o resolve, e nada nesta frente depende dele — excepto
+a 094, que agora o denuncia em vez de passar por cima.
