@@ -45,7 +45,7 @@ O worktree `feat/contratos-cliente-pesquisavel` permanece intocado por esta impl
 ```text
 INTERVENTION_BASE = 1daec61b26c41dccd64e103b4a7c73c3cc65682a
 INTERVENTION_BRANCH = fix/intervencao-edicao-pontual
-INTERVENTION_HEAD = 13756d5 (commit de implementação)
+INTERVENTION_HEAD = 3f1ea64 (commit de implementação + prova PostgreSQL real)
 INTERVENTION_PR = não aberta; push bloqueado por SEC_E_NO_CREDENTIALS
 
 AUDIT_ROOT_CAUSE_RECONFIRMED = YES
@@ -66,11 +66,12 @@ COMBINED_EDIT = uma RPC candidata com contrato, serviços e auditoria na mesma t
 REOPEN_PERSISTENCE = commit/read provado no PGlite; reabertura na base real ainda não provada
 CALENDAR_SYNC = serviços futuros recebem horários projetados
 TEAM_SYNC = serviços futuros recebem a equipa projetada
-STALE_CONCURRENCY = timestamp stale recusado; duas sessões reais ainda não provadas
+STALE_CONCURRENCY = PASS — timestamp stale e lock de contrato entre duas sessões reais
 PARTIAL_WRITE_AFTER_FIX = 0 na prova PGlite com falha posterior
 
 MANUAL_SERVICE_OVERRIDE_MECHANISM = services.is_exception; update-service e reschedule marcam edição manual
 IS_EXCEPTION_OR_EQUIVALENT = YES
+MANUAL_EDIT_SURVIVES_RESYNC = PASS — a RPC recusa UPDATE de ocorrência protegida
 FINANCIAL_STACK_DEPENDENCY = YES — campos financeiros são preservados no patch; stack financeira não foi alterada
 ```
 
@@ -112,8 +113,8 @@ FILES_CHANGED =
   src/__tests__/intervention-atomic-candidate.test.ts
 RELEASE_NOTES = src/release-notes/2026-09-03-intervencoes-pontuais.ts e index.ts
 FOCUSED_TESTS = 130/130 antes; 10/10 testes específicos finais
-POSTGRES_TESTS = 3/3 PGlite: commit, rollback total e stale
-POSTGRES_REQUIRED_SKIPPED = 1 — prova de duas sessões/Docker indisponível
+POSTGRES_TESTS = 3/3 PGlite + 7/7 PostgreSQL real: commit, rollback, stale, lock e exceção
+POSTGRES_REQUIRED_SKIPPED = 0
 FULL_SUITE = 154 ficheiros passados, 25 falhados, 1 skipped; 3665 testes passados, 6 falhados, 471 skipped
 TYPECHECK = PASS
 LINT = PASS
@@ -132,8 +133,84 @@ DEPLOY = 0
 Os failures da suite completa foram ambientais ou preexistentes: Docker sem acesso, timeouts de suites pesadas/CLI e o guard de rede `verify-target-guard`. O teste PGlite que excedeu o hook padrão sob carga foi corrigido e passou isoladamente com timeout explícito.
 
 ```text
-BLOCKER = schema candidate ainda sem número/aplicação, prova real de duas sessões pendente, Parte A bloqueada por overlap e push/PR bloqueados por credenciais GitHub ausentes
+BLOCKER = schema candidate ainda sem número/aplicação, push/PR bloqueados por credenciais GitHub ausentes e integração dependente da direção técnica
 NEXT_ACTION = devolver tudo à direção técnica
 ```
 
 Não foram tocadas migrations 090+, financial periods, payments, payroll, payment recurrence, branches do Claude, produção ou deployment.
+
+## Handoff final
+
+```text
+BASE_SHA = 1daec61b26c41dccd64e103b4a7c73c3cc65682a
+BRANCH = fix/intervencao-edicao-pontual
+HEAD = 3f1ea64
+COMMITS = 14cdbf5, 13756d5, 29de0f6, 2333a00, 3f1ea64
+
+PATCH_BACKUP = C:\Users\tecno\Documents\Codex\2026-08-31\mol\handoff-artifacts\intervencao-2026-09-03\patches
+BUNDLE_BACKUP = C:\Users\tecno\Documents\Codex\2026-08-31\mol\handoff-artifacts\intervencao-2026-09-03\intervencao.bundle
+
+ROOT_CAUSE = múltiplas escritas independentes em updateContrato permitiam estado parcial
+ATOMIC_RPC_CANDIDATE = docs/INTERVENTION_ATOMIC_SCHEMA_CANDIDATE.sql
+MIGRATION_NUMBER_ASSIGNED = NO
+
+POSTGRES_REAL = PASS — contentor PostgreSQL 17 descartável via harness do projeto
+POSTGRES_TESTS = 7/7
+POSTGRES_REQUIRED_SKIPPED = 0
+ROLLBACK_ALL = PASS
+STALE = PASS
+CONCURRENCY = PASS — duas sessões, FOR UPDATE de contrato
+TEAM_EDIT = PASS
+DATE_EDIT = PASS
+SCHEDULE_EDIT = PASS
+COMBINED_EDIT = PASS
+REOPEN = PASS — readback após commit; UI real não foi aberta
+
+PONTUAL_SEMANTIC = services.contract_id IS NULL
+PONTUAL_ONE_SERVICE = PASS — 1 service
+PONTUAL_CONTRACT_ID = NULL
+PONTUAL_CONTRACT_CREATED = 0
+PONTUAL_FUTURE_GENERATION = 0
+PONTUAL_EDIT = PASS — caminho existente de edição standalone
+PONTUAL_FROM_RECURRENT = BLOCKED_NEEDS_PRODUCT_DECISION
+
+MANUAL_OVERRIDE_MECHANISM = services.is_exception
+MANUAL_EDIT_SURVIVES_RESYNC = PASS
+
+FULL_SUITE = BLOCKED_ENVIRONMENT — 154 ficheiros passados, 25 falhados, 1 skipped; 3665 testes passados, 6 falhados, 471 skipped
+FAILURES = Docker sem acesso no sandbox; 3 timeouts de CLI T08; 1 timeout de setup PGlite sob carga; 1 timeout de fixture secure-migrations; 1 verify-target-guard sem erro de rede esperado. O timeout PGlite foi corrigido; a prova PostgreSQL real passou.
+BUILD = BLOCKED_ENVIRONMENT — npm EACCES ao obter tsx em https://registry.npmjs.org/tsx; logs não puderam ser escritos em C:\Users\tecno\AppData\Local\npm-cache\_logs
+TYPECHECK = PASS
+LINT = PASS
+SECRETS = PASS
+AUDIT = PASS — diagnostics vazio/highConfidence vazio
+DIFF_CHECK = PASS
+
+INTERVENTION_PUSH = BLOQUEADO — SEC_E_NO_CREDENTIALS / token gh inválido
+INTERVENTION_PR = não aberta
+
+OVERLAP_FILE = src/app/(dashboard)/dashboard/contratos/_components/sheet.tsx
+OVERLAP_WORKTREE = C:\Users\tecno\Documents\Codex\2026-08-31\mol\work\contratos-cliente-pesquisavel
+OVERLAP_BRANCH = feat/contratos-cliente-pesquisavel
+OVERLAP_HEAD = 46fe901
+OVERLAP_OWNER = trabalho anterior do próprio Codex
+OVERLAP_UNCOMMITTED = NO — preservado em commit
+OVERLAP_REASON = mesmo ficheiro editado; recuperação segura em branch própria
+OVERLAP_CLASSIFICATION = CASE C
+
+CLIENT_SEARCH_IMPLEMENTED = YES
+CLIENT_SEARCH_BRANCH = feat/contratos-cliente-pesquisavel
+CLIENT_SEARCH_HEAD = 46fe901
+CLIENT_SEARCH_TESTS = 26/26
+CLIENT_SEARCH_BUILD = não executado nesta branch
+CLIENT_SEARCH_PUSH = bloqueado por SEC_E_NO_CREDENTIALS
+CLIENT_SEARCH_PR = não aberta
+
+PRODUCTION_WRITES = 0
+PRODUCTION_MIGRATIONS = 0
+PRODUCTION_REPAIRS = 0
+MERGES = 0
+DEPLOYS = 0
+TASK_CLOSED = NO — handoff pendente
+NEXT_RECOMMENDED_ACTION = devolver à direção técnica para validação dos diffs e posterior integração com a stack do Claude
+```
