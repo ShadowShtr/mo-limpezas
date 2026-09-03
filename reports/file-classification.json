@@ -1,8 +1,8 @@
 {
   "generatedBy": "scripts/audit-file-inventory.mjs",
-  "totalFiles": 831,
+  "totalFiles": 832,
   "byStatus": {
-    "MANTER": 808,
+    "MANTER": 809,
     "STANDBY": 23
   },
   "byCategory": {
@@ -12,7 +12,7 @@
     "lib": 70,
     "script": 55,
     "domain": 52,
-    "doc": 45,
+    "doc": 46,
     "server-action": 44,
     "component": 30,
     "src-other": 30,
@@ -29,7 +29,7 @@
     "supabase-other": 2
   },
   "byConfidence": {
-    "alta": 810,
+    "alta": 811,
     "média": 15,
     "baixa": 6
   },
@@ -528,6 +528,24 @@
       "signals": {
         "write": 2,
         "sqlWrite": 7
+      },
+      "action": "nenhuma",
+      "reason": "documentação",
+      "manualDecision": false
+    },
+    {
+      "path": "docs/FIN-PERIOD-WRITER-INVENTORY.md",
+      "category": "doc",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "sqlWrite": 23
       },
       "action": "nenhuma",
       "reason": "documentação",
