@@ -1,12 +1,12 @@
 {
   "generatedBy": "scripts/audit-file-inventory.mjs",
-  "totalFiles": 828,
+  "totalFiles": 829,
   "byStatus": {
-    "MANTER": 805,
+    "MANTER": 806,
     "STANDBY": 23
   },
   "byCategory": {
-    "test": 184,
+    "test": 185,
     "route-ui": 138,
     "migration": 106,
     "lib": 70,
@@ -29,7 +29,7 @@
     "supabase-other": 2
   },
   "byConfidence": {
-    "alta": 807,
+    "alta": 808,
     "média": 15,
     "baixa": 6
   },
@@ -1042,7 +1042,7 @@
       "sideEffects": [],
       "risks": [],
       "signals": {
-        "sqlWrite": 1
+        "sqlWrite": 3
       },
       "action": "nenhuma",
       "reason": "documentação",
@@ -6059,8 +6059,9 @@
       "category": "test",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 2,
+      "consumers": 3,
       "consumerSample": [
+        "src/__tests__/intervention-atomic-candidate-real-postgres.test.ts",
         "src/__tests__/migration-088-runner-ledger-atomicity.pg.test.ts",
         "src/__tests__/pg-container-helper.test.ts"
       ],
@@ -6231,6 +6232,33 @@
       "signals": {
         "serviceRole": 1,
         "sqlWrite": 7
+      },
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/__tests__/intervention-atomic-candidate-real-postgres.test.ts",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [
+        "service-role"
+      ],
+      "signals": {
+        "serviceRole": 1,
+        "sqlWrite": 11
       },
       "action": "nenhuma",
       "reason": "suite de testes — corre por convenção do vitest",
