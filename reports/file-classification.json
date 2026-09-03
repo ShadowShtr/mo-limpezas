@@ -5564,7 +5564,7 @@
       "signals": {
         "supabase": 2,
         "write": 1,
-        "sqlWrite": 12,
+        "sqlWrite": 10,
         "revalidatePath": 1
       },
       "action": "nenhuma",
@@ -5650,7 +5650,7 @@
         "supabase": 2,
         "serviceRole": 1,
         "write": 6,
-        "sqlWrite": 29,
+        "sqlWrite": 46,
         "fallbackArray": 1,
         "dynamicImport": 1
       },
@@ -7833,7 +7833,7 @@
       "signals": {
         "supabase": 2,
         "write": 2,
-        "sqlWrite": 36,
+        "sqlWrite": 39,
         "selectStar": 2,
         "ignoredError": 1,
         "dynamicImport": 26
@@ -13240,13 +13240,11 @@
       ],
       "signals": {
         "serverAction": 1,
-        "write": 11,
-        "sqlWrite": 13,
+        "write": 1,
+        "sqlWrite": 3,
         "eslintDisable": 1,
         "anyType": 1,
-        "unknownCast": 1,
         "ignoredError": 6,
-        "fallbackZero": 1,
         "fallbackArray": 8,
         "revalidatePath": 9
       },
@@ -13366,7 +13364,6 @@
       ],
       "sideEffects": [
         "supabase",
-        "write",
         "revalidatePath(9)"
       ],
       "risks": [
@@ -13376,18 +13373,17 @@
       "signals": {
         "supabase": 11,
         "serverAction": 1,
-        "write": 2,
-        "sqlWrite": 8,
+        "sqlWrite": 5,
         "eslintDisable": 3,
         "anyType": 3,
-        "unknownCast": 8,
+        "unknownCast": 7,
         "consoleErr": 2,
         "ignoredError": 3,
         "fallbackZero": 3,
         "fallbackArray": 5,
         "revalidatePath": 9
       },
-      "action": "auditar atomicidade (T12/T13)",
+      "action": "nenhuma",
       "reason": "em uso: 6 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
@@ -13677,37 +13673,32 @@
       "category": "server-action",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 4,
+      "consumers": 5,
       "consumerSample": [
+        "src/__tests__/finance-actions-rpc-routing.test.ts",
         "src/app/(dashboard)/dashboard/calendario/_components/service-detail-sheet.tsx",
-        "src/app/(dashboard)/dashboard/cobrancas/_components/cobrancas-tabs.tsx",
-        "src/app/(dashboard)/dashboard/cobrancas/_components/daily-billing-client.tsx"
+        "src/app/(dashboard)/dashboard/cobrancas/_components/cobrancas-tabs.tsx"
       ],
       "autoLoaded": false,
       "referencedBy": [
         "docs"
       ],
       "sideEffects": [
-        "supabase",
-        "write",
         "revalidatePath(3)"
       ],
       "risks": [
-        "erro-de-query-ignorado(8)"
+        "erro-de-query-ignorado(3)"
       ],
       "signals": {
-        "supabase": 2,
         "serverAction": 1,
-        "write": 4,
-        "sqlWrite": 4,
         "unknownCast": 4,
-        "ignoredError": 8,
-        "fallbackZero": 5,
+        "ignoredError": 3,
+        "fallbackZero": 3,
         "fallbackArray": 8,
         "revalidatePath": 3
       },
-      "action": "auditar atomicidade (T12/T13)",
-      "reason": "em uso: 4 consumidor(es)",
+      "action": "nenhuma",
+      "reason": "em uso: 5 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -14011,19 +14002,16 @@
         "docs"
       ],
       "sideEffects": [
-        "write",
         "revalidatePath(1)"
       ],
       "risks": [],
       "signals": {
         "serverAction": 1,
-        "write": 2,
-        "sqlWrite": 1,
-        "unknownCast": 3,
+        "unknownCast": 1,
         "fallbackZero": 1,
         "revalidatePath": 1
       },
-      "action": "auditar atomicidade (T12/T13)",
+      "action": "nenhuma",
       "reason": "em uso: 2 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
@@ -14077,11 +14065,11 @@
       "category": "server-action",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 6,
+      "consumers": 7,
       "consumerSample": [
+        "src/__tests__/finance-actions-rpc-routing.test.ts",
         "src/app/(dashboard)/dashboard/cobrancas/_components/cobrancas-tabs.tsx",
-        "src/app/(dashboard)/dashboard/cobrancas/_components/invoice-detail-sheet.tsx",
-        "src/app/(dashboard)/dashboard/cobrancas/_components/invoices-client.tsx"
+        "src/app/(dashboard)/dashboard/cobrancas/_components/invoice-detail-sheet.tsx"
       ],
       "autoLoaded": false,
       "referencedBy": [
@@ -14089,28 +14077,25 @@
       ],
       "sideEffects": [
         "supabase",
-        "write",
         "revalidatePath(4)"
       ],
       "risks": [
-        "erro-de-query-ignorado(6)",
+        "erro-de-query-ignorado(3)",
         "any(3)"
       ],
       "signals": {
         "supabase": 8,
         "serverAction": 1,
-        "write": 4,
-        "sqlWrite": 10,
         "eslintDisable": 3,
         "anyType": 3,
-        "unknownCast": 3,
-        "ignoredError": 6,
+        "unknownCast": 2,
+        "ignoredError": 3,
         "fallbackZero": 2,
-        "fallbackArray": 14,
+        "fallbackArray": 13,
         "revalidatePath": 4
       },
-      "action": "auditar atomicidade (T12/T13)",
-      "reason": "em uso: 6 consumidor(es)",
+      "action": "nenhuma",
+      "reason": "em uso: 7 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -14315,16 +14300,16 @@
         "revalidatePath(5)"
       ],
       "risks": [
-        "erro-de-query-ignorado(3)"
+        "erro-de-query-ignorado(2)"
       ],
       "signals": {
         "supabase": 2,
         "serverAction": 1,
-        "write": 4,
-        "sqlWrite": 9,
+        "write": 2,
+        "sqlWrite": 7,
         "unknownCast": 2,
-        "ignoredError": 3,
-        "fallbackZero": 4,
+        "ignoredError": 2,
+        "fallbackZero": 3,
         "fallbackArray": 2,
         "revalidatePath": 5
       },
@@ -14354,20 +14339,18 @@
         "docs"
       ],
       "sideEffects": [
-        "write",
         "revalidatePath(5)"
       ],
       "risks": [],
       "signals": {
         "serverAction": 1,
-        "write": 5,
-        "sqlWrite": 11,
-        "unknownCast": 4,
+        "sqlWrite": 3,
+        "unknownCast": 3,
         "fallbackZero": 35,
-        "fallbackArray": 9,
+        "fallbackArray": 7,
         "revalidatePath": 5
       },
-      "action": "auditar atomicidade (T12/T13)",
+      "action": "nenhuma",
       "reason": "em uso: 6 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
@@ -17870,7 +17853,7 @@
       "category": "lib",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 21,
+      "consumers": 19,
       "consumerSample": [
         "src/__tests__/audit.test.ts",
         "src/app/(dashboard)/dashboard/calendario/_actions/reschedule.ts",
@@ -17898,7 +17881,7 @@
         "consoleErr": 2
       },
       "action": "nenhuma",
-      "reason": "em uso: 21 consumidor(es), script npm, CI, configuração",
+      "reason": "em uso: 19 consumidor(es), script npm, CI, configuração",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -18325,7 +18308,7 @@
       "category": "lib",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 6,
+      "consumers": 3,
       "consumerSample": [
         "src/__tests__/cash-flow-integrity.test.ts",
         "src/app/actions/bank-reconciliation.ts",
@@ -18337,7 +18320,7 @@
       "risks": [],
       "signals": {},
       "action": "nenhuma",
-      "reason": "em uso: 6 consumidor(es)",
+      "reason": "em uso: 3 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -18856,7 +18839,7 @@
       "category": "lib",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 9,
+      "consumers": 8,
       "consumerSample": [
         "src/__tests__/finance-actions-rpc-routing.test.ts",
         "src/__tests__/financial-period.test.ts",
@@ -18870,7 +18853,7 @@
       "risks": [],
       "signals": {},
       "action": "nenhuma",
-      "reason": "em uso: 9 consumidor(es)",
+      "reason": "em uso: 8 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -19074,7 +19057,7 @@
       "category": "lib",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 35,
+      "consumers": 36,
       "consumerSample": [
         "src/__tests__/lisbon-time.test.ts",
         "src/app/(app)/app/ausencias/_components/ausencias-client.tsx",
@@ -19088,7 +19071,7 @@
       "risks": [],
       "signals": {},
       "action": "nenhuma",
-      "reason": "em uso: 35 consumidor(es)",
+      "reason": "em uso: 36 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -19685,7 +19668,7 @@
       "category": "lib",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 79,
+      "consumers": 78,
       "consumerSample": [
         "src/app/(app)/app/perfil/page.tsx",
         "src/app/(app)/app/servico/[id]/page.tsx",
@@ -19708,7 +19691,7 @@
         "serviceRole": 1
       },
       "action": "nenhuma",
-      "reason": "em uso: 79 consumidor(es)",
+      "reason": "em uso: 78 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
