@@ -3,8 +3,8 @@
   "summary": {
     "repositoryFiles": 871,
     "textFiles": 858,
- Relatório gravado em reports/code-audit.json
-,
+    "sourceFiles": 605,
+    "textLines": 212684,
     "typescriptDiagnostics": 0,
     "productionEntries": 71,
     "unreachableProductionModules": 40,
