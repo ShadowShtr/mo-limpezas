@@ -237,9 +237,9 @@ As **15 funções** que a pilha 090..097 substitui existem em produção com a
 assinatura EXACTA que cada migration assume, e nenhuma é `SECURITY DEFINER`.
 `DIVERGENCIAS = 0`.
 
-### 🔴 Dois achados que mudam decisões
+### Revalidação do prestate e adoção da 094
 
-**1. `set_invoice_status_atomic` já existe — com outra assinatura.**
+**1. `set_invoice_status_atomic` já existia — com a assinatura canónica de 7 argumentos.**
 
 ```
 set_invoice_status_atomic(
@@ -248,30 +248,29 @@ set_invoice_status_atomic(
 ) RETURNS jsonb   — SECURITY DEFINER
 ```
 
-É da linha F14/078 («domain mutation, change event e sequência»), que vive na
-PR #74 e **não está no master**. Usa `public.domain_mutations` para
-idempotência e `invoices.revision` para bloqueio optimista — ambos presentes na
-base, ambos ausentes das migrations deste repositório.
+A origem versionada desta função continua UNKNOWN / ORPHAN_PRODUCTION_DRIFT.
+Ela usa `public.domain_mutations` para idempotência e `invoices.revision` para
+bloqueio optimista — ambos presentes na base, mas ausentes das migrations
+anteriores desta linha.
 
-Aplicar a 094 como estava criaria uma **sobrecarga**, não uma substituição:
-duas funções com o mesmo nome, o runtime a continuar na antiga sem protecção de
-período, e a migration a dizer que correu bem. A 094 passa a **recusar-se** com
-`INVOICES_PERIOD_094_SIGNATURE_COLLISION`.
+A 094 foi corrigida para adotar esse prestate exacto, substituir o corpo stale
+contra os contratos canónicos atuais e manter uma única assinatura, sem
+overload silencioso. A precondition continua fail-closed para qualquer shape
+inesperado.
 
-`BLOCKER: 094 não é aplicável a produção hoje.` Reconciliar exige decidir o que
-fazer à idempotência por `domain_mutations` e ao `expected_revision` — decisão
-de arquitectura, não uma linha de SQL.
+`PRODUCTION_ORPHAN_RPC_ADOPTED = YES` · `NO_OVERLOAD = YES`.
 
-**2. `payroll_records` não tem índice único além da chave primária.**
+**2. `payroll_records` possui o árbitro único exigido pelo upsert:**
 
 `runPayrollCalculation` faz
 `upsert(..., { onConflict: "company_id,collaborator_id,period_year,period_month" })`.
-Sem árbitro, esse caminho falha com **42P10 em produção**. Confirmado por
-leitura: o único índice único da tabela é `payroll_records_pkey`.
+O prestate de produção confirma:
 
-Não é resolvido pela 096 — criar a restrição exige decidir o que fazer a
-duplicados existentes, e isso é decisão de dados. `upsert_payroll_records_atomic`
-não depende dela.
+`UNIQUE (company_id, collaborator_id, period_year, period_month)`.
+
+`PAYROLL_UNIQUE_EFFECT = PRESENT` · `PAYROLL_42P10_PRODUCTION_BLOCKER = NO` ·
+`PAYROLL_UNIQUE_PROVENANCE = UNKNOWN`. Não criar repair, remover constraint ou
+adicionar uma constraint equivalente nesta frente.
 
 ### O que existe na base e em migration nenhuma
 
@@ -283,5 +282,5 @@ public.cash_flow_entries.revision = ausente
 ```
 
 É a mesma família de drift que `docs/LEDGER-RECONCILIATION-PENDING.md` já
-regista. Nada nesta frente o resolve, e nada nesta frente depende dele — excepto
-a 094, que agora o denuncia em vez de passar por cima.
+regista. A 094 agora adota explicitamente a RPC órfã, sem promover a sua origem
+desconhecida a uma migration histórica.
