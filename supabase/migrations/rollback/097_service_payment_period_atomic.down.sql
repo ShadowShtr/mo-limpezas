@@ -1,0 +1,25 @@
+-- Rollback da 097 — pagamento de serviços dentro do protocolo de período.
+--
+-- 🔴 ROLLBACK_DATA_DESTRUCTIVE = NO. Nenhuma linha de `services` ou de
+--    `cash_flow_entries` é tocada.
+--
+-- 🔴 ROLLBACK_REQUIRES_CODE_ROLLBACK = NÃO, e é preciso dizer porquê.
+--
+--    `set_service_payment_atomic` NÃO é removida aqui: existe desde a 086 e
+--    largá-la partiria qualquer chamador. A 097 só lhe acrescentou o período —
+--    para a repor na versão anterior reaplica-se a 086, que é toda em
+--    `CREATE OR REPLACE`.
+--
+--    E o runtime publicado hoje nem sequer a chama: `setServicePayment` escreve
+--    directamente em `cash_flow_entries` e `services`, da server action. Isso
+--    muda quando a PR de runtime entrar; a partir daí, este ficheiro deixa de
+--    poder correr sozinho.
+--
+-- 🔴 O QUE SE PERDE: com o mês fechado, um recebimento de serviço volta a
+--    entrar. E o mês de onde sai um movimento de caixa antigo — reescrito ou
+--    apagado pela operação — volta a não ser olhado por ninguém.
+--
+-- 🔴 FORWARD_FIX_PREFERRED = YES.
+--
+-- Reponha a versão da 086 reaplicando essa migration. Este ficheiro não remove
+-- nada de propósito: não há nada aqui que seja seguro largar.
