@@ -15,11 +15,9 @@ import {
   splitRecalculationScope,
   PAYROLL_MUTATION_DENIAL_MESSAGE,
   PAYROLL_APPROVE_DENIAL_MESSAGE,
-  type PayrollStatus,
 } from "@/domain/payroll/payroll-state";
-import { auditLog } from "@/lib/audit";
-import { getMissingCashFlowReferenceIds, isValidCashFlowAmount } from "@/lib/cash-flow-integrity";
 import { isValidFiniteNumber } from "@/lib/utils";
+import { todayInLisbon } from "@/lib/lisbon-time";
 import { revalidatePath } from "next/cache";
 
 import { criarContextoPeriodo, lerEstadoPeriodo, type ClientePeriodo } from "@/lib/finance-period-guard";
@@ -131,6 +129,7 @@ export interface PayrollRecord {
   gross_salary: number;
   meal_allowance: number;
   overtime_bonus: number;
+  overtime_rate_pct?: number;
   absence_deductions: number;
   other_deductions: number;
   other_additions: number;
@@ -155,10 +154,6 @@ export interface PayrollAdjust {
 
 type PayrollProfileJoin = {
   profiles?: { full_name: string; avatar_url: string | null } | null;
-};
-
-type PayrollPaidProfileJoin = {
-  profiles?: { full_name: string } | null;
 };
 
 /**
@@ -411,9 +406,10 @@ async function runPayrollCalculation(
   // Toda a gente já está aprovada ou paga: não há nada para escrever, e um
   // upsert vazio não é uma escrita que valha a pena arriscar.
   if (upserts.length > 0) {
-    const { error: uErr } = await admin
-      .from("payroll_records")
-      .upsert(upserts, { onConflict: "company_id,collaborator_id,period_year,period_month" });
+    const { error: uErr } = await admin.rpc("upsert_payroll_records_atomic", {
+      p_company_id: companyId, p_period_year: year, p_period_month: month,
+      p_records: upserts, p_actor: guard.profile.id,
+    });
 
     if (uErr) return queryFailure("runPayrollCalculation:upsert", uErr);
   }
@@ -507,6 +503,16 @@ export async function getPayrollRecords(
 
   if (error) return { ok: false, error: error.message };
 
+  const { data: settings, error: settingsError } = await admin
+    .from("company_settings")
+    .select("overtime_rate_pct")
+    .eq("company_id", companyId)
+    .maybeSingle();
+  if (settingsError && !isNoRowsError(settingsError)) {
+    return queryFailure("getPayrollRecords:company_settings", settingsError);
+  }
+  const overtimeRatePct = settings?.overtime_rate_pct ?? 25;
+
   const records: PayrollRecord[] = (data ?? []).map((r) => {
     const profile = (r as unknown as PayrollProfileJoin).profiles ?? null;
     return {
@@ -525,6 +531,7 @@ export async function getPayrollRecords(
       gross_salary:       r.gross_salary ?? 0,
       meal_allowance:     r.meal_allowance ?? 0,
       overtime_bonus:     r.overtime_bonus ?? 0,
+      overtime_rate_pct: overtimeRatePct,
       absence_deductions: r.absence_deductions ?? 0,
       other_additions:    r.other_additions ?? 0,
       other_deductions:   r.other_deductions ?? 0,
@@ -650,64 +657,22 @@ export async function adjustPayrollRecord(
     grossSalary, mealAllowance, overtimeBonus, otherAdd, absenceDed, otherDed,
   );
 
-  const { error } = await admin
-    .from("payroll_records")
-    .update({
-      worked_hours:        workedHours,
-      overtime_hours:      overtimeHours,
-      absence_hours:       absenceHours,
-      days_worked:         daysWorked,
-      hourly_rate:         hourlyRate,
-      gross_salary:        grossSalary,
-      meal_allowance:      mealAllowance,
-      overtime_bonus:      overtimeBonus,
-      absence_deductions:  absenceDed,
-      other_additions:     otherAdd,
-      other_deductions:    otherDed,
-      net_salary:          netSalary,
-      notes:               adjust.notes !== undefined ? adjust.notes : undefined,
-    })
-    .eq("id", id)
-    .eq("company_id", companyId)
-    // 🔴 Guarda final na própria escrita. A leitura acima pode ter ficado
-    //    obsoleta entre o `select` e o `update` — se outra sessão aprovou a
-    //    folha entretanto, esta condição faz a escrita não encontrar linha
-    //    nenhuma em vez de passar por cima da aprovação.
-    .eq("status", "rascunho");
-
-  if (error) return queryFailure("adjustPayrollRecord:update", error);
-
-  await auditLog({
-    companyId,
-    actorId: guard.profile.id,
-    action: "payroll_adjusted",
-    entityType: "payroll",
-    entityId: id,
-    // 🔴 O `before` estava a mentir: `net_salary` era preenchido com o
-    //    `gross_salary` anterior. Quem lesse a auditoria via um líquido que
-    //    nunca existiu, e a diferença antes/depois não fechava.
-    before: {
-      status,
-      gross_salary:       rec.gross_salary ?? 0,
-      meal_allowance:     rec.meal_allowance ?? 0,
-      overtime_bonus:     rec.overtime_bonus ?? 0,
-      absence_deductions: rec.absence_deductions ?? 0,
-      other_additions:    rec.other_additions ?? 0,
-      other_deductions:   rec.other_deductions ?? 0,
-      net_salary:         rec.net_salary ?? 0,
+  const { error } = await admin.rpc("adjust_payroll_record_atomic", {
+    p_company_id: companyId,
+    p_record_id: id,
+    p_actor: guard.profile.id,
+    p_patch: {
+      worked_hours: workedHours, overtime_hours: overtimeHours,
+      absence_hours: absenceHours, days_worked: daysWorked,
+      hourly_rate: hourlyRate, gross_salary: grossSalary,
+      meal_allowance: mealAllowance, overtime_bonus: overtimeBonus,
+      absence_deductions: absenceDed, other_additions: otherAdd,
+      other_deductions: otherDed, net_salary: netSalary,
+      ...(adjust.notes !== undefined ? { notes: adjust.notes } : {}),
     },
-    after: {
-      status,
-      gross_salary:       grossSalary,
-      meal_allowance:     mealAllowance,
-      overtime_bonus:     overtimeBonus,
-      absence_deductions: absenceDed,
-      other_additions:    otherAdd,
-      other_deductions:   otherDed,
-      net_salary:         netSalary,
-    },
-    source: "dashboard",
-  }, admin);
+  });
+
+  if (error) return queryFailure("adjustPayrollRecord:atomic", error);
 
   revalidatePath("/dashboard/folha-pagamento");
   return { ok: true };
@@ -782,30 +747,15 @@ export async function approvePayrollRecords(
     return { ok: true, aprovados: 0, jaAprovados };
   }
 
-  const { error } = await admin
-    .from("payroll_records")
-    .update({ status: "aprovado", approved_by: guard.profile.id })
-    .in("id", aAprovar)
-    .eq("company_id", companyId)
-    // 🔴 Guarda final na escrita, pelo mesmo motivo do ajuste: entre o
-    //    `select` e o `update` outra sessão pode ter pago a folha.
-    .eq("status", "rascunho");
-
-  if (error) return queryFailure("approvePayrollRecords:update", error);
-
-  await auditLog({
-    companyId,
-    actorId: guard.profile.id,
-    action: "payroll_approved",
-    entityType: "payroll",
-    before: { status: "rascunho" as PayrollStatus, count: aAprovar.length },
-    after:  { status: "aprovado" as PayrollStatus, count: aAprovar.length },
-    meta: { ids: aAprovar, jaAprovados },
-    source: "dashboard",
-  }, admin);
+  const { data: approval, error } = await admin.rpc("approve_payroll_records_atomic", {
+    p_company_id: companyId, p_record_ids: uniqueIds, p_actor: guard.profile.id,
+  });
+  if (error) return queryFailure("approvePayrollRecords:atomic", error);
 
   revalidatePath("/dashboard/folha-pagamento");
-  return { ok: true, aprovados: aAprovar.length, jaAprovados };
+  const result = (approval as Array<{ approved_count?: number; already_approved_count?: number }> | null)?.[0];
+  if (!result || typeof result.approved_count !== "number") return { ok: false, error: "Resposta inválida da operação atómica." };
+  return { ok: true, aprovados: result.approved_count, jaAprovados: result.already_approved_count ?? 0 };
 }
 
 // ─── Marcar como pago ────────────────────────────────────────────────────────
@@ -826,87 +776,13 @@ export async function markPayrollPaid(
   const { admin } = guard;
   const profile = guard.profile;
 
-  // 🔴 Sem verificar o `error`, uma consulta falhada devolvia `records = []`,
-  //    a função seguia até ao fim sem nada para pagar e respondia `ok: true`.
-  //    Quem carregou no botão via sucesso e nenhuma folha paga.
-  //
-  // ⚠️ A atomicidade desta operação continua por resolver: o `update` da folha
-  //    e o `insert` do movimento de caixa são duas escritas separadas, e uma
-  //    falha entre elas deixa salário pago sem saída de caixa. Isso é a P0B,
-  //    precisa de RPC transacional e de migration, e está fora desta PR. O que
-  //    aqui muda é só o que se podia fechar sem tocar no schema.
-  const { data: records, error: rErr } = await admin
-    .from("payroll_records")
-    .select("id, company_id, collaborator_id, net_salary, period_year, period_month, status, profiles(full_name)")
-    .in("id", uniqueIds)
-    .eq("company_id", profile.company_id);
-
-  if (rErr) return queryFailure("markPayrollPaid:records", rErr);
-
-  const payableRecords = (records ?? []).filter((r) => r.status !== "pago");
-  const payableIds = payableRecords.map((r) => r.id);
-
-  if (payableIds.length > 0) {
-    const { error } = await admin
-      .from("payroll_records")
-      .update({ status: "pago", paid_at: new Date().toISOString() })
-      .in("id", payableIds)
-      .eq("company_id", profile.company_id);
-
-    if (error) return { ok: false, error: error.message };
-  }
-
-  if (payableRecords.length > 0) {
-    // 🔴 Falhar aqui assumia "não existe movimento" e mandava inserir tudo —
-    //    criando um segundo movimento de caixa para uma folha que já o tinha.
-    const { data: existingRefs, error: refErr } = await admin
-      .from("cash_flow_entries")
-      .select("reference_id")
-      .eq("company_id", profile.company_id)
-      .eq("reference_type", "payroll")
-      .in("reference_id", payableIds);
-
-    if (refErr) return queryFailure("markPayrollPaid:cash_refs", refErr);
-
-    const missingIds = new Set(getMissingCashFlowReferenceIds(
-      payableIds,
-      (existingRefs ?? []).map((r) => r.reference_id),
-    ));
-    const today = new Date().toISOString().split("T")[0];
-    const cashEntries = payableRecords
-      .filter((r) => missingIds.has(r.id) && isValidCashFlowAmount(r.net_salary))
-      .map((r) => {
-        const name = (r as unknown as PayrollPaidProfileJoin).profiles?.full_name ?? "Colaborador";
-        return {
-          company_id: r.company_id,
-          type: "saida" as const,
-          amount: r.net_salary,
-          description: `Salario ${name} - ${r.period_month}/${r.period_year}`,
-          category: "salario" as const,
-          date: today,
-          reference_id: r.id,
-          reference_type: "payroll" as const,
-          status: "confirmado" as const,
-        };
-      });
-
-    if (cashEntries.length > 0) {
-      const { error: cashErr } = await admin.from("cash_flow_entries").insert(cashEntries);
-      if (cashErr) return queryFailure("markPayrollPaid:cash_insert", cashErr);
-    }
-  }
-
-  if (payableIds.length > 0) {
-    await auditLog({
-      companyId: profile.company_id,
-      actorId: profile.id,
-      action: "payroll_paid",
-      entityType: "payroll",
-      after: { status: "pago", count: payableIds.length },
-      meta: { ids: payableIds },
-      source: "dashboard",
-    }, admin);
-  }
+  const { error } = await admin.rpc("mark_payroll_paid_atomic", {
+    p_company_id: profile.company_id,
+    p_record_ids: uniqueIds,
+    p_paid_on: todayInLisbon(),
+    p_actor: profile.id,
+  });
+  if (error) return queryFailure("markPayrollPaid:atomic", error);
 
   revalidatePath("/dashboard/folha-pagamento");
   revalidatePath("/dashboard/financeiro");

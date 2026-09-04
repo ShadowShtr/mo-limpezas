@@ -188,7 +188,30 @@ vi.mock("@/lib/supabase/server", () => ({
 }));
 
 vi.mock("@/lib/supabase/admin", () => ({
-  createAdminClient: () => ({ from: (table: string) => makeBuilder(table) }),
+  createAdminClient: () => ({
+    from: (table: string) => makeBuilder(table),
+    rpc: async (name: string, args: Record<string, unknown>) => {
+      if (name === "upsert_payroll_records_atomic") {
+        escritas.push({ table: "payroll_records", op: "upsert", payload: args.p_records, filtros: [] });
+        return { data: [{ written_count: Array.isArray(args.p_records) ? args.p_records.length : 0, preserved_count: 0 }], error: null };
+      }
+      if (name === "adjust_payroll_record_atomic") {
+        const patch = (args.p_patch ?? {}) as Record<string, unknown>;
+        escritas.push({ table: "payroll_records", op: "update", payload: patch, filtros: [["status", "rascunho"]] });
+        auditoria.push({ action: "payroll_adjusted", before: { net_salary: 1100, gross_salary: 1000 }, after: patch });
+        return { data: [{ record_id: args.p_record_id, net_salary: patch.net_salary }], error: null };
+      }
+      if (name === "approve_payroll_records_atomic") {
+        escritas.push({ table: "payroll_records", op: "update", payload: { status: "aprovado" }, filtros: [["status", "rascunho"]] });
+        const ids = Array.isArray(args.p_record_ids) ? args.p_record_ids : [];
+        return { data: [{ approved_count: ids.length, already_approved_count: 0 }], error: null };
+      }
+      if (name === "mark_payroll_paid_atomic") {
+        return { data: [{ paid_count: 1, already_paid_count: 0, cash_entry_count: 1 }], error: null };
+      }
+      return { data: null, error: { message: `RPC inesperada: ${name}` } };
+    },
+  }),
 }));
 
 vi.mock("next/cache", () => ({ revalidatePath: () => {} }));

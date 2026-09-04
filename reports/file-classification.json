@@ -1,20 +1,20 @@
 {
   "generatedBy": "scripts/audit-file-inventory.mjs",
-  "totalFiles": 829,
+  "totalFiles": 834,
   "byStatus": {
-    "MANTER": 806,
+    "MANTER": 811,
     "STANDBY": 23
   },
   "byCategory": {
-    "test": 183,
+    "test": 184,
     "route-ui": 140,
-    "migration": 106,
+    "migration": 108,
     "lib": 72,
     "script": 54,
     "domain": 52,
-    "doc": 45,
+    "doc": 46,
     "server-action": 44,
-    "src-other": 33,
+    "src-other": 34,
     "component": 30,
     "doc-historico": 16,
     "api-route": 16,
@@ -29,7 +29,7 @@
     "supabase-other": 2
   },
   "byConfidence": {
-    "alta": 808,
+    "alta": 813,
     "média": 15,
     "baixa": 6
   },
@@ -1099,6 +1099,24 @@
         "sqlWrite": 1,
         "dynamicImport": 1
       },
+      "action": "nenhuma",
+      "reason": "documentação",
+      "manualDecision": false
+    },
+    {
+      "path": "docs/PAYROLL-SAFETY-01.md",
+      "category": "doc",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [
+        "docs"
+      ],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {},
       "action": "nenhuma",
       "reason": "documentação",
       "manualDecision": false
@@ -5996,9 +6014,10 @@
       "category": "test",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 2,
+      "consumers": 3,
       "consumerSample": [
         "src/__tests__/migration-088-runner-ledger-atomicity.pg.test.ts",
+        "src/__tests__/payroll-safety-postgres.test.ts",
         "src/__tests__/pg-container-helper.test.ts"
       ],
       "autoLoaded": false,
@@ -7259,6 +7278,35 @@
       }
     },
     {
+      "path": "src/__tests__/payroll-safety-postgres.test.ts",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [
+        "docs"
+      ],
+      "sideEffects": [],
+      "risks": [
+        "service-role"
+      ],
+      "signals": {
+        "serviceRole": 2,
+        "sqlWrite": 19
+      },
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
       "path": "src/__tests__/payroll-state-integrity.test.ts",
       "category": "test",
       "status": "MANTER",
@@ -7278,7 +7326,7 @@
       "signals": {
         "supabase": 2,
         "write": 2,
-        "sqlWrite": 36,
+        "sqlWrite": 38,
         "selectStar": 2,
         "ignoredError": 1,
         "dynamicImport": 26
@@ -13772,20 +13820,18 @@
         "docs"
       ],
       "sideEffects": [
-        "write",
         "revalidatePath(5)"
       ],
       "risks": [],
       "signals": {
         "serverAction": 1,
-        "write": 5,
-        "sqlWrite": 11,
-        "unknownCast": 4,
-        "fallbackZero": 35,
-        "fallbackArray": 9,
+        "sqlWrite": 1,
+        "unknownCast": 3,
+        "fallbackZero": 29,
+        "fallbackArray": 7,
         "revalidatePath": 5
       },
-      "action": "auditar atomicidade (T12/T13)",
+      "action": "nenhuma",
       "reason": "em uso: 6 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
@@ -17172,7 +17218,7 @@
       "category": "domain",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 39,
+      "consumers": 40,
       "consumerSample": [
         "src/__tests__/update-notice-modal.test.tsx",
         "src/__tests__/update-notices-eligibility.test.ts",
@@ -17187,7 +17233,7 @@
       "risks": [],
       "signals": {},
       "action": "nenhuma",
-      "reason": "em uso: 39 consumidor(es), configuração",
+      "reason": "em uso: 40 consumidor(es), configuração",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -17288,7 +17334,7 @@
       "category": "lib",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 21,
+      "consumers": 20,
       "consumerSample": [
         "src/__tests__/audit.test.ts",
         "src/app/(dashboard)/dashboard/calendario/_actions/reschedule.ts",
@@ -17316,7 +17362,7 @@
         "consoleErr": 2
       },
       "action": "nenhuma",
-      "reason": "em uso: 21 consumidor(es), script npm, CI, configuração",
+      "reason": "em uso: 20 consumidor(es), script npm, CI, configuração",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -17743,7 +17789,7 @@
       "category": "lib",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 6,
+      "consumers": 5,
       "consumerSample": [
         "src/__tests__/cash-flow-integrity.test.ts",
         "src/app/actions/bank-reconciliation.ts",
@@ -17755,7 +17801,7 @@
       "risks": [],
       "signals": {},
       "action": "nenhuma",
-      "reason": "em uso: 6 consumidor(es)",
+      "reason": "em uso: 5 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -18492,7 +18538,7 @@
       "category": "lib",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 35,
+      "consumers": 36,
       "consumerSample": [
         "src/__tests__/lisbon-time.test.ts",
         "src/app/(app)/app/ausencias/_components/ausencias-client.tsx",
@@ -18506,7 +18552,7 @@
       "risks": [],
       "signals": {},
       "action": "nenhuma",
-      "reason": "em uso: 35 consumidor(es)",
+      "reason": "em uso: 36 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -20159,6 +20205,32 @@
     },
     {
       "path": "src/release-notes/2026-09-03-intervencoes-sem-data-de-fim.ts",
+      "category": "src-other",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 1,
+      "consumerSample": [
+        "src/release-notes/index.ts"
+      ],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "sqlWrite": 1
+      },
+      "action": "nenhuma",
+      "reason": "em uso: 1 consumidor(es)",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/release-notes/2026-09-04-folha-pagamento-segura.ts",
       "category": "src-other",
       "status": "MANTER",
       "confidence": "alta",
@@ -22168,6 +22240,29 @@
       "manualDecision": false
     },
     {
+      "path": "supabase/migrations/draft/PAYROLL-SAFETY-01.sql",
+      "category": "migration",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [
+        "docs"
+      ],
+      "sideEffects": [],
+      "risks": [
+        "service-role"
+      ],
+      "signals": {
+        "serviceRole": 4,
+        "sqlWrite": 17
+      },
+      "action": "nenhuma",
+      "reason": "migration versionada — histórico do schema, nunca se apaga",
+      "manualDecision": false
+    },
+    {
       "path": "supabase/migrations/draft/PROVISIONAL_collaborator_identity_expand.sql",
       "category": "migration",
       "status": "MANTER",
@@ -22219,6 +22314,24 @@
       "risks": [],
       "signals": {
         "sqlWrite": 9
+      },
+      "action": "nenhuma",
+      "reason": "migration versionada — histórico do schema, nunca se apaga",
+      "manualDecision": false
+    },
+    {
+      "path": "supabase/migrations/draft/rollback/PAYROLL-SAFETY-01.down.sql",
+      "category": "migration",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "sqlWrite": 8
       },
       "action": "nenhuma",
       "reason": "migration versionada — histórico do schema, nunca se apaga",
