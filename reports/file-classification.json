@@ -1,15 +1,15 @@
 {
   "generatedBy": "scripts/audit-file-inventory.mjs",
-  "totalFiles": 833,
+  "totalFiles": 835,
   "byStatus": {
-    "MANTER": 810,
+    "MANTER": 812,
     "STANDBY": 23
   },
   "byCategory": {
-    "test": 185,
+    "test": 186,
     "route-ui": 140,
     "migration": 108,
-    "lib": 72,
+    "lib": 73,
     "script": 54,
     "domain": 52,
     "doc": 45,
@@ -29,7 +29,7 @@
     "supabase-other": 2
   },
   "byConfidence": {
-    "alta": 812,
+    "alta": 814,
     "média": 15,
     "baixa": 6
   },
@@ -6165,6 +6165,28 @@
         "serviceRole": 3,
         "sqlWrite": 25
       },
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/__tests__/identity-strict.test.ts",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {},
       "action": "nenhuma",
       "reason": "suite de testes — corre por convenção do vitest",
       "manualDecision": false,
@@ -17380,11 +17402,11 @@
       "category": "lib",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 26,
+      "consumers": 27,
       "consumerSample": [
         "src/__tests__/auth-revalidation-central.test.ts",
-        "src/app/actions/absences.ts",
-        "src/app/actions/attachments.ts"
+        "src/__tests__/identity-strict.test.ts",
+        "src/app/actions/absences.ts"
       ],
       "autoLoaded": false,
       "referencedBy": [
@@ -17398,7 +17420,7 @@
         "supabase": 7
       },
       "action": "nenhuma",
-      "reason": "em uso: 26 consumidor(es)",
+      "reason": "em uso: 27 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -18481,6 +18503,38 @@
       }
     },
     {
+      "path": "src/lib/identity.ts",
+      "category": "lib",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 2,
+      "consumerSample": [
+        "src/__tests__/identity-strict.test.ts",
+        "src/lib/auth-guard.ts"
+      ],
+      "autoLoaded": false,
+      "referencedBy": [
+        "docs"
+      ],
+      "sideEffects": [
+        "supabase"
+      ],
+      "risks": [],
+      "signals": {
+        "supabase": 2,
+        "fallbackArray": 1
+      },
+      "action": "nenhuma",
+      "reason": "em uso: 2 consumidor(es)",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
       "path": "src/lib/images/compress-client-image.ts",
       "category": "lib",
       "status": "MANTER",
@@ -19150,7 +19204,7 @@
       "category": "lib",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 79,
+      "consumers": 80,
       "consumerSample": [
         "src/app/(app)/app/perfil/page.tsx",
         "src/app/(app)/app/servico/[id]/page.tsx",
@@ -19173,7 +19227,7 @@
         "serviceRole": 1
       },
       "action": "nenhuma",
-      "reason": "em uso: 79 consumidor(es)",
+      "reason": "em uso: 80 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
