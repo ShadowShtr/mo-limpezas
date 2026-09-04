@@ -115,9 +115,40 @@ describe("ferramentas a correr de ponta a ponta", () => {
     fs.writeFileSync(caminho, JSON.stringify(dados), "utf8");
     return caminho;
   }
+  /**
+   * O `tsx` LOCAL, resolvido à mão, sem `npx`.
+   *
+   * Isto corria como `execFile("npx", ["tsx", ...])`. O `npx`, quando não
+   * encontra a ferramenta instalada, vai buscá-la à rede — e o `tsx` não estava
+   * declarado no `package.json` nem no lockfile, portanto `npm ci` nunca o
+   * instalava. Numa máquina de desenvolvimento o cache do npx já o tem e o
+   * ensaio corre em ~4 s; num runner limpo o download é o caminho normal, e os
+   * três casos que lançam subprocessos ficavam presos até ao teto de 60 s cada.
+   * Era um `npm test` a depender de rede a meio da suite.
+   *
+   * Agora aponta-se ao binário que o `npm ci` instala. Se faltar, o ensaio
+   * falha na hora e diz porquê, em vez de esperar um minuto por um download:
+   * ausência de dependência declarada é defeito de instalação, não lentidão.
+   */
+  function binarioTsx(): string {
+    const base = path.join(ROOT, "node_modules", ".bin");
+    // O `.cmd` é o que o Windows sabe executar; noutros sistemas é o script sem
+    // extensão. Verificam-se os dois para o ensaio não depender da plataforma.
+    const candidatos = process.platform === "win32"
+      ? [path.join(base, "tsx.cmd"), path.join(base, "tsx")]
+      : [path.join(base, "tsx")];
+    const encontrado = candidatos.find((c) => fs.existsSync(c));
+    if (!encontrado) {
+      throw new Error(
+        `tsx não está instalado em node_modules/.bin (procurado: ${candidatos.join(", ")}). ` +
+        "Declare-o como devDependency e corra `npm ci` — este ensaio não descarrega ferramentas.",
+      );
+    }
+    return encontrado;
+  }
 
   async function correr(script: string, args: string[]) {
-    return execFileAsync("npx", ["tsx", path.join(ROOT, "scripts", script), ...args], {
+    return execFileAsync(binarioTsx(), [path.join(ROOT, "scripts", script), ...args], {
       cwd: ROOT, shell: process.platform === "win32",
     });
   }
