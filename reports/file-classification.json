@@ -1,12 +1,12 @@
 {
   "generatedBy": "scripts/audit-file-inventory.mjs",
-  "totalFiles": 829,
+  "totalFiles": 830,
   "byStatus": {
-    "MANTER": 806,
+    "MANTER": 807,
     "STANDBY": 23
   },
   "byCategory": {
-    "test": 183,
+    "test": 184,
     "route-ui": 140,
     "migration": 106,
     "lib": 72,
@@ -29,7 +29,7 @@
     "supabase-other": 2
   },
   "byConfidence": {
-    "alta": 808,
+    "alta": 809,
     "média": 15,
     "baixa": 6
   },
@@ -5990,6 +5990,28 @@
       "action": "nenhuma",
       "reason": "suite de testes — corre por convenção do vitest",
       "manualDecision": false
+    },
+    {
+      "path": "src/__tests__/harness-tool-dependencies.test.ts",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {},
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
     },
     {
       "path": "src/__tests__/helpers/pg-container.ts",
