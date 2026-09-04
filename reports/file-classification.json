@@ -1901,7 +1901,7 @@
       ],
       "sideEffects": [
         "supabase",
-        "revalidatePath(40)"
+        "revalidatePath(38)"
       ],
       "risks": [
         "debugger"
@@ -1909,8 +1909,8 @@
       "signals": {
         "supabase": 1,
         "sqlWrite": 26,
-        "debugger": 10,
-        "revalidatePath": 40
+        "debugger": 6,
+        "revalidatePath": 38
       },
       "action": "nenhuma",
       "reason": "configuração/infra",
@@ -6089,7 +6089,7 @@
       "category": "test",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 3,
+      "consumers": 4,
       "consumerSample": [
         "src/__tests__/collaborator-create-name-only-postgres.test.ts",
         "src/__tests__/collaborator-identity-hardening-postgres.test.ts",
@@ -7338,12 +7338,9 @@
         "docs"
       ],
       "sideEffects": [],
-      "risks": [
-        "service-role"
-      ],
+      "risks": [],
       "signals": {
-        "serviceRole": 2,
-        "sqlWrite": 19
+        "sqlWrite": 22
       },
       "action": "nenhuma",
       "reason": "suite de testes — corre por convenção do vitest",
@@ -7378,7 +7375,7 @@
         "sqlWrite": 38,
         "selectStar": 2,
         "ignoredError": 1,
-        "dynamicImport": 26
+        "dynamicImport": 31
       },
       "action": "nenhuma",
       "reason": "suite de testes — corre por convenção do vitest",
@@ -13876,7 +13873,7 @@
         "serverAction": 1,
         "sqlWrite": 1,
         "unknownCast": 3,
-        "fallbackZero": 29,
+        "fallbackZero": 28,
         "fallbackArray": 7,
         "revalidatePath": 5
       },
@@ -22329,7 +22326,7 @@
       ],
       "signals": {
         "serviceRole": 4,
-        "sqlWrite": 17
+        "sqlWrite": 19
       },
       "action": "nenhuma",
       "reason": "migration versionada — histórico do schema, nunca se apaga",

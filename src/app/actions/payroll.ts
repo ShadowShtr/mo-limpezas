@@ -174,6 +174,23 @@ export type PayrollCalculationResult =
     }
   | { ok: false; error: string };
 
+const RPC_RESPONSE_ERROR = "Resposta inválida da operação atómica.";
+
+function isExactObject(value: unknown, keys: readonly string[]): value is Record<string, unknown> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const actual = Object.keys(value).sort();
+  return actual.length === keys.length && actual.every((key, index) => key === [...keys].sort()[index]);
+}
+
+function isNonNegativeInteger(value: unknown): value is number {
+  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
+}
+
+function oneRpcRow(data: unknown, keys: readonly string[]): Record<string, unknown> | null {
+  if (!Array.isArray(data) || data.length !== 1 || !isExactObject(data[0], keys)) return null;
+  return data[0];
+}
+
 // monthRange re-exported from payroll-calc (timezone-safe, uses Date.UTC)
 
 // ─── Calcular e guardar folha de pagamento ────────────────────────────────────
@@ -406,12 +423,17 @@ async function runPayrollCalculation(
   // Toda a gente já está aprovada ou paga: não há nada para escrever, e um
   // upsert vazio não é uma escrita que valha a pena arriscar.
   if (upserts.length > 0) {
-    const { error: uErr } = await admin.rpc("upsert_payroll_records_atomic", {
+    const { data: upsertData, error: uErr } = await admin.rpc("upsert_payroll_records_atomic", {
       p_company_id: companyId, p_period_year: year, p_period_month: month,
       p_records: upserts, p_actor: guard.profile.id,
     });
 
     if (uErr) return queryFailure("runPayrollCalculation:upsert", uErr);
+    const result = oneRpcRow(upsertData, ["written_count", "preserved_count"]);
+    if (!result || !isNonNegativeInteger(result.written_count) || !isNonNegativeInteger(result.preserved_count)
+      || result.written_count + result.preserved_count !== upserts.length) {
+      return { ok: false, error: RPC_RESPONSE_ERROR };
+    }
   }
 
   const gravados = await getPayrollRecords(companyId, year, month);
@@ -657,7 +679,7 @@ export async function adjustPayrollRecord(
     grossSalary, mealAllowance, overtimeBonus, otherAdd, absenceDed, otherDed,
   );
 
-  const { error } = await admin.rpc("adjust_payroll_record_atomic", {
+  const { data, error } = await admin.rpc("adjust_payroll_record_atomic", {
     p_company_id: companyId,
     p_record_id: id,
     p_actor: guard.profile.id,
@@ -673,6 +695,12 @@ export async function adjustPayrollRecord(
   });
 
   if (error) return queryFailure("adjustPayrollRecord:atomic", error);
+  const result = oneRpcRow(data, ["net_salary", "record_id"]);
+  const returnedNet = result ? Number(result.net_salary) : Number.NaN;
+  if (!result || result.record_id !== id || !Number.isFinite(returnedNet)
+    || Math.abs(returnedNet - netSalary) > 0.005) {
+    return { ok: false, error: RPC_RESPONSE_ERROR };
+  }
 
   revalidatePath("/dashboard/folha-pagamento");
   return { ok: true };
@@ -752,10 +780,13 @@ export async function approvePayrollRecords(
   });
   if (error) return queryFailure("approvePayrollRecords:atomic", error);
 
+  const result = oneRpcRow(approval, ["already_approved_count", "approved_count"]);
+  if (!result || !isNonNegativeInteger(result.approved_count) || !isNonNegativeInteger(result.already_approved_count)
+    || result.approved_count + result.already_approved_count !== uniqueIds.length) {
+    return { ok: false, error: RPC_RESPONSE_ERROR };
+  }
   revalidatePath("/dashboard/folha-pagamento");
-  const result = (approval as Array<{ approved_count?: number; already_approved_count?: number }> | null)?.[0];
-  if (!result || typeof result.approved_count !== "number") return { ok: false, error: "Resposta inválida da operação atómica." };
-  return { ok: true, aprovados: result.approved_count, jaAprovados: result.already_approved_count ?? 0 };
+  return { ok: true, aprovados: result.approved_count, jaAprovados: result.already_approved_count };
 }
 
 // ─── Marcar como pago ────────────────────────────────────────────────────────
@@ -776,13 +807,21 @@ export async function markPayrollPaid(
   const { admin } = guard;
   const profile = guard.profile;
 
-  const { error } = await admin.rpc("mark_payroll_paid_atomic", {
+  const { data, error } = await admin.rpc("mark_payroll_paid_atomic", {
     p_company_id: profile.company_id,
     p_record_ids: uniqueIds,
     p_paid_on: todayInLisbon(),
     p_actor: profile.id,
   });
   if (error) return queryFailure("markPayrollPaid:atomic", error);
+
+  const result = oneRpcRow(data, ["already_paid_count", "cash_entry_count", "paid_count"]);
+  if (!result || !isNonNegativeInteger(result.paid_count) || !isNonNegativeInteger(result.already_paid_count)
+    || !isNonNegativeInteger(result.cash_entry_count)
+    || result.paid_count + result.already_paid_count !== uniqueIds.length
+    || result.cash_entry_count > result.paid_count) {
+    return { ok: false, error: RPC_RESPONSE_ERROR };
+  }
 
   revalidatePath("/dashboard/folha-pagamento");
   revalidatePath("/dashboard/financeiro");
