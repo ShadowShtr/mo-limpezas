@@ -8,41 +8,11 @@ BEGIN
      OR to_regclass('public.cash_flow_entries') IS NULL
      OR to_regclass('public.financial_periods') IS NULL
      OR to_regclass('public.audit_logs') IS NULL
-     OR to_regprocedure('public.is_financial_period_open(uuid,integer,integer)') IS NULL THEN
+     OR to_regprocedure('public.is_financial_period_open(uuid,integer,integer)') IS NULL
+     OR to_regprocedure('public.assert_financial_period_open_locked(uuid,integer,integer)') IS NULL THEN
     RAISE EXCEPTION 'PAYROLL_SAFETY_PREREQUISITES_MISSING';
   END IF;
 END $$;
-
-CREATE OR REPLACE FUNCTION public.payroll_period_lock_key(
-  p_company_id uuid, p_year integer, p_month integer
-) RETURNS bigint
-LANGUAGE sql IMMUTABLE STRICT AS $$
-  SELECT hashtextextended(p_company_id::text || ':' || p_year::text || ':' || p_month::text, 0);
-$$;
-
-CREATE OR REPLACE FUNCTION public.lock_payroll_period(
-  p_company_id uuid, p_year integer, p_month integer
-) RETURNS void
-LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
-BEGIN
-  IF p_company_id IS NULL OR p_year NOT BETWEEN 1900 AND 2200 OR p_month NOT BETWEEN 1 AND 12 THEN
-    RAISE EXCEPTION 'PAYROLL_INVALID_PERIOD' USING ERRCODE = '22023';
-  END IF;
-  PERFORM pg_advisory_xact_lock(public.payroll_period_lock_key(p_company_id, p_year, p_month));
-END;
-$$;
-
-CREATE OR REPLACE FUNCTION public.assert_payroll_period_open(
-  p_company_id uuid, p_year integer, p_month integer
-) RETURNS void
-LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
-BEGIN
-  PERFORM public.lock_payroll_period(p_company_id, p_year, p_month);
-  IF NOT public.is_financial_period_open(p_company_id, p_year, p_month) THEN
-    RAISE EXCEPTION 'FINANCIAL_PERIOD_CLOSED' USING ERRCODE = '55000';
-  END IF;
-END;
-$$;
 
 CREATE OR REPLACE FUNCTION public.assert_payroll_actor(
   p_company_id uuid, p_actor uuid
@@ -72,7 +42,7 @@ DECLARE
   v_collaborator uuid;
 BEGIN
   PERFORM public.assert_payroll_actor(p_company_id, p_actor);
-  PERFORM public.assert_payroll_period_open(p_company_id, p_period_year, p_period_month);
+  PERFORM public.assert_financial_period_open_locked(p_company_id, p_period_year, p_period_month);
   IF jsonb_typeof(p_records) <> 'array' THEN RAISE EXCEPTION 'PAYROLL_RECORDS_MUST_BE_ARRAY' USING ERRCODE = '22023'; END IF;
 
   FOR v_record IN SELECT value FROM jsonb_array_elements(p_records) ORDER BY value->>'collaborator_id' LOOP
@@ -139,7 +109,7 @@ BEGIN
   PERFORM public.assert_payroll_actor(p_company_id, p_actor);
   SELECT period_year, period_month INTO v_period FROM payroll_records WHERE id = p_record_id AND company_id = p_company_id;
   IF NOT FOUND THEN RAISE EXCEPTION 'PAYROLL_RECORD_NOT_FOUND' USING ERRCODE = 'P0002'; END IF;
-  PERFORM public.assert_payroll_period_open(p_company_id, v_period.period_year, v_period.period_month);
+  PERFORM public.assert_financial_period_open_locked(p_company_id, v_period.period_year, v_period.period_month);
   SELECT * INTO v_row FROM payroll_records WHERE id = p_record_id AND company_id = p_company_id FOR UPDATE;
   IF NOT FOUND THEN RAISE EXCEPTION 'PAYROLL_RECORD_NOT_FOUND' USING ERRCODE = 'P0002'; END IF;
   IF v_row.status <> 'rascunho' THEN RAISE EXCEPTION 'PAYROLL_MUTATION_NOT_ALLOWED' USING ERRCODE = '55000'; END IF;
@@ -185,7 +155,7 @@ BEGIN
      WHERE company_id = p_company_id AND id = ANY(p_record_ids)
      ORDER BY period_year, period_month
   LOOP
-    PERFORM public.assert_payroll_period_open(p_company_id, v_period.period_year, v_period.period_month);
+    PERFORM public.assert_financial_period_open_locked(p_company_id, v_period.period_year, v_period.period_month);
   END LOOP;
   FOR v_id IN SELECT DISTINCT x FROM unnest(p_record_ids) x ORDER BY x LOOP
     SELECT * INTO v_row FROM payroll_records WHERE id = v_id AND company_id = p_company_id FOR UPDATE;
@@ -222,7 +192,7 @@ BEGIN
      WHERE company_id = p_company_id AND id = ANY(p_record_ids)
      ORDER BY period_year, period_month
   LOOP
-    PERFORM public.assert_payroll_period_open(p_company_id, v_period.period_year, v_period.period_month);
+    PERFORM public.assert_financial_period_open_locked(p_company_id, v_period.period_year, v_period.period_month);
   END LOOP;
   FOR v_id IN SELECT DISTINCT x FROM unnest(p_record_ids) x ORDER BY x LOOP
     SELECT * INTO v_row FROM payroll_records WHERE id = v_id AND company_id = p_company_id FOR UPDATE;
@@ -264,9 +234,6 @@ BEGIN
 END;
 $$;
 
-REVOKE ALL ON FUNCTION public.payroll_period_lock_key(uuid, integer, integer) FROM PUBLIC, anon, authenticated;
-REVOKE ALL ON FUNCTION public.lock_payroll_period(uuid, integer, integer) FROM PUBLIC, anon, authenticated;
-REVOKE ALL ON FUNCTION public.assert_payroll_period_open(uuid, integer, integer) FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.assert_payroll_actor(uuid, uuid) FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.upsert_payroll_records_atomic(uuid, integer, integer, jsonb, uuid) FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.adjust_payroll_record_atomic(uuid, uuid, jsonb, uuid) FROM PUBLIC, anon, authenticated;

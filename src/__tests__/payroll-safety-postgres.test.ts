@@ -44,6 +44,16 @@ CREATE OR REPLACE FUNCTION is_financial_period_open(p_company_id uuid, p_year in
 RETURNS boolean LANGUAGE sql STABLE AS $$
   SELECT NOT EXISTS (SELECT 1 FROM financial_periods WHERE company_id = p_company_id AND year = p_year AND month = p_month AND status = 'closed');
 $$;
+CREATE OR REPLACE FUNCTION financial_period_lock_key(p_year integer, p_month integer)
+RETURNS integer LANGUAGE sql IMMUTABLE AS $$ SELECT p_year * 100 + p_month $$;
+CREATE OR REPLACE FUNCTION lock_financial_period(p_company_id uuid, p_year integer, p_month integer)
+RETURNS void LANGUAGE plpgsql AS $$ BEGIN PERFORM pg_advisory_xact_lock(hashtextextended(p_company_id::text || ':' || (p_year * 100 + p_month)::text, 0)); END $$;
+CREATE OR REPLACE FUNCTION lock_financial_periods_many(p_company_id uuid, p_keys integer[])
+RETURNS integer[] LANGUAGE plpgsql AS $$ DECLARE k integer; BEGIN FOR k IN SELECT DISTINCT unnest(p_keys) ORDER BY 1 LOOP PERFORM lock_financial_period(p_company_id,k/100,k%100); END LOOP; RETURN p_keys; END $$;
+CREATE OR REPLACE FUNCTION assert_financial_periods_open_locked_many(p_company_id uuid, p_keys integer[])
+RETURNS integer[] LANGUAGE plpgsql AS $$ DECLARE k integer; BEGIN PERFORM lock_financial_periods_many(p_company_id,p_keys); FOR k IN SELECT DISTINCT unnest(p_keys) ORDER BY 1 LOOP IF NOT is_financial_period_open(p_company_id,k/100,k%100) THEN RAISE EXCEPTION 'FINANCIAL_PERIOD_CLOSED'; END IF; END LOOP; RETURN p_keys; END $$;
+CREATE OR REPLACE FUNCTION assert_financial_period_open_locked(p_company_id uuid, p_year integer, p_month integer)
+RETURNS void LANGUAGE plpgsql AS $$ BEGIN PERFORM assert_financial_periods_open_locked_many(p_company_id, ARRAY[p_year * 100 + p_month]); END $$;
 `;
 
 describe("PAYROLL-SAFETY-01 em PostgreSQL real", () => {
@@ -132,7 +142,7 @@ describe("PAYROLL-SAFETY-01 em PostgreSQL real", () => {
     const row = await first.query("INSERT INTO payroll_records(company_id,collaborator_id,period_year,period_month,net_salary,status) VALUES ($1,$2,2026,9,700,'aprovado') RETURNING id", [company, collaborator]);
     const id = row.rows[0].id;
     await first.query("BEGIN");
-    await first.query("SELECT public.lock_payroll_period($1,2026,9)", [company]);
+    await first.query("SELECT public.lock_financial_period($1,2026,9)", [company]);
     const blocked = call(second, "mark_payroll_paid_atomic", `$1::uuid, ARRAY[$2::uuid], '2026-09-04'::date, $3::uuid`, company, id, actor);
     await new Promise((resolve) => setTimeout(resolve, 100));
     await first.query("UPDATE financial_periods SET status='closed' WHERE company_id=$1 AND year=2026 AND month=9", [company]);
