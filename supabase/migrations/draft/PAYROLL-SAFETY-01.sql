@@ -470,6 +470,14 @@ BEGIN
     END IF;
 
     SELECT * INTO v_cash FROM public.cash_flow_entries WHERE id = v_cash_id FOR UPDATE;
+    IF NOT FOUND THEN
+      RAISE EXCEPTION 'PAYROLL_CASHFLOW_INSERT_NOT_CONFIRMED' USING ERRCODE = '40001';
+    END IF;
+    v_current_cash_key := EXTRACT(YEAR FROM v_cash.date)::integer * 100
+      + EXTRACT(MONTH FROM v_cash.date)::integer;
+    IF NOT (v_current_cash_key = ANY(v_keys)) THEN
+      RAISE EXCEPTION 'PAYROLL_CASHFLOW_PERIOD_CHANGED' USING ERRCODE = '40001';
+    END IF;
     IF v_cash.company_id IS DISTINCT FROM p_company_id
        OR v_cash.reference_type IS DISTINCT FROM 'payroll'
        OR v_cash.reference_id IS DISTINCT FROM v_id

@@ -17,6 +17,7 @@ const OTHER_ACTOR = "00000000-0000-0000-0000-000000000021";
 const COLLABORATOR = "00000000-0000-0000-0000-000000000012";
 const COLLABORATOR_TWO = "00000000-0000-0000-0000-000000000013";
 const OTHER_COLLABORATOR = "00000000-0000-0000-0000-000000000022";
+const LATE_CASH_GATE = 918273645;
 
 const baseline = `
 DROP SCHEMA IF EXISTS public CASCADE;
@@ -165,6 +166,87 @@ describe("PAYROLL-SAFETY-01 contra o schema de produção e 090 real", () => {
     await client.query("UPDATE public.financial_periods SET status='open' WHERE company_id=$1 AND year=2026 AND month=9", [COMPANY]);
     await client.query("UPDATE public.financial_periods SET status='closed' WHERE company_id=$1 AND year=2026 AND month=8", [COMPANY]);
     await expect(call(client, "mark_payroll_paid_atomic", "$1::uuid, ARRAY[$2::uuid], $3::date, $4::uuid", COMPANY, id, "2026-09-04", ACTOR)).rejects.toThrow(/FINANCIAL_PERIOD_CLOSED/);
+  });
+
+  async function runLateCashflowRace() {
+    const setup = clients[0];
+    const actor = await connect();
+    const blocker = await connect();
+    const id = await payroll(setup, COLLABORATOR, 2026, 8, 1200, "aprovado");
+    await actor.query("SET application_name='payroll-late-cash-actor'");
+    await setup.query(`
+      CREATE OR REPLACE FUNCTION public.payroll_late_cash_gate() RETURNS trigger LANGUAGE plpgsql AS $fn$
+      BEGIN
+        IF NEW.reference_id = '${id}'::uuid THEN
+          PERFORM pg_advisory_xact_lock(${LATE_CASH_GATE});
+        END IF;
+        RETURN NEW;
+      END
+      $fn$;
+      DROP TRIGGER IF EXISTS payroll_late_cash_gate ON public.cash_flow_entries;
+      CREATE TRIGGER payroll_late_cash_gate
+        BEFORE INSERT ON public.cash_flow_entries
+        FOR EACH ROW EXECUTE FUNCTION public.payroll_late_cash_gate();
+    `);
+
+    let outcome: { result?: pg.QueryResult; error?: Error };
+    try {
+      await blocker.query("BEGIN");
+      await blocker.query("SELECT pg_advisory_xact_lock($1)", [LATE_CASH_GATE]);
+      const marking = actor
+        .query("SELECT * FROM public.mark_payroll_paid_atomic($1::uuid, ARRAY[$2::uuid], $3::date, $4::uuid)", [COMPANY, id, "2026-09-04", ACTOR])
+        .then((result) => ({ result, error: undefined }))
+        .catch((error: Error) => ({ result: undefined, error }));
+
+      const deadline = Date.now() + 10_000;
+      for (;;) {
+        const waiting = await setup.query(
+          `SELECT 1 FROM pg_stat_activity
+            WHERE application_name='payroll-late-cash-actor'
+              AND wait_event_type='Lock' AND wait_event='advisory'`,
+        );
+        if (waiting.rowCount === 1) break;
+        if (Date.now() > deadline) throw new Error("A RPC não chegou à barreira do cashflow tardio.");
+        await new Promise((resolve) => setTimeout(resolve, 20));
+      }
+
+      await blocker.query(
+        `INSERT INTO public.cash_flow_entries(
+           company_id,type,amount,description,category,date,reference_id,reference_type,status
+         ) VALUES ($1,'saida',1200,'cashflow concorrente tardio','salario','2026-10-04',$2,'payroll','confirmado')`,
+        [COMPANY, id],
+      );
+      await blocker.query("COMMIT");
+      outcome = await marking;
+      return { setup, id, outcome };
+    } finally {
+      await setup.query("DROP TRIGGER IF EXISTS payroll_late_cash_gate ON public.cash_flow_entries");
+      await setup.query("DROP FUNCTION IF EXISTS public.payroll_late_cash_gate()");
+      await blocker.query("ROLLBACK").catch(() => undefined);
+      await actor.end().catch(() => undefined);
+      await blocker.end().catch(() => undefined);
+    }
+  }
+
+  it("cashflow concorrente tardio fora do lock set falha e retry aberto adota", async () => {
+    const { setup, id, outcome } = await runLateCashflowRace();
+    expect(outcome.error?.message).toMatch(/PAYROLL_CASHFLOW_PERIOD_CHANGED/);
+    expect((await setup.query("SELECT status FROM public.payroll_records WHERE id=$1", [id])).rows[0].status).toBe("aprovado");
+    expect(await count(setup, "audit_logs", "action='payroll_paid'")).toBe(0);
+    expect((await setup.query("SELECT date::text FROM public.cash_flow_entries WHERE reference_id=$1", [id])).rows[0].date).toBe("2026-10-04");
+
+    const retry = await call(setup, "mark_payroll_paid_atomic", "$1::uuid, ARRAY[$2::uuid], $3::date, $4::uuid", COMPANY, id, "2026-09-04", ACTOR);
+    expect(retry.rows[0]).toMatchObject({ paid_count: 1, already_paid_count: 0, cash_entry_count: 0 });
+    expect((await setup.query("SELECT status FROM public.payroll_records WHERE id=$1", [id])).rows[0].status).toBe("pago");
+  });
+
+  it("retry do cashflow tardio rejeita se o período descoberto estiver fechado", async () => {
+    const { setup, id, outcome } = await runLateCashflowRace();
+    expect(outcome.error?.message).toMatch(/PAYROLL_CASHFLOW_PERIOD_CHANGED/);
+    await setup.query("UPDATE public.financial_periods SET status='closed' WHERE company_id=$1 AND year=2026 AND month=10", [COMPANY]);
+    await expect(call(setup, "mark_payroll_paid_atomic", "$1::uuid, ARRAY[$2::uuid], $3::date, $4::uuid", COMPANY, id, "2026-09-04", ACTOR)).rejects.toThrow(/FINANCIAL_PERIOD_CLOSED/);
+    expect((await setup.query("SELECT status FROM public.payroll_records WHERE id=$1", [id])).rows[0].status).toBe("aprovado");
+    expect(await count(setup, "audit_logs", "action='payroll_paid'")).toBe(0);
   });
 
   it("dois pagamentos concorrentes geram um único efeito económico", async () => {

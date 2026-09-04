@@ -7340,7 +7340,7 @@
       "sideEffects": [],
       "risks": [],
       "signals": {
-        "sqlWrite": 22
+        "sqlWrite": 28
       },
       "action": "nenhuma",
       "reason": "suite de testes — corre por convenção do vitest",
