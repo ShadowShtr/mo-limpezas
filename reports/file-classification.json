@@ -1,12 +1,12 @@
 {
   "generatedBy": "scripts/audit-file-inventory.mjs",
-  "totalFiles": 875,
+  "totalFiles": 880,
   "byStatus": {
-    "MANTER": 852,
+    "MANTER": 857,
     "STANDBY": 23
   },
   "byCategory": {
-    "test": 204,
+    "test": 205,
     "route-ui": 140,
     "migration": 122,
     "lib": 73,
@@ -20,7 +20,7 @@
     "api-route": 16,
     "config": 12,
     "asset": 8,
-    "report": 4,
+    "report": 8,
     "script-historico": 4,
     "other": 2,
     "ci": 2,
@@ -29,7 +29,7 @@
     "supabase-other": 2
   },
   "byConfidence": {
-    "alta": 854,
+    "alta": 859,
     "média": 15,
     "baixa": 6
   },
@@ -1894,6 +1894,58 @@
       "manualDecision": false
     },
     {
+      "path": "reports/code-audit.json",
+      "category": "report",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [
+        "npm",
+        "ci",
+        "config",
+        "docs"
+      ],
+      "sideEffects": [
+        "supabase"
+      ],
+      "risks": [],
+      "signals": {
+        "supabase": 1,
+        "sqlWrite": 1
+      },
+      "action": "nenhuma",
+      "reason": "configuração/infra",
+      "manualDecision": false
+    },
+    {
+      "path": "reports/code-audit.json",
+      "category": "report",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [
+        "npm",
+        "ci",
+        "config",
+        "docs"
+      ],
+      "sideEffects": [
+        "supabase"
+      ],
+      "risks": [],
+      "signals": {
+        "supabase": 1,
+        "sqlWrite": 1
+      },
+      "action": "nenhuma",
+      "reason": "configuração/infra",
+      "manualDecision": false
+    },
+    {
       "path": "reports/file-classification.json",
       "category": "report",
       "status": "MANTER",
@@ -1906,7 +1958,7 @@
       ],
       "sideEffects": [
         "supabase",
-        "revalidatePath(38)"
+        "revalidatePath(40)"
       ],
       "risks": [
         "debugger"
@@ -1914,8 +1966,64 @@
       "signals": {
         "supabase": 1,
         "sqlWrite": 26,
-        "debugger": 6,
-        "revalidatePath": 38
+        "debugger": 10,
+        "revalidatePath": 40
+      },
+      "action": "nenhuma",
+      "reason": "configuração/infra",
+      "manualDecision": false
+    },
+    {
+      "path": "reports/file-classification.json",
+      "category": "report",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [
+        "docs"
+      ],
+      "sideEffects": [
+        "supabase",
+        "revalidatePath(40)"
+      ],
+      "risks": [
+        "debugger"
+      ],
+      "signals": {
+        "supabase": 1,
+        "sqlWrite": 26,
+        "debugger": 10,
+        "revalidatePath": 40
+      },
+      "action": "nenhuma",
+      "reason": "configuração/infra",
+      "manualDecision": false
+    },
+    {
+      "path": "reports/file-classification.json",
+      "category": "report",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [
+        "docs"
+      ],
+      "sideEffects": [
+        "supabase",
+        "revalidatePath(40)"
+      ],
+      "risks": [
+        "debugger"
+      ],
+      "signals": {
+        "supabase": 1,
+        "sqlWrite": 26,
+        "debugger": 10,
+        "revalidatePath": 40
       },
       "action": "nenhuma",
       "reason": "configuração/infra",
@@ -6481,6 +6589,28 @@
       "action": "nenhuma",
       "reason": "suite de testes — corre por convenção do vitest",
       "manualDecision": false
+    },
+    {
+      "path": "src/__tests__/harness-tool-dependencies.test.ts",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {},
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
     },
     {
       "path": "src/__tests__/helpers/pg-container.ts",

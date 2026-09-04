@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "prebuild": "npx tsx scripts/check-env.ts && npx tsx scripts/audit-security.ts && node scripts/stamp-sw.mjs",
+    "prebuild": "tsx scripts/check-env.ts && tsx scripts/audit-security.ts && node scripts/stamp-sw.mjs",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
@@ -69,6 +69,7 @@
     "jsdom": "^29.1.1",
     "pg": "^8.21.0",
     "tailwindcss": "^4",
+    "tsx": "4.23.13",
     "typescript": "^5",
     "vitest": "^3.2.0"
   }
