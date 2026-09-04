@@ -1,14 +1,14 @@
 {
   "generatedBy": "scripts/audit-file-inventory.mjs",
-  "totalFiles": 830,
+  "totalFiles": 833,
   "byStatus": {
-    "MANTER": 807,
+    "MANTER": 810,
     "STANDBY": 23
   },
   "byCategory": {
-    "test": 184,
+    "test": 185,
     "route-ui": 140,
-    "migration": 106,
+    "migration": 108,
     "lib": 72,
     "script": 54,
     "domain": 52,
@@ -29,7 +29,7 @@
     "supabase-other": 2
   },
   "byConfidence": {
-    "alta": 809,
+    "alta": 812,
     "média": 15,
     "baixa": 6
   },
@@ -5926,6 +5926,33 @@
       }
     },
     {
+      "path": "src/__tests__/financial-period-lock-protocol.pg.test.ts",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [
+        "service-role"
+      ],
+      "signals": {
+        "serviceRole": 4,
+        "sqlWrite": 25
+      },
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
       "path": "src/__tests__/financial-period.test.ts",
       "category": "test",
       "status": "MANTER",
@@ -6018,8 +6045,9 @@
       "category": "test",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 2,
+      "consumers": 3,
       "consumerSample": [
+        "src/__tests__/financial-period-lock-protocol.pg.test.ts",
         "src/__tests__/migration-088-runner-ledger-atomicity.pg.test.ts",
         "src/__tests__/pg-container-helper.test.ts"
       ],
@@ -22110,6 +22138,30 @@
       "manualDecision": false
     },
     {
+      "path": "supabase/migrations/090_financial_period_lock_protocol.sql",
+      "category": "migration",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [
+        "supabase"
+      ],
+      "risks": [
+        "service-role"
+      ],
+      "signals": {
+        "supabase": 1,
+        "serviceRole": 13,
+        "sqlWrite": 9
+      },
+      "action": "nenhuma",
+      "reason": "migration versionada — histórico do schema, nunca se apaga",
+      "manualDecision": false
+    },
+    {
       "path": "supabase/migrations/20260608_new_features.sql",
       "category": "migration",
       "status": "MANTER",
@@ -22466,6 +22518,24 @@
       "risks": [],
       "signals": {
         "sqlWrite": 3
+      },
+      "action": "nenhuma",
+      "reason": "migration versionada — histórico do schema, nunca se apaga",
+      "manualDecision": false
+    },
+    {
+      "path": "supabase/migrations/rollback/090_financial_period_lock_protocol.down.sql",
+      "category": "migration",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "sqlWrite": 12
       },
       "action": "nenhuma",
       "reason": "migration versionada — histórico do schema, nunca se apaga",
