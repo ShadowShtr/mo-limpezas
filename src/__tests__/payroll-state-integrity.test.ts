@@ -136,6 +136,7 @@ const getUser = vi.fn();
  */
 type Terminal = "await" | "single" | "maybeSingle";
 let respostas: Record<string, { data?: unknown; error?: unknown }> = {};
+let rpcRespostas: Record<string, { data?: unknown; error?: unknown }> = {};
 
 function resposta(table: string, terminal: Terminal) {
   const chave = `${table}:${terminal}`;
@@ -188,7 +189,31 @@ vi.mock("@/lib/supabase/server", () => ({
 }));
 
 vi.mock("@/lib/supabase/admin", () => ({
-  createAdminClient: () => ({ from: (table: string) => makeBuilder(table) }),
+  createAdminClient: () => ({
+    from: (table: string) => makeBuilder(table),
+    rpc: async (name: string, args: Record<string, unknown>) => {
+      if (name in rpcRespostas) return rpcRespostas[name];
+      if (name === "upsert_payroll_records_atomic") {
+        escritas.push({ table: "payroll_records", op: "upsert", payload: args.p_records, filtros: [] });
+        return { data: [{ written_count: Array.isArray(args.p_records) ? args.p_records.length : 0, preserved_count: 0 }], error: null };
+      }
+      if (name === "adjust_payroll_record_atomic") {
+        const patch = (args.p_patch ?? {}) as Record<string, unknown>;
+        escritas.push({ table: "payroll_records", op: "update", payload: patch, filtros: [["status", "rascunho"]] });
+        auditoria.push({ action: "payroll_adjusted", before: { net_salary: 1100, gross_salary: 1000 }, after: patch });
+        return { data: [{ record_id: args.p_record_id, net_salary: patch.net_salary }], error: null };
+      }
+      if (name === "approve_payroll_records_atomic") {
+        escritas.push({ table: "payroll_records", op: "update", payload: { status: "aprovado" }, filtros: [["status", "rascunho"]] });
+        const ids = Array.isArray(args.p_record_ids) ? args.p_record_ids : [];
+        return { data: [{ approved_count: ids.length, already_approved_count: 0 }], error: null };
+      }
+      if (name === "mark_payroll_paid_atomic") {
+        return { data: [{ paid_count: 1, already_paid_count: 0, cash_entry_count: 1 }], error: null };
+      }
+      return { data: null, error: { message: `RPC inesperada: ${name}` } };
+    },
+  }),
 }));
 
 vi.mock("next/cache", () => ({ revalidatePath: () => {} }));
@@ -229,6 +254,7 @@ function cenarioBase(over: Record<string, { data?: unknown; error?: unknown }> =
 beforeEach(() => {
   escritas.length = 0;
   auditoria.length = 0;
+  rpcRespostas = {};
   getUser.mockReset();
   getUser.mockResolvedValue({ data: { user: { id: ACTOR.id } } });
   cenarioBase();
@@ -308,6 +334,17 @@ describe("consulta falhada não vira default nem lista vazia", () => {
     expect(res.ok).toBe(false);
     if (res.ok) return;
     expect(res.error).not.toMatch(/relation|daily_clocks|42P01/);
+  });
+});
+
+describe("contratos de resposta das RPCs", () => {
+  it("resposta vazia do cálculo não confirma materialização", async () => {
+    rpcRespostas.upsert_payroll_records_atomic = { data: [], error: null };
+    const { calculateAndSavePayroll } = await import("@/app/actions/payroll");
+
+    const res = await calculateAndSavePayroll("empresa-1", 2026, 8);
+
+    expect(res).toEqual({ ok: false, error: "Resposta inválida da operação atómica." });
   });
 });
 
@@ -500,6 +537,28 @@ describe("ajuste manual respeita o estado", () => {
     expect(res.ok).toBe(false);
     expect(escritasEm("payroll_records").filter((e) => e.op === "update")).toHaveLength(0);
   });
+
+  it("resposta vazia do ajuste não é sucesso", async () => {
+    cenarioBase({ "payroll_records:maybeSingle": { data: registo("rascunho"), error: null },
+                  "payroll_records:await": { data: [{ period_year: 2026, period_month: 8 }], error: null } });
+    rpcRespostas.adjust_payroll_record_atomic = { data: [], error: null };
+    const { adjustPayrollRecord } = await import("@/app/actions/payroll");
+
+    const res = await adjustPayrollRecord("rec-1", { other_additions: 50 });
+
+    expect(res).toEqual({ ok: false, error: "Resposta inválida da operação atómica." });
+  });
+
+  it("ajuste com Infinity é recusado antes da RPC", async () => {
+    cenarioBase({ "payroll_records:maybeSingle": { data: registo("rascunho"), error: null },
+                  "payroll_records:await": { data: [{ period_year: 2026, period_month: 8 }], error: null } });
+    const { adjustPayrollRecord } = await import("@/app/actions/payroll");
+
+    const res = await adjustPayrollRecord("rec-1", { other_additions: Number.POSITIVE_INFINITY });
+
+    expect(res.ok).toBe(false);
+    expect(escritasEm("payroll_records")).toHaveLength(0);
+  });
 });
 
 // ─── B4. Aprovação em lote ───────────────────────────────────────────────────
@@ -596,6 +655,28 @@ describe("aprovação em lote", () => {
 
     const update = escritasEm("payroll_records").find((e) => e.op === "update");
     expect(update?.filtros).toContainEqual(["status", "rascunho"]);
+  });
+
+  it("resposta incoerente da aprovação falha fechado", async () => {
+    cenarioBase({ "payroll_records:await": { data: [{ id: "r1", status: "rascunho", period_year: 2026, period_month: 8 }], error: null } });
+    rpcRespostas.approve_payroll_records_atomic = {
+      data: [{ approved_count: 0, already_approved_count: 0 }], error: null,
+    };
+    const { approvePayrollRecords } = await import("@/app/actions/payroll");
+
+    const res = await approvePayrollRecords(["r1"]);
+
+    expect(res).toEqual({ ok: false, error: "Resposta inválida da operação atómica." });
+  });
+
+  it("resposta vazia do pagamento não é sucesso", async () => {
+    cenarioBase({ "payroll_records:await": { data: [{ id: "r1", status: "aprovado", period_year: 2026, period_month: 8 }], error: null } });
+    rpcRespostas.mark_payroll_paid_atomic = { data: [], error: null };
+    const { markPayrollPaid } = await import("@/app/actions/payroll");
+
+    const res = await markPayrollPaid(["r1"]);
+
+    expect(res).toEqual({ ok: false, error: "Resposta inválida da operação atómica." });
   });
 });
 
