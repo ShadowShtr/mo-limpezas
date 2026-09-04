@@ -1906,7 +1906,7 @@
       ],
       "sideEffects": [
         "supabase",
-        "revalidatePath(38)"
+        "revalidatePath(40)"
       ],
       "risks": [
         "debugger"
@@ -1914,8 +1914,8 @@
       "signals": {
         "supabase": 1,
         "sqlWrite": 26,
-        "debugger": 6,
-        "revalidatePath": 38
+        "debugger": 10,
+        "revalidatePath": 40
       },
       "action": "nenhuma",
       "reason": "configuração/infra",
@@ -6487,7 +6487,7 @@
       "category": "test",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 4,
+      "consumers": 5,
       "consumerSample": [
         "src/__tests__/collaborator-create-name-only-postgres.test.ts",
         "src/__tests__/collaborator-identity-hardening-postgres.test.ts",
@@ -7759,33 +7759,6 @@
       }
     },
     {
-      "path": "src/__tests__/payroll-period-atomic.pg.test.ts",
-      "category": "test",
-      "status": "MANTER",
-      "confidence": "alta",
-      "consumers": 0,
-      "consumerSample": [],
-      "autoLoaded": false,
-      "referencedBy": [],
-      "sideEffects": [],
-      "risks": [
-        "service-role"
-      ],
-      "signals": {
-        "serviceRole": 3,
-        "sqlWrite": 8
-      },
-      "action": "nenhuma",
-      "reason": "suite de testes — corre por convenção do vitest",
-      "manualDecision": false,
-      "deadCodeDoors": {
-        "frameworkConvention": false,
-        "cliEntrypoint": false,
-        "dynamicImport": true,
-        "allClosed": false
-      }
-    },
-    {
       "path": "src/__tests__/payroll-period-view-identity.test.tsx",
       "category": "test",
       "status": "MANTER",
@@ -7824,6 +7797,30 @@
       "signals": {
         "unknownCast": 1,
         "dynamicImport": 2
+      },
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/__tests__/payroll-safety-postgres.test.ts",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "sqlWrite": 28
       },
       "action": "nenhuma",
       "reason": "suite de testes — corre por convenção do vitest",
@@ -22856,16 +22853,13 @@
       "consumerSample": [],
       "autoLoaded": false,
       "referencedBy": [],
-      "sideEffects": [
-        "write"
-      ],
+      "sideEffects": [],
       "risks": [
         "service-role"
       ],
       "signals": {
         "serviceRole": 4,
-        "write": 1,
-        "sqlWrite": 18
+        "sqlWrite": 19
       },
       "action": "nenhuma",
       "reason": "migration versionada — histórico do schema, nunca se apaga",
@@ -23374,7 +23368,7 @@
       "sideEffects": [],
       "risks": [],
       "signals": {
-        "sqlWrite": 4
+        "sqlWrite": 5
       },
       "action": "nenhuma",
       "reason": "migration versionada — histórico do schema, nunca se apaga",

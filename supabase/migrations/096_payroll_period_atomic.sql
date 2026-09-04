@@ -1,530 +1,536 @@
 -- ============================================================================
--- 096 — segurança de período da folha
--- ============================================================================
---
--- O runner é o dono da transação e do registo no `_migrations`: este ficheiro
--- não abre `BEGIN`/`COMMIT` próprios.
---
--- ---------------------------------------------------------------------------
--- 🔴 ÂMBITO: PAYROLL_PERIOD_SAFETY_ONLY
--- ---------------------------------------------------------------------------
---
--- Esta migration NÃO toca no cálculo da folha. Nada de componentes de
--- remuneração, nada de termos de compensação, nada de novas fórmulas. O
--- `gross_salary`, o `meal_allowance`, o `overtime_bonus` e o `net_salary`
--- continuam a ser calculados exactamente onde são hoje —
--- `src/app/actions/payroll.ts` e `src/lib/calculations.ts` — e chegam aqui já
--- feitos.
---
--- O que muda é uma coisa só: as escritas passam a acontecer dentro do protocolo
--- de período, e a folha e o caixa passam a ser uma transação.
---
--- Se a frente PAYROLL-SAFETY/FLEX vier a precisar destas funções como base:
--- `PAYROLL_SAFETY_REUSE_LATER = YES`. Elas recebem valores já calculados, e é
--- por isso que continuam a servir quando o cálculo mudar.
---
--- ---------------------------------------------------------------------------
--- O que falta hoje, exactamente
--- ---------------------------------------------------------------------------
---
--- Os quatro writers da folha TÊM guarda — `bloquearSePeriodoFechado` e
--- `bloquearSePeriodoFechadoPorIds` — e ela está na server action, uma viagem
--- antes da escrita. `RACY`, portanto, e não `NO_GUARD`.
---
--- Mas `markPayrollPaid` tem um segundo defeito, e o próprio ficheiro admite-o:
---
---     «⚠️ A atomicidade desta operação continua por resolver: o `update` da
---      folha e o `insert` do movimento de caixa são duas escritas separadas, e
---      uma falha entre elas deixa salário pago sem saída de caixa.»
---
--- É a P0B. Fica fechada aqui, porque é a mesma transação que o período exige.
---
--- ---------------------------------------------------------------------------
--- 🔴 Um lote de folhas é um lote de PERÍODOS
--- ---------------------------------------------------------------------------
---
--- `approvePayrollRecords` e `markPayrollPaid` recebem uma LISTA de ids. Nada
--- obriga essa lista a ser toda do mesmo mês — a guarda actual até o reconhece,
--- e verifica todos. Cada registo traz a sua competência, e o pagamento traz
--- ainda a data em que o dinheiro sai.
---
--- Conjunto de períodos = todas as competências do lote + o dia do pagamento.
--- Sem número fixo. É o protocolo de N períodos da 090.
---
--- ---------------------------------------------------------------------------
--- 🔴 Uma nota sobre `ON CONFLICT` que NÃO se corrige aqui
--- ---------------------------------------------------------------------------
---
--- `runPayrollCalculation` faz hoje
---
---     .upsert(upserts, { onConflict: "company_id,collaborator_id,period_year,period_month" })
---
--- e não existe, em nenhuma migration deste repositório, índice único sobre
--- essas quatro colunas — só o índice NÃO-único `idx_payroll_company_period`.
--- Ou a restrição foi criada fora do ledger, ou este caminho falha com 42P10.
---
--- Isto fica REGISTADO e não é resolvido por esta migration: criar a restrição
--- exigiria decidir o que fazer a duplicados que possam existir em produção, e
--- isso é uma decisão de dados, não de protocolo. `upsert_payroll_records_atomic`
--- abaixo não depende dela — faz `UPDATE` e, se não houver linha, `INSERT` — e é
--- por isso que funciona nos dois mundos.
+-- 096 — PAYROLL-SAFETY-01 / CANONICAL_PAYROLL_SAFETY
+-- SUPERSEDES_OLD_096: canonical implementation derived from PR #156.
+-- Requires the production schema and the canonical 090 period-lock protocol.
 -- ============================================================================
 
-DO $precondicoes$
+DO $$
 DECLARE
-  v_faltam text[];
+  v_reference_type text;
+  v_reference_index boolean;
 BEGIN
-  SELECT array_agg(esperado.nome || '(' || esperado.assinatura || ')') INTO v_faltam
-    FROM (VALUES
-      ('assert_financial_periods_open_locked_many', 'p_company_id uuid, p_keys integer[]'),
-      ('financial_period_lock_key',                 'p_year integer, p_month integer'),
-      ('financial_period_lock_keys',                'p_dates date[]')
-    ) AS esperado(nome, assinatura)
-   WHERE NOT EXISTS (
-     SELECT 1 FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
-      WHERE n.nspname = 'public' AND p.proname = esperado.nome
-        AND pg_get_function_identity_arguments(p.oid) = esperado.assinatura
-   );
-
-  IF v_faltam IS NOT NULL THEN
-    RAISE EXCEPTION 'PAYROLL_PERIOD_096_PRECONDITION_FAILED: em falta %', v_faltam;
+  IF to_regclass('public.profiles') IS NULL
+     OR to_regclass('public.payroll_records') IS NULL
+     OR to_regclass('public.cash_flow_entries') IS NULL
+     OR to_regclass('public.financial_periods') IS NULL
+     OR to_regprocedure('public.assert_financial_periods_open_locked_many(uuid,integer[])') IS NULL
+  THEN
+    RAISE EXCEPTION 'PAYROLL_SAFETY_PREREQUISITES_MISSING';
   END IF;
 
-  IF to_regclass('public.payroll_records') IS NULL THEN
-    RAISE EXCEPTION 'PAYROLL_PERIOD_096_PRECONDITION_FAILED: tabela payroll_records ausente';
-  END IF;
-END
-$precondicoes$;
+  SELECT format_type(a.atttypid, a.atttypmod)
+    INTO v_reference_type
+    FROM pg_attribute a
+   WHERE a.attrelid = 'public.cash_flow_entries'::regclass
+     AND a.attname = 'reference_id'
+     AND a.attnum > 0
+     AND NOT a.attisdropped;
 
--- ─── 1. Materializar a folha calculada, sob o lock da competência ───────────
---
--- NOVA. Recebe as linhas JÁ CALCULADAS e grava-as. O cálculo não entra aqui —
--- ver o âmbito no topo.
---
--- 🔴 Preserva a regra que a action já tem: uma folha `aprovado` ou `pago` NÃO é
---    reescrita por um recálculo. Fixar o valor a pagar é o que aprovar
---    significa, e um recálculo por cima apagava-o sem deixar rasto.
+  SELECT EXISTS (
+    SELECT 1
+      FROM pg_indexes
+     WHERE schemaname = 'public'
+       AND tablename = 'cash_flow_entries'
+       AND indexdef ILIKE '%CREATE UNIQUE INDEX%'
+       AND indexdef ILIKE '%company_id, reference_type, reference_id%'
+       AND indexdef ILIKE '%reference_type IS NOT NULL%'
+       AND indexdef ILIKE '%reference_id IS NOT NULL%'
+  ) INTO v_reference_index;
+
+  IF v_reference_type IS DISTINCT FROM 'uuid' OR NOT v_reference_index THEN
+    RAISE EXCEPTION 'PAYROLL_SAFETY_REFERENCE_CONTRACT_INVALID: reference_id=% unique_partial_index=%',
+      v_reference_type, v_reference_index;
+  END IF;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.assert_payroll_actor(
+  p_company_id uuid, p_actor uuid
+) RETURNS void
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+BEGIN
+  IF p_actor IS NULL OR NOT EXISTS (
+    SELECT 1
+      FROM public.profiles
+     WHERE id = p_actor
+       AND company_id = p_company_id
+       AND role IN ('admin', 'gestor')
+  ) THEN
+    RAISE EXCEPTION 'PAYROLL_ACTOR_NOT_AUTHORIZED' USING ERRCODE = '42501';
+  END IF;
+END;
+$$;
+
 CREATE OR REPLACE FUNCTION public.upsert_payroll_records_atomic(
-  p_company_id   uuid,
-  p_period_year  integer,
-  p_period_month integer,
-  p_records      jsonb,
-  p_actor        uuid DEFAULT NULL
-)
-RETURNS TABLE (gravados int, preservados int)
-LANGUAGE plpgsql
-SECURITY INVOKER
-SET search_path = pg_catalog, public
-AS $fn$
+  p_company_id uuid, p_period_year integer, p_period_month integer,
+  p_records jsonb, p_actor uuid DEFAULT NULL
+) RETURNS TABLE (written_count integer, preserved_count integer)
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
 DECLARE
-  v_rec         jsonb;
-  v_colaborador uuid;
-  v_estado      text;
-  v_gravados    int := 0;
-  v_preservados int := 0;
+  v_record jsonb;
+  v_existing public.payroll_records%ROWTYPE;
+  v_written integer := 0;
+  v_changed integer;
+  v_preserved integer := 0;
+  v_collaborator uuid;
+  v_net numeric;
 BEGIN
-  IF p_company_id IS NULL OR p_period_year IS NULL OR p_period_month IS NULL THEN
-    RAISE EXCEPTION 'PAYROLL_INVALID_ARGS' USING ERRCODE = 'check_violation';
+  PERFORM public.assert_payroll_actor(p_company_id, p_actor);
+  PERFORM public.assert_financial_periods_open_locked_many(
+    p_company_id, ARRAY[p_period_year * 100 + p_period_month]
+  );
+  IF jsonb_typeof(p_records) <> 'array' THEN
+    RAISE EXCEPTION 'PAYROLL_RECORDS_MUST_BE_ARRAY' USING ERRCODE = '22023';
   END IF;
 
-  IF p_records IS NULL OR jsonb_typeof(p_records) <> 'array' THEN
-    RAISE EXCEPTION 'PAYROLL_RECORDS_INVALID' USING ERRCODE = 'check_violation';
-  END IF;
-
-  IF p_actor IS NOT NULL THEN
-    PERFORM set_config('app.actor_id', p_actor::text, true);
-  END IF;
-
-  PERFORM public.assert_financial_periods_open_locked_many(p_company_id, ARRAY[
-    public.financial_period_lock_key(p_period_year, p_period_month)
-  ]);
-
-  FOR v_rec IN SELECT * FROM jsonb_array_elements(p_records) LOOP
-    v_colaborador := (v_rec->>'collaborator_id')::uuid;
-    IF v_colaborador IS NULL THEN
-      RAISE EXCEPTION 'PAYROLL_RECORD_WITHOUT_COLLABORATOR' USING ERRCODE = 'check_violation';
+  FOR v_record IN
+    SELECT value FROM jsonb_array_elements(p_records)
+    ORDER BY value->>'collaborator_id'
+  LOOP
+    v_collaborator := NULLIF(v_record->>'collaborator_id', '')::uuid;
+    IF NOT EXISTS (
+      SELECT 1 FROM public.profiles p
+       WHERE p.id = v_collaborator AND p.company_id = p_company_id
+    ) THEN
+      RAISE EXCEPTION 'PAYROLL_COLLABORATOR_COMPANY_MISMATCH' USING ERRCODE = '42501';
     END IF;
 
-    -- 🔴 `FOR UPDATE` e leitura do estado antes de escrever: é o que impede um
-    --    recálculo de passar por cima de uma folha já aprovada ou paga.
-    SELECT status INTO v_estado
+    SELECT * INTO v_existing
       FROM public.payroll_records
      WHERE company_id = p_company_id
-       AND collaborator_id = v_colaborador
+       AND collaborator_id = v_collaborator
        AND period_year = p_period_year
        AND period_month = p_period_month
      FOR UPDATE;
 
-    IF FOUND AND v_estado IN ('aprovado', 'pago') THEN
-      v_preservados := v_preservados + 1;
+    IF FOUND AND v_existing.status IN ('aprovado', 'pago') THEN
+      v_preserved := v_preserved + 1;
       CONTINUE;
     END IF;
-
-    IF FOUND THEN
-      UPDATE public.payroll_records SET
-        contracted_hours   = COALESCE((v_rec->>'contracted_hours')::numeric, contracted_hours),
-        worked_hours       = COALESCE((v_rec->>'worked_hours')::numeric, worked_hours),
-        overtime_hours     = COALESCE((v_rec->>'overtime_hours')::numeric, overtime_hours),
-        absence_hours      = COALESCE((v_rec->>'absence_hours')::numeric, absence_hours),
-        days_worked        = COALESCE((v_rec->>'days_worked')::integer, days_worked),
-        hourly_rate        = COALESCE((v_rec->>'hourly_rate')::numeric, hourly_rate),
-        gross_salary       = COALESCE((v_rec->>'gross_salary')::numeric, gross_salary),
-        meal_allowance     = COALESCE((v_rec->>'meal_allowance')::numeric, meal_allowance),
-        overtime_bonus     = COALESCE((v_rec->>'overtime_bonus')::numeric, overtime_bonus),
-        absence_deductions = COALESCE((v_rec->>'absence_deductions')::numeric, absence_deductions),
-        other_additions    = COALESCE((v_rec->>'other_additions')::numeric, other_additions),
-        other_deductions   = COALESCE((v_rec->>'other_deductions')::numeric, other_deductions),
-        net_salary         = COALESCE((v_rec->>'net_salary')::numeric, net_salary),
-        updated_at         = now()
-       WHERE company_id = p_company_id
-         AND collaborator_id = v_colaborador
-         AND period_year = p_period_year
-         AND period_month = p_period_month;
-    ELSE
-      -- 🔴 `INSERT` explícito em vez de `ON CONFLICT`: não existe, neste
-      --    repositório, índice único sobre
-      --    (company_id, collaborator_id, period_year, period_month) — ver a
-      --    nota no topo. Sem restrição não há árbitro, e um `ON CONFLICT`
-      --    falharia com 42P10. Esta forma funciona com ou sem ela.
-      INSERT INTO public.payroll_records (
-        company_id, collaborator_id, period_year, period_month,
-        contracted_hours, worked_hours, overtime_hours, absence_hours, days_worked,
-        hourly_rate, gross_salary, meal_allowance, overtime_bonus,
-        absence_deductions, other_additions, other_deductions, net_salary, status
-      ) VALUES (
-        p_company_id, v_colaborador, p_period_year, p_period_month,
-        (v_rec->>'contracted_hours')::numeric, (v_rec->>'worked_hours')::numeric,
-        (v_rec->>'overtime_hours')::numeric, (v_rec->>'absence_hours')::numeric,
-        (v_rec->>'days_worked')::integer, (v_rec->>'hourly_rate')::numeric,
-        (v_rec->>'gross_salary')::numeric, (v_rec->>'meal_allowance')::numeric,
-        (v_rec->>'overtime_bonus')::numeric, (v_rec->>'absence_deductions')::numeric,
-        (v_rec->>'other_additions')::numeric, (v_rec->>'other_deductions')::numeric,
-        (v_rec->>'net_salary')::numeric, 'rascunho'
-      );
+    IF FOUND AND v_existing.status <> 'rascunho' THEN
+      RAISE EXCEPTION 'PAYROLL_UNKNOWN_STATUS' USING ERRCODE = '22023';
+    END IF;
+    IF (v_record->>'net_salary') IS NULL THEN
+      RAISE EXCEPTION 'PAYROLL_INVALID_TOTAL' USING ERRCODE = '22023';
+    END IF;
+    v_net := (v_record->>'net_salary')::numeric;
+    IF v_net::text IN ('NaN', 'Infinity', '-Infinity') OR abs(v_net) > 100000000 THEN
+      RAISE EXCEPTION 'PAYROLL_INVALID_TOTAL' USING ERRCODE = '22023';
     END IF;
 
-    v_gravados := v_gravados + 1;
+    INSERT INTO public.payroll_records (
+      company_id, collaborator_id, period_year, period_month, contracted_hours,
+      worked_hours, overtime_hours, absence_hours, days_worked, hourly_rate,
+      gross_salary, meal_allowance, overtime_bonus, absence_deductions,
+      other_additions, other_deductions, net_salary, notes, status, paid_at
+    ) VALUES (
+      p_company_id, v_collaborator, p_period_year, p_period_month,
+      (v_record->>'contracted_hours')::numeric, (v_record->>'worked_hours')::numeric,
+      (v_record->>'overtime_hours')::numeric, (v_record->>'absence_hours')::numeric,
+      (v_record->>'days_worked')::integer, (v_record->>'hourly_rate')::numeric,
+      (v_record->>'gross_salary')::numeric, (v_record->>'meal_allowance')::numeric,
+      (v_record->>'overtime_bonus')::numeric, (v_record->>'absence_deductions')::numeric,
+      (v_record->>'other_additions')::numeric, (v_record->>'other_deductions')::numeric,
+      v_net, v_record->>'notes', 'rascunho', NULL
+    )
+    ON CONFLICT (company_id, collaborator_id, period_year, period_month) DO UPDATE SET
+      contracted_hours = EXCLUDED.contracted_hours, worked_hours = EXCLUDED.worked_hours,
+      overtime_hours = EXCLUDED.overtime_hours, absence_hours = EXCLUDED.absence_hours,
+      days_worked = EXCLUDED.days_worked, hourly_rate = EXCLUDED.hourly_rate,
+      gross_salary = EXCLUDED.gross_salary, meal_allowance = EXCLUDED.meal_allowance,
+      overtime_bonus = EXCLUDED.overtime_bonus, absence_deductions = EXCLUDED.absence_deductions,
+      other_additions = EXCLUDED.other_additions, other_deductions = EXCLUDED.other_deductions,
+      net_salary = EXCLUDED.net_salary, notes = EXCLUDED.notes, updated_at = now()
+      WHERE public.payroll_records.status = 'rascunho';
+    GET DIAGNOSTICS v_changed = ROW_COUNT;
+    v_written := v_written + v_changed;
   END LOOP;
 
-  RETURN QUERY SELECT v_gravados, v_preservados;
+  IF v_written > 0 OR v_preserved > 0 THEN
+    INSERT INTO public.audit_logs(company_id, actor_id, action, entity_type, meta)
+    VALUES (
+      p_company_id, p_actor, 'payroll_recalculated', 'payroll',
+      jsonb_build_object(
+        'period_year', p_period_year, 'period_month', p_period_month,
+        'written_count', v_written, 'preserved_count', v_preserved
+      )
+    );
+  END IF;
+  RETURN QUERY SELECT v_written, v_preserved;
 END;
-$fn$;
+$$;
 
--- ─── 2. Ajustar uma folha, sob o lock da sua competência ────────────────────
---
--- NOVA. Recebe os valores JÁ recalculados pela action — a soma é a mesma de
--- `calcAdjustedNetSalary` e continua lá — e grava-os.
---
--- 🔴 Preserva a guarda final da action: a escrita só acontece sobre uma folha
---    em `rascunho`. Se outra sessão aprovou entretanto, esta operação não
---    encontra linha e recusa, em vez de passar por cima da aprovação.
 CREATE OR REPLACE FUNCTION public.adjust_payroll_record_atomic(
-  p_company_id uuid,
-  p_record_id  uuid,
-  p_patch      jsonb,
-  p_actor      uuid DEFAULT NULL
-)
-RETURNS TABLE (record_id uuid)
-LANGUAGE plpgsql
-SECURITY INVOKER
-SET search_path = pg_catalog, public
-AS $fn$
+  p_company_id uuid, p_record_id uuid, p_patch jsonb, p_actor uuid
+) RETURNS TABLE (record_id uuid, net_salary numeric)
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
 DECLARE
-  v_rec       public.payroll_records%ROWTYPE;
-  v_proibidas text[];
-  v_alteradas int;
+  v_row public.payroll_records%ROWTYPE;
+  v_after public.payroll_records%ROWTYPE;
+  v_period_year integer;
+  v_period_month integer;
+  v_net numeric;
 BEGIN
-  IF p_actor IS NOT NULL THEN
-    PERFORM set_config('app.actor_id', p_actor::text, true);
+  PERFORM public.assert_payroll_actor(p_company_id, p_actor);
+  SELECT period_year, period_month
+    INTO v_period_year, v_period_month
+    FROM public.payroll_records
+   WHERE id = p_record_id AND company_id = p_company_id;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'PAYROLL_RECORD_NOT_FOUND' USING ERRCODE = 'P0002';
   END IF;
 
-  SELECT array_agg(k) INTO v_proibidas
-    FROM jsonb_object_keys(p_patch) AS k
-   WHERE k NOT IN ('worked_hours', 'overtime_hours', 'absence_hours', 'days_worked',
-                   'hourly_rate', 'gross_salary', 'meal_allowance', 'overtime_bonus',
-                   'absence_deductions', 'other_additions', 'other_deductions',
-                   'net_salary', 'notes');
-
-  IF v_proibidas IS NOT NULL THEN
-    RAISE EXCEPTION 'PAYROLL_FIELD_NOT_EDITABLE: %', array_to_string(v_proibidas, ', ')
-      USING ERRCODE = 'check_violation';
-  END IF;
-
-  SELECT * INTO v_rec
+  PERFORM public.assert_financial_periods_open_locked_many(
+    p_company_id, ARRAY[v_period_year * 100 + v_period_month]
+  );
+  SELECT * INTO v_row
     FROM public.payroll_records
    WHERE id = p_record_id AND company_id = p_company_id
    FOR UPDATE;
-
   IF NOT FOUND THEN
-    RAISE EXCEPTION 'PAYROLL_RECORD_NOT_FOUND' USING ERRCODE = 'no_data_found';
+    RAISE EXCEPTION 'PAYROLL_RECORD_NOT_FOUND' USING ERRCODE = 'P0002';
+  END IF;
+  IF v_row.status <> 'rascunho' THEN
+    RAISE EXCEPTION 'PAYROLL_MUTATION_NOT_ALLOWED' USING ERRCODE = '55000';
+  END IF;
+  IF p_patch IS NULL OR jsonb_typeof(p_patch) <> 'object' THEN
+    RAISE EXCEPTION 'PAYROLL_PATCH_INVALID' USING ERRCODE = '22023';
+  END IF;
+  IF p_patch ?| ARRAY['status','paid_at','approved_by','company_id','collaborator_id','period_year','period_month'] THEN
+    RAISE EXCEPTION 'PAYROLL_PATCH_FORBIDDEN' USING ERRCODE = '42501';
   END IF;
 
-  IF v_rec.status <> 'rascunho' THEN
-    RAISE EXCEPTION 'PAYROLL_RECORD_NOT_DRAFT'
-      USING ERRCODE = 'object_not_in_prerequisite_state',
-            HINT = 'Uma folha aprovada ou paga já não se ajusta.';
+  v_net := COALESCE((p_patch->>'net_salary')::numeric, v_row.net_salary);
+  IF v_net IS NULL OR v_net::text IN ('NaN', 'Infinity', '-Infinity') OR abs(v_net) > 100000000 THEN
+    RAISE EXCEPTION 'PAYROLL_INVALID_TOTAL' USING ERRCODE = '22023';
   END IF;
-
-  PERFORM public.assert_financial_periods_open_locked_many(p_company_id, ARRAY[
-    public.financial_period_lock_key(v_rec.period_year, v_rec.period_month)
-  ]);
 
   UPDATE public.payroll_records SET
-    worked_hours       = COALESCE((p_patch->>'worked_hours')::numeric, worked_hours),
-    overtime_hours     = COALESCE((p_patch->>'overtime_hours')::numeric, overtime_hours),
-    absence_hours      = COALESCE((p_patch->>'absence_hours')::numeric, absence_hours),
-    days_worked        = COALESCE((p_patch->>'days_worked')::integer, days_worked),
-    hourly_rate        = COALESCE((p_patch->>'hourly_rate')::numeric, hourly_rate),
-    gross_salary       = COALESCE((p_patch->>'gross_salary')::numeric, gross_salary),
-    meal_allowance     = COALESCE((p_patch->>'meal_allowance')::numeric, meal_allowance),
-    overtime_bonus     = COALESCE((p_patch->>'overtime_bonus')::numeric, overtime_bonus),
+    worked_hours = COALESCE((p_patch->>'worked_hours')::numeric, worked_hours),
+    overtime_hours = COALESCE((p_patch->>'overtime_hours')::numeric, overtime_hours),
+    absence_hours = COALESCE((p_patch->>'absence_hours')::numeric, absence_hours),
+    days_worked = COALESCE((p_patch->>'days_worked')::integer, days_worked),
+    hourly_rate = COALESCE((p_patch->>'hourly_rate')::numeric, hourly_rate),
+    gross_salary = COALESCE((p_patch->>'gross_salary')::numeric, gross_salary),
+    meal_allowance = COALESCE((p_patch->>'meal_allowance')::numeric, meal_allowance),
+    overtime_bonus = COALESCE((p_patch->>'overtime_bonus')::numeric, overtime_bonus),
     absence_deductions = COALESCE((p_patch->>'absence_deductions')::numeric, absence_deductions),
-    other_additions    = COALESCE((p_patch->>'other_additions')::numeric, other_additions),
-    other_deductions   = COALESCE((p_patch->>'other_deductions')::numeric, other_deductions),
-    net_salary         = COALESCE((p_patch->>'net_salary')::numeric, net_salary),
-    notes              = CASE WHEN p_patch ? 'notes' THEN p_patch->>'notes' ELSE notes END,
-    updated_at         = now()
+    other_additions = COALESCE((p_patch->>'other_additions')::numeric, other_additions),
+    other_deductions = COALESCE((p_patch->>'other_deductions')::numeric, other_deductions),
+    net_salary = v_net,
+    notes = CASE WHEN p_patch ? 'notes' THEN p_patch->>'notes' ELSE notes END,
+    updated_at = now()
    WHERE id = p_record_id AND company_id = p_company_id AND status = 'rascunho';
-
-  GET DIAGNOSTICS v_alteradas = ROW_COUNT;
-  IF v_alteradas = 0 THEN
-    RAISE EXCEPTION 'PAYROLL_RECORD_NOT_DRAFT'
-      USING ERRCODE = 'object_not_in_prerequisite_state';
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'PAYROLL_CONCURRENT_STATE_CHANGE' USING ERRCODE = '40001';
   END IF;
+  SELECT * INTO v_after FROM public.payroll_records WHERE id = p_record_id;
 
-  RETURN QUERY SELECT p_record_id;
-END;
-$fn$;
-
--- ─── 3. Aprovar um lote, com TODAS as competências protegidas ───────────────
---
--- NOVA. Preserva a resolução fechada da action: pedimos N, resolvemos N, ou não
--- se escreve nada — um id inexistente ou de outra empresa faz a operação
--- inteira recuar, em vez de aprovar menos linhas em silêncio.
---
--- 🔴 E preserva a razão pela qual o estado é lido: uma folha **paga** não volta
---    a `aprovado`. A saída de caixa ficaria lá, e a folha passaria a dizer que
---    está por pagar com o dinheiro já registado como saído.
-CREATE OR REPLACE FUNCTION public.approve_payroll_records_atomic(
-  p_company_id uuid,
-  p_ids        uuid[],
-  p_actor      uuid
-)
-RETURNS TABLE (aprovados int, ja_aprovados int)
-LANGUAGE plpgsql
-SECURITY INVOKER
-SET search_path = pg_catalog, public
-AS $fn$
-DECLARE
-  v_ids      uuid[];
-  v_chaves   integer[];
-  v_pagos    int;
-  v_aprov    int := 0;
-  v_ja       int := 0;
-BEGIN
-  IF p_actor IS NOT NULL THEN
-    PERFORM set_config('app.actor_id', p_actor::text, true);
-  END IF;
-
-  SELECT array_agg(DISTINCT k) INTO v_ids FROM unnest(COALESCE(p_ids, ARRAY[]::uuid[])) AS k;
-
-  IF v_ids IS NULL OR cardinality(v_ids) = 0 THEN
-    RETURN QUERY SELECT 0, 0;
-    RETURN;
-  END IF;
-
-  -- As linhas primeiro, em ordem estável pelo id: um lote e outro lote com
-  -- ids sobrepostos trancam-nas pela mesma ordem, e não há ciclo entre eles.
-  PERFORM 1 FROM public.payroll_records
-   WHERE company_id = p_company_id AND id = ANY(v_ids)
-   ORDER BY id
-   FOR UPDATE;
-
-  -- Falha fechada: pedimos N, resolvemos N.
-  IF (SELECT count(*) FROM public.payroll_records
-       WHERE company_id = p_company_id AND id = ANY(v_ids)) <> cardinality(v_ids) THEN
-    RAISE EXCEPTION 'PAYROLL_SELECTION_STALE'
-      USING ERRCODE = 'no_data_found',
-            HINT = 'A seleção já não corresponde aos registos existentes.';
-  END IF;
-
-  SELECT count(*) INTO v_pagos
-    FROM public.payroll_records
-   WHERE company_id = p_company_id AND id = ANY(v_ids) AND status = 'pago';
-
-  IF v_pagos > 0 THEN
-    RAISE EXCEPTION 'PAYROLL_ALREADY_PAID'
-      USING ERRCODE = 'object_not_in_prerequisite_state',
-            HINT = 'Uma folha paga não volta a aprovada.';
-  END IF;
-
-  -- Todas as competências do lote, de uma vez.
-  SELECT array_agg(DISTINCT public.financial_period_lock_key(period_year, period_month))
-    INTO v_chaves
-    FROM public.payroll_records
-   WHERE company_id = p_company_id AND id = ANY(v_ids);
-
-  PERFORM public.assert_financial_periods_open_locked_many(p_company_id, v_chaves);
-
-  SELECT count(*) INTO v_ja
-    FROM public.payroll_records
-   WHERE company_id = p_company_id AND id = ANY(v_ids) AND status = 'aprovado';
-
-  UPDATE public.payroll_records
-     SET status = 'aprovado', approved_by = p_actor, updated_at = now()
-   WHERE company_id = p_company_id AND id = ANY(v_ids) AND status = 'rascunho';
-  GET DIAGNOSTICS v_aprov = ROW_COUNT;
-
-  RETURN QUERY SELECT v_aprov, v_ja;
-END;
-$fn$;
-
--- ─── 4. Pagar um lote — folha E caixa na mesma transação ────────────────────
---
--- NOVA, e é esta que fecha a P0B.
---
--- Hoje `markPayrollPaid` faz o `update` das folhas numa viagem e o `insert` dos
--- movimentos de caixa noutra. O próprio ficheiro regista o defeito: uma falha
--- entre as duas deixa salário pago sem saída de caixa. O dinheiro sai da conta
--- da empresa no mundo real e não sai em lado nenhum no sistema.
---
--- 🔴 Os períodos são todas as competências do lote MAIS o dia do pagamento. Um
---    lote pode atravessar meses, e o movimento de caixa nasce com a data de
---    hoje — que pode ser outro mês ainda.
---
--- Preserva a idempotência da action: uma folha já `pago` não é repetida, e um
--- movimento de caixa que já exista para aquela folha não é duplicado.
-CREATE OR REPLACE FUNCTION public.mark_payroll_paid_atomic(
-  p_company_id uuid,
-  p_ids        uuid[],
-  p_paid_on    date DEFAULT NULL,
-  p_actor      uuid DEFAULT NULL
-)
-RETURNS TABLE (pagos int, movimentos int)
-LANGUAGE plpgsql
-SECURITY INVOKER
-SET search_path = pg_catalog, public
-AS $fn$
-DECLARE
-  v_ids      uuid[];
-  v_chaves   integer[];
-  v_data     date;
-  v_pagos    int := 0;
-  v_movs     int := 0;
-BEGIN
-  IF p_actor IS NOT NULL THEN
-    PERFORM set_config('app.actor_id', p_actor::text, true);
-  END IF;
-
-  SELECT array_agg(DISTINCT k) INTO v_ids FROM unnest(COALESCE(p_ids, ARRAY[]::uuid[])) AS k;
-
-  IF v_ids IS NULL OR cardinality(v_ids) = 0 THEN
-    RETURN QUERY SELECT 0, 0;
-    RETURN;
-  END IF;
-
-  v_data := COALESCE(p_paid_on, (now() AT TIME ZONE 'Europe/Lisbon')::date);
-
-  PERFORM 1 FROM public.payroll_records
-   WHERE company_id = p_company_id AND id = ANY(v_ids)
-   ORDER BY id
-   FOR UPDATE;
-
-  IF (SELECT count(*) FROM public.payroll_records
-       WHERE company_id = p_company_id AND id = ANY(v_ids)) <> cardinality(v_ids) THEN
-    RAISE EXCEPTION 'PAYROLL_SELECTION_STALE'
-      USING ERRCODE = 'no_data_found',
-            HINT = 'A seleção já não corresponde aos registos existentes.';
-  END IF;
-
-  -- Competências do lote + o dia em que o dinheiro sai.
-  SELECT array_agg(DISTINCT public.financial_period_lock_key(period_year, period_month))
-    INTO v_chaves
-    FROM public.payroll_records
-   WHERE company_id = p_company_id AND id = ANY(v_ids);
-
-  PERFORM public.assert_financial_periods_open_locked_many(
-    p_company_id, v_chaves || public.financial_period_lock_keys(ARRAY[v_data])
+  INSERT INTO public.audit_logs(company_id, actor_id, action, entity_type, entity_id, meta)
+  VALUES (
+    p_company_id, p_actor, 'payroll_adjusted', 'payroll', p_record_id::text,
+    jsonb_build_object(
+      'payroll_id', p_record_id, 'actor', p_actor, 'company', p_company_id,
+      'before_status', v_row.status, 'after_status', v_after.status,
+      'amount', v_after.net_salary, 'payroll_period_year', v_after.period_year,
+      'payroll_period_month', v_after.period_month,
+      'before', to_jsonb(v_row), 'after', to_jsonb(v_after)
+    )
   );
+  RETURN QUERY SELECT p_record_id, v_after.net_salary;
+END;
+$$;
 
-  -- ── Os movimentos de caixa, para as folhas que ainda não estão pagas ──────
-  --
-  -- 🔴 Primeiro o caixa, e só depois o estado. Não é indiferente: a condição
-  --    `status <> 'pago'` é o que distingue o que falta pagar, e mudá-la antes
-  --    de inserir deixaria esta consulta sem nada para encontrar.
-  --
-  --    O `NOT EXISTS` é a idempotência: uma folha que já tenha movimento não
-  --    ganha um segundo, mesmo que o estado dela tenha ficado por escrever numa
-  --    tentativa anterior.
-  WITH a_pagar AS (
-    SELECT r.id, r.company_id, r.net_salary, r.period_year, r.period_month,
-           COALESCE(pr.full_name, 'Colaborador') AS nome
-      FROM public.payroll_records r
-      LEFT JOIN public.profiles pr ON pr.id = r.collaborator_id
-     WHERE r.company_id = p_company_id
-       AND r.id = ANY(v_ids)
-       AND r.status <> 'pago'
-       AND r.net_salary IS NOT NULL
-       AND r.net_salary > 0
+CREATE OR REPLACE FUNCTION public.approve_payroll_records_atomic(
+  p_company_id uuid, p_record_ids uuid[], p_actor uuid
+) RETURNS TABLE (approved_count integer, already_approved_count integer)
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE
+  v_id uuid;
+  v_row public.payroll_records%ROWTYPE;
+  v_keys integer[];
+  v_found integer;
+  v_approved integer := 0;
+  v_already integer := 0;
+BEGIN
+  PERFORM public.assert_payroll_actor(p_company_id, p_actor);
+  IF p_record_ids IS NULL OR cardinality(p_record_ids) = 0 THEN
+    RETURN QUERY SELECT 0, 0;
+    RETURN;
+  END IF;
+  IF cardinality(p_record_ids) <> (SELECT count(DISTINCT x) FROM unnest(p_record_ids) AS u(x)) THEN
+    RAISE EXCEPTION 'PAYROLL_DUPLICATE_IDS' USING ERRCODE = '22023';
+  END IF;
+  SELECT count(*) INTO v_found
+    FROM public.payroll_records
+   WHERE company_id = p_company_id AND id = ANY(p_record_ids);
+  IF v_found <> cardinality(p_record_ids) THEN
+    RAISE EXCEPTION 'PAYROLL_RECORD_NOT_FOUND' USING ERRCODE = 'P0002';
+  END IF;
+  v_keys := ARRAY(
+    SELECT DISTINCT period_year * 100 + period_month
+      FROM public.payroll_records
+     WHERE company_id = p_company_id AND id = ANY(p_record_ids)
+     ORDER BY 1
+  );
+  PERFORM public.assert_financial_periods_open_locked_many(p_company_id, v_keys);
+
+  FOR v_id IN SELECT x FROM unnest(p_record_ids) AS u(x) ORDER BY x LOOP
+    SELECT * INTO v_row FROM public.payroll_records
+     WHERE id = v_id AND company_id = p_company_id FOR UPDATE;
+    IF v_row.status = 'aprovado' THEN
+      v_already := v_already + 1;
+      CONTINUE;
+    ELSIF v_row.status <> 'rascunho' THEN
+      RAISE EXCEPTION 'PAYROLL_APPROVAL_NOT_ALLOWED' USING ERRCODE = '55000';
+    END IF;
+    UPDATE public.payroll_records
+       SET status = 'aprovado', approved_by = p_actor, updated_at = now()
+     WHERE id = v_id AND company_id = p_company_id AND status = 'rascunho';
+    IF NOT FOUND THEN
+      RAISE EXCEPTION 'PAYROLL_CONCURRENT_STATE_CHANGE' USING ERRCODE = '40001';
+    END IF;
+    v_approved := v_approved + 1;
+    INSERT INTO public.audit_logs(company_id, actor_id, action, entity_type, entity_id, meta)
+    VALUES (
+      p_company_id, p_actor, 'payroll_approved', 'payroll', v_id::text,
+      jsonb_build_object(
+        'payroll_id', v_id, 'actor', p_actor, 'company', p_company_id,
+        'before_status', 'rascunho', 'after_status', 'aprovado'
+      )
+    );
+  END LOOP;
+  RETURN QUERY SELECT v_approved, v_already;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.mark_payroll_paid_atomic(
+  p_company_id uuid, p_record_ids uuid[], p_paid_on date, p_actor uuid
+) RETURNS TABLE (paid_count integer, already_paid_count integer, cash_entry_count integer)
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE
+  v_id uuid;
+  v_row public.payroll_records%ROWTYPE;
+  v_cash public.cash_flow_entries%ROWTYPE;
+  v_collaborator_name text;
+  v_keys integer[];
+  v_cash_keys integer[];
+  v_current_cash_key integer;
+  v_found integer;
+  v_needs_new_cash boolean;
+  v_has_cash boolean;
+  v_cash_id uuid;
+  v_source text;
+  v_paid integer := 0;
+  v_already integer := 0;
+  v_cash_count integer := 0;
+BEGIN
+  PERFORM public.assert_payroll_actor(p_company_id, p_actor);
+  IF p_record_ids IS NULL OR cardinality(p_record_ids) = 0 THEN
+    RETURN QUERY SELECT 0, 0, 0;
+    RETURN;
+  END IF;
+  IF cardinality(p_record_ids) <> (SELECT count(DISTINCT x) FROM unnest(p_record_ids) AS u(x)) THEN
+    RAISE EXCEPTION 'PAYROLL_DUPLICATE_IDS' USING ERRCODE = '22023';
+  END IF;
+  SELECT count(*) INTO v_found
+    FROM public.payroll_records
+   WHERE company_id = p_company_id AND id = ANY(p_record_ids);
+  IF v_found <> cardinality(p_record_ids) THEN
+    RAISE EXCEPTION 'PAYROLL_RECORD_NOT_FOUND' USING ERRCODE = 'P0002';
+  END IF;
+
+  v_keys := ARRAY(
+    SELECT DISTINCT period_year * 100 + period_month
+      FROM public.payroll_records
+     WHERE company_id = p_company_id AND id = ANY(p_record_ids)
+     ORDER BY 1
+  );
+  v_cash_keys := ARRAY(
+    SELECT DISTINCT EXTRACT(YEAR FROM c.date)::integer * 100 + EXTRACT(MONTH FROM c.date)::integer
+      FROM public.cash_flow_entries c
+     WHERE c.company_id = p_company_id
+       AND c.reference_type = 'payroll'
+       AND c.reference_id = ANY(p_record_ids)
+     ORDER BY 1
+  );
+  SELECT EXISTS (
+    SELECT 1
+      FROM public.payroll_records pr
+     WHERE pr.company_id = p_company_id
+       AND pr.id = ANY(p_record_ids)
+       AND pr.status = 'aprovado'
        AND NOT EXISTS (
          SELECT 1 FROM public.cash_flow_entries c
           WHERE c.company_id = p_company_id
             AND c.reference_type = 'payroll'
-            AND c.reference_id = r.id
+            AND c.reference_id = pr.id
        )
-  )
-  INSERT INTO public.cash_flow_entries (
-    company_id, type, amount, description, category, date,
-    reference_id, reference_type, status
-  )
-  SELECT a.company_id, 'saida', a.net_salary,
-         'Salario ' || a.nome || ' - ' || a.period_month || '/' || a.period_year,
-         'salario', v_data,
-         a.id, 'payroll', 'confirmado'
-    FROM a_pagar a;
-  GET DIAGNOSTICS v_movs = ROW_COUNT;
-
-  UPDATE public.payroll_records
-     SET status = 'pago', paid_at = now(), updated_at = now()
-   WHERE company_id = p_company_id AND id = ANY(v_ids) AND status <> 'pago';
-  GET DIAGNOSTICS v_pagos = ROW_COUNT;
-
-  RETURN QUERY SELECT v_pagos, v_movs;
-END;
-$fn$;
-
--- ─── Superfície ─────────────────────────────────────────────────────────────
-REVOKE ALL PRIVILEGES ON FUNCTION public.upsert_payroll_records_atomic(uuid, integer, integer, jsonb, uuid) FROM PUBLIC, anon, authenticated;
-REVOKE ALL PRIVILEGES ON FUNCTION public.adjust_payroll_record_atomic(uuid, uuid, jsonb, uuid) FROM PUBLIC, anon, authenticated;
-REVOKE ALL PRIVILEGES ON FUNCTION public.approve_payroll_records_atomic(uuid, uuid[], uuid) FROM PUBLIC, anon, authenticated;
-REVOKE ALL PRIVILEGES ON FUNCTION public.mark_payroll_paid_atomic(uuid, uuid[], date, uuid) FROM PUBLIC, anon, authenticated;
-
-GRANT EXECUTE ON FUNCTION public.upsert_payroll_records_atomic(uuid, integer, integer, jsonb, uuid) TO postgres, service_role;
-GRANT EXECUTE ON FUNCTION public.adjust_payroll_record_atomic(uuid, uuid, jsonb, uuid) TO postgres, service_role;
-GRANT EXECUTE ON FUNCTION public.approve_payroll_records_atomic(uuid, uuid[], uuid) TO postgres, service_role;
-GRANT EXECUTE ON FUNCTION public.mark_payroll_paid_atomic(uuid, uuid[], date, uuid) TO postgres, service_role;
-
--- ─── Pós-estado ─────────────────────────────────────────────────────────────
-DO $posestado$
-DECLARE
-  v_faltam text[];
-BEGIN
-  SELECT array_agg(esperado.nome) INTO v_faltam
-    FROM (VALUES
-      ('upsert_payroll_records_atomic',  'p_company_id uuid, p_period_year integer, p_period_month integer, p_records jsonb, p_actor uuid'),
-      ('adjust_payroll_record_atomic',   'p_company_id uuid, p_record_id uuid, p_patch jsonb, p_actor uuid'),
-      ('approve_payroll_records_atomic', 'p_company_id uuid, p_ids uuid[], p_actor uuid'),
-      ('mark_payroll_paid_atomic',       'p_company_id uuid, p_ids uuid[], p_paid_on date, p_actor uuid')
-    ) AS esperado(nome, assinatura)
-   WHERE NOT EXISTS (
-     SELECT 1 FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
-      WHERE n.nspname = 'public' AND p.proname = esperado.nome
-        AND pg_get_function_identity_arguments(p.oid) = esperado.assinatura
-        AND NOT p.prosecdef
-   );
-
-  IF v_faltam IS NOT NULL THEN
-    RAISE EXCEPTION 'PAYROLL_PERIOD_096_POSTSTATE_FAILED: em falta ou com assinatura/segurança errada %', v_faltam;
+  ) INTO v_needs_new_cash;
+  IF v_needs_new_cash AND p_paid_on IS NULL THEN
+    RAISE EXCEPTION 'PAYROLL_PAID_DATE_REQUIRED' USING ERRCODE = '22023';
   END IF;
-END
-$posestado$;
+  v_keys := ARRAY(
+    SELECT DISTINCT k
+      FROM unnest(
+        COALESCE(v_keys, ARRAY[]::integer[])
+        || COALESCE(v_cash_keys, ARRAY[]::integer[])
+        || CASE WHEN v_needs_new_cash THEN ARRAY[
+             EXTRACT(YEAR FROM p_paid_on)::integer * 100 + EXTRACT(MONTH FROM p_paid_on)::integer
+           ] ELSE ARRAY[]::integer[] END
+      ) AS u(k)
+     ORDER BY k
+  );
+  PERFORM public.assert_financial_periods_open_locked_many(p_company_id, v_keys);
+
+  -- All reads below happen after the complete economic lock set is held.
+  FOR v_id IN SELECT x FROM unnest(p_record_ids) AS u(x) ORDER BY x LOOP
+    SELECT * INTO v_row FROM public.payroll_records
+     WHERE id = v_id AND company_id = p_company_id FOR UPDATE;
+    IF v_row.status NOT IN ('aprovado', 'pago') THEN
+      IF v_row.status IN ('rascunho') THEN
+        RAISE EXCEPTION 'PAYROLL_NOT_APPROVED' USING ERRCODE = '55000';
+      END IF;
+      RAISE EXCEPTION 'PAYROLL_UNKNOWN_STATUS' USING ERRCODE = '22023';
+    END IF;
+    IF v_row.net_salary IS NULL OR v_row.net_salary::text IN ('NaN', 'Infinity', '-Infinity')
+       OR v_row.net_salary <= 0
+       OR abs(v_row.net_salary) > 100000000 THEN
+      RAISE EXCEPTION 'PAYROLL_INVALID_TOTAL' USING ERRCODE = '22023';
+    END IF;
+
+    SELECT * INTO v_cash FROM public.cash_flow_entries
+     WHERE company_id = p_company_id
+       AND reference_type = 'payroll'
+       AND reference_id = v_id
+     FOR UPDATE;
+    v_has_cash := FOUND;
+    IF v_has_cash THEN
+      v_current_cash_key := EXTRACT(YEAR FROM v_cash.date)::integer * 100
+        + EXTRACT(MONTH FROM v_cash.date)::integer;
+      IF NOT (v_current_cash_key = ANY(v_keys)) THEN
+        RAISE EXCEPTION 'PAYROLL_CASHFLOW_PERIOD_CHANGED' USING ERRCODE = '40001';
+      END IF;
+      IF v_cash.company_id IS DISTINCT FROM p_company_id
+         OR v_cash.reference_type IS DISTINCT FROM 'payroll'
+         OR v_cash.reference_id IS DISTINCT FROM v_id
+         OR v_cash.amount IS DISTINCT FROM v_row.net_salary
+         OR v_cash.type IS DISTINCT FROM 'saida'
+         OR v_cash.category IS DISTINCT FROM 'salario'
+         OR v_cash.status IS DISTINCT FROM 'confirmado' THEN
+        RAISE EXCEPTION 'PAYROLL_CASHFLOW_CONFLICT' USING ERRCODE = '23514';
+      END IF;
+    ELSIF v_row.status = 'pago' THEN
+      RAISE EXCEPTION 'PAYROLL_PAID_CASHFLOW_MISSING' USING ERRCODE = '23514';
+    END IF;
+  END LOOP;
+
+  FOR v_id IN SELECT x FROM unnest(p_record_ids) AS u(x) ORDER BY x LOOP
+    SELECT * INTO v_row FROM public.payroll_records
+     WHERE id = v_id AND company_id = p_company_id FOR UPDATE;
+    SELECT p.full_name INTO v_collaborator_name
+      FROM public.profiles p
+     WHERE p.id = v_row.collaborator_id AND p.company_id = p_company_id;
+    IF v_collaborator_name IS NULL THEN
+      RAISE EXCEPTION 'PAYROLL_COLLABORATOR_NOT_FOUND' USING ERRCODE = '42501';
+    END IF;
+
+    v_cash_id := NULL;
+    v_source := NULL;
+    SELECT id INTO v_cash_id FROM public.cash_flow_entries
+     WHERE company_id = p_company_id
+       AND reference_type = 'payroll'
+       AND reference_id = v_id
+     FOR UPDATE;
+    IF v_cash_id IS NULL THEN
+      INSERT INTO public.cash_flow_entries(
+        company_id, type, amount, description, category, date,
+        reference_id, reference_type, status, created_by
+      ) VALUES (
+        p_company_id, 'saida', v_row.net_salary,
+        'Salario ' || v_collaborator_name || ' - ' ||
+          lpad(v_row.period_month::text, 2, '0') || '/' || v_row.period_year::text,
+        'salario', p_paid_on, v_id, 'payroll', 'confirmado', p_actor
+      )
+      ON CONFLICT (company_id, reference_type, reference_id)
+        WHERE reference_type IS NOT NULL AND reference_id IS NOT NULL
+      DO NOTHING
+      RETURNING id INTO v_cash_id;
+      IF v_cash_id IS NOT NULL THEN
+        v_cash_count := v_cash_count + 1;
+        v_source := 'created';
+      ELSE
+        SELECT id INTO v_cash_id FROM public.cash_flow_entries
+         WHERE company_id = p_company_id
+           AND reference_type = 'payroll'
+           AND reference_id = v_id
+         FOR UPDATE;
+        IF v_cash_id IS NULL THEN
+          RAISE EXCEPTION 'PAYROLL_CASHFLOW_INSERT_NOT_CONFIRMED' USING ERRCODE = '40001';
+        END IF;
+        v_source := 'adopted_existing';
+      END IF;
+    END IF;
+
+    SELECT * INTO v_cash FROM public.cash_flow_entries WHERE id = v_cash_id FOR UPDATE;
+    IF NOT FOUND THEN
+      RAISE EXCEPTION 'PAYROLL_CASHFLOW_INSERT_NOT_CONFIRMED' USING ERRCODE = '40001';
+    END IF;
+    v_current_cash_key := EXTRACT(YEAR FROM v_cash.date)::integer * 100
+      + EXTRACT(MONTH FROM v_cash.date)::integer;
+    IF NOT (v_current_cash_key = ANY(v_keys)) THEN
+      RAISE EXCEPTION 'PAYROLL_CASHFLOW_PERIOD_CHANGED' USING ERRCODE = '40001';
+    END IF;
+    IF v_cash.company_id IS DISTINCT FROM p_company_id
+       OR v_cash.reference_type IS DISTINCT FROM 'payroll'
+       OR v_cash.reference_id IS DISTINCT FROM v_id
+       OR v_cash.amount IS DISTINCT FROM v_row.net_salary
+       OR v_cash.type IS DISTINCT FROM 'saida'
+       OR v_cash.category IS DISTINCT FROM 'salario'
+       OR v_cash.status IS DISTINCT FROM 'confirmado' THEN
+      RAISE EXCEPTION 'PAYROLL_CASHFLOW_CONFLICT' USING ERRCODE = '23514';
+    END IF;
+
+    IF v_row.status = 'aprovado' THEN
+      UPDATE public.payroll_records
+         SET status = 'pago', paid_at = COALESCE(paid_at, p_paid_on::timestamptz), updated_at = now()
+       WHERE id = v_id AND company_id = p_company_id AND status = 'aprovado';
+      IF NOT FOUND THEN
+        RAISE EXCEPTION 'PAYROLL_CONCURRENT_STATE_CHANGE' USING ERRCODE = '40001';
+      END IF;
+      v_paid := v_paid + 1;
+      INSERT INTO public.audit_logs(company_id, actor_id, action, entity_type, entity_id, meta)
+      VALUES (
+        p_company_id, p_actor, 'payroll_paid', 'payroll', v_id::text,
+        jsonb_build_object(
+          'payroll_id', v_id, 'cashflow_id', v_cash_id,
+          'actor', p_actor, 'company', p_company_id,
+          'before_status', 'aprovado', 'after_status', 'pago',
+          'amount', v_row.net_salary,
+          'payroll_period_year', v_row.period_year,
+          'payroll_period_month', v_row.period_month,
+          'cashflow_date', v_cash.date,
+          'reference_type', v_cash.reference_type,
+          'reference_id', v_cash.reference_id,
+          'source', COALESCE(v_source, 'adopted_existing'),
+          'created_by', v_cash.created_by
+        )
+      );
+    ELSE
+      -- A retry validates the existing economic fact but remains read-only.
+      v_already := v_already + 1;
+    END IF;
+  END LOOP;
+  RETURN QUERY SELECT v_paid, v_already, v_cash_count;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.assert_payroll_actor(uuid, uuid) FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.upsert_payroll_records_atomic(uuid, integer, integer, jsonb, uuid) FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.adjust_payroll_record_atomic(uuid, uuid, jsonb, uuid) FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.approve_payroll_records_atomic(uuid, uuid[], uuid) FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.mark_payroll_paid_atomic(uuid, uuid[], date, uuid) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.upsert_payroll_records_atomic(uuid, integer, integer, jsonb, uuid) TO service_role;
+GRANT EXECUTE ON FUNCTION public.adjust_payroll_record_atomic(uuid, uuid, jsonb, uuid) TO service_role;
+GRANT EXECUTE ON FUNCTION public.approve_payroll_records_atomic(uuid, uuid[], uuid) TO service_role;
+GRANT EXECUTE ON FUNCTION public.mark_payroll_paid_atomic(uuid, uuid[], date, uuid) TO service_role;
