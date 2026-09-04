@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { resolveProfileByAuthUser, IDENTITY_CODES, type IdentityCode } from "@/lib/identity";
 
 export interface AuthedProfile {
   id: string;
@@ -22,6 +23,10 @@ export const AUTH_GUARD_CODES = {
   UNAUTHENTICATED: "UNAUTHENTICATED",
   PROFILE_NOT_FOUND: "PROFILE_NOT_FOUND",
   FORBIDDEN: "FORBIDDEN",
+  /** A consulta de identidade falhou — não é o mesmo que não haver perfil. */
+  IDENTITY_LOOKUP_FAILED: "IDENTITY_LOOKUP_FAILED",
+  /** Dois perfis ligados à mesma conta de acesso. Nunca escolher um. */
+  IDENTITY_AMBIGUOUS: "IDENTITY_AMBIGUOUS",
 } as const;
 
 export type AuthGuardCode =
@@ -39,6 +44,19 @@ type GuardOk = {
  * `ActionResult` (Task T05) terminar, não antes.
  */
 type GuardFail = { ok: false; code: AuthGuardCode; error: string };
+
+/**
+ * Tradução dos motivos do resolver para os códigos do guard.
+ *
+ * É um mapa e não uma cadeia de ternários porque o `Record` obriga o
+ * compilador a exigir uma entrada por cada `IdentityCode`: um motivo novo no
+ * resolver parte a compilação em vez de cair em silêncio num ramo genérico.
+ */
+const CODIGO_DE_IDENTIDADE: Record<IdentityCode, AuthGuardCode> = {
+  [IDENTITY_CODES.IDENTITY_LOOKUP_FAILED]: AUTH_GUARD_CODES.IDENTITY_LOOKUP_FAILED,
+  [IDENTITY_CODES.IDENTITY_AMBIGUOUS]: AUTH_GUARD_CODES.IDENTITY_AMBIGUOUS,
+  [IDENTITY_CODES.PROFILE_NOT_FOUND]: AUTH_GUARD_CODES.PROFILE_NOT_FOUND,
+};
 
 /**
  * Guarda de autenticação partilhada para server actions que usam o
@@ -62,19 +80,16 @@ export async function requireProfile(
   }
 
   const admin = createAdminClient();
-  const { data: profile } = await admin
-    .from("profiles")
-    .select("id, company_id, role")
-    .eq("id", user.id)
-    .single();
 
-  if (!profile) {
-    return {
-      ok: false,
-      code: AUTH_GUARD_CODES.PROFILE_NOT_FOUND,
-      error: "Perfil não encontrado.",
-    };
+  // `auth.uid()` → `profiles.auth_user_id` → `profiles.id`. A consulta antiga
+  // era `profiles.id = user.id`, que só funciona enquanto o id do perfil e o
+  // da conta forem o mesmo valor — e deixa de funcionar na primeira pessoa a
+  // quem se dê acesso depois de o perfil já existir. Ver `lib/identity.ts`.
+  const identidade = await resolveProfileByAuthUser(admin, user.id);
+  if (!identidade.ok) {
+    return { ok: false, code: CODIGO_DE_IDENTIDADE[identidade.code], error: identidade.error };
   }
+  const profile = identidade.profile;
 
   if (opts?.roles && !opts.roles.includes(profile.role)) {
     return {

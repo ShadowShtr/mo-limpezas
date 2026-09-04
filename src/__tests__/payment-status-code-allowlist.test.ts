@@ -93,9 +93,9 @@ describe("MASTER_REGEX_SANITIZER_SUPERSEDED", () => {
     expect(SINK_SEM_COMENTARIOS).not.toMatch(/slice\(\s*0?\s*,?\s*60\s*\)/);
   });
 
-  it("o conjunto fechado tem os treze códigos do domínio, sem repetições", () => {
+  it("o conjunto fechado tem os quinze códigos do domínio, sem repetições", () => {
     expect(new Set(CODIGOS_CONHECIDOS).size).toBe(CODIGOS_CONHECIDOS.length);
-    expect(CODIGOS_CONHECIDOS.length).toBe(13);
+    expect(CODIGOS_CONHECIDOS.length).toBe(15);
   });
 });
 

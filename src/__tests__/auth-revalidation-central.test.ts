@@ -54,7 +54,18 @@ vi.mock("@/lib/supabase/admin", () => ({
   createAdminClient: () => ({
     from: () => ({
       select: () => ({
-        eq: () => ({ single }),
+        // `requireProfile` resolve a identidade por `auth_user_id` e termina em
+        // `.limit(2)` — precisa de distinguir zero linhas de várias, e o
+        // `.single()` do supabase-js dá erro para as duas coisas. Os testes
+        // continuam a declarar o perfil em `single`; aqui converte-se para a
+        // forma de lista, para não haver duas maneiras de dizer o mesmo.
+        eq: () => ({
+          single,
+          limit: async () => {
+            const r = await single();
+            return { data: r?.data ? [r.data] : [], error: r?.error ?? null };
+          },
+        }),
       }),
     }),
   }),

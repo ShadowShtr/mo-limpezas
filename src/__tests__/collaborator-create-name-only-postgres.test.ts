@@ -51,15 +51,24 @@ async function esperarPronto() {
 }
 
 beforeAll(async () => {
-  port = 55600 + (process.pid % 300);
+  // 🔴 A porta é atribuída pelo Docker, não calculada a partir do pid.
+  //
+  //    `55600 + (pid % 300)` cobre 55600–55899, e o Windows reserva
+  //    55787–55986: mais de um terço dos pids escolhia uma porta proibida e o
+  //    ensaio falhava com «bind: … proibida pelas permissões de acesso» — um
+  //    vermelho que não diz nada sobre o código. É o mesmo padrão que os
+  //    ensaios do período financeiro (090+) já usam.
   docker(["rm", "-f", CONTAINER]);
   const r = docker(["run", "-d", "--name", CONTAINER,
     // Autenticacao `trust` num contentor local e descartavel, como nos outros
     // ensaios. Uma credencial literal aqui ficaria versionada, e o scanner de
     // segredos recusa — com razao.
     "-e", "POSTGRES_HOST_AUTH_METHOD=trust", "-e", "POSTGRES_DB=colab",
-    "-p", `${port}:5432`, "postgres:16-alpine"]);
+    "-p", "127.0.0.1::5432", "postgres:16-alpine"]);
   if (r.status !== 0) throw new Error(`contentor: ${r.stderr || r.stdout}`);
+  const mapeamento = docker(["port", CONTAINER, "5432/tcp"]).stdout.trim();
+  port = Number(mapeamento.slice(mapeamento.lastIndexOf(":") + 1));
+  if (!Number.isInteger(port) || port < 1) throw new Error(`Porta inválida: ${mapeamento}`);
   await esperarPronto();
 
   pool = new pg.Pool({ host: "127.0.0.1", port, user: "postgres", database: "colab", max: 4 });

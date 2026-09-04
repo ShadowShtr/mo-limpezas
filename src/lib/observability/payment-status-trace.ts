@@ -130,6 +130,11 @@ export const CODIGOS_CONHECIDOS = [
   "UNAUTHENTICATED",
   "PROFILE_NOT_FOUND",
   "FORBIDDEN",
+  // Identidade estrita: distinguem-se de PROFILE_NOT_FOUND porque exigem
+  // respostas diferentes — uma leitura falhada pede retry, uma conta ligada a
+  // dois perfis pede intervenção humana, e nenhuma das duas é "não existe".
+  "IDENTITY_LOOKUP_FAILED",
+  "IDENTITY_AMBIGUOUS",
   // src/lib/finance-period-guard.ts — assertFinancialPeriodOpen
   "INVALID_DATE",
   "FINANCIAL_PERIOD_STATE_UNKNOWN",
