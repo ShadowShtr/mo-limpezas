@@ -17393,12 +17393,9 @@
       "sideEffects": [
         "supabase"
       ],
-      "risks": [
-        "erro-de-query-ignorado(1)"
-      ],
+      "risks": [],
       "signals": {
-        "supabase": 7,
-        "ignoredError": 1
+        "supabase": 7
       },
       "action": "nenhuma",
       "reason": "em uso: 26 consumidor(es)",

@@ -136,9 +136,10 @@ let assinaturaFalha: unknown = null;
 function makeBuilder(table: string) {
   const b: Record<string, unknown> = {};
   let op: string | null = null;
+  let porAuthUserId = false;
   const enc = (n: string) => (...a: unknown[]) => {
-    void a;
     if (["insert", "update", "upsert", "delete"].includes(n)) { op = n; }
+    else if (n === "eq" && a[0] === "auth_user_id") { porAuthUserId = true; }
     return b;
   };
   for (const n of ["select", "insert", "update", "upsert", "delete", "eq", "in", "is", "order", "limit"]) {
@@ -149,6 +150,13 @@ function makeBuilder(table: string) {
   b.maybeSingle = async () => { reg(); return respostas[`${table}:maybeSingle`] ?? { data: null, error: null }; };
   b.then = (r: (v: unknown) => unknown) => {
     reg();
+    // `requireProfile` resolve a identidade por `auth_user_id` e termina em
+    // `.limit(2)`, não em `.single()`. O cenário continua a declarar o ator em
+    // `profiles:single`; converte-se aqui para a forma de lista.
+    if (table === "profiles" && porAuthUserId) {
+      const res = respostas[`${table}:single`] ?? { data: null, error: null };
+      return Promise.resolve({ data: res.data ? [res.data] : [], error: res.error ?? null }).then(r);
+    }
     return Promise.resolve(respostas[`${table}:await`] ?? { data: [], error: null }).then(r);
   };
   return b;

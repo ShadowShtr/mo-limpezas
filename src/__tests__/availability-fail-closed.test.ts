@@ -128,10 +128,11 @@ function resposta(table: string, terminal: Terminal) {
 function makeBuilder(table: string) {
   const builder: Record<string, unknown> = {};
   let op: string | null = null;
+  let porAuthUserId = false;
 
   const encadeia = (nome: string) => (...args: unknown[]) => {
-    void args;
     if (["insert", "update", "upsert", "delete", "rpc"].includes(nome)) op = nome;
+    else if (nome === "eq" && args[0] === "auth_user_id") porAuthUserId = true;
     return builder;
   };
   for (const nome of [
@@ -145,6 +146,16 @@ function makeBuilder(table: string) {
   builder.maybeSingle = async () => { registar(); return resposta(table, "maybeSingle"); };
   builder.then = (resolve: (v: unknown) => unknown) => {
     registar();
+    // `requireProfile` passou a resolver a identidade por `auth_user_id` e
+    // termina em `.limit(2)`, não em `.single()` — precisa de distinguir zero
+    // linhas de várias. Os cenários continuam a declarar o ator em
+    // `profiles:single`; converte-se aqui para a forma de lista, para não
+    // haver duas maneiras de dizer a mesma coisa nos testes.
+    const porIdentidade = table === "profiles" && porAuthUserId;
+    if (porIdentidade) {
+      const r = resposta(table, "single") as { data?: unknown; error?: unknown };
+      return Promise.resolve({ data: r.data ? [r.data] : [], error: r.error ?? null }).then(resolve);
+    }
     return Promise.resolve(resposta(table, "await")).then(resolve);
   };
   return builder;
