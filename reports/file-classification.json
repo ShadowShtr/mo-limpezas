@@ -5191,12 +5191,9 @@
       "consumerSample": [],
       "autoLoaded": false,
       "referencedBy": [],
-      "sideEffects": [
-        "env"
-      ],
+      "sideEffects": [],
       "risks": [],
       "signals": {
-        "env": 1,
         "sqlWrite": 5,
         "fallbackZero": 1
       },
@@ -6461,11 +6458,11 @@
       "category": "test",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 12,
+      "consumers": 13,
       "consumerSample": [
         "src/__tests__/bank-reconciliation-period-atomic.pg.test.ts",
         "src/__tests__/cashflow-period-atomic.pg.test.ts",
-        "src/__tests__/fin-period-production-shadow.pg.test.ts"
+        "src/__tests__/domain-mutation-sequence-concurrency.pg.test.ts"
       ],
       "autoLoaded": false,
       "referencedBy": [],
