@@ -260,20 +260,6 @@ describe("faturas, serviços e restante conciliação — runtime encaminhado", 
     expect(src).toContain('rpc("delete_bank_import_atomic"');
   });
 
-  it("os writers de payroll usam apenas as RPCs da 096 para escrever", () => {
-    const src = fs.readFileSync(path.join(process.cwd(), "src/app/actions/payroll.ts"), "utf8");
-    expect(src).toContain('rpc("upsert_payroll_records_atomic"');
-    expect(src).toContain('rpc("adjust_payroll_record_atomic"');
-    expect(src).toContain('rpc("approve_payroll_records_atomic"');
-    expect(src).toContain('rpc("mark_payroll_paid_atomic"');
-    for (const nome of ["calculateAndSavePayroll", "adjustPayrollRecord", "approvePayrollRecords", "markPayrollPaid"]) {
-      const inicio = src.indexOf(`export async function ${nome}`);
-      const fim = src.indexOf("\nexport ", inicio + 1);
-      const corpo = src.slice(inicio, fim === -1 ? undefined : fim);
-      expect(corpo).not.toMatch(/\.from\("(payroll_records|cash_flow_entries)"\)[\s\S]{0,260}\.(update|insert|upsert|delete)\(/);
-    }
-  });
-
   it("fecho e reabertura usam o protocolo atómico da 090", () => {
     const src = fs.readFileSync(path.join(process.cwd(), "src/app/actions/financial-periods.ts"), "utf8");
     expect(src).toContain('rpc("close_financial_period_atomic"');

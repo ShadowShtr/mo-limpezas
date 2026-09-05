@@ -5695,7 +5695,7 @@
         "supabase": 2,
         "serviceRole": 1,
         "write": 6,
-        "sqlWrite": 46,
+        "sqlWrite": 43,
         "fallbackArray": 1,
         "dynamicImport": 1
       },
@@ -7897,7 +7897,7 @@
       "signals": {
         "supabase": 2,
         "write": 2,
-        "sqlWrite": 39,
+        "sqlWrite": 36,
         "selectStar": 2,
         "ignoredError": 1,
         "dynamicImport": 26
@@ -14427,18 +14427,20 @@
         "docs"
       ],
       "sideEffects": [
+        "write",
         "revalidatePath(5)"
       ],
       "risks": [],
       "signals": {
         "serverAction": 1,
-        "sqlWrite": 3,
-        "unknownCast": 3,
+        "write": 5,
+        "sqlWrite": 11,
+        "unknownCast": 4,
         "fallbackZero": 35,
-        "fallbackArray": 7,
+        "fallbackArray": 9,
         "revalidatePath": 5
       },
-      "action": "nenhuma",
+      "action": "auditar atomicidade (T12/T13)",
       "reason": "em uso: 6 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
@@ -18424,7 +18426,7 @@
       "category": "lib",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 3,
+      "consumers": 4,
       "consumerSample": [
         "src/__tests__/cash-flow-integrity.test.ts",
         "src/app/actions/bank-reconciliation.ts",
@@ -18436,7 +18438,7 @@
       "risks": [],
       "signals": {},
       "action": "nenhuma",
-      "reason": "em uso: 3 consumidor(es)",
+      "reason": "em uso: 4 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -19173,7 +19175,7 @@
       "category": "lib",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 36,
+      "consumers": 35,
       "consumerSample": [
         "src/__tests__/lisbon-time.test.ts",
         "src/app/(app)/app/ausencias/_components/ausencias-client.tsx",
@@ -19187,7 +19189,7 @@
       "risks": [],
       "signals": {},
       "action": "nenhuma",
-      "reason": "em uso: 36 consumidor(es)",
+      "reason": "em uso: 35 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
