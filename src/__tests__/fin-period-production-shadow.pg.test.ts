@@ -238,7 +238,7 @@ describe("shadow — a cadeia aplica sobre a forma real de produção", () => {
     }
   }, 120_000);
 
-  it("apenas a RPC canónica de invoice é SECURITY DEFINER", async () => {
+  it("apenas as RPCs canónicas autorizadas são SECURITY DEFINER", async () => {
     const { rows } = await pool.query(
       `SELECT p.proname FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
         WHERE n.nspname='public' AND p.prosecdef
@@ -248,9 +248,17 @@ describe("shadow — a cadeia aplica sobre a forma real de produção", () => {
             OR p.proname LIKE '%cashflow%'
             OR p.proname LIKE '%invoice%'
             OR p.proname LIKE '%bank_%'
-            OR p.proname LIKE '%payroll%')`,
+            OR p.proname LIKE '%payroll%')
+        ORDER BY p.proname`,
     );
-    expect(rows.map((r) => r.proname)).toEqual(["set_invoice_status_atomic"]);
+    expect(rows.map((r) => r.proname)).toEqual([
+      "adjust_payroll_record_atomic",
+      "approve_payroll_records_atomic",
+      "assert_payroll_actor",
+      "mark_payroll_paid_atomic",
+      "set_invoice_status_atomic",
+      "upsert_payroll_records_atomic",
+    ]);
   }, 120_000);
 
   it("a superfície fica fechada a anon e authenticated, e aberta a service_role", async () => {

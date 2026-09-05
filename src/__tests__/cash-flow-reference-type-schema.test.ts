@@ -424,18 +424,37 @@ describe("🔴 RPC_REFERENCE_TYPE_SCHEMA_MISMATCH = 0", () => {
     return new Set([...corpo.matchAll(/'([a-z_]+)'/g)].map((m) => m[1]));
   }
 
+  function extrairTiposReferenceType(conteudo: string): string[] {
+    return [
+      ...conteudo.matchAll(/(?<![\w.])reference_type\s*(?:=|,)\s*'([a-z_]+)'/g),
+    ].map((m) => m[1]);
+  }
+
   /** O que as migrations escrevem como `reference_type` em cash_flow_entries. */
   function tiposEscritos(): Map<string, string[]> {
     const usos = new Map<string, string[]>();
     for (const f of fs.readdirSync(MIGRACOES).filter((x) => x.endsWith(".sql"))) {
       const s = fs.readFileSync(path.join(MIGRACOES, f), "utf8");
       // Só linhas que atribuem/comparam um literal a reference_type.
-      for (const m of s.matchAll(/reference_type\s*(?:=|,)\s*'([a-z_]+)'/g)) {
-        usos.set(m[1], [...(usos.get(m[1]) ?? []), f]);
+      for (const tipo of extrairTiposReferenceType(s)) {
+        usos.set(tipo, [...(usos.get(tipo) ?? []), f]);
       }
     }
     return usos;
   }
+
+  it("extrai apenas literais atribuídos ao identificador reference_type", () => {
+    expect(extrairTiposReferenceType("reference_type = 'payroll'")).toEqual(["payroll"]);
+    expect(extrairTiposReferenceType("reference_type = 'tipo_inventado'")).toEqual([
+      "tipo_inventado",
+    ]);
+    expect(extrairTiposReferenceType("v_cash.reference_type, 'reference_id'")).toEqual([]);
+    expect(
+      extrairTiposReferenceType(
+        "jsonb_build_object('reference_type', v_cash.reference_type, 'reference_id', v_cash.reference_id)",
+      ),
+    ).toEqual([]);
+  });
 
   it("todo o `reference_type` escrito pelas migrations cabe no CHECK", () => {
     const permitidos = tiposPermitidos();

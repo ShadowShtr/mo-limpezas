@@ -1,8 +1,8 @@
 {
   "generatedBy": "scripts/audit-file-inventory.mjs",
-  "totalFiles": 876,
+  "totalFiles": 878,
   "byStatus": {
-    "MANTER": 853,
+    "MANTER": 855,
     "STANDBY": 23
   },
   "byCategory": {
@@ -20,7 +20,7 @@
     "api-route": 16,
     "config": 12,
     "asset": 8,
-    "report": 4,
+    "report": 6,
     "script-historico": 4,
     "other": 2,
     "ci": 2,
@@ -29,7 +29,7 @@
     "supabase-other": 2
   },
   "byConfidence": {
-    "alta": 855,
+    "alta": 857,
     "média": 15,
     "baixa": 6
   },
@@ -1861,6 +1861,58 @@
       "sideEffects": [],
       "risks": [],
       "signals": {
+        "sqlWrite": 1
+      },
+      "action": "nenhuma",
+      "reason": "configuração/infra",
+      "manualDecision": false
+    },
+    {
+      "path": "reports/code-audit.json",
+      "category": "report",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [
+        "npm",
+        "ci",
+        "config",
+        "docs"
+      ],
+      "sideEffects": [
+        "supabase"
+      ],
+      "risks": [],
+      "signals": {
+        "supabase": 1,
+        "sqlWrite": 1
+      },
+      "action": "nenhuma",
+      "reason": "configuração/infra",
+      "manualDecision": false
+    },
+    {
+      "path": "reports/code-audit.json",
+      "category": "report",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [
+        "npm",
+        "ci",
+        "config",
+        "docs"
+      ],
+      "sideEffects": [
+        "supabase"
+      ],
+      "risks": [],
+      "signals": {
+        "supabase": 1,
         "sqlWrite": 1
       },
       "action": "nenhuma",
@@ -5215,12 +5267,9 @@
       "consumerSample": [],
       "autoLoaded": false,
       "referencedBy": [],
-      "sideEffects": [
-        "env"
-      ],
+      "sideEffects": [],
       "risks": [],
       "signals": {
-        "env": 1,
         "sqlWrite": 5,
         "fallbackZero": 1
       },
@@ -6509,11 +6558,11 @@
       "category": "test",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 12,
+      "consumers": 13,
       "consumerSample": [
         "src/__tests__/bank-reconciliation-period-atomic.pg.test.ts",
         "src/__tests__/cashflow-period-atomic.pg.test.ts",
-        "src/__tests__/fin-period-production-shadow.pg.test.ts"
+        "src/__tests__/domain-mutation-sequence-concurrency.pg.test.ts"
       ],
       "autoLoaded": false,
       "referencedBy": [],
@@ -6535,7 +6584,7 @@
       "category": "test",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 4,
+      "consumers": 5,
       "consumerSample": [
         "src/__tests__/collaborator-create-name-only-postgres.test.ts",
         "src/__tests__/collaborator-identity-hardening-postgres.test.ts",
@@ -7807,33 +7856,6 @@
       }
     },
     {
-      "path": "src/__tests__/payroll-period-atomic.pg.test.ts",
-      "category": "test",
-      "status": "MANTER",
-      "confidence": "alta",
-      "consumers": 0,
-      "consumerSample": [],
-      "autoLoaded": false,
-      "referencedBy": [],
-      "sideEffects": [],
-      "risks": [
-        "service-role"
-      ],
-      "signals": {
-        "serviceRole": 3,
-        "sqlWrite": 8
-      },
-      "action": "nenhuma",
-      "reason": "suite de testes — corre por convenção do vitest",
-      "manualDecision": false,
-      "deadCodeDoors": {
-        "frameworkConvention": false,
-        "cliEntrypoint": false,
-        "dynamicImport": true,
-        "allClosed": false
-      }
-    },
-    {
       "path": "src/__tests__/payroll-period-view-identity.test.tsx",
       "category": "test",
       "status": "MANTER",
@@ -7872,6 +7894,30 @@
       "signals": {
         "unknownCast": 1,
         "dynamicImport": 2
+      },
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/__tests__/payroll-safety-postgres.test.ts",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "sqlWrite": 28
       },
       "action": "nenhuma",
       "reason": "suite de testes — corre por convenção do vitest",
@@ -22941,16 +22987,13 @@
       "consumerSample": [],
       "autoLoaded": false,
       "referencedBy": [],
-      "sideEffects": [
-        "write"
-      ],
+      "sideEffects": [],
       "risks": [
         "service-role"
       ],
       "signals": {
         "serviceRole": 4,
-        "write": 1,
-        "sqlWrite": 18
+        "sqlWrite": 19
       },
       "action": "nenhuma",
       "reason": "migration versionada — histórico do schema, nunca se apaga",
@@ -23459,7 +23502,7 @@
       "sideEffects": [],
       "risks": [],
       "signals": {
-        "sqlWrite": 4
+        "sqlWrite": 5
       },
       "action": "nenhuma",
       "reason": "migration versionada — histórico do schema, nunca se apaga",
