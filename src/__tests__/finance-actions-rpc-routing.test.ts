@@ -92,16 +92,19 @@ function cliente(linha: Record<string, unknown> | null = null) {
   return api;
 }
 
-import { updatePayment, deletePayment } from "@/app/actions/payments";
-import { updateCashFlowEntry, deleteCashFlowEntry } from "@/app/actions/cash-flow";
+import { createPayment, updatePayment, setPaymentStatus, deletePayment } from "@/app/actions/payments";
+import { createCashFlowEntry, updateCashFlowEntry, deleteCashFlowEntry } from "@/app/actions/cash-flow";
 import { confirmMatch } from "@/app/actions/bank-reconciliation";
+import { updateInvoiceStatus, deleteInvoice } from "@/app/actions/invoices";
+import { setServicePayment } from "@/app/actions/daily-billing";
 
 beforeEach(() => {
   reg.chamadas = [];
   guarda.resultado = {
     ok: true,
     admin: cliente({ id: ALVO, date: "2026-08-10", reference_type: null,
-                     bank_transaction_id: "tx-1", cash_flow_entry_id: "cf-1" }),
+                     bank_transaction_id: "tx-1", cash_flow_entry_id: "cf-1",
+                     invoice_date: "2026-08-10", revision: 3 }),
     profile: { id: PERFIL, company_id: EMPRESA, role: "admin" },
   };
 });
@@ -114,6 +117,13 @@ const escritas = (tabela: string, tipo: string) =>
 // ═══════════════════════════════════════════════════════════════════════════
 
 describe("pagamentos — o valor e a eliminação passam pela RPC", () => {
+  it("criar chama create_payment_atomic sem INSERT direto", async () => {
+    await createPayment({ kind: "fixo", description: "Renda", amount: 500, due_date: "2026-08-10",
+      expense_category_id: null, direct_debit: false, notes: null, year: 2026, month: 8 });
+    expect(rpcs().find((c) => c.nome === "create_payment_atomic")).toBeDefined();
+    expect(escritas("fixed_variable_payments", "insert")).toHaveLength(0);
+  });
+
   it("PAYMENT_ACTION_RPC_ROUTING: editar chama update_payment_atomic, uma só vez", async () => {
     await updatePayment(ALVO, { amount: 250, description: "Nova descrição", due_date: "2026-09-10" });
     const chamadas = rpcs().filter((c) => c.nome === "update_payment_atomic");
@@ -152,6 +162,12 @@ describe("pagamentos — o valor e a eliminação passam pela RPC", () => {
     expect(r!.args).toEqual({ p_company_id: EMPRESA, p_payment_id: ALVO });
   });
 
+  it("cancelar chama set_payment_status_atomic sem UPDATE direto", async () => {
+    await setPaymentStatus(ALVO, "cancelado");
+    expect(rpcs().find((c) => c.nome === "set_payment_status_atomic")).toBeDefined();
+    expect(escritas("fixed_variable_payments", "update")).toHaveLength(0);
+  });
+
   it("🔴 e não sobra nenhum delete directo na tabela de pagamentos", async () => {
     await deletePayment(ALVO);
     expect(escritas("fixed_variable_payments", "delete")).toHaveLength(0);
@@ -159,6 +175,13 @@ describe("pagamentos — o valor e a eliminação passam pela RPC", () => {
 });
 
 describe("fluxo de caixa — alterar e apagar passam pela RPC", () => {
+  it("criar chama create_cashflow_entry_atomic sem INSERT direto", async () => {
+    await createCashFlowEntry(EMPRESA, { type: "entrada", amount: 100, description: "Recebimento",
+      category: "faturacao", date: "2026-08-10", status: "confirmado" });
+    expect(rpcs().find((c) => c.nome === "create_cashflow_entry_atomic")).toBeDefined();
+    expect(escritas("cash_flow_entries", "insert")).toHaveLength(0);
+  });
+
   it("CASHFLOW_ACTION_RPC_ROUTING: alterar chama update_cashflow_entry_atomic", async () => {
     await updateCashFlowEntry(ALVO, { description: "Revisto" });
     const r = rpcs().find((c) => c.nome === "update_cashflow_entry_atomic");
@@ -202,6 +225,52 @@ describe("conciliação — a confirmação é uma só chamada", () => {
     await confirmMatch(ALVO);
     expect(escritas("bank_reconciliation_matches", "update")).toHaveLength(0);
     expect(escritas("bank_transactions", "update")).toHaveLength(0);
+  });
+});
+
+describe("faturas, serviços e restante conciliação — runtime encaminhado", () => {
+  it("status de invoice chama a RPC canónica com revisão", async () => {
+    await updateInvoiceStatus(ALVO, "pago", "transferencia");
+    const r = rpcs().find((c) => c.nome === "set_invoice_status_atomic");
+    expect(r).toBeDefined();
+    expect((r!.args as Record<string, unknown>).p_expected_revision).toBe(3);
+    expect(escritas("invoices", "update")).toHaveLength(0);
+    expect(escritas("cash_flow_entries", "insert")).toHaveLength(0);
+  });
+
+  it("apagar invoice chama delete_invoice_atomic", async () => {
+    await deleteInvoice(ALVO);
+    expect(rpcs().find((c) => c.nome === "delete_invoice_atomic")).toBeDefined();
+    expect(escritas("invoices", "delete")).toHaveLength(0);
+  });
+
+  it("serviço chama set_service_payment_atomic", async () => {
+    await setServicePayment(ALVO, "pago_total", 100);
+    expect(rpcs().find((c) => c.nome === "set_service_payment_atomic")).toBeDefined();
+    expect(escritas("services", "update")).toHaveLength(0);
+    expect(escritas("cash_flow_entries", "insert")).toHaveLength(0);
+  });
+
+  it("as restantes ações bancárias usam as RPCs da 095", () => {
+    const src = fs.readFileSync(path.join(process.cwd(), "src/app/actions/bank-reconciliation.ts"), "utf8");
+    expect(src).toContain('rpc("reject_bank_match_atomic"');
+    expect(src).toContain('rpc("manual_bank_match_atomic"');
+    expect(src).toContain('rpc("set_bank_transaction_ignored_atomic"');
+    expect(src).toContain('rpc("create_cashflow_from_bank_transaction_atomic"');
+    expect(src).toContain('rpc("delete_bank_import_atomic"');
+  });
+
+  it("fecho e reabertura usam o protocolo atómico da 090", () => {
+    const src = fs.readFileSync(path.join(process.cwd(), "src/app/actions/financial-periods.ts"), "utf8");
+    expect(src).toContain('rpc("close_financial_period_atomic"');
+    expect(src).toContain('rpc("reopen_financial_period_atomic"');
+    expect(src).not.toMatch(/from\("financial_periods"\)[\s\S]{0,240}\.(insert|update|upsert|delete)\(/);
+  });
+
+  it("getUnbilledServices falha fechado quando a leitura de invoice_items falha", () => {
+    const src = fs.readFileSync(path.join(process.cwd(), "src/app/actions/invoices.ts"), "utf8");
+    expect(src).toContain("billedErr");
+    expect(src).toContain("Nada foi assumido como livre");
   });
 });
 

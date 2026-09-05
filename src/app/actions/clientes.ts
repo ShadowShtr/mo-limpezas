@@ -159,12 +159,13 @@ export async function archiveCliente(id: string) {
   let futureCount = 0;
 
   if (locationIds.length > 0) {
-    const { count } = await admin
+    const { count, error: servicesError } = await admin
       .from("services")
       .select("id", { count: "exact", head: true })
       .in("location_id", locationIds)
       .gt("scheduled_start", now)
       .not("status", "in", '("cancelado","concluido")');
+    if (servicesError) return queryFailure("archiveCliente:services", servicesError);
     futureCount = count ?? 0;
   }
 
@@ -274,73 +275,15 @@ export async function updateCliente(id: string, input: Omit<ClienteInput, "compa
   return { ok: true as const };
 }
 
-export async function deleteCliente(id: string) {
+export async function deleteCliente(_id: string) {
   const supabase = await createClient();
-  const admin = createAdminClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { ok: false as const, error: "Nao autenticado." };
 
-  const { data: profile } = await admin
-    .from("profiles")
-    .select("company_id, role")
-    .eq("id", user.id)
-    .single();
-  if (!profile || !["admin", "gestor"].includes(profile.role)) {
-    return { ok: false as const, error: "Sem permissao." };
-  }
-
-  const { data: client, error: clientError } = await admin
-    .from("clients")
-    .select("id, name")
-    .eq("id", id)
-    .eq("company_id", profile.company_id)
-    .single();
-  if (clientError && !isNoRowsError(clientError)) {
-    return queryFailure("deleteCliente:client", clientError);
-  }
-  if (!client) return { ok: false as const, error: "Cliente invalido." };
-
-  // Locais do cliente (services/contracts têm FK RESTRICT para locations).
-  // A lista comanda a eliminação em cascata. Vazia por falha, os serviços e
-  // contratos dos locais sobreviviam e a eliminação batia na FK — ou deixava
-  // dados órfãos.
-  const { data: locations, error: locationsError } = await admin
-    .from("locations")
-    .select("id")
-    .eq("client_id", id)
-    .eq("company_id", profile.company_id);
-  if (locationsError) return queryFailure("deleteCliente:locations", locationsError);
-  const locationIds = (locations ?? []).map((l) => l.id);
-
-  // 1) Serviços (cascade: timesheets, fotos, reforços, auditoria de preço).
-  if (locationIds.length > 0) {
-    await admin.from("services").delete()
-      .eq("company_id", profile.company_id).in("location_id", locationIds);
-    // 2) Contratos desses locais.
-    await admin.from("contracts").delete()
-      .eq("company_id", profile.company_id).in("location_id", locationIds);
-  }
-
-  // 3) Faturas do cliente (invoice_items fazem cascade do invoice).
-  await admin.from("invoices").delete()
-    .eq("company_id", profile.company_id).eq("client_id", id);
-
-  // 4) Cliente → cascade de locais + notificações do cliente.
-  const { error } = await admin.from("clients").delete()
-    .eq("id", id).eq("company_id", profile.company_id);
-  if (error) return { ok: false as const, error: error.message };
-
-  await auditLog({
-    companyId: profile.company_id,
-    actorId: user.id,
-    action: "client_deleted",
-    entityType: "client",
-    entityId: id,
-    before: { name: client.name },
-    source: "dashboard",
-  }, admin);
-
-  revalidatePath("/dashboard/clientes");
-  revalidatePath("/dashboard/calendario");
-  return { ok: true as const };
+  // Hard delete removes financial history and cannot be made atomic by this
+  // action. Client removal is intentionally archive-only.
+  return {
+    ok: false as const,
+    error: "A eliminação de clientes foi desativada para preservar o histórico. Arquive o cliente em vez disso.",
+  };
 }

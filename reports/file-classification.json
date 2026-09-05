@@ -1,15 +1,15 @@
 {
   "generatedBy": "scripts/audit-file-inventory.mjs",
-  "totalFiles": 872,
+  "totalFiles": 879,
   "byStatus": {
-    "MANTER": 849,
+    "MANTER": 856,
     "STANDBY": 23
   },
   "byCategory": {
-    "test": 203,
+    "test": 205,
     "route-ui": 140,
     "migration": 122,
-    "lib": 72,
+    "lib": 73,
     "script": 60,
     "domain": 52,
     "doc": 46,
@@ -20,7 +20,7 @@
     "api-route": 16,
     "config": 12,
     "asset": 8,
-    "report": 4,
+    "report": 8,
     "script-historico": 4,
     "other": 2,
     "ci": 2,
@@ -29,7 +29,7 @@
     "supabase-other": 2
   },
   "byConfidence": {
-    "alta": 851,
+    "alta": 858,
     "média": 15,
     "baixa": 6
   },
@@ -549,7 +549,7 @@
       ],
       "signals": {
         "serviceRole": 1,
-        "sqlWrite": 25,
+        "sqlWrite": 26,
         "todo": 1
       },
       "action": "nenhuma",
@@ -1888,6 +1888,114 @@
       "signals": {
         "supabase": 1,
         "sqlWrite": 1
+      },
+      "action": "nenhuma",
+      "reason": "configuração/infra",
+      "manualDecision": false
+    },
+    {
+      "path": "reports/code-audit.json",
+      "category": "report",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [
+        "npm",
+        "ci",
+        "config",
+        "docs"
+      ],
+      "sideEffects": [
+        "supabase"
+      ],
+      "risks": [],
+      "signals": {
+        "supabase": 1,
+        "sqlWrite": 1
+      },
+      "action": "nenhuma",
+      "reason": "configuração/infra",
+      "manualDecision": false
+    },
+    {
+      "path": "reports/code-audit.json",
+      "category": "report",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [
+        "npm",
+        "ci",
+        "config",
+        "docs"
+      ],
+      "sideEffects": [
+        "supabase"
+      ],
+      "risks": [],
+      "signals": {
+        "supabase": 1,
+        "sqlWrite": 1
+      },
+      "action": "nenhuma",
+      "reason": "configuração/infra",
+      "manualDecision": false
+    },
+    {
+      "path": "reports/file-classification.json",
+      "category": "report",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [
+        "docs"
+      ],
+      "sideEffects": [
+        "supabase",
+        "revalidatePath(38)"
+      ],
+      "risks": [
+        "debugger"
+      ],
+      "signals": {
+        "supabase": 1,
+        "sqlWrite": 26,
+        "debugger": 6,
+        "revalidatePath": 38
+      },
+      "action": "nenhuma",
+      "reason": "configuração/infra",
+      "manualDecision": false
+    },
+    {
+      "path": "reports/file-classification.json",
+      "category": "report",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [
+        "docs"
+      ],
+      "sideEffects": [
+        "supabase",
+        "revalidatePath(38)"
+      ],
+      "risks": [
+        "debugger"
+      ],
+      "signals": {
+        "supabase": 1,
+        "sqlWrite": 26,
+        "debugger": 6,
+        "revalidatePath": 38
       },
       "action": "nenhuma",
       "reason": "configuração/infra",
@@ -4099,6 +4207,30 @@
       }
     },
     {
+      "path": "src/__tests__/atomic-rpc-results.test.ts",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "sqlWrite": 5
+      },
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
       "path": "src/__tests__/attachments-async-hydration.test.tsx",
       "category": "test",
       "status": "MANTER",
@@ -5561,7 +5693,7 @@
       "signals": {
         "supabase": 2,
         "write": 1,
-        "sqlWrite": 12,
+        "sqlWrite": 10,
         "revalidatePath": 1
       },
       "action": "nenhuma",
@@ -5626,6 +5758,30 @@
       }
     },
     {
+      "path": "src/__tests__/fin-period-runtime-inventory.test.ts",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "sqlWrite": 1
+      },
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
       "path": "src/__tests__/finance-actions-rpc-routing.test.ts",
       "category": "test",
       "status": "MANTER",
@@ -5647,7 +5803,7 @@
         "supabase": 2,
         "serviceRole": 1,
         "write": 6,
-        "sqlWrite": 29,
+        "sqlWrite": 43,
         "fallbackArray": 1,
         "dynamicImport": 1
       },
@@ -13280,13 +13436,11 @@
       ],
       "signals": {
         "serverAction": 1,
-        "write": 11,
-        "sqlWrite": 13,
+        "write": 1,
+        "sqlWrite": 3,
         "eslintDisable": 1,
         "anyType": 1,
-        "unknownCast": 1,
         "ignoredError": 6,
-        "fallbackZero": 1,
         "fallbackArray": 8,
         "revalidatePath": 9
       },
@@ -13406,7 +13560,6 @@
       ],
       "sideEffects": [
         "supabase",
-        "write",
         "revalidatePath(9)"
       ],
       "risks": [
@@ -13416,18 +13569,17 @@
       "signals": {
         "supabase": 11,
         "serverAction": 1,
-        "write": 2,
-        "sqlWrite": 8,
+        "sqlWrite": 5,
         "eslintDisable": 3,
         "anyType": 3,
-        "unknownCast": 8,
+        "unknownCast": 7,
         "consoleErr": 2,
         "ignoredError": 3,
         "fallbackZero": 3,
         "fallbackArray": 5,
         "revalidatePath": 9
       },
-      "action": "auditar atomicidade (T12/T13)",
+      "action": "nenhuma",
       "reason": "em uso: 6 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
@@ -13484,21 +13636,21 @@
       "sideEffects": [
         "supabase",
         "write",
-        "revalidatePath(8)"
+        "revalidatePath(6)"
       ],
       "risks": [
-        "erro-de-query-ignorado(5)"
+        "erro-de-query-ignorado(4)"
       ],
       "signals": {
-        "supabase": 19,
+        "supabase": 18,
         "serverAction": 1,
-        "write": 10,
-        "sqlWrite": 13,
+        "write": 6,
+        "sqlWrite": 10,
         "unknownCast": 1,
-        "ignoredError": 5,
+        "ignoredError": 4,
         "fallbackZero": 1,
-        "fallbackArray": 2,
-        "revalidatePath": 8
+        "fallbackArray": 1,
+        "revalidatePath": 6
       },
       "action": "auditar atomicidade (T12/T13)",
       "reason": "em uso: 3 consumidor(es)",
@@ -13717,37 +13869,32 @@
       "category": "server-action",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 4,
+      "consumers": 5,
       "consumerSample": [
+        "src/__tests__/finance-actions-rpc-routing.test.ts",
         "src/app/(dashboard)/dashboard/calendario/_components/service-detail-sheet.tsx",
-        "src/app/(dashboard)/dashboard/cobrancas/_components/cobrancas-tabs.tsx",
-        "src/app/(dashboard)/dashboard/cobrancas/_components/daily-billing-client.tsx"
+        "src/app/(dashboard)/dashboard/cobrancas/_components/cobrancas-tabs.tsx"
       ],
       "autoLoaded": false,
       "referencedBy": [
         "docs"
       ],
       "sideEffects": [
-        "supabase",
-        "write",
         "revalidatePath(3)"
       ],
       "risks": [
-        "erro-de-query-ignorado(8)"
+        "erro-de-query-ignorado(3)"
       ],
       "signals": {
-        "supabase": 2,
         "serverAction": 1,
-        "write": 4,
-        "sqlWrite": 4,
         "unknownCast": 4,
-        "ignoredError": 8,
-        "fallbackZero": 5,
+        "ignoredError": 3,
+        "fallbackZero": 3,
         "fallbackArray": 8,
         "revalidatePath": 3
       },
-      "action": "auditar atomicidade (T12/T13)",
-      "reason": "em uso: 4 consumidor(es)",
+      "action": "nenhuma",
+      "reason": "em uso: 5 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -14051,19 +14198,16 @@
         "docs"
       ],
       "sideEffects": [
-        "write",
         "revalidatePath(1)"
       ],
       "risks": [],
       "signals": {
         "serverAction": 1,
-        "write": 2,
-        "sqlWrite": 1,
-        "unknownCast": 3,
+        "unknownCast": 1,
         "fallbackZero": 1,
         "revalidatePath": 1
       },
-      "action": "auditar atomicidade (T12/T13)",
+      "action": "nenhuma",
       "reason": "em uso: 2 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
@@ -14117,11 +14261,11 @@
       "category": "server-action",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 6,
+      "consumers": 7,
       "consumerSample": [
+        "src/__tests__/finance-actions-rpc-routing.test.ts",
         "src/app/(dashboard)/dashboard/cobrancas/_components/cobrancas-tabs.tsx",
-        "src/app/(dashboard)/dashboard/cobrancas/_components/invoice-detail-sheet.tsx",
-        "src/app/(dashboard)/dashboard/cobrancas/_components/invoices-client.tsx"
+        "src/app/(dashboard)/dashboard/cobrancas/_components/invoice-detail-sheet.tsx"
       ],
       "autoLoaded": false,
       "referencedBy": [
@@ -14129,28 +14273,25 @@
       ],
       "sideEffects": [
         "supabase",
-        "write",
         "revalidatePath(4)"
       ],
       "risks": [
-        "erro-de-query-ignorado(6)",
+        "erro-de-query-ignorado(3)",
         "any(3)"
       ],
       "signals": {
         "supabase": 8,
         "serverAction": 1,
-        "write": 4,
-        "sqlWrite": 10,
         "eslintDisable": 3,
         "anyType": 3,
-        "unknownCast": 3,
-        "ignoredError": 6,
+        "unknownCast": 2,
+        "ignoredError": 3,
         "fallbackZero": 2,
-        "fallbackArray": 14,
+        "fallbackArray": 13,
         "revalidatePath": 4
       },
-      "action": "auditar atomicidade (T12/T13)",
-      "reason": "em uso: 6 consumidor(es)",
+      "action": "nenhuma",
+      "reason": "em uso: 7 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -14355,16 +14496,16 @@
         "revalidatePath(5)"
       ],
       "risks": [
-        "erro-de-query-ignorado(3)"
+        "erro-de-query-ignorado(2)"
       ],
       "signals": {
         "supabase": 2,
         "serverAction": 1,
-        "write": 4,
-        "sqlWrite": 9,
+        "write": 2,
+        "sqlWrite": 7,
         "unknownCast": 2,
-        "ignoredError": 3,
-        "fallbackZero": 4,
+        "ignoredError": 2,
+        "fallbackZero": 3,
         "fallbackArray": 2,
         "revalidatePath": 5
       },
@@ -17878,6 +18019,34 @@
       }
     },
     {
+      "path": "src/lib/atomic-rpc-results.ts",
+      "category": "lib",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 3,
+      "consumerSample": [
+        "src/__tests__/atomic-rpc-results.test.ts",
+        "src/app/actions/bank-reconciliation.ts",
+        "src/app/actions/daily-billing.ts"
+      ],
+      "autoLoaded": false,
+      "referencedBy": [
+        "docs"
+      ],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {},
+      "action": "nenhuma",
+      "reason": "em uso: 3 consumidor(es)",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
       "path": "src/lib/attachments.ts",
       "category": "lib",
       "status": "MANTER",
@@ -17910,7 +18079,7 @@
       "category": "lib",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 21,
+      "consumers": 20,
       "consumerSample": [
         "src/__tests__/audit.test.ts",
         "src/app/(dashboard)/dashboard/calendario/_actions/reschedule.ts",
@@ -17938,7 +18107,7 @@
         "consoleErr": 2
       },
       "action": "nenhuma",
-      "reason": "em uso: 21 consumidor(es), script npm, CI, configuração",
+      "reason": "em uso: 20 consumidor(es), script npm, CI, configuração",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -18365,7 +18534,7 @@
       "category": "lib",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 6,
+      "consumers": 4,
       "consumerSample": [
         "src/__tests__/cash-flow-integrity.test.ts",
         "src/app/actions/bank-reconciliation.ts",
@@ -18377,7 +18546,7 @@
       "risks": [],
       "signals": {},
       "action": "nenhuma",
-      "reason": "em uso: 6 consumidor(es)",
+      "reason": "em uso: 4 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -18896,7 +19065,7 @@
       "category": "lib",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 9,
+      "consumers": 8,
       "consumerSample": [
         "src/__tests__/finance-actions-rpc-routing.test.ts",
         "src/__tests__/financial-period.test.ts",
@@ -18910,7 +19079,7 @@
       "risks": [],
       "signals": {},
       "action": "nenhuma",
-      "reason": "em uso: 9 consumidor(es)",
+      "reason": "em uso: 8 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -19725,7 +19894,7 @@
       "category": "lib",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 79,
+      "consumers": 78,
       "consumerSample": [
         "src/app/(app)/app/perfil/page.tsx",
         "src/app/(app)/app/servico/[id]/page.tsx",
@@ -19748,7 +19917,7 @@
         "serviceRole": 1
       },
       "action": "nenhuma",
-      "reason": "em uso: 79 consumidor(es)",
+      "reason": "em uso: 78 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
