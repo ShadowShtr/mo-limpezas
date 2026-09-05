@@ -1906,7 +1906,7 @@
       ],
       "sideEffects": [
         "supabase",
-        "revalidatePath(40)"
+        "revalidatePath(38)"
       ],
       "risks": [
         "debugger"
@@ -1914,8 +1914,8 @@
       "signals": {
         "supabase": 1,
         "sqlWrite": 26,
-        "debugger": 10,
-        "revalidatePath": 40
+        "debugger": 6,
+        "revalidatePath": 38
       },
       "action": "nenhuma",
       "reason": "configuração/infra",
