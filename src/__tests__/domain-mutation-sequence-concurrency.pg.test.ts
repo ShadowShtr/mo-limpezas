@@ -24,10 +24,10 @@
 // Como corre
 // ---------------------------------------------------------------------------
 //
-// Precisa de um Postgres real com duas ligações. No CI vem de um service
-// container (ver .github/workflows/quality.yml). Localmente, define
-// `TEST_DATABASE_URL` e corre; sem essa variável o ficheiro é ignorado, para
-// não falhar em máquinas sem Postgres.
+// Precisa de um Postgres real com duas ligações. O helper partilhado arranca
+// um contentor descartável local, tanto no CI como numa máquina de
+// desenvolvimento. Sem Docker disponível, a suite falha explicitamente em
+// vez de ser marcada como passada por omissão.
 //
 // A base é descartável e criada do zero em cada execução. Nunca toca em
 // produção — há uma verificação explícita disso mais abaixo.
@@ -37,6 +37,7 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { createRequire } from "node:module";
 import fs from "node:fs";
 import path from "node:path";
+import { startPostgresContainer, type PostgresContainer } from "./helpers/pg-container";
 
 // `pg` não traz tipos e `@types/pg` não está instalado. Acrescentar uma
 // dependência só para tipar um ficheiro de teste seria alargar a superfície do
@@ -46,11 +47,17 @@ interface Ligacao {
   query<T = Record<string, unknown>>(sql: string, params?: unknown[]): Promise<{ rows: T[] }>;
   end(): Promise<void>;
 }
-interface ModuloPg { Client: new (config: { connectionString?: string }) => Ligacao }
+interface ModuloPg {
+  Client: new (config: {
+    host?: string;
+    port?: number;
+    user?: string;
+    database?: string;
+    connectionString?: string;
+  }) => Ligacao;
+}
 
 const pg = createRequire(import.meta.url)("pg") as ModuloPg;
-
-const URL_TESTE = process.env.TEST_DATABASE_URL;
 
 const RAIZ = process.cwd();
 const SQL_078 = fs.readFileSync(
@@ -61,42 +68,44 @@ const SQL_078 = fs.readFileSync(
 const EMPRESA_A = "11111111-1111-1111-1111-111111111111";
 const EMPRESA_B = "22222222-2222-2222-2222-222222222222";
 
-// `describe.skipIf` mantém o ficheiro válido onde não há Postgres, em vez de
-// o transformar num falso verde silencioso: quando corre, corre a sério.
-describe.skipIf(!URL_TESTE)("sequência por empresa com duas ligações reais", () => {
+describe("sequência por empresa com duas ligações reais", () => {
+  let container: PostgresContainer;
   let a: Ligacao;
   let b: Ligacao;
 
   beforeAll(async () => {
-    // 🔴 Uma salvaguarda que não custa nada e evita a pior classe de engano:
-    //    este ficheiro cria e apaga tabelas.
-    if (/supabase\.co|supabase\.in/.test(URL_TESTE!)) {
-      throw new Error("TEST_DATABASE_URL aponta para um Supabase. Este teste cria e apaga tabelas.");
+    container = await startPostgresContainer({
+      name: `domain-mutation-sequence-${process.pid}`,
+      database: "domain_mutation_sequence",
+      serverFlags: ["shared_buffers=16MB", "max_connections=20", "work_mem=1MB"],
+    });
+
+    const setup = new pg.Client(container.connection);
+    await setup.connect();
+    try {
+      await setup.query(`DROP TABLE IF EXISTS public.company_change_events, public.domain_mutations,
+                         public.company_sync_state, public.companies, public._migrations CASCADE`);
+      await setup.query("DROP FUNCTION IF EXISTS public.next_company_sequence(uuid)");
+      await setup.query("DROP FUNCTION IF EXISTS public.lock_domain_mutation(uuid, uuid)");
+      await setup.query("CREATE TABLE public.companies (id uuid PRIMARY KEY, name text NOT NULL)");
+      await setup.query(
+        "INSERT INTO public.companies (id, name) VALUES ($1, 'A'), ($2, 'B')",
+        [EMPRESA_A, EMPRESA_B],
+      );
+      await setup.query(`CREATE TABLE public._migrations (
+        name text PRIMARY KEY, checksum text, applied_at timestamptz NOT NULL DEFAULT now()
+      )`);
+      await setup.query(
+        "INSERT INTO public._migrations (name, checksum) VALUES ('077_secure_migrations_ledger.sql', 'checksum-077')",
+      );
+
+      await setup.query(SQL_078);
+    } finally {
+      await setup.end();
     }
 
-    const setup = new pg.Client({ connectionString: URL_TESTE });
-    await setup.connect();
-    await setup.query(`
-      DROP TABLE IF EXISTS public.company_change_events, public.domain_mutations,
-                           public.company_sync_state, public.companies, public._migrations CASCADE;
-      DROP FUNCTION IF EXISTS public.next_company_sequence(uuid);
-      DROP FUNCTION IF EXISTS public.lock_domain_mutation(uuid, uuid);
-
-      CREATE TABLE public.companies (id uuid PRIMARY KEY, name text NOT NULL);
-      INSERT INTO public.companies (id, name) VALUES ($1, 'A'), ($2, 'B');
-
-      CREATE TABLE public._migrations (
-        name text PRIMARY KEY, checksum text, applied_at timestamptz NOT NULL DEFAULT now()
-      );
-      INSERT INTO public._migrations (name, checksum)
-      VALUES ('077_secure_migrations_ledger.sql', 'checksum-077');
-    `.replace("$1", `'${EMPRESA_A}'`).replace("$2", `'${EMPRESA_B}'`));
-
-    await setup.query(SQL_078);
-    await setup.end();
-
-    a = new pg.Client({ connectionString: URL_TESTE });
-    b = new pg.Client({ connectionString: URL_TESTE });
+    a = new pg.Client(container.connection);
+    b = new pg.Client(container.connection);
     await a.connect();
     await b.connect();
   }, 60_000);
@@ -104,6 +113,7 @@ describe.skipIf(!URL_TESTE)("sequência por empresa com duas ligações reais", 
   afterAll(async () => {
     await a?.end().catch(() => {});
     await b?.end().catch(() => {});
+    container?.stop();
   });
 
   it("🔴 duas transações simultâneas na MESMA empresa obtêm N e N+1 — sem falhas", async () => {
@@ -161,7 +171,7 @@ describe.skipIf(!URL_TESTE)("sequência por empresa com duas ligações reais", 
   it("dez pedidos concorrentes produzem dez números distintos e contíguos", async () => {
     const ligacoes: Ligacao[] = await Promise.all(
       Array.from({ length: 10 }, async (): Promise<Ligacao> => {
-        const c = new pg.Client({ connectionString: URL_TESTE });
+        const c = new pg.Client(container.connection);
         await c.connect();
         return c;
       }),

@@ -4964,12 +4964,9 @@
       "consumerSample": [],
       "autoLoaded": false,
       "referencedBy": [],
-      "sideEffects": [
-        "env"
-      ],
+      "sideEffects": [],
       "risks": [],
       "signals": {
-        "env": 1,
         "sqlWrite": 5,
         "fallbackZero": 1
       },
@@ -6045,11 +6042,11 @@
       "category": "test",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 3,
+      "consumers": 4,
       "consumerSample": [
+        "src/__tests__/domain-mutation-sequence-concurrency.pg.test.ts",
         "src/__tests__/financial-period-lock-protocol.pg.test.ts",
-        "src/__tests__/migration-088-runner-ledger-atomicity.pg.test.ts",
-        "src/__tests__/pg-container-helper.test.ts"
+        "src/__tests__/migration-088-runner-ledger-atomicity.pg.test.ts"
       ],
       "autoLoaded": false,
       "referencedBy": [],
