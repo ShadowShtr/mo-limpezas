@@ -1,8 +1,8 @@
 {
   "generatedBy": "scripts/audit-file-inventory.mjs",
-  "totalFiles": 878,
+  "totalFiles": 876,
   "byStatus": {
-    "MANTER": 855,
+    "MANTER": 853,
     "STANDBY": 23
   },
   "byCategory": {
@@ -20,7 +20,7 @@
     "api-route": 16,
     "config": 12,
     "asset": 8,
-    "report": 6,
+    "report": 4,
     "script-historico": 4,
     "other": 2,
     "ci": 2,
@@ -29,7 +29,7 @@
     "supabase-other": 2
   },
   "byConfidence": {
-    "alta": 857,
+    "alta": 855,
     "média": 15,
     "baixa": 6
   },
@@ -1861,58 +1861,6 @@
       "sideEffects": [],
       "risks": [],
       "signals": {
-        "sqlWrite": 1
-      },
-      "action": "nenhuma",
-      "reason": "configuração/infra",
-      "manualDecision": false
-    },
-    {
-      "path": "reports/code-audit.json",
-      "category": "report",
-      "status": "MANTER",
-      "confidence": "alta",
-      "consumers": 0,
-      "consumerSample": [],
-      "autoLoaded": false,
-      "referencedBy": [
-        "npm",
-        "ci",
-        "config",
-        "docs"
-      ],
-      "sideEffects": [
-        "supabase"
-      ],
-      "risks": [],
-      "signals": {
-        "supabase": 1,
-        "sqlWrite": 1
-      },
-      "action": "nenhuma",
-      "reason": "configuração/infra",
-      "manualDecision": false
-    },
-    {
-      "path": "reports/code-audit.json",
-      "category": "report",
-      "status": "MANTER",
-      "confidence": "alta",
-      "consumers": 0,
-      "consumerSample": [],
-      "autoLoaded": false,
-      "referencedBy": [
-        "npm",
-        "ci",
-        "config",
-        "docs"
-      ],
-      "sideEffects": [
-        "supabase"
-      ],
-      "risks": [],
-      "signals": {
-        "supabase": 1,
         "sqlWrite": 1
       },
       "action": "nenhuma",
