@@ -1,0 +1,46 @@
+-- Rollback da 092 — pagamentos fixos e variáveis dentro do protocolo de período.
+--
+-- 🔴 ROLLBACK_DATA_DESTRUCTIVE = NO. Nenhuma linha de `fixed_variable_payments`,
+--    `cash_flow_entries` ou `payment_cashflow_provenance` é tocada: a 092 só
+--    acrescentou o protocolo de período a funções que já existiam, e criou duas
+--    novas que nada em produção chama ainda.
+--
+-- 🔴 ROLLBACK_REQUIRES_CODE_ROLLBACK = PARCIAL.
+--
+--    `create_payment_atomic` e `set_payment_status_atomic` são NOVAS na 092 e
+--    são aqui removidas. Hoje nenhum runtime publicado as chama — `createPayment`
+--    e o ramo `cancelado` de `setPaymentStatus` ainda escrevem directamente da
+--    server action. Se a PR de runtime dos pagamentos já estiver em produção,
+--    este ficheiro NÃO pode correr sozinho.
+--
+--    As outras quatro NÃO são removidas aqui. Deixá-las cair partiria
+--    `setPaymentStatus`, `updatePayment` e `deletePayment`, que dependem delas
+--    desde a 079/082/088. Para as repor nas versões anteriores reaplicam-se as
+--    migrations que as definem, por ordem: 082, depois 081, depois 088.
+--
+--    🔴 A ordem importa e não é a numérica ingénua: a 081 é a última a definir
+--       `mark_payment_paid` e `unmark_payment_paid`, e a 088 é a última a
+--       definir `update_payment_atomic`. Reaplicar a 079 depois da 081 repunha
+--       uma versão de `mark_payment_paid` que NÃO escreve proveniência — e um
+--       movimento sem proveniência é um movimento que o `unmark` recusa
+--       desmarcar para sempre.
+--
+-- 🔴 O QUE SE PERDE, e é o ponto:
+--
+--    · `mark_payment_paid` e `unmark_payment_paid` voltam a perguntar
+--      `is_financial_period_open` sem adquirir o lock — voltam a ser RACY;
+--    · `update_payment_atomic` e `delete_payment_atomic` voltam a não perguntar
+--      nada;
+--    · o mês de ORIGEM de um movimento reutilizado, e o mês para onde o
+--      `prestate_date` o devolve, deixam outra vez de ser protegidos.
+--
+--    Nada disto dá erro. O sistema volta a aceitar escritas em meses que a
+--    contabilidade já deu por encerrados, em silêncio.
+--
+-- 🔴 FORWARD_FIX_PREFERRED = YES.
+
+DROP FUNCTION IF EXISTS public.create_payment_atomic(uuid, text, text, numeric, date, integer, integer, uuid, boolean, text, uuid);
+DROP FUNCTION IF EXISTS public.set_payment_status_atomic(uuid, uuid, text, uuid);
+
+-- As quatro substituídas NÃO são removidas aqui: deixá-las cair partiria o
+-- runtime que as usa desde a 079/082/088. Reponha-as reaplicando 082 → 081 → 088.
