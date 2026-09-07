@@ -1,7 +1,8 @@
 # Inventário dos writers financeiros — participação no protocolo de período
 
-Revalidado sobre `feat/091-fin-writers-atomic-manual-charges` @ `78138aa`
-(base: `master` @ `1daec61`, com a 090 já generalizada para N períodos).
+Revalidado sobre `master` @ `fdc20c78611bc15f2ede9d4dd304175f02057778`
+(090, 091 e 092 presentes no master e aplicadas em produção; 093–097 ainda
+ausentes do master e do ledger).
 
 Este documento é a lista de trabalho da adopção. Enquanto tiver linhas
 `RACY` ou `NO_GUARD`, `FIN_PERIOD_DOMAIN_COMPLETE = NO` — e o runtime de
@@ -193,13 +194,13 @@ Agrupado por coerência transaccional e de rollback, não por ficheiro de action
 
 | Migration | Domínio | Writers |
 |---|---|---|
-| 091 | Cobranças avulsas | 24–27 · **feito** (PR #137) |
-| 092 | Pagamentos fixos e variáveis | 1–6 · **feito** (PR #139) |
-| 093 | Fluxo de caixa directo | 7–9 · **feito** (PR #140) |
-| 094 | Faturas | 10–12 · **feito** (PR #141) |
-| 095 | Conciliação bancária | 13–18 · **feito** (PR #142) |
-| 096 | Folha — segurança de período apenas | 19–22 · **feito** (PR #143) |
-| 097 | Pagamento de serviços | 23 · **feito** (PR #144) |
+| 091 | Cobranças avulsas | 24–27 · **no master e aplicada** |
+| 092 | Pagamentos fixos e variáveis | 1–6 · **no master e aplicada** |
+| 093 | Fluxo de caixa directo | 7–9 · **em revalidação nesta branch; não aplicada** |
+| 094 | Faturas | 10–12 · pendente |
+| 095 | Conciliação bancária | 13–18 · pendente |
+| 096 | Folha — segurança de período apenas | 19–22 · pendente |
+| 097 | Pagamento de serviços | 23 · pendente |
 
 A recorrência **não** tem número reservado: recebe `NEXT_FREE_MIGRATION` depois
 de esta lista estar fechada.
@@ -213,10 +214,10 @@ sessão. **Zero escritas.** Nenhuma migration aplicada, nenhuma linha tocada.
 ### Estado do ledger
 
 ```
-LEDGER_COUNT      = 90
-090_PRESENT       = NO
-091_PRESENT       = NO
-092..097_PRESENT  = NO
+090_PRESENT       = YES
+091_PRESENT       = YES
+092_PRESENT       = YES
+093..097_PRESENT  = NO
 financial_periods = 0 linhas   (todos os meses abertos)
 ```
 
