@@ -1,8 +1,8 @@
 # Inventário dos writers financeiros — participação no protocolo de período
 
-Revalidado sobre `master` @ `2bef3494d13da911b6a9524a4fe5b7ef5d13c8f5`
-(090, 091, 092 e 093 presentes no master e aplicadas em produção; 094–097
-ainda ausentes do master e do ledger).
+Revalidado sobre `master` @ `270ba1c412e9b007467334651067b47fde10d793`
+(090–094 presentes no master e aplicadas em produção; 095–097 ainda ausentes
+do master e do ledger).
 
 Este documento é a lista de trabalho da adopção. Enquanto tiver linhas
 `RACY` ou `NO_GUARD`, `FIN_PERIOD_DOMAIN_COMPLETE = NO` — e o runtime de
@@ -53,20 +53,20 @@ avisa que não chega.
 
 | # | Writer | Caminho de escrita | Períodos que toca | Estado |
 |---|---|---|---|---|
-| 10 | `generateInvoices` | `create_invoice_with_items` + UPDATE de `services` | `period_start` da fatura | `NO_GUARD` |
-| 11 | `updateInvoiceStatus` | guarda na action + UPDATE + INSERT/DELETE em `cash_flow_entries` | `period_start` + data do movimento criado/removido | `RACY` |
-| 12 | `deleteInvoice` | guarda na action + DELETE | `period_start` | `RACY` |
+| 10 | `generateInvoices` | `create_invoice_with_items` + UPDATE de `services` | `period_start` da fatura | `LOCKED_ATOMIC` |
+| 11 | `updateInvoiceStatus` | `set_invoice_status_atomic` | `period_start` + data do movimento criado/removido | `LOCKED_ATOMIC` |
+| 12 | `deleteInvoice` | `delete_invoice_atomic` | `period_start` | `LOCKED_ATOMIC` |
 
 ### Conciliação bancária — `src/app/actions/bank-reconciliation.ts`
 
 | # | Writer | Caminho de escrita | Períodos que toca | Estado |
 |---|---|---|---|---|
-| 13 | `confirmMatch` | `confirm_bank_match_atomic` (082) | `transaction_date` + data do movimento de caixa emparelhado | `NO_GUARD` |
-| 14 | `rejectMatch` | UPDATEs directos em `matches` e `bank_transactions` | `transaction_date` | `NO_GUARD` |
-| 15 | `manualMatch` | INSERT em `matches` + UPDATE de `bank_transactions` | `transaction_date` + data do movimento | `NO_GUARD` |
-| 16 | `ignoreTransaction` | UPDATE de `bank_transactions.status` | `transaction_date` — `status='pending'` é bloqueador de fecho | `NO_GUARD` |
-| 17 | `createEntryFromTransaction` | guarda na action + INSERT em `cash_flow_entries` + `matches` | `transaction_date` (é a data do movimento criado) | `RACY` |
-| 18 | `deleteImport` | DELETE em `bank_statement_imports`, cascata para `bank_transactions` e `matches` | período de CADA transacção apagada | `NO_GUARD` |
+| 13 | `confirmMatch` | `confirm_bank_match_atomic` (095) | `transaction_date` + data do movimento de caixa emparelhado | `LOCKED_ATOMIC` |
+| 14 | `rejectMatch` | `reject_bank_match_atomic` (095) | `transaction_date` | `LOCKED_ATOMIC` |
+| 15 | `manualMatch` | `manual_bank_match_atomic` (095) | `transaction_date` + data do movimento | `LOCKED_ATOMIC` |
+| 16 | `ignoreTransaction` | `set_bank_transaction_ignored_atomic` (095) | `transaction_date` — `status='pending'` é bloqueador de fecho | `LOCKED_ATOMIC` |
+| 17 | `createEntryFromTransaction` | `create_cashflow_from_bank_transaction_atomic` (095) | `transaction_date` (é a data do movimento criado) | `LOCKED_ATOMIC` |
+| 18 | `deleteImport` | `delete_bank_import_atomic` (095) | período de CADA transacção apagada | `LOCKED_ATOMIC` |
 | — | `createBankAccount`, `recalcSuggestions` | conta bancária; sugestões | nenhum | `NOT_PERIOD_SENSITIVE` |
 
 `deleteImport` é o writer com o maior conjunto de períodos de todo o sistema: um
@@ -123,9 +123,9 @@ WRITER_INVENTORY_TOTAL      = 32   (29 numerados + 3 não sensíveis agrupados)
 PERIOD_SENSITIVE_TOTAL      = 29
 
 Antes desta frente:
-  LOCKED_ATOMIC             = 0
-  RACY                      = 12   (3, 4, 7, 8, 9, 11, 12, 17, 19, 20, 21, 22)
-  NO_GUARD                  = 17   (1, 2, 5, 6, 10, 13, 14, 15, 16, 18, 23, 24..29)
+  LOCKED_ATOMIC             = 15   (090 × 2, 091 × 4, 094 × 3, 095 × 6)
+  RACY                      = 5    (3, 4, 7, 8, 9)
+  NO_GUARD                  = 9    (1, 2, 5, 6, 19, 20, 21, 22, 23)
   NOT_PERIOD_SENSITIVE      = 3
 
 Depois de 090..097, ao nível do SCHEMA:
@@ -197,8 +197,8 @@ Agrupado por coerência transaccional e de rollback, não por ficheiro de action
 | 091 | Cobranças avulsas | 24–27 · **no master e aplicada** |
 | 092 | Pagamentos fixos e variáveis | 1–6 · **no master e aplicada** |
 | 093 | Fluxo de caixa directo | 7–9 · **no master e aplicada** |
-| 094 | Faturas | 10–12 · **em revalidação nesta branch; não aplicada** |
-| 095 | Conciliação bancária | 13–18 · pendente |
+| 094 | Faturas | 10–12 · **no master e aplicada** |
+| 095 | Conciliação bancária | 13–18 · **nesta branch; pendente** |
 | 096 | Folha — segurança de período apenas | 19–22 · pendente |
 | 097 | Pagamento de serviços | 23 · pendente |
 
