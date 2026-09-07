@@ -1,16 +1,16 @@
 {
   "generatedBy": "scripts/audit-file-inventory.mjs",
-  "totalFiles": 857,
+  "totalFiles": 862,
   "byStatus": {
-    "MANTER": 834,
+    "MANTER": 839,
     "STANDBY": 23
   },
   "byCategory": {
-    "test": 197,
+    "test": 199,
     "route-ui": 140,
-    "migration": 116,
+    "migration": 118,
     "lib": 72,
-    "script": 57,
+    "script": 58,
     "domain": 52,
     "doc": 46,
     "server-action": 44,
@@ -29,12 +29,12 @@
     "supabase-other": 2
   },
   "byConfidence": {
-    "alta": 836,
+    "alta": 841,
     "média": 15,
     "baixa": 6
   },
   "scriptRisk": {
-    "SAFE_OFFLINE": 31,
+    "SAFE_OFFLINE": 32,
     "ADMIN_GUARDED_WRITE": 11,
     "WRITE_CAPABLE": 9,
     "ADMIN_READ": 6
@@ -549,7 +549,7 @@
       ],
       "signals": {
         "serviceRole": 1,
-        "sqlWrite": 25,
+        "sqlWrite": 16,
         "todo": 1
       },
       "action": "nenhuma",
@@ -2751,6 +2751,31 @@
       "scriptRisk": "SAFE_OFFLINE"
     },
     {
+      "path": "scripts/gen-095-fixture.mjs",
+      "category": "script",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "consoleLog": 1
+      },
+      "action": "nenhuma",
+      "reason": "ferramenta offline, sem acesso à base",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": true,
+        "dynamicImport": true,
+        "allClosed": false
+      },
+      "scriptRisk": "SAFE_OFFLINE"
+    },
+    {
       "path": "scripts/gen-credenciais-pdf.mjs",
       "category": "script",
       "status": "MANTER",
@@ -4208,6 +4233,33 @@
       }
     },
     {
+      "path": "src/__tests__/bank-reconciliation-period-atomic.pg.test.ts",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [
+        "service-role"
+      ],
+      "signals": {
+        "serviceRole": 4,
+        "sqlWrite": 15
+      },
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
       "path": "src/__tests__/billing-adhoc-guard.test.ts",
       "category": "test",
       "status": "MANTER",
@@ -5510,7 +5562,7 @@
         "service-role"
       ],
       "signals": {
-        "serviceRole": 3,
+        "serviceRole": 4,
         "sqlWrite": 10
       },
       "action": "nenhuma",
@@ -6235,6 +6287,24 @@
       "manualDecision": false
     },
     {
+      "path": "src/__tests__/fixtures/pre-095-bank-rpc.sql",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "sqlWrite": 6
+      },
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false
+    },
+    {
       "path": "src/__tests__/fixtures/production-078-partial-shape.json",
       "category": "test",
       "status": "MANTER",
@@ -6320,11 +6390,11 @@
       "category": "test",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 9,
+      "consumers": 10,
       "consumerSample": [
+        "src/__tests__/bank-reconciliation-period-atomic.pg.test.ts",
         "src/__tests__/cashflow-period-atomic.pg.test.ts",
-        "src/__tests__/domain-mutation-sequence-concurrency.pg.test.ts",
-        "src/__tests__/fin-period-production-shadow.pg.test.ts"
+        "src/__tests__/domain-mutation-sequence-concurrency.pg.test.ts"
       ],
       "autoLoaded": false,
       "referencedBy": [],
@@ -22608,6 +22678,27 @@
       "manualDecision": false
     },
     {
+      "path": "supabase/migrations/095_bank_reconciliation_period_atomic.sql",
+      "category": "migration",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [
+        "service-role"
+      ],
+      "signals": {
+        "serviceRole": 7,
+        "sqlWrite": 24
+      },
+      "action": "nenhuma",
+      "reason": "migration versionada — histórico do schema, nunca se apaga",
+      "manualDecision": false
+    },
+    {
       "path": "supabase/migrations/20260608_new_features.sql",
       "category": "migration",
       "status": "MANTER",
@@ -23054,6 +23145,24 @@
       "risks": [],
       "signals": {
         "sqlWrite": 3
+      },
+      "action": "nenhuma",
+      "reason": "migration versionada — histórico do schema, nunca se apaga",
+      "manualDecision": false
+    },
+    {
+      "path": "supabase/migrations/rollback/095_bank_reconciliation_period_atomic.down.sql",
+      "category": "migration",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "sqlWrite": 5
       },
       "action": "nenhuma",
       "reason": "migration versionada — histórico do schema, nunca se apaga",

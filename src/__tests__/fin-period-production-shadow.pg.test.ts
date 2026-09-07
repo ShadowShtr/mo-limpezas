@@ -1,5 +1,5 @@
 // ============================================================================
-// PRODUCTION-PARITY SHADOW — 078, 090, 091 e 094 sobre a forma real do schema
+// PRODUCTION-PARITY SHADOW — 078, 090, 091, 094 e 095 sobre a forma real do schema
 // ============================================================================
 //
 // As suites da 090 e da 091 provam o protocolo sobre um palco mínimo: as
@@ -46,8 +46,8 @@ const ler = (p: string) => readFileSync(join(ROOT, p), "utf8");
  *    049, …), porque o dump da forma traz tabelas e políticas mas não traz
  *    funções.
  *
- *    O que se ensaia é o que a direcção vai autorizar aplicar: 078, 090, 091
- *    e 094,
+ *    O que se ensaia é o que a direcção vai autorizar aplicar: 078, 090, 091,
+ *    094 e 095,
  *    sobre uma base que já tem o que produção tem. O pré-estado da 086 —
  *    `manual_charges` e as três RPCs — é montado abaixo a partir do mesmo
  *    fixture extraído que a suite da 091 usa, para as duas partirem do mesmo
@@ -58,6 +58,7 @@ const CADEIA = [
   "supabase/migrations/090_financial_period_lock_protocol.sql",
   "supabase/migrations/091_manual_charges_period_atomic.sql",
   "supabase/migrations/094_invoices_period_atomic.sql",
+  "supabase/migrations/095_bank_reconciliation_period_atomic.sql",
 ] as const;
 
 beforeAll(async () => {
@@ -123,6 +124,7 @@ beforeAll(async () => {
   await pool.query(ler("src/__tests__/fixtures/086-manual-charges-table.sql"));
   await pool.query(ler("src/__tests__/fixtures/086-manual-charges-rpcs.sql"));
   await pool.query(ler("src/__tests__/fixtures/pre-094-invoice-rpc.sql"));
+  await pool.query(ler("src/__tests__/fixtures/pre-095-bank-rpc.sql"));
 
   for (const migration of CADEIA) {
     await pool.query(ler(migration));
@@ -135,7 +137,7 @@ afterAll(async () => {
 });
 
 describe("shadow — a cadeia aplica sobre a forma real de produção", () => {
-  it("078 → 090 → 091 → 094 aplicam sem erro sobre o schema real", async () => {
+  it("078 → 090 → 091 → 094 → 095 aplicam sem erro sobre o schema real", async () => {
     // Se o `beforeAll` chegou aqui, aplicaram. Este teste existe para que a
     // falha apareça com nome próprio em vez de como «beforeAll rebentou».
     const { rows } = await pool.query("SELECT current_database() db");
@@ -173,6 +175,35 @@ describe("shadow — a cadeia aplica sobre a forma real de produção", () => {
       expect(rows.map((r) => r.args), nome).toContain(assinatura);
     }
   }, 120_000);
+
+  it("as seis RPCs da 095 existem com assinatura e grants fechados", async () => {
+    const esperado: ReadonlyArray<readonly [string, string]> = [
+      ["confirm_bank_match_atomic", "p_company_id uuid, p_match_id uuid, p_actor_id uuid"],
+      ["reject_bank_match_atomic", "p_company_id uuid, p_match_id uuid, p_actor_id uuid"],
+      ["manual_bank_match_atomic", "p_company_id uuid, p_bank_tx_id uuid, p_entry_id uuid, p_actor_id uuid"],
+      ["set_bank_transaction_ignored_atomic", "p_company_id uuid, p_bank_tx_id uuid, p_ignorar boolean, p_actor_id uuid"],
+      [
+        "create_cashflow_from_bank_transaction_atomic",
+        "p_company_id uuid, p_bank_tx_id uuid, p_category text, p_actor_id uuid",
+      ],
+      ["delete_bank_import_atomic", "p_company_id uuid, p_import_id uuid, p_actor_id uuid"],
+    ];
+
+    for (const [nome, assinatura] of esperado) {
+      const { rows } = await pool.query(
+        `SELECT pg_get_function_identity_arguments(p.oid) args
+           FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+          WHERE n.nspname='public' AND p.proname=$1`,
+        [nome],
+      );
+      expect(rows.map((r) => r.args), nome).toContain(assinatura);
+      const tipos = assinatura.split(", ").map((a) => a.split(" ").slice(1).join(" ")).join(", ");
+      const alvo = `public.${nome}(${tipos})`;
+      expect((await pool.query("SELECT has_function_privilege('anon',$1,'EXECUTE') pode", [alvo])).rows[0].pode).toBe(false);
+      expect((await pool.query("SELECT has_function_privilege('authenticated',$1,'EXECUTE') pode", [alvo])).rows[0].pode).toBe(false);
+      expect((await pool.query("SELECT has_function_privilege('service_role',$1,'EXECUTE') pode", [alvo])).rows[0].pode).toBe(true);
+    }
+  }, 180_000);
 
   it("as quatro RPCs de cobranças ficam com a assinatura preservada da 086", async () => {
     // 🔴 EXPAND FIRST: a 091 substitui três funções e acrescenta uma. Se
