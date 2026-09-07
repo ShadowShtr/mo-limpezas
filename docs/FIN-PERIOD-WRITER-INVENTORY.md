@@ -1,8 +1,8 @@
 # Inventário dos writers financeiros — participação no protocolo de período
 
-Revalidado sobre `master` @ `fdc20c78611bc15f2ede9d4dd304175f02057778`
-(090, 091 e 092 presentes no master e aplicadas em produção; 093–097 ainda
-ausentes do master e do ledger).
+Revalidado sobre `master` @ `2bef3494d13da911b6a9524a4fe5b7ef5d13c8f5`
+(090, 091, 092 e 093 presentes no master e aplicadas em produção; 094–097
+ainda ausentes do master e do ledger).
 
 Este documento é a lista de trabalho da adopção. Enquanto tiver linhas
 `RACY` ou `NO_GUARD`, `FIN_PERIOD_DOMAIN_COMPLETE = NO` — e o runtime de
@@ -196,8 +196,8 @@ Agrupado por coerência transaccional e de rollback, não por ficheiro de action
 |---|---|---|
 | 091 | Cobranças avulsas | 24–27 · **no master e aplicada** |
 | 092 | Pagamentos fixos e variáveis | 1–6 · **no master e aplicada** |
-| 093 | Fluxo de caixa directo | 7–9 · **em revalidação nesta branch; não aplicada** |
-| 094 | Faturas | 10–12 · pendente |
+| 093 | Fluxo de caixa directo | 7–9 · **no master e aplicada** |
+| 094 | Faturas | 10–12 · **em revalidação nesta branch; não aplicada** |
 | 095 | Conciliação bancária | 13–18 · pendente |
 | 096 | Folha — segurança de período apenas | 19–22 · pendente |
 | 097 | Pagamento de serviços | 23 · pendente |
@@ -206,7 +206,7 @@ A recorrência **não** tem número reservado: recebe `NEXT_FREE_MIGRATION` depo
 de esta lista estar fechada.
 
 
-## Verificação READ-ONLY de produção — 2026-09-03
+## Verificação READ-ONLY de produção — 2026-09-07
 
 Leitura pela ligação directa, com `SET default_transaction_read_only = on` na
 sessão. **Zero escritas.** Nenhuma migration aplicada, nenhuma linha tocada.
@@ -217,7 +217,8 @@ sessão. **Zero escritas.** Nenhuma migration aplicada, nenhuma linha tocada.
 090_PRESENT       = YES
 091_PRESENT       = YES
 092_PRESENT       = YES
-093..097_PRESENT  = NO
+093_PRESENT       = YES
+094..097_PRESENT  = NO
 financial_periods = 0 linhas   (todos os meses abertos)
 ```
 
