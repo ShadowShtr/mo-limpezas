@@ -1,12 +1,12 @@
 {
   "generatedBy": "scripts/audit-file-inventory.mjs",
-  "totalFiles": 873,
+  "totalFiles": 874,
   "byStatus": {
-    "MANTER": 850,
+    "MANTER": 851,
     "STANDBY": 23
   },
   "byCategory": {
-    "test": 203,
+    "test": 204,
     "route-ui": 140,
     "migration": 122,
     "lib": 73,
@@ -29,7 +29,7 @@
     "supabase-other": 2
   },
   "byConfidence": {
-    "alta": 852,
+    "alta": 853,
     "média": 15,
     "baixa": 6
   },
@@ -543,14 +543,9 @@
       "autoLoaded": false,
       "referencedBy": [],
       "sideEffects": [],
-      "risks": [
-        "service-role",
-        "todo(1)"
-      ],
+      "risks": [],
       "signals": {
-        "serviceRole": 1,
-        "sqlWrite": 16,
-        "todo": 1
+        "sqlWrite": 3
       },
       "action": "nenhuma",
       "reason": "documentação",
@@ -5625,6 +5620,32 @@
       }
     },
     {
+      "path": "src/__tests__/fin-period-writer-guard.test.ts",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [
+        "docs"
+      ],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "sqlWrite": 3
+      },
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
       "path": "src/__tests__/finance-actions-rpc-routing.test.ts",
       "category": "test",
       "status": "MANTER",
@@ -6397,9 +6418,7 @@
       "consumers": 0,
       "consumerSample": [],
       "autoLoaded": false,
-      "referencedBy": [
-        "docs"
-      ],
+      "referencedBy": [],
       "sideEffects": [],
       "risks": [],
       "signals": {
@@ -7652,7 +7671,9 @@
       "consumers": 0,
       "consumerSample": [],
       "autoLoaded": false,
-      "referencedBy": [],
+      "referencedBy": [
+        "docs"
+      ],
       "sideEffects": [
         "write"
       ],

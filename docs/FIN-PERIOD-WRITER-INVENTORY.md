@@ -1,288 +1,81 @@
 # Inventário dos writers financeiros — participação no protocolo de período
 
-Revalidado sobre `master` @ `270ba1c412e9b007467334651067b47fde10d793`
-(090–094 presentes no master e aplicadas em produção; 095–097 ainda ausentes
-do master e do ledger).
+Estado sobre `master` @ `f453999`, com as migrations 090..097 **aplicadas em
+produção** (ledger completo, checksums a bater) e o runtime do R1 integrado.
 
-Este documento é a lista de trabalho da adopção. Enquanto tiver linhas
-`RACY` ou `NO_GUARD`, `FIN_PERIOD_DOMAIN_COMPLETE = NO` — e o runtime de
-fecho (#138) não pode ser publicado, porque o `close` passaria a adquirir um
-recurso que metade dos writers não adquire, dando protecção parcial com ar de
-protecção completa.
+O guard que fixa este documento é `src/__tests__/fin-period-writer-guard.test.ts`.
+Enquanto houver linhas na tabela de dívida no fim, `PERIOD_SENSITIVE_RACY_WRITERS`
+**não é zero** — e este documento não diz que é.
 
-## As três classificações, e o que distingue a segunda da terceira
+## As três classificações
 
 | Estado | O que significa |
 |---|---|
-| `LOCKED_ATOMIC` | O writer adquire o **mesmo** `pg_advisory_xact_lock` que o fecho, dentro da transação que escreve, e valida depois de o ter. Serializa com o fecho. |
-| `RACY` | Existe guarda de período, mas em transação diferente da escrita — ou dentro da RPC mas **sem** adquirir o lock. Lê «aberto», o fecho entra pelo meio, e a escrita entra num mês fechado. |
-| `NO_GUARD` | Não há guarda nenhuma. Escreve num mês fechado sem sequer perguntar. |
+| `LOCKED_ATOMIC` | O writer escreve por uma RPC que adquire o **mesmo** `pg_advisory_xact_lock` que o fecho, dentro da transação que escreve, e valida depois de o ter. Serializa com o fecho. |
+| `RACY` | Há guarda de período, mas noutra transação — ou dentro da RPC sem adquirir o lock. Lê «aberto», o fecho entra pelo meio, a escrita entra num mês fechado. |
+| `NO_GUARD` | Não há guarda nenhuma. |
 
-`FOR UPDATE` + `is_financial_period_open()` dentro de uma RPC **não** basta e
-não conta como `LOCKED_ATOMIC`. O `FOR UPDATE` serializa contra outros writers
-da mesma linha; não serializa contra o `close`, que não toca nessa linha. Sem o
-advisory lock partilhado, os dois lados continuam a não se ver.
+`FOR UPDATE` + `is_financial_period_open()` dentro de uma RPC **não** basta e não
+conta como `LOCKED_ATOMIC`: o `FOR UPDATE` serializa contra outros writers da
+mesma linha, mas não contra o `close`, que não toca nessa linha.
 
-## Inventário
+## Writers convertidos
 
-### Pagamentos fixos e variáveis — `src/app/actions/payments.ts`
+Todos `LOCKED_ATOMIC`. Nenhum destes ficheiros escreve directamente numa tabela
+sensível ao período — verificado, não presumido: o guard varre `src/` inteiro à
+procura de `.from("<tabela>")` seguido de escrita, e falha se um deles reaparecer.
 
-| # | Writer | Caminho de escrita | Períodos que toca | Estado |
-|---|---|---|---|---|
-| 1 | `createPayment` | INSERT directo em `fixed_variable_payments` | `period_year`/`period_month` (competência) | `NO_GUARD` |
-| 2 | `updatePayment` | `update_payment_atomic` (088) | competência actual + competência nova + data do movimento ligado | `NO_GUARD` |
-| 3 | `setPaymentStatus('pago')` | `mark_payment_paid` (079) | competência + data do movimento que nasce (hoje) | `RACY` |
-| 4 | `setPaymentStatus('pendente')` | `unmark_payment_paid` (081) | competência + data do movimento que é removido/despromovido | `RACY` |
-| 5 | `setPaymentStatus(outros)` | UPDATE directo do `status` | competência — `status='pendente'` é bloqueador de fecho | `NO_GUARD` |
-| 6 | `deletePayment` | `delete_payment_atomic` (082) | competência + data do movimento apagado | `NO_GUARD` |
-| — | `uploadPaymentAttachment`, `deletePaymentAttachment` | metadados de anexo | nenhum | `NOT_PERIOD_SENSITIVE` |
+| Ficheiro | RPCs | Migration |
+|---|---|---|
+| `src/app/actions/payments.ts` | `create_payment_atomic`, `update_payment_atomic`, `set_payment_status_atomic`, `delete_payment_atomic` | 092 |
+| `src/app/actions/cash-flow.ts` | `create_cashflow_entry_atomic`, `update_cashflow_entry_atomic`, `delete_cashflow_entry_atomic` | 093 |
+| `src/app/actions/invoices.ts` | `set_invoice_status_atomic`, `delete_invoice_atomic` | 094 |
+| `src/app/actions/bank-reconciliation.ts` | `confirm_bank_match_atomic`, `reject_bank_match_atomic`, `manual_bank_match_atomic`, `set_bank_transaction_ignored_atomic`, `create_cashflow_from_bank_transaction_atomic`, `delete_bank_import_atomic` | 095 |
+| `src/app/actions/daily-billing.ts` | `set_service_payment_atomic` | 097 |
+| `src/app/actions/financial-periods.ts` | `close_financial_period_atomic`, `reopen_financial_period_atomic` | 090 |
 
-As RPCs 079/081 chamam `is_financial_period_open` lá dentro. É por isso que
-estão em `RACY` e não em `NO_GUARD` — e é exactamente o caso que a tabela acima
-avisa que não chega.
+Cobranças avulsas (091) estão em `manual-charges`, já encaminhadas antes desta
+frente.
 
-### Fluxo de caixa directo — `src/app/actions/cash-flow.ts`
+`src/app/actions/clientes.ts` deixou de ter caminho de destruição: o
+arquivamento é `archive-only`, e a tabela de clientes não expõe `deleteCliente`.
+Um cliente arquivado mantém faturas, movimentos e histórico.
 
-| # | Writer | Caminho de escrita | Períodos que toca | Estado |
-|---|---|---|---|---|
-| 7 | `createCashFlowEntry` | guarda na action + INSERT directo | data do movimento | `RACY` |
-| 8 | `updateCashFlowEntry` | guarda na action + `update_cashflow_entry_atomic` (082) | data actual + data nova | `RACY` |
-| 9 | `deleteCashFlowEntry` | guarda na action + `delete_cashflow_entry_atomic` (082) | data do movimento | `RACY` |
+## A dívida que falta — e é uma só
 
-### Faturas — `src/app/actions/invoices.ts`
-
-| # | Writer | Caminho de escrita | Períodos que toca | Estado |
-|---|---|---|---|---|
-| 10 | `generateInvoices` | `create_invoice_with_items` + UPDATE de `services` | `period_start` da fatura | `LOCKED_ATOMIC` |
-| 11 | `updateInvoiceStatus` | `set_invoice_status_atomic` | `period_start` + data do movimento criado/removido | `LOCKED_ATOMIC` |
-| 12 | `deleteInvoice` | `delete_invoice_atomic` | `period_start` | `LOCKED_ATOMIC` |
-
-### Conciliação bancária — `src/app/actions/bank-reconciliation.ts`
-
-| # | Writer | Caminho de escrita | Períodos que toca | Estado |
-|---|---|---|---|---|
-| 13 | `confirmMatch` | `confirm_bank_match_atomic` (095) | `transaction_date` + data do movimento de caixa emparelhado | `LOCKED_ATOMIC` |
-| 14 | `rejectMatch` | `reject_bank_match_atomic` (095) | `transaction_date` | `LOCKED_ATOMIC` |
-| 15 | `manualMatch` | `manual_bank_match_atomic` (095) | `transaction_date` + data do movimento | `LOCKED_ATOMIC` |
-| 16 | `ignoreTransaction` | `set_bank_transaction_ignored_atomic` (095) | `transaction_date` — `status='pending'` é bloqueador de fecho | `LOCKED_ATOMIC` |
-| 17 | `createEntryFromTransaction` | `create_cashflow_from_bank_transaction_atomic` (095) | `transaction_date` (é a data do movimento criado) | `LOCKED_ATOMIC` |
-| 18 | `deleteImport` | `delete_bank_import_atomic` (095) | período de CADA transacção apagada | `LOCKED_ATOMIC` |
-| — | `createBankAccount`, `recalcSuggestions` | conta bancária; sugestões | nenhum | `NOT_PERIOD_SENSITIVE` |
-
-`deleteImport` é o writer com o maior conjunto de períodos de todo o sistema: um
-extracto pode atravessar meses, e a cascata apaga tudo de uma vez.
-
-### Folha — `src/app/actions/payroll.ts`
-
-| # | Writer | Caminho de escrita | Períodos que toca | Estado |
-|---|---|---|---|---|
-| 19 | `calculateAndSavePayroll` | guarda na action + UPSERT em `payroll_records` | `period_year`/`period_month` | `RACY` |
-| 20 | `adjustPayrollRecord` | guarda na action + UPDATE | `period_year`/`period_month` | `RACY` |
-| 21 | `approvePayrollRecords` | guarda na action + UPDATE de `status` | competências de TODO o lote | `RACY` |
-| 22 | `markPayrollPaid` | guarda na action + UPDATE + INSERT em `cash_flow_entries`, **em viagens separadas** | competências do lote + data do movimento | `RACY` |
-
-🔴 **Correcção.** A primeira versão deste inventário classificou os quatro como
-`NO_GUARD`. Está errado: `bloquearSePeriodoFechado` e
-`bloquearSePeriodoFechadoPorIds` existem e correm antes de cada escrita. São
-`RACY` — a guarda está na action, uma viagem antes.
-
-`markPayrollPaid` tem um segundo defeito, que o próprio ficheiro admitia por
-resolver (a P0B): o `update` da folha e o `insert` do caixa são duas escritas
-separadas. A 096 fecha-o.
-
-### Pagamento de serviços — `src/app/actions/daily-billing.ts`
-
-| # | Writer | Caminho de escrita | Períodos que toca | Estado |
-|---|---|---|---|---|
-| 23 | `setServicePayment` | INSERT/UPDATE/DELETE directos em `cash_flow_entries` + UPDATE de `services` | data do serviço + data do movimento novo + data do movimento existente | `NO_GUARD` |
-
-`set_service_payment_atomic` existe na 086, mas o runtime publicado **não a
-chama**: `setServicePayment` escreve directamente. A adopção tem de cobrir os
-dois — a RPC e o caminho que a substitui.
-
-### Cobranças avulsas — 091
-
-| # | Writer | Caminho de escrita | Períodos que toca | Estado |
-|---|---|---|---|---|
-| 24 | `create_manual_charge_atomic` | 091 | `charge_date` | `LOCKED_ATOMIC` |
-| 25 | `update_manual_charge_atomic` | 091 | `charge_date` actual + nova | `LOCKED_ATOMIC` |
-| 26 | `set_manual_charge_payment_atomic` | 091 | `charge_date` + data de cada movimento existente + hoje (só quando entra dinheiro) | `LOCKED_ATOMIC` |
-| 27 | `void_manual_charge_atomic` | 091 | `charge_date` | `LOCKED_ATOMIC` |
-
-### Fecho e reabertura — 090
-
-| # | Writer | Caminho de escrita | Estado |
+| Ficheiro | Tabela | Estado | Dono |
 |---|---|---|---|
-| 28 | `close_financial_period_atomic` | 090 | `LOCKED_ATOMIC` |
-| 29 | `reopen_financial_period_atomic` | 090 | `LOCKED_ATOMIC` |
+| `src/app/actions/payroll.ts` | `cash_flow_entries` (INSERT directo) | `RACY` | **PR #156** |
 
-## Contagem — depois da adopção 091..097
+A 096 está aplicada em produção e o contrato existe —
+`upsert_payroll_records_atomic`, `adjust_payroll_record_atomic`,
+`approve_payroll_records_atomic`, `mark_payroll_paid_atomic`. O que falta é o
+writer passar a chamá-lo.
 
-```
-WRITER_INVENTORY_TOTAL      = 32   (29 numerados + 3 não sensíveis agrupados)
-PERIOD_SENSITIVE_TOTAL      = 29
+Enquanto ficar assim, marcar a folha como paga cria o movimento de caixa por
+fora da transação: um mês fechado não trava essa escrita, e uma falha a meio
+pode deixar a folha paga sem movimento, ou o movimento sem a folha.
 
-Antes desta frente:
-  LOCKED_ATOMIC             = 15   (090 × 2, 091 × 4, 094 × 3, 095 × 6)
-  RACY                      = 5    (3, 4, 7, 8, 9)
-  NO_GUARD                  = 9    (1, 2, 5, 6, 19, 20, 21, 22, 23)
-  NOT_PERIOD_SENSITIVE      = 3
+O guard tem um teste dedicado a esta linha. Quando a #156 entrar, a excepção
+deixa de corresponder a código real e o teste **falha** — obrigando a que saia
+da lista em vez de ficar esquecida a dar ar de estado normal.
 
-Depois de 090..097, ao nível do SCHEMA:
-  LOCKED_ATOMIC             = 29
-  RACY                      = 0
-  NO_GUARD                  = 0
-  NOT_PERIOD_SENSITIVE      = 3
-```
+## Escritas directas que não são dívida
 
-🔴 **`ao nível do SCHEMA` não é uma ressalva de estilo.** Sete writers têm hoje
-uma RPC protegida que o runtime publicado **ainda não chama** — escreve
-directamente da server action. Enquanto assim for, a protecção existe na base e
-não está no caminho que a aplicação usa:
+Inventariadas com razão, e o guard falha se alguma delas desaparecer do código
+sem sair daqui.
 
-| Writer | RPC que passa a existir | `MUST_CALL` |
+| Ficheiro | Tabela | Porquê não conta |
 |---|---|---|
-| `createPayment` | `create_payment_atomic` | sim |
-| `setPaymentStatus` (`cancelado`) | `set_payment_status_atomic` | sim |
-| `createCashFlowEntry` | `create_cashflow_entry_atomic` | sim |
-| `updateInvoiceStatus` | `set_invoice_status_atomic` | sim |
-| `deleteInvoice` | `delete_invoice_atomic` | sim |
-| `rejectMatch`, `manualMatch`, `ignoreTransaction`, `createEntryFromTransaction`, `deleteImport` | as cinco novas da 095 | sim |
-| `calculateAndSavePayroll`, `adjustPayrollRecord`, `approvePayrollRecords`, `markPayrollPaid` | as quatro da 096 | sim |
-| `setServicePayment` | `set_service_payment_atomic` (existe desde a 086, e o runtime **nunca** a chamou) | sim |
-| `createManualCharge` | `create_manual_charge_atomic` | sim |
+| `src/app/actions/colaboradores.ts` | `invoices` | Anonimiza `created_by` ao remover uma pessoa. Não toca em valor, data nem estado. |
+| `src/app/actions/colaboradores.ts` | `payroll_records` | Anonimiza `approved_by`, pela mesma razão. |
+| `src/lib/payments-month-materialization.ts` | `fixed_variable_payments` | Módulo em quarentena, sem nenhum caminho da aplicação a chegar-lhe; `payments-no-implicit-materialization.test.ts` falha se alguém o importar. |
 
-`FIN_PERIOD_DOMAIN_COMPLETE` só passa a `YES` quando estas substituições
-estiverem feitas — é a PR de runtime, e é ela que fecha a frente. Até lá:
+## Porque é que o guard varre as escritas, e não só as chamadas
 
-```
-FIN_PERIOD_SCHEMA_COMPLETE  = YES
-FIN_PERIOD_RUNTIME_COMPLETE = NO
-FIN_PERIOD_DOMAIN_COMPLETE  = NO
-```
-
-## Maior conjunto de períodos numa única operação económica
-
-A pergunta que a 090 tinha de responder para deixar de ser um protocolo de par:
-
-| Operação | Períodos |
-|---|---|
-| `updatePayment` com mudança de competência e movimento ligado | 3 — competência actual, competência nova, data do movimento |
-| `set_manual_charge_payment_atomic` a receber sobre caixa antigo | 3 — cobrança, movimento antigo, hoje |
-| `setServicePayment` a mudar o recebimento | 3 — serviço, movimento existente, hoje |
-| `confirmMatch` | 2 — transacção bancária, movimento de caixa |
-| `deleteImport` | **N** — um por cada mês tocado pelo extracto |
-
-`deleteImport` fecha a discussão: não há número fixo. É por isso que a primitiva
-canónica recebe uma lista e não um par, e é por isso que a 090 passou a
-`lock_financial_periods_many`.
-
-## Prestate financeiro observado
-
-Leitura read-only do schema de produção confirmou a constraint única
-`(company_id, collaborator_id, period_year, period_month)` em
-`payroll_records`.
-
-`PAYROLL_UNIQUE_EFFECT = PRESENT` · `PAYROLL_UNIQUE_PROVENANCE = UNKNOWN`.
-Não se cria constraint duplicada nem se atribui migration até existir origem
-canónica comprovada. O prestate usado nos ensaios está em
-`src/__tests__/fixtures/production-financial-prestate.sql`.
-
-## Agrupamento das migrations de adopção
-
-Agrupado por coerência transaccional e de rollback, não por ficheiro de action:
-
-| Migration | Domínio | Writers |
-|---|---|---|
-| 091 | Cobranças avulsas | 24–27 · **no master e aplicada** |
-| 092 | Pagamentos fixos e variáveis | 1–6 · **no master e aplicada** |
-| 093 | Fluxo de caixa directo | 7–9 · **no master e aplicada** |
-| 094 | Faturas | 10–12 · **no master e aplicada** |
-| 095 | Conciliação bancária | 13–18 · **nesta branch; pendente** |
-| 096 | Folha — segurança de período apenas | 19–22 · pendente |
-| 097 | Pagamento de serviços | 23 · pendente |
-
-A recorrência **não** tem número reservado: recebe `NEXT_FREE_MIGRATION` depois
-de esta lista estar fechada.
-
-
-## Verificação READ-ONLY de produção — 2026-09-07
-
-Leitura pela ligação directa, com `SET default_transaction_read_only = on` na
-sessão. **Zero escritas.** Nenhuma migration aplicada, nenhuma linha tocada.
-
-### Estado do ledger
-
-```
-090_PRESENT       = YES
-091_PRESENT       = YES
-092_PRESENT       = YES
-093_PRESENT       = YES
-094..097_PRESENT  = NO
-financial_periods = 0 linhas   (todos os meses abertos)
-```
-
-### O prestate que o shadow assume, confirmado na base real
-
-| Objecto | Produção |
-|---|---|
-| `financial_periods_unique` | `UNIQUE (company_id, year, month)` ✅ |
-| `cash_flow_entries_reference_unique` | índice único **parcial** ✅ |
-| `cash_flow_entries_reference_type_check` | inclui `manual_charge` ✅ |
-| `uq_bank_match_pair` | `(bank_transaction_id, cash_flow_entry_id)` ✅ |
-| `payment_cashflow_provenance` | presente ✅ |
-| `is_financial_period_open` | `(uuid, integer, integer)` ✅ |
-| `audit_logs` | `id`/`meta`/`created_at`/`entity_type` com os defaults esperados ✅ |
-| grants | `postgres, service_role` nas RPCs financeiras ✅ |
-
-As **15 funções** que a pilha 090..097 substitui existem em produção com a
-assinatura EXACTA que cada migration assume, e nenhuma é `SECURITY DEFINER`.
-`DIVERGENCIAS = 0`.
-
-### Revalidação do prestate e adoção da 094
-
-**1. `set_invoice_status_atomic` já existia — com a assinatura canónica de 7 argumentos.**
-
-```
-set_invoice_status_atomic(
-  p_invoice_id uuid, p_company_id uuid, p_actor uuid, p_status text,
-  p_payment_method text, p_mutation_id uuid, p_expected_revision integer
-) RETURNS jsonb   — SECURITY DEFINER
-```
-
-A origem versionada desta função continua UNKNOWN / ORPHAN_PRODUCTION_DRIFT.
-Ela usa `public.domain_mutations` para idempotência e `invoices.revision` para
-bloqueio optimista — ambos presentes na base, mas ausentes das migrations
-anteriores desta linha.
-
-A 094 foi corrigida para adotar esse prestate exacto, substituir o corpo stale
-contra os contratos canónicos atuais e manter uma única assinatura, sem
-overload silencioso. A precondition continua fail-closed para qualquer shape
-inesperado.
-
-`PRODUCTION_ORPHAN_RPC_ADOPTED = YES` · `NO_OVERLOAD = YES`.
-
-**2. `payroll_records` possui o árbitro único exigido pelo upsert:**
-
-`runPayrollCalculation` faz
-`upsert(..., { onConflict: "company_id,collaborator_id,period_year,period_month" })`.
-O prestate de produção confirma:
-
-`UNIQUE (company_id, collaborator_id, period_year, period_month)`.
-
-`PAYROLL_UNIQUE_EFFECT = PRESENT` · `PAYROLL_42P10_PRODUCTION_BLOCKER = NO` ·
-`PAYROLL_UNIQUE_PROVENANCE = UNKNOWN`. Não criar repair, remover constraint ou
-adicionar uma constraint equivalente nesta frente.
-
-### O que existe na base e em migration nenhuma
-
-```
-public.domain_mutations        = presente
-public.invoices.revision       = presente
-public.domain_change_events    = ausente
-public.cash_flow_entries.revision = ausente
-```
-
-É a mesma família de drift que `docs/LEDGER-RECONCILIATION-PENDING.md` já
-regista. A 094 agora adota explicitamente a RPC órfã, sem promover a sua origem
-desconhecida a uma migration histórica.
+Verificar apenas que o ficheiro chama a RPC certa passaria com um ficheiro que a
+chama num caminho e escreve à mão noutro — que é precisamente a forma que a
+regressão costuma ter. O padrão «ler, decidir em TypeScript, escrever» é o que
+sai naturalmente de quem escreve a funcionalidade seguinte: reaparece sozinho, e
+sem guard reaparece sem ninguém dar por isso. A única prova de que voltou seria
+um mês fechado a mudar de valor.
