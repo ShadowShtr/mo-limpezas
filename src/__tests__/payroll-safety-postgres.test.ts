@@ -284,10 +284,34 @@ describe("PAYROLL-SAFETY-01 contra o schema de produção e 090 real", () => {
     await closer.query("BEGIN");
     await closer.query("SELECT public.assert_financial_periods_open_locked_many($1, ARRAY[202608,202609])", [COMPANY]);
     await closer.query("UPDATE public.financial_periods SET status='closed' WHERE company_id=$1 AND year=2026 AND month=8", [COMPANY]);
-    const blocked = call(writer, "mark_payroll_paid_atomic", "$1::uuid, ARRAY[$2::uuid], $3::date, $4::uuid", COMPANY, id, "2026-09-04", ACTOR);
+    // 🔴 O handler é anexado no MESMO tick em que a promise nasce, e não só
+    //    no `await` lá em baixo.
+    //
+    //    Entre criar a chamada e esperar por ela há um `setTimeout` e um
+    //    `COMMIT` — dois pontos onde o event loop corre. A rejeição que este
+    //    teste quer provar pode chegar em qualquer um deles, e uma promise
+    //    rejeitada sem handler nesse instante é `unhandledRejection`: o Node
+    //    emite-a, o Vitest conta-a como erro, e o CI cai com todos os testes
+    //    a passar — que é o pior sítio para procurar a causa.
+    //
+    //    `.then(onFulfilled, onRejected)` transforma a rejeição num valor,
+    //    de imediato. A asserção continua a ser a mesma, e o que ela prova
+    //    também: o writer é recusado, não fica pendurado.
+    const blocked = call(
+      writer,
+      "mark_payroll_paid_atomic",
+      "$1::uuid, ARRAY[$2::uuid], $3::date, $4::uuid",
+      COMPANY,
+      id,
+      "2026-09-04",
+      ACTOR,
+    ).then(
+      () => new Error("PAGAMENTO_ACEITE: o writer devia ter sido recusado pelo período fechado"),
+      (erro: unknown) => erro,
+    );
     await new Promise((resolve) => setTimeout(resolve, 100));
     await closer.query("COMMIT");
-    await expect(blocked).rejects.toThrow(/FINANCIAL_PERIOD_CLOSED/);
+    expect(String(await blocked)).toMatch(/FINANCIAL_PERIOD_CLOSED/);
     expect((await writer.query("SELECT status FROM public.payroll_records WHERE id=$1", [id])).rows[0].status).toBe("aprovado");
   });
 
@@ -362,11 +386,26 @@ describe("PAYROLL-SAFETY-01 contra o schema de produção e 090 real", () => {
     const id = await payroll(writer, COLLABORATOR, 2026, 8, 1000, "rascunho");
     await writer.query("BEGIN");
     await writer.query("SELECT * FROM public.payroll_records WHERE id=$1 FOR UPDATE", [id]);
-    const blocked = call(other, "adjust_payroll_record_atomic", "$1::uuid,$2::uuid,$3::jsonb,$4::uuid", COMPANY, id, JSON.stringify({ net_salary: 1100 }), ACTOR);
+    // Handler anexado no mesmo tick — ver a nota em «close começa primeiro».
+    // Aqui há três pontos de suspensão antes do `await`, não dois.
+    const blocked = call(
+      other,
+      "adjust_payroll_record_atomic",
+      "$1::uuid,$2::uuid,$3::jsonb,$4::uuid",
+      COMPANY,
+      id,
+      JSON.stringify({ net_salary: 1100 }),
+      ACTOR,
+    ).then(
+      () => new Error("AJUSTE_ACEITE: o ajuste devia ter sido recusado pela mudança de estado"),
+      (erro: unknown) => erro,
+    );
     await new Promise((resolve) => setTimeout(resolve, 100));
     await writer.query("UPDATE public.payroll_records SET status='aprovado' WHERE id=$1", [id]);
     await writer.query("COMMIT");
-    await expect(blocked).rejects.toThrow(/PAYROLL_MUTATION_NOT_ALLOWED|PAYROLL_CONCURRENT_STATE_CHANGE/);
+    expect(String(await blocked)).toMatch(
+      /PAYROLL_MUTATION_NOT_ALLOWED|PAYROLL_CONCURRENT_STATE_CHANGE/,
+    );
   });
 
   it("aprovação concorrente é coerente e não perde a transição", async () => {
