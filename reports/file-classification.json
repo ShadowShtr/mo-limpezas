@@ -1,8 +1,8 @@
 {
   "generatedBy": "scripts/audit-file-inventory.mjs",
-  "totalFiles": 874,
+  "totalFiles": 875,
   "byStatus": {
-    "MANTER": 851,
+    "MANTER": 852,
     "STANDBY": 23
   },
   "byCategory": {
@@ -14,7 +14,7 @@
     "domain": 52,
     "doc": 46,
     "server-action": 44,
-    "src-other": 34,
+    "src-other": 35,
     "component": 30,
     "doc-historico": 16,
     "api-route": 16,
@@ -29,7 +29,7 @@
     "supabase-other": 2
   },
   "byConfidence": {
-    "alta": 853,
+    "alta": 854,
     "média": 15,
     "baixa": 6
   },
@@ -545,7 +545,7 @@
       "sideEffects": [],
       "risks": [],
       "signals": {
-        "sqlWrite": 3
+        "sqlWrite": 4
       },
       "action": "nenhuma",
       "reason": "documentação",
@@ -5633,7 +5633,7 @@
       "sideEffects": [],
       "risks": [],
       "signals": {
-        "sqlWrite": 3
+        "sqlWrite": 4
       },
       "action": "nenhuma",
       "reason": "suite de testes — corre por convenção do vitest",
@@ -7869,10 +7869,10 @@
       "signals": {
         "supabase": 2,
         "write": 2,
-        "sqlWrite": 36,
+        "sqlWrite": 38,
         "selectStar": 2,
         "ignoredError": 1,
-        "dynamicImport": 26
+        "dynamicImport": 31
       },
       "action": "nenhuma",
       "reason": "suite de testes — corre por convenção do vitest",
@@ -14375,20 +14375,18 @@
         "docs"
       ],
       "sideEffects": [
-        "write",
         "revalidatePath(5)"
       ],
       "risks": [],
       "signals": {
         "serverAction": 1,
-        "write": 5,
-        "sqlWrite": 11,
-        "unknownCast": 4,
-        "fallbackZero": 35,
-        "fallbackArray": 9,
+        "sqlWrite": 1,
+        "unknownCast": 3,
+        "fallbackZero": 28,
+        "fallbackArray": 7,
         "revalidatePath": 5
       },
-      "action": "auditar atomicidade (T12/T13)",
+      "action": "nenhuma",
       "reason": "em uso: 6 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
@@ -17775,7 +17773,7 @@
       "category": "domain",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 40,
+      "consumers": 41,
       "consumerSample": [
         "src/__tests__/update-notice-modal.test.tsx",
         "src/__tests__/update-notices-eligibility.test.ts",
@@ -17790,7 +17788,7 @@
       "risks": [],
       "signals": {},
       "action": "nenhuma",
-      "reason": "em uso: 40 consumidor(es), configuração",
+      "reason": "em uso: 41 consumidor(es), configuração",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -17917,7 +17915,7 @@
       "category": "lib",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 20,
+      "consumers": 19,
       "consumerSample": [
         "src/__tests__/audit.test.ts",
         "src/app/(dashboard)/dashboard/calendario/_actions/reschedule.ts",
@@ -17945,7 +17943,7 @@
         "consoleErr": 2
       },
       "action": "nenhuma",
-      "reason": "em uso: 20 consumidor(es), script npm, CI, configuração",
+      "reason": "em uso: 19 consumidor(es), script npm, CI, configuração",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -18372,7 +18370,7 @@
       "category": "lib",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 4,
+      "consumers": 3,
       "consumerSample": [
         "src/__tests__/cash-flow-integrity.test.ts",
         "src/app/actions/bank-reconciliation.ts",
@@ -18384,7 +18382,7 @@
       "risks": [],
       "signals": {},
       "action": "nenhuma",
-      "reason": "em uso: 4 consumidor(es)",
+      "reason": "em uso: 3 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -19121,7 +19119,7 @@
       "category": "lib",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 35,
+      "consumers": 36,
       "consumerSample": [
         "src/__tests__/lisbon-time.test.ts",
         "src/app/(app)/app/ausencias/_components/ausencias-client.tsx",
@@ -19135,7 +19133,7 @@
       "risks": [],
       "signals": {},
       "action": "nenhuma",
-      "reason": "em uso: 35 consumidor(es)",
+      "reason": "em uso: 36 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -20814,6 +20812,32 @@
     },
     {
       "path": "src/release-notes/2026-09-08-financeiro-mes-fechado.ts",
+      "category": "src-other",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 1,
+      "consumerSample": [
+        "src/release-notes/index.ts"
+      ],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "sqlWrite": 1
+      },
+      "action": "nenhuma",
+      "reason": "em uso: 1 consumidor(es)",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/release-notes/2026-09-08-folha-pagamento-segura.ts",
       "category": "src-other",
       "status": "MANTER",
       "confidence": "alta",

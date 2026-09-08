@@ -44,6 +44,7 @@ import { nota as clientesPesquisaContratos } from "./2026-09-02-clientes-pesquis
 import { nota as equipasEspelhoAusencias } from "./2026-09-02-equipas-espelho-ausencias";
 import { nota as intervencoesSemDataDeFim } from "./2026-09-03-intervencoes-sem-data-de-fim";
 import { nota as correcaoGuardarIntervencoes } from "./2026-09-03-correcao-guardar-intervencoes";
+import { nota as folhaPagamentoSegura } from "./2026-09-08-folha-pagamento-segura";
 import { nota as financeiroMesFechado } from "./2026-09-08-financeiro-mes-fechado";
 
 export const RELEASE_NOTES: ReleaseNote[] = [
@@ -76,6 +77,7 @@ export const RELEASE_NOTES: ReleaseNote[] = [
   equipasEspelhoAusencias,
   intervencoesSemDataDeFim,
   correcaoGuardarIntervencoes,
+  folhaPagamentoSegura,
   financeiroMesFechado,
 ];
 

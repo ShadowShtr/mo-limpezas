@@ -1,11 +1,13 @@
 # Inventário dos writers financeiros — participação no protocolo de período
 
-Estado sobre `master` @ `f453999`, com as migrations 090..097 **aplicadas em
-produção** (ledger completo, checksums a bater) e o runtime do R1 integrado.
+Estado sobre `master` @ `1b2fdae`, com as migrations 090..097 **aplicadas em
+produção** (ledger completo, checksums a bater) e o runtime integrado até à
+folha, inclusive.
+
+**`PERIOD_SENSITIVE_RACY_WRITERS = 0`.** Nenhuma escrita que decida o valor de um
+mês acontece fora da transação que valida esse mês.
 
 O guard que fixa este documento é `src/__tests__/fin-period-writer-guard.test.ts`.
-Enquanto houver linhas na tabela de dívida no fim, `PERIOD_SENSITIVE_RACY_WRITERS`
-**não é zero** — e este documento não diz que é.
 
 ## As três classificações
 
@@ -33,6 +35,7 @@ procura de `.from("<tabela>")` seguido de escrita, e falha se um deles reaparece
 | `src/app/actions/bank-reconciliation.ts` | `confirm_bank_match_atomic`, `reject_bank_match_atomic`, `manual_bank_match_atomic`, `set_bank_transaction_ignored_atomic`, `create_cashflow_from_bank_transaction_atomic`, `delete_bank_import_atomic` | 095 |
 | `src/app/actions/daily-billing.ts` | `set_service_payment_atomic` | 097 |
 | `src/app/actions/financial-periods.ts` | `close_financial_period_atomic`, `reopen_financial_period_atomic` | 090 |
+| `src/app/actions/payroll.ts` | `upsert_payroll_records_atomic`, `adjust_payroll_record_atomic`, `approve_payroll_records_atomic`, `mark_payroll_paid_atomic` | 096 |
 
 Cobranças avulsas (091) estão em `manual-charges`, já encaminhadas antes desta
 frente.
@@ -41,24 +44,24 @@ frente.
 arquivamento é `archive-only`, e a tabela de clientes não expõe `deleteCliente`.
 Um cliente arquivado mantém faturas, movimentos e histórico.
 
-## A dívida que falta — e é uma só
+## A folha — a última a entrar, e como se soube que tinha entrado
 
-| Ficheiro | Tabela | Estado | Dono |
-|---|---|---|---|
-| `src/app/actions/payroll.ts` | `cash_flow_entries` (INSERT directo) | `RACY` | **PR #156** |
+Até à 096 estar aplicada, `src/app/actions/payroll.ts` fazia um INSERT directo
+em `cash_flow_entries`: marcar a folha como paga criava o movimento de caixa por
+fora da transação, um mês fechado não travava essa escrita, e uma falha a meio
+podia deixar a folha paga sem movimento — ou o movimento sem a folha.
 
-A 096 está aplicada em produção e o contrato existe —
-`upsert_payroll_records_atomic`, `adjust_payroll_record_atomic`,
-`approve_payroll_records_atomic`, `mark_payroll_paid_atomic`. O que falta é o
-writer passar a chamá-lo.
+Passou a escrever pelas quatro RPCs da 096. `mark_payroll_paid_atomic` cria o
+movimento dentro da mesma transação que marca o registo como pago, com a
+proveniência escrita (`reference_type = 'payroll'`), e um segundo pedido igual
+devolve o que já ficou gravado em vez de duplicar.
 
-Enquanto ficar assim, marcar a folha como paga cria o movimento de caixa por
-fora da transação: um mês fechado não trava essa escrita, e uma falha a meio
-pode deixar a folha paga sem movimento, ou o movimento sem a folha.
-
-O guard tem um teste dedicado a esta linha. Quando a #156 entrar, a excepção
-deixa de corresponder a código real e o teste **falha** — obrigando a que saia
-da lista em vez de ficar esquecida a dar ar de estado normal.
+O que vale a pena registar é **como** isto ficou fechado: a excepção da folha
+estava inventariada aqui e no guard, e o teste «cada excepção inventariada
+continua a existir» falhou no instante em que o INSERT directo desapareceu do
+código. A lista não se limpou por alguém se ter lembrado dela — limpou-se porque
+deixar de a limpar partia o build. É essa a diferença entre uma lista de
+excepções e uma desculpa.
 
 ## Escritas directas que não são dívida
 
