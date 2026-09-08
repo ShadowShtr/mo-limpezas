@@ -1,13 +1,10 @@
 "use server";
 
 import { requireProfile } from "@/lib/auth-guard";
-import { auditLog } from "@/lib/audit";
 import { revalidatePath } from "next/cache";
-import { isValidCashFlowAmount } from "@/lib/cash-flow-integrity";
-import { todayInLisbon, addDaysToDateString, toLisbonTimestamp } from "@/lib/lisbon-time";
-import type { createAdminClient } from "@/lib/supabase/admin";
-
-type AdminClient = ReturnType<typeof createAdminClient>;
+import { addDaysToDateString, toLisbonTimestamp } from "@/lib/lisbon-time";
+import { auditLog } from "@/lib/audit";
+import { readServicePaymentResult } from "@/lib/atomic-rpc-results";
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 
@@ -210,109 +207,6 @@ export async function setServicePayment(
   }
 }
 
-/**
- * Recalcula o valor base + IVA de UM serviço, replicando a mesma lógica de
- * split de avença usada em getDailyBilling.toRow (mensalidade ÷ nº de
- * serviços do mês). Usado para saber quanto dinheiro foi realmente
- * recebido quando o valor não é indicado explicitamente (botões 50%/100%).
- */
-async function computeServiceBillingValue(
-  admin: AdminClient,
-  companyId: string,
-  service: {
-    contract_id: string | null;
-    manual_value: number | null;
-    calculated_value: number | null;
-    apply_vat: boolean | null;
-    scheduled_start: string;
-  },
-): Promise<{ baseValue: number; applyVat: boolean }> {
-  const fallback = {
-    baseValue: service.manual_value ?? service.calculated_value ?? 0,
-    applyVat: service.apply_vat !== false,
-  };
-  if (!service.contract_id) return fallback;
-
-  const { data: contract } = await admin
-    .from("contracts")
-    .select("fixed_monthly, fixed_price, apply_vat")
-    .eq("id", service.contract_id)
-    .single();
-  if (!contract || contract.fixed_monthly !== true) return fallback;
-
-  const ym = service.scheduled_start.slice(0, 7);
-  const [y, m] = ym.split("-").map(Number);
-  const monthEnd = new Date(y, m, 0).getDate();
-  const nextMonthStartStr = addDaysToDateString(`${ym}-${String(monthEnd).padStart(2, "0")}`, 1);
-  const { data: monthRows } = await admin
-    .from("services")
-    .select("id")
-    .eq("company_id", companyId)
-    .eq("contract_id", service.contract_id)
-    .neq("status", "cancelado")
-    .gte("scheduled_start", toLisbonTimestamp(`${ym}-01`, "00:00"))
-    .lt("scheduled_start", toLisbonTimestamp(nextMonthStartStr, "00:00"));
-  const count = Math.max(1, monthRows?.length ?? 1);
-
-  return {
-    baseValue: Math.round(((contract.fixed_price ?? 0) / count) * 100) / 100,
-    applyVat: contract.apply_vat === true,
-  };
-}
-
-/**
- * Espelha o estado de pagamento do serviço em cash_flow_entries
- * (reference_type="service_payment") para que a Cobrança Diária e o
- * Fluxo de Caixa/KPIs financeiros nunca fiquem dessincronizados.
- */
-async function syncServicePaymentCashFlow(
-  admin: AdminClient,
-  companyId: string,
-  serviceId: string,
-  referenceLabel: string,
-  receivedAmount: number,
-): Promise<{ ok: true } | { ok: false; error: string }> {
-  if (receivedAmount > 0 && isValidCashFlowAmount(receivedAmount)) {
-    const { data: existingEntry } = await admin
-      .from("cash_flow_entries")
-      .select("id")
-      .eq("company_id", companyId)
-      .eq("reference_type", "service_payment")
-      .eq("reference_id", serviceId)
-      .maybeSingle();
-
-    if (existingEntry) {
-      const { error } = await admin
-        .from("cash_flow_entries")
-        .update({ amount: receivedAmount, date: todayInLisbon(), status: "confirmado" })
-        .eq("id", existingEntry.id);
-      if (error) return { ok: false, error: error.message };
-    } else {
-      const { error } = await admin.from("cash_flow_entries").insert({
-        company_id: companyId,
-        type: "entrada",
-        amount: receivedAmount,
-        description: `Cobrança serviço ${referenceLabel}`,
-        category: "faturacao",
-        date: todayInLisbon(),
-        reference_id: serviceId,
-        reference_type: "service_payment",
-        status: "confirmado",
-      });
-      if (error) return { ok: false, error: error.message };
-    }
-  } else {
-    const { error } = await admin
-      .from("cash_flow_entries")
-      .delete()
-      .eq("company_id", companyId)
-      .eq("reference_type", "service_payment")
-      .eq("reference_id", serviceId);
-    if (error) return { ok: false, error: error.message };
-  }
-  return { ok: true };
-}
-
 async function _setServicePayment(
   serviceId: string,
   status: "nao_informado" | "sinal_50" | "pago_total",
@@ -327,50 +221,36 @@ async function _setServicePayment(
     return { ok: false, error: "Valor recebido inválido." };
   }
 
-  const { data: existing } = await admin
+  // O estado ANTERIOR tem de ser lido antes da RPC: depois dela já não existe,
+  // e sem ele a auditoria não diz de onde é que o pagamento veio.
+  const { data: antes, error: antesErr } = await admin
     .from("services")
-    .select(
-      "id, reference_number, payment_status, paid_amount, contract_id, manual_value, calculated_value, apply_vat, scheduled_start",
-    )
+    .select("payment_status")
     .eq("id", serviceId)
     .eq("company_id", companyId)
-    .single();
-  if (!existing) return { ok: false, error: "Serviço inválido." };
+    .maybeSingle();
+  // Uma leitura falhada e um serviço inexistente não são a mesma coisa:
+  // engolir o erro daria "Serviço inválido." a quem tem o serviço à frente.
+  if (antesErr) {
+    return { ok: false, error: "Não foi possível confirmar o estado atual do serviço. Atualize a página e tente novamente." };
+  }
+  if (!antes) return { ok: false, error: "Serviço inválido." };
 
-  const { error } = await admin
-    .from("services")
-    .update({
-      payment_status: status,
-      paid_amount: paidAmount ?? null,
-      paid_at: status === "nao_informado" && paidAmount == null ? null : new Date().toISOString(),
-    })
-    .eq("id", serviceId)
-    .eq("company_id", companyId);
+  const { data: linhas, error } = await admin.rpc("set_service_payment_atomic", {
+    p_company_id: companyId,
+    p_service_id: serviceId,
+    p_status: status,
+    p_paid_amount: paidAmount ?? null,
+    p_actor: profile.id,
+  });
   if (error) return { ok: false, error: error.message };
 
-  // Determina o valor efetivamente recebido para espelhar no Fluxo de Caixa.
-  let receivedAmount = 0;
-  if (paidAmount != null) {
-    receivedAmount = paidAmount;
-  } else if (status === "pago_total" || status === "sinal_50") {
-    const { data: settingsRow } = await admin
-      .from("company_settings")
-      .select("vat_rate")
-      .eq("company_id", companyId)
-      .single();
-    const { baseValue, applyVat } = await computeServiceBillingValue(admin, companyId, existing);
-    const total = baseValue * (applyVat ? 1 + (settingsRow?.vat_rate ?? 23) / 100 : 1);
-    receivedAmount = status === "pago_total" ? total : total / 2;
-  }
-
-  const cashFlowResult = await syncServicePaymentCashFlow(
-    admin,
-    companyId,
-    serviceId,
-    existing.reference_number ?? serviceId,
-    receivedAmount,
-  );
-  if (!cashFlowResult.ok) return cashFlowResult;
+  // A RPC é a autoridade económica: o valor que entrou em caixa é o que ELA
+  // gravou, não um número recalculado aqui. Recalcular em TypeScript era
+  // exatamente a segunda fonte da mesma regra que a 097 veio fechar — e a
+  // auditoria passaria a registar um valor que a base pode não ter.
+  const confirmacao = readServicePaymentResult(linhas, serviceId);
+  if (!confirmacao.ok) return confirmacao;
 
   await auditLog({
     companyId,
@@ -379,10 +259,10 @@ async function _setServicePayment(
     entityType: "service",
     entityId: serviceId,
     meta: {
-      from: existing.payment_status,
+      from: antes.payment_status,
       to: status,
       paid_amount: paidAmount ?? null,
-      cash_flow_amount: receivedAmount,
+      cash_flow_amount: confirmacao.cashAmount,
     },
   }, admin);
 

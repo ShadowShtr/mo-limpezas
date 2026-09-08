@@ -32,7 +32,7 @@ type AdminClient = ReturnType<typeof createAdminClient>;
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 
 export type PaymentKind = "fixo" | "variavel";
-export type PaymentStatus = "pago" | "pendente";
+export type PaymentStatus = "pago" | "pendente" | "cancelado";
 
 export interface Payment {
   id: string;
@@ -241,32 +241,18 @@ export async function createPayment(input: PaymentInput): Promise<{ ok: boolean;
     fallback: { year: input.year, month: input.month },
   });
 
-  const { data: maxRow } = await admin
-    .from("fixed_variable_payments")
-    .select("sort_order")
-    .eq("company_id", profile.company_id)
-    .eq("period_year", competencia.year)
-    .eq("period_month", competencia.month)
-    .eq("kind", input.kind)
-    .order("sort_order", { ascending: false })
-    .limit(1);
-  const sort_order = (maxRow?.[0]?.sort_order ?? 0) + 1;
-
-  const { error } = await admin.from("fixed_variable_payments").insert({
-    company_id: profile.company_id,
-    kind: input.kind,
-    description: input.description.trim(),
-    amount: input.amount,
-    due_date: input.due_date,
-    expense_category_id: input.expense_category_id,
-    direct_debit: input.direct_debit,
-    status: "pendente",
-    recurring: input.kind === "fixo",
-    period_year: competencia.year,
-    period_month: competencia.month,
-    notes: input.notes,
-    sort_order,
-    created_by: profile.id,
+  const { error } = await admin.rpc("create_payment_atomic", {
+    p_company_id: profile.company_id,
+    p_kind: input.kind,
+    p_description: input.description.trim(),
+    p_amount: input.amount,
+    p_due_date: input.due_date,
+    p_period_year: competencia.year,
+    p_period_month: competencia.month,
+    p_expense_category_id: input.expense_category_id,
+    p_direct_debit: input.direct_debit ?? false,
+    p_notes: input.notes,
+    p_actor: profile.id,
   });
   if (error) return { ok: false, error: error.message };
   revalidate();
@@ -534,14 +520,14 @@ export async function setPaymentStatus(id: string, status: PaymentStatus): Promi
       return { ok: true };
     }
 
-    // Outros estados (`cancelado`, …) não geram nem removem caixa: mudam só o
-    // estado do pagamento. Um cancelamento depois de pago teria de decidir o que
-    // fazer ao movimento, e essa decisão não se toma por omissão.
-    const { error } = await admin
-      .from("fixed_variable_payments")
-      .update({ status, updated_at: new Date().toISOString() })
-      .eq("id", id)
-      .eq("company_id", profile.company_id);
+    // Estados sem caixa também passam pela RPC: o período é validado sob lock
+    // na mesma transação que altera o pagamento.
+    const { error } = await admin.rpc("set_payment_status_atomic", {
+      p_company_id: profile.company_id,
+      p_payment_id: id,
+      p_status: status,
+      p_actor: profile.id,
+    });
     if (error) return { ok: false, error: error.message };
     revalidate();
     return { ok: true };
