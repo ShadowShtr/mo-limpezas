@@ -4,7 +4,6 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { requireProfile } from "@/lib/auth-guard";
 import { criarFaturaComLinhas } from "@/lib/finance-rpc/invoice-creation";
-import { getMissingCashFlowReferenceIds, isValidCashFlowAmount } from "@/lib/cash-flow-integrity";
 import { findDuplicateMonthlyContractsByLocation } from "@/lib/invoice-duplicates";
 import { revalidatePath } from "next/cache";
 import { todayInLisbon, addDaysToDateString, toLisbonTimestamp } from "@/lib/lisbon-time";
@@ -85,9 +84,8 @@ export async function generateInvoices(
   // Gerar cobranças cria documentos financeiros do mês pedido — aqui o período
   // vem directamente do argumento, sem ambiguidade.
   //
-  // ⚠️ Isto **não** liga a RPC da 072 (`create_invoice_with_items`). A criação
-  //    atómica continua por activar até haver prova de serialização concorrente
-  //    — ver `src/lib/finance-rpc/invoice-creation.ts`.
+  // A criação cabeçalho + linhas passa pela RPC 072; este método continua a
+  // calcular os seus argumentos, mas não escreve diretamente nas tabelas.
   const estadoPeriodo = await lerEstadoPeriodo(
     admin as unknown as ClientePeriodo,
     companyId,
@@ -506,7 +504,7 @@ export async function updateInvoiceStatus(
 
   const { data: profile } = await admin
     .from("profiles")
-    .select("company_id, role")
+    .select("id, company_id, role")
     .eq("id", user.id)
     .single();
   if (!profile || !["admin", "gestor"].includes(profile.role)) {
@@ -515,7 +513,7 @@ export async function updateInvoiceStatus(
 
   const { data: inv } = await admin
     .from("invoices")
-    .select("company_id, total, invoice_number, client_id, status, paid_at, invoice_date")
+    .select("company_id, total, invoice_number, client_id, status, paid_at, invoice_date, revision")
     .eq("id", id)
     .eq("company_id", profile.company_id)
     .single();
@@ -532,57 +530,20 @@ export async function updateInvoiceStatus(
   });
   if (!periodo.ok) return { ok: false, error: periodo.error };
 
-  const update: { status: string; paid_at?: string | null; payment_method?: string | null } = { status };
-  if (status === "pago") {
-    update.paid_at = inv.paid_at ?? new Date().toISOString();
-    update.payment_method = paymentMethod ?? null;
-  } else {
-    update.paid_at = null;
-    update.payment_method = null;
+  if (!Number.isInteger(inv.revision)) {
+    return { ok: false, error: "A fatura não tem revisão válida. Nada foi alterado." };
   }
 
-  const { error } = await admin
-    .from("invoices")
-    .update(update)
-    .eq("id", id)
-    .eq("company_id", profile.company_id);
-
+  const { error } = await admin.rpc("set_invoice_status_atomic", {
+    p_invoice_id: id,
+    p_company_id: profile.company_id,
+    p_actor: profile.id,
+    p_status: status,
+    p_payment_method: status === "pago" ? paymentMethod ?? null : null,
+    p_mutation_id: crypto.randomUUID(),
+    p_expected_revision: inv.revision,
+  });
   if (error) return { ok: false, error: error.message };
-
-  if (status === "pago" && isValidCashFlowAmount(inv.total)) {
-    const { data: existingRefs } = await admin
-      .from("cash_flow_entries")
-      .select("reference_id")
-      .eq("company_id", profile.company_id)
-      .eq("reference_type", "invoice")
-      .eq("reference_id", id);
-
-    const missingIds = getMissingCashFlowReferenceIds([id], (existingRefs ?? []).map((r) => r.reference_id));
-    if (missingIds.length > 0) {
-      const { data: clientData } = await admin.from("clients").select("name").eq("id", inv.client_id).single();
-      const { error: cashErr } = await admin.from("cash_flow_entries").insert({
-        company_id: inv.company_id,
-        type: "entrada",
-        amount: inv.total,
-        description: `Fatura ${inv.invoice_number} - ${(clientData as { name?: string })?.name ?? "Cliente"}`,
-        category: "faturacao",
-        date: todayInLisbon(),
-        reference_id: id,
-        reference_type: "invoice",
-        status: "confirmado",
-      });
-      if (cashErr) return { ok: false, error: cashErr.message };
-    }
-  }
-
-  if (status !== "pago") {
-    await admin
-      .from("cash_flow_entries")
-      .delete()
-      .eq("company_id", profile.company_id)
-      .eq("reference_type", "invoice")
-      .eq("reference_id", id);
-  }
 
   revalidatePath("/dashboard/cobrancas");
   revalidatePath("/dashboard/financeiro");
@@ -602,39 +563,18 @@ export async function deleteInvoice(
 
   const { data: profile } = await admin
     .from("profiles")
-    .select("company_id, role")
+    .select("id, company_id, role")
     .eq("id", user.id)
     .single();
   if (!profile || !["admin", "gestor"].includes(profile.role)) {
     return { ok: false, error: "Sem permissão." };
   }
 
-  // Apagar um rascunho altera o que o mês tem por facturar.
-  const { data: inv, error: erroInv } = await admin
-    .from("invoices")
-    .select("invoice_date")
-    .eq("id", id)
-    .eq("company_id", profile.company_id)
-    .maybeSingle();
-
-  if (erroInv) {
-    return { ok: false, error: "Não foi possível confirmar o período da fatura. Nada foi apagado." };
-  }
-  if (!inv) return { ok: true }; // já não existe
-
-  const periodo = await assertFinancialPeriodOpen({
-    cliente: admin as unknown as ClientePeriodo,
-    companyId: profile.company_id,
-    data: String(inv.invoice_date),
+  const { error } = await admin.rpc("delete_invoice_atomic", {
+    p_company_id: profile.company_id,
+    p_invoice_id: id,
+    p_actor: profile.id,
   });
-  if (!periodo.ok) return { ok: false, error: periodo.error };
-
-  const { error } = await admin
-    .from("invoices")
-    .delete()
-    .eq("id", id)
-    .eq("company_id", profile.company_id)
-    .eq("status", "rascunho"); // só eliminar rascunhos
 
   if (error) return { ok: false, error: error.message };
   revalidatePath("/dashboard/cobrancas");
@@ -679,10 +619,14 @@ export async function getUnbilledServices(
 
   // IDs de serviços que já têm invoice_item
   const serviceIds = services.map((s) => s.id);
-  const { data: billed } = await admin
+  const { data: billed, error: billedErr } = await admin
     .from("invoice_items")
     .select("service_id")
     .in("service_id", serviceIds);
+
+  if (billedErr) {
+    return { ok: false, error: "Não foi possível confirmar os itens já faturados. Nada foi assumido como livre." };
+  }
 
   const billedIds = new Set((billed ?? []).map((b) => b.service_id));
 

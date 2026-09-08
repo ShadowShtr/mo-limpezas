@@ -548,8 +548,13 @@ describe("o que a reparação das 6 vai precisar, medido no domínio actual", ()
   });
 
   it("`variavel` não cria recorrência", async () => {
-    // §1: «não criar recorrência». O `recurring` já é derivado do `kind`.
-    expect(ler("src/app/actions/payments.ts")).toMatch(/recurring: input\.kind === "fixo"/);
+    // A action já não escreve a linha: a RPC canónica deriva `recurring` do
+    // `kind` dentro da mesma transação.
+    expect(ler("src/app/actions/payments.ts")).toMatch(/p_kind:\s*input\.kind/);
+    expect(ler("src/app/actions/payments.ts")).not.toMatch(/recurring:\s*input\.kind/);
+    expect(ler("supabase/migrations/092_payments_period_atomic.sql")).toMatch(
+      /p_kind\s*=\s*'fixo'/,
+    );
   });
 
   it("🔴 um pagamento sem vencimento nunca aparece «Em atraso»", async () => {

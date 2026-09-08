@@ -175,7 +175,7 @@ export async function createCashFlowEntry(
   const admin = createAdminClient();
   const { data: profile } = await admin
     .from("profiles")
-    .select("company_id, role")
+    .select("id, company_id, role")
     .eq("id", user.id)
     .single();
   if (!profile || !["admin", "gestor"].includes(profile.role) || profile.company_id !== companyId) {
@@ -205,34 +205,20 @@ export async function createCashFlowEntry(
   // 071 não estiver aplicada a coluna não existe, e mandá-la a `null` faria
   // falhar todas as despesas manuais, incluindo as que não querem categoria
   // nenhuma.
-  const { expenseCategoryId, ...colunas } = data;
+  const { expenseCategoryId } = data;
 
-  const linha = {
-    company_id: profile.company_id,
-    ...colunas,
-    ...(expenseCategoryId ? { expense_category_id: expenseCategoryId } : {}),
-    created_by: user.id,
-  };
-
-  // 🔴 O cast é por a 071 não estar aplicada, e é deliberadamente estreito.
-  //
-  //    `database.ts` é gerado do esquema **real**, onde `expense_category_id`
-  //    ainda não existe. Acrescentá-lo à mão faria os tipos afirmarem que a
-  //    coluna existe — e o resto do código deixava de ter como saber que não.
-  //    Quando a coluna faltar, é a base que recusa, com o erro verdadeiro.
-  // 🔴 O cast fica no argumento, e a chamada continua a **parecer** o que é.
-  //
-  //    A primeira versão embrulhava o `.insert` numa variável para lhe mudar o
-  //    tipo — e com isso o detector de capacidade de escrita deixou de
-  //    reconhecer esta action como escrita. O cliquet acusou duas capacidades
-  //    «removidas» que estavam bem vivas.
-  //
-  //    Uma escrita que se disfarça de outra coisa é exactamente o que aquele
-  //    inventário existe para impedir. `as never` mantém a forma `.insert(...)`
-  //    à vista de quem lê e de quem analisa.
-  const { error } = await admin
-    .from("cash_flow_entries")
-    .insert(linha as unknown as never);
+  const { error } = await admin.rpc("create_cashflow_entry_atomic", {
+    p_company_id: profile.company_id,
+    p_type: data.type,
+    p_amount: data.amount,
+    p_description: data.description.trim(),
+    p_category: data.category,
+    p_date: data.date,
+    p_status: data.status,
+    p_notes: data.notes ?? null,
+    p_expense_category_id: expenseCategoryId ?? null,
+    p_actor: profile.id,
+  });
 
   if (error) return { ok: false, error: error.message };
   revalidatePath("/dashboard/financeiro/fluxo-caixa");

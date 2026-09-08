@@ -201,21 +201,16 @@ describe("createCashFlowEntry e a categoria", () => {
     expect(fonte).toMatch(/expenseCategoryId\?:\s*string \| null/);
   });
 
-  it("🔴 o nome camelCase não vai para a base", () => {
-    // `...data` copiava as chaves tal como estão, e não há coluna nenhuma com
-    // esse nome — o insert seria recusado inteiro por um campo que só existe
-    // no vocabulário do TypeScript.
-    expect(fonte).toMatch(/const \{ expenseCategoryId, \.\.\.colunas \} = data;/);
-    expect(fonte).toMatch(/expenseCategoryId \? \{ expense_category_id: expenseCategoryId \} : \{\}/);
+  it("🔴 o nome camelCase é traduzido para o argumento da RPC", () => {
+    expect(fonte).toMatch(/const \{ expenseCategoryId \} = data;/);
+    expect(fonte).toContain("p_expense_category_id: expenseCategoryId ?? null");
   });
 
-  it("🔴 a escrita continua a parecer uma escrita", () => {
-    // Uma primeira versão do cast embrulhou o `.insert` numa variável, e o
-    // detector de capacidade de escrita deixou de reconhecer esta action.
-    // O cliquet acusou duas capacidades «removidas» que estavam bem vivas.
+  it("🔴 a escrita passa pela RPC atómica do fluxo de caixa", () => {
     const i = fonte.indexOf("export async function createCashFlowEntry");
     const corpo = fonte.slice(i, fonte.indexOf("export async function", i + 10));
-    expect(corpo).toMatch(/\.from\("cash_flow_entries"\)\s*\n?\s*\.insert\(/);
+    expect(corpo).toContain('rpc("create_cashflow_entry_atomic"');
+    expect(corpo).not.toMatch(/\.from\("cash_flow_entries"\)[\s\S]{0,200}\.insert\(/);
   });
 
   it("getAccountsData pede a categoria estruturada", () => {
