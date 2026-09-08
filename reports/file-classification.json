@@ -1,14 +1,14 @@
 {
   "generatedBy": "scripts/audit-file-inventory.mjs",
-  "totalFiles": 862,
+  "totalFiles": 865,
   "byStatus": {
-    "MANTER": 839,
+    "MANTER": 842,
     "STANDBY": 23
   },
   "byCategory": {
-    "test": 199,
+    "test": 200,
     "route-ui": 140,
-    "migration": 118,
+    "migration": 120,
     "lib": 72,
     "script": 58,
     "domain": 52,
@@ -29,7 +29,7 @@
     "supabase-other": 2
   },
   "byConfidence": {
-    "alta": 841,
+    "alta": 844,
     "média": 15,
     "baixa": 6
   },
@@ -6390,7 +6390,7 @@
       "category": "test",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 10,
+      "consumers": 11,
       "consumerSample": [
         "src/__tests__/bank-reconciliation-period-atomic.pg.test.ts",
         "src/__tests__/cashflow-period-atomic.pg.test.ts",
@@ -6416,7 +6416,7 @@
       "category": "test",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 4,
+      "consumers": 5,
       "consumerSample": [
         "src/__tests__/collaborator-create-name-only-postgres.test.ts",
         "src/__tests__/collaborator-identity-hardening-postgres.test.ts",
@@ -7726,6 +7726,30 @@
       "signals": {
         "unknownCast": 1,
         "dynamicImport": 2
+      },
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/__tests__/payroll-safety-postgres.test.ts",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "sqlWrite": 28
       },
       "action": "nenhuma",
       "reason": "suite de testes — corre por convenção do vitest",
@@ -22699,6 +22723,27 @@
       "manualDecision": false
     },
     {
+      "path": "supabase/migrations/096_payroll_period_atomic.sql",
+      "category": "migration",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [
+        "service-role"
+      ],
+      "signals": {
+        "serviceRole": 4,
+        "sqlWrite": 19
+      },
+      "action": "nenhuma",
+      "reason": "migration versionada — histórico do schema, nunca se apaga",
+      "manualDecision": false
+    },
+    {
       "path": "supabase/migrations/20260608_new_features.sql",
       "category": "migration",
       "status": "MANTER",
@@ -23152,6 +23197,24 @@
     },
     {
       "path": "supabase/migrations/rollback/095_bank_reconciliation_period_atomic.down.sql",
+      "category": "migration",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "sqlWrite": 5
+      },
+      "action": "nenhuma",
+      "reason": "migration versionada — histórico do schema, nunca se apaga",
+      "manualDecision": false
+    },
+    {
+      "path": "supabase/migrations/rollback/096_payroll_period_atomic.down.sql",
       "category": "migration",
       "status": "MANTER",
       "confidence": "alta",
