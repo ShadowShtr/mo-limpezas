@@ -76,26 +76,24 @@ const WRITERS: Record<string, string[]> = {
     "close_financial_period_atomic",
     "reopen_financial_period_atomic",
   ],
+  "src/app/actions/payroll.ts": [
+    "upsert_payroll_records_atomic",
+    "adjust_payroll_record_atomic",
+    "approve_payroll_records_atomic",
+    "mark_payroll_paid_atomic",
+  ],
 };
 
 /**
  * O que ainda escreve à mão numa tabela sensível, porque quê, e de quem é.
  *
- * Isto NÃO é uma lista de coisas toleradas para sempre. É a lista de trabalho
- * que falta: enquanto tiver linhas, `PERIOD_SENSITIVE_RACY_WRITERS` não é zero,
- * e dizer o contrário seria falso.
+ * Nenhuma destas é dívida do protocolo: são escritas que não decidem nada sobre
+ * o mês. A dívida a sério — a folha — saiu daqui quando passou pelas RPCs da
+ * 096, e foi este ficheiro que obrigou a que saísse: o teste
+ * «cada excepção inventariada continua a existir» falhou no instante em que o
+ * INSERT directo desapareceu do código.
  */
 const EXCECOES: Array<{ ficheiro: string; tabela: string; dono: string; razao: string }> = [
-  {
-    ficheiro: "src/app/actions/payroll.ts",
-    tabela: "cash_flow_entries",
-    dono: "PR #156",
-    razao:
-      "O runtime da folha ainda não passou pelas RPCs da 096. A migration já está " +
-      "aplicada e o contrato existe; falta o writer chamá-lo. Enquanto isto ficar " +
-      "aqui, marcar a folha como paga cria o movimento de caixa por fora da " +
-      "transação — e um mês fechado não a trava.",
-  },
   {
     ficheiro: "src/app/actions/colaboradores.ts",
     tabela: "invoices",
@@ -214,12 +212,26 @@ describe("FIN-PERIOD-WRITER-INVENTORY", () => {
     }
   });
 
-  it("a folha continua declarada como a única dívida do protocolo", () => {
-    // Quando a #156 entrar, esta excepção sai — e este teste é o que obriga a
-    // que saia, em vez de ficar esquecida a dar ar de estado normal.
-    const folha = EXCECOES.filter((e) => e.ficheiro === "src/app/actions/payroll.ts");
-    expect(folha).toHaveLength(1);
-    expect(folha[0].dono).toBe("PR #156");
+  it("PERIOD_SENSITIVE_RACY_WRITERS = 0", () => {
+    // A afirmação inteira do protocolo, num sítio só: nenhuma escrita que
+    // decida o valor de um mês acontece fora de uma RPC atómica.
+    //
+    // As excepções que restam não contam para isto, e o teste diz porquê em vez
+    // de as ignorar em silêncio: duas anonimizam uma chave estrangeira, e a
+    // terceira é um módulo que nenhum caminho da aplicação alcança.
+    const racy = EXCECOES.filter(
+      (e) =>
+        e.ficheiro !== "src/app/actions/colaboradores.ts" &&
+        e.ficheiro !== "src/lib/payments-month-materialization.ts",
+    );
+
+    expect(
+      racy,
+      "voltou a existir uma escrita que decide o mês fora da transação que o valida",
+    ).toEqual([]);
+
+    // A folha foi a última a entrar. Se algum dia sair, é aqui que se vê.
+    expect(Object.keys(WRITERS)).toContain("src/app/actions/payroll.ts");
   });
 
   it("o arquivamento de clientes não destrói histórico financeiro", () => {

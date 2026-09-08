@@ -67,7 +67,7 @@ export function PayrollEditSheet({ record, onClose, onSaved }: Props) {
 
   const grossPreview    = Math.round(workedHoursVal * hourlyRateVal * 100) / 100;
   const mealPreview     = Math.round(daysWorkedVal * mealDayVal * 100) / 100;
-  const otBonusPreview  = Math.round(overtimeHoursVal * hourlyRateVal * 0.25 * 100) / 100;
+  const otBonusPreview  = Math.round(overtimeHoursVal * hourlyRateVal * ((record.overtime_rate_pct ?? 25) / 100) * 100) / 100;
   const previewNet      = Math.round(
     (grossPreview + mealPreview + otBonusPreview + addVal - absenceDedVal - dedVal) * 100,
   ) / 100;

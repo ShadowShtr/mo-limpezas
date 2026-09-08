@@ -2139,6 +2139,14 @@ export type Database = {
       }
     }
     Functions: {
+      adjust_payroll_record_atomic: {
+        Args: { p_actor: string; p_company_id: string; p_patch: Json; p_record_id: string }
+        Returns: { net_salary: number; record_id: string }[]
+      }
+      approve_payroll_records_atomic: {
+        Args: { p_actor: string; p_company_id: string; p_record_ids: string[] }
+        Returns: { already_approved_count: number; approved_count: number }[]
+      }
       archive_expired_documents: {
         Args: { p_company_id: string }
         Returns: number
@@ -2181,6 +2189,29 @@ export type Database = {
       get_service_company_id: {
         Args: { p_service_id: string }
         Returns: string
+      }
+      mark_payroll_paid_atomic: {
+        Args: {
+          p_actor: string
+          p_company_id: string
+          p_paid_on: string
+          p_record_ids: string[]
+        }
+        Returns: {
+          already_paid_count: number
+          cash_entry_count: number
+          paid_count: number
+        }[]
+      }
+      upsert_payroll_records_atomic: {
+        Args: {
+          p_actor?: string
+          p_company_id: string
+          p_period_month: number
+          p_period_year: number
+          p_records: Json
+        }
+        Returns: { preserved_count: number; written_count: number }[]
       }
     }
     Enums: {
