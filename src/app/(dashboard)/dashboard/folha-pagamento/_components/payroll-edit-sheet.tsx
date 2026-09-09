@@ -76,6 +76,10 @@ export function PayrollEditSheet({ record, onClose, onSaved }: Props) {
   const baseSalaryVal    = parseFloat(baseSalary) || 0;
   const overrideVal      = parseFloat(overrideValue);
   const overrideValido   = overrideOn && Number.isFinite(overrideVal);
+  // Ligar o campo e deixá-lo vazio não pode ser ignorado em silêncio: quem o
+  // ligou está à espera de pagar outro valor, e sair daqui com o calculado
+  // seria a interface a decidir por si.
+  const overrideVazio    = overrideOn && !Number.isFinite(overrideVal);
 
   // Com vencimento base, o bruto É o base. Mesma regra do servidor.
   const grossPreview    = baseSalaryVal > 0
@@ -96,6 +100,11 @@ export function PayrollEditSheet({ record, onClose, onSaved }: Props) {
     setSaving(true);
     setError(null);
 
+    if (overrideVazio) {
+      setError("Escreva o valor líquido a pagar, ou desligue a opção.");
+      setSaving(false);
+      return;
+    }
     if (razaoEmFalta) {
       setError("Escreva porque é que o líquido difere do calculado.");
       setSaving(false);
@@ -399,6 +408,12 @@ export function PayrollEditSheet({ record, onClose, onSaved }: Props) {
                 />
               </div>
 
+              {overrideVazio && (
+                <p className="text-xs text-red-600">
+                  Escreva o valor a pagar, ou desligue a opção acima.
+                </p>
+              )}
+
               {overrideValido && diferenca !== 0 && (
                 <p className="text-xs text-amber-700">
                   Difere do calculado ({fmtEur(netCalculado)}) em{" "}
@@ -464,8 +479,13 @@ export function PayrollEditSheet({ record, onClose, onSaved }: Props) {
           </button>
           <button
             onClick={(e) => handleSubmit(e as unknown as React.FormEvent)}
-            disabled={saving}
-            className="flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-[var(--finance-primary)] text-white text-sm font-semibold hover:bg-[var(--finance-primary-hover)] transition-colors disabled:opacity-50"
+            disabled={saving || razaoEmFalta || overrideVazio}
+            title={
+              overrideVazio ? "Escreva o valor líquido a pagar, ou desligue a opção."
+              : razaoEmFalta ? "Escreva porque é que o líquido difere do calculado."
+              : undefined
+            }
+            className="flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-[var(--finance-primary)] text-white text-sm font-semibold hover:bg-[var(--finance-primary-hover)] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {saving && <Loader2 className="w-4 h-4 animate-spin" />}
             Guardar
