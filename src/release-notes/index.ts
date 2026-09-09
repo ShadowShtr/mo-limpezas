@@ -46,6 +46,7 @@ import { nota as intervencoesSemDataDeFim } from "./2026-09-03-intervencoes-sem-
 import { nota as correcaoGuardarIntervencoes } from "./2026-09-03-correcao-guardar-intervencoes";
 import { nota as folhaPagamentoSegura } from "./2026-09-08-folha-pagamento-segura";
 import { nota as financeiroMesFechado } from "./2026-09-08-financeiro-mes-fechado";
+import { nota as folhaVencimentoBase } from "./2026-09-09-folha-vencimento-base";
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   financeiroEAnexos,
@@ -79,6 +80,7 @@ export const RELEASE_NOTES: ReleaseNote[] = [
   correcaoGuardarIntervencoes,
   folhaPagamentoSegura,
   financeiroMesFechado,
+  folhaVencimentoBase,
 ];
 
 /** As chaves têm de ser únicas — duas notas com a mesma key partilhariam a leitura. */

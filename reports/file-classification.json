@@ -1,20 +1,20 @@
 {
   "generatedBy": "scripts/audit-file-inventory.mjs",
-  "totalFiles": 877,
+  "totalFiles": 882,
   "byStatus": {
-    "MANTER": 854,
+    "MANTER": 859,
     "STANDBY": 23
   },
   "byCategory": {
-    "test": 205,
+    "test": 207,
     "route-ui": 140,
-    "migration": 122,
+    "migration": 124,
     "lib": 73,
     "script": 59,
     "domain": 52,
     "doc": 47,
     "server-action": 44,
-    "src-other": 35,
+    "src-other": 36,
     "component": 30,
     "doc-historico": 16,
     "api-route": 16,
@@ -29,7 +29,7 @@
     "supabase-other": 2
   },
   "byConfidence": {
-    "alta": 856,
+    "alta": 861,
     "média": 15,
     "baixa": 6
   },
@@ -7743,6 +7743,28 @@
       }
     },
     {
+      "path": "src/__tests__/payroll-base-salary-and-override.test.ts",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {},
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
       "path": "src/__tests__/payroll-calc.test.ts",
       "category": "test",
       "status": "MANTER",
@@ -7786,6 +7808,31 @@
         "sqlWrite": 10,
         "unknownCast": 1,
         "fallbackArray": 1,
+        "dynamicImport": 2
+      },
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/__tests__/payroll-edit-sheet-override.test.tsx",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "unknownCast": 4,
         "dynamicImport": 2
       },
       "action": "nenhuma",
@@ -7860,7 +7907,7 @@
       "sideEffects": [],
       "risks": [],
       "signals": {
-        "sqlWrite": 28
+        "sqlWrite": 30
       },
       "action": "nenhuma",
       "reason": "suite de testes — corre por convenção do vitest",
@@ -12483,8 +12530,9 @@
       "category": "route-ui",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 1,
+      "consumers": 2,
       "consumerSample": [
+        "src/__tests__/payroll-edit-sheet-override.test.tsx",
         "src/app/(dashboard)/dashboard/folha-pagamento/_components/payroll-client.tsx"
       ],
       "autoLoaded": false,
@@ -12498,7 +12546,7 @@
         "unknownCast": 1
       },
       "action": "nenhuma",
-      "reason": "em uso: 1 consumidor(es)",
+      "reason": "em uso: 2 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -14413,11 +14461,11 @@
       "category": "server-action",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 6,
+      "consumers": 7,
       "consumerSample": [
+        "src/__tests__/payroll-edit-sheet-override.test.tsx",
         "src/__tests__/payroll-period-view-identity.test.tsx",
-        "src/__tests__/payroll-row-identity.test.tsx",
-        "src/__tests__/payroll-state-integrity.test.ts"
+        "src/__tests__/payroll-row-identity.test.tsx"
       ],
       "autoLoaded": false,
       "referencedBy": [
@@ -14431,12 +14479,12 @@
         "serverAction": 1,
         "sqlWrite": 1,
         "unknownCast": 3,
-        "fallbackZero": 28,
+        "fallbackZero": 30,
         "fallbackArray": 7,
         "revalidatePath": 5
       },
       "action": "nenhuma",
-      "reason": "em uso: 6 consumidor(es)",
+      "reason": "em uso: 7 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -17822,7 +17870,7 @@
       "category": "domain",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 41,
+      "consumers": 42,
       "consumerSample": [
         "src/__tests__/update-notice-modal.test.tsx",
         "src/__tests__/update-notices-eligibility.test.ts",
@@ -17837,7 +17885,7 @@
       "risks": [],
       "signals": {},
       "action": "nenhuma",
-      "reason": "em uso: 41 consumidor(es), configuração",
+      "reason": "em uso: 42 consumidor(es), configuração",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -19466,11 +19514,11 @@
       "category": "lib",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 5,
+      "consumers": 6,
       "consumerSample": [
         "src/__tests__/concurrent-load.test.ts",
         "src/__tests__/data-integrity.test.ts",
-        "src/__tests__/payroll-calc.test.ts"
+        "src/__tests__/payroll-base-salary-and-override.test.ts"
       ],
       "autoLoaded": false,
       "referencedBy": [
@@ -19482,7 +19530,7 @@
         "fallbackZero": 1
       },
       "action": "nenhuma",
-      "reason": "em uso: 5 consumidor(es)",
+      "reason": "em uso: 6 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -20887,6 +20935,32 @@
     },
     {
       "path": "src/release-notes/2026-09-08-folha-pagamento-segura.ts",
+      "category": "src-other",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 1,
+      "consumerSample": [
+        "src/release-notes/index.ts"
+      ],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "sqlWrite": 1
+      },
+      "action": "nenhuma",
+      "reason": "em uso: 1 consumidor(es)",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/release-notes/2026-09-09-folha-vencimento-base.ts",
       "category": "src-other",
       "status": "MANTER",
       "confidence": "alta",
@@ -22990,6 +23064,27 @@
       "manualDecision": false
     },
     {
+      "path": "supabase/migrations/098_payroll_base_salary_and_net_override.sql",
+      "category": "migration",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [
+        "service-role"
+      ],
+      "signals": {
+        "serviceRole": 2,
+        "sqlWrite": 12
+      },
+      "action": "nenhuma",
+      "reason": "migration versionada — histórico do schema, nunca se apaga",
+      "manualDecision": false
+    },
+    {
       "path": "supabase/migrations/20260608_new_features.sql",
       "category": "migration",
       "status": "MANTER",
@@ -23489,6 +23584,27 @@
       "sideEffects": [],
       "risks": [],
       "signals": {},
+      "action": "nenhuma",
+      "reason": "migration versionada — histórico do schema, nunca se apaga",
+      "manualDecision": false
+    },
+    {
+      "path": "supabase/migrations/rollback/098_payroll_base_salary_and_net_override.down.sql",
+      "category": "migration",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [
+        "service-role"
+      ],
+      "signals": {
+        "serviceRole": 2,
+        "sqlWrite": 16
+      },
       "action": "nenhuma",
       "reason": "migration versionada — histórico do schema, nunca se apaga",
       "manualDecision": false

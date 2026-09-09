@@ -9,6 +9,7 @@ const ROOT = process.cwd();
 const migration = readFileSync(join(ROOT, "supabase/migrations/096_payroll_period_atomic.sql"), "utf8");
 const migration024 = readFileSync(join(ROOT, "supabase/migrations/024_cash_flow_reference_integrity.sql"), "utf8");
 const migration090 = readFileSync(join(ROOT, "supabase/migrations/090_financial_period_lock_protocol.sql"), "utf8");
+const migration098 = readFileSync(join(ROOT, "supabase/migrations/098_payroll_base_salary_and_net_override.sql"), "utf8");
 
 const COMPANY = "00000000-0000-0000-0000-000000000001";
 const OTHER_COMPANY = "00000000-0000-0000-0000-000000000002";
@@ -27,6 +28,14 @@ ${baselineCompleto()}
 ${migration024}
 ALTER TABLE public.financial_periods
   ADD CONSTRAINT financial_periods_unique UNIQUE (company_id, year, month);
+-- 🔴 Existe em produção
+--    (payroll_records_company_id_collaborator_id_period_year_peri_key) e
+--    faltava aqui. Sem ele, o ON CONFLICT de upsert_payroll_records_atomic
+--    nunca chegava a ser exercitado: a 096 passou os testes sem que ninguém
+--    corresse o seu caminho de recálculo contra uma linha já existente.
+ALTER TABLE public.payroll_records
+  ADD CONSTRAINT payroll_records_company_collaborator_period_key
+  UNIQUE (company_id, collaborator_id, period_year, period_month);
 CREATE OR REPLACE FUNCTION public.is_financial_period_open(
   p_company_id uuid, p_year integer, p_month integer
 ) RETURNS boolean LANGUAGE sql STABLE AS $fn$
@@ -38,6 +47,7 @@ CREATE OR REPLACE FUNCTION public.is_financial_period_open(
 $fn$;
 ${migration090}
 ${migration}
+${migration098}
 `;
 
 describe("PAYROLL-SAFETY-01 contra o schema de produção e 090 real", () => {
@@ -424,5 +434,162 @@ describe("PAYROLL-SAFETY-01 contra o schema de produção e 090 real", () => {
     const client = clients[0];
     const result = await call(client, "mark_payroll_paid_atomic", "$1::uuid,$2::uuid[],$3::date,$4::uuid", COMPANY, [], "2026-09-04", ACTOR);
     expect(result.rows[0]).toEqual({ paid_count: 0, already_paid_count: 0, cash_entry_count: 0 });
+  });
+
+  // ── 098 — vencimento base e líquido escrito à mão ──────────────────────────
+
+  async function ajustar(client: pg.Client, id: string, patch: Record<string, unknown>) {
+    return call(
+      client, "adjust_payroll_record_atomic",
+      "$1::uuid,$2::uuid,$3::jsonb,$4::uuid",
+      COMPANY, id, JSON.stringify(patch), ACTOR,
+    );
+  }
+
+  it("098: o vencimento base é gravado na linha do mês", async () => {
+    const client = clients[0];
+    const id = await payroll(client, COLLABORATOR, 2026, 8, 1000, "rascunho");
+    await ajustar(client, id, { base_salary: 870, net_salary: 1071.6 });
+    const r = (await client.query("SELECT base_salary, net_salary FROM public.payroll_records WHERE id=$1", [id])).rows[0];
+    expect(Number(r.base_salary)).toBe(870);
+    expect(Number(r.net_salary)).toBe(1071.6);
+  });
+
+  it("098: o líquido escrito à mão é o que fica em net_salary", async () => {
+    const client = clients[0];
+    const id = await payroll(client, COLLABORATOR, 2026, 8, 1000, "rascunho");
+    const res = await ajustar(client, id, {
+      net_salary: 1071.6,
+      net_salary_override: 1100,
+      net_salary_override_reason: "acerto combinado",
+    });
+    expect(Number(res.rows[0].net_salary)).toBe(1100);
+    const r = (await client.query(
+      "SELECT net_salary, net_salary_override, net_salary_override_reason FROM public.payroll_records WHERE id=$1", [id],
+    )).rows[0];
+    expect(Number(r.net_salary)).toBe(1100);
+    expect(Number(r.net_salary_override)).toBe(1100);
+    expect(r.net_salary_override_reason).toBe("acerto combinado");
+  });
+
+  it("🔴 098: um líquido à mão sem razão é recusado", async () => {
+    const client = clients[0];
+    const id = await payroll(client, COLLABORATOR, 2026, 8, 1000, "rascunho");
+    const erro = await ajustar(client, id, {
+      net_salary: 1071.6, net_salary_override: 1100,
+    }).then(() => new Error("ACEITE: devia exigir a razão"), (e: unknown) => e);
+    expect(String(erro)).toMatch(/PAYROLL_OVERRIDE_REASON_REQUIRED/);
+    const r = (await client.query("SELECT net_salary, net_salary_override FROM public.payroll_records WHERE id=$1", [id])).rows[0];
+    expect(Number(r.net_salary)).toBe(1000);
+    expect(r.net_salary_override).toBeNull();
+  });
+
+  it("🔴 098: uma razão em branco também não serve", async () => {
+    const client = clients[0];
+    const id = await payroll(client, COLLABORATOR, 2026, 8, 1000, "rascunho");
+    const erro = await ajustar(client, id, {
+      net_salary: 1071.6, net_salary_override: 1100, net_salary_override_reason: "   ",
+    }).then(() => new Error("ACEITE"), (e: unknown) => e);
+    expect(String(erro)).toMatch(/PAYROLL_OVERRIDE_REASON_REQUIRED/);
+  });
+
+  it("098: retirar o override devolve o líquido à conta, e não deixa razão órfã", async () => {
+    const client = clients[0];
+    const id = await payroll(client, COLLABORATOR, 2026, 8, 1000, "rascunho");
+    await ajustar(client, id, {
+      net_salary: 1071.6, net_salary_override: 1100, net_salary_override_reason: "acerto",
+    });
+    await ajustar(client, id, { net_salary: 1071.6, net_salary_override: null });
+    const r = (await client.query(
+      "SELECT net_salary, net_salary_override, net_salary_override_reason FROM public.payroll_records WHERE id=$1", [id],
+    )).rows[0];
+    expect(Number(r.net_salary)).toBe(1071.6);
+    expect(r.net_salary_override).toBeNull();
+    expect(r.net_salary_override_reason).toBeNull();
+  });
+
+  it("098: um ajuste que não fala do override não lhe toca", async () => {
+    const client = clients[0];
+    const id = await payroll(client, COLLABORATOR, 2026, 8, 1000, "rascunho");
+    await ajustar(client, id, {
+      net_salary: 1071.6, net_salary_override: 1100, net_salary_override_reason: "acerto",
+    });
+    await ajustar(client, id, { notes: "revisto" });
+    const r = (await client.query(
+      "SELECT net_salary, net_salary_override, notes FROM public.payroll_records WHERE id=$1", [id],
+    )).rows[0];
+    expect(Number(r.net_salary)).toBe(1100);
+    expect(Number(r.net_salary_override)).toBe(1100);
+    expect(r.notes).toBe("revisto");
+  });
+
+  it("🔴 098: recalcular o mês NÃO apaga um líquido escrito à mão", async () => {
+    const client = clients[0];
+    const id = await payroll(client, COLLABORATOR, 2026, 8, 1000, "rascunho");
+    await ajustar(client, id, {
+      net_salary: 1071.6, net_salary_override: 1100, net_salary_override_reason: "acerto",
+    });
+
+    await call(
+      client, "upsert_payroll_records_atomic",
+      "$1::uuid,$2::integer,$3::integer,$4::jsonb,$5::uuid",
+      COMPANY, 2026, 8,
+      JSON.stringify([{ collaborator_id: COLLABORATOR, net_salary: 500, base_salary: 870 }]),
+      ACTOR,
+    );
+
+    const r = (await client.query(
+      "SELECT net_salary, net_salary_override FROM public.payroll_records WHERE id=$1", [id],
+    )).rows[0];
+    expect(Number(r.net_salary)).toBe(1100);
+    expect(Number(r.net_salary_override)).toBe(1100);
+  });
+
+  it("098: sem override, recalcular o mês escreve por cima como sempre", async () => {
+    const client = clients[0];
+    const id = await payroll(client, COLLABORATOR, 2026, 8, 1000, "rascunho");
+    await call(
+      client, "upsert_payroll_records_atomic",
+      "$1::uuid,$2::integer,$3::integer,$4::jsonb,$5::uuid",
+      COMPANY, 2026, 8,
+      JSON.stringify([{ collaborator_id: COLLABORATOR, net_salary: 500, base_salary: 870 }]),
+      ACTOR,
+    );
+    const r = (await client.query("SELECT net_salary, base_salary FROM public.payroll_records WHERE id=$1", [id])).rows[0];
+    expect(Number(r.net_salary)).toBe(500);
+    expect(Number(r.base_salary)).toBe(870);
+  });
+
+  it("🔴 098: a constraint recusa uma razão sem override, por SQL cru", async () => {
+    const client = clients[0];
+    const id = await payroll(client, COLLABORATOR, 2026, 8, 1000, "rascunho");
+    const erro = await client.query(
+      "UPDATE public.payroll_records SET net_salary_override_reason=$2 WHERE id=$1", [id, "orfa"],
+    ).then(() => new Error("ACEITE"), (e: unknown) => e);
+    expect(String(erro)).toMatch(/payroll_net_override_needs_reason/);
+  });
+
+  it("098: a auditoria guarda o calculado ao lado do que se pagou", async () => {
+    const client = clients[0];
+    const id = await payroll(client, COLLABORATOR, 2026, 8, 1000, "rascunho");
+    await ajustar(client, id, {
+      net_salary: 1071.6, net_salary_override: 1100, net_salary_override_reason: "acerto combinado",
+    });
+    const meta = (await client.query(
+      "SELECT meta FROM public.audit_logs WHERE action='payroll_adjusted' ORDER BY created_at DESC LIMIT 1",
+    )).rows[0].meta;
+    expect(Number(meta.net_calculado)).toBe(1071.6);
+    expect(Number(meta.net_override)).toBe(1100);
+    expect(meta.override_reason).toBe("acerto combinado");
+    expect(Number(meta.amount)).toBe(1100);
+  });
+
+  it("🔴 098: uma folha já aprovada continua fechada ao override", async () => {
+    const client = clients[0];
+    const id = await payroll(client, COLLABORATOR, 2026, 8, 1000, "aprovado");
+    const erro = await ajustar(client, id, {
+      net_salary: 1071.6, net_salary_override: 1100, net_salary_override_reason: "acerto",
+    }).then(() => new Error("ACEITE"), (e: unknown) => e);
+    expect(String(erro)).toMatch(/PAYROLL_MUTATION_NOT_ALLOWED/);
   });
 });

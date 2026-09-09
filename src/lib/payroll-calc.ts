@@ -108,12 +108,19 @@ export interface PayrollSettings {
   defaultHourlyRate: number;
   mealAllowanceDay: number;
   overtimeRatePct: number;
+  /**
+   * Vencimento base mensal da empresa — o que vale para quem não tem o seu
+   * próprio. Tipicamente o salário mínimo.
+   */
+  defaultBaseSalaryMonthly?: number;
 }
 
 export interface CollaboratorPayrollResult {
   workedHours: number;
   daysWorked: number;
   overtimeHours: number;
+  /** Vencimento base do mês. É a base do bruto quando existe. */
+  baseSalary: number;
   grossSalary: number;
   mealAllowance: number;
   overtimeBonus: number;
@@ -134,6 +141,11 @@ export function calcCollaboratorPayroll(
   periodEnd: string,
   otherAdditions = 0,
   otherDeductions = 0,
+  /**
+   * Vencimento base desta pessoa. `null`/`undefined` cai no da empresa; zero
+   * ou ausência dos dois mantém o modelo antigo (bruto = horas × taxa).
+   */
+  baseSalaryMonthly?: number | null,
 ): CollaboratorPayrollResult {
   // Worked hours from timesheets
   const workedMinutes = timesheets.reduce(
@@ -158,8 +170,28 @@ export function calcCollaboratorPayroll(
   const { absenceDays, injustifiedDays, absenceHours, absenceDeductions } =
     calcAbsenceSummary(absences, periodStart, periodEnd, contractedHours, hourlyRate);
 
-  // Monetary values
-  const grossSalary = Math.round(workedHours * hourlyRate * 100) / 100;
+  // ── O bruto ───────────────────────────────────────────────────────────────
+  //
+  // 🔴 Aqui estava, e só estava, `workedHours × hourlyRate`. Não havia
+  //    vencimento base em lado nenhum, por isso quem é contratado ao salário
+  //    mínimo só lá chegava por acaso — se as horas do ponto vezes a taxa
+  //    dessem esse número. Não davam: a leitura de produção mostra
+  //    `hourly_rate` entre 5,23 € e 9,50 €, sinal de que a taxa horária andou
+  //    a ser torcida para o total bater certo. Um campo a fazer o trabalho de
+  //    outro.
+  //
+  //    Com vencimento base, o bruto é o base. As horas continuam a ser
+  //    contadas e gravadas, mas passam a ser assiduidade — e as horas ACIMA
+  //    das contratadas continuam a pagar-se como extra, por cima.
+  //
+  //    Sem base definido (nem na pessoa nem na empresa), o cálculo antigo
+  //    mantém-se tal e qual. Ninguém é obrigado a migrar de modelo por esta
+  //    alteração existir.
+  const baseSalary = resolveBaseSalary(baseSalaryMonthly, settings.defaultBaseSalaryMonthly);
+  const grossSalary = baseSalary > 0
+    ? baseSalary
+    : Math.round(workedHours * hourlyRate * 100) / 100;
+
   const mealAllowance = Math.round(daysWorked * settings.mealAllowanceDay * 100) / 100;
   const overtimeBonus = calcOvertimeBonus(overtimeHours, hourlyRate, settings.overtimeRatePct);
 
@@ -177,6 +209,7 @@ export function calcCollaboratorPayroll(
     workedHours,
     daysWorked,
     overtimeHours,
+    baseSalary,
     grossSalary,
     mealAllowance,
     overtimeBonus,
@@ -186,6 +219,30 @@ export function calcCollaboratorPayroll(
     absenceDeductions,
     netSalary,
   };
+}
+
+/**
+ * Qual vencimento base vale: o da pessoa, o da empresa, ou nenhum.
+ *
+ * 🔴 `0` da pessoa NÃO cai no da empresa. Zero é uma resposta — «esta pessoa
+ *    não tem vencimento base, paga-se-lhe às horas» — e tratá-lo como ausência
+ *    daria à pessoa um base que ninguém lhe atribuiu. Só `null`/`undefined`,
+ *    que são ausência a sério, procuram o da empresa.
+ *
+ * Valores inválidos (NaN, infinito, negativo) não passam: um base corrompido
+ * escreveria um salário errado em vez de falhar à vista.
+ */
+export function resolveBaseSalary(
+  daPessoa: number | null | undefined,
+  daEmpresa: number | null | undefined,
+): number {
+  const valido = (v: number | null | undefined): v is number =>
+    typeof v === "number" && Number.isFinite(v) && v >= 0;
+
+  if (daPessoa !== null && daPessoa !== undefined) {
+    return valido(daPessoa) ? Math.round(daPessoa * 100) / 100 : 0;
+  }
+  return valido(daEmpresa) ? Math.round(daEmpresa * 100) / 100 : 0;
 }
 
 // ─── Adjusted net salary (for manual payroll adjustments) ────────────────────

@@ -427,7 +427,20 @@ export function PayrollClient({ initialRecords, companyId, mesParam, year, month
                           : "—"}
                       </td>
                       <td className="px-4 py-3 text-right font-semibold text-[var(--color-text-main)]">
-                        {fmtEur(r.net_salary)}
+                        <span className="inline-flex items-center gap-1.5 justify-end">
+                          {/* Um valor decidido por alguém não deve parecer um
+                              valor calculado. Quem olha para a lista tem de o
+                              distinguir sem abrir a linha. */}
+                          {r.net_salary_override !== null && (
+                            <span
+                              title={`Valor escrito à mão: ${r.net_salary_override_reason ?? ""}`}
+                              className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-amber-100 text-amber-800"
+                            >
+                              MANUAL
+                            </span>
+                          )}
+                          {fmtEur(r.net_salary)}
+                        </span>
                       </td>
                       <td className="px-4 py-3">
                         <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_COLOR[r.status]}`}>
@@ -476,6 +489,12 @@ export function PayrollClient({ initialRecords, companyId, mesParam, year, month
                               <p className="text-[var(--color-text-main)]">{fmtEur(r.hourly_rate)}</p>
                             </div>
                             <div>
+                              <p className="font-medium mb-0.5">Vencimento base</p>
+                              <p className="text-[var(--color-text-main)]">
+                                {r.base_salary > 0 ? fmtEur(r.base_salary) : "— (às horas)"}
+                              </p>
+                            </div>
+                            <div>
                               <p className="font-medium mb-0.5">Outros acréscimos</p>
                               <p className="text-[var(--color-text-main)]">{fmtEur(r.other_additions)}</p>
                             </div>
@@ -484,6 +503,17 @@ export function PayrollClient({ initialRecords, companyId, mesParam, year, month
                               <p className="text-[var(--color-text-main)] text-red-600">{fmtEur(r.other_deductions)}</p>
                             </div>
                           </div>
+
+                          {r.net_salary_override !== null && (
+                            <div className="mt-3 p-3 rounded-lg bg-amber-50 border border-amber-200">
+                              <p className="text-xs font-semibold text-amber-900">
+                                Líquido escrito à mão: {fmtEur(r.net_salary_override)}
+                              </p>
+                              <p className="mt-0.5 text-xs text-amber-800">
+                                {r.net_salary_override_reason}
+                              </p>
+                            </div>
+                          )}
                         </td>
                       </tr>
                     )}
