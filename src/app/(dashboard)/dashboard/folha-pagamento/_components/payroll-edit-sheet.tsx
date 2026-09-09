@@ -35,20 +35,39 @@ function SummaryLine({ label, value, danger }: { label: string; value: string; d
 const inputCls =
   "w-full px-3 py-2 rounded-lg border border-[var(--color-border)] text-sm text-[var(--color-text-main)] focus:outline-none focus:ring-2 focus:ring-[var(--finance-primary)] focus:border-transparent";
 
+/**
+ * Um campo numérico a zero mostra-se VAZIO, não "0".
+ *
+ * 🔴 Com "0" lá dentro, escrever 80 dá "080": o cursor fica depois do zero e
+ *    o valor antigo não é substituído. Foi reportado como «coloco o valor e
+ *    ainda fica o 0». O placeholder diz o que acontece se ficar vazio, sem
+ *    obrigar a apagar um carácter antes de cada edição.
+ */
+function campoNumerico(v: number): string {
+  return v === 0 ? "" : String(v);
+}
+
 export function PayrollEditSheet({ record, onClose, onSaved }: Props) {
   // Campos de taxas
-  const [hourlyRate,    setHourlyRate]    = useState(record.hourly_rate.toString());
+  const [hourlyRate,    setHourlyRate]    = useState(campoNumerico(record.hourly_rate));
   const mealPerDayInit = record.days_worked > 0 ? record.meal_allowance / record.days_worked : 9.6;
-  const [mealDay,       setMealDay]       = useState(mealPerDayInit.toFixed(2));
+  const [mealDay,       setMealDay]       = useState(mealPerDayInit === 0 ? "" : mealPerDayInit.toFixed(2));
   // Campos de horas
-  const [workedHours,   setWorkedHours]   = useState(record.worked_hours.toString());
-  const [overtimeHours, setOvertimeHours] = useState(record.overtime_hours.toString());
-  const [absenceHours,  setAbsenceHours]  = useState(record.absence_hours.toString());
-  const [daysWorked,    setDaysWorked]    = useState(record.days_worked.toString());
+  const [workedHours,   setWorkedHours]   = useState(campoNumerico(record.worked_hours));
+  const [overtimeHours, setOvertimeHours] = useState(campoNumerico(record.overtime_hours));
+  const [absenceHours,  setAbsenceHours]  = useState(campoNumerico(record.absence_hours));
+  const [daysWorked,    setDaysWorked]    = useState(campoNumerico(record.days_worked));
   // Desconto por falta (€)
-  const [absenceDed,    setAbsenceDed]    = useState(record.absence_deductions.toString());
+  const [absenceDed,    setAbsenceDed]    = useState(campoNumerico(record.absence_deductions));
   // Vencimento base do mês
-  const [baseSalary, setBaseSalary] = useState(record.base_salary.toString());
+  const [baseSalary, setBaseSalary] = useState(campoNumerico(record.base_salary));
+  // Hora extra ao valor, dias extras e adiantamento
+  const [otHourRate,  setOtHourRate]  = useState(
+    record.overtime_hour_rate !== null ? String(record.overtime_hour_rate) : "",
+  );
+  const [extraDays,    setExtraDays]    = useState(campoNumerico(record.extra_days));
+  const [extraDayRate, setExtraDayRate] = useState(campoNumerico(record.extra_day_rate));
+  const [advance,      setAdvance]      = useState(campoNumerico(record.advance_deduction));
   // Líquido escrito à mão
   const [overrideOn,     setOverrideOn]     = useState(record.net_salary_override !== null);
   const [overrideValue,  setOverrideValue]  = useState(
@@ -56,8 +75,8 @@ export function PayrollEditSheet({ record, onClose, onSaved }: Props) {
   );
   const [overrideReason, setOverrideReason] = useState(record.net_salary_override_reason ?? "");
   // Ajustes manuais
-  const [otherAdd, setOtherAdd] = useState(record.other_additions.toString());
-  const [otherDed, setOtherDed] = useState(record.other_deductions.toString());
+  const [otherAdd, setOtherAdd] = useState(campoNumerico(record.other_additions));
+  const [otherDed, setOtherDed] = useState(campoNumerico(record.other_deductions));
   const [notes,    setNotes]    = useState(record.notes ?? "");
 
   const [saving, setSaving] = useState(false);
@@ -86,9 +105,22 @@ export function PayrollEditSheet({ record, onClose, onSaved }: Props) {
     ? baseSalaryVal
     : Math.round(workedHoursVal * hourlyRateVal * 100) / 100;
   const mealPreview     = Math.round(daysWorkedVal * mealDayVal * 100) / 100;
-  const otBonusPreview  = Math.round(overtimeHoursVal * hourlyRateVal * ((record.overtime_rate_pct ?? 25) / 100) * 100) / 100;
+  const otHourRateVal   = parseFloat(otHourRate);
+  const temValorHoraExtra = Number.isFinite(otHourRateVal) && otHourRateVal > 0;
+  // Com €/hora extra, a percentagem sai da conta. Sem ele, mantém-se como era.
+  const otBonusPreview  = temValorHoraExtra
+    ? Math.round(overtimeHoursVal * otHourRateVal * 100) / 100
+    : Math.round(overtimeHoursVal * hourlyRateVal * ((record.overtime_rate_pct ?? 25) / 100) * 100) / 100;
+
+  const extraDaysVal     = parseInt(extraDays) || 0;
+  const extraDayRateVal  = parseFloat(extraDayRate) || 0;
+  const extraDaysPreview = extraDaysVal > 0 && extraDayRateVal > 0
+    ? Math.round(extraDaysVal * extraDayRateVal * 100) / 100
+    : 0;
+  const advanceVal       = parseFloat(advance) || 0;
   const netCalculado    = Math.round(
-    (grossPreview + mealPreview + otBonusPreview + addVal - absenceDedVal - dedVal) * 100,
+    (grossPreview + mealPreview + otBonusPreview + extraDaysPreview + addVal
+      - absenceDedVal - advanceVal - dedVal) * 100,
   ) / 100;
   // O que se vai pagar: o escrito à mão, ou a conta.
   const previewNet      = overrideValido ? overrideVal : netCalculado;
@@ -113,6 +145,10 @@ export function PayrollEditSheet({ record, onClose, onSaved }: Props) {
 
     const res = await adjustPayrollRecord(record.id, {
       base_salary:         baseSalaryVal,
+      overtime_hour_rate:  temValorHoraExtra ? otHourRateVal : null,
+      extra_days:          extraDaysVal,
+      extra_day_rate:      extraDayRateVal,
+      advance_deduction:   advanceVal,
       net_salary_override: overrideValido ? overrideVal : null,
       net_salary_override_reason: overrideValido ? overrideReason.trim() : null,
       hourly_rate:         hourlyRateVal,
@@ -131,6 +167,11 @@ export function PayrollEditSheet({ record, onClose, onSaved }: Props) {
       onSaved({
         ...record,
         base_salary:         baseSalaryVal,
+        overtime_hour_rate:  temValorHoraExtra ? otHourRateVal : null,
+        extra_days:          extraDaysVal,
+        extra_day_rate:      extraDayRateVal,
+        extra_days_bonus:    extraDaysPreview,
+        advance_deduction:   advanceVal,
         net_salary_override: overrideValido ? overrideVal : null,
         net_salary_override_reason: overrideValido ? overrideReason.trim() : null,
         hourly_rate:         hourlyRateVal,
@@ -223,6 +264,7 @@ export function PayrollEditSheet({ record, onClose, onSaved }: Props) {
                 min="0"
                 step="0.01"
                 value={hourlyRate}
+              placeholder="0,00"
                 onChange={(e) => setHourlyRate(e.target.value)}
                 className={inputCls}
               />
@@ -236,6 +278,7 @@ export function PayrollEditSheet({ record, onClose, onSaved }: Props) {
                 min="0"
                 step="0.01"
                 value={mealDay}
+              placeholder="0,00"
                 onChange={(e) => setMealDay(e.target.value)}
                 className={inputCls}
               />
@@ -315,10 +358,76 @@ export function PayrollEditSheet({ record, onClose, onSaved }: Props) {
               min="0"
               step="0.01"
               value={absenceDed}
+              placeholder="0,00"
               onChange={(e) => setAbsenceDed(e.target.value)}
               className={inputCls}
             />
           </div>
+
+          <div className="border-t border-[var(--color-border)]" />
+
+          {/* Secção: Dias extras e hora extra ao valor */}
+          <SectionLabel icon={<Euro className="w-4 h-4" />} label="Dias extras e hora extra" />
+
+          <div>
+            <label className="block text-xs font-medium text-[var(--color-text-sub)] mb-1.5">
+              Valor por hora extra (€)
+              <span className="text-[var(--color-text-muted)] font-normal ml-1">— deixa vazio para usar a percentagem</span>
+            </label>
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              value={otHourRate}
+              onChange={(e) => setOtHourRate(e.target.value)}
+              className={inputCls}
+              placeholder={`${record.overtime_rate_pct ?? 25}% da hora normal`}
+            />
+            {overtimeHoursVal > 0 && (
+              <p className="mt-1.5 text-xs text-[var(--color-text-muted)]">
+                {overtimeHoursVal}h × {temValorHoraExtra ? fmtEur(otHourRateVal) : `${record.overtime_rate_pct ?? 25}%`}
+                {" = "}{fmtEur(otBonusPreview)}
+              </p>
+            )}
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-medium text-[var(--color-text-sub)] mb-1.5">
+                Dias extras
+                <span className="text-[var(--color-text-muted)] font-normal ml-1">— sábados, etc.</span>
+              </label>
+              <input
+                type="number"
+                min="0"
+                step="1"
+                value={extraDays}
+                onChange={(e) => setExtraDays(e.target.value)}
+                className={inputCls}
+                placeholder="0"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-[var(--color-text-sub)] mb-1.5">
+                Valor por dia extra (€)
+              </label>
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={extraDayRate}
+                onChange={(e) => setExtraDayRate(e.target.value)}
+                className={inputCls}
+                placeholder="0,00"
+              />
+            </div>
+          </div>
+
+          {extraDaysPreview > 0 && (
+            <p className="-mt-1 text-xs text-[var(--finance-primary)]">
+              {extraDaysVal} dia{extraDaysVal !== 1 ? "s" : ""} × {fmtEur(extraDayRateVal)} = <strong>{fmtEur(extraDaysPreview)}</strong>
+            </p>
+          )}
 
           <div className="border-t border-[var(--color-border)]" />
 
@@ -335,6 +444,7 @@ export function PayrollEditSheet({ record, onClose, onSaved }: Props) {
               min="0"
               step="0.01"
               value={otherAdd}
+              placeholder="0,00"
               onChange={(e) => setOtherAdd(e.target.value)}
               className={inputCls}
             />
@@ -342,14 +452,30 @@ export function PayrollEditSheet({ record, onClose, onSaved }: Props) {
 
           <div>
             <label className="block text-xs font-medium text-[var(--color-text-sub)] mb-1.5">
-              Descontos (€)
-              <span className="text-[var(--color-text-muted)] font-normal ml-1">— adiantamento, etc.</span>
+              Adiantamento a descontar (€)
+              <span className="text-[var(--color-text-muted)] font-normal ml-1">— dinheiro já entregue</span>
+            </label>
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              value={advance}
+              onChange={(e) => setAdvance(e.target.value)}
+              className={inputCls}
+              placeholder="0,00"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-[var(--color-text-sub)] mb-1.5">
+              Outros descontos (€)
             </label>
             <input
               type="number"
               min="0"
               step="0.01"
               value={otherDed}
+              placeholder="0,00"
               onChange={(e) => setOtherDed(e.target.value)}
               className={inputCls}
             />
@@ -453,9 +579,11 @@ export function PayrollEditSheet({ record, onClose, onSaved }: Props) {
               {fmtEur(grossPreview)} bruto
               {baseSalaryVal > 0 ? " (base)" : ""}
               {" + "}{fmtEur(mealPreview)} alim.
-              {" + "}{fmtEur(otBonusPreview)} extra
+              {" + "}{fmtEur(otBonusPreview)} h.extra
+              {extraDaysPreview > 0 ? ` + ${fmtEur(extraDaysPreview)} dias extra` : ""}
               {" + "}{fmtEur(addVal)} acrésc.
               {" − "}{fmtEur(absenceDedVal)} faltas
+              {advanceVal > 0 ? ` − ${fmtEur(advanceVal)} adiant.` : ""}
               {" − "}{fmtEur(dedVal)} desc.
               {overrideValido && diferenca !== 0 ? ` = ${fmtEur(netCalculado)} calculado` : ""}
             </p>

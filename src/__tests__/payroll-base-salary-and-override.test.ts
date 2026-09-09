@@ -11,6 +11,8 @@ import { describe, expect, it } from "vitest";
 import {
   calcCollaboratorPayroll,
   calcAdjustedNetSalary,
+  calcOvertimeValue,
+  calcExtraDaysBonus,
   resolveBaseSalary,
 } from "@/lib/payroll-calc";
 
@@ -175,5 +177,52 @@ describe("o problema que isto veio resolver", () => {
     expect(curto.grossSalary).toBe(cheio.grossSalary);
     // O que muda é o subsídio de alimentação, que é mesmo por dia.
     expect(curto.mealAllowance).toBeLessThan(cheio.mealAllowance);
+  });
+});
+
+describe("hora extra ao valor, dias extras e adiantamento", () => {
+  it("com €/hora extra definido, a percentagem sai da conta", () => {
+    // 8h a 12 € = 96 €. Nada de taxa horária, nada de 25%.
+    expect(calcOvertimeValue(8, 9.5, 25, 12)).toBe(96);
+  });
+
+  it("sem €/hora extra, mantém-se o cálculo por percentagem", () => {
+    // 8 × 9,50 × 0,25 = 19 €
+    expect(calcOvertimeValue(8, 9.5, 25, null)).toBe(19);
+    expect(calcOvertimeValue(8, 9.5, 25, undefined)).toBe(19);
+  });
+
+  it("🔴 um valor por hora extra a zero não é um valor — cai na percentagem", () => {
+    // Zero aqui é o campo vazio, não «a hora extra não vale nada».
+    expect(calcOvertimeValue(8, 9.5, 25, 0)).toBe(19);
+  });
+
+  it("dias extras são dias × valor", () => {
+    // Dois sábados a 50 € = 100 €.
+    expect(calcExtraDaysBonus(2, 50)).toBe(100);
+  });
+
+  it("dias sem valor, ou valor sem dias, não inventam dinheiro", () => {
+    expect(calcExtraDaysBonus(2, 0)).toBe(0);
+    expect(calcExtraDaysBonus(0, 50)).toBe(0);
+    expect(calcExtraDaysBonus(-1, 50)).toBe(0);
+    expect(calcExtraDaysBonus(Number.NaN, 50)).toBe(0);
+  });
+
+  it("o líquido soma os dias extras e desconta o adiantamento", () => {
+    // 870 base + 201,60 alim + 0 extra + 100 dias extras − 0 faltas
+    //   − 200 adiantamento − 0 outros = 971,60
+    expect(
+      calcAdjustedNetSalary(870, 201.6, 0, 0, 0, 0, 100, 200),
+    ).toBe(971.6);
+  });
+
+  it("🔴 quem não usa dias extras nem adiantamentos soma o mesmo de sempre", () => {
+    // Os parâmetros novos têm valor por omissão: nenhum chamador antigo muda
+    // de resultado por eles existirem.
+    const antes = 870 + 201.6 + 19 + 50 - 30 - 20;
+    expect(calcAdjustedNetSalary(870, 201.6, 19, 50, 30, 20)).toBe(
+      Math.round(antes * 100) / 100,
+    );
   });
 });

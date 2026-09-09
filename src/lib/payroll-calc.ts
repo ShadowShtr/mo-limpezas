@@ -254,18 +254,73 @@ export function calcAdjustedNetSalary(
   otherAdditions: number,
   absenceDeductions: number,
   otherDeductions: number,
+  /**
+   * Dias extras (sábados, feriados) já convertidos em euros, e adiantamento
+   * já entregue.
+   *
+   * 🔴 Entram como parâmetros com valor por omissão, e não como campos novos
+   *    obrigatórios: todos os chamadores antigos continuam a somar o mesmo
+   *    que somavam. Quem não usa dias extras nem adiantamentos não vê
+   *    diferença nenhuma no total.
+   */
+  extraDaysBonus = 0,
+  advanceDeduction = 0,
 ): number {
   return (
     Math.round(
       (grossSalary +
         mealAllowance +
         overtimeBonus +
+        extraDaysBonus +
         otherAdditions -
         absenceDeductions -
+        advanceDeduction -
         otherDeductions) *
         100,
     ) / 100
   );
+}
+
+/**
+ * O bónus das horas extra.
+ *
+ * Duas formas, e a escolha não é arbitrária:
+ *
+ *   · com `€/hora extra` definido, é `horas × valor`. É o que uma empresa que
+ *     paga o bruto sabe de cor, e não depende de uma taxa horária que aqui é
+ *     ficção — o ponto está vazio, a taxa foi torcida para os totais baterem,
+ *     e multiplicar uma percentagem por cima disso agrava o erro;
+ *
+ *   · sem ele, mantém-se `horas × taxa × percentagem`, para quem já usava
+ *     assim.
+ */
+export function calcOvertimeValue(
+  overtimeHours: number,
+  hourlyRate: number,
+  overtimeRatePct: number,
+  overtimeHourRate?: number | null,
+): number {
+  const valido = typeof overtimeHourRate === "number"
+    && Number.isFinite(overtimeHourRate)
+    && overtimeHourRate > 0;
+
+  if (valido) {
+    return Math.round(overtimeHours * (overtimeHourRate as number) * 100) / 100;
+  }
+  return calcOvertimeBonus(overtimeHours, hourlyRate, overtimeRatePct);
+}
+
+/**
+ * Dias extras trabalhados × valor de cada um.
+ *
+ * Um sábado não é «horas extra»: é um dia, com um preço combinado. Sem este
+ * conceito, quem quisesse pagá-lo tinha de o esconder dentro de «acréscimos»
+ * — e o recibo deixava de dizer o que aquele dinheiro era.
+ */
+export function calcExtraDaysBonus(extraDays: number, extraDayRate: number): number {
+  if (!Number.isFinite(extraDays) || !Number.isFinite(extraDayRate)) return 0;
+  if (extraDays <= 0 || extraDayRate <= 0) return 0;
+  return Math.round(extraDays * extraDayRate * 100) / 100;
 }
 
 // ─── Timestamp validation (mirrors API route logic) ──────────────────────────
