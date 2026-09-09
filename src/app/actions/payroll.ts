@@ -138,6 +138,12 @@ export interface PayrollRecord {
   extra_days_bonus: number;
   /** Adiantamento já entregue, a descontar. */
   advance_deduction: number;
+  /** O que o ponto diz. `null` = ainda não houve recálculo com ponto. */
+  clock_worked_hours: number | null;
+  clock_days_worked: number | null;
+  clock_absence_hours: number | null;
+  /** true = as horas foram corrigidas à mão e o recálculo não lhes toca. */
+  hours_manual: boolean;
   gross_salary: number;
   meal_allowance: number;
   overtime_bonus: number;
@@ -170,6 +176,12 @@ export interface PayrollAdjust {
   extra_days?:         number;
   extra_day_rate?:     number;
   advance_deduction?:  number;
+  /**
+   * `false` é o botão «repor do ponto»: as horas efectivas voltam a ser as do
+   * ponto. Ausente deixa a marca como está — e a RPC liga-a sozinha se algum
+   * dos campos de horas mudar de valor.
+   */
+  hours_manual?:       boolean;
   /**
    * Líquido escrito à mão.
    *
@@ -591,6 +603,10 @@ export async function getPayrollRecords(
       extra_day_rate:     r.extra_day_rate ?? 0,
       extra_days_bonus:   r.extra_days_bonus ?? 0,
       advance_deduction:  r.advance_deduction ?? 0,
+      clock_worked_hours:  r.clock_worked_hours ?? null,
+      clock_days_worked:   r.clock_days_worked ?? null,
+      clock_absence_hours: r.clock_absence_hours ?? null,
+      hours_manual:        r.hours_manual ?? false,
       gross_salary:       r.gross_salary ?? 0,
       meal_allowance:     r.meal_allowance ?? 0,
       overtime_bonus:     r.overtime_bonus ?? 0,
@@ -621,6 +637,7 @@ export async function adjustPayrollRecord(
   // (um NaN/negativo/absurdo aqui corrompe o salário real, não só a UI).
   for (const [field, value] of Object.entries(adjust)) {
     if (field === "notes" || field === "net_salary_override_reason") continue;
+    if (field === "hours_manual") continue;
     // 🔴 `net_salary_override` a `null` é intenção — «retirar o override» —, e
     //    não um valor inválido. Os outros campos continuam a passar todos pela
     //    mesma validação: aqui `undefined` significa «não mexeu».
@@ -655,7 +672,7 @@ export async function adjustPayrollRecord(
   // sobretudo — para saber se sequer se pode tocar nele.
   const { data: rec, error: rErr } = await admin
     .from("payroll_records")
-    .select("company_id, status, base_salary, gross_salary, meal_allowance, overtime_bonus, overtime_hour_rate, extra_days, extra_day_rate, extra_days_bonus, advance_deduction, absence_deductions, other_additions, other_deductions, net_salary, net_salary_override, net_salary_override_reason, worked_hours, overtime_hours, absence_hours, days_worked, hourly_rate, notes")
+    .select("company_id, status, base_salary, gross_salary, meal_allowance, overtime_bonus, overtime_hour_rate, extra_days, extra_day_rate, extra_days_bonus, advance_deduction, absence_deductions, other_additions, other_deductions, net_salary, net_salary_override, net_salary_override_reason, worked_hours, overtime_hours, absence_hours, days_worked, hourly_rate, clock_worked_hours, clock_days_worked, clock_absence_hours, hours_manual, notes")
     .eq("id", id)
     .eq("company_id", companyId)
     .maybeSingle();
@@ -676,14 +693,27 @@ export async function adjustPayrollRecord(
   const recusa = denyEconomicMutation(status);
   if (recusa) return { ok: false, error: PAYROLL_MUTATION_DENIAL_MESSAGE[recusa] };
 
-  const workedHours    = adjust.worked_hours      ?? rec.worked_hours       ?? 0;
+  // 🔴 «Repor do ponto» decide-se aqui e na RPC, e as duas têm de concordar:
+  //    se o TypeScript calculasse o líquido com as horas da mão enquanto o SQL
+  //    gravava as do ponto, o total ficava a descrever números que já não
+  //    estão na linha.
+  const reporDoPonto = adjust.hours_manual === false;
+
+  const workedHours    = reporDoPonto
+    ? (rec.clock_worked_hours ?? rec.worked_hours ?? 0)
+    : (adjust.worked_hours ?? rec.worked_hours ?? 0);
   const overtimeHours  = adjust.overtime_hours    ?? rec.overtime_hours     ?? 0;
-  const absenceHours   = adjust.absence_hours     ?? rec.absence_hours      ?? 0;
-  const daysWorked     = adjust.days_worked       ?? rec.days_worked        ?? 0;
+  const absenceHours   = reporDoPonto
+    ? (rec.clock_absence_hours ?? rec.absence_hours ?? 0)
+    : (adjust.absence_hours ?? rec.absence_hours ?? 0);
+  const daysWorked     = reporDoPonto
+    ? (rec.clock_days_worked ?? rec.days_worked ?? 0)
+    : (adjust.days_worked ?? rec.days_worked ?? 0);
   const hourlyRate     = adjust.hourly_rate       ?? rec.hourly_rate        ?? 0;
 
   const rateChanged  = adjust.hourly_rate     !== undefined;
-  const hoursChanged = adjust.worked_hours    !== undefined || adjust.overtime_hours !== undefined
+  const hoursChanged = reporDoPonto
+    || adjust.worked_hours    !== undefined || adjust.overtime_hours !== undefined
     || adjust.days_worked !== undefined || adjust.absence_hours !== undefined;
 
   // 🔴 Com vencimento base, o bruto É o base — as horas não o mexem. Sem base,
@@ -782,6 +812,7 @@ export async function adjustPayrollRecord(
       absence_hours: absenceHours, days_worked: daysWorked,
       hourly_rate: hourlyRate, base_salary: baseSalary,
       overtime_hour_rate: temValorHoraExtra ? overtimeHourRate : null,
+      ...(adjust.hours_manual !== undefined ? { hours_manual: adjust.hours_manual } : {}),
       extra_days: extraDays, extra_day_rate: extraDayRate,
       extra_days_bonus: extraDaysBonus,
       advance_deduction: advanceDeduction,

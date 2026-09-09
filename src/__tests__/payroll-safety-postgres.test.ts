@@ -11,6 +11,7 @@ const migration024 = readFileSync(join(ROOT, "supabase/migrations/024_cash_flow_
 const migration090 = readFileSync(join(ROOT, "supabase/migrations/090_financial_period_lock_protocol.sql"), "utf8");
 const migration098 = readFileSync(join(ROOT, "supabase/migrations/098_payroll_base_salary_and_net_override.sql"), "utf8");
 const migration099 = readFileSync(join(ROOT, "supabase/migrations/099_payroll_extra_days_and_advances.sql"), "utf8");
+const migration100 = readFileSync(join(ROOT, "supabase/migrations/100_payroll_clock_vs_manual.sql"), "utf8");
 
 const COMPANY = "00000000-0000-0000-0000-000000000001";
 const OTHER_COMPANY = "00000000-0000-0000-0000-000000000002";
@@ -50,6 +51,7 @@ ${migration090}
 ${migration}
 ${migration098}
 ${migration099}
+${migration100}
 `;
 
 describe("PAYROLL-SAFETY-01 contra o schema de produção e 090 real", () => {
@@ -661,6 +663,82 @@ describe("PAYROLL-SAFETY-01 contra o schema de produção e 090 real", () => {
       net_salary: 1000, net_salary_override: 1100,
     }).then(() => new Error("ACEITE"), (e: unknown) => e);
     expect(String(erro)).toMatch(/PAYROLL_OVERRIDE_REASON_REQUIRED/);
+  });
+
+  // ── 100 — o ponto propõe, a mão decide ────────────────────────────────────
+
+  it("100: o recálculo guarda o que o ponto diz e segue-o", async () => {
+    const client = clients[0];
+    await call(
+      client, "upsert_payroll_records_atomic",
+      "$1::uuid,$2::integer,$3::integer,$4::jsonb,$5::uuid",
+      COMPANY, 2026, 8,
+      JSON.stringify([{ collaborator_id: COLLABORATOR_TWO, worked_hours: 168, days_worked: 21, absence_hours: 0, net_salary: 1000 }]),
+      ACTOR,
+    );
+    const r = (await client.query(
+      "SELECT worked_hours, clock_worked_hours, hours_manual FROM public.payroll_records WHERE collaborator_id=$1 AND period_month=8", [COLLABORATOR_TWO],
+    )).rows[0];
+    expect(Number(r.worked_hours)).toBe(168);
+    expect(Number(r.clock_worked_hours)).toBe(168);
+    expect(r.hours_manual).toBe(false);
+  });
+
+  it("🔴 100: corrigir as horas à mão marca a linha, e o recálculo deixa-a em paz", async () => {
+    const client = clients[0];
+    const id = await payroll(client, COLLABORATOR, 2026, 8, 1000, "rascunho");
+    await ajustar(client, id, { worked_hours: 150, days_worked: 19, net_salary: 900 });
+
+    let r = (await client.query(
+      "SELECT worked_hours, hours_manual FROM public.payroll_records WHERE id=$1", [id],
+    )).rows[0];
+    expect(Number(r.worked_hours)).toBe(150);
+    expect(r.hours_manual).toBe(true);
+
+    // O recálculo traz 168h do ponto: guarda-as, mas não as impõe.
+    await call(
+      client, "upsert_payroll_records_atomic",
+      "$1::uuid,$2::integer,$3::integer,$4::jsonb,$5::uuid",
+      COMPANY, 2026, 8,
+      JSON.stringify([{ collaborator_id: COLLABORATOR, worked_hours: 168, days_worked: 21, absence_hours: 0, net_salary: 1200 }]),
+      ACTOR,
+    );
+
+    r = (await client.query(
+      "SELECT worked_hours, clock_worked_hours, net_salary FROM public.payroll_records WHERE id=$1", [id],
+    )).rows[0];
+    expect(Number(r.worked_hours)).toBe(150);       // a mão manda
+    expect(Number(r.clock_worked_hours)).toBe(168); // e o ponto fica guardado
+    expect(Number(r.net_salary)).toBe(900);
+  });
+
+  it("🔴 100: repor do ponto copia os valores e desmarca", async () => {
+    const client = clients[0];
+    const id = await payroll(client, COLLABORATOR, 2026, 8, 1000, "rascunho");
+    await client.query(
+      `UPDATE public.payroll_records
+          SET clock_worked_hours=168, clock_days_worked=21, clock_absence_hours=0,
+              worked_hours=150, days_worked=19, hours_manual=true
+        WHERE id=$1`, [id],
+    );
+
+    await ajustar(client, id, { hours_manual: false, net_salary: 1000 });
+
+    const r = (await client.query(
+      "SELECT worked_hours, days_worked, hours_manual FROM public.payroll_records WHERE id=$1", [id],
+    )).rows[0];
+    expect(Number(r.worked_hours)).toBe(168);
+    expect(r.days_worked).toBe(21);
+    expect(r.hours_manual).toBe(false);
+  });
+
+  it("100: guardar sem mexer nas horas não as congela", async () => {
+    const client = clients[0];
+    const id = await payroll(client, COLLABORATOR, 2026, 8, 1000, "rascunho");
+    await ajustar(client, id, { notes: "revisto" });
+    expect((await client.query(
+      "SELECT hours_manual FROM public.payroll_records WHERE id=$1", [id],
+    )).rows[0].hours_manual).toBe(false);
   });
 
   it("🔴 098: uma folha já aprovada continua fechada ao override", async () => {

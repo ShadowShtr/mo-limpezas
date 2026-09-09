@@ -1087,6 +1087,10 @@ export type Database = {
       }
       payroll_records: {
         Row: {
+          clock_absence_hours: number | null
+          clock_days_worked: number | null
+          clock_worked_hours: number | null
+          hours_manual: boolean | null
           advance_deduction: number | null
           extra_day_rate: number | null
           extra_days: number | null
@@ -1121,6 +1125,10 @@ export type Database = {
           worked_hours: number | null
         }
         Insert: {
+          clock_absence_hours?: number | null
+          clock_days_worked?: number | null
+          clock_worked_hours?: number | null
+          hours_manual?: boolean | null
           advance_deduction?: number | null
           extra_day_rate?: number | null
           extra_days?: number | null
@@ -1155,6 +1163,10 @@ export type Database = {
           worked_hours?: number | null
         }
         Update: {
+          clock_absence_hours?: number | null
+          clock_days_worked?: number | null
+          clock_worked_hours?: number | null
+          hours_manual?: boolean | null
           advance_deduction?: number | null
           extra_day_rate?: number | null
           extra_days?: number | null

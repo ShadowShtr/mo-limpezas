@@ -48,6 +48,7 @@ import { nota as folhaPagamentoSegura } from "./2026-09-08-folha-pagamento-segur
 import { nota as financeiroMesFechado } from "./2026-09-08-financeiro-mes-fechado";
 import { nota as folhaVencimentoBase } from "./2026-09-09-folha-vencimento-base";
 import { nota as folhaDiasExtras } from "./2026-09-09-folha-dias-extras";
+import { nota as folhaPontoEMao } from "./2026-09-09-folha-ponto-e-mao";
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   financeiroEAnexos,
@@ -83,6 +84,7 @@ export const RELEASE_NOTES: ReleaseNote[] = [
   financeiroMesFechado,
   folhaVencimentoBase,
   folhaDiasExtras,
+  folhaPontoEMao,
 ];
 
 /** As chaves têm de ser únicas — duas notas com a mesma key partilhariam a leitura. */

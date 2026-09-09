@@ -10,6 +10,11 @@ interface Props {
   onSaved: (updated: PayrollRecord) => void;
 }
 
+/** Horas em português: "168h", "7,5h". */
+function fmtH(v: number) {
+  return `${v.toLocaleString("pt-PT", { maximumFractionDigits: 2 })}h`;
+}
+
 function fmtEur(v: number) {
   return v.toLocaleString("pt-PT", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " €";
 }
@@ -79,6 +84,10 @@ export function PayrollEditSheet({ record, onClose, onSaved }: Props) {
   const [otherDed, setOtherDed] = useState(campoNumerico(record.other_deductions));
   const [notes,    setNotes]    = useState(record.notes ?? "");
 
+  // As horas foram corrigidas à mão? Começa como está gravado, e passa a true
+  // assim que algum dos três campos de horas se afasta do que o ponto diz.
+  const [horasManuais, setHorasManuais] = useState(record.hours_manual);
+
   const [saving, setSaving] = useState(false);
   const [error,  setError]  = useState<string | null>(null);
 
@@ -118,6 +127,26 @@ export function PayrollEditSheet({ record, onClose, onSaved }: Props) {
     ? Math.round(extraDaysVal * extraDayRateVal * 100) / 100
     : 0;
   const advanceVal       = parseFloat(advance) || 0;
+
+  // O que o ponto diz, quando já houve um recálculo com ponto.
+  const temPonto = record.clock_worked_hours !== null
+    || record.clock_days_worked !== null
+    || record.clock_absence_hours !== null;
+
+  const difereDoPonto =
+    (record.clock_worked_hours  !== null && workedHoursVal !== record.clock_worked_hours)
+    || (record.clock_days_worked   !== null && daysWorkedVal  !== record.clock_days_worked)
+    || (record.clock_absence_hours !== null && (parseFloat(absenceHours) || 0) !== record.clock_absence_hours);
+
+  const emUsoManual = horasManuais || difereDoPonto;
+
+  /** Devolve as horas às do ponto, e desmarca a correcção manual. */
+  function reporDoPonto() {
+    if (record.clock_worked_hours  !== null) setWorkedHours(campoNumerico(record.clock_worked_hours));
+    if (record.clock_days_worked   !== null) setDaysWorked(campoNumerico(record.clock_days_worked));
+    if (record.clock_absence_hours !== null) setAbsenceHours(campoNumerico(record.clock_absence_hours));
+    setHorasManuais(false);
+  }
   const netCalculado    = Math.round(
     (grossPreview + mealPreview + otBonusPreview + extraDaysPreview + addVal
       - absenceDedVal - advanceVal - dedVal) * 100,
@@ -145,6 +174,9 @@ export function PayrollEditSheet({ record, onClose, onSaved }: Props) {
 
     const res = await adjustPayrollRecord(record.id, {
       base_salary:         baseSalaryVal,
+      // Só se manda quando é uma decisão: repor (false) ou corrigir (true).
+      // Ausente deixa a RPC decidir pela comparação com o ponto.
+      hours_manual:        emUsoManual ? true : (temPonto ? false : undefined),
       overtime_hour_rate:  temValorHoraExtra ? otHourRateVal : null,
       extra_days:          extraDaysVal,
       extra_day_rate:      extraDayRateVal,
@@ -167,6 +199,7 @@ export function PayrollEditSheet({ record, onClose, onSaved }: Props) {
       onSaved({
         ...record,
         base_salary:         baseSalaryVal,
+        hours_manual:        emUsoManual,
         overtime_hour_rate:  temValorHoraExtra ? otHourRateVal : null,
         extra_days:          extraDaysVal,
         extra_day_rate:      extraDayRateVal,
@@ -288,7 +321,48 @@ export function PayrollEditSheet({ record, onClose, onSaved }: Props) {
           <div className="border-t border-[var(--color-border)]" />
 
           {/* Secção: Correções de Horas */}
-          <SectionLabel icon={<Clock className="w-4 h-4" />} label="Correções de Horas" />
+          <SectionLabel icon={<Clock className="w-4 h-4" />} label="Horas" />
+
+          <div className={`p-3 rounded-lg border text-xs ${
+            emUsoManual
+              ? "bg-amber-50 border-amber-200 text-amber-900"
+              : "bg-[var(--color-background)] border-[var(--color-border)] text-[var(--color-text-sub)]"
+          }`}>
+            {temPonto ? (
+              <>
+                <p className="font-medium">
+                  {emUsoManual ? "Horas corrigidas à mão" : "Horas vindas do ponto"}
+                </p>
+                <p className="mt-0.5">
+                  O ponto diz: <strong>{fmtH(record.clock_worked_hours ?? 0)}</strong>
+                  {" · "}<strong>{record.clock_days_worked ?? 0}</strong> dia
+                  {(record.clock_days_worked ?? 0) !== 1 ? "s" : ""}
+                  {(record.clock_absence_hours ?? 0) > 0
+                    ? ` · ${fmtH(record.clock_absence_hours ?? 0)} de falta`
+                    : ""}
+                </p>
+                {emUsoManual && (
+                  <>
+                    <p className="mt-1">
+                      Enquanto estiver assim, <strong>recalcular a folha não mexe nestes valores</strong>.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={reporDoPonto}
+                      className="mt-2 px-2.5 py-1 rounded-md border border-amber-300 bg-white text-amber-900 font-medium hover:bg-amber-100 transition-colors"
+                    >
+                      Repor do ponto
+                    </button>
+                  </>
+                )}
+              </>
+            ) : (
+              <p>
+                Ainda não há registo de ponto para este mês. Escreve as horas à mão —
+                quando o ponto começar a ser usado, aparece aqui e podes voltar a ele.
+              </p>
+            )}
+          </div>
 
           <div className="grid grid-cols-2 gap-3">
             <div>
