@@ -1,18 +1,18 @@
 {
   "generatedBy": "scripts/audit-file-inventory.mjs",
-  "totalFiles": 880,
+  "totalFiles": 882,
   "byStatus": {
-    "MANTER": 857,
+    "MANTER": 859,
     "STANDBY": 23
   },
   "byCategory": {
-    "test": 206,
+    "test": 207,
     "route-ui": 140,
     "migration": 124,
     "lib": 73,
     "script": 59,
     "domain": 52,
-    "doc": 46,
+    "doc": 47,
     "server-action": 44,
     "src-other": 36,
     "component": 30,
@@ -29,7 +29,7 @@
     "supabase-other": 2
   },
   "byConfidence": {
-    "alta": 859,
+    "alta": 861,
     "média": 15,
     "baixa": 6
   },
@@ -1245,6 +1245,29 @@
         "serviceRole": 4,
         "write": 4,
         "sqlWrite": 19
+      },
+      "action": "nenhuma",
+      "reason": "documentação",
+      "manualDecision": false
+    },
+    {
+      "path": "docs/SEC-POSTDDL-01.md",
+      "category": "doc",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [
+        "docs"
+      ],
+      "sideEffects": [],
+      "risks": [
+        "service-role"
+      ],
+      "signals": {
+        "serviceRole": 3,
+        "sqlWrite": 4
       },
       "action": "nenhuma",
       "reason": "documentação",
@@ -8073,6 +8096,32 @@
         "serviceRole": 26,
         "sqlWrite": 45,
         "unknownCast": 1
+      },
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/__tests__/public-surface-guard.test.ts",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [
+        "docs"
+      ],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "sqlWrite": 5
       },
       "action": "nenhuma",
       "reason": "suite de testes — corre por convenção do vitest",
