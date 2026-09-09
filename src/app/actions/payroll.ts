@@ -126,6 +126,8 @@ export interface PayrollRecord {
   absence_hours: number;
   days_worked: number;
   hourly_rate: number;
+  /** Vencimento base do mês. 0 = a folha desta pessoa é calculada às horas. */
+  base_salary: number;
   gross_salary: number;
   meal_allowance: number;
   overtime_bonus: number;
@@ -134,6 +136,9 @@ export interface PayrollRecord {
   other_deductions: number;
   other_additions: number;
   net_salary: number;
+  /** Líquido escrito à mão. `null` = o líquido veio da conta. */
+  net_salary_override: number | null;
+  net_salary_override_reason: string | null;
   notes: string | null;
   status: "rascunho" | "aprovado" | "pago";
   paid_at: string | null;
@@ -150,6 +155,17 @@ export interface PayrollAdjust {
   days_worked?:        number;
   hourly_rate?:        number;
   meal_allowance_day?: number;
+  base_salary?:        number;
+  /**
+   * Líquido escrito à mão.
+   *
+   * 🔴 Três estados, não dois: ausente = não mexer; `null` = retirar o
+   *    override e voltar ao calculado; número = passar a pagar este valor.
+   *    Um booleano `usarOverride` obrigaria quem chama a mandar sempre os
+   *    dois campos coerentes entre si — e a incoerência seria possível.
+   */
+  net_salary_override?: number | null;
+  net_salary_override_reason?: string | null;
 }
 
 type PayrollProfileJoin = {
@@ -227,7 +243,7 @@ async function runPayrollCalculation(
   // 1. Colaboradores ativos
   const { data: profiles, error: pErr } = await admin
     .from("profiles")
-    .select("id, full_name, avatar_url, contracted_hours_month, hourly_rate")
+    .select("id, full_name, avatar_url, contracted_hours_month, hourly_rate, base_salary_monthly")
     .eq("company_id", companyId)
     .in("role", ["colaborador", "gestor", "admin"])
     .eq("status", "ativo")
@@ -249,7 +265,7 @@ async function runPayrollCalculation(
   //    omissão de sempre — o comportamento económico não muda.
   const { data: settings, error: sErr } = await admin
     .from("company_settings")
-    .select("hourly_rate, meal_allowance_day, overtime_rate_pct")
+    .select("hourly_rate, meal_allowance_day, overtime_rate_pct, default_base_salary_monthly")
     .eq("company_id", companyId)
     .maybeSingle();
 
@@ -260,6 +276,9 @@ async function runPayrollCalculation(
   const defaultHourlyRate = settings?.hourly_rate ?? 8;
   const mealAllowanceDay  = settings?.meal_allowance_day ?? 9.6;
   const overtimeRatePct   = settings?.overtime_rate_pct ?? 25;
+  // Sem valor por omissão inventado: quem não define vencimento base fica no
+  // modelo antigo (bruto pelas horas). Ver `resolveBaseSalary`.
+  const defaultBaseSalaryMonthly = settings?.default_base_salary_monthly ?? null;
 
   const profileIds = profiles.map((p) => p.id);
 
@@ -368,16 +387,17 @@ async function runPayrollCalculation(
       myAbsences,
       contractedHours,
       hourlyRate,
-      { defaultHourlyRate, mealAllowanceDay, overtimeRatePct },
+      { defaultHourlyRate, mealAllowanceDay, overtimeRatePct, defaultBaseSalaryMonthly: defaultBaseSalaryMonthly ?? undefined },
       start,
       end,
       otherAdditions,
       otherDeductions,
+      p.base_salary_monthly,
     );
 
     const {
       workedHours, daysWorked, overtimeHours,
-      grossSalary, mealAllowance, overtimeBonus,
+      baseSalary, grossSalary, mealAllowance, overtimeBonus,
       absenceHours, absenceDeductions, netSalary,
     } = calc;
 
@@ -392,6 +412,7 @@ async function runPayrollCalculation(
       absence_hours:       absenceHours,
       days_worked:         daysWorked,
       hourly_rate:         hourlyRate,
+      base_salary:         baseSalary,
       gross_salary:        grossSalary,
       meal_allowance:      mealAllowance,
       overtime_bonus:      overtimeBonus,
@@ -550,6 +571,7 @@ export async function getPayrollRecords(
       absence_hours:      r.absence_hours ?? 0,
       days_worked:        r.days_worked ?? 0,
       hourly_rate:        r.hourly_rate ?? 0,
+      base_salary:        r.base_salary ?? 0,
       gross_salary:       r.gross_salary ?? 0,
       meal_allowance:     r.meal_allowance ?? 0,
       overtime_bonus:     r.overtime_bonus ?? 0,
@@ -558,6 +580,8 @@ export async function getPayrollRecords(
       other_additions:    r.other_additions ?? 0,
       other_deductions:   r.other_deductions ?? 0,
       net_salary:         r.net_salary ?? 0,
+      net_salary_override:        r.net_salary_override ?? null,
+      net_salary_override_reason: r.net_salary_override_reason ?? null,
       notes:              r.notes ?? null,
       status:             r.status as PayrollRecord["status"],
       paid_at:            r.paid_at ?? null,
@@ -577,9 +601,24 @@ export async function adjustPayrollRecord(
   // conta do net_salary pago à colaboradora, por isso é validado à entrada
   // (um NaN/negativo/absurdo aqui corrompe o salário real, não só a UI).
   for (const [field, value] of Object.entries(adjust)) {
-    if (field === "notes") continue;
+    if (field === "notes" || field === "net_salary_override_reason") continue;
+    // 🔴 `net_salary_override` a `null` é intenção — «retirar o override» —, e
+    //    não um valor inválido. Os outros campos continuam a passar todos pela
+    //    mesma validação: aqui `undefined` significa «não mexeu».
+    if (field === "net_salary_override" && value === null) continue;
     if (!isValidFiniteNumber(value as number | undefined, { max: 100_000 })) {
       return { ok: false, error: `Valor inválido em "${field}".` };
+    }
+  }
+
+  // A justificação é exigida do lado do servidor, e não só pela UI e pela
+  // constraint: quem chama a action pode não ser o formulário.
+  if (adjust.net_salary_override !== undefined && adjust.net_salary_override !== null) {
+    if ((adjust.net_salary_override_reason ?? "").trim().length < 3) {
+      return {
+        ok: false,
+        error: "Um líquido diferente do calculado tem de dizer porquê (mínimo 3 caracteres).",
+      };
     }
   }
 
@@ -597,7 +636,7 @@ export async function adjustPayrollRecord(
   // sobretudo — para saber se sequer se pode tocar nele.
   const { data: rec, error: rErr } = await admin
     .from("payroll_records")
-    .select("company_id, status, gross_salary, meal_allowance, overtime_bonus, absence_deductions, other_additions, other_deductions, net_salary, worked_hours, overtime_hours, absence_hours, days_worked, hourly_rate, notes")
+    .select("company_id, status, base_salary, gross_salary, meal_allowance, overtime_bonus, absence_deductions, other_additions, other_deductions, net_salary, net_salary_override, net_salary_override_reason, worked_hours, overtime_hours, absence_hours, days_worked, hourly_rate, notes")
     .eq("id", id)
     .eq("company_id", companyId)
     .maybeSingle();
@@ -628,9 +667,19 @@ export async function adjustPayrollRecord(
   const hoursChanged = adjust.worked_hours    !== undefined || adjust.overtime_hours !== undefined
     || adjust.days_worked !== undefined || adjust.absence_hours !== undefined;
 
-  const grossSalary = (hoursChanged || rateChanged)
-    ? Math.round(workedHours * hourlyRate * 100) / 100
-    : (rec.gross_salary ?? 0);
+  // 🔴 Com vencimento base, o bruto É o base — as horas não o mexem. Sem base,
+  //    mantém-se o cálculo às horas de sempre. É a mesma regra do cálculo
+  //    mensal (`calcCollaboratorPayroll`), e tem de continuar a ser: dois
+  //    sítios a decidir o bruto de maneiras diferentes foi exactamente o que
+  //    pôs 25% num lado e `overtime_rate_pct` no outro.
+  const baseSalary = adjust.base_salary ?? rec.base_salary ?? 0;
+  const baseChanged = adjust.base_salary !== undefined;
+
+  const grossSalary = baseSalary > 0
+    ? baseSalary
+    : (hoursChanged || rateChanged || baseChanged)
+      ? Math.round(workedHours * hourlyRate * 100) / 100
+      : (rec.gross_salary ?? 0);
 
   // Subsídio de alimentação: usa meal_allowance_day se fornecido, senão proporcional ao registo
   const mealPerDay = adjust.meal_allowance_day !== undefined
@@ -675,9 +724,16 @@ export async function adjustPayrollRecord(
   const otherDed   = adjust.other_deductions   ?? rec.other_deductions   ?? 0;
 
   // A mesma soma que o cálculo mensal usa. Ver `calcAdjustedNetSalary`.
-  const netSalary = calcAdjustedNetSalary(
+  const netCalculado = calcAdjustedNetSalary(
     grossSalary, mealAllowance, overtimeBonus, otherAdd, absenceDed, otherDed,
   );
+
+  // 🔴 O calculado vai SEMPRE para a RPC, mesmo quando não é o que se paga.
+  //    É ele que a auditoria guarda ao lado do override, e sem isso a
+  //    diferença entre o que a conta deu e o que se decidiu pagar deixava de
+  //    existir em qualquer sítio.
+  const overrideNoPatch = adjust.net_salary_override !== undefined;
+  const netSalary = netCalculado;
 
   const { data, error } = await admin.rpc("adjust_payroll_record_atomic", {
     p_company_id: companyId,
@@ -686,10 +742,19 @@ export async function adjustPayrollRecord(
     p_patch: {
       worked_hours: workedHours, overtime_hours: overtimeHours,
       absence_hours: absenceHours, days_worked: daysWorked,
-      hourly_rate: hourlyRate, gross_salary: grossSalary,
+      hourly_rate: hourlyRate, base_salary: baseSalary,
+      gross_salary: grossSalary,
       meal_allowance: mealAllowance, overtime_bonus: overtimeBonus,
       absence_deductions: absenceDed, other_additions: otherAdd,
       other_deductions: otherDed, net_salary: netSalary,
+      ...(overrideNoPatch
+        ? {
+            net_salary_override: adjust.net_salary_override,
+            net_salary_override_reason: adjust.net_salary_override ?? null
+              ? (adjust.net_salary_override_reason ?? null)
+              : null,
+          }
+        : {}),
       ...(adjust.notes !== undefined ? { notes: adjust.notes } : {}),
     },
   });

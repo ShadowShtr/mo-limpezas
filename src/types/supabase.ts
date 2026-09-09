@@ -530,6 +530,7 @@ export type Database = {
       }
       company_settings: {
         Row: {
+          default_base_salary_monthly: number | null
           checkin_before_minutes: number
           checkout_after_minutes: number
           company_id: string
@@ -549,6 +550,7 @@ export type Database = {
           vat_rate: number | null
         }
         Insert: {
+          default_base_salary_monthly?: number | null
           checkin_before_minutes?: number
           checkout_after_minutes?: number
           company_id: string
@@ -568,6 +570,7 @@ export type Database = {
           vat_rate?: number | null
         }
         Update: {
+          default_base_salary_monthly?: number | null
           checkin_before_minutes?: number
           checkout_after_minutes?: number
           company_id?: string
@@ -1078,6 +1081,9 @@ export type Database = {
       }
       payroll_records: {
         Row: {
+          base_salary: number | null
+          net_salary_override: number | null
+          net_salary_override_reason: string | null
           absence_deductions: number | null
           absence_hours: number | null
           approved_by: string | null
@@ -1104,6 +1110,9 @@ export type Database = {
           worked_hours: number | null
         }
         Insert: {
+          base_salary?: number | null
+          net_salary_override?: number | null
+          net_salary_override_reason?: string | null
           absence_deductions?: number | null
           absence_hours?: number | null
           approved_by?: string | null
@@ -1130,6 +1139,9 @@ export type Database = {
           worked_hours?: number | null
         }
         Update: {
+          base_salary?: number | null
+          net_salary_override?: number | null
+          net_salary_override_reason?: string | null
           absence_deductions?: number | null
           absence_hours?: number | null
           approved_by?: string | null
@@ -1195,6 +1207,7 @@ export type Database = {
       }
       profiles: {
         Row: {
+          base_salary_monthly: number | null
           auth_user_id: string | null
           availability: Json | null
           avatar_url: string | null
@@ -1220,6 +1233,7 @@ export type Database = {
           vacation_balance: number | null
         }
         Insert: {
+          base_salary_monthly?: number | null
           auth_user_id?: string | null
           availability?: Json | null
           avatar_url?: string | null
@@ -1245,6 +1259,7 @@ export type Database = {
           vacation_balance?: number | null
         }
         Update: {
+          base_salary_monthly?: number | null
           auth_user_id?: string | null
           availability?: Json | null
           avatar_url?: string | null
