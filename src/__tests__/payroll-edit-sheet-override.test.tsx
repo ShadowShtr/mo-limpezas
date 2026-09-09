@@ -45,6 +45,10 @@ const REGISTO: Registo = {
   extra_day_rate: 0,
   extra_days_bonus: 0,
   advance_deduction: 0,
+  clock_worked_hours: null,
+  clock_days_worked: null,
+  clock_absence_hours: null,
+  hours_manual: false,
   gross_salary: 0,
   meal_allowance: 201.6,
   overtime_bonus: 0,
@@ -267,5 +271,81 @@ describe("sheet de ajuste — dias extras, hora extra ao valor e adiantamento", 
 
     const [, patch] = adjustPayrollRecord.mock.calls[0] as unknown as [string, Record<string, unknown>];
     expect(patch.overtime_hour_rate).toBeNull();
+  });
+});
+
+describe("sheet de ajuste — o ponto propõe, a mão decide", () => {
+  const COM_PONTO: Registo = {
+    ...REGISTO,
+    worked_hours: 168,
+    days_worked: 21,
+    absence_hours: 0,
+    clock_worked_hours: 168,
+    clock_days_worked: 21,
+    clock_absence_hours: 0,
+    hours_manual: false,
+  };
+
+  beforeEach(() => {
+    adjustPayrollRecord.mockClear();
+  });
+
+  afterEach(async () => {
+    await act(async () => root.unmount());
+    container.remove();
+  });
+
+  it("com ponto, mostra o que o ponto diz", async () => {
+    await montar(COM_PONTO);
+    expect(container.textContent).toContain("Horas vindas do ponto");
+    expect(container.textContent).toContain("168h");
+    expect(container.textContent).toContain("21 dias");
+  });
+
+  it("sem ponto, explica que se escreve à mão", async () => {
+    await montar();
+    expect(container.textContent).toMatch(/Ainda não há registo de ponto/i);
+    // E não oferece repor de um sítio que não existe.
+    expect(container.textContent).not.toContain("Repor do ponto");
+  });
+
+  it("🔴 editar as horas marca-as como manuais e avisa que o recálculo não lhes toca", async () => {
+    await montar(COM_PONTO);
+    await escrever(inputPorLabel("Horas trabalhadas") as HTMLInputElement, "150");
+
+    expect(container.textContent).toContain("Horas corrigidas à mão");
+    expect(container.textContent).toMatch(/recalcular a folha não mexe nestes valores/i);
+
+    await act(async () => guardar().click());
+    const [, patch] = adjustPayrollRecord.mock.calls[0] as unknown as [string, Record<string, unknown>];
+    expect(patch.hours_manual).toBe(true);
+    expect(patch.worked_hours).toBe(150);
+  });
+
+  it("🔴 «Repor do ponto» devolve os três campos e desmarca a correcção", async () => {
+    await montar({ ...COM_PONTO, worked_hours: 150, days_worked: 19, hours_manual: true });
+    expect(container.textContent).toContain("Horas corrigidas à mão");
+
+    const botao = [...container.querySelectorAll("button")]
+      .find((b) => b.textContent?.includes("Repor do ponto")) as HTMLButtonElement;
+    await act(async () => botao.click());
+
+    expect((inputPorLabel("Horas trabalhadas") as HTMLInputElement).value).toBe("168");
+    expect(container.textContent).toContain("Horas vindas do ponto");
+
+    await act(async () => guardar().click());
+    const [, patch] = adjustPayrollRecord.mock.calls[0] as unknown as [string, Record<string, unknown>];
+    expect(patch.hours_manual).toBe(false);
+    expect(patch.worked_hours).toBe(168);
+  });
+
+  it("guardar sem tocar nas horas não as congela face ao ponto", async () => {
+    await montar(COM_PONTO);
+    // Mexe só nas notas.
+    await escrever(inputPorLabel("Notas") as HTMLTextAreaElement, "revisto");
+    await act(async () => guardar().click());
+
+    const [, patch] = adjustPayrollRecord.mock.calls[0] as unknown as [string, Record<string, unknown>];
+    expect(patch.hours_manual).toBe(false);
   });
 });

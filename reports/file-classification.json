@@ -1,20 +1,20 @@
 {
   "generatedBy": "scripts/audit-file-inventory.mjs",
-  "totalFiles": 885,
+  "totalFiles": 888,
   "byStatus": {
-    "MANTER": 862,
+    "MANTER": 865,
     "STANDBY": 23
   },
   "byCategory": {
     "test": 207,
     "route-ui": 140,
-    "migration": 126,
+    "migration": 128,
     "lib": 73,
     "script": 59,
     "domain": 52,
     "doc": 47,
     "server-action": 44,
-    "src-other": 37,
+    "src-other": 38,
     "component": 30,
     "doc-historico": 16,
     "api-route": 16,
@@ -29,7 +29,7 @@
     "supabase-other": 2
   },
   "byConfidence": {
-    "alta": 864,
+    "alta": 867,
     "média": 15,
     "baixa": 6
   },
@@ -7832,7 +7832,7 @@
       "sideEffects": [],
       "risks": [],
       "signals": {
-        "unknownCast": 8,
+        "unknownCast": 11,
         "dynamicImport": 2
       },
       "action": "nenhuma",
@@ -7907,7 +7907,7 @@
       "sideEffects": [],
       "risks": [],
       "signals": {
-        "sqlWrite": 31
+        "sqlWrite": 32
       },
       "action": "nenhuma",
       "reason": "suite de testes — corre por convenção do vitest",
@@ -12543,7 +12543,8 @@
       "risks": [],
       "signals": {
         "clientComponent": 1,
-        "unknownCast": 1
+        "unknownCast": 1,
+        "fallbackZero": 5
       },
       "action": "nenhuma",
       "reason": "em uso: 2 consumidor(es)",
@@ -14479,7 +14480,7 @@
         "serverAction": 1,
         "sqlWrite": 1,
         "unknownCast": 3,
-        "fallbackZero": 37,
+        "fallbackZero": 40,
         "fallbackArray": 7,
         "revalidatePath": 5
       },
@@ -17870,7 +17871,7 @@
       "category": "domain",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 43,
+      "consumers": 44,
       "consumerSample": [
         "src/__tests__/update-notice-modal.test.tsx",
         "src/__tests__/update-notices-eligibility.test.ts",
@@ -17885,7 +17886,7 @@
       "risks": [],
       "signals": {},
       "action": "nenhuma",
-      "reason": "em uso: 43 consumidor(es), configuração",
+      "reason": "em uso: 44 consumidor(es), configuração",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -20986,6 +20987,32 @@
       }
     },
     {
+      "path": "src/release-notes/2026-09-09-folha-ponto-e-mao.ts",
+      "category": "src-other",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 1,
+      "consumerSample": [
+        "src/release-notes/index.ts"
+      ],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "sqlWrite": 1
+      },
+      "action": "nenhuma",
+      "reason": "em uso: 1 consumidor(es)",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
       "path": "src/release-notes/2026-09-09-folha-vencimento-base.ts",
       "category": "src-other",
       "status": "MANTER",
@@ -23132,6 +23159,27 @@
       "manualDecision": false
     },
     {
+      "path": "supabase/migrations/100_payroll_clock_vs_manual.sql",
+      "category": "migration",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [
+        "service-role"
+      ],
+      "signals": {
+        "serviceRole": 2,
+        "sqlWrite": 8
+      },
+      "action": "nenhuma",
+      "reason": "migration versionada — histórico do schema, nunca se apaga",
+      "manualDecision": false
+    },
+    {
       "path": "supabase/migrations/20260608_new_features.sql",
       "category": "migration",
       "status": "MANTER",
@@ -23672,6 +23720,27 @@
       "signals": {
         "serviceRole": 2,
         "sqlWrite": 17
+      },
+      "action": "nenhuma",
+      "reason": "migration versionada — histórico do schema, nunca se apaga",
+      "manualDecision": false
+    },
+    {
+      "path": "supabase/migrations/rollback/100_payroll_clock_vs_manual.down.sql",
+      "category": "migration",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [
+        "service-role"
+      ],
+      "signals": {
+        "serviceRole": 2,
+        "sqlWrite": 11
       },
       "action": "nenhuma",
       "reason": "migration versionada — histórico do schema, nunca se apaga",
