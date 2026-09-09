@@ -10,6 +10,7 @@ const migration = readFileSync(join(ROOT, "supabase/migrations/096_payroll_perio
 const migration024 = readFileSync(join(ROOT, "supabase/migrations/024_cash_flow_reference_integrity.sql"), "utf8");
 const migration090 = readFileSync(join(ROOT, "supabase/migrations/090_financial_period_lock_protocol.sql"), "utf8");
 const migration098 = readFileSync(join(ROOT, "supabase/migrations/098_payroll_base_salary_and_net_override.sql"), "utf8");
+const migration099 = readFileSync(join(ROOT, "supabase/migrations/099_payroll_extra_days_and_advances.sql"), "utf8");
 
 const COMPANY = "00000000-0000-0000-0000-000000000001";
 const OTHER_COMPANY = "00000000-0000-0000-0000-000000000002";
@@ -48,6 +49,7 @@ $fn$;
 ${migration090}
 ${migration}
 ${migration098}
+${migration099}
 `;
 
 describe("PAYROLL-SAFETY-01 contra o schema de produção e 090 real", () => {
@@ -582,6 +584,83 @@ describe("PAYROLL-SAFETY-01 contra o schema de produção e 090 real", () => {
     expect(Number(meta.net_override)).toBe(1100);
     expect(meta.override_reason).toBe("acerto combinado");
     expect(Number(meta.amount)).toBe(1100);
+  });
+
+  // ── 099 — dias extras, hora extra ao valor, adiantamento ──────────────────
+
+  it("099: dias extras, valor por dia e adiantamento são gravados", async () => {
+    const client = clients[0];
+    const id = await payroll(client, COLLABORATOR, 2026, 8, 1000, "rascunho");
+    await ajustar(client, id, {
+      extra_days: 2, extra_day_rate: 50, extra_days_bonus: 100,
+      advance_deduction: 200, net_salary: 900,
+    });
+    const r = (await client.query(
+      "SELECT extra_days, extra_day_rate, extra_days_bonus, advance_deduction, net_salary FROM public.payroll_records WHERE id=$1", [id],
+    )).rows[0];
+    expect(r.extra_days).toBe(2);
+    expect(Number(r.extra_day_rate)).toBe(50);
+    expect(Number(r.extra_days_bonus)).toBe(100);
+    expect(Number(r.advance_deduction)).toBe(200);
+    expect(Number(r.net_salary)).toBe(900);
+  });
+
+  it("099: o valor por hora extra pode ser posto e retirado", async () => {
+    const client = clients[0];
+    const id = await payroll(client, COLLABORATOR, 2026, 8, 1000, "rascunho");
+    await ajustar(client, id, { overtime_hour_rate: 12, net_salary: 1000 });
+    expect(Number((await client.query(
+      "SELECT overtime_hour_rate FROM public.payroll_records WHERE id=$1", [id],
+    )).rows[0].overtime_hour_rate)).toBe(12);
+
+    // NULL explícito volta ao cálculo por percentagem.
+    await ajustar(client, id, { overtime_hour_rate: null, net_salary: 1000 });
+    expect((await client.query(
+      "SELECT overtime_hour_rate FROM public.payroll_records WHERE id=$1", [id],
+    )).rows[0].overtime_hour_rate).toBeNull();
+  });
+
+  it("🔴 099: dias extras ou adiantamento negativos são recusados", async () => {
+    const client = clients[0];
+    const id = await payroll(client, COLLABORATOR, 2026, 8, 1000, "rascunho");
+    const erro = await client.query(
+      "UPDATE public.payroll_records SET advance_deduction = -50 WHERE id=$1", [id],
+    ).then(() => new Error("ACEITE"), (e: unknown) => e);
+    expect(String(erro)).toMatch(/payroll_extra_days_non_negative/);
+  });
+
+  it("🔴 099: recalcular o mês não apaga dias extras nem adiantamentos", async () => {
+    const client = clients[0];
+    const id = await payroll(client, COLLABORATOR, 2026, 8, 1000, "rascunho");
+    await ajustar(client, id, {
+      extra_days: 2, extra_day_rate: 50, extra_days_bonus: 100,
+      advance_deduction: 200, net_salary: 900,
+    });
+
+    // O recálculo vem do ponto, e o ponto não sabe de sábados.
+    await call(
+      client, "upsert_payroll_records_atomic",
+      "$1::uuid,$2::integer,$3::integer,$4::jsonb,$5::uuid",
+      COMPANY, 2026, 8,
+      JSON.stringify([{ collaborator_id: COLLABORATOR, net_salary: 500 }]),
+      ACTOR,
+    );
+
+    const r = (await client.query(
+      "SELECT extra_days, advance_deduction, net_salary FROM public.payroll_records WHERE id=$1", [id],
+    )).rows[0];
+    expect(r.extra_days).toBe(2);
+    expect(Number(r.advance_deduction)).toBe(200);
+    expect(Number(r.net_salary)).toBe(900);
+  });
+
+  it("099: as 098 continuam a valer sobre a 099", async () => {
+    const client = clients[0];
+    const id = await payroll(client, COLLABORATOR, 2026, 8, 1000, "rascunho");
+    const erro = await ajustar(client, id, {
+      net_salary: 1000, net_salary_override: 1100,
+    }).then(() => new Error("ACEITE"), (e: unknown) => e);
+    expect(String(erro)).toMatch(/PAYROLL_OVERRIDE_REASON_REQUIRED/);
   });
 
   it("🔴 098: uma folha já aprovada continua fechada ao override", async () => {

@@ -530,6 +530,8 @@ export type Database = {
       }
       company_settings: {
         Row: {
+          default_extra_day_rate: number | null
+          default_overtime_hour_rate: number | null
           default_base_salary_monthly: number | null
           checkin_before_minutes: number
           checkout_after_minutes: number
@@ -550,6 +552,8 @@ export type Database = {
           vat_rate: number | null
         }
         Insert: {
+          default_extra_day_rate?: number | null
+          default_overtime_hour_rate?: number | null
           default_base_salary_monthly?: number | null
           checkin_before_minutes?: number
           checkout_after_minutes?: number
@@ -570,6 +574,8 @@ export type Database = {
           vat_rate?: number | null
         }
         Update: {
+          default_extra_day_rate?: number | null
+          default_overtime_hour_rate?: number | null
           default_base_salary_monthly?: number | null
           checkin_before_minutes?: number
           checkout_after_minutes?: number
@@ -1081,6 +1087,11 @@ export type Database = {
       }
       payroll_records: {
         Row: {
+          advance_deduction: number | null
+          extra_day_rate: number | null
+          extra_days: number | null
+          extra_days_bonus: number | null
+          overtime_hour_rate: number | null
           base_salary: number | null
           net_salary_override: number | null
           net_salary_override_reason: string | null
@@ -1110,6 +1121,11 @@ export type Database = {
           worked_hours: number | null
         }
         Insert: {
+          advance_deduction?: number | null
+          extra_day_rate?: number | null
+          extra_days?: number | null
+          extra_days_bonus?: number | null
+          overtime_hour_rate?: number | null
           base_salary?: number | null
           net_salary_override?: number | null
           net_salary_override_reason?: string | null
@@ -1139,6 +1155,11 @@ export type Database = {
           worked_hours?: number | null
         }
         Update: {
+          advance_deduction?: number | null
+          extra_day_rate?: number | null
+          extra_days?: number | null
+          extra_days_bonus?: number | null
+          overtime_hour_rate?: number | null
           base_salary?: number | null
           net_salary_override?: number | null
           net_salary_override_reason?: string | null

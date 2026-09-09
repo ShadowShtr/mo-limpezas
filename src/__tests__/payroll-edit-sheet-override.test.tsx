@@ -40,6 +40,11 @@ const REGISTO: Registo = {
   days_worked: 21,
   hourly_rate: 9.5,
   base_salary: 0,
+  overtime_hour_rate: null,
+  extra_days: 0,
+  extra_day_rate: 0,
+  extra_days_bonus: 0,
+  advance_deduction: 0,
   gross_salary: 0,
   meal_allowance: 201.6,
   overtime_bonus: 0,
@@ -189,5 +194,78 @@ describe("sheet de ajuste — vencimento base e líquido à mão", () => {
   it("a zero, o vencimento base explica que o cálculo é às horas", async () => {
     await montar();
     expect(container.textContent).toMatch(/o bruto é calculado pelas horas/i);
+  });
+});
+
+describe("sheet de ajuste — dias extras, hora extra ao valor e adiantamento", () => {
+  beforeEach(() => {
+    adjustPayrollRecord.mockClear();
+  });
+
+  afterEach(async () => {
+    await act(async () => root.unmount());
+    container.remove();
+  });
+
+  it("🔴 os campos numéricos a zero aparecem VAZIOS, não com um 0 à frente", () => {
+    // O defeito reportado: «coloco o valor e ainda fica o 0». Com "0" no
+    // campo, escrever 80 dava "080".
+    return montar().then(() => {
+      const dias = inputPorLabel("Dias extras") as HTMLInputElement;
+      const adiant = inputPorLabel("Adiantamento a descontar") as HTMLInputElement;
+      expect(dias.value).toBe("");
+      expect(adiant.value).toBe("");
+      expect(dias.placeholder).toBe("0");
+    });
+  });
+
+  it("dias extras × valor entram no total e são gravados", async () => {
+    await montar();
+    await escrever(inputPorLabel("Dias extras") as HTMLInputElement, "2");
+    await escrever(inputPorLabel("Valor por dia extra") as HTMLInputElement, "50");
+
+    // 0 bruto + 201,60 alim + 100 dias extras = 301,60
+    expect(container.textContent).toContain("301,60 €");
+
+    await act(async () => guardar().click());
+    const [, patch] = adjustPayrollRecord.mock.calls[0] as unknown as [string, Record<string, unknown>];
+    expect(patch.extra_days).toBe(2);
+    expect(patch.extra_day_rate).toBe(50);
+  });
+
+  it("o adiantamento desconta, e vai num campo próprio", async () => {
+    await montar();
+    await escrever(inputPorLabel("Adiantamento a descontar") as HTMLInputElement, "100");
+
+    // 201,60 alim − 100 adiantamento = 101,60
+    expect(container.textContent).toContain("101,60 €");
+
+    await act(async () => guardar().click());
+    const [, patch] = adjustPayrollRecord.mock.calls[0] as unknown as [string, Record<string, unknown>];
+    expect(patch.advance_deduction).toBe(100);
+    // E não se mistura com os outros descontos.
+    expect(patch.other_deductions).toBe(0);
+  });
+
+  it("🔴 com €/hora extra escrito, a percentagem deixa de entrar", async () => {
+    await montar();
+    await escrever(inputPorLabel("Horas extra") as HTMLInputElement, "8");
+    await escrever(inputPorLabel("Valor por hora extra") as HTMLInputElement, "12");
+
+    // 8 × 12 = 96, e não 8 × 9,50 × 0,25 = 19.
+    expect(container.textContent).toContain("96,00 €");
+
+    await act(async () => guardar().click());
+    const [, patch] = adjustPayrollRecord.mock.calls[0] as unknown as [string, Record<string, unknown>];
+    expect(patch.overtime_hour_rate).toBe(12);
+  });
+
+  it("sem €/hora extra, o campo fica nulo e mantém-se a percentagem", async () => {
+    await montar();
+    await escrever(inputPorLabel("Horas extra") as HTMLInputElement, "8");
+    await act(async () => guardar().click());
+
+    const [, patch] = adjustPayrollRecord.mock.calls[0] as unknown as [string, Record<string, unknown>];
+    expect(patch.overtime_hour_rate).toBeNull();
   });
 });

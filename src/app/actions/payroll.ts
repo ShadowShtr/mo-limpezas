@@ -5,6 +5,8 @@ import {
   monthRange,
   calcCollaboratorPayroll,
   calcOvertimeBonus,
+  calcOvertimeValue,
+  calcExtraDaysBonus,
   calcAdjustedNetSalary,
 } from "@/lib/payroll-calc";
 import { isNoRowsError, queryFailure } from "@/lib/query-error";
@@ -128,6 +130,14 @@ export interface PayrollRecord {
   hourly_rate: number;
   /** Vencimento base do mês. 0 = a folha desta pessoa é calculada às horas. */
   base_salary: number;
+  /** €/hora extra. `null` = calcula-se pela percentagem, como antes. */
+  overtime_hour_rate: number | null;
+  /** Dias extras trabalhados (sábados, feriados) e quanto vale cada um. */
+  extra_days: number;
+  extra_day_rate: number;
+  extra_days_bonus: number;
+  /** Adiantamento já entregue, a descontar. */
+  advance_deduction: number;
   gross_salary: number;
   meal_allowance: number;
   overtime_bonus: number;
@@ -156,6 +166,10 @@ export interface PayrollAdjust {
   hourly_rate?:        number;
   meal_allowance_day?: number;
   base_salary?:        number;
+  overtime_hour_rate?: number | null;
+  extra_days?:         number;
+  extra_day_rate?:     number;
+  advance_deduction?:  number;
   /**
    * Líquido escrito à mão.
    *
@@ -572,6 +586,11 @@ export async function getPayrollRecords(
       days_worked:        r.days_worked ?? 0,
       hourly_rate:        r.hourly_rate ?? 0,
       base_salary:        r.base_salary ?? 0,
+      overtime_hour_rate: r.overtime_hour_rate ?? null,
+      extra_days:         r.extra_days ?? 0,
+      extra_day_rate:     r.extra_day_rate ?? 0,
+      extra_days_bonus:   r.extra_days_bonus ?? 0,
+      advance_deduction:  r.advance_deduction ?? 0,
       gross_salary:       r.gross_salary ?? 0,
       meal_allowance:     r.meal_allowance ?? 0,
       overtime_bonus:     r.overtime_bonus ?? 0,
@@ -636,7 +655,7 @@ export async function adjustPayrollRecord(
   // sobretudo — para saber se sequer se pode tocar nele.
   const { data: rec, error: rErr } = await admin
     .from("payroll_records")
-    .select("company_id, status, base_salary, gross_salary, meal_allowance, overtime_bonus, absence_deductions, other_additions, other_deductions, net_salary, net_salary_override, net_salary_override_reason, worked_hours, overtime_hours, absence_hours, days_worked, hourly_rate, notes")
+    .select("company_id, status, base_salary, gross_salary, meal_allowance, overtime_bonus, overtime_hour_rate, extra_days, extra_day_rate, extra_days_bonus, advance_deduction, absence_deductions, other_additions, other_deductions, net_salary, net_salary_override, net_salary_override_reason, worked_hours, overtime_hours, absence_hours, days_worked, hourly_rate, notes")
     .eq("id", id)
     .eq("company_id", companyId)
     .maybeSingle();
@@ -699,8 +718,26 @@ export async function adjustPayrollRecord(
   //
   //    A percentagem vem agora da mesma fonte que o cálculo mensal. Se não a
   //    conseguirmos ler, o ajuste é recusado: assumir 25% é inventar dinheiro.
-  const precisaTaxaExtra = adjust.overtime_hours !== undefined || rateChanged;
-  let overtimeBonus = rec.overtime_bonus ?? 0;
+  // Dias extras e adiantamento: contas diretas, sem depender de definições.
+  const extraDays        = adjust.extra_days       ?? rec.extra_days       ?? 0;
+  const extraDayRate     = adjust.extra_day_rate   ?? rec.extra_day_rate   ?? 0;
+  const extraDaysBonus   = calcExtraDaysBonus(extraDays, extraDayRate);
+  const advanceDeduction = adjust.advance_deduction ?? rec.advance_deduction ?? 0;
+
+  const overtimeHourRate = adjust.overtime_hour_rate !== undefined
+    ? adjust.overtime_hour_rate
+    : (rec.overtime_hour_rate ?? null);
+
+  // Com €/hora extra definido não é preciso ler as definições da empresa: a
+  // percentagem deixa de entrar na conta.
+  const temValorHoraExtra = typeof overtimeHourRate === "number"
+    && Number.isFinite(overtimeHourRate) && overtimeHourRate > 0;
+
+  const precisaTaxaExtra = !temValorHoraExtra
+    && (adjust.overtime_hours !== undefined || rateChanged);
+  let overtimeBonus = temValorHoraExtra
+    ? calcOvertimeValue(overtimeHours, hourlyRate, 0, overtimeHourRate)
+    : (rec.overtime_bonus ?? 0);
 
   if (precisaTaxaExtra) {
     const { data: settings, error: sErr } = await admin
@@ -726,6 +763,7 @@ export async function adjustPayrollRecord(
   // A mesma soma que o cálculo mensal usa. Ver `calcAdjustedNetSalary`.
   const netCalculado = calcAdjustedNetSalary(
     grossSalary, mealAllowance, overtimeBonus, otherAdd, absenceDed, otherDed,
+    extraDaysBonus, advanceDeduction,
   );
 
   // 🔴 O calculado vai SEMPRE para a RPC, mesmo quando não é o que se paga.
@@ -743,6 +781,10 @@ export async function adjustPayrollRecord(
       worked_hours: workedHours, overtime_hours: overtimeHours,
       absence_hours: absenceHours, days_worked: daysWorked,
       hourly_rate: hourlyRate, base_salary: baseSalary,
+      overtime_hour_rate: temValorHoraExtra ? overtimeHourRate : null,
+      extra_days: extraDays, extra_day_rate: extraDayRate,
+      extra_days_bonus: extraDaysBonus,
+      advance_deduction: advanceDeduction,
       gross_salary: grossSalary,
       meal_allowance: mealAllowance, overtime_bonus: overtimeBonus,
       absence_deductions: absenceDed, other_additions: otherAdd,
