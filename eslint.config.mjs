@@ -29,6 +29,11 @@ const eslintConfig = defineConfig([
     "build/**",
     ".vercel/**",
     "next-env.d.ts",
+    // Rascunhos locais que o git já ignora (`/tmp/`, `/backups/`). Não são
+    // código do produto e não podem pintar o `npm run lint` de vermelho: um
+    // gate que falha por um ficheiro descartável deixa de ser lido.
+    "tmp/**",
+    "backups/**",
   ]),
 ]);
 

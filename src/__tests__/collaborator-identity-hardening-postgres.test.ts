@@ -18,9 +18,18 @@ import fs from "node:fs";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import pg from "pg";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
 import { baselineCompleto } from "./helpers/production-baseline";
+
+// Cada caso destes demora <1s contra um PostgreSQL sossegado, mas aqui há um
+// contentor Docker a competir com os ~190 ficheiros da suite: sob carga, um
+// caso de 0,7s passa dos 15s globais e cai por tempo. O que falhava a seguir
+// não era outro defeito — era este mesmo caso a morrer a meio do reset do
+// baseline e a deixar a base populada, o que dava um `companies_pkey`
+// duplicado no caso seguinte. Esperar mais não enfraquece nenhuma asserção;
+// só distingue "lento porque a máquina está ocupada" de "partido".
+vi.setConfig({ testTimeout: 60_000 });
 
 const ROOT = process.cwd();
 const CONTAINER = `hardening-${process.pid}`;

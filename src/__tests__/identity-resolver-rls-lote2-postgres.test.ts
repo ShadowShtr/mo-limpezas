@@ -16,7 +16,12 @@ import fs from "node:fs";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import pg from "pg";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+
+// Mesma razão do `collaborator-identity-hardening-postgres`: este ficheiro
+// arranca o seu próprio PostgreSQL em Docker e, sob a suite completa, os 15s
+// globais medem a carga da máquina e não o comportamento em prova.
+vi.setConfig({ testTimeout: 60_000 });
 
 import { baselineCompleto } from "./helpers/production-baseline";
 
