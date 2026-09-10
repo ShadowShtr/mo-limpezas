@@ -126,30 +126,36 @@ describe("ferramentas a correr de ponta a ponta", () => {
    * três casos que lançam subprocessos ficavam presos até ao teto de 60 s cada.
    * Era um `npm test` a depender de rede a meio da suite.
    *
-   * Agora aponta-se ao binário que o `npm ci` instala. Se faltar, o ensaio
+   * Agora aponta-se ao módulo que o `npm ci` instala. Se faltar, o ensaio
    * falha na hora e diz porquê, em vez de esperar um minuto por um download:
    * ausência de dependência declarada é defeito de instalação, não lentidão.
+   *
+   * Devolve-se o `dist/cli.mjs` do próprio pacote e não o atalho
+   * `node_modules/.bin/tsx.cmd`: o `.cmd` só corre através do `cmd.exe`
+   * (`shell: true`), e aí o caminho do executável deixa de ser um argumento
+   * para passar a ser uma linha de comando interpretada. Numa pasta cujo
+   * caminho contenha `,`, `&`, `^` ou espaços — o caso real que apanhou isto
+   * foi `Documents\progra,a` — o `cmd.exe` parte o caminho ao meio e o ensaio
+   * falha com "não é reconhecido como comando", sem relação nenhuma com o que
+   * está a ser testado. Chamar o `node` diretamente dispensa a shell e o
+   * caminho volta a ser um argumento tratado como texto.
    */
-  function binarioTsx(): string {
-    const base = path.join(ROOT, "node_modules", ".bin");
-    // O `.cmd` é o que o Windows sabe executar; noutros sistemas é o script sem
-    // extensão. Verificam-se os dois para o ensaio não depender da plataforma.
-    const candidatos = process.platform === "win32"
-      ? [path.join(base, "tsx.cmd"), path.join(base, "tsx")]
-      : [path.join(base, "tsx")];
-    const encontrado = candidatos.find((c) => fs.existsSync(c));
-    if (!encontrado) {
+  function entradaTsx(): string {
+    const cli = path.join(ROOT, "node_modules", "tsx", "dist", "cli.mjs");
+    if (!fs.existsSync(cli)) {
       throw new Error(
-        `tsx não está instalado em node_modules/.bin (procurado: ${candidatos.join(", ")}). ` +
+        `tsx não está instalado (procurado: ${cli}). ` +
         "Declare-o como devDependency e corra `npm ci` — este ensaio não descarrega ferramentas.",
       );
     }
-    return encontrado;
+    return cli;
   }
 
   async function correr(script: string, args: string[]) {
-    return execFileAsync(binarioTsx(), [path.join(ROOT, "scripts", script), ...args], {
-      cwd: ROOT, shell: process.platform === "win32",
+    // Sem `shell`: o caminho do script e os argumentos passam ao processo como
+    // argumentos, não como linha de comando a interpretar.
+    return execFileAsync(process.execPath, [entradaTsx(), path.join(ROOT, "scripts", script), ...args], {
+      cwd: ROOT,
     });
   }
 
