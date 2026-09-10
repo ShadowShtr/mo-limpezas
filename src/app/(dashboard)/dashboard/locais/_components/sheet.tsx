@@ -3,8 +3,16 @@
 import { useState, useRef, useEffect, useTransition } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
-import { X, Loader2, Search, MapPin, CheckCircle2 } from "lucide-react";
+import { X, Loader2, Search, MapPin, CheckCircle2, Map as MapIcon } from "lucide-react";
 import { createLocation, updateLocation } from "@/app/actions/locations";
+import { PinPicker } from "@/components/map/pin-picker";
+import {
+  buildSearchUrl,
+  composeAddress as composeAddressParts,
+  parseAddress,
+  type NominatimResult,
+  type StructuredAddress,
+} from "@/lib/geocoding";
 
 type Local = {
   id: string;
@@ -32,24 +40,6 @@ interface Props {
   local?: Local;
   /** Quando definido, o local fica pré-associado a este cliente e o seletor é escondido. */
   fixedClientId?: string;
-}
-
-interface NominatimResult {
-  place_id: number;
-  display_name: string;
-  lat: string;
-  lon: string;
-  address: {
-    road?: string;
-    pedestrian?: string;
-    house_number?: string;
-    postcode?: string;
-    city?: string;
-    town?: string;
-    village?: string;
-    municipality?: string;
-    county?: string;
-  };
 }
 
 const INPUT_CLS =
@@ -87,66 +77,76 @@ export function LocalSheet({ trigger, companyId, clientes, local, fixedClientId 
   const [suggestions, setSuggestions]     = useState<NominatimResult[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [searching, setSearching]         = useState(false);
+  const [noResults, setNoResults]         = useState(false);
+  const [showMap, setShowMap]             = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const searchWrapRef = useRef<HTMLDivElement>(null);
 
   const isEdit = !!local;
 
+  const latNum = lat ? parseFloat(lat) : NaN;
+  const lngNum = lng ? parseFloat(lng) : NaN;
+  const hasPin = Number.isFinite(latNum) && Number.isFinite(lngNum);
+
   function composeAddress(): string {
-    const parts: string[] = [];
-    if (road) parts.push(`${road}${houseNumber ? " " + houseNumber : ""}`);
-    if (complement) parts.push(complement);
-    if (postalCode || city) parts.push(`${postalCode}${postalCode && city ? " " : ""}${city}`);
-    return parts.join(", ");
+    return composeAddressParts({ road, houseNumber, complement, postalCode, city });
   }
 
   function handleSearchInput(value: string) {
     setSearchQuery(value);
     setGeocoded(false);
+    setNoResults(false);
     if (debounceRef.current) clearTimeout(debounceRef.current);
     if (value.trim().length < 4) { setSuggestions([]); setShowSuggestions(false); return; }
 
     debounceRef.current = setTimeout(async () => {
       setSearching(true);
       try {
-        const encoded = encodeURIComponent(value + (value.toLowerCase().includes("portugal") ? "" : ", Portugal"));
-        const res = await fetch(
-          `https://nominatim.openstreetmap.org/search?q=${encoded}&format=json&limit=5&addressdetails=1&countrycodes=pt`,
-          { headers: { "Accept-Language": "pt" } }
-        );
+        const res = await fetch(buildSearchUrl(value), { headers: { "Accept-Language": "pt" } });
         const data: NominatimResult[] = await res.json();
         setSuggestions(data);
         setShowSuggestions(data.length > 0);
+        setNoResults(data.length === 0);
       } catch {
         setSuggestions([]);
+        // Falha de rede fica igual a "não encontrei": o caminho de saída é o
+        // mesmo — marcar o ponto no mapa à mão.
+        setNoResults(true);
       } finally {
         setSearching(false);
       }
     }, 420);
   }
 
-  function pickSuggestion(r: NominatimResult) {
-    const a = r.address;
-    const roadVal = a.road ?? a.pedestrian ?? "";
-    const numVal  = a.house_number ?? "";
-    const pcVal   = a.postcode ?? "";
-    const cityVal = a.city ?? a.town ?? a.village ?? a.municipality ?? a.county ?? "";
+  function applyStructured(a: StructuredAddress) {
+    setRoad(a.road);
+    setHouseNumber(a.houseNumber);
+    setPostalCode(a.postalCode);
+    setCity(a.city);
+    setSearchQuery(
+      composeAddressParts({ road: a.road, houseNumber: a.houseNumber, postalCode: a.postalCode, city: a.city }) ||
+        searchQuery,
+    );
+  }
 
-    setRoad(roadVal);
-    setHouseNumber(numVal);
-    setPostalCode(pcVal);
-    setCity(cityVal);
+  function pickSuggestion(r: NominatimResult) {
+    applyStructured(parseAddress(r.address));
     setLat(r.lat);
     setLng(r.lon);
     setGeocoded(true);
-
-    const display = [
-      roadVal + (numVal ? " " + numVal : ""),
-      pcVal + (pcVal && cityVal ? " " : "") + cityVal,
-    ].filter(Boolean).join(", ");
-    setSearchQuery(display);
     setSuggestions([]);
     setShowSuggestions(false);
+    setNoResults(false);
+    // Com coordenadas na mão, mostrar o mapa deixa a gestora confirmar (e
+    // corrigir) o ponto antes de gravar, em vez de confiar cegamente no OSM.
+    setShowMap(true);
+  }
+
+  function handlePinChange(nextLat: number, nextLng: number) {
+    setLat(String(nextLat));
+    setLng(String(nextLng));
+    setGeocoded(true);
+    setNoResults(false);
   }
 
   useEffect(() => {
@@ -165,7 +165,10 @@ export function LocalSheet({ trigger, companyId, clientes, local, fixedClientId 
 
     const composedAddress = isEdit ? searchQuery : (composeAddress() || searchQuery.trim());
     if (!composedAddress.trim()) {
-      setMessage({ type: "error", text: "Preenche a morada ou pesquisa uma localização acima." });
+      setMessage({
+        type: "error",
+        text: "Preenche a morada, pesquisa uma localização ou marca o ponto no mapa.",
+      });
       return;
     }
 
@@ -283,8 +286,27 @@ export function LocalSheet({ trigger, companyId, clientes, local, fixedClientId 
                   )}
                 </div>
                 <p className="text-xs text-[var(--color-text-muted)] mt-1">
-                  Clica numa sugestão para obter coordenadas GPS, ou preenche os campos abaixo manualmente.
+                  Clica numa sugestão para obter coordenadas GPS, ou marca o ponto no mapa.
                 </p>
+
+                {noResults && !searching && (
+                  <div className="mt-2 flex items-start gap-2 p-2.5 rounded-lg bg-amber-50 border border-amber-200">
+                    <MapIcon className="w-3.5 h-3.5 mt-0.5 shrink-0 text-amber-600" />
+                    <div className="min-w-0">
+                      <p className="text-xs text-amber-800 leading-relaxed">
+                        Não encontrei esta morada. Marca o ponto exato no mapa — é isso que a equipa
+                        vai seguir para chegar lá.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => setShowMap(true)}
+                        className="mt-1 text-xs font-semibold text-amber-900 hover:underline"
+                      >
+                        Abrir mapa
+                      </button>
+                    </div>
+                  </div>
+                )}
 
                 {showSuggestions && suggestions.length > 0 && (
                   <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-[var(--color-border)] rounded-lg shadow-lg z-50 overflow-hidden">
@@ -302,6 +324,40 @@ export function LocalSheet({ trigger, companyId, clientes, local, fixedClientId 
                       </button>
                     ))}
                   </div>
+                )}
+              </div>
+
+              {/* Ponto exato no mapa — a morada por si só não chega para quem
+                  vai lá ter; o pin é o que abre no Google Maps na app. */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between gap-2">
+                  <label className="block text-sm font-medium text-[var(--color-text-main)]">
+                    Ponto exato no mapa
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setShowMap((v) => !v)}
+                    className="inline-flex items-center gap-1.5 text-xs font-semibold text-[var(--color-primary)] hover:underline"
+                  >
+                    <MapIcon className="w-3.5 h-3.5" />
+                    {showMap ? "Esconder mapa" : hasPin ? "Ver / corrigir pin" : "Marcar no mapa"}
+                  </button>
+                </div>
+
+                {!showMap && (
+                  <p className={`text-xs ${hasPin ? "text-[var(--color-primary)]" : "text-amber-700"}`}>
+                    {hasPin
+                      ? "Ponto marcado — a equipa vai ser levada exatamente aqui."
+                      : "Sem ponto marcado. A equipa só recebe a morada escrita, e pode não encontrar."}
+                  </p>
+                )}
+
+                {showMap && (
+                  <PinPicker
+                    lat={hasPin ? latNum : null}
+                    lng={hasPin ? lngNum : null}
+                    onChange={handlePinChange}
+                  />
                 )}
               </div>
 

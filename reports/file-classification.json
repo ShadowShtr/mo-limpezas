@@ -1,21 +1,21 @@
 {
   "generatedBy": "scripts/audit-file-inventory.mjs",
-  "totalFiles": 888,
+  "totalFiles": 894,
   "byStatus": {
-    "MANTER": 865,
+    "MANTER": 871,
     "STANDBY": 23
   },
   "byCategory": {
-    "test": 207,
+    "test": 210,
     "route-ui": 140,
     "migration": 128,
-    "lib": 73,
+    "lib": 74,
     "script": 59,
     "domain": 52,
     "doc": 47,
     "server-action": 44,
-    "src-other": 38,
-    "component": 30,
+    "src-other": 39,
+    "component": 31,
     "doc-historico": 16,
     "api-route": 16,
     "config": 12,
@@ -29,7 +29,7 @@
     "supabase-other": 2
   },
   "byConfidence": {
-    "alta": 867,
+    "alta": 873,
     "média": 15,
     "baixa": 6
   },
@@ -6473,6 +6473,28 @@
       "manualDecision": false
     },
     {
+      "path": "src/__tests__/geocoding.test.ts",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {},
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
       "path": "src/__tests__/harness-tool-dependencies.test.ts",
       "category": "test",
       "status": "MANTER",
@@ -6741,6 +6763,31 @@
       "sideEffects": [],
       "risks": [],
       "signals": {},
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/__tests__/locais-pin-no-mapa.test.tsx",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "unknownCast": 1,
+        "dynamicImport": 2
+      },
       "action": "nenhuma",
       "reason": "suite de testes — corre por convenção do vitest",
       "manualDecision": false,
@@ -7966,6 +8013,30 @@
       "sideEffects": [],
       "risks": [],
       "signals": {},
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/__tests__/pin-picker-gps.test.tsx",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "unknownCast": 1
+      },
       "action": "nenhuma",
       "reason": "suite de testes — corre por convenção do vitest",
       "manualDecision": false,
@@ -12619,11 +12690,11 @@
       "category": "route-ui",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 3,
+      "consumers": 4,
       "consumerSample": [
+        "src/__tests__/locais-pin-no-mapa.test.tsx",
         "src/app/(dashboard)/dashboard/clientes/[id]/page.tsx",
-        "src/app/(dashboard)/dashboard/locais/_components/table.tsx",
-        "src/app/(dashboard)/dashboard/locais/page.tsx"
+        "src/app/(dashboard)/dashboard/locais/_components/table.tsx"
       ],
       "autoLoaded": false,
       "referencedBy": [
@@ -12638,7 +12709,7 @@
         "clientComponent": 1
       },
       "action": "nenhuma",
-      "reason": "em uso: 3 consumidor(es)",
+      "reason": "em uso: 4 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -12652,8 +12723,9 @@
       "category": "route-ui",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 2,
+      "consumers": 3,
       "consumerSample": [
+        "src/__tests__/locais-pin-no-mapa.test.tsx",
         "src/app/(dashboard)/dashboard/clientes/[id]/page.tsx",
         "src/app/(dashboard)/dashboard/locais/page.tsx"
       ],
@@ -12667,7 +12739,7 @@
         "clientComponent": 1
       },
       "action": "nenhuma",
-      "reason": "em uso: 2 consumidor(es)",
+      "reason": "em uso: 3 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -16213,6 +16285,34 @@
       }
     },
     {
+      "path": "src/components/map/pin-picker.tsx",
+      "category": "component",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 2,
+      "consumerSample": [
+        "src/__tests__/pin-picker-gps.test.tsx",
+        "src/app/(dashboard)/dashboard/locais/_components/sheet.tsx"
+      ],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "clientComponent": 1,
+        "sqlWrite": 1
+      },
+      "action": "nenhuma",
+      "reason": "em uso: 2 consumidor(es)",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
       "path": "src/components/pwa/sw-update-prompt.tsx",
       "category": "component",
       "status": "MANTER",
@@ -17871,7 +17971,7 @@
       "category": "domain",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 44,
+      "consumers": 45,
       "consumerSample": [
         "src/__tests__/update-notice-modal.test.tsx",
         "src/__tests__/update-notices-eligibility.test.ts",
@@ -17886,7 +17986,7 @@
       "risks": [],
       "signals": {},
       "action": "nenhuma",
-      "reason": "em uso: 44 consumidor(es), configuração",
+      "reason": "em uso: 45 consumidor(es), configuração",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -18412,7 +18512,7 @@
       "category": "lib",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 3,
+      "consumers": 4,
       "consumerSample": [
         "src/__tests__/calculations.test.ts",
         "src/__tests__/validation.test.ts",
@@ -18426,7 +18526,7 @@
       "risks": [],
       "signals": {},
       "action": "nenhuma",
-      "reason": "em uso: 3 consumidor(es)",
+      "reason": "em uso: 4 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -19126,6 +19226,34 @@
       },
       "action": "nenhuma",
       "reason": "em uso: 7 consumidor(es)",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/lib/geocoding.ts",
+      "category": "lib",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 3,
+      "consumerSample": [
+        "src/__tests__/geocoding.test.ts",
+        "src/app/(dashboard)/dashboard/locais/_components/sheet.tsx",
+        "src/components/map/pin-picker.tsx"
+      ],
+      "autoLoaded": false,
+      "referencedBy": [
+        "docs"
+      ],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {},
+      "action": "nenhuma",
+      "reason": "em uso: 3 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -21014,6 +21142,32 @@
     },
     {
       "path": "src/release-notes/2026-09-09-folha-vencimento-base.ts",
+      "category": "src-other",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 1,
+      "consumerSample": [
+        "src/release-notes/index.ts"
+      ],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "sqlWrite": 1
+      },
+      "action": "nenhuma",
+      "reason": "em uso: 1 consumidor(es)",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/release-notes/2026-09-10-locais-ponto-no-mapa.ts",
       "category": "src-other",
       "status": "MANTER",
       "confidence": "alta",

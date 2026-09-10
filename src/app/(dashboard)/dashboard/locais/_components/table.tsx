@@ -33,6 +33,7 @@ interface Props {
 
 export function LocaisTable({ locais, clientes, companyId }: Props) {
   const [search, setSearch] = useState("");
+  const [onlyNoGps, setOnlyNoGps] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [, startTransition] = useTransition();
 
@@ -47,10 +48,15 @@ export function LocaisTable({ locais, clientes, companyId }: Props) {
 
   const clienteMap = Object.fromEntries(clientes.map((c) => [c.id, c.name]));
 
-  const filtered = locais.filter((l) =>
-    l.name.toLowerCase().includes(search.toLowerCase()) ||
-    l.address.toLowerCase().includes(search.toLowerCase())
-  );
+  const semGps = locais.filter((l) => l.lat == null || l.lng == null).length;
+
+  const filtered = locais.filter((l) => {
+    if (onlyNoGps && l.lat != null && l.lng != null) return false;
+    return (
+      l.name.toLowerCase().includes(search.toLowerCase()) ||
+      l.address.toLowerCase().includes(search.toLowerCase())
+    );
+  });
 
   const pag = usePagination(filtered, 10);
   const paginated = pag.pageItems;
@@ -64,6 +70,21 @@ export function LocaisTable({ locais, clientes, companyId }: Props) {
             placeholder="Pesquisar local ou morada..."
             className="w-full pl-9 pr-3 py-2 text-sm rounded-lg border border-[var(--color-border)] bg-white text-[var(--color-text-main)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] focus:border-transparent" />
         </div>
+
+        {semGps > 0 && (
+          <button
+            type="button"
+            onClick={() => { setOnlyNoGps((v) => !v); pag.setPage(1); }}
+            className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border text-xs font-medium transition-colors ${
+              onlyNoGps
+                ? "bg-amber-100 border-amber-300 text-amber-900"
+                : "bg-white border-[var(--color-border)] text-[var(--color-text-sub)] hover:bg-[var(--color-background)]"
+            }`}
+          >
+            <MapPin className="w-3.5 h-3.5" />
+            {semGps} sem ponto no mapa
+          </button>
+        )}
       </div>
 
       <div className="overflow-x-auto">

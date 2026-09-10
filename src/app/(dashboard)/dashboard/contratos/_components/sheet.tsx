@@ -111,6 +111,8 @@ interface Props {
     client_id: string;
     name: string;
     address: string;
+    lat?: number | null;
+    lng?: number | null;
     hourly_rate: number | null;
     access_code?: string | null;
     instructions?: string | null;
@@ -982,6 +984,14 @@ export function ContratoSheet({
                 ) : (
                   <div className="space-y-1">
                     <p><strong>Morada:</strong> {selectedLocal.address}</p>
+                    {selectedLocal.lat == null || selectedLocal.lng == null ? (
+                      <p className="text-amber-700">
+                        <strong>Mapa:</strong> este local não tem ponto marcado — a equipa só recebe a
+                        morada escrita. Marca o pin em Locais → editar o local.
+                      </p>
+                    ) : (
+                      <p><strong>Mapa:</strong> ponto marcado</p>
+                    )}
                     <p><strong>Chave:</strong> {selectedLocal.has_key ? selectedLocal.key_label || "Registada" : "Não registada"}</p>
                     <p><strong>Código:</strong> {selectedLocal.access_code ? "Registado" : "Não registado"}</p>
                     {selectedLocal.instructions && <p><strong>Instruções:</strong> {selectedLocal.instructions}</p>}
