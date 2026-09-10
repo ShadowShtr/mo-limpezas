@@ -14,23 +14,12 @@ import { MapPin, X, Filter, Clock } from "lucide-react";
 import { getMapServices, type MapClockPoint, type MapService, type MapTeam } from "@/app/actions/map";
 import { createClient } from "@/lib/supabase/client";
 import { isValidIsoDateString } from "@/lib/utils";
+import { getMapStyle } from "@/lib/map-style";
 
-const MAP_STYLE = {
-  version: 8 as const,
-  sources: {
-    carto: {
-      type: "raster" as const,
-      tiles: [
-        "https://a.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png",
-        "https://b.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png",
-        "https://c.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png",
-      ],
-      tileSize: 256,
-      attribution: "© OpenStreetMap, © CARTO",
-    },
-  },
-  layers: [{ id: "carto-tiles", type: "raster" as const, source: "carto" }],
-};
+// Calculado uma vez: o token é inlined na compilação, e um objeto novo a cada
+// render faria o MapLibre reaplicar o estilo sem necessidade.
+const MAP_STYLE = getMapStyle();
+
 
 const DEFAULT_VIEW = { longitude: -9.1393, latitude: 38.7223, zoom: 12 };
 

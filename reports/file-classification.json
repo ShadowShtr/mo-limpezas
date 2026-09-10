@@ -1,15 +1,15 @@
 {
   "generatedBy": "scripts/audit-file-inventory.mjs",
-  "totalFiles": 895,
+  "totalFiles": 897,
   "byStatus": {
-    "MANTER": 872,
+    "MANTER": 874,
     "STANDBY": 23
   },
   "byCategory": {
-    "test": 210,
+    "test": 211,
     "route-ui": 140,
     "migration": 128,
-    "lib": 74,
+    "lib": 75,
     "script": 59,
     "domain": 52,
     "doc": 47,
@@ -29,7 +29,7 @@
     "supabase-other": 2
   },
   "byConfidence": {
-    "alta": 874,
+    "alta": 876,
     "média": 15,
     "baixa": 6
   },
@@ -6845,6 +6845,28 @@
         "serviceRole": 5,
         "sqlWrite": 18
       },
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/__tests__/map-style.test.ts",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {},
       "action": "nenhuma",
       "reason": "suite de testes — corre por convenção do vitest",
       "manualDecision": false,
@@ -19360,6 +19382,36 @@
       "signals": {},
       "action": "nenhuma",
       "reason": "em uso: 36 consumidor(es)",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/lib/map-style.ts",
+      "category": "lib",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 3,
+      "consumerSample": [
+        "src/__tests__/map-style.test.ts",
+        "src/app/(dashboard)/dashboard/mapa/_components/map-view.tsx",
+        "src/components/map/pin-picker.tsx"
+      ],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [
+        "env"
+      ],
+      "risks": [],
+      "signals": {
+        "env": 2
+      },
+      "action": "nenhuma",
+      "reason": "em uso: 3 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,

@@ -78,6 +78,11 @@ export function LocalSheet({ trigger, companyId, clientes, local, fixedClientId 
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [searching, setSearching]         = useState(false);
   const [noResults, setNoResults]         = useState(false);
+  // Melhor palpite da pesquisa: a primeira sugestão que o Nominatim devolveu,
+  // ainda sem ninguém ter escolhido nada. Serve só para o mapa já estar na
+  // zona certa enquanto a morada está a ser escrita — não marca ponto nenhum
+  // nem preenche campo nenhum, porque ninguém confirmou que é ali.
+  const [focus, setFocus] = useState<{ lat: number; lng: number } | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const searchWrapRef = useRef<HTMLDivElement>(null);
 
@@ -121,6 +126,16 @@ export function LocalSheet({ trigger, companyId, clientes, local, fixedClientId 
         setSuggestions(data);
         setShowSuggestions(data.length > 0);
         setNoResults(data.length === 0);
+
+        // Sem pedidos extra: aproveita o primeiro resultado desta mesma
+        // resposta para levar o mapa à zona. Antes disto o mapa mostrava
+        // Portugal inteiro e era preciso navegar à mão até à rua.
+        const primeiro = data[0];
+        if (primeiro) {
+          const pLat = parseFloat(primeiro.lat);
+          const pLng = parseFloat(primeiro.lon);
+          if (Number.isFinite(pLat) && Number.isFinite(pLng)) setFocus({ lat: pLat, lng: pLng });
+        }
       } catch {
         setSuggestions([]);
         // Falha de rede fica igual a "não encontrei": o caminho de saída é o
@@ -387,6 +402,7 @@ export function LocalSheet({ trigger, companyId, clientes, local, fixedClientId 
                     lat={hasPin ? latNum : null}
                     lng={hasPin ? lngNum : null}
                     onChange={handlePinChange}
+                    focus={focus}
                   />
                 )}
               </div>

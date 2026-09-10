@@ -128,6 +128,14 @@ async function abrirMapa() {
   await act(async () => { botao.click(); });
 }
 
+/** A pesquisa espera 420ms antes de ir à rede. Deixar esse temporizador
+ *  disparar fora de `act` fazia o React avisar a cada ensaio — e o aviso
+ *  escondia o que os ensaios estavam mesmo a dizer. Esperar por ele também
+ *  torna o caminho "não encontrei nada" determinístico, em vez de acidental. */
+async function aguardarPesquisa() {
+  await act(async () => { await new Promise((r) => setTimeout(r, 450)); });
+}
+
 async function marcarPin() {
   const marcar = document.querySelector('[data-testid="marcar-pin"]') as HTMLButtonElement | null;
   if (!marcar) throw new Error("o mapa não está montado");
@@ -203,6 +211,7 @@ describe("criar um local cuja morada a pesquisa não encontra", () => {
 
     escrever(campoPorEtiqueta("Nome do local"), "Prédio sem número");
     escrever(campoPorEtiqueta("Pesquisar morada"), "Travessa do Pinheiro, Alenquer");
+    await aguardarPesquisa();
 
     await abrirMapa();
     await marcarPin();
@@ -219,6 +228,7 @@ describe("criar um local cuja morada a pesquisa não encontra", () => {
 
     escrever(campoPorEtiqueta("Nome do local"), "Prédio sem número");
     escrever(campoPorEtiqueta("Pesquisar morada"), "Travessa do Pinheiro, Alenquer");
+    await aguardarPesquisa();
 
     await abrirMapa();
     await marcarPin();
@@ -234,6 +244,7 @@ describe("criar um local cuja morada a pesquisa não encontra", () => {
     escrever(campoPorEtiqueta("Nome do local"), "Prédio sem número");
     escrever(campoPorEtiqueta("Pesquisar morada"), "Travessa do Pinheiro");
     escrever(campoPorEtiqueta("Código do prédio"), "1234#");
+    await aguardarPesquisa();
 
     await abrirMapa();
     await marcarPin();
