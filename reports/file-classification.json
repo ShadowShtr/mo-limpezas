@@ -1,12 +1,12 @@
 {
   "generatedBy": "scripts/audit-file-inventory.mjs",
-  "totalFiles": 893,
+  "totalFiles": 894,
   "byStatus": {
-    "MANTER": 870,
+    "MANTER": 871,
     "STANDBY": 23
   },
   "byCategory": {
-    "test": 209,
+    "test": 210,
     "route-ui": 140,
     "migration": 128,
     "lib": 74,
@@ -29,7 +29,7 @@
     "supabase-other": 2
   },
   "byConfidence": {
-    "alta": 872,
+    "alta": 873,
     "média": 15,
     "baixa": 6
   },
@@ -8013,6 +8013,30 @@
       "sideEffects": [],
       "risks": [],
       "signals": {},
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/__tests__/pin-picker-gps.test.tsx",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "unknownCast": 1
+      },
       "action": "nenhuma",
       "reason": "suite de testes — corre por convenção do vitest",
       "manualDecision": false,
@@ -16265,8 +16289,9 @@
       "category": "component",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 1,
+      "consumers": 2,
       "consumerSample": [
+        "src/__tests__/pin-picker-gps.test.tsx",
         "src/app/(dashboard)/dashboard/locais/_components/sheet.tsx"
       ],
       "autoLoaded": false,
@@ -16278,7 +16303,7 @@
         "sqlWrite": 1
       },
       "action": "nenhuma",
-      "reason": "em uso: 1 consumidor(es)",
+      "reason": "em uso: 2 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,

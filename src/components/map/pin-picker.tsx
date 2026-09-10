@@ -76,25 +76,46 @@ export function PinPicker({ lat, lng, onChange, heightClass = "h-64" }: Props) {
   // nunca a cada arrasto do próprio utilizador — senão o mapa "salta" debaixo
   // do dedo enquanto ele afina a posição.
   const lastExternal = useRef<string | null>(null);
+
+  /** Leva o mapa até um ponto.
+   *
+   *  Existe porque nem toda a coordenada nova vem de um gesto sobre o mapa. Se
+   *  veio (clique, arrasto), o ponto já está debaixo do dedo e mexer a câmara
+   *  seria o mapa a fugir. Se NÃO veio — GPS, "repor pin anterior", sugestão da
+   *  pesquisa —, o ponto pode estar fora do ecrã e sem isto o pin muda-se sem
+   *  ninguém ver para onde.
+   *
+   *  O `Math.max` preserva a aproximação de quem já tinha ampliado: nunca
+   *  afasta, e garante o nível de rua (~17) quando estava mais longe. */
+  const centrarEm = useCallback((cLat: number, cLng: number) => {
+    const map = mapRef.current;
+    if (map) map.flyTo({ center: [cLng, cLat], zoom: Math.max(map.getZoom(), 17), duration: 700 });
+    else setViewState((v) => ({ ...v, latitude: cLat, longitude: cLng, zoom: 17 }));
+  }, []);
+
+  // Coordenada vinda de fora (a pesquisa de morada escolheu uma sugestão).
+  // `lastExternal` guarda o que este componente acabou de emitir, para o
+  // efeito não reagir ao eco do próprio gesto do utilizador.
   useEffect(() => {
     if (lat == null || lng == null || !isValidCoord(lat, lng)) return;
     const key = `${lat},${lng}`;
     if (lastExternal.current === key) return;
     lastExternal.current = key;
-    const map = mapRef.current;
-    if (map) map.flyTo({ center: [lng, lat], zoom: Math.max(map.getZoom(), 17), duration: 700 });
-    else setViewState((v) => ({ ...v, latitude: lat, longitude: lng, zoom: 17 }));
-  }, [lat, lng]);
+    centrarEm(lat, lng);
+  }, [lat, lng, centrarEm]);
 
+  /** Marca o pin e devolve a coordenada já arredondada — quem chama precisa
+   *  dela para decidir se centra o mapa (ver `centrarEm`). */
   const placePin = useCallback(
-    (nextLat: number, nextLng: number) => {
-      if (!isValidCoord(nextLat, nextLng)) return;
+    (nextLat: number, nextLng: number): { lat: number; lng: number } | null => {
+      if (!isValidCoord(nextLat, nextLng)) return null;
       if (lat != null && lng != null && isValidCoord(lat, lng)) setPrevious({ lat, lng });
       const rLat = roundCoord(nextLat);
       const rLng = roundCoord(nextLng);
       lastExternal.current = `${rLat},${rLng}`;
       setHint(null);
       onChange(rLat, rLng);
+      return { lat: rLat, lng: rLng };
     },
     [lat, lng, onChange],
   );
@@ -113,7 +134,15 @@ export function PinPicker({ lat, lng, onChange, heightClass = "h-64" }: Props) {
     navigator.geolocation.getCurrentPosition(
       (pos) => {
         setLocating(false);
-        placePin(pos.coords.latitude, pos.coords.longitude);
+        // 🔴 O recentrar é explícito e não pode ser deixado ao efeito acima.
+        //    `placePin` regista a coordenada em `lastExternal` antes de a
+        //    emitir — é isso que impede o mapa de saltar a cada clique/arrasto
+        //    —, e por isso o efeito vê a mesma chave e sai sem mexer a câmara.
+        //    Sem esta linha, carregar em "Estou aqui agora" trocava as
+        //    coordenadas e deixava o mapa parado no sítio anterior: o pin ia
+        //    parar fora do ecrã e ninguém via para onde tinha ido.
+        const marcado = placePin(pos.coords.latitude, pos.coords.longitude);
+        if (marcado) centrarEm(marcado.lat, marcado.lng);
       },
       () => {
         // Recusar a localização nunca pode fechar o caminho manual — é
@@ -131,7 +160,8 @@ export function PinPicker({ lat, lng, onChange, heightClass = "h-64" }: Props) {
     setPrevious(null);
     lastExternal.current = `${pLat},${pLng}`;
     onChange(pLat, pLng);
-    mapRef.current?.flyTo({ center: [pLng, pLat], zoom: 17, duration: 500 });
+    // Mesma razão do GPS: o ponto anterior pode estar fora do ecrã.
+    centrarEm(pLat, pLng);
   }
 
   return (
