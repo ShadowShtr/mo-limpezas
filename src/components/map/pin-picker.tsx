@@ -1,0 +1,202 @@
+"use client";
+
+import "maplibre-gl/dist/maplibre-gl.css";
+import { useCallback, useEffect, useRef, useState } from "react";
+import MapGL, { Marker, NavigationControl, type MapRef, type MapLayerMouseEvent } from "react-map-gl/maplibre";
+import { Crosshair, Loader2, MapPin, Undo2 } from "lucide-react";
+import { isValidCoord } from "@/lib/calculations";
+import { PORTUGAL_CENTER, formatCoord, roundCoord } from "@/lib/geocoding";
+
+/** Mesmo estilo raster do mapa operacional (`/dashboard/mapa`): tiles CARTO,
+ *  sem token, já autorizados na CSP.
+ *
+ *  A `attribution` da fonte não é decorativa e não pode ser escondida: o
+ *  MapLibre desenha-a através do `AttributionControl` que monta por omissão.
+ *  Por isso este componente **não** passa `attributionControl={false}` — as
+ *  licenças do OpenStreetMap e da CARTO exigem crédito visível a quem vê o
+ *  mapa, e o mapa operacional já segue a mesma regra. */
+const MAP_STYLE = {
+  version: 8 as const,
+  sources: {
+    carto: {
+      type: "raster" as const,
+      tiles: [
+        "https://a.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png",
+        "https://b.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png",
+        "https://c.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png",
+      ],
+      tileSize: 256,
+      attribution: "© OpenStreetMap, © CARTO",
+    },
+  },
+  layers: [{ id: "carto-tiles", type: "raster" as const, source: "carto" }],
+};
+
+interface Props {
+  lat: number | null;
+  lng: number | null;
+  /** Chamado sempre que o pin passa a estar noutro sítio. */
+  onChange: (lat: number, lng: number) => void;
+  heightClass?: string;
+}
+
+/**
+ * Marcação manual do ponto de um local.
+ *
+ * 🔴 Deliberadamente **sem geocodificação inversa**. A primeira versão pedia
+ *    ao Nominatim público a morada de cada ponto largado e oferecia-a para
+ *    preencher os campos. Duas razões para não o fazer:
+ *
+ *    · o Nominatim público limita-se a 1 pedido/segundo somados TODOS os
+ *      utilizadores da aplicação, e um pedido por cada clique/arrasto é carga
+ *      automática nova sobre um serviço gratuito de terceiros;
+ *    · duas respostas em voo podiam chegar trocadas — o pin ficava no ponto B
+ *      com a morada de A oferecida por baixo, e bastava carregar em "usar"
+ *      para gravar texto de A com coordenadas de B.
+ *
+ *    Nada disto é preciso para o problema que este componente resolve: quando
+ *    a pesquisa de morada não encontra o sítio, quem sabe onde ele é marca-o
+ *    à mão. A morada continua a ser escrita por quem sabe.
+ */
+export function PinPicker({ lat, lng, onChange, heightClass = "h-64" }: Props) {
+  const mapRef = useRef<MapRef>(null);
+  const hasPin = lat != null && lng != null && isValidCoord(lat, lng);
+
+  const [viewState, setViewState] = useState({
+    latitude: hasPin ? (lat as number) : PORTUGAL_CENTER.lat,
+    longitude: hasPin ? (lng as number) : PORTUGAL_CENTER.lng,
+    zoom: hasPin ? 17 : PORTUGAL_CENTER.zoom,
+  });
+
+  const [locating, setLocating] = useState(false);
+  const [hint, setHint] = useState<string | null>(null);
+  const [previous, setPrevious] = useState<{ lat: number; lng: number } | null>(null);
+
+  // Só centra automaticamente quando o pin vem de fora (pesquisa de morada),
+  // nunca a cada arrasto do próprio utilizador — senão o mapa "salta" debaixo
+  // do dedo enquanto ele afina a posição.
+  const lastExternal = useRef<string | null>(null);
+  useEffect(() => {
+    if (lat == null || lng == null || !isValidCoord(lat, lng)) return;
+    const key = `${lat},${lng}`;
+    if (lastExternal.current === key) return;
+    lastExternal.current = key;
+    const map = mapRef.current;
+    if (map) map.flyTo({ center: [lng, lat], zoom: Math.max(map.getZoom(), 17), duration: 700 });
+    else setViewState((v) => ({ ...v, latitude: lat, longitude: lng, zoom: 17 }));
+  }, [lat, lng]);
+
+  const placePin = useCallback(
+    (nextLat: number, nextLng: number) => {
+      if (!isValidCoord(nextLat, nextLng)) return;
+      if (lat != null && lng != null && isValidCoord(lat, lng)) setPrevious({ lat, lng });
+      const rLat = roundCoord(nextLat);
+      const rLng = roundCoord(nextLng);
+      lastExternal.current = `${rLat},${rLng}`;
+      setHint(null);
+      onChange(rLat, rLng);
+    },
+    [lat, lng, onChange],
+  );
+
+  function handleMapClick(e: MapLayerMouseEvent) {
+    placePin(e.lngLat.lat, e.lngLat.lng);
+  }
+
+  function handleLocateMe() {
+    if (typeof navigator === "undefined" || !navigator.geolocation) {
+      setHint("Este dispositivo não permite obter a localização atual. Marca o ponto no mapa com o dedo.");
+      return;
+    }
+    setLocating(true);
+    setHint(null);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setLocating(false);
+        placePin(pos.coords.latitude, pos.coords.longitude);
+      },
+      () => {
+        // Recusar a localização nunca pode fechar o caminho manual — é
+        // precisamente esse o caminho que este componente existe para dar.
+        setLocating(false);
+        setHint("Não foi possível obter a localização. Marca o ponto no mapa com o dedo.");
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 },
+    );
+  }
+
+  function handleUndo() {
+    if (!previous) return;
+    const { lat: pLat, lng: pLng } = previous;
+    setPrevious(null);
+    lastExternal.current = `${pLat},${pLng}`;
+    onChange(pLat, pLng);
+    mapRef.current?.flyTo({ center: [pLng, pLat], zoom: 17, duration: 500 });
+  }
+
+  return (
+    <div className="space-y-2">
+      <div className={`relative w-full ${heightClass} rounded-lg overflow-hidden border border-[var(--color-border)]`}>
+        <MapGL
+          ref={mapRef}
+          {...viewState}
+          onMove={(e) => setViewState(e.viewState)}
+          onClick={handleMapClick}
+          mapStyle={MAP_STYLE}
+          style={{ width: "100%", height: "100%" }}
+          cursor="crosshair"
+        >
+          <NavigationControl position="top-right" showCompass={false} />
+          {hasPin && (
+            <Marker
+              latitude={lat as number}
+              longitude={lng as number}
+              draggable
+              anchor="bottom"
+              onDragEnd={(e) => placePin(e.lngLat.lat, e.lngLat.lng)}
+            >
+              <MapPin className="w-8 h-8 text-[var(--color-primary)] drop-shadow" fill="#16A34A" strokeWidth={1.5} />
+            </Marker>
+          )}
+        </MapGL>
+
+        {!hasPin && (
+          <div className="absolute inset-x-0 top-0 px-3 py-2 text-[11px] text-white bg-black/55 pointer-events-none">
+            Toca no mapa para marcar exatamente onde é a entrada do local.
+          </div>
+        )}
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          onClick={handleLocateMe}
+          disabled={locating}
+          className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-[var(--color-border)] text-xs font-medium text-[var(--color-text-sub)] hover:bg-[var(--color-background)] transition-colors disabled:opacity-50"
+        >
+          {locating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Crosshair className="w-3.5 h-3.5" />}
+          Estou aqui agora
+        </button>
+
+        {previous && (
+          <button
+            type="button"
+            onClick={handleUndo}
+            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-[var(--color-border)] text-xs font-medium text-[var(--color-text-sub)] hover:bg-[var(--color-background)] transition-colors"
+          >
+            <Undo2 className="w-3.5 h-3.5" />
+            Repor pin anterior
+          </button>
+        )}
+
+        {hasPin && (
+          <span className="text-[11px] text-[var(--color-text-muted)] font-mono">
+            {formatCoord(lat as number, lng as number)}
+          </span>
+        )}
+      </div>
+
+      {hint && <p className="text-xs text-[var(--color-danger)]">{hint}</p>}
+    </div>
+  );
+}
