@@ -78,7 +78,6 @@ export function LocalSheet({ trigger, companyId, clientes, local, fixedClientId 
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [searching, setSearching]         = useState(false);
   const [noResults, setNoResults]         = useState(false);
-  const [showMap, setShowMap]             = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const searchWrapRef = useRef<HTMLDivElement>(null);
 
@@ -87,6 +86,21 @@ export function LocalSheet({ trigger, companyId, clientes, local, fixedClientId 
   const latNum = lat ? parseFloat(lat) : NaN;
   const lngNum = lng ? parseFloat(lng) : NaN;
   const hasPin = Number.isFinite(latNum) && Number.isFinite(lngNum);
+
+  // 🔴 O mapa NÃO pode nascer fechado atrás de um link pequeno.
+  //
+  //    Nasceu, e o resultado foi o previsível: quem tinha exatamente o
+  //    problema que isto resolve — «a morada não aparece na pesquisa» — não
+  //    encontrava a forma de marcar o ponto. Um caminho de saída que é preciso
+  //    descobrir não é um caminho de saída.
+  //
+  //    Por omissão o mapa segue o estado do ponto: sem ponto marcado está
+  //    aberto e à vista; com ponto marcado recolhe, porque aí já não há nada a
+  //    resolver e o painel não precisa de ficar comprido. `showMapManual`
+  //    guarda a vontade explícita de quem abriu ou fechou à mão, e essa ganha
+  //    sempre a partir daí.
+  const [showMapManual, setShowMapManual] = useState<boolean | null>(null);
+  const showMap = showMapManual ?? !hasPin;
 
   function composeAddress(): string {
     return composeAddressParts({ road, houseNumber, complement, postalCode, city });
@@ -137,9 +151,9 @@ export function LocalSheet({ trigger, companyId, clientes, local, fixedClientId 
     setSuggestions([]);
     setShowSuggestions(false);
     setNoResults(false);
-    // Com coordenadas na mão, mostrar o mapa deixa a gestora confirmar (e
-    // corrigir) o ponto antes de gravar, em vez de confiar cegamente no OSM.
-    setShowMap(true);
+    // Não força o mapa a nada: a sugestão trouxe um ponto, e a regra por
+    // omissão recolhe o mapa quando há ponto. Quem quiser confirmar o que o
+    // OSM devolveu tem o "Ver / corrigir pin" mesmo ao lado.
   }
 
   function handlePinChange(nextLat: number, nextLng: number) {
@@ -147,6 +161,10 @@ export function LocalSheet({ trigger, companyId, clientes, local, fixedClientId 
     setLng(String(nextLng));
     setGeocoded(true);
     setNoResults(false);
+    // Este ponto veio de um toque no próprio mapa, logo o mapa está aberto e
+    // tem de continuar aberto. Sem isto, a regra por omissão via "já há ponto"
+    // e fechava o mapa debaixo da mão de quem o estava a usar.
+    setShowMapManual(true);
   }
 
   useEffect(() => {
@@ -156,7 +174,13 @@ export function LocalSheet({ trigger, companyId, clientes, local, fixedClientId 
       }
     }
     document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      // A pesquisa espera 420ms antes de ir à rede. Se o painel fechar nesse
+      // intervalo, o pedido partia à mesma e voltava para escrever estado num
+      // componente que já não existe.
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
   }, []);
 
   async function handleSubmit(e: React.SyntheticEvent<HTMLFormElement>) {
@@ -265,7 +289,7 @@ export function LocalSheet({ trigger, companyId, clientes, local, fixedClientId 
               )}
 
               {/* Pesquisa de morada (autocomplete) */}
-              <div ref={searchWrapRef} className="relative">
+              <div ref={searchWrapRef} className="relative z-20">
                 <label className="block text-sm font-medium text-[var(--color-text-main)] mb-1.5">
                   Pesquisar morada
                 </label>
@@ -299,7 +323,7 @@ export function LocalSheet({ trigger, companyId, clientes, local, fixedClientId 
                       </p>
                       <button
                         type="button"
-                        onClick={() => setShowMap(true)}
+                        onClick={() => setShowMapManual(true)}
                         className="mt-1 text-xs font-semibold text-amber-900 hover:underline"
                       >
                         Abrir mapa
@@ -328,15 +352,21 @@ export function LocalSheet({ trigger, companyId, clientes, local, fixedClientId 
               </div>
 
               {/* Ponto exato no mapa — a morada por si só não chega para quem
-                  vai lá ter; o pin é o que abre no Google Maps na app. */}
-              <div className="space-y-2">
+                  vai lá ter; o pin é o que abre no Google Maps na app.
+
+                  `isolate` cria um contexto de empilhamento próprio: o mapa do
+                  MapLibre desenha por cima de quase tudo, e sem isto a lista de
+                  sugestões (que flutua a partir do campo acima) acabava por
+                  baixo do mapa. Com o contexto isolado, a lista fica sempre
+                  visível por cima. */}
+              <div className="space-y-2 relative z-0 isolate">
                 <div className="flex items-center justify-between gap-2">
                   <label className="block text-sm font-medium text-[var(--color-text-main)]">
                     Ponto exato no mapa
                   </label>
                   <button
                     type="button"
-                    onClick={() => setShowMap((v) => !v)}
+                    onClick={() => setShowMapManual(!showMap)}
                     className="inline-flex items-center gap-1.5 text-xs font-semibold text-[var(--color-primary)] hover:underline"
                   >
                     <MapIcon className="w-3.5 h-3.5" />

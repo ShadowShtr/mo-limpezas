@@ -117,10 +117,10 @@ async function abrirFicha(local?: Record<string, unknown>) {
   await act(async () => { abrir.click(); });
 }
 
-/** O mapa não está aberto de origem — ocupa metade do painel e a maioria das
- *  moradas resolve-se pela pesquisa. Abre-se com um clique, e é esse clique
- *  que o teste tem de dar, como a gestora dá. */
+/** Sem ponto marcado o mapa já vem aberto — é esse o ponto desta ficha. Só
+ *  clica no que abre quando, por alguma razão, ele estiver fechado. */
 async function abrirMapa() {
+  if (document.querySelector('[data-testid="marcar-pin"]')) return;
   const botao = Array.from(document.querySelectorAll("button")).find((b) =>
     ["Marcar no mapa", "Ver / corrigir pin", "Abrir mapa"].some((t) => b.textContent?.includes(t)),
   );
@@ -149,6 +149,53 @@ function campoPorEtiqueta(etiqueta: string): HTMLInputElement {
   if (!campo) throw new Error(`campo "${etiqueta}" não encontrado`);
   return campo as HTMLInputElement;
 }
+
+describe("o mapa tem de estar à vista, não escondido atrás de um link", () => {
+  // 🔴 Origem: a dona abriu "Novo local", escreveu a morada, e disse
+  //    «não aparece o ponto para abrir e marcar no mapa». O mapa estava lá —
+  //    fechado atrás de um link de texto pequeno, ao lado de uma etiqueta.
+  //    Quem tem exatamente o problema que isto resolve não o encontrava.
+  it("🔴 num local novo o mapa aparece sem ser preciso descobrir nada", async () => {
+    await abrirFicha();
+    expect(
+      document.querySelector('[data-testid="marcar-pin"]'),
+      "sem ponto marcado, o mapa tem de estar aberto de origem",
+    ).toBeTruthy();
+  });
+
+  it("🔴 ao editar um local antigo sem coordenadas, também abre logo", async () => {
+    await abrirFicha({
+      id: "loc-9", name: "Escritório", address: "Rua Antiga 4", lat: null, lng: null,
+      hourly_rate: null, fixed_price: null, pricing_type: "hourly", active: true,
+      client_id: "cli-1", access_code: null, instructions: null, has_key: false, key_label: null,
+    });
+    expect(document.querySelector('[data-testid="marcar-pin"]')).toBeTruthy();
+  });
+
+  it("com o ponto já marcado recolhe, para não alongar o painel à toa", async () => {
+    await abrirFicha({
+      id: "loc-1", name: "Escritório", address: "Rua A", lat: 38.7, lng: -9.1,
+      hourly_rate: null, fixed_price: null, pricing_type: "hourly", active: true,
+      client_id: "cli-1", access_code: null, instructions: null, has_key: false, key_label: null,
+    });
+    expect(document.querySelector('[data-testid="marcar-pin"]')).toBeFalsy();
+    expect(
+      Array.from(document.querySelectorAll("button")).some((b) =>
+        b.textContent?.includes("Ver / corrigir pin"),
+      ),
+      "mas continua a haver como voltar lá",
+    ).toBe(true);
+  });
+
+  it("🔴 marcar o ponto no mapa não fecha o mapa debaixo da mão de quem o usa", async () => {
+    await abrirFicha();
+    await marcarPin();
+    expect(
+      document.querySelector('[data-testid="marcar-pin"]'),
+      "passou a haver ponto, mas quem o marcou estava a olhar para o mapa",
+    ).toBeTruthy();
+  });
+});
 
 describe("criar um local cuja morada a pesquisa não encontra", () => {
   it("🔴 grava as coordenadas do pin marcado à mão", async () => {
