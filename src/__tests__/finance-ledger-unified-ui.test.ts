@@ -145,7 +145,10 @@ describe("UNI15–UNI30 — métricas e apresentação unificadas", () => {
       .toEqual(["payment:p-ago"]);
   });
 
-  it("Fixos/Variáveis ordenam por sort_order, descrição e identidade", () => {
+  // A ordem é por data; no MESMO dia desempata por descrição e identidade.
+  // `sort_order` já não participa — é a ordem de criação, não uma escolha de
+  // ninguém. Ver `src/__tests__/pagamentos-ordem-vencimento.test.tsx`.
+  it("no mesmo vencimento, desempata por descrição e identidade", () => {
     const rows = buildFinanceLedger({
       payments: [
         payment({ id: "p3", kind: "fixo", description: "Zoo", sort_order: 2 }),

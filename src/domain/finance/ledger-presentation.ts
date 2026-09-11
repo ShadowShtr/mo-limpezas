@@ -330,76 +330,82 @@ export function financeLedgerMetrics(
 }
 
 /**
- * As vistas em que a pergunta é «o que vence a seguir».
+ * A data por que cada linha se ordena.
  *
- * 🔴 `fixos` e `variaveis` NÃO entram aqui, de propósito. Nessas duas a ordem
- *    é `sort_order` — uma ordem intencional, própria daquelas listas — e
- *    substituí-la por vencimento destruiria uma regra que já existe. Ordenar
- *    melhor uma vista nunca pode custar a ordem de outra.
+ * Um pagamento ordena-se pelo dia em que TEM de ser pago — `due_date`, a
+ * coluna «Vencimento» do ecrã. Um movimento de caixa não tem vencimento (já
+ * aconteceu) e entra pelo dia em que aconteceu, a única data que tem. Assim
+ * uma tabela que mistura os dois lê-se como um calendário, em vez de ter os
+ * movimentos todos amontoados no fim.
  *
- *    `manuais` também fica de fora: são movimentos de caixa, que já
- *    aconteceram e não têm vencimento nenhum. Dar-lhes uma ordem por
- *    `due_date` seria redesenhar a ordem do fluxo de caixa a pretexto de
- *    arrumar os pagamentos — outra alteração, com outros riscos.
+ * `null` só quando não há data nenhuma: uma obrigação registada sem
+ * vencimento ainda não tem lugar no mês, e atribuir-lhe um dia (o 1, o
+ * último) seria afirmar uma certeza que ninguém escreveu.
  */
-const VISTAS_POR_VENCIMENTO: ReadonlySet<FinanceLedgerFilter> =
-  new Set<FinanceLedgerFilter>(["todos", "por_pagar", "pagos"]);
+const dataDeOrdenacao = (row: FinanceLedgerRow): string | null =>
+  row.due_date ?? (row.row_kind === "cashflow" ? row.date : null);
 
 /**
- * Ordem de leitura de uma lista de contas a pagar: a mais antiga primeiro.
+ * UMA regra de ordem, igual nos cinco separadores: por data, do dia 1 ao 31.
  *
- * 🔴 O relato do dono era literalmente esta sequência: «primeiro dia 15,
- *    depois dia 10, depois 25». Sem ordenação, estas vistas herdavam a ordem
- *    do read model, que é por data DESCENDENTE — certa para um extracto de
- *    movimentos («o que aconteceu agora»), errada para vencimentos, onde põe
- *    o fim do mês no topo e esconde o que está prestes a vencer.
+ * 🔴 Esta função já teve três comportamentos diferentes ao mesmo tempo, e a
+ *    história explica porquê está agora reduzida a um só:
+ *
+ *      · «Fixos» e «Variáveis» ordenavam por `sort_order`, que se acreditava
+ *        ser uma ordem manual e intencional. Não é: `create_payment_atomic`
+ *        atribui-o como `max(sort_order) + 1` (092_payments_period_atomic.sql)
+ *        e não existe em toda a aplicação nenhuma forma de reordenar
+ *        pagamentos à mão. Era, literalmente, a ordem por que foram escritos
+ *        — e foi por isso que o dono continuou a ver «dia 15, dia 10, dia 25»
+ *        depois de a correcção das outras vistas já estar em produção.
+ *      · «Todos», «Por pagar» e «Pagos» não ordenavam nada e herdavam a ordem
+ *        do read model, que é por data DESCENDENTE. Correcto para um extracto
+ *        de movimentos, errado para vencimentos: põe o fim do mês no topo.
+ *      · «Movimentos manuais» herdava a mesma ordem descendente.
+ *
+ *    Preservar `sort_order` seria preservar um acidente. A coluna continua na
+ *    base de dados, intacta — se algum dia existir reordenação manual a
+ *    sério, tem por onde voltar.
  *
  *    Três decisões que valem a pena ficar escritas:
  *
- *    1. Compara-se `due_date` como TEXTO. Uma data civil `YYYY-MM-DD` ordena
+ *    1. As datas comparam-se como TEXTO. Uma data civil `YYYY-MM-DD` ordena
  *       lexicograficamente na mesma ordem em que ordena cronologicamente, e
  *       assim nunca se converte para `Date` — o que traria fuso horário para
  *       dentro de uma comparação que não tem hora nenhuma. Em Lisboa, no
  *       verão, `new Date("2026-09-01")` é 31 de Agosto às 23h00 UTC; é essa
  *       classe de desvio que aqui não pode existir.
  *
- *    2. Sem vencimento vai para o FIM, nunca é escondida. Uma obrigação sem
- *       data ainda não tem lugar no calendário do mês, e atribuir-lhe um (dia
- *       1, último dia) era afirmar uma certeza que ninguém escreveu. Entre si,
- *       essas linhas mantêm a ordem com que chegaram — `Array.sort` é estável
- *       desde o ES2019 e o read model já as entrega ordenadas. É também o que
- *       mantém os movimentos de caixa da vista «Todos» exactamente na ordem
- *       que sempre tiveram.
+ *    2. Sem data vai para o FIM, nunca é escondida. Entre si, essas linhas
+ *       mantêm a ordem com que chegaram — `Array.sort` é estável desde o
+ *       ES2019 e o read model já as entrega numa ordem determinística.
  *
- *    3. Duas contas no mesmo dia desempatam por descrição e depois por
+ *    3. Duas linhas no mesmo dia desempatam por descrição e depois por
  *       identidade. Sem isso, a ordem podia mudar entre renderizações e a
  *       lista mexia-se debaixo dos olhos de quem a lê.
+ *
+ *    O `_filter` deixou de influenciar a ordem, mas continua no parâmetro — o
+ *    sublinhado diz isso mesmo. Fica porque é a vista que se está a ordenar:
+ *    se um dia um separador voltar a precisar de ordem própria, o sítio já
+ *    existe e nenhum chamador tem de mudar.
  */
-function ordenarPorVencimento(rows: FinanceLedgerRow[]): FinanceLedgerRow[] {
+export function sortFinanceLedgerForView(
+  rows: FinanceLedgerRow[],
+  _filter: FinanceLedgerFilter,
+): FinanceLedgerRow[] {
   return [...rows].sort((a, b) => {
-    if (a.due_date === null || b.due_date === null) {
+    const dataA = dataDeOrdenacao(a);
+    const dataB = dataDeOrdenacao(b);
+    if (dataA === null || dataB === null) {
       // Só a AUSÊNCIA se decide aqui. Se faltarem as duas, devolve-se 0 e a
       // estabilidade do sort preserva a ordem de entrada.
-      if (a.due_date === b.due_date) return 0;
-      return a.due_date === null ? 1 : -1;
+      if (dataA === dataB) return 0;
+      return dataA === null ? 1 : -1;
     }
-    return a.due_date.localeCompare(b.due_date)
+    return dataA.localeCompare(dataB)
       || a.description.localeCompare(b.description, "pt-PT")
       || a.row_id.localeCompare(b.row_id);
   });
-}
-
-export function sortFinanceLedgerForView(
-  rows: FinanceLedgerRow[],
-  filter: FinanceLedgerFilter,
-): FinanceLedgerRow[] {
-  if (VISTAS_POR_VENCIMENTO.has(filter)) return ordenarPorVencimento(rows);
-  if (filter !== "fixos" && filter !== "variaveis") return rows;
-  return [...rows].sort((a, b) =>
-    (a.sort_order ?? Number.MAX_SAFE_INTEGER) - (b.sort_order ?? Number.MAX_SAFE_INTEGER)
-    || a.description.localeCompare(b.description, "pt-PT")
-    || a.row_id.localeCompare(b.row_id),
-  );
 }
 
 export function categorySlices(
