@@ -19,10 +19,13 @@
 //    de categoria, um de origem, uma pesquisa e uma paginação — qualquer um
 //    deles podia desfazer a ordem sem que um teste de unidade desse por isso.
 //
-// 🔴 E há uma regra que esta correcção NÃO pode destruir: «Fixos» e
-//    «Variáveis» ordenam por `sort_order`, uma ordem intencional própria
-//    daquelas listas. Ordenar melhor uma vista nunca pode custar a ordem de
-//    outra — por isso as duas estão aqui como regressão.
+// 🔴 A primeira versão desta correcção deixou «Fixos» e «Variáveis» de fora,
+//    para não destruir o que se julgava ser uma ordem manual. Não era: o
+//    `sort_order` é atribuído por `create_payment_atomic` como
+//    `max(sort_order) + 1` (092_payments_period_atomic.sql) e não há em toda
+//    a aplicação forma de reordenar pagamentos à mão. Era a ordem por que
+//    foram escritos — e o dono voltou com a fotografia de «Variáveis» ainda
+//    desordenado. Hoje a regra é uma só, igual nos cinco separadores.
 // ============================================================================
 
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
@@ -102,6 +105,14 @@ async function mostrar(
     );
   });
   return container;
+}
+
+/** Os separadores identificam-se pelo texto que o utilizador lê. */
+async function clickText(text: string) {
+  const button = [...document.querySelectorAll("button")]
+    .find((item) => item.textContent?.includes(text));
+  if (!button) throw new Error(`botao nao encontrado: ${text}`);
+  await act(async () => button.click());
 }
 
 /** Os botões de paginação são só ícones — identificam-se pelo `aria-label`. */
@@ -207,41 +218,63 @@ describe("B. a ordenação acontece antes da paginação", () => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════
-// C+D. A ORDEM MANUAL DE FIXOS E VARIÁVEIS NÃO SE PERDE
+// C+D. FIXOS E VARIÁVEIS TAMBÉM SE LEEM POR VENCIMENTO
 // ═══════════════════════════════════════════════════════════════════════════
 //
-// `sort_order` é uma ordem intencional daquelas duas listas. A correcção dos
-// vencimentos não lhe pode tocar — por isso os dados abaixo têm `due_date`
-// DELIBERADAMENTE ao contrário do `sort_order`: se a nova regra vazasse para
-// estas vistas, o teste via-o imediatamente.
-describe("C+D. Fixos e Variáveis mantêm sort_order", () => {
-  const comOrdemManual = (kind: "fixo" | "variavel") => buildFinanceLedger({
+// 🔴 Os dados abaixo têm `sort_order` DELIBERADAMENTE ao contrário do
+//    `due_date` — que é a forma real como estas listas aparecem, já que o
+//    `sort_order` é a ordem de criação e ninguém cria as contas pela ordem
+//    em que elas vencem. Se a ordem de criação voltasse a mandar, estes dois
+//    testes viam-no imediatamente.
+describe("C+D. Fixos e Variáveis ordenam por vencimento, não por criação", () => {
+  const ordemDeCriacaoAoContrario = (kind: "fixo" | "variavel") => buildFinanceLedger({
     payments: [
-      pagamento({ id: "p1", kind, description: "Primeiro", sort_order: 1, due_date: "2026-09-28" }),
-      pagamento({ id: "p2", kind, description: "Segundo", sort_order: 2, due_date: "2026-09-15" }),
-      pagamento({ id: "p3", kind, description: "Terceiro", sort_order: 3, due_date: "2026-09-01" }),
+      pagamento({ id: "p1", kind, description: "Criado primeiro", sort_order: 1, due_date: "2026-09-28" }),
+      pagamento({ id: "p2", kind, description: "Criado segundo", sort_order: 2, due_date: "2026-09-15" }),
+      pagamento({ id: "p3", kind, description: "Criado terceiro", sort_order: 3, due_date: "2026-09-01" }),
     ],
     cashflows: [],
   });
 
-  it("🔴 Fixos: sort_order continua a mandar, mesmo com vencimentos ao contrário", () => {
-    const rows = comOrdemManual("fixo");
-    expect(sortFinanceLedgerForView(rows, "fixos").map((row) => row.description))
-      .toEqual(["Primeiro", "Segundo", "Terceiro"]);
+  it("🔴 Fixos: o vencimento manda, mesmo com a ordem de criação ao contrário", () => {
+    const rows = ordemDeCriacaoAoContrario("fixo");
+    const ordenadas = sortFinanceLedgerForView(rows, "fixos");
+    expect(ordenadas).toHaveLength(3);
+    expect(ordenadas.map((row) => row.due_date))
+      .toEqual(["2026-09-01", "2026-09-15", "2026-09-28"]);
   });
 
-  it("🔴 Variáveis: sort_order continua a mandar, mesmo com vencimentos ao contrário", () => {
-    const rows = comOrdemManual("variavel");
-    expect(sortFinanceLedgerForView(rows, "variaveis").map((row) => row.description))
-      .toEqual(["Primeiro", "Segundo", "Terceiro"]);
+  it("🔴 Variáveis: o vencimento manda, mesmo com a ordem de criação ao contrário", () => {
+    const rows = ordemDeCriacaoAoContrario("variavel");
+    const ordenadas = sortFinanceLedgerForView(rows, "variaveis");
+    expect(ordenadas).toHaveLength(3);
+    expect(ordenadas.map((row) => row.due_date))
+      .toEqual(["2026-09-01", "2026-09-15", "2026-09-28"]);
   });
 
-  it("sem sort_order, Fixos desempata por descrição e identidade — como antes", () => {
+  // A fotografia que o dono enviou do separador «Variáveis», no DOM real.
+  it("🔴 o separador Variáveis, no ecrã, lê-se do dia mais cedo ao mais tarde", async () => {
+    const el = await mostrar(buildFinanceLedger({
+      payments: [
+        pagamento({ id: "v1", kind: "variavel", description: "HIGIAPROL FT2026/605", sort_order: 1, due_date: "2026-09-28" }),
+        pagamento({ id: "v2", kind: "variavel", description: "Mecanico - FT FIZ2026/116", sort_order: 2, due_date: "2026-09-18" }),
+        pagamento({ id: "v3", kind: "variavel", description: "Endesa - garagem 1", sort_order: 3, due_date: "2026-09-04" }),
+        pagamento({ id: "v4", kind: "variavel", description: "Plano de pagamento - Corte real 56", sort_order: 4, due_date: "2026-09-28" }),
+      ],
+      cashflows: [],
+    }));
+    await clickText("Variáveis");
+    const vencimentos = colunaVencimento(el);
+    expect(vencimentos).toHaveLength(4);
+    expect(vencimentos).toEqual(["04/09/2026", "18/09/2026", "28/09/2026", "28/09/2026"]);
+  });
+
+  it("no mesmo dia, desempata por descrição e identidade", () => {
     const rows = buildFinanceLedger({
       payments: [
-        pagamento({ id: "p3", kind: "fixo", description: "Zoo", sort_order: 2 }),
-        pagamento({ id: "p2", kind: "fixo", description: "Alfa", sort_order: 1 }),
-        pagamento({ id: "p1", kind: "fixo", description: "Beta", sort_order: 1 }),
+        pagamento({ id: "p3", kind: "fixo", description: "Zoo", sort_order: 2, due_date: "2026-09-10" }),
+        pagamento({ id: "p2", kind: "fixo", description: "Alfa", sort_order: 1, due_date: "2026-09-10" }),
+        pagamento({ id: "p1", kind: "fixo", description: "Beta", sort_order: 1, due_date: "2026-09-10" }),
       ],
       cashflows: [],
     });
@@ -341,15 +374,14 @@ describe("H. o mesmo vencimento produz sempre a mesma ordem", () => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════
-// ESCOPO — o que esta correcção NÃO faz
+// MOVIMENTOS MANUAIS — «qualquer coisa de pagamentos e registos tem de estar
+// em ordem»
 // ═══════════════════════════════════════════════════════════════════════════
 //
-// 🔴 Esta task é a ordem dos PAGAMENTOS. Não é uma redefinição da ordem do
-//    fluxo de caixa. Um movimento manual já aconteceu e não tem vencimento
-//    nenhum: dar-lhe uma posição por `due_date` seria outra alteração, com
-//    outros riscos, à boleia desta.
-describe("escopo: o fluxo de caixa mantém a ordem que sempre teve", () => {
-  it("«Manuais» não é reordenado por esta correcção", () => {
+// Um movimento de caixa não tem vencimento: já aconteceu. Entra pelo dia em
+// que aconteceu — a única data que tem — e não amontoado no fim da lista.
+describe("movimentos manuais entram pela data em que aconteceram", () => {
+  it("«Manuais» lê-se do mais antigo ao mais recente", () => {
     const rows = filterFinanceLedger(buildFinanceLedger({
       payments: [],
       cashflows: [
@@ -358,25 +390,26 @@ describe("escopo: o fluxo de caixa mantém a ordem que sempre teve", () => {
         movimento({ id: "c-12", date: "2026-09-12" }),
       ],
     }), "manuais");
-    expect(sortFinanceLedgerForView(rows, "manuais")).toEqual(rows);
+    const ordenadas = sortFinanceLedgerForView(rows, "manuais");
+    expect(ordenadas).toHaveLength(3);
+    expect(ordenadas.map((row) => row.row_id))
+      .toEqual(["cashflow:c-05", "cashflow:c-12", "cashflow:c-20"]);
   });
 
-  it("em «Todos», os movimentos ficam no fim e guardam a ordem de origem", () => {
+  it("em «Todos», pagamentos e movimentos intercalam-se por data, como um calendário", () => {
     const ledger = buildFinanceLedger({
       payments: [pagamento({ id: "p-20", description: "Seguro", due_date: "2026-09-20" })],
       cashflows: [
         movimento({ id: "c-05", date: "2026-09-05" }),
-        movimento({ id: "c-18", date: "2026-09-18" }),
+        movimento({ id: "c-28", date: "2026-09-28" }),
       ],
     });
     const ordenadas = sortFinanceLedgerForView(ledger, "todos");
 
     // Nada se perde: o pagamento e os dois movimentos continuam todos lá.
     expect(ordenadas).toHaveLength(ledger.length);
-    expect(ordenadas[0]?.row_id).toBe("payment:p-20");
-    // Os movimentos mantêm entre si a ordem com que o read model os entregou.
-    const movimentos = ordenadas.slice(1).map((row) => row.row_id);
-    expect(movimentos).toEqual(ledger.filter((row) => row.row_kind === "cashflow").map((row) => row.row_id));
+    expect(ordenadas.map((row) => row.row_id))
+      .toEqual(["cashflow:c-05", "payment:p-20", "cashflow:c-28"]);
   });
 });
 

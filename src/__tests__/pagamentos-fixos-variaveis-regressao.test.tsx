@@ -462,9 +462,12 @@ describe("4. provas DOM/runtime do P0 fixos/variáveis", () => {
   it("Débito direto: Sim/Não/— aparecem e edição preserva valor", async () => {
     const el = await mostrar(buildFinanceLedger({
       payments: [
-        pagamento({ id: "p-dd-sim", kind: "fixo", description: "DD sim", direct_debit: true, sort_order: 1 }),
-        pagamento({ id: "p-dd-nao", kind: "fixo", description: "DD nao", direct_debit: false, sort_order: 2 }),
-        pagamento({ id: "p-dd-null", kind: "fixo", description: "DD null", direct_debit: null, sort_order: 3 }),
+        // Vencimentos distintos e crescentes: a lista ordena-se por data, por
+        // isso é o dia — e não a ordem de criação — que fixa a sequência
+        // esperada das linhas.
+        pagamento({ id: "p-dd-sim", kind: "fixo", description: "DD sim", direct_debit: true, due_date: "2026-08-01" }),
+        pagamento({ id: "p-dd-nao", kind: "fixo", description: "DD nao", direct_debit: false, due_date: "2026-08-02" }),
+        pagamento({ id: "p-dd-null", kind: "fixo", description: "DD null", direct_debit: null, due_date: "2026-08-03" }),
       ],
       cashflows: [],
     }));
