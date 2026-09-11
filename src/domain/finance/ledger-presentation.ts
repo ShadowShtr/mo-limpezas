@@ -329,10 +329,71 @@ export function financeLedgerMetrics(
   };
 }
 
+/**
+ * As vistas em que a pergunta é «o que vence a seguir».
+ *
+ * 🔴 `fixos` e `variaveis` NÃO entram aqui, de propósito. Nessas duas a ordem
+ *    é `sort_order` — uma ordem intencional, própria daquelas listas — e
+ *    substituí-la por vencimento destruiria uma regra que já existe. Ordenar
+ *    melhor uma vista nunca pode custar a ordem de outra.
+ *
+ *    `manuais` também fica de fora: são movimentos de caixa, que já
+ *    aconteceram e não têm vencimento nenhum. Dar-lhes uma ordem por
+ *    `due_date` seria redesenhar a ordem do fluxo de caixa a pretexto de
+ *    arrumar os pagamentos — outra alteração, com outros riscos.
+ */
+const VISTAS_POR_VENCIMENTO: ReadonlySet<FinanceLedgerFilter> =
+  new Set<FinanceLedgerFilter>(["todos", "por_pagar", "pagos"]);
+
+/**
+ * Ordem de leitura de uma lista de contas a pagar: a mais antiga primeiro.
+ *
+ * 🔴 O relato do dono era literalmente esta sequência: «primeiro dia 15,
+ *    depois dia 10, depois 25». Sem ordenação, estas vistas herdavam a ordem
+ *    do read model, que é por data DESCENDENTE — certa para um extracto de
+ *    movimentos («o que aconteceu agora»), errada para vencimentos, onde põe
+ *    o fim do mês no topo e esconde o que está prestes a vencer.
+ *
+ *    Três decisões que valem a pena ficar escritas:
+ *
+ *    1. Compara-se `due_date` como TEXTO. Uma data civil `YYYY-MM-DD` ordena
+ *       lexicograficamente na mesma ordem em que ordena cronologicamente, e
+ *       assim nunca se converte para `Date` — o que traria fuso horário para
+ *       dentro de uma comparação que não tem hora nenhuma. Em Lisboa, no
+ *       verão, `new Date("2026-09-01")` é 31 de Agosto às 23h00 UTC; é essa
+ *       classe de desvio que aqui não pode existir.
+ *
+ *    2. Sem vencimento vai para o FIM, nunca é escondida. Uma obrigação sem
+ *       data ainda não tem lugar no calendário do mês, e atribuir-lhe um (dia
+ *       1, último dia) era afirmar uma certeza que ninguém escreveu. Entre si,
+ *       essas linhas mantêm a ordem com que chegaram — `Array.sort` é estável
+ *       desde o ES2019 e o read model já as entrega ordenadas. É também o que
+ *       mantém os movimentos de caixa da vista «Todos» exactamente na ordem
+ *       que sempre tiveram.
+ *
+ *    3. Duas contas no mesmo dia desempatam por descrição e depois por
+ *       identidade. Sem isso, a ordem podia mudar entre renderizações e a
+ *       lista mexia-se debaixo dos olhos de quem a lê.
+ */
+function ordenarPorVencimento(rows: FinanceLedgerRow[]): FinanceLedgerRow[] {
+  return [...rows].sort((a, b) => {
+    if (a.due_date === null || b.due_date === null) {
+      // Só a AUSÊNCIA se decide aqui. Se faltarem as duas, devolve-se 0 e a
+      // estabilidade do sort preserva a ordem de entrada.
+      if (a.due_date === b.due_date) return 0;
+      return a.due_date === null ? 1 : -1;
+    }
+    return a.due_date.localeCompare(b.due_date)
+      || a.description.localeCompare(b.description, "pt-PT")
+      || a.row_id.localeCompare(b.row_id);
+  });
+}
+
 export function sortFinanceLedgerForView(
   rows: FinanceLedgerRow[],
   filter: FinanceLedgerFilter,
 ): FinanceLedgerRow[] {
+  if (VISTAS_POR_VENCIMENTO.has(filter)) return ordenarPorVencimento(rows);
   if (filter !== "fixos" && filter !== "variaveis") return rows;
   return [...rows].sort((a, b) =>
     (a.sort_order ?? Number.MAX_SAFE_INTEGER) - (b.sort_order ?? Number.MAX_SAFE_INTEGER)
