@@ -15,6 +15,7 @@ import { getMapServices, type MapClockPoint, type MapService, type MapTeam } fro
 import { createClient } from "@/lib/supabase/client";
 import { isValidIsoDateString } from "@/lib/utils";
 import { getMapStyle } from "@/lib/map-style";
+import { MapAttribution } from "@/components/map/map-attribution";
 
 // Calculado uma vez: o token é inlined na compilação, e um objeto novo a cada
 // render faria o MapLibre reaplicar o estilo sem necessidade.
@@ -229,6 +230,10 @@ export function MapView({ initialServices, initialClockPoints, initialTeams, ini
           mapStyle={MAP_STYLE}
           reuseMaps
           onLoad={() => mapRef.current?.resize()}
+          // Substituído por `MapAttribution`, partilhado com a marcação do
+          // ponto de um local: o logótipo e os links que os tiles do Mapbox
+          // exigem não cabem numa string de atribuição. Substituição completa.
+          attributionControl={false}
         >
           <NavigationControl position="top-right" />
           <ScaleControl unit="metric" position="bottom-left" />
@@ -275,6 +280,8 @@ export function MapView({ initialServices, initialClockPoints, initialTeams, ini
             </Marker>
           ))}
         </MapGL>
+
+        <MapAttribution />
 
         {selectedClockPoint && (
           <div className="absolute top-4 right-4 w-72 bg-white rounded-xl shadow-lg border border-[var(--color-border)] p-4 z-10">

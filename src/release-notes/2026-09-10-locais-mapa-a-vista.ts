@@ -6,8 +6,8 @@ export const nota: ReleaseNote = {
   kind: "correcao",
   title: "Mapas: já mostram as ruas e vão para a morada",
   message:
-    "O mapa dos locais estava a aparecer com um aviso por cima e sem detalhe. Já está corrigido: " +
-    "agora mostra nomes de rua e números de porta. Assim que escreves a morada, o mapa vai sozinho " +
-    "para essa zona, e se o local ainda não tem ponto marcado o mapa abre logo na ficha — é só tocar " +
-    "onde é a entrada. Isto vale também para o mapa do dia, em Mapa.",
+    "Os mapas estavam a aparecer com um aviso carimbado por cima e sem detalhe. Já está corrigido: " +
+    "mostram nomes de rua e números de porta, tanto nos locais como no mapa do dia. Assim que " +
+    "escreves a morada, o mapa vai sozinho para essa zona, e se o local ainda não tem ponto marcado " +
+    "o mapa abre logo na ficha — é só tocar onde é a entrada.",
 };

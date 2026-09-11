@@ -1,12 +1,12 @@
 {
   "generatedBy": "scripts/audit-file-inventory.mjs",
-  "totalFiles": 897,
+  "totalFiles": 899,
   "byStatus": {
-    "MANTER": 874,
+    "MANTER": 876,
     "STANDBY": 23
   },
   "byCategory": {
-    "test": 211,
+    "test": 212,
     "route-ui": 140,
     "migration": 128,
     "lib": 75,
@@ -15,7 +15,7 @@
     "doc": 47,
     "server-action": 44,
     "src-other": 40,
-    "component": 31,
+    "component": 32,
     "doc-historico": 16,
     "api-route": 16,
     "config": 12,
@@ -29,7 +29,7 @@
     "supabase-other": 2
   },
   "byConfidence": {
-    "alta": 876,
+    "alta": 878,
     "média": 15,
     "baixa": 6
   },
@@ -6856,6 +6856,30 @@
       }
     },
     {
+      "path": "src/__tests__/map-attribution.test.tsx",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "unknownCast": 1
+      },
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
       "path": "src/__tests__/map-style.test.ts",
       "category": "test",
       "status": "MANTER",
@@ -6866,7 +6890,9 @@
       "referencedBy": [],
       "sideEffects": [],
       "risks": [],
-      "signals": {},
+      "signals": {
+        "unknownCast": 1
+      },
       "action": "nenhuma",
       "reason": "suite de testes — corre por convenção do vitest",
       "manualDecision": false,
@@ -16307,6 +16333,34 @@
       }
     },
     {
+      "path": "src/components/map/map-attribution.tsx",
+      "category": "component",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 3,
+      "consumerSample": [
+        "src/__tests__/map-attribution.test.tsx",
+        "src/app/(dashboard)/dashboard/mapa/_components/map-view.tsx",
+        "src/components/map/pin-picker.tsx"
+      ],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "clientComponent": 1
+      },
+      "action": "nenhuma",
+      "reason": "em uso: 3 consumidor(es)",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
       "path": "src/components/map/pin-picker.tsx",
       "category": "component",
       "status": "MANTER",
@@ -19395,11 +19449,11 @@
       "category": "lib",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 3,
+      "consumers": 4,
       "consumerSample": [
         "src/__tests__/map-style.test.ts",
         "src/app/(dashboard)/dashboard/mapa/_components/map-view.tsx",
-        "src/components/map/pin-picker.tsx"
+        "src/components/map/map-attribution.tsx"
       ],
       "autoLoaded": false,
       "referencedBy": [],
@@ -19411,7 +19465,7 @@
         "env": 2
       },
       "action": "nenhuma",
-      "reason": "em uso: 3 consumidor(es)",
+      "reason": "em uso: 4 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,

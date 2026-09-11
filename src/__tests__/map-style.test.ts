@@ -16,7 +16,7 @@
 // ============================================================================
 
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { getMapStyle, hasDetailedTiles } from "@/lib/map-style";
+import { getMapStyle, hasDetailedTiles, getMapProvider, isUsablePublicMapboxToken } from "@/lib/map-style";
 
 function urlDosTiles(style: ReturnType<typeof getMapStyle>): string {
   const fonte = Object.values(style.sources)[0] as { tiles?: string[] };
@@ -30,22 +30,26 @@ function atribuicao(style: ReturnType<typeof getMapStyle>): string {
 
 afterEach(() => vi.unstubAllEnvs());
 
+const PK = "pk.eyJ1IjoiZW5zYWlvIiwiYSI6ImVuc2Fpby1zZW0tdmFsb3ItcmVhbCJ9";
+const SK = "sk.eyJ1IjoiZW5zYWlvIiwiYSI6InNlZ3JlZG8tcXVlLW5hby1wb2RlLXNhaXIifQ";
+const TK = "tk.eyJ1IjoiZW5zYWlvIiwiYSI6InRlbXBvcmFyaW8tbmFvLWNpcmN1bGEifQ";
+
 describe("com token do Mapbox configurado", () => {
   it("🔴 não serve tiles da CARTO — foi de lá que veio o carimbo", () => {
-    vi.stubEnv("NEXT_PUBLIC_MAPBOX_TOKEN", "pk.token-de-ensaio");
+    vi.stubEnv("NEXT_PUBLIC_MAPBOX_TOKEN", PK);
     expect(urlDosTiles(getMapStyle())).not.toContain("cartocdn");
   });
 
   it("pede o estilo de ruas, que é o que traz nomes de rua e números de porta", () => {
-    vi.stubEnv("NEXT_PUBLIC_MAPBOX_TOKEN", "pk.token-de-ensaio");
+    vi.stubEnv("NEXT_PUBLIC_MAPBOX_TOKEN", PK);
     const url = urlDosTiles(getMapStyle());
     expect(url).toContain("api.mapbox.com");
     expect(url).toContain("streets-v12");
-    expect(url).toContain("access_token=pk.token-de-ensaio");
+    expect(url).toContain(`access_token=${PK}`);
   });
 
   it("usa tiles raster: o MapLibre não resolve URLs mapbox://", () => {
-    vi.stubEnv("NEXT_PUBLIC_MAPBOX_TOKEN", "pk.token-de-ensaio");
+    vi.stubEnv("NEXT_PUBLIC_MAPBOX_TOKEN", PK);
     const style = getMapStyle();
     const fonte = Object.values(style.sources)[0] as { type: string };
     expect(fonte.type).toBe("raster");
@@ -53,14 +57,14 @@ describe("com token do Mapbox configurado", () => {
   });
 
   it("🔴 credita o Mapbox e o OpenStreetMap — é exigido pelas licenças", () => {
-    vi.stubEnv("NEXT_PUBLIC_MAPBOX_TOKEN", "pk.token-de-ensaio");
+    vi.stubEnv("NEXT_PUBLIC_MAPBOX_TOKEN", PK);
     const texto = atribuicao(getMapStyle());
     expect(texto).toContain("Mapbox");
     expect(texto).toContain("OpenStreetMap");
   });
 
   it("assume detalhe ao nível do número de porta", () => {
-    vi.stubEnv("NEXT_PUBLIC_MAPBOX_TOKEN", "pk.token-de-ensaio");
+    vi.stubEnv("NEXT_PUBLIC_MAPBOX_TOKEN", PK);
     expect(hasDetailedTiles()).toBe(true);
   });
 });
@@ -89,4 +93,82 @@ describe("sem token configurado", () => {
     expect(style.layers.length).toBeGreaterThan(0);
     expect(Object.keys(style.sources).length).toBeGreaterThan(0);
   });
+
+  it("com a variável em falta comporta-se como sem token", () => {
+    vi.stubEnv("NEXT_PUBLIC_MAPBOX_TOKEN", undefined as unknown as string);
+    expect(getMapProvider()).toBe("osm");
+    expect(urlDosTiles(getMapStyle())).toContain("tile.openstreetmap.org");
+  });
+});
+
+// ============================================================================
+// 🔴 A prova que mais importa neste ficheiro
+// ============================================================================
+// A versão anterior aceitava QUALQUER string truthy e punha-a no URL dos
+// tiles — um URL que o browser pede em claro e que qualquer pessoa vê nas
+// ferramentas de rede. Um token `sk.` é secreto e dá acesso à conta Mapbox;
+// um `tk.` é temporário e não deve circular. Bastava alguém pôr o token
+// errado na variável de ambiente para publicar uma credencial.
+//
+// Na dúvida, OSM. Um mapa mais pobre é sempre melhor do que um segredo
+// publicado.
+// ============================================================================
+describe("tokens que NÃO podem chegar ao browser", () => {
+  const proibidos: ReadonlyArray<readonly [string, string]> = [
+    ["sk. — token secreto, dá acesso à conta", SK],
+    ["tk. — token temporário, não circula", TK],
+    ["pk. truncado, sem corpo nenhum", "pk."],
+    ["pk. curto de mais para ser real", "pk.abc"],
+    ["marcador de posição por preencher", "COLOCAR_TOKEN_AQUI"],
+    ["espaços em branco", "   "],
+    ["um sim qualquer, de um .env mal copiado", "true"],
+  ];
+
+  it.each(proibidos)("%s → OSM", (_descricao, token) => {
+    vi.stubEnv("NEXT_PUBLIC_MAPBOX_TOKEN", token);
+    expect(isUsablePublicMapboxToken(token)).toBe(false);
+    expect(getMapProvider()).toBe("osm");
+    expect(hasDetailedTiles()).toBe(false);
+    expect(urlDosTiles(getMapStyle())).toContain("tile.openstreetmap.org");
+  });
+
+  it("🔴 o valor secreto não aparece em lado nenhum do estilo", () => {
+    vi.stubEnv("NEXT_PUBLIC_MAPBOX_TOKEN", SK);
+    const serializado = JSON.stringify(getMapStyle());
+    expect(serializado).not.toContain(SK);
+    expect(serializado).not.toContain("sk.");
+    expect(serializado).not.toContain("access_token");
+  });
+
+  it("🔴 o mesmo para um token temporário", () => {
+    vi.stubEnv("NEXT_PUBLIC_MAPBOX_TOKEN", TK);
+    const serializado = JSON.stringify(getMapStyle());
+    expect(serializado).not.toContain(TK);
+    expect(serializado).not.toContain("tk.");
+  });
+
+  it("aceita um pk. real com espaços à volta — é o erro de cópia mais comum", () => {
+    vi.stubEnv("NEXT_PUBLIC_MAPBOX_TOKEN", `  ${PK}  `);
+    expect(getMapProvider()).toBe("mapbox");
+    expect(urlDosTiles(getMapStyle())).toContain(`access_token=${PK}`);
+  });
+});
+
+describe("uma só decisão, em vez de condições parecidas espalhadas", () => {
+  // Duas condições em sítios diferentes acabariam por divergir, e a que
+  // divergisse seria a que põe o token no URL.
+  it.each([
+    ["pk. válido", PK, "mapbox", true],
+    ["sk. secreto", SK, "osm", false],
+    ["vazio", "", "osm", false],
+  ] as ReadonlyArray<readonly [string, string, string, boolean]>)(
+    "%s: provider, estilo e hasDetailedTiles dizem todos o mesmo",
+    (_d, token, provider, detalhado) => {
+      vi.stubEnv("NEXT_PUBLIC_MAPBOX_TOKEN", token);
+      const usaMapbox = urlDosTiles(getMapStyle()).includes("api.mapbox.com");
+      expect(getMapProvider()).toBe(provider);
+      expect(hasDetailedTiles()).toBe(detalhado);
+      expect(usaMapbox).toBe(provider === "mapbox");
+    },
+  );
 });

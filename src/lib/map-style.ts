@@ -65,15 +65,45 @@ function mapboxStyle(token: string): StyleSpecification {
   };
 }
 
-/** O token é `NEXT_PUBLIC_*`, portanto está no bundle do browser — é assim que
- *  o Mapbox espera que um token público de leitura seja usado. */
+export type MapProvider = "mapbox" | "osm";
+
+/**
+ * 🔴 A ÚNICA regra que decide se o Mapbox é usado. Tudo o resto neste módulo
+ *    deriva daqui — duas condições parecidas em sítios diferentes acabariam
+ *    por divergir, e a que divergisse seria a que põe o token no URL.
+ *
+ *    O token entra num URL que o browser pede em claro. Um token `pk.` é
+ *    público por desenho e é assim que o Mapbox espera que seja usado. Um
+ *    `sk.` é secreto e dá acesso à conta; um `tk.` é temporário e não deve
+ *    circular. Qualquer um deles num URL do browser é uma fuga de credencial,
+ *    e a versão anterior deste ficheiro punha lá **qualquer string** que
+ *    estivesse na variável de ambiente.
+ *
+ *    Na dúvida, OSM: um mapa mais pobre é sempre melhor do que um segredo
+ *    publicado. Fail-closed.
+ */
+export function isUsablePublicMapboxToken(token: string | null | undefined): boolean {
+  if (typeof token !== "string") return false;
+  const limpo = token.trim();
+  // `pk.` e mais nada: nem `sk.`, nem `tk.`, nem um `pk.` truncado ou com
+  // caracteres que não pertencem a um token. O comprimento mínimo rejeita
+  // marcadores de posição como "pk." ou "pk.xxx".
+  return /^pk\.[A-Za-z0-9._-]{20,}$/.test(limpo);
+}
+
+/** Qual a fonte de tiles em uso. A UI usa isto para o branding não dizer
+ *  "Mapbox" quando os tiles vieram do OpenStreetMap. */
+export function getMapProvider(): MapProvider {
+  return isUsablePublicMapboxToken(process.env.NEXT_PUBLIC_MAPBOX_TOKEN) ? "mapbox" : "osm";
+}
+
 export function getMapStyle(): StyleSpecification {
   const token = process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
-  return token ? mapboxStyle(token) : OSM_FALLBACK;
+  return isUsablePublicMapboxToken(token) ? mapboxStyle((token as string).trim()) : OSM_FALLBACK;
 }
 
 /** Verdadeiro quando há tiles com detalhe de número de porta. Serve para a UI
  *  não prometer o que a base de mapa não mostra. */
 export function hasDetailedTiles(): boolean {
-  return Boolean(process.env.NEXT_PUBLIC_MAPBOX_TOKEN);
+  return getMapProvider() === "mapbox";
 }

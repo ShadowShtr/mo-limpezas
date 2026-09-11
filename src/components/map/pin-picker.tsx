@@ -7,6 +7,7 @@ import { Crosshair, Loader2, MapPin, Undo2 } from "lucide-react";
 import { isValidCoord } from "@/lib/calculations";
 import { PORTUGAL_CENTER, formatCoord, roundCoord } from "@/lib/geocoding";
 import { getMapStyle } from "@/lib/map-style";
+import { MapAttribution } from "@/components/map/map-attribution";
 
 // Calculado uma vez: o token é inlined na compilação, e um objeto novo a cada
 // render faria o MapLibre reaplicar o estilo sem necessidade.
@@ -172,6 +173,10 @@ export function PinPicker({ lat, lng, onChange, focus, heightClass = "h-64" }: P
           mapStyle={MAP_STYLE}
           style={{ width: "100%", height: "100%" }}
           cursor="crosshair"
+          // Substituído por `MapAttribution`, que dá o logótipo e os links
+          // que uma string de atribuição não consegue dar. Substituição
+          // completa — ver o comentário desse componente.
+          attributionControl={false}
         >
           <NavigationControl position="top-right" showCompass={false} />
           {hasPin && (
@@ -186,6 +191,8 @@ export function PinPicker({ lat, lng, onChange, focus, heightClass = "h-64" }: P
             </Marker>
           )}
         </MapGL>
+
+        <MapAttribution />
 
         {!hasPin && (
           <div className="absolute inset-x-0 top-0 px-3 py-2 text-[11px] text-white bg-black/55 pointer-events-none">
