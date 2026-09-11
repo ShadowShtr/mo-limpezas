@@ -204,6 +204,59 @@ describe("UNDO_AFTER_GPS — desfazer depois de o GPS mover o pin", () => {
   });
 });
 
+describe("FOCUS — o mapa acompanha a morada que está a ser escrita", () => {
+  // 🔴 Origem: «preciso que quando eu coloque o endereço já apareça na
+  //    proximidade». O mapa abria em Portugal inteiro e era preciso navegar à
+  //    mão até à rua antes de conseguir marcar o que quer que fosse.
+  beforeEach(() => instalarGeolocation("ok"));
+
+  it("🔴 leva o mapa para o palpite da pesquisa, sem marcar ponto nenhum", async () => {
+    await montar(null, null);
+    flyTo.mockClear();
+
+    await act(async () => {
+      root.render(
+        <PinPicker lat={null} lng={null} onChange={onChange} focus={{ lat: 39.02, lng: -9.01 }} />,
+      );
+    });
+
+    const [args] = flyTo.mock.calls[0] as [{ center: [number, number] }];
+    expect(args.center).toEqual([-9.01, 39.02]);
+    expect(onChange, "um palpite não é uma decisão — não pode gravar coordenadas").not.toHaveBeenCalled();
+  });
+
+  it("🔴 não arrasta a câmara para longe do ponto que já está marcado", async () => {
+    await montar(ANTERIOR.lat, ANTERIOR.lng);
+    flyTo.mockClear();
+
+    await act(async () => {
+      root.render(
+        <PinPicker
+          lat={ANTERIOR.lat}
+          lng={ANTERIOR.lng}
+          onChange={onChange}
+          focus={{ lat: 39.02, lng: -9.01 }}
+        />,
+      );
+    });
+
+    expect(flyTo, "com pin marcado, o palpite da pesquisa não manda no mapa").not.toHaveBeenCalled();
+  });
+
+  it("ignora um palpite inválido em vez de mandar o mapa para lado nenhum", async () => {
+    await montar(null, null);
+    flyTo.mockClear();
+
+    await act(async () => {
+      root.render(
+        <PinPicker lat={null} lng={null} onChange={onChange} focus={{ lat: 999, lng: -9.01 }} />,
+      );
+    });
+
+    expect(flyTo).not.toHaveBeenCalled();
+  });
+});
+
 describe("clique e arrasto continuam sem fazer o mapa saltar", () => {
   beforeEach(() => instalarGeolocation("ok"));
 

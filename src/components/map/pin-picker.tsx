@@ -6,37 +6,24 @@ import MapGL, { Marker, NavigationControl, type MapRef, type MapLayerMouseEvent 
 import { Crosshair, Loader2, MapPin, Undo2 } from "lucide-react";
 import { isValidCoord } from "@/lib/calculations";
 import { PORTUGAL_CENTER, formatCoord, roundCoord } from "@/lib/geocoding";
+import { getMapStyle } from "@/lib/map-style";
+import { MapAttribution } from "@/components/map/map-attribution";
 
-/** Mesmo estilo raster do mapa operacional (`/dashboard/mapa`): tiles CARTO,
- *  sem token, já autorizados na CSP.
- *
- *  A `attribution` da fonte não é decorativa e não pode ser escondida: o
- *  MapLibre desenha-a através do `AttributionControl` que monta por omissão.
- *  Por isso este componente **não** passa `attributionControl={false}` — as
- *  licenças do OpenStreetMap e da CARTO exigem crédito visível a quem vê o
- *  mapa, e o mapa operacional já segue a mesma regra. */
-const MAP_STYLE = {
-  version: 8 as const,
-  sources: {
-    carto: {
-      type: "raster" as const,
-      tiles: [
-        "https://a.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png",
-        "https://b.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png",
-        "https://c.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png",
-      ],
-      tileSize: 256,
-      attribution: "© OpenStreetMap, © CARTO",
-    },
-  },
-  layers: [{ id: "carto-tiles", type: "raster" as const, source: "carto" }],
-};
+// Calculado uma vez: o token é inlined na compilação, e um objeto novo a cada
+// render faria o MapLibre reaplicar o estilo sem necessidade.
+const MAP_STYLE = getMapStyle();
 
 interface Props {
   lat: number | null;
   lng: number | null;
   /** Chamado sempre que o pin passa a estar noutro sítio. */
   onChange: (lat: number, lng: number) => void;
+  /** Sítio para onde levar o mapa **sem** marcar nada — o melhor palpite da
+   *  pesquisa enquanto a morada está a ser escrita. Serve para o mapa já estar
+   *  na zona certa quando chega a hora de tocar nele, em vez de mostrar o país
+   *  inteiro. Nunca mexe no mapa depois de haver pin: aí o ponto que interessa
+   *  é o que está marcado, não o palpite. */
+  focus?: { lat: number; lng: number } | null;
   heightClass?: string;
 }
 
@@ -58,7 +45,7 @@ interface Props {
  *    a pesquisa de morada não encontra o sítio, quem sabe onde ele é marca-o
  *    à mão. A morada continua a ser escrita por quem sabe.
  */
-export function PinPicker({ lat, lng, onChange, heightClass = "h-64" }: Props) {
+export function PinPicker({ lat, lng, onChange, focus, heightClass = "h-64" }: Props) {
   const mapRef = useRef<MapRef>(null);
   const hasPin = lat != null && lng != null && isValidCoord(lat, lng);
 
@@ -103,6 +90,17 @@ export function PinPicker({ lat, lng, onChange, heightClass = "h-64" }: Props) {
     lastExternal.current = key;
     centrarEm(lat, lng);
   }, [lat, lng, centrarEm]);
+
+  // Palpite da pesquisa: leva o mapa para a zona, sem marcar nada. Só enquanto
+  // não há pin — depois de haver ponto marcado, arrastar a câmara para um
+  // palpite seria tirar de vista aquilo que a pessoa acabou de decidir.
+  const focusLat = focus?.lat ?? null;
+  const focusLng = focus?.lng ?? null;
+  useEffect(() => {
+    if (hasPin) return;
+    if (focusLat == null || focusLng == null || !isValidCoord(focusLat, focusLng)) return;
+    centrarEm(focusLat, focusLng);
+  }, [focusLat, focusLng, hasPin, centrarEm]);
 
   /** Marca o pin e devolve a coordenada já arredondada — quem chama precisa
    *  dela para decidir se centra o mapa (ver `centrarEm`). */
@@ -175,6 +173,10 @@ export function PinPicker({ lat, lng, onChange, heightClass = "h-64" }: Props) {
           mapStyle={MAP_STYLE}
           style={{ width: "100%", height: "100%" }}
           cursor="crosshair"
+          // Substituído por `MapAttribution`, que dá o logótipo e os links
+          // que uma string de atribuição não consegue dar. Substituição
+          // completa — ver o comentário desse componente.
+          attributionControl={false}
         >
           <NavigationControl position="top-right" showCompass={false} />
           {hasPin && (
@@ -189,6 +191,8 @@ export function PinPicker({ lat, lng, onChange, heightClass = "h-64" }: Props) {
             </Marker>
           )}
         </MapGL>
+
+        <MapAttribution />
 
         {!hasPin && (
           <div className="absolute inset-x-0 top-0 px-3 py-2 text-[11px] text-white bg-black/55 pointer-events-none">

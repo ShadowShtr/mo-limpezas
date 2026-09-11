@@ -14,23 +14,13 @@ import { MapPin, X, Filter, Clock } from "lucide-react";
 import { getMapServices, type MapClockPoint, type MapService, type MapTeam } from "@/app/actions/map";
 import { createClient } from "@/lib/supabase/client";
 import { isValidIsoDateString } from "@/lib/utils";
+import { getMapStyle } from "@/lib/map-style";
+import { MapAttribution } from "@/components/map/map-attribution";
 
-const MAP_STYLE = {
-  version: 8 as const,
-  sources: {
-    carto: {
-      type: "raster" as const,
-      tiles: [
-        "https://a.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png",
-        "https://b.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png",
-        "https://c.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png",
-      ],
-      tileSize: 256,
-      attribution: "© OpenStreetMap, © CARTO",
-    },
-  },
-  layers: [{ id: "carto-tiles", type: "raster" as const, source: "carto" }],
-};
+// Calculado uma vez: o token é inlined na compilação, e um objeto novo a cada
+// render faria o MapLibre reaplicar o estilo sem necessidade.
+const MAP_STYLE = getMapStyle();
+
 
 const DEFAULT_VIEW = { longitude: -9.1393, latitude: 38.7223, zoom: 12 };
 
@@ -240,6 +230,10 @@ export function MapView({ initialServices, initialClockPoints, initialTeams, ini
           mapStyle={MAP_STYLE}
           reuseMaps
           onLoad={() => mapRef.current?.resize()}
+          // Substituído por `MapAttribution`, partilhado com a marcação do
+          // ponto de um local: o logótipo e os links que os tiles do Mapbox
+          // exigem não cabem numa string de atribuição. Substituição completa.
+          attributionControl={false}
         >
           <NavigationControl position="top-right" />
           <ScaleControl unit="metric" position="bottom-left" />
@@ -286,6 +280,8 @@ export function MapView({ initialServices, initialClockPoints, initialTeams, ini
             </Marker>
           ))}
         </MapGL>
+
+        <MapAttribution />
 
         {selectedClockPoint && (
           <div className="absolute top-4 right-4 w-72 bg-white rounded-xl shadow-lg border border-[var(--color-border)] p-4 z-10">
