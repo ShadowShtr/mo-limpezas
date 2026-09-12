@@ -16,11 +16,11 @@ import {
 } from "../../calendario/_components/service-create-sheet";
 import { safeFormat, isValidIsoDateString } from "@/lib/utils";
 import {
-  setServicePayment,
   type DailyBillingData,
   type DailyBillingRow,
 } from "@/app/actions/daily-billing";
 import { useDailyBillingQuery } from "./use-daily-billing-query";
+import { useDailyBillingPayments } from "./use-daily-billing-payments";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -68,10 +68,9 @@ export function DailyBillingClient({ initialDate, initialData, initialError, com
   const {
     date, data, error, loading, refresh, changeDay, updateData, reportError,
   } = useDailyBillingQuery(initialDate, initialData, initialError);
-  // Serviço com o editor de valor recebido aberto
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [amountInput, setAmountInput] = useState("");
-  const [savingId, setSavingId] = useState<string | null>(null);
+  const {
+    editingId, amountInput, savingIds, setAmountInput, startEdit, cancelEdit, applyPayment,
+  } = useDailyBillingPayments({ date, updateData, refresh, reportError });
   const [creating, setCreating] = useState(false);
 
   // Tempo real: qualquer alteração em `services` da empresa recarrega o dia
@@ -100,25 +99,6 @@ export function DailyBillingClient({ initialDate, initialData, initialError, com
     };
   }, [companyId, refresh]);
 
-  async function applyPayment(row: DailyBillingRow, status: "nao_informado" | "sinal_50" | "pago_total", amount?: number | null) {
-    setSavingId(row.id);
-    const res = await setServicePayment(row.id, status, amount);
-    setSavingId(null);
-    setEditingId(null);
-    if (!res.ok) { reportError(res.error); return; }
-    reportError(null);
-    // Atualização otimista local + refetch para consistência
-    updateData((prev) => {
-      if (!prev) return prev;
-      const patch = (r: DailyBillingRow) =>
-        r.id === row.id
-          ? { ...r, payment_status: status, paid_amount: amount ?? null, paid_at: new Date().toISOString() }
-          : r;
-      return { ...prev, day: prev.day.map(patch), pending: prev.pending.map(patch) };
-    });
-    void refresh();
-  }
-
   const day = data?.day ?? [];
   const pending = (data?.pending ?? []).filter((r) => !r.is_avenca);
   const vatRate = data?.vatRate ?? 23;
@@ -134,7 +114,7 @@ export function DailyBillingClient({ initialDate, initialData, initialError, com
   const dayLabel = safeFormat(new Date(`${date}T12:00:00`), "EEEE, d 'de' MMMM", { locale: pt });
 
   function selectDay(newDate: string) {
-    setEditingId(null);
+    cancelEdit();
     changeDay(newDate);
   }
 
@@ -255,12 +235,12 @@ export function DailyBillingClient({ initialDate, initialData, initialError, com
                 key={r.id}
                 row={r}
                 vatRate={vatRate}
-                saving={savingId === r.id}
+                saving={savingIds.has(r.id)}
                 editing={editingId === r.id}
                 amountInput={amountInput}
                 onAmountInput={setAmountInput}
-                onStartEdit={() => { setEditingId(r.id); setAmountInput(r.paid_amount != null ? String(r.paid_amount) : ""); }}
-                onCancelEdit={() => setEditingId(null)}
+                onStartEdit={() => startEdit(r)}
+                onCancelEdit={cancelEdit}
                 onApply={(status, amount) => void applyPayment(r, status, amount)}
               />
             ))}
@@ -291,12 +271,12 @@ export function DailyBillingClient({ initialDate, initialData, initialError, com
                 row={r}
                 vatRate={vatRate}
                 showDate
-                saving={savingId === r.id}
+                saving={savingIds.has(r.id)}
                 editing={editingId === r.id}
                 amountInput={amountInput}
                 onAmountInput={setAmountInput}
-                onStartEdit={() => { setEditingId(r.id); setAmountInput(r.paid_amount != null ? String(r.paid_amount) : ""); }}
-                onCancelEdit={() => setEditingId(null)}
+                onStartEdit={() => startEdit(r)}
+                onCancelEdit={cancelEdit}
                 onApply={(status, amount) => void applyPayment(r, status, amount)}
               />
             ))}
