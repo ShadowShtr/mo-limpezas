@@ -201,7 +201,7 @@ const CAPABILITY_CEILING: Record<string, string[]> = {
   "src/app/(dashboard)/dashboard/cobrancas/_components/invoices-client.tsx": [
     "deleteInvoice", "generateInvoices", "updateInvoiceStatus",
   ],
-  "src/app/(dashboard)/dashboard/cobrancas/_components/daily-billing-client.tsx": [
+  "src/app/(dashboard)/dashboard/cobrancas/_components/use-daily-billing-payments.ts": [
     "setServicePayment",
   ],
 

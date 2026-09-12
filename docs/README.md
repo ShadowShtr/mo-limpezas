@@ -11,6 +11,7 @@ remeter para ele.
 | [`../AGENTS.md`](../AGENTS.md) | **REGRA ZERO.** O que é proibido fazer sem autorização explícita. Acima de tudo o resto. |
 | [`PRODUCTION-RUNBOOK.md`](PRODUCTION-RUNBOOK.md) | Como fazer deploy, rollback, rotação de chaves e resposta a incidentes. |
 | [`ARCHITECTURE.md`](ARCHITECTURE.md) | Onde vive cada coisa e como uma alteração atravessa o sistema. |
+| [`architecture/INDEX.md`](architecture/INDEX.md) | Mapa curto para localizar cobranças, folha, migrations e testes sem carregar o histórico. |
 | [`ENGINEERING-STANDARD.md`](ENGINEERING-STANDARD.md) | Como implementar, testar e fechar uma alteração. |
 
 ## 2. Trabalho planeado

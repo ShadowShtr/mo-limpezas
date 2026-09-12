@@ -48,6 +48,11 @@ describe("parseArgs", () => {
     expect(parsed.confirmProductionValue).toBeNull();
   });
 
+  it("distingue ausência de --only de --only sem valor", () => {
+    expect(parseArgs([])).toMatchObject({ onlyProvided: false, onlyValue: null });
+    expect(parseArgs(["--only"])).toMatchObject({ onlyProvided: true, onlyValue: null });
+  });
+
   it("regista qualquer flag fora da lista conhecida em unknownArgs", () => {
     const parsed = parseArgs(["--apply", "--force", "--yes"]);
     expect(parsed.unknownArgs).toEqual(["--force", "--yes"]);
@@ -116,6 +121,27 @@ describe("validateArgCombination", () => {
   it("--confirm-production com --apply: não é rejeitado por esta regra (a validação de valor correto é separada)", () => {
     const r = validateArgCombination(parseArgs(["--apply", "--confirm-production", "algum-ref"]));
     expect(r.ok).toBe(true);
+  });
+
+  it.each([
+    { nome: "sem valor", argv: ["--only"] },
+    { nome: "valor vazio", argv: ["--only", ""] },
+    { nome: "flag seguinte", argv: ["--only", "--apply"] },
+    { nome: "repetido", argv: ["--only", "077_a.sql", "--only", "078_b.sql"] },
+  ])("rejeita --only inválido: $nome", ({ argv }) => {
+    const parsed = parseArgs(argv);
+    expect(validateArgCombination(parsed)).toMatchObject({ ok: false });
+  });
+
+  it("preserva as flags seguintes quando --only não recebe valor", () => {
+    const parsed = parseArgs(["--only", "--apply"]);
+    expect(parsed).toMatchObject({ onlyProvided: true, onlyValue: null, apply: true });
+  });
+
+  it("aceita um único --only com nome explícito", () => {
+    const parsed = parseArgs(["--only", "077_x.sql"]);
+    expect(parsed).toMatchObject({ onlyProvided: true, onlyValue: "077_x.sql" });
+    expect(validateArgCombination(parsed)).toEqual({ ok: true });
   });
 });
 
