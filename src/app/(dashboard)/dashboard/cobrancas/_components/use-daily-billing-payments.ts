@@ -14,6 +14,7 @@ interface Options {
   date: string;
   updateData: DataUpdater;
   refresh: (date?: string) => Promise<void>;
+  isCurrentDate: (date: string) => boolean;
   reportError: (error: string | null) => void;
 }
 
@@ -22,18 +23,15 @@ interface EditorSession {
   rowId: string;
 }
 
-export function useDailyBillingPayments({ date, updateData, refresh, reportError }: Options) {
+export function useDailyBillingPayments({ date, updateData, refresh, isCurrentDate, reportError }: Options) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [amountInput, setAmountInput] = useState("");
   const [savingIds, setSavingIds] = useState<Set<string>>(() => new Set());
-  const dateRef = useRef(date);
   const editorRef = useRef<EditorSession | null>(null);
   const nextEditorIdRef = useRef(0);
   const nextOperationIdRef = useRef(0);
   const latestOperationRef = useRef(0);
   const pendingByRowRef = useRef(new Map<string, number>());
-  dateRef.current = date;
-
   const startEdit = useCallback((row: DailyBillingRow) => {
     const session = { id: ++nextEditorIdRef.current, rowId: row.id };
     editorRef.current = session;
@@ -53,7 +51,7 @@ export function useDailyBillingPayments({ date, updateData, refresh, reportError
   ) => {
     const operationId = ++nextOperationIdRef.current;
     latestOperationRef.current = operationId;
-    const operationDate = dateRef.current;
+    const operationDate = date;
     const editorSession = editorRef.current?.rowId === row.id ? editorRef.current : null;
     pendingByRowRef.current.set(row.id, operationId);
     setSavingIds((current) => new Set(current).add(row.id));
@@ -61,13 +59,13 @@ export function useDailyBillingPayments({ date, updateData, refresh, reportError
     try {
       const result = await setServicePayment(row.id, status, amount);
       if (!result.ok) {
-        if (operationId === latestOperationRef.current && operationDate === dateRef.current) {
+        if (operationId === latestOperationRef.current && isCurrentDate(operationDate)) {
           reportError(result.error);
         }
         return;
       }
 
-      if (operationDate !== dateRef.current) return;
+      if (!isCurrentDate(operationDate)) return;
 
       if (operationId === latestOperationRef.current) reportError(null);
       updateData((current) => {
@@ -89,7 +87,7 @@ export function useDailyBillingPayments({ date, updateData, refresh, reportError
       }
       void refresh(operationDate);
     } catch (cause) {
-      if (operationId === latestOperationRef.current && operationDate === dateRef.current) {
+      if (operationId === latestOperationRef.current && isCurrentDate(operationDate)) {
         reportError(cause instanceof Error ? cause.message : "Erro ao registar pagamento.");
       }
     } finally {
@@ -102,7 +100,7 @@ export function useDailyBillingPayments({ date, updateData, refresh, reportError
         });
       }
     }
-  }, [refresh, reportError, updateData]);
+  }, [date, isCurrentDate, refresh, reportError, updateData]);
 
   return {
     editingId,
@@ -114,4 +112,3 @@ export function useDailyBillingPayments({ date, updateData, refresh, reportError
     applyPayment,
   };
 }
-

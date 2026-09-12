@@ -8,4 +8,3 @@ export const nota: ReleaseNote = {
   message:
     "Ao registar pagamentos em serviços diferentes, cada linha permanece protegida até terminar. A conclusão de uma cobrança também deixa de fechar o valor que estiver a ser escrito noutra linha.",
 };
-

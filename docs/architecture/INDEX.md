@@ -21,14 +21,19 @@ são leitura inicial para uma correção.
 | Página e dados iniciais | `src/app/(dashboard)/dashboard/cobrancas/page.tsx` |
 | Seleção da aba | `src/app/(dashboard)/dashboard/cobrancas/_components/cobrancas-tabs.tsx` |
 | Estado da consulta e dos botões | `src/app/(dashboard)/dashboard/cobrancas/_components/daily-billing-client.tsx` |
+| Identidade e ciclo das consultas | `src/app/(dashboard)/dashboard/cobrancas/_components/use-daily-billing-query.ts` |
+| Sessões do editor e comandos pendentes | `src/app/(dashboard)/dashboard/cobrancas/_components/use-daily-billing-payments.ts` |
+| Apresentação de uma linha | `src/app/(dashboard)/dashboard/cobrancas/_components/payment-row.tsx` |
 | Leitura, autorização e comando | `src/app/actions/daily-billing.ts` |
 | Regra económica da escrita | `supabase/migrations/097_service_payment_period_atomic.sql` |
 | Outro consumidor do comando | `src/app/(dashboard)/dashboard/calendario/_components/service-detail-sheet.tsx` |
 | Testes focados | `src/__tests__/daily-billing-client.test.tsx`, `src/__tests__/atomic-rpc-results.test.ts`, `src/__tests__/service-payment-period-atomic.pg.test.ts` |
 
 Para um botão de pagamento, começar pelo componente, seguir
-`setServicePayment` até `set_service_payment_atomic` e procurar ambos os nomes
-antes de editar. A UI não volta a calcular o valor que a RPC confirma.
+`PaymentRow → useDailyBillingPayments → setServicePayment` até
+`set_service_payment_atomic` e procurar os nomes antes de editar. Uma recarga
+segue `DailyBillingClient → useDailyBillingQuery → getDailyBilling`. A UI não
+volta a calcular o valor que a RPC confirma.
 
 ## Folha de pagamento
 
@@ -102,4 +107,3 @@ pesquisa automática por esses símbolos demora menos de um segundo neste
 checkout; o tempo humano anterior não estava instrumentado. A partir deste
 mapa, cada tarefa deve registar separadamente tempo de localização, leitura,
 implementação e testes, conforme a ficha MET-01.
-

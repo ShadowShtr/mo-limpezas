@@ -53,6 +53,7 @@ export function useDailyBillingQuery(
   const updateData = useCallback((updater: DataUpdater) => {
     setData(updater);
   }, []);
+  const isCurrentDate = useCallback((candidate: string) => dateRef.current === candidate, []);
 
   return {
     date,
@@ -62,7 +63,7 @@ export function useDailyBillingQuery(
     refresh,
     changeDay,
     updateData,
+    isCurrentDate,
     reportError: setError,
   };
 }
-

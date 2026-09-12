@@ -8,4 +8,3 @@ export const nota: ReleaseNote = {
   message:
     "Ao mudar ou atualizar o dia das cobranças, uma resposta mais antiga deixa de substituir os dados mais recentes. Durante a mudança, os serviços do dia anterior também deixam de aparecer como se pertencessem ao novo dia.",
 };
-

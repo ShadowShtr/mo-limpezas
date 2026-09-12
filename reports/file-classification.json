@@ -1,20 +1,20 @@
 {
   "generatedBy": "scripts/audit-file-inventory.mjs",
-  "totalFiles": 902,
+  "totalFiles": 909,
   "byStatus": {
-    "MANTER": 879,
+    "MANTER": 886,
     "STANDBY": 23
   },
   "byCategory": {
-    "test": 213,
-    "route-ui": 140,
+    "test": 214,
+    "route-ui": 143,
     "migration": 128,
     "lib": 75,
     "script": 59,
     "domain": 52,
-    "doc": 47,
+    "doc": 48,
     "server-action": 44,
-    "src-other": 42,
+    "src-other": 44,
     "component": 32,
     "doc-historico": 16,
     "api-route": 16,
@@ -29,7 +29,7 @@
     "supabase-other": 2
   },
   "byConfidence": {
-    "alta": 881,
+    "alta": 888,
     "média": 15,
     "baixa": 6
   },
@@ -348,6 +348,24 @@
         "serviceRole": 1,
         "sqlWrite": 1
       },
+      "action": "nenhuma",
+      "reason": "documentação",
+      "manualDecision": false
+    },
+    {
+      "path": "docs/architecture/INDEX.md",
+      "category": "doc",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [
+        "docs"
+      ],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {},
       "action": "nenhuma",
       "reason": "documentação",
       "manualDecision": false
@@ -3215,7 +3233,9 @@
         "src/__tests__/migration-runner-targeted-apply.test.ts"
       ],
       "autoLoaded": false,
-      "referencedBy": [],
+      "referencedBy": [
+        "docs"
+      ],
       "sideEffects": [],
       "risks": [],
       "signals": {
@@ -4099,7 +4119,9 @@
       "consumers": 0,
       "consumerSample": [],
       "autoLoaded": false,
-      "referencedBy": [],
+      "referencedBy": [
+        "docs"
+      ],
       "sideEffects": [],
       "risks": [],
       "signals": {
@@ -4928,6 +4950,34 @@
       "sideEffects": [],
       "risks": [],
       "signals": {},
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/__tests__/daily-billing-client.test.tsx",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [
+        "docs"
+      ],
+      "sideEffects": [
+        "supabase"
+      ],
+      "risks": [],
+      "signals": {
+        "supabase": 1
+      },
       "action": "nenhuma",
       "reason": "suite de testes — corre por convenção do vitest",
       "manualDecision": false,
@@ -7109,7 +7159,9 @@
       "consumers": 0,
       "consumerSample": [],
       "autoLoaded": false,
-      "referencedBy": [],
+      "referencedBy": [
+        "docs"
+      ],
       "sideEffects": [],
       "risks": [],
       "signals": {
@@ -7162,7 +7214,9 @@
       "consumers": 0,
       "consumerSample": [],
       "autoLoaded": false,
-      "referencedBy": [],
+      "referencedBy": [
+        "docs"
+      ],
       "sideEffects": [
         "supabase"
       ],
@@ -7188,7 +7242,9 @@
       "consumers": 0,
       "consumerSample": [],
       "autoLoaded": false,
-      "referencedBy": [],
+      "referencedBy": [
+        "docs"
+      ],
       "sideEffects": [],
       "risks": [],
       "signals": {
@@ -8843,7 +8899,9 @@
       "consumers": 0,
       "consumerSample": [],
       "autoLoaded": false,
-      "referencedBy": [],
+      "referencedBy": [
+        "docs"
+      ],
       "sideEffects": [],
       "risks": [
         "service-role"
@@ -11249,7 +11307,9 @@
         "src/app/(dashboard)/dashboard/cobrancas/page.tsx"
       ],
       "autoLoaded": false,
-      "referencedBy": [],
+      "referencedBy": [
+        "docs"
+      ],
       "sideEffects": [],
       "risks": [],
       "signals": {
@@ -11270,8 +11330,9 @@
       "category": "route-ui",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 2,
+      "consumers": 3,
       "consumerSample": [
+        "src/__tests__/daily-billing-client.test.tsx",
         "src/__tests__/finance-categoria-identidade-e-resumo.test.tsx",
         "src/app/(dashboard)/dashboard/cobrancas/_components/cobrancas-tabs.tsx"
       ],
@@ -11287,12 +11348,11 @@
       "signals": {
         "supabase": 3,
         "clientComponent": 1,
-        "sqlWrite": 2,
         "fallbackArray": 2,
         "realtime": 2
       },
       "action": "nenhuma",
-      "reason": "em uso: 2 consumidor(es)",
+      "reason": "em uso: 3 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -11350,6 +11410,95 @@
         "eslintDisable": 1,
         "anyType": 1,
         "dynamicImport": 2
+      },
+      "action": "nenhuma",
+      "reason": "em uso: 1 consumidor(es)",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/app/(dashboard)/dashboard/cobrancas/_components/payment-row.tsx",
+      "category": "route-ui",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 1,
+      "consumerSample": [
+        "src/app/(dashboard)/dashboard/cobrancas/_components/daily-billing-client.tsx"
+      ],
+      "autoLoaded": false,
+      "referencedBy": [
+        "docs"
+      ],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "clientComponent": 1,
+        "sqlWrite": 2
+      },
+      "action": "nenhuma",
+      "reason": "em uso: 1 consumidor(es)",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/app/(dashboard)/dashboard/cobrancas/_components/use-daily-billing-payments.ts",
+      "category": "route-ui",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 1,
+      "consumerSample": [
+        "src/app/(dashboard)/dashboard/cobrancas/_components/daily-billing-client.tsx"
+      ],
+      "autoLoaded": false,
+      "referencedBy": [
+        "docs"
+      ],
+      "sideEffects": [
+        "write"
+      ],
+      "risks": [],
+      "signals": {
+        "clientComponent": 1,
+        "write": 2,
+        "sqlWrite": 2
+      },
+      "action": "nenhuma",
+      "reason": "em uso: 1 consumidor(es)",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/app/(dashboard)/dashboard/cobrancas/_components/use-daily-billing-query.ts",
+      "category": "route-ui",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 1,
+      "consumerSample": [
+        "src/app/(dashboard)/dashboard/cobrancas/_components/daily-billing-client.tsx"
+      ],
+      "autoLoaded": false,
+      "referencedBy": [
+        "docs"
+      ],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "clientComponent": 1
       },
       "action": "nenhuma",
       "reason": "em uso: 1 consumidor(es)",
@@ -12645,7 +12794,9 @@
         "src/app/(dashboard)/dashboard/folha-pagamento/page.tsx"
       ],
       "autoLoaded": false,
-      "referencedBy": [],
+      "referencedBy": [
+        "docs"
+      ],
       "sideEffects": [
         "write"
       ],
@@ -13951,11 +14102,11 @@
       "category": "server-action",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 5,
+      "consumers": 9,
       "consumerSample": [
+        "src/__tests__/daily-billing-client.test.tsx",
         "src/__tests__/finance-actions-rpc-routing.test.ts",
-        "src/app/(dashboard)/dashboard/calendario/_components/service-detail-sheet.tsx",
-        "src/app/(dashboard)/dashboard/cobrancas/_components/cobrancas-tabs.tsx"
+        "src/app/(dashboard)/dashboard/calendario/_components/service-detail-sheet.tsx"
       ],
       "autoLoaded": false,
       "referencedBy": [
@@ -13976,7 +14127,7 @@
         "revalidatePath": 3
       },
       "action": "nenhuma",
-      "reason": "em uso: 5 consumidor(es)",
+      "reason": "em uso: 9 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -17463,7 +17614,9 @@
         "src/app/actions/payroll.ts"
       ],
       "autoLoaded": false,
-      "referencedBy": [],
+      "referencedBy": [
+        "docs"
+      ],
       "sideEffects": [],
       "risks": [],
       "signals": {},
@@ -18071,7 +18224,7 @@
       "category": "domain",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 48,
+      "consumers": 50,
       "consumerSample": [
         "src/__tests__/update-notice-modal.test.tsx",
         "src/__tests__/update-notices-eligibility.test.ts",
@@ -18086,7 +18239,7 @@
       "risks": [],
       "signals": {},
       "action": "nenhuma",
-      "reason": "em uso: 48 consumidor(es), configuração",
+      "reason": "em uso: 50 consumidor(es), configuração",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -18166,7 +18319,9 @@
         "src/app/actions/daily-billing.ts"
       ],
       "autoLoaded": false,
-      "referencedBy": [],
+      "referencedBy": [
+        "docs"
+      ],
       "sideEffects": [],
       "risks": [],
       "signals": {},
@@ -21401,6 +21556,58 @@
       }
     },
     {
+      "path": "src/release-notes/2026-09-12-cobrancas-dia-certo.ts",
+      "category": "src-other",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 1,
+      "consumerSample": [
+        "src/release-notes/index.ts"
+      ],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "sqlWrite": 1
+      },
+      "action": "nenhuma",
+      "reason": "em uso: 1 consumidor(es)",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/release-notes/2026-09-12-cobrancas-gravacoes-seguras.ts",
+      "category": "src-other",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 1,
+      "consumerSample": [
+        "src/release-notes/index.ts"
+      ],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "sqlWrite": 1
+      },
+      "action": "nenhuma",
+      "reason": "em uso: 1 consumidor(es)",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
       "path": "src/release-notes/index.ts",
       "category": "src-other",
       "status": "MANTER",
@@ -23444,7 +23651,9 @@
       "consumers": 0,
       "consumerSample": [],
       "autoLoaded": false,
-      "referencedBy": [],
+      "referencedBy": [
+        "docs"
+      ],
       "sideEffects": [],
       "risks": [
         "service-role"
@@ -23465,7 +23674,9 @@
       "consumers": 0,
       "consumerSample": [],
       "autoLoaded": false,
-      "referencedBy": [],
+      "referencedBy": [
+        "docs"
+      ],
       "sideEffects": [],
       "risks": [
         "service-role"
@@ -23486,7 +23697,9 @@
       "consumers": 0,
       "consumerSample": [],
       "autoLoaded": false,
-      "referencedBy": [],
+      "referencedBy": [
+        "docs"
+      ],
       "sideEffects": [],
       "risks": [
         "service-role"
@@ -23507,7 +23720,9 @@
       "consumers": 0,
       "consumerSample": [],
       "autoLoaded": false,
-      "referencedBy": [],
+      "referencedBy": [
+        "docs"
+      ],
       "sideEffects": [],
       "risks": [
         "service-role"
@@ -23528,7 +23743,9 @@
       "consumers": 0,
       "consumerSample": [],
       "autoLoaded": false,
-      "referencedBy": [],
+      "referencedBy": [
+        "docs"
+      ],
       "sideEffects": [],
       "risks": [
         "service-role"
