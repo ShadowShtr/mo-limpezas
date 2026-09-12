@@ -35,6 +35,9 @@ export function parseArgs(argv) {
   const unknownArgs = [];
   let confirmProductionValue = null;
   let onlyValue = null;
+  let onlyProvided = false;
+  let onlyRepeated = false;
+  let onlyInvalidFollowingFlag = null;
   let dryRun = false;
   let apply = false;
   let baseline = false;
@@ -48,8 +51,16 @@ export function parseArgs(argv) {
       continue;
     }
     if (arg === "--only") {
-      onlyValue = argv[i + 1] ?? null;
-      i++; // consome o valor
+      if (onlyProvided) onlyRepeated = true;
+      onlyProvided = true;
+      const candidate = argv[i + 1];
+      if (candidate !== undefined && !candidate.startsWith("--")) {
+        onlyValue = candidate;
+        i++; // consome apenas um valor; uma flag continua disponível ao parser
+      } else {
+        onlyValue = null;
+        onlyInvalidFollowingFlag = candidate?.startsWith("--") ? candidate : null;
+      }
       continue;
     }
     if (!KNOWN_FLAGS.includes(arg)) {
@@ -62,7 +73,18 @@ export function parseArgs(argv) {
     else if (arg === "--seed") seed = true;
   }
 
-  return { dryRun, apply, baseline, seed, confirmProductionValue, onlyValue, unknownArgs };
+  return {
+    dryRun,
+    apply,
+    baseline,
+    seed,
+    confirmProductionValue,
+    onlyValue,
+    onlyProvided,
+    onlyRepeated,
+    onlyInvalidFollowingFlag,
+    unknownArgs,
+  };
 }
 
 /**
@@ -84,6 +106,7 @@ export function parseArgs(argv) {
  *     chama, este validador só confirma que não há flags contraditórias).
  */
 export function validateArgCombination(parsed) {
+  const onlyProvided = parsed.onlyProvided ?? (parsed.onlyValue != null);
   if (parsed.unknownArgs.length > 0) {
     return { ok: false, error: `Argumentos não suportados: ${parsed.unknownArgs.join(", ")}` };
   }
@@ -92,6 +115,18 @@ export function validateArgCombination(parsed) {
   }
   if (parsed.baseline && parsed.seed) {
     return { ok: false, error: "--baseline e --seed não podem ser combinados." };
+  }
+  if (parsed.onlyRepeated) {
+    return { ok: false, error: "--only deve aparecer exatamente uma vez." };
+  }
+  if (onlyProvided && parsed.onlyValue == null) {
+    if (parsed.onlyInvalidFollowingFlag) {
+      return {
+        ok: false,
+        error: `--only recebeu "${parsed.onlyInvalidFollowingFlag}" em vez de um nome de ficheiro.`,
+      };
+    }
+    return { ok: false, error: "--only exige o nome exato do ficheiro da migration." };
   }
   // ── --only: exatamente uma migration, e mais nada ────────────────────────
   //
@@ -103,10 +138,10 @@ export function validateArgCombination(parsed) {
   //      recebesse a outra — e a outra escreve no ledger.
   //    · `--seed` insere dados fictícios e não tem nada que ver com aplicar
   //      uma migration escolhida.
-  if (parsed.onlyValue !== null && parsed.baseline) {
+  if (onlyProvided && parsed.baseline) {
     return { ok: false, error: "--only e --baseline não podem ser combinados." };
   }
-  if (parsed.onlyValue !== null && parsed.seed) {
+  if (onlyProvided && parsed.seed) {
     return { ok: false, error: "--only e --seed não podem ser combinados." };
   }
   if (parsed.onlyValue !== null && parsed.onlyValue.trim() === "") {
