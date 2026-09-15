@@ -1,5 +1,5 @@
 // ============================================================================
-// 101 — a fundação do CRM, provada contra um Postgres a sério
+// O schema do CRM, provado contra um Postgres a sério
 // ============================================================================
 //
 // Um teste que procura strings num ficheiro SQL não prova que a tabela existe,
@@ -24,7 +24,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { startPostgresContainer, type PostgresContainer } from "./helpers/pg-container";
 
 const ROOT = process.cwd();
-const CONTAINER = `crmleads-${process.pid}`;
+const CONTAINER = `crmschema-${process.pid}`;
 
 const EMPRESA = "11111111-1111-4111-8111-111111111111";
 const OUTRA = "22222222-2222-4222-8222-222222222222";
@@ -41,6 +41,11 @@ let pool: pg.Pool;
 const MIGRATION = () => readFileSync(join(ROOT, "supabase/migrations/101_crm_leads.sql"), "utf8");
 const ROLLBACK = () =>
   readFileSync(join(ROOT, "supabase/migrations/rollback/101_crm_leads.down.sql"), "utf8");
+
+const MIGRATION_102 = () =>
+  readFileSync(join(ROOT, "supabase/migrations/102_crm_visitas_comerciais.sql"), "utf8");
+const ROLLBACK_102 = () =>
+  readFileSync(join(ROOT, "supabase/migrations/rollback/102_crm_visitas_comerciais.down.sql"), "utf8");
 
 /**
  * O que existe em produção ANTES da 101 — e só isso.
@@ -478,5 +483,171 @@ describe("101 — quem pode ler e quem pode escrever", () => {
     await novaLead();
     const erro = await erroDe(() => como("anon", null, "SELECT * FROM public.crm_leads"));
     expect(erro).toMatch(/permission denied/i);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 102 — a visita comercial
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe("102 — a visita comercial", () => {
+  beforeEach(async () => {
+    // A 101 já foi aplicada pelo beforeEach global; a 102 assenta em cima.
+    await pool.query(MIGRATION_102());
+  });
+
+  const AMANHA = "2026-09-16 10:00:00+01";
+  const AMANHA_FIM = "2026-09-16 11:00:00+01";
+
+  async function novaVisita(extra: Record<string, unknown> = {}) {
+    const leadId = (extra.lead_id as string) ?? (await novaLead());
+    const campos: Record<string, unknown> = {
+      company_id: EMPRESA,
+      lead_id: leadId,
+      scheduled_start: AMANHA,
+      scheduled_end: AMANHA_FIM,
+      ...extra,
+    };
+    const colunas = Object.keys(campos);
+    const marcas = colunas.map((_, i) => `$${i + 1}`).join(", ");
+    const { rows } = await pool.query(
+      `INSERT INTO public.crm_visits (${colunas.join(", ")}) VALUES (${marcas}) RETURNING id`,
+      Object.values(campos),
+    );
+    return rows[0].id as string;
+  }
+
+  it("a migration corre, e correr duas vezes não parte nada", async () => {
+    await expect(pool.query(MIGRATION_102())).resolves.toBeDefined();
+  });
+
+  it("sem a 101, recusa-se a correr", async () => {
+    await baseline();
+    const erro = await erroDe(() => pool.query(MIGRATION_102()));
+    expect(erro).toContain("CRM_VISITS_102_PRECONDITION_FAILED");
+    expect(erro).toContain("crm_leads");
+  });
+
+  it("🔴 uma visita comercial não é um serviço: não tem equipa nem valor", async () => {
+    // A ausência destas colunas é uma decisão, e o pós-estado da migration
+    // falha se alguma aparecer. Aqui confirma-se no schema real.
+    const { rows } = await pool.query(`
+      SELECT column_name FROM information_schema.columns
+       WHERE table_schema = 'public' AND table_name = 'crm_visits'
+    `);
+    const colunas = rows.map((r) => r.column_name);
+    for (const proibida of ["team_id", "calculated_value", "payment_status", "hourly_rate"]) {
+      expect(colunas, `crm_visits não pode ter ${proibida}`).not.toContain(proibida);
+    }
+  });
+
+  it("🔴 exactamente um destinatário: lead ou cliente, nunca ambos", async () => {
+    const leadId = await novaLead();
+    const erroAmbos = await erroDe(() =>
+      novaVisita({ lead_id: leadId, client_id: CLIENTE_A }),
+    );
+    expect(erroAmbos).toContain("crm_visits_um_destinatario");
+
+    const erroNenhum = await erroDe(() =>
+      pool.query(
+        `INSERT INTO public.crm_visits (company_id, scheduled_start, scheduled_end)
+         VALUES ($1, $2, $3)`,
+        [EMPRESA, AMANHA, AMANHA_FIM],
+      ),
+    );
+    expect(erroNenhum).toContain("crm_visits_um_destinatario");
+  });
+
+  it("a um cliente existente também se pode ir — é uma proposta de serviço novo", async () => {
+    await expect(
+      pool.query(
+        `INSERT INTO public.crm_visits (company_id, client_id, scheduled_start, scheduled_end)
+         VALUES ($1, $2, $3, $4)`,
+        [EMPRESA, CLIENTE_A, AMANHA, AMANHA_FIM],
+      ),
+    ).resolves.toBeDefined();
+  });
+
+  it("uma janela que acaba antes de começar é recusada", async () => {
+    const erro = await erroDe(() =>
+      novaVisita({ scheduled_start: AMANHA_FIM, scheduled_end: AMANHA }),
+    );
+    expect(erro).toContain("crm_visits_janela_valida");
+  });
+
+  it("dar uma visita como realizada exige a data", async () => {
+    const id = await novaVisita();
+    const erro = await erroDe(() =>
+      pool.query("UPDATE public.crm_visits SET status = 'realizada' WHERE id = $1", [id]),
+    );
+    expect(erro).toContain("crm_visits_realizada_tem_data");
+  });
+
+  it("'não compareceu' é um estado próprio, e não um cancelamento", async () => {
+    const id = await novaVisita();
+    // Não exige data: quem não apareceu não produziu nenhum momento a datar.
+    await expect(
+      pool.query("UPDATE public.crm_visits SET status = 'nao_compareceu' WHERE id = $1", [id]),
+    ).resolves.toBeDefined();
+  });
+
+  it("o que se mede no local fica guardado, e recusa valores impossíveis", async () => {
+    const id = await novaVisita();
+    await pool.query(
+      `UPDATE public.crm_visits
+          SET status = 'realizada', completed_at = now(),
+              area_sqm = 240.5, estimated_hours = 3.5,
+              frequency_hint = '2x por semana', outcome_notes = 'Escadas e 3 pisos'
+        WHERE id = $1`,
+      [id],
+    );
+    const { rows } = await pool.query("SELECT area_sqm, estimated_hours FROM public.crm_visits WHERE id = $1", [id]);
+    expect(Number(rows[0].area_sqm)).toBe(240.5);
+    expect(Number(rows[0].estimated_hours)).toBe(3.5);
+
+    const erro = await erroDe(() => novaVisita({ area_sqm: 0 }));
+    expect(erro).toContain("crm_visits_area_sqm_check");
+  });
+
+  it("🔴 uma visita não pode ser marcada à lead de outra empresa", async () => {
+    const leadDaOutra = await novaLead({}, OUTRA);
+    const erro = await erroDe(() => novaVisita({ lead_id: leadDaOutra }));
+    expect(erro).toContain("crm_visits_lead_mesma_empresa");
+  });
+
+  it("apagar a lead leva as visitas dela", async () => {
+    const leadId = await novaLead();
+    await novaVisita({ lead_id: leadId });
+    await pool.query("DELETE FROM public.crm_leads WHERE id = $1", [leadId]);
+    const { rows } = await pool.query("SELECT count(*)::int n FROM public.crm_visits");
+    expect(rows[0].n).toBe(0);
+  });
+
+  it("🔴 um cliente com visitas não desaparece por baixo delas", async () => {
+    await pool.query(
+      `INSERT INTO public.crm_visits (company_id, client_id, scheduled_start, scheduled_end)
+       VALUES ($1, $2, $3, $4)`,
+      [EMPRESA, CLIENTE_A, AMANHA, AMANHA_FIM],
+    );
+    // RESTRICT, e não CASCADE: apagar um cliente não pode levar em silêncio o
+    // histórico comercial que explica como ele apareceu.
+    const erro = await erroDe(() =>
+      pool.query("DELETE FROM public.clients WHERE id = $1", [CLIENTE_A]),
+    );
+    expect(erro).toMatch(/crm_visits_cliente_mesma_empresa|violates foreign key/i);
+  });
+
+  it("o rollback leva a tabela e deixa as leads onde estão", async () => {
+    await novaVisita();
+    await pool.query(ROLLBACK_102());
+
+    const { rows: t } = await pool.query(`
+      SELECT count(*)::int n FROM information_schema.tables
+       WHERE table_schema = 'public' AND table_name = 'crm_visits'
+    `);
+    expect(t[0].n).toBe(0);
+
+    const { rows: l } = await pool.query("SELECT count(*)::int n FROM public.crm_leads");
+    expect(l[0].n).toBe(1);
   });
 });
