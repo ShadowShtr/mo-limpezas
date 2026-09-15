@@ -10,8 +10,9 @@
 // ============================================================================
 
 import { useEffect, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { createPortal } from "react-dom";
-import { Download, Mail, X } from "lucide-react";
+import { Download, Mail, UserPlus, X } from "lucide-react";
 
 import { useToast } from "@/components/ui/toast";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
@@ -27,6 +28,7 @@ import {
   type QuoteUnit,
 } from "@/lib/crm/quotes";
 import { sendQuoteByEmail, setQuoteStatus, type QuoteRow } from "@/app/actions/crm-orcamentos";
+import { converterLeadEmCliente } from "@/app/actions/crm-conversao";
 
 import { buildQuotePdf, downloadQuotePdf } from "./quote-pdf";
 
@@ -58,6 +60,7 @@ function blobParaBase64(blob: Blob): Promise<string> {
 }
 
 export function QuoteDetailSheet({ quote, hoje, onClose, onChanged }: Props) {
+  const router = useRouter();
   const { toast } = useToast();
   const [pending, startTransition] = useTransition();
   const [aEnviar, setAEnviar] = useState(false);
@@ -119,6 +122,26 @@ export function QuoteDetailSheet({ quote, hoje, onClose, onChanged }: Props) {
 
       toast(`Orçamento enviado para ${destino.trim()}.`, "success");
       onChanged();
+    });
+  }
+
+  /**
+   * Converte a lead em cliente e leva o gestor ao formulário já preenchido.
+   *
+   * 🔴 Nada é agendado aqui. O destino é um formulário com os campos postos —
+   *    quem grava é uma pessoa, depois de rever.
+   */
+  function converter() {
+    if (!quote.lead_id) return;
+
+    startTransition(async () => {
+      const res = await converterLeadEmCliente(quote.lead_id!, { quoteId: quote.id });
+      if (!res.ok) {
+        toast(res.error.message, "error");
+        return;
+      }
+      toast("Cliente criado. Reveja e confirme o que fica agendado.", "success");
+      router.push(res.data.redirectTo);
     });
   }
 
@@ -323,6 +346,25 @@ export function QuoteDetailSheet({ quote, hoje, onClose, onChanged }: Props) {
           className="flex flex-wrap justify-end gap-2 border-t px-5 py-4"
           style={{ borderColor: "var(--color-border)" }}
         >
+          {estado === "aceite" && quote.lead_id && !quote.converted_contract_id && (
+            <ConfirmDialog
+              trigger={
+                <button
+                  disabled={pending}
+                  className="flex items-center gap-1.5 rounded-lg px-3 py-2 text-[13px] font-semibold text-white disabled:opacity-50"
+                  style={{ background: "#16A34A" }}
+                >
+                  <UserPlus className="h-4 w-4" />
+                  Converter em cliente
+                </button>
+              }
+              title="Converter esta lead em cliente?"
+              description="Cria o cliente e o local com os dados da lead, e abre o formulário do trabalho já preenchido com os valores do orçamento. Nada fica agendado até confirmar."
+              confirmLabel="Converter"
+              onConfirm={converter}
+            />
+          )}
+
           <button
             onClick={verPdf}
             disabled={pending}

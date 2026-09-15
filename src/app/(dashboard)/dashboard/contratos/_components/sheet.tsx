@@ -101,6 +101,28 @@ function OccurrencePreview({
 
 // ─── Tipos de props ──────────────────────────────────────────────────────────
 
+/**
+ * Valores para abrir o formulário já preenchido, vindos de fora do módulo.
+ *
+ * 🔴 É um objecto simples de propósito, e não uma `ContratosTableRow` falsa:
+ *    fabricar uma linha de contrato que não existe para reaproveitar o
+ *    `copyFrom` faria o formulário pensar que está a copiar algo real, e um
+ *    campo esquecido nessa linha inventada apareceria como valor válido.
+ *
+ * Quem o usa hoje: a conversão de uma lead do CRM, que traz os valores do
+ * orçamento aceite. Nada é gravado — o gestor revê e confirma.
+ */
+export interface ContratoPrefill {
+  name?: string;
+  clienteId?: string;
+  localId?: string;
+  billingMode?: "hourly" | "monthly";
+  fixedPrice?: number | null;
+  hourlyRate?: number | null;
+  applyVat?: boolean;
+  notes?: string;
+}
+
 interface Props {
   trigger: React.ReactElement;
   companyId: string;
@@ -124,6 +146,9 @@ interface Props {
   copyFrom?: ContratosTableRow;
   fixedClientId?: string;
   vatRate?: number;
+  prefill?: ContratoPrefill;
+  /** Abre logo ao montar — usado quando o utilizador chega por um link. */
+  defaultOpen?: boolean;
   labels?: {
     createTitle?: string;
     editTitle?: string;
@@ -149,6 +174,8 @@ export function ContratoSheet({
   copyFrom,
   fixedClientId,
   vatRate = 23,
+  prefill,
+  defaultOpen = false,
   labels,
 }: Props) {
   const isEdit = !!contrato;
@@ -161,7 +188,7 @@ export function ContratoSheet({
   const router = useRouter();
 
   // UI state
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(defaultOpen);
   const [step, setStep] = useState<1 | 2>(1);
   // Pequeno "cooldown" ao entrar no passo 2: evita que o mesmo gesto de clique
   // que avança de passo (no botão "Seguinte") também acabe por acionar o botão
@@ -186,20 +213,21 @@ export function ContratoSheet({
   const [message, setMessage] = useState<{ type: "error" | "success"; text: string } | null>(null);
 
   // Formulário
-  const [name, setName] = useState(source?.name ?? "");
+  const [name, setName] = useState(prefill?.name ?? source?.name ?? "");
   const [clienteId, setClienteId] = useState<string>(() => {
     if (fixedClientId) return fixedClientId;
+    if (prefill?.clienteId) return prefill.clienteId;
     if (source?.locations?.clients?.id) return source.locations.clients.id;
     return "";
   });
-  const [localId, setLocalId] = useState(source?.locations?.id ?? "");
+  const [localId, setLocalId] = useState(prefill?.localId ?? source?.locations?.id ?? "");
   const [cleaningType, setCleaningType] = useState(source?.cleaning_type ?? "");
   const [frequency, setFrequency] = useState(source?.frequency ?? "weekly");
   const [intervalDays, setIntervalDays] = useState(source?.interval_days ?? 1);
   const [selectedWeekdays, setSelectedWeekdays] = useState<number[]>(source?.weekdays ?? [1, 3, 5]);
   const [startsOn, setStartsOn] = useState(source?.starts_on ?? todayInLisbon());
   const [endsOn, setEndsOn] = useState(source?.ends_on ?? "");
-  const [notes, setNotes] = useState(source?.notes ?? "");
+  const [notes, setNotes] = useState(prefill?.notes ?? source?.notes ?? "");
   const [status, setStatus] = useState(contrato?.status ?? "ativo");
   const [paymentStatus, setPaymentStatus] = useState(source?.payment_status ?? "nao_informado");
   const [upholsteryType, setUpholsteryType] = useState(source?.upholstery_type ?? "");
@@ -211,18 +239,22 @@ export function ContratoSheet({
     source?.upholstery_unit_price != null ? String(source.upholstery_unit_price) : "",
   );
   const [hourlyRate, setHourlyRate] = useState(
-    source?.locations?.hourly_rate != null ? String(source.locations.hourly_rate) : "",
+    prefill?.hourlyRate != null
+      ? String(prefill.hourlyRate)
+      : source?.locations?.hourly_rate != null ? String(source.locations.hourly_rate) : "",
   );
   // Valor fixo: no modo mensal é o valor da avença/mês. Reutiliza fixed_price.
   const [fixedPrice, setFixedPrice] = useState(
-    source?.fixed_price != null ? String(source.fixed_price) : "",
+    prefill?.fixedPrice != null
+      ? String(prefill.fixedPrice)
+      : source?.fixed_price != null ? String(source.fixed_price) : "",
   );
   // Mecânica de faturação: "hourly" (por hora, default) ou "monthly" (valor fixo mensal).
   const [billingMode, setBillingMode] = useState<"hourly" | "monthly">(
-    source?.fixed_monthly ? "monthly" : "hourly",
+    prefill?.billingMode ?? (source?.fixed_monthly ? "monthly" : "hourly"),
   );
   // IVA do contrato (chavinha). Default desligado.
-  const [applyVat, setApplyVat] = useState<boolean>(source?.apply_vat ?? false);
+  const [applyVat, setApplyVat] = useState<boolean>(prefill?.applyVat ?? source?.apply_vat ?? false);
   // Guarda de integridade: em edição, se a query que carregou este contrato
   // não trouxe fixed_price/fixed_monthly/apply_vat (undefined — diferente de
   // null, que é um valor legítimo de "sem avença"), bloqueia a gravação em
