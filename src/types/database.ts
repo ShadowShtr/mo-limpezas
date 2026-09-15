@@ -350,6 +350,21 @@ export type Database = {
         Update: { lead_id?: string | null; client_id?: string | null; scheduled_start?: string; scheduled_end?: string; assigned_to?: string | null; address?: string | null; lat?: number | null; lng?: number | null; status?: string; completed_at?: string | null; cancelled_at?: string | null; cancel_reason?: string | null; outcome_notes?: string | null; area_sqm?: number | null; estimated_hours?: number | null; frequency_hint?: string | null; updated_at?: string };
         Relationships: [];
       };
+      crm_quotes: {
+        Row: { id: string; company_id: string; lead_id: string | null; client_id: string | null; visit_id: string | null; quote_number: string; quote_year: number; quote_seq: number; revision: number; root_quote_id: string; superseded_by_id: string | null; issue_date: string; valid_until: string; status: string; sent_at: string | null; accepted_at: string | null; rejected_at: string | null; rejection_reason: string | null; pricing_kind: string; subtotal: number; discount_pct: number; apply_vat: boolean; vat_rate: number; vat_amount: number; total: number; proposed_frequency: string | null; proposed_weekdays: unknown | null; payment_terms: string | null; notes: string | null; internal_notes: string | null; converted_contract_id: string | null; converted_service_id: string | null; created_by: string | null; created_at: string; updated_at: string };
+        // Insert directo NAO e o caminho canonico: um orcamento nasce pela RPC
+        // create_crm_quote_with_items, que atribui o numero e calcula os totais
+        // dentro da transacao. O tipo existe para leitura e para os testes.
+        Insert: { company_id: string; quote_number: string; quote_year: number; quote_seq: number; root_quote_id: string; issue_date: string; valid_until: string; subtotal: number; vat_rate: number; vat_amount: number; total: number; lead_id?: string | null; client_id?: string | null; visit_id?: string | null; revision?: number; status?: string; pricing_kind?: string; discount_pct?: number; apply_vat?: boolean; created_by?: string | null };
+        Update: { status?: string; sent_at?: string | null; accepted_at?: string | null; rejected_at?: string | null; rejection_reason?: string | null; superseded_by_id?: string | null; notes?: string | null; internal_notes?: string | null; converted_contract_id?: string | null; converted_service_id?: string | null; updated_at?: string };
+        Relationships: [];
+      };
+      crm_quote_items: {
+        Row: { id: string; company_id: string; quote_id: string; position: number; description: string; quantity: number; unit: string; unit_price: number; line_total: number; created_at: string };
+        Insert: { company_id: string; quote_id: string; position: number; description: string; quantity: number; unit: string; unit_price: number; line_total: number };
+        Update: Record<string, never>;
+        Relationships: [];
+      };
     };
     Views: {
       services_full: {

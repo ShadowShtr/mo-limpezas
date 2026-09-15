@@ -1,14 +1,14 @@
 {
   "generatedBy": "scripts/audit-file-inventory.mjs",
-  "totalFiles": 928,
+  "totalFiles": 931,
   "byStatus": {
-    "MANTER": 905,
+    "MANTER": 908,
     "STANDBY": 23
   },
   "byCategory": {
-    "test": 217,
+    "test": 218,
     "route-ui": 150,
-    "migration": 132,
+    "migration": 134,
     "lib": 78,
     "script": 59,
     "domain": 52,
@@ -29,7 +29,7 @@
     "supabase-other": 2
   },
   "byConfidence": {
-    "alta": 907,
+    "alta": 910,
     "média": 15,
     "baixa": 6
   },
@@ -1924,7 +1924,7 @@
       ],
       "sideEffects": [
         "supabase",
-        "revalidatePath(39)"
+        "revalidatePath(40)"
       ],
       "risks": [
         "debugger"
@@ -1933,7 +1933,7 @@
         "supabase": 1,
         "sqlWrite": 26,
         "debugger": 6,
-        "revalidatePath": 39
+        "revalidatePath": 40
       },
       "action": "nenhuma",
       "reason": "configuração/infra",
@@ -4968,6 +4968,34 @@
       }
     },
     {
+      "path": "src/__tests__/crm-quotes.pg.test.ts",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [
+        "service-role"
+      ],
+      "signals": {
+        "serviceRole": 2,
+        "sqlWrite": 18,
+        "fallbackZero": 1
+      },
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
       "path": "src/__tests__/crm-schema.pg.test.ts",
       "category": "test",
       "status": "MANTER",
@@ -6626,11 +6654,11 @@
       "category": "test",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 13,
+      "consumers": 14,
       "consumerSample": [
         "src/__tests__/bank-reconciliation-period-atomic.pg.test.ts",
         "src/__tests__/cashflow-period-atomic.pg.test.ts",
-        "src/__tests__/crm-schema.pg.test.ts"
+        "src/__tests__/crm-quotes.pg.test.ts"
       ],
       "autoLoaded": false,
       "referencedBy": [],
@@ -22086,7 +22114,7 @@
       "risks": [],
       "signals": {
         "supabase": 1,
-        "sqlWrite": 95
+        "sqlWrite": 100
       },
       "action": "nenhuma",
       "reason": "em uso: 26 consumidor(es)",
@@ -24222,6 +24250,27 @@
       "manualDecision": false
     },
     {
+      "path": "supabase/migrations/103_crm_orcamentos.sql",
+      "category": "migration",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [
+        "service-role"
+      ],
+      "signals": {
+        "serviceRole": 7,
+        "sqlWrite": 45
+      },
+      "action": "nenhuma",
+      "reason": "migration versionada — histórico do schema, nunca se apaga",
+      "manualDecision": false
+    },
+    {
       "path": "supabase/migrations/20260608_new_features.sql",
       "category": "migration",
       "status": "MANTER",
@@ -24819,6 +24868,24 @@
       "risks": [],
       "signals": {
         "sqlWrite": 1
+      },
+      "action": "nenhuma",
+      "reason": "migration versionada — histórico do schema, nunca se apaga",
+      "manualDecision": false
+    },
+    {
+      "path": "supabase/migrations/rollback/103_crm_orcamentos.down.sql",
+      "category": "migration",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "sqlWrite": 5
       },
       "action": "nenhuma",
       "reason": "migration versionada — histórico do schema, nunca se apaga",

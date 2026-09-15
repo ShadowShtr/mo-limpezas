@@ -19,18 +19,14 @@ import { KanbanSquare, CalendarClock, FileText } from "lucide-react";
 /**
  * As vistas do módulo.
  *
- * Visitas e Orçamentos entram nas PRs seguintes; as rotas ainda não existem, e
- * por isso não estão aqui. Listar um destino que dá 404 é pior do que não o
- * listar — quem clica não sabe se está avariado ou por fazer.
+ * As três, por ordem de trabalho: primeiro o funil, depois a visita, depois o
+ * orçamento. Nenhuma entrada aqui aponta para uma rota que não exista — um
+ * destino que dá 404 é pior do que um destino que não se mostra.
  */
 export const CRM_VIEWS = [
   { href: "/dashboard/crm", label: "Pipeline de Leads", icon: KanbanSquare },
   { href: "/dashboard/crm/visitas", label: "Visitas", icon: CalendarClock },
-] as const;
-
-/** Vistas ainda por construir, mostradas em cinzento para dar o mapa do módulo. */
-export const CRM_VIEWS_EM_BREVE = [
-  { label: "Orçamentos", icon: FileText },
+  { href: "/dashboard/crm/orcamentos", label: "Orçamentos", icon: FileText },
 ] as const;
 
 /**
@@ -78,20 +74,6 @@ export function CrmNav() {
         );
       })}
 
-      {CRM_VIEWS_EM_BREVE.map(({ label, icon: Icon }) => (
-        <span
-          key={label}
-          className="flex shrink-0 cursor-default items-center gap-2 px-3 py-2 text-[13px] font-medium opacity-40"
-          style={{ color: "var(--color-text-muted)" }}
-          title="Em preparação"
-        >
-          <Icon className="h-4 w-4 shrink-0" />
-          {label}
-          <span className="rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
-            Em breve
-          </span>
-        </span>
-      ))}
     </nav>
   );
 }
