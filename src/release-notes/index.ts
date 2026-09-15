@@ -54,6 +54,7 @@ import { nota as locaisMapaAVista } from "./2026-09-10-locais-mapa-a-vista";
 import { nota as pagamentosOrdemVencimento } from "./2026-09-11-pagamentos-ordem-vencimento";
 import { nota as pagamentosOrdemTodasAsAbas } from "./2026-09-11-pagamentos-ordem-todas-as-abas";
 import { nota as crmFunilDeLeads } from "./2026-09-15-crm-funil-de-leads";
+import { nota as crmVisitas } from "./2026-09-15-crm-visitas";
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   financeiroEAnexos,
@@ -95,6 +96,7 @@ export const RELEASE_NOTES: ReleaseNote[] = [
   pagamentosOrdemVencimento,
   pagamentosOrdemTodasAsAbas,
   crmFunilDeLeads,
+  crmVisitas,
 ];
 
 /** As chaves têm de ser únicas — duas notas com a mesma key partilhariam a leitura. */

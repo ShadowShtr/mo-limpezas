@@ -25,11 +25,11 @@ import { KanbanSquare, CalendarClock, FileText } from "lucide-react";
  */
 export const CRM_VIEWS = [
   { href: "/dashboard/crm", label: "Pipeline de Leads", icon: KanbanSquare },
+  { href: "/dashboard/crm/visitas", label: "Visitas", icon: CalendarClock },
 ] as const;
 
 /** Vistas ainda por construir, mostradas em cinzento para dar o mapa do módulo. */
 export const CRM_VIEWS_EM_BREVE = [
-  { label: "Visitas", icon: CalendarClock },
   { label: "Orçamentos", icon: FileText },
 ] as const;
 

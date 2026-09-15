@@ -1,14 +1,14 @@
 {
   "generatedBy": "scripts/audit-file-inventory.mjs",
-  "totalFiles": 918,
+  "totalFiles": 920,
   "byStatus": {
-    "MANTER": 895,
+    "MANTER": 897,
     "STANDBY": 23
   },
   "byCategory": {
     "test": 216,
     "route-ui": 146,
-    "migration": 130,
+    "migration": 132,
     "lib": 77,
     "script": 59,
     "domain": 52,
@@ -29,7 +29,7 @@
     "supabase-other": 2
   },
   "byConfidence": {
-    "alta": 897,
+    "alta": 899,
     "média": 15,
     "baixa": 6
   },
@@ -1924,7 +1924,7 @@
       ],
       "sideEffects": [
         "supabase",
-        "revalidatePath(38)"
+        "revalidatePath(39)"
       ],
       "risks": [
         "debugger"
@@ -1933,7 +1933,7 @@
         "supabase": 1,
         "sqlWrite": 26,
         "debugger": 6,
-        "revalidatePath": 38
+        "revalidatePath": 39
       },
       "action": "nenhuma",
       "reason": "configuração/infra",
@@ -21856,7 +21856,7 @@
       "risks": [],
       "signals": {
         "supabase": 1,
-        "sqlWrite": 93
+        "sqlWrite": 95
       },
       "action": "nenhuma",
       "reason": "em uso: 26 consumidor(es)",
@@ -23971,6 +23971,27 @@
       "manualDecision": false
     },
     {
+      "path": "supabase/migrations/102_crm_visitas_comerciais.sql",
+      "category": "migration",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [
+        "service-role"
+      ],
+      "signals": {
+        "serviceRole": 2,
+        "sqlWrite": 21
+      },
+      "action": "nenhuma",
+      "reason": "migration versionada — histórico do schema, nunca se apaga",
+      "manualDecision": false
+    },
+    {
       "path": "supabase/migrations/20260608_new_features.sql",
       "category": "migration",
       "status": "MANTER",
@@ -24550,6 +24571,24 @@
       "risks": [],
       "signals": {
         "sqlWrite": 5
+      },
+      "action": "nenhuma",
+      "reason": "migration versionada — histórico do schema, nunca se apaga",
+      "manualDecision": false
+    },
+    {
+      "path": "supabase/migrations/rollback/102_crm_visitas_comerciais.down.sql",
+      "category": "migration",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "sqlWrite": 1
       },
       "action": "nenhuma",
       "reason": "migration versionada — histórico do schema, nunca se apaga",
