@@ -176,15 +176,32 @@ describe("CRM — a fronteira da conversão", () => {
     }
   });
 
-  it("reutiliza a action que já cria clientes, em vez de duplicar a lógica", () => {
-    expect(semComentarios).toContain("createClienteComLocal");
-    // E não insere em `clients`/`locations` por sua conta.
+  it("🔴 não cria o cliente antes da RPC — foi esse o defeito da primeira versão", () => {
+    // A versão anterior chamava `createClienteComLocal`, que COMMITAVA o
+    // cliente e o local antes de a RPC correr. Em concorrência, dois pedidos
+    // criavam dois clientes antes de qualquer um chegar à RPC; a RPC rejeitava
+    // o segundo e o cliente dele ficava lá.
+    //
+    // A action deixou de criar seja o que for: a RPC recebe os DADOS.
+    expect(semComentarios).not.toContain("createClienteComLocal(");
     expect(semComentarios).not.toContain('.from("clients")');
     expect(semComentarios).not.toContain('.from("locations")');
+    expect(semComentarios).not.toMatch(/\.insert\(/);
   });
 
-  it("fecha a lead por RPC, e não por updates soltos", () => {
-    expect(semComentarios).toContain("link_crm_lead_conversion");
+  it("converte por RPC, e é a RPC nova", () => {
+    expect(semComentarios).toContain("convert_crm_lead_atomic");
+    // A assinatura antiga não pode voltar a aparecer: era o caminho que
+    // commitava antes de converter.
+    expect(semComentarios).not.toContain("link_crm_lead_conversion");
+  });
+
+  it("os dados que a RPC recebe saem do mapeamento puro", () => {
+    // Se a action passasse valores construídos à mão, o mapeamento testado
+    // acima deixaria de ser o que chega à base.
+    expect(semComentarios).toContain("leadParaClienteComLocal");
+    expect(semComentarios).toContain("entrada.address");
+    expect(semComentarios).toContain("entrada.hourlyRate");
   });
 
   it("revalida os três domínios que a conversão muda", () => {

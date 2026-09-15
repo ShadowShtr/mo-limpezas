@@ -70,6 +70,11 @@ BEGIN
     RAISE EXCEPTION 'CRM_VISITS_102_PRECONDITION_FAILED: índice clients_id_company_unique ausente (086)';
   END IF;
 
+  -- A FK composta do responsável precisa da chave candidata que a 101 cria.
+  IF to_regclass('public.profiles_id_company_unique') IS NULL THEN
+    RAISE EXCEPTION 'CRM_VISITS_102_PRECONDITION_FAILED: índice profiles_id_company_unique ausente (101)';
+  END IF;
+
   IF to_regprocedure('public.update_updated_at()') IS NULL
      OR to_regprocedure('public.fn_capture_history()') IS NULL THEN
     RAISE EXCEPTION 'CRM_VISITS_102_PRECONDITION_FAILED: update_updated_at()/fn_capture_history() ausentes';
@@ -100,7 +105,11 @@ CREATE TABLE IF NOT EXISTS public.crm_visits (
   -- 🔴 Um `profiles`, e nunca um `teams`. Uma visita é de uma pessoa, e pôr
   --    aqui uma equipa faria a visita aparecer no espelho de equipas e na
   --    escala — que é precisamente o que esta tabela existe para evitar.
-  assigned_to     uuid REFERENCES public.profiles(id) ON DELETE SET NULL,
+  --
+  --    Sem `REFERENCES` na coluna: a FK é COMPOSTA (ver secção das FKs). Uma
+  --    FK simples aceitaria o perfil de outra empresa, e as Server Actions
+  --    escrevem com service_role, que é BYPASSRLS.
+  assigned_to     uuid,
 
   -- Morada própria: a da lead pode ser a da sede e a visita ser a outro sítio.
   address         text,
@@ -123,7 +132,7 @@ CREATE TABLE IF NOT EXISTS public.crm_visits (
   estimated_hours numeric(5,2)  CHECK (estimated_hours IS NULL OR estimated_hours > 0),
   frequency_hint  text,
 
-  created_by      uuid REFERENCES public.profiles(id) ON DELETE SET NULL,
+  created_by      uuid,
   created_at      timestamptz NOT NULL DEFAULT now(),
   updated_at      timestamptz NOT NULL DEFAULT now(),
 
@@ -167,6 +176,32 @@ ALTER TABLE public.crm_visits
   FOREIGN KEY (client_id, company_id)
   REFERENCES public.clients (id, company_id)
   ON DELETE RESTRICT;
+
+-- 🔴 Quem vai à visita e quem a marcou têm de ser da MESMA empresa.
+--
+--    `ON DELETE NO ACTION` e não `SET NULL`: numa FK composta o SET NULL poria
+--    `company_id` a NULL, que é NOT NULL, e o DELETE do perfil falharia com um
+--    erro incompreensível. Assim, apagar um perfil ainda responsável por
+--    visitas é bloqueado de forma explícita. (Neste projeto um colaborador que
+--    sai passa a `status = 'inativo'`; o perfil não é apagado.)
+ALTER TABLE public.crm_visits DROP CONSTRAINT IF EXISTS crm_visits_assigned_mesma_empresa;
+ALTER TABLE public.crm_visits
+  ADD CONSTRAINT crm_visits_assigned_mesma_empresa
+  FOREIGN KEY (assigned_to, company_id)
+  REFERENCES public.profiles (id, company_id)
+  ON DELETE NO ACTION;
+
+ALTER TABLE public.crm_visits DROP CONSTRAINT IF EXISTS crm_visits_created_by_mesma_empresa;
+ALTER TABLE public.crm_visits
+  ADD CONSTRAINT crm_visits_created_by_mesma_empresa
+  FOREIGN KEY (created_by, company_id)
+  REFERENCES public.profiles (id, company_id)
+  ON DELETE NO ACTION;
+
+-- A chave candidata que a 103 usa para amarrar `crm_quotes.visit_id` à mesma
+-- empresa. Fica aqui porque é desta tabela.
+CREATE UNIQUE INDEX IF NOT EXISTS crm_visits_id_company_unique
+  ON public.crm_visits (id, company_id);
 
 -- A agenda: «o que tenho para ver esta semana».
 CREATE INDEX IF NOT EXISTS idx_crm_visits_company_start
@@ -266,7 +301,9 @@ BEGIN
       ('crm_visits_um_destinatario'),
       ('crm_visits_janela_valida'),
       ('crm_visits_lead_mesma_empresa'),
-      ('crm_visits_cliente_mesma_empresa')
+      ('crm_visits_cliente_mesma_empresa'),
+      ('crm_visits_assigned_mesma_empresa'),
+      ('crm_visits_created_by_mesma_empresa')
     ) AS esperada(nome)
    WHERE NOT EXISTS (
      SELECT 1 FROM pg_constraint
@@ -275,6 +312,10 @@ BEGIN
 
   IF v_faltam IS NOT NULL THEN
     RAISE EXCEPTION 'CRM_VISITS_102_POSTSTATE_FAILED: restrições em falta %', v_faltam;
+  END IF;
+
+  IF to_regclass('public.crm_visits_id_company_unique') IS NULL THEN
+    RAISE EXCEPTION 'CRM_VISITS_102_POSTSTATE_FAILED: chave candidata (id, company_id) ausente — a 103 precisa dela';
   END IF;
 END
 $posestado$;

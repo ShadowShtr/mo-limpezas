@@ -112,11 +112,32 @@ BEGIN
 END
 $precondicoes$;
 
--- O par (id, company_id) de `locations` ainda não tem índice único — a 086 só
--- criou o de `clients`. É aditivo, e é o que permite a FK composta do local
--- convertido. Fica aqui porque é aqui que passa a ser preciso.
+-- ───────────────────────────────────────────────────────────────────────────
+-- 0. Chaves candidatas para as FKs compostas
+-- ───────────────────────────────────────────────────────────────────────────
+--
+-- 🔴 Porque é que FKs simples NÃO chegam neste projeto.
+--
+--    As Server Actions escrevem com `service_role`, que é BYPASSRLS. O RLS
+--    protege quem lê pelo browser; não protege a escrita feita pelo caminho
+--    canónico. Uma FK simples `owner_id REFERENCES profiles(id)` aceita o
+--    perfil de OUTRA empresa — o id é um uuid válido, e a base não tem como
+--    saber que não é para ali.
+--
+--    Com a FK composta `(owner_id, company_id) → profiles(id, company_id)`, a
+--    própria base recusa. Deixa de depender de a aplicação se lembrar.
+--
+-- O par (id, company_id) de `locations` e `profiles` ainda não tinha índice
+-- único — a 086 só criou o de `clients`. São aditivos.
+--
+-- `profiles`: verificado em produção antes de propor (46 linhas, 0 com
+-- `company_id` nulo, 0 duplicados de (id, company_id)) — e é trivialmente
+-- único porque `id` já é a chave primária. O índice não pode falhar.
 CREATE UNIQUE INDEX IF NOT EXISTS locations_id_company_unique
   ON public.locations (id, company_id);
+
+CREATE UNIQUE INDEX IF NOT EXISTS profiles_id_company_unique
+  ON public.profiles (id, company_id);
 
 -- ───────────────────────────────────────────────────────────────────────────
 -- 1. A lead
@@ -170,7 +191,9 @@ CREATE TABLE IF NOT EXISTS public.crm_leads (
 
   -- O responsável comercial. Uma lead sem dono morre sem ninguém dar por
   -- isso — é o modo de falha mais comum de um funil.
-  owner_id        uuid REFERENCES public.profiles(id) ON DELETE SET NULL,
+  -- 🔴 Sem `REFERENCES` na coluna: a FK é COMPOSTA, declarada mais abaixo.
+  --    Uma FK simples aceitaria o perfil de outra empresa — ver a secção 0.
+  owner_id        uuid,
 
   -- ── Valor ────────────────────────────────────────────────────────────────
   -- 🔴 O valor e a sua natureza andam sempre juntos, e não é detalhe.
@@ -223,7 +246,7 @@ CREATE TABLE IF NOT EXISTS public.crm_leads (
   -- de perda, que é metade da razão de esta tabela existir.
   archived_at     timestamptz,
 
-  created_by      uuid REFERENCES public.profiles(id) ON DELETE SET NULL,
+  created_by      uuid,
   created_at      timestamptz NOT NULL DEFAULT now(),
   updated_at      timestamptz NOT NULL DEFAULT now(),
 
@@ -278,6 +301,30 @@ ALTER TABLE public.crm_leads
   REFERENCES public.locations (id, company_id)
   ON DELETE RESTRICT;
 
+-- 🔴 O responsável e o autor têm de ser da MESMA empresa da lead.
+--
+--    `ON DELETE NO ACTION` e não `SET NULL`: numa FK composta, o SET NULL
+--    poria a NULL as DUAS colunas — incluindo `company_id`, que é NOT NULL —
+--    e o DELETE do perfil falharia com um erro incompreensível. Com NO ACTION,
+--    apagar um perfil que ainda é responsável por leads é bloqueado de forma
+--    explícita: primeiro liberta-se (`owner_id = NULL`), depois apaga-se.
+--
+--    Na prática não morde: neste projeto um colaborador que sai passa a
+--    `status = 'inativo'`; o perfil não é apagado.
+ALTER TABLE public.crm_leads DROP CONSTRAINT IF EXISTS crm_leads_owner_mesma_empresa;
+ALTER TABLE public.crm_leads
+  ADD CONSTRAINT crm_leads_owner_mesma_empresa
+  FOREIGN KEY (owner_id, company_id)
+  REFERENCES public.profiles (id, company_id)
+  ON DELETE NO ACTION;
+
+ALTER TABLE public.crm_leads DROP CONSTRAINT IF EXISTS crm_leads_created_by_mesma_empresa;
+ALTER TABLE public.crm_leads
+  ADD CONSTRAINT crm_leads_created_by_mesma_empresa
+  FOREIGN KEY (created_by, company_id)
+  REFERENCES public.profiles (id, company_id)
+  ON DELETE NO ACTION;
+
 -- O quadro do funil lê por empresa, estado e ordem manual — o acesso quente.
 CREATE INDEX IF NOT EXISTS idx_crm_leads_company_stage
   ON public.crm_leads (company_id, stage, board_order);
@@ -331,7 +378,7 @@ CREATE TABLE IF NOT EXISTS public.crm_lead_interactions (
   -- ontem. A ordem da timeline é por `occurred_at`; `created_at` é auditoria.
   occurred_at  timestamptz NOT NULL DEFAULT now(),
 
-  author_id    uuid REFERENCES public.profiles(id) ON DELETE SET NULL,
+  author_id    uuid,
   created_at   timestamptz NOT NULL DEFAULT now(),
   updated_at   timestamptz NOT NULL DEFAULT now(),
 
@@ -358,6 +405,14 @@ ALTER TABLE public.crm_lead_interactions
   FOREIGN KEY (lead_id, company_id)
   REFERENCES public.crm_leads (id, company_id)
   ON DELETE CASCADE;
+
+ALTER TABLE public.crm_lead_interactions
+  DROP CONSTRAINT IF EXISTS crm_lead_interactions_author_mesma_empresa;
+ALTER TABLE public.crm_lead_interactions
+  ADD CONSTRAINT crm_lead_interactions_author_mesma_empresa
+  FOREIGN KEY (author_id, company_id)
+  REFERENCES public.profiles (id, company_id)
+  ON DELETE NO ACTION;
 
 -- A timeline de uma lead, por ordem de acontecimento — o acesso quente.
 CREATE INDEX IF NOT EXISTS idx_crm_lead_interactions_lead
@@ -423,7 +478,196 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.crm_leads             TO se
 GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.crm_lead_interactions TO service_role;
 
 -- ───────────────────────────────────────────────────────────────────────────
--- 4. Pós-estado
+-- 4. Mover a lead no funil — estado e diário na MESMA transação
+-- ───────────────────────────────────────────────────────────────────────────
+--
+-- 🔴 O defeito que esta RPC existe para fechar.
+--
+--    A primeira versão fazia, na Server Action:
+--
+--        UPDATE crm_leads SET stage = ...
+--        depois: registarInteracao(...)   ← best-effort, engolia o erro
+--
+--    Isso permite o estado STAGE_CHANGED = YES + DIARY_ENTRY = MISSING: a lead
+--    muda de coluna e a timeline não regista porquê nem quando. Três semanas
+--    depois ninguém sabe o que aconteceu — e a timeline existe precisamente
+--    para responder a isso.
+--
+--    Permitia também last-write-wins: duas pessoas a arrastar o mesmo cartão
+--    ao mesmo tempo, e a segunda escrita a sobrepor-se sem ninguém saber.
+--
+-- Aqui as duas escritas são uma transação só. Se o INSERT do diário falhar, o
+-- UPDATE do estado é revertido com ele.
+--
+-- `p_expected_stage` é o controlo de concorrência: quem arrasta declara de que
+-- coluna veio. Se entretanto outra pessoa mudou, a transição é recusada em vez
+-- de sobrepor.
+
+CREATE OR REPLACE FUNCTION public.move_crm_lead_stage_atomic(
+  p_company_id        uuid,
+  p_lead_id           uuid,
+  p_expected_stage    text,
+  p_new_stage         text,
+  p_actor             uuid,
+  p_lost_reason       text DEFAULT NULL,
+  p_lost_reason_notes text DEFAULT NULL
+)
+RETURNS TABLE (lead_id uuid, stage text)
+LANGUAGE plpgsql
+SECURITY INVOKER
+AS $mover$
+DECLARE
+  v_atual public.crm_leads%ROWTYPE;
+  v_etiquetas constant jsonb := jsonb_build_object(
+    'novo', 'Novo', 'contactado', 'Contactado', 'visita_agendada', 'Visita agendada',
+    'orcamento_enviado', 'Orçamento enviado', 'ganho', 'Ganho', 'perdido', 'Perdido'
+  );
+BEGIN
+  SELECT * INTO v_atual
+    FROM public.crm_leads
+   WHERE id = p_lead_id AND company_id = p_company_id
+   FOR UPDATE;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'LEAD_NOT_FOUND' USING ERRCODE = 'no_data_found';
+  END IF;
+
+  -- 🔴 Controlo de concorrência. Sem isto, duas sessões a mover o mesmo cartão
+  --    dariam last-write-wins e a segunda apagaria a decisão da primeira.
+  IF p_expected_stage IS NOT NULL AND v_atual.stage <> p_expected_stage THEN
+    RAISE EXCEPTION 'LEAD_STAGE_CONFLICT: esperado %, actual %', p_expected_stage, v_atual.stage
+      USING ERRCODE = 'serialization_failure';
+  END IF;
+
+  -- Idempotência explícita: repetir a mesma transição não escreve, não regista
+  -- no diário e não gera histórico. É o retry seguro.
+  IF v_atual.stage = p_new_stage THEN
+    lead_id := p_lead_id; stage := v_atual.stage; RETURN NEXT; RETURN;
+  END IF;
+
+  -- 🔴 `ganho` NÃO se marca por aqui. Ganhar é converter, e converter cria um
+  --    cliente — o que acontece em `convert_crm_lead_atomic` (104). Deixar
+  --    marcar aqui daria uma lead ganha sem cliente, que o CHECK
+  --    `crm_leads_conversao_so_se_ganha` nem sequer permite.
+  IF p_new_stage = 'ganho' THEN
+    RAISE EXCEPTION 'LEAD_WIN_REQUIRES_CONVERSION' USING ERRCODE = 'check_violation';
+  END IF;
+
+  -- Sair de `ganho` seria reescrever a história de um cliente que já existe.
+  IF v_atual.stage = 'ganho' THEN
+    RAISE EXCEPTION 'LEAD_ALREADY_WON' USING ERRCODE = 'check_violation';
+  END IF;
+
+  IF NOT (v_etiquetas ? p_new_stage) THEN
+    RAISE EXCEPTION 'LEAD_STAGE_UNKNOWN: %', p_new_stage USING ERRCODE = 'check_violation';
+  END IF;
+
+  IF p_new_stage = 'perdido' AND (p_lost_reason IS NULL OR btrim(p_lost_reason) = '') THEN
+    RAISE EXCEPTION 'LEAD_LOST_REQUIRES_REASON' USING ERRCODE = 'check_violation';
+  END IF;
+
+  UPDATE public.crm_leads
+     SET stage = p_new_stage,
+         lost_at = CASE WHEN p_new_stage = 'perdido' THEN now() ELSE NULL END,
+         lost_reason = CASE WHEN p_new_stage = 'perdido' THEN p_lost_reason ELSE NULL END,
+         lost_reason_notes = CASE WHEN p_new_stage = 'perdido' THEN p_lost_reason_notes ELSE NULL END
+   WHERE id = p_lead_id AND company_id = p_company_id;
+
+  -- Na mesma transação. Se isto falhar, o UPDATE acima desaparece com ele.
+  INSERT INTO public.crm_lead_interactions (company_id, lead_id, kind, summary, author_id)
+  VALUES (
+    p_company_id, p_lead_id, 'sistema',
+    'Estado alterado de ' || COALESCE(v_etiquetas->>v_atual.stage, v_atual.stage)
+      || ' para ' || COALESCE(v_etiquetas->>p_new_stage, p_new_stage) || '.',
+    p_actor
+  );
+
+  lead_id := p_lead_id;
+  stage := p_new_stage;
+  RETURN NEXT;
+END;
+$mover$;
+
+-- ───────────────────────────────────────────────────────────────────────────
+-- 5. Reordenar cartões dentro de uma coluna — tudo ou nada
+-- ───────────────────────────────────────────────────────────────────────────
+--
+-- 🔴 A primeira versão fazia N `UPDATE` sequenciais a partir da Server Action.
+--    Se o terceiro falhasse, os dois primeiros ficavam gravados e o quadro
+--    ficava numa ordem que ninguém escolheu.
+--
+-- Aqui valida-se TUDO antes de escrever QUALQUER coisa, e a escrita é uma só
+-- instrução dentro de uma transação.
+
+CREATE OR REPLACE FUNCTION public.reorder_crm_leads_atomic(
+  p_company_id uuid,
+  p_stage      text,
+  p_items      jsonb,
+  p_actor      uuid
+)
+RETURNS TABLE (atualizadas integer)
+LANGUAGE plpgsql
+SECURITY INVOKER
+AS $reordenar$
+DECLARE
+  v_total     integer;
+  v_validas   integer;
+  v_distintas integer;
+BEGIN
+  IF p_items IS NULL OR jsonb_array_length(p_items) = 0 THEN
+    atualizadas := 0; RETURN NEXT; RETURN;
+  END IF;
+
+  v_total := jsonb_array_length(p_items);
+
+  -- Sem ids repetidos: duas posições para o mesmo cartão é um pedido incoerente.
+  SELECT count(DISTINCT (i->>'leadId')) INTO v_distintas
+    FROM jsonb_array_elements(p_items) AS i;
+
+  IF v_distintas <> v_total THEN
+    RAISE EXCEPTION 'REORDER_DUPLICATE_IDS' USING ERRCODE = 'check_violation';
+  END IF;
+
+  -- Todos os ids têm de existir, ser desta empresa E estar na coluna que o
+  -- pedido diz. Validado ANTES de escrever — é isto que impede a ordem parcial.
+  SELECT count(*) INTO v_validas
+    FROM jsonb_array_elements(p_items) AS i
+    JOIN public.crm_leads l
+      ON l.id = (i->>'leadId')::uuid
+     AND l.company_id = p_company_id
+     AND l.stage = p_stage;
+
+  IF v_validas <> v_total THEN
+    RAISE EXCEPTION 'REORDER_INVALID_ITEMS: % de % validos', v_validas, v_total
+      USING ERRCODE = 'check_violation';
+  END IF;
+
+  IF EXISTS (
+    SELECT 1 FROM jsonb_array_elements(p_items) AS i
+     WHERE (i->>'boardOrder')::int < 0 OR (i->>'boardOrder')::int > 100000
+  ) THEN
+    RAISE EXCEPTION 'REORDER_INVALID_POSITION' USING ERRCODE = 'check_violation';
+  END IF;
+
+  UPDATE public.crm_leads l
+     SET board_order = (i->>'boardOrder')::int
+    FROM jsonb_array_elements(p_items) AS i
+   WHERE l.id = (i->>'leadId')::uuid
+     AND l.company_id = p_company_id
+     AND l.board_order IS DISTINCT FROM (i->>'boardOrder')::int;
+
+  atualizadas := v_total;
+  RETURN NEXT;
+END;
+$reordenar$;
+
+REVOKE ALL ON FUNCTION public.move_crm_lead_stage_atomic(uuid, uuid, text, text, uuid, text, text) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.reorder_crm_leads_atomic(uuid, text, jsonb, uuid) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.move_crm_lead_stage_atomic(uuid, uuid, text, text, uuid, text, text) TO service_role;
+GRANT EXECUTE ON FUNCTION public.reorder_crm_leads_atomic(uuid, text, jsonb, uuid) TO service_role;
+
+-- ───────────────────────────────────────────────────────────────────────────
+-- 6. Pós-estado
 -- ───────────────────────────────────────────────────────────────────────────
 --
 -- `CREATE TABLE IF NOT EXISTS` não corrige uma tabela pré-existente com outra
@@ -473,16 +717,20 @@ BEGIN
     RAISE EXCEPTION 'CRM_LEADS_101_POSTSTATE_FAILED: RLS não ficou activa';
   END IF;
 
-  -- As três FKs compostas são o que impede cruzar empresas. Se alguma faltar,
-  -- o isolamento passa a depender só da aplicação.
+  -- 🔴 As SEIS FKs compostas são o que impede cruzar empresas. Se alguma
+  --    faltar, o isolamento passa a depender de a aplicação se lembrar — e as
+  --    Server Actions escrevem com service_role, que é BYPASSRLS.
   SELECT array_agg(esperado.nome) INTO v_faltam
     FROM (VALUES
-      ('crm_leads_cliente_mesma_empresa',            'public.crm_leads'),
-      ('crm_leads_local_mesma_empresa',              'public.crm_leads'),
-      ('crm_lead_interactions_lead_mesma_empresa',   'public.crm_lead_interactions'),
+      ('crm_leads_cliente_mesma_empresa',              'public.crm_leads'),
+      ('crm_leads_local_mesma_empresa',                'public.crm_leads'),
+      ('crm_leads_owner_mesma_empresa',                'public.crm_leads'),
+      ('crm_leads_created_by_mesma_empresa',           'public.crm_leads'),
+      ('crm_lead_interactions_lead_mesma_empresa',     'public.crm_lead_interactions'),
+      ('crm_lead_interactions_author_mesma_empresa',   'public.crm_lead_interactions'),
       -- O CHECK do motivo de perda é metade da razão de esta tabela existir.
-      ('crm_leads_perdida_exige_motivo',             'public.crm_leads'),
-      ('crm_leads_conversao_so_se_ganha',            'public.crm_leads')
+      ('crm_leads_perdida_exige_motivo',               'public.crm_leads'),
+      ('crm_leads_conversao_so_se_ganha',              'public.crm_leads')
     ) AS esperado(nome, tabela)
    WHERE NOT EXISTS (
      SELECT 1 FROM pg_constraint
@@ -492,6 +740,36 @@ BEGIN
 
   IF v_faltam IS NOT NULL THEN
     RAISE EXCEPTION 'CRM_LEADS_101_POSTSTATE_FAILED: restrições em falta %', v_faltam;
+  END IF;
+
+  -- As chaves candidatas sem as quais as FKs compostas não podem existir.
+  SELECT array_agg(esperado.nome) INTO v_faltam
+    FROM (VALUES
+      ('profiles_id_company_unique'),
+      ('locations_id_company_unique'),
+      ('crm_leads_id_company_unique')
+    ) AS esperado(nome)
+   WHERE to_regclass('public.' || esperado.nome) IS NULL;
+
+  IF v_faltam IS NOT NULL THEN
+    RAISE EXCEPTION 'CRM_LEADS_101_POSTSTATE_FAILED: chaves candidatas em falta %', v_faltam;
+  END IF;
+
+  -- 🔴 As duas RPCs atómicas. Sem elas, a aplicação voltaria a fazer
+  --    `UPDATE` + diário best-effort (estado sem timeline) e N updates
+  --    sequenciais de ordem (reordenação parcial em erro).
+  SELECT array_agg(esperada.nome) INTO v_faltam
+    FROM (VALUES
+      ('move_crm_lead_stage_atomic'),
+      ('reorder_crm_leads_atomic')
+    ) AS esperada(nome)
+   WHERE NOT EXISTS (
+     SELECT 1 FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+      WHERE n.nspname = 'public' AND p.proname = esperada.nome
+   );
+
+  IF v_faltam IS NOT NULL THEN
+    RAISE EXCEPTION 'CRM_LEADS_101_POSTSTATE_FAILED: RPC em falta %', v_faltam;
   END IF;
 END
 $posestado$;

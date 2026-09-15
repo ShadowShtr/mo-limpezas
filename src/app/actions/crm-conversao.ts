@@ -10,8 +10,18 @@
 //    gestor, depois de o rever — nada entra no calendário sem uma pessoa
 //    decidir. Foi decisão explícita do dono.
 //
-// 🔴 `createClienteComLocal` é reutilizada tal como está. Reimplementá-la aqui
-//    daria duas formas de criar um cliente, que divergiriam com o tempo.
+// 🔴 O cliente e o local são criados DENTRO da RPC, na mesma transação da
+//    conversão. A versão anterior chamava `createClienteComLocal` primeiro —
+//    e essas duas linhas ficavam COMMITADAS antes de a RPC correr.
+//
+//    Isso não era uma conversão atómica: se a RPC falhasse, ficava um cliente
+//    órfão; e em concorrência, dois pedidos criavam dois clientes antes de
+//    qualquer um chegar à RPC. A RPC era idempotente; o FLUXO não era.
+//
+//    A duplicação com `createClienteComLocal` é assumida e pequena — `clients`
+//    e `locations` não têm regra de negócio na criação além de `trim` e
+//    defaults. O que essa action tem a mais (auth, revalidação) é da camada de
+//    aplicação, e continua a ser feito aqui.
 // ============================================================================
 
 import {
@@ -30,13 +40,44 @@ import {
   porqueNaoConverte,
   type LeadParaConverter,
 } from "@/lib/crm/lead-to-cliente";
-import { createClienteComLocal } from "@/app/actions/clientes";
 
 export interface ResultadoConversao {
   clientId: string;
   locationId: string;
   /** Para onde levar o gestor a seguir, com o formulário pré-preenchido. */
   redirectTo: string;
+}
+
+/** Traduz os erros da RPC de conversão para frases que se leem. */
+function erroDaConversao(contexto: string, err: unknown): ActionResult<never> {
+  const msg = err instanceof Error ? err.message : String(err);
+
+  if (msg.includes("QUOTE_LEAD_MISMATCH")) {
+    return actionFailure(
+      ACTION_ERROR_CODES.BUSINESS_RULE,
+      "Esse orçamento é de outra lead. Escolha o orçamento aceite desta.",
+    );
+  }
+  if (msg.includes("QUOTE_NOT_ACCEPTED")) {
+    return actionFailure(
+      ACTION_ERROR_CODES.BUSINESS_RULE,
+      "Só um orçamento aceite pode dar origem a um cliente. Marque-o como aceite primeiro.",
+    );
+  }
+  if (msg.includes("QUOTE_NOT_FOUND")) {
+    return actionFailure(ACTION_ERROR_CODES.NOT_FOUND, "Orçamento não encontrado.");
+  }
+  if (msg.includes("LEAD_NOT_FOUND")) {
+    return actionFailure(ACTION_ERROR_CODES.NOT_FOUND, "Lead não encontrada.");
+  }
+  if (msg.includes("CONVERSION_ADDRESS_REQUIRED")) {
+    return actionFailure(
+      ACTION_ERROR_CODES.BUSINESS_RULE,
+      "Falta a morada do local. Acrescente-a à lead antes de a converter em cliente.",
+    );
+  }
+
+  return internalFailure(contexto, err, ACTION_ERROR_CODES.PERSISTENCE);
 }
 
 function recusa(code: string): ActionResult<never> {
@@ -56,19 +97,19 @@ function recusa(code: string): ActionResult<never> {
  * nenhum. Quando existe, os seus valores pré-preenchem o contrato e o
  * orçamento passa a apontar para o cliente.
  *
- * ── Sobre a atomicidade, com honestidade ───────────────────────────────────
+ * ── Atomicidade ────────────────────────────────────────────────────────────
  *
- * Isto são dois passos: criar o cliente (action existente, com o seu próprio
- * rollback manual) e fechar a lead (RPC da 104). Não são uma transação só.
+ * 🔴 UMA transação. `convert_crm_lead_atomic` bloqueia a lead, valida o
+ *    orçamento, cria o cliente e o local, fecha a lead, aponta o orçamento e
+ *    escreve a timeline — tudo dentro dela. Qualquer erro reverte tudo.
  *
- * Se o segundo falhar, fica um cliente real criado — visível, sem dinheiro
- * pendurado e sem nada agendado — e a lead por converter. A guarda
- * `converted_client_id IS NULL` na RPC torna a repetição segura, e a mensagem
- * diz o que aconteceu em vez de esconder.
+ *    Os passos 1 a 3 aqui em cima são LEITURAS: servem para dar mensagens que
+ *    se entendem antes de chamar a RPC. Nenhum deles escreve. As mesmas
+ *    validações estão dentro da RPC, que é a autoridade — estas só evitam que
+ *    o utilizador receba um código de erro em vez de uma frase.
  *
- * É uma degradação aceitável. A alternativa — reimplementar a criação do
- * cliente em SQL para ter uma transação só — daria duas formas de criar um
- * cliente, e essa é a espécie de duplicação que este projeto já pagou caro.
+ *    Dois pedidos simultâneos: o segundo espera no lock, encontra a lead já
+ *    convertida e devolve os ids existentes sem ter criado nada.
  */
 export async function converterLeadEmCliente(
   leadId: string,
@@ -170,74 +211,70 @@ export async function converterLeadEmCliente(
     return actionFailure(ACTION_ERROR_CODES.BUSINESS_RULE, impedimento);
   }
 
-  // ── 4. Criar cliente + local, pela action que já existe ───────────────────
+  // ── 4. Converter — cliente, local e lead numa transação só ────────────────
   const entrada = leadParaClienteComLocal(dadosLead, {
     items: itens,
     visitAddress: moradaDaVisita,
   });
 
-  const criado = await createClienteComLocal(profile.company_id, entrada);
+  let resultado: { client_id: string; location_id: string; ja_convertida: boolean };
 
-  if (!criado.ok || !criado.clientId || !criado.locationId) {
-    // A action antiga devolve `{ ok, error }`; traduz-se para o formato novo
-    // sem deixar passar a mensagem crua da base.
-    logQueryFailure("converterLeadEmCliente.createCliente", { message: criado.error ?? "" });
-    return actionFailure(
-      ACTION_ERROR_CODES.PERSISTENCE,
-      "Não foi possível criar o cliente a partir desta lead.",
-    );
-  }
-
-  // ── 5. Fechar a lead, numa transação ──────────────────────────────────────
   try {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { error } = await (admin as any).rpc("link_crm_lead_conversion", {
+    const { data, error } = await (admin as any).rpc("convert_crm_lead_atomic", {
       p_company_id: profile.company_id,
       p_lead_id: leadId,
-      p_client_id: criado.clientId,
-      p_location_id: criado.locationId,
-      p_quote_id: orcamento?.id ?? null,
       p_actor: profile.id,
+      p_quote_id: orcamento?.id ?? null,
+      p_location_name: entrada.locationName,
+      p_address: entrada.address,
+      p_service_type: entrada.serviceType,
+      p_hourly_rate: entrada.hourlyRate,
+      p_lat: entrada.lat ?? null,
+      p_lng: entrada.lng ?? null,
     });
 
-    if (error) {
-      const msg = error.message ?? "";
-      if (msg.includes("LEAD_ALREADY_CONVERTED")) {
-        // O cliente foi criado por esta chamada, mas outra ganhou a corrida.
-        // Dizer isto é melhor do que fingir que correu bem: há um cliente a
-        // mais, e quem está no ecrã tem de saber.
-        return actionFailure(
-          ACTION_ERROR_CODES.CONFLICT,
-          "Esta lead foi convertida entretanto. Verifique a lista de Clientes — pode ter ficado um registo repetido.",
-        );
-      }
-      return internalFailure("converterLeadEmCliente.rpc", new Error(msg), ACTION_ERROR_CODES.PERSISTENCE);
+    if (error) return erroDaConversao("converterLeadEmCliente", new Error(error.message));
+
+    const linha = Array.isArray(data) ? data[0] : data;
+    if (!linha?.client_id) {
+      return internalFailure(
+        "converterLeadEmCliente",
+        new Error("RPC sem resultado"),
+        ACTION_ERROR_CODES.PERSISTENCE,
+      );
     }
+    resultado = linha;
   } catch (err) {
-    return internalFailure("converterLeadEmCliente.rpc", err, ACTION_ERROR_CODES.PERSISTENCE);
+    return erroDaConversao("converterLeadEmCliente", err);
   }
 
-  await auditLog({
+    await auditLog({
     companyId: profile.company_id,
     actorId: profile.id,
     action: "crm_lead_converted",
     entityType: "crm_lead",
     entityId: leadId,
-    after: { client_id: criado.clientId, location_id: criado.locationId, quote_id: orcamento?.id ?? null },
+    after: {
+      client_id: resultado.client_id,
+      location_id: resultado.location_id,
+      quote_id: orcamento?.id ?? null,
+      ja_convertida: resultado.ja_convertida,
+    },
   }, admin);
 
   // A conversão muda o funil, os clientes e os locais — os três domínios.
   invalidateBusinessState({
     domains: ["leads", "clients", "locations"],
-    clientId: criado.clientId,
+    clientId: resultado.client_id,
   });
 
   return actionSuccess({
-    clientId: criado.clientId,
-    locationId: criado.locationId,
+    clientId: resultado.client_id,
+    locationId: resultado.location_id,
     redirectTo: destinoAposConversao({
-      clientId: criado.clientId,
-      locationId: criado.locationId,
+      clientId: resultado.client_id,
+      locationId: resultado.location_id,
       orcamento,
     }),
   });

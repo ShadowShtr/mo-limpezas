@@ -19,93 +19,37 @@ import { join } from "node:path";
 import pg from "pg";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { startPostgresContainer, type PostgresContainer } from "./helpers/pg-container";
+import {
+  EMPRESA,
+  ACTOR,
+  montarPalcoCrm,
+} from "./helpers/crm-pg-harness";
 
 const ROOT = process.cwd();
 const CONTAINER = `crmaudit-${process.pid}`;
 
-const EMPRESA = "11111111-1111-4111-8111-111111111111";
-const ACTOR = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 
 let container: PostgresContainer;
 let pool: pg.Pool;
 
-const sql = (rel: string) => readFileSync(join(ROOT, rel), "utf8");
 
 const ITENS = JSON.stringify([
   { description: "Limpeza", quantity: 10, unit: "hora", unit_price: 12 },
 ]);
 
-async function baseline() {
-  await pool.query(`
-    DROP SCHEMA IF EXISTS public CASCADE;
-    CREATE SCHEMA public;
-    GRANT USAGE ON SCHEMA public TO anon, authenticated, service_role;
-
-    CREATE TABLE public.companies (id uuid PRIMARY KEY, name text NOT NULL);
-    CREATE TABLE public.profiles (
-      id uuid PRIMARY KEY, company_id uuid NOT NULL REFERENCES public.companies(id) ON DELETE CASCADE,
-      full_name text NOT NULL, role text NOT NULL DEFAULT 'gestor'
-    );
-    CREATE TABLE public.clients (
-      id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-      company_id uuid NOT NULL REFERENCES public.companies(id) ON DELETE CASCADE, name text NOT NULL
-    );
-    CREATE TABLE public.locations (
-      id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-      company_id uuid NOT NULL REFERENCES public.companies(id) ON DELETE CASCADE,
-      client_id uuid NOT NULL REFERENCES public.clients(id) ON DELETE CASCADE,
-      name text NOT NULL, address text NOT NULL
-    );
-    CREATE TABLE public.company_settings (
-      id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-      company_id uuid NOT NULL REFERENCES public.companies(id) ON DELETE CASCADE,
-      vat_rate numeric(5,2) NOT NULL DEFAULT 23, invoice_prefix text NOT NULL DEFAULT 'F'
-    );
-    CREATE TABLE public.data_history (
-      id uuid PRIMARY KEY DEFAULT gen_random_uuid(), table_name text NOT NULL, row_id uuid,
-      op text NOT NULL, old_data jsonb, new_data jsonb, actor uuid,
-      changed_at timestamptz NOT NULL DEFAULT now()
-    );
-    CREATE FUNCTION public.update_updated_at() RETURNS trigger
-      LANGUAGE plpgsql AS $$ BEGIN NEW.updated_at = now(); RETURN NEW; END $$;
-    -- A de produção (059) escreve mesmo; aqui também, para o teste de retenção
-    -- poder provar que o histórico sobrevive ao DELETE.
-    CREATE FUNCTION public.fn_capture_history() RETURNS trigger
-      LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
-      BEGIN
-        IF TG_OP = 'DELETE' THEN
-          INSERT INTO public.data_history (table_name, row_id, op, old_data)
-          VALUES (TG_TABLE_NAME, OLD.id, 'DELETE', to_jsonb(OLD));
-          RETURN OLD;
-        END IF;
-        IF to_jsonb(OLD) IS DISTINCT FROM to_jsonb(NEW) THEN
-          INSERT INTO public.data_history (table_name, row_id, op, old_data, new_data)
-          VALUES (TG_TABLE_NAME, OLD.id, 'UPDATE', to_jsonb(OLD), to_jsonb(NEW));
-        END IF;
-        RETURN NEW;
-      END $$;
-    CREATE FUNCTION public.get_my_company_id() RETURNS uuid
-      LANGUAGE sql STABLE AS $$ SELECT current_setting('teste.company', true)::uuid $$;
-    CREATE FUNCTION public.get_my_role() RETURNS text
-      LANGUAGE sql STABLE AS $$ SELECT current_setting('teste.role', true) $$;
-    CREATE UNIQUE INDEX clients_id_company_unique ON public.clients (id, company_id);
-  `);
-
-  await pool.query("INSERT INTO public.companies (id, name) VALUES ($1, 'A')", [EMPRESA]);
-  await pool.query(
-    "INSERT INTO public.profiles (id, company_id, full_name) VALUES ($1, $2, 'Gestora')",
-    [ACTOR, EMPRESA],
-  );
-  await pool.query("INSERT INTO public.company_settings (company_id) VALUES ($1)", [EMPRESA]);
-
-  for (const m of [
-    "101_crm_leads",
-    "102_crm_visitas_comerciais",
-    "103_crm_orcamentos",
-    "104_crm_conversao_lead",
-  ]) {
-    await pool.query(sql(`supabase/migrations/${m}.sql`));
-  }
+/**
+ * O palco: a forma REAL do schema de produção + as migrations do CRM.
+ *
+ * 🔴 A versão anterior escrevia aqui um baseline à mão, com 7 tabelas. Provava
+ *    coisas verdadeiras sobre um mundo que não é o nosso — sem as FKs reais,
+ *    sem as políticas reais, sem os grants reais, e com `service_role` sem
+ *    BYPASSRLS (o que fazia uma recusa passar pela razão errada).
+ *
+ *    Ver `helpers/crm-pg-harness.ts` para o porquê e para o que o fixture não
+ *    traz.
+ */
+async function baseline(opts: { aplicarCrm?: boolean } = {}) {
+  await montarPalcoCrm(pool, opts);
 }
 
 async function novaLead(nome = "Lead"): Promise<string> {
@@ -155,11 +99,6 @@ beforeAll(async () => {
     serverFlags: ["shared_buffers=16MB", "max_connections=30", "work_mem=1MB"],
   });
   pool = new pg.Pool({ ...container.connection, max: 10 });
-  await pool.query(`
-    DO $$ BEGIN CREATE ROLE anon; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
-    DO $$ BEGIN CREATE ROLE authenticated; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
-    DO $$ BEGIN CREATE ROLE service_role BYPASSRLS; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
-  `);
 }, 180_000);
 
 afterAll(async () => {
@@ -427,17 +366,24 @@ describe("🔴 11 — leads: transições e integridade", () => {
     expect(n2, "um UPDATE repetido gera histórico por causa de updated_at").toBe(2);
   });
 
-  it("🔴 a action não repete a escrita quando o estado não muda", async () => {
-    // É esta a guarda real contra audit duplicado em retry: `moveLeadStage`
-    // sai cedo se o destino for igual à origem, sem UPDATE, sem interacção de
-    // sistema e sem `auditLog`.
+  it("🔴 a guarda de idempotência vive na RPC, e a action não escreve por fora", async () => {
+    // A guarda mudou de sítio nesta ronda, e é uma melhoria: estava na action
+    // (`if (origem === destino) return`), passou para dentro de
+    // `move_crm_lead_stage_atomic`, onde corre sob o mesmo lock que a escrita.
+    //
+    // O que se mede aqui é que a action deixou de escrever por fora da RPC —
+    // era esse o caminho que permitia estado sem diário.
     const src = readFileSync(join(ROOT, "src/app/actions/crm-leads.ts"), "utf8");
-    const corpo = src.slice(src.indexOf("export async function moveLeadStage"));
-    const saidaCedo = corpo.indexOf("if (origem === destino) return actionSuccess");
-    const primeiraEscrita = corpo.indexOf(".update(");
+    const corpo = src.slice(
+      src.indexOf("export async function moveLeadStage"),
+      src.indexOf("export async function reorderLeads"),
+    );
 
-    expect(saidaCedo, "a saída antecipada tem de existir").toBeGreaterThan(-1);
-    expect(saidaCedo, "e tem de vir ANTES de qualquer escrita").toBeLessThan(primeiraEscrita);
+    expect(corpo).toContain("move_crm_lead_stage_atomic");
+    expect(corpo, "a action não pode escrever fora da RPC").not.toMatch(/\.update\(|\.insert\(/);
+
+    const sql = readFileSync(join(ROOT, "supabase/migrations/101_crm_leads.sql"), "utf8");
+    expect(sql, "a idempotência tem de estar na RPC").toContain("IF v_atual.stage = p_new_stage THEN");
   });
 
   it("🔴 a RPC de estado do orçamento também sai cedo em retry", async () => {
@@ -457,14 +403,11 @@ describe("🔴 11 — leads: transições e integridade", () => {
   it("a interação de sistema da conversão é escrita na mesma transação da mudança", async () => {
     // STATUS_CHANGED = YES + CONTACT_LOG_ENTRY = MISSING é o estado proibido.
     const leadId = await novaLead();
-    const { rows: cli } = await pool.query(
-      "INSERT INTO public.clients (company_id, name) VALUES ($1, 'C') RETURNING id", [EMPRESA]);
-    const { rows: loc } = await pool.query(
-      "INSERT INTO public.locations (company_id, client_id, name, address) VALUES ($1,$2,'L','R') RETURNING id",
-      [EMPRESA, cli[0].id]);
 
-    await pool.query("SELECT public.link_crm_lead_conversion($1,$2,$3,$4,NULL,$5)",
-      [EMPRESA, leadId, cli[0].id, loc[0].id, ACTOR]);
+    await pool.query(
+      "SELECT * FROM public.convert_crm_lead_atomic($1,$2,$3,NULL,NULL,$4,NULL,NULL,NULL,NULL)",
+      [EMPRESA, leadId, ACTOR, "Rua da Lead, 1"],
+    );
 
     const lead = (await pool.query("SELECT stage FROM public.crm_leads WHERE id = $1", [leadId])).rows[0];
     const inter = (await pool.query(
@@ -493,15 +436,17 @@ describe("🔴 15 — retenção: NO_HISTORY_LOSS", () => {
     // `converted_client_id` é RESTRICT contra `clients`: apagar o cliente é
     // que fica bloqueado, protegendo a história comercial.
     const leadId = await novaLead();
-    const { rows: cli } = await pool.query(
-      "INSERT INTO public.clients (company_id, name) VALUES ($1, 'C') RETURNING id", [EMPRESA]);
-    const { rows: loc } = await pool.query(
-      "INSERT INTO public.locations (company_id, client_id, name, address) VALUES ($1,$2,'L','R') RETURNING id",
-      [EMPRESA, cli[0].id]);
-    await pool.query("SELECT public.link_crm_lead_conversion($1,$2,$3,$4,NULL,$5)",
-      [EMPRESA, leadId, cli[0].id, loc[0].id, ACTOR]);
+    await pool.query(
+      "SELECT * FROM public.convert_crm_lead_atomic($1,$2,$3,NULL,NULL,$4,NULL,NULL,NULL,NULL)",
+      [EMPRESA, leadId, ACTOR, "Rua da Lead, 1"],
+    );
 
-    const erro = await erroDe(() => pool.query("DELETE FROM public.clients WHERE id = $1", [cli[0].id]));
+    const { rows: conv } = await pool.query(
+      "SELECT * FROM public.convert_crm_lead_atomic($1,$2,$3,NULL,NULL,$4,NULL,NULL,NULL,NULL)",
+      [EMPRESA, leadId, ACTOR, "Rua da Lead, 1"],
+    );
+    const erro = await erroDe(() =>
+      pool.query("DELETE FROM public.clients WHERE id = $1", [conv[0].client_id]));
     expect(erro, "o cliente de uma lead convertida está protegido").toMatch(
       /crm_leads_cliente_mesma_empresa|violates foreign key/i,
     );

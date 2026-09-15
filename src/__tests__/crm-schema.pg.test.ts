@@ -22,18 +22,24 @@ import { join } from "node:path";
 import pg from "pg";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { startPostgresContainer, type PostgresContainer } from "./helpers/pg-container";
+import {
+  EMPRESA,
+  OUTRA,
+  CLIENTE_A,
+  LOCAL_A,
+  CLIENTE_B,
+  LOCAL_B,
+  ACTOR,
+  ACTOR_OUTRA,
+  comoUtilizador,
+  montarPalcoCrm,
+  novaLead,
+} from "./helpers/crm-pg-harness";
 
 const ROOT = process.cwd();
 const CONTAINER = `crmschema-${process.pid}`;
 
-const EMPRESA = "11111111-1111-4111-8111-111111111111";
-const OUTRA = "22222222-2222-4222-8222-222222222222";
-const ACTOR = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 
-const CLIENTE_A = "c1111111-1111-4111-8111-111111111111";
-const LOCAL_A = "10cac111-1111-4111-8111-111111111111";
-const CLIENTE_B = "c2222222-2222-4222-8222-222222222222";
-const LOCAL_B = "10cab222-2222-4222-8222-222222222222";
 
 let container: PostgresContainer;
 let pool: pg.Pool;
@@ -46,6 +52,10 @@ const MIGRATION_102 = () =>
   readFileSync(join(ROOT, "supabase/migrations/102_crm_visitas_comerciais.sql"), "utf8");
 const ROLLBACK_102 = () =>
   readFileSync(join(ROOT, "supabase/migrations/rollback/102_crm_visitas_comerciais.down.sql"), "utf8");
+const ROLLBACK_103 = () =>
+  readFileSync(join(ROOT, "supabase/migrations/rollback/103_crm_orcamentos.down.sql"), "utf8");
+const ROLLBACK_104 = () =>
+  readFileSync(join(ROOT, "supabase/migrations/rollback/104_crm_conversao_lead.down.sql"), "utf8");
 
 /**
  * O que existe em produção ANTES da 101 — e só isso.
@@ -54,116 +64,21 @@ const ROLLBACK_102 = () =>
  * interessa é exactamente aquilo de que a 101 diz depender, para que uma
  * dependência esquecida apareça como falha e não como sorte.
  */
-async function baseline() {
-  await pool.query(`
-    DROP SCHEMA IF EXISTS public CASCADE;
-    CREATE SCHEMA public;
-    GRANT USAGE ON SCHEMA public TO anon, authenticated, service_role;
-
-    CREATE TABLE public.companies (id uuid PRIMARY KEY, name text NOT NULL);
-
-    CREATE TABLE public.profiles (
-      id uuid PRIMARY KEY,
-      company_id uuid NOT NULL REFERENCES public.companies(id) ON DELETE CASCADE,
-      full_name text NOT NULL,
-      role text NOT NULL DEFAULT 'colaborador'
-    );
-
-    CREATE TABLE public.clients (
-      id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-      company_id uuid NOT NULL REFERENCES public.companies(id) ON DELETE CASCADE,
-      name text NOT NULL,
-      type text DEFAULT 'empresa',
-      status text DEFAULT 'ativo'
-    );
-
-    CREATE TABLE public.locations (
-      id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-      company_id uuid NOT NULL REFERENCES public.companies(id) ON DELETE CASCADE,
-      client_id uuid NOT NULL REFERENCES public.clients(id) ON DELETE CASCADE,
-      name text NOT NULL,
-      address text NOT NULL
-    );
-
-    CREATE TABLE public.data_history (
-      id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-      table_name text NOT NULL, row_id uuid, op text NOT NULL,
-      old_data jsonb, new_data jsonb, actor uuid,
-      changed_at timestamptz NOT NULL DEFAULT now()
-    );
-
-    -- 001
-    CREATE FUNCTION public.update_updated_at() RETURNS trigger
-      LANGUAGE plpgsql AS $$ BEGIN NEW.updated_at = now(); RETURN NEW; END $$;
-
-    -- 059
-    CREATE FUNCTION public.fn_capture_history() RETURNS trigger
-      LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
-      BEGIN
-        IF TG_OP = 'DELETE' THEN
-          INSERT INTO public.data_history (table_name, row_id, op, old_data)
-          VALUES (TG_TABLE_NAME, OLD.id, 'DELETE', to_jsonb(OLD));
-          RETURN OLD;
-        END IF;
-        IF to_jsonb(OLD) IS DISTINCT FROM to_jsonb(NEW) THEN
-          INSERT INTO public.data_history (table_name, row_id, op, old_data, new_data)
-          VALUES (TG_TABLE_NAME, OLD.id, 'UPDATE', to_jsonb(OLD), to_jsonb(NEW));
-        END IF;
-        RETURN NEW;
-      END $$;
-
-    -- 014: em produção leem auth.uid(); aqui basta a identidade da sessão,
-    -- que é o que as policies consultam.
-    CREATE FUNCTION public.get_my_company_id() RETURNS uuid
-      LANGUAGE sql STABLE AS $$ SELECT current_setting('teste.company', true)::uuid $$;
-    CREATE FUNCTION public.get_my_role() RETURNS text
-      LANGUAGE sql STABLE AS $$ SELECT current_setting('teste.role', true) $$;
-
-    -- 086
-    CREATE UNIQUE INDEX clients_id_company_unique ON public.clients (id, company_id);
-  `);
-
-  await pool.query("INSERT INTO public.companies (id, name) VALUES ($1, 'A'), ($2, 'B')", [
-    EMPRESA,
-    OUTRA,
-  ]);
-  await pool.query(
-    "INSERT INTO public.profiles (id, company_id, full_name, role) VALUES ($1, $2, 'Gestora', 'gestor')",
-    [ACTOR, EMPRESA],
-  );
-  await pool.query(
-    "INSERT INTO public.clients (id, company_id, name) VALUES ($1, $2, 'Cliente A'), ($3, $4, 'Cliente B')",
-    [CLIENTE_A, EMPRESA, CLIENTE_B, OUTRA],
-  );
-  await pool.query(
-    `INSERT INTO public.locations (id, company_id, client_id, name, address)
-     VALUES ($1, $2, $3, 'Sede A', 'Rua A'), ($4, $5, $6, 'Sede B', 'Rua B')`,
-    [LOCAL_A, EMPRESA, CLIENTE_A, LOCAL_B, OUTRA, CLIENTE_B],
-  );
-}
-
 /**
- * Insere uma lead mínima e devolve o id.
+ * O palco: a forma REAL do schema de produção + as migrations do CRM.
  *
- * `extra` substitui os valores por omissão em vez de os acompanhar — sem isso,
- * passar `name` produzia `column "name" specified more than once` e o teste
- * falhava por uma razão que não era a que estava a tentar provar.
+ * 🔴 A versão anterior escrevia aqui um baseline à mão, com 7 tabelas. Provava
+ *    coisas verdadeiras sobre um mundo que não é o nosso — sem as FKs reais,
+ *    sem as políticas reais, sem os grants reais, e com `service_role` sem
+ *    BYPASSRLS (o que fazia uma recusa passar pela razão errada).
+ *
+ *    Ver `helpers/crm-pg-harness.ts` para o porquê e para o que o fixture não
+ *    traz.
  */
-async function novaLead(extra: Record<string, unknown> = {}, empresa = EMPRESA): Promise<string> {
-  const campos: Record<string, unknown> = {
-    company_id: empresa,
-    name: "Condomínio Teste",
-    ...extra,
-  };
-  const colunas = Object.keys(campos);
-  const valores = Object.values(campos);
-  const marcas = colunas.map((_, i) => `$${i + 1}`).join(", ");
-  const { rows } = await pool.query(
-    `INSERT INTO public.crm_leads (${colunas.join(", ")}) VALUES (${marcas}) RETURNING id`,
-    valores,
-  );
-  return rows[0].id as string;
+async function baseline(opts: { aplicarCrm?: boolean } = {}) {
+  await montarPalcoCrm(pool, opts);
 }
+
 
 /** Corre `fn` e devolve a mensagem de erro, ou null se não levantou. */
 async function erroDe(fn: () => Promise<unknown>): Promise<string | null> {
@@ -182,11 +97,6 @@ beforeAll(async () => {
     serverFlags: ["shared_buffers=16MB", "max_connections=25", "work_mem=1MB"],
   });
   pool = new pg.Pool({ ...container.connection, max: 4 });
-  await pool.query(`
-    DO $$ BEGIN CREATE ROLE anon; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
-    DO $$ BEGIN CREATE ROLE authenticated; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
-    DO $$ BEGIN CREATE ROLE service_role BYPASSRLS; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
-  `);
 }, 180_000);
 
 afterAll(async () => {
@@ -206,7 +116,12 @@ describe("101 — a migration corre", () => {
        WHERE table_schema = 'public' AND table_name LIKE 'crm_%'
        ORDER BY table_name
     `);
-    expect(rows.map((r) => r.table_name)).toEqual(["crm_lead_interactions", "crm_leads"]);
+    // 🔴 Cinco, e não duas: o palco aplica as QUATRO migrations do CRM, tal
+    //    como aconteceria na base real. Provar a 101 isolada sobre um schema
+    //    onde as outras não existem seria provar um mundo que nunca existe.
+    expect(rows.map((r) => r.table_name)).toEqual([
+      "crm_lead_interactions", "crm_leads", "crm_quote_items", "crm_quotes", "crm_visits",
+    ]);
   });
 
   it("correr duas vezes não parte nada (é idempotente)", async () => {
@@ -214,6 +129,13 @@ describe("101 — a migration corre", () => {
   });
 
   it("o rollback deixa o schema como estava, sem tocar em clients nem locations", async () => {
+    // 🔴 Pela ordem inversa: 104, 103, 102 e só depois 101. As outras
+    //    migrations dependem das tabelas e chaves da 101, e um `down` fora de
+    //    ordem falha com «other objects depend on it» — que é o próprio
+    //    Postgres a dizer que a ordem importa.
+    await pool.query(ROLLBACK_104());
+    await pool.query(ROLLBACK_103());
+    await pool.query(ROLLBACK_102());
     await pool.query(ROLLBACK());
 
     const { rows: crm } = await pool.query(`
@@ -232,7 +154,7 @@ describe("101 — a migration corre", () => {
 
 describe("101 — as precondições falham em fecho", () => {
   it("sem o índice da 086, recusa-se a correr em vez de o criar por sua conta", async () => {
-    await baseline();
+    await baseline({ aplicarCrm: false });
     await pool.query("DROP INDEX public.clients_id_company_unique");
 
     const erro = await erroDe(() => pool.query(MIGRATION()));
@@ -248,7 +170,7 @@ describe("101 — as precondições falham em fecho", () => {
   });
 
   it("sem fn_capture_history (059), recusa antes de criar a tabela", async () => {
-    await baseline();
+    await baseline({ aplicarCrm: false });
     await pool.query("DROP FUNCTION public.fn_capture_history() CASCADE");
 
     const erro = await erroDe(() => pool.query(MIGRATION()));
@@ -259,7 +181,7 @@ describe("101 — as precondições falham em fecho", () => {
 
 describe("101 — perder uma lead exige dizer porquê", () => {
   it("🔴 stage='perdido' sem motivo é recusado pela base", async () => {
-    const id = await novaLead();
+    const id = await novaLead(pool);
     const erro = await erroDe(() =>
       pool.query("UPDATE public.crm_leads SET stage = 'perdido', lost_at = now() WHERE id = $1", [id]),
     );
@@ -267,7 +189,7 @@ describe("101 — perder uma lead exige dizer porquê", () => {
   });
 
   it("com motivo e data, passa", async () => {
-    const id = await novaLead();
+    const id = await novaLead(pool);
     await expect(
       pool.query(
         `UPDATE public.crm_leads SET stage = 'perdido', lost_reason = 'preco', lost_at = now()
@@ -278,7 +200,7 @@ describe("101 — perder uma lead exige dizer porquê", () => {
   });
 
   it("um motivo fora da lista não entra — é o que permite contá-los depois", async () => {
-    const id = await novaLead();
+    const id = await novaLead(pool);
     const erro = await erroDe(() =>
       pool.query(
         `UPDATE public.crm_leads SET stage = 'perdido', lost_reason = 'porque sim', lost_at = now()
@@ -292,7 +214,7 @@ describe("101 — perder uma lead exige dizer porquê", () => {
 
 describe("101 — a conversão só existe depois de ganhar", () => {
   it("🔴 uma lead 'novo' não pode apontar para um cliente", async () => {
-    const id = await novaLead();
+    const id = await novaLead(pool);
     const erro = await erroDe(() =>
       pool.query(
         `UPDATE public.crm_leads SET converted_client_id = $2, converted_location_id = $3 WHERE id = $1`,
@@ -303,7 +225,7 @@ describe("101 — a conversão só existe depois de ganhar", () => {
   });
 
   it("cliente sem local (ou local sem cliente) é uma conversão a meio, e é recusada", async () => {
-    const id = await novaLead();
+    const id = await novaLead(pool);
     const erro = await erroDe(() =>
       pool.query(
         `UPDATE public.crm_leads
@@ -316,7 +238,7 @@ describe("101 — a conversão só existe depois de ganhar", () => {
   });
 
   it("ganhar sem data é recusado", async () => {
-    const id = await novaLead();
+    const id = await novaLead(pool);
     const erro = await erroDe(() =>
       pool.query("UPDATE public.crm_leads SET stage = 'ganho' WHERE id = $1", [id]),
     );
@@ -324,7 +246,7 @@ describe("101 — a conversão só existe depois de ganhar", () => {
   });
 
   it("ganho + data + cliente + local da mesma empresa passa", async () => {
-    const id = await novaLead();
+    const id = await novaLead(pool);
     await expect(
       pool.query(
         `UPDATE public.crm_leads
@@ -339,7 +261,7 @@ describe("101 — a conversão só existe depois de ganhar", () => {
 
 describe("101 — isolamento entre empresas, garantido pela base", () => {
   it("🔴 uma lead não pode ser convertida no cliente de outra empresa", async () => {
-    const id = await novaLead();
+    const id = await novaLead(pool);
     const erro = await erroDe(() =>
       pool.query(
         `UPDATE public.crm_leads
@@ -353,7 +275,7 @@ describe("101 — isolamento entre empresas, garantido pela base", () => {
   });
 
   it("🔴 uma interacção não pode pertencer à lead de outra empresa", async () => {
-    const leadDaOutra = await novaLead({}, OUTRA);
+    const leadDaOutra = await novaLead(pool, { empresa: OUTRA });
     const erro = await erroDe(() =>
       pool.query(
         `INSERT INTO public.crm_lead_interactions (company_id, lead_id, kind, summary)
@@ -365,7 +287,7 @@ describe("101 — isolamento entre empresas, garantido pela base", () => {
   });
 
   it("apagar a lead leva o diário com ela", async () => {
-    const id = await novaLead();
+    const id = await novaLead(pool);
     await pool.query(
       `INSERT INTO public.crm_lead_interactions (company_id, lead_id, kind, summary)
        VALUES ($1, $2, 'chamada', 'Primeiro contacto')`,
@@ -380,17 +302,17 @@ describe("101 — isolamento entre empresas, garantido pela base", () => {
 
 describe("101 — o que a base exige de uma lead", () => {
   it("um nome em branco não é um nome", async () => {
-    const erro = await erroDe(() => novaLead({ name: "   " }));
+    const erro = await erroDe(() => novaLead(pool, { campos: { name: "   " } }));
     expect(erro).toContain("crm_leads_name_nao_vazio");
   });
 
   it("valor estimado negativo é recusado", async () => {
-    const erro = await erroDe(() => novaLead({ estimated_value: -1 }));
+    const erro = await erroDe(() => novaLead(pool, { campos: { estimated_value: -1 } }));
     expect(erro).toContain("crm_leads_estimated_value_check");
   });
 
   it("a natureza do valor tem de ser dita, e por omissão é mensal", async () => {
-    const id = await novaLead({ estimated_value: 300 });
+    const id = await novaLead(pool, { campos: { estimated_value: 300 } });
     const { rows } = await pool.query(
       "SELECT estimated_value_kind FROM public.crm_leads WHERE id = $1",
       [id],
@@ -400,14 +322,14 @@ describe("101 — o que a base exige de uma lead", () => {
   });
 
   it("uma lead nasce em 'novo'", async () => {
-    const id = await novaLead();
+    const id = await novaLead(pool);
     const { rows } = await pool.query("SELECT stage, board_order FROM public.crm_leads WHERE id = $1", [id]);
     expect(rows[0].stage).toBe("novo");
     expect(rows[0].board_order).toBe(0);
   });
 
   it("updated_at acompanha a edição", async () => {
-    const id = await novaLead();
+    const id = await novaLead(pool);
     const antes = (await pool.query("SELECT updated_at FROM public.crm_leads WHERE id = $1", [id]))
       .rows[0].updated_at;
     await pool.query("UPDATE public.crm_leads SET notes = 'nota' WHERE id = $1", [id]);
@@ -417,7 +339,7 @@ describe("101 — o que a base exige de uma lead", () => {
   });
 
   it("a edição fica registada no histórico", async () => {
-    const id = await novaLead();
+    const id = await novaLead(pool);
     await pool.query("UPDATE public.crm_leads SET notes = 'combinou visita' WHERE id = $1", [id]);
 
     const { rows } = await pool.query(
@@ -429,59 +351,56 @@ describe("101 — o que a base exige de uma lead", () => {
 });
 
 describe("101 — quem pode ler e quem pode escrever", () => {
-  /** Corre `sql` como um papel, com a identidade que as policies consultam. */
-  async function como(
-    papel: "anon" | "authenticated",
-    identidade: { company: string; role: string } | null,
-    sql: string,
-    params: unknown[] = [],
-  ) {
-    const c = new pg.Client({ ...container.connection });
-    await c.connect();
-    try {
-      await c.query(`SET ROLE ${papel}`);
-      if (identidade) {
-        await c.query("SELECT set_config('teste.company', $1, false)", [identidade.company]);
-        await c.query("SELECT set_config('teste.role', $1, false)", [identidade.role]);
-      }
-      return await c.query(sql, params);
-    } finally {
-      await c.end();
-    }
-  }
+  /**
+   * 🔴 A identidade vem de `auth.uid()`, como em produção.
+   *
+   *    O palco anterior inventava `current_setting('teste.company')` e as
+   *    políticas do fixture nem sequer lhe tocavam — o ensaio media uma regra
+   *    que a base real não tem. Agora define-se `request.jwt.claim.sub`, que é
+   *    o que `auth.uid()` lê.
+   */
+  const comoGestoraA = <T,>(fn: (c: pg.Client) => Promise<T>) =>
+    comoUtilizador(container.connection, { papel: "authenticated", userId: ACTOR }, fn);
+
+  const comoGestoraB = <T,>(fn: (c: pg.Client) => Promise<T>) =>
+    comoUtilizador(container.connection, { papel: "authenticated", userId: ACTOR_OUTRA }, fn);
 
   it("gestor da empresa lê as leads da sua empresa", async () => {
-    await novaLead();
-    const r = await como("authenticated", { company: EMPRESA, role: "gestor" },
-      "SELECT count(*)::int n FROM public.crm_leads");
+    await novaLead(pool);
+    const r = await comoGestoraA((c) => c.query("SELECT count(*)::int n FROM public.crm_leads"));
     expect(r.rows[0].n).toBe(1);
   });
 
   it("🔴 gestor de outra empresa não vê nada", async () => {
-    await novaLead();
-    const r = await como("authenticated", { company: OUTRA, role: "gestor" },
-      "SELECT count(*)::int n FROM public.crm_leads");
+    await novaLead(pool);
+    const r = await comoGestoraB((c) => c.query("SELECT count(*)::int n FROM public.crm_leads"));
     expect(r.rows[0].n).toBe(0);
   });
 
   it("🔴 colaboradora não vê o funil comercial", async () => {
-    await novaLead();
-    const r = await como("authenticated", { company: EMPRESA, role: "colaborador" },
-      "SELECT count(*)::int n FROM public.crm_leads");
+    await novaLead(pool);
+    // A mesma empresa, outro papel: a política exige admin/gestor.
+    await pool.query("UPDATE public.profiles SET role = 'colaborador' WHERE id = $1", [ACTOR]);
+    const r = await comoGestoraA((c) => c.query("SELECT count(*)::int n FROM public.crm_leads"));
     expect(r.rows[0].n).toBe(0);
   });
 
   it("🔴 authenticated não escreve — nem sequer o gestor da própria empresa", async () => {
     const erro = await erroDe(() =>
-      como("authenticated", { company: EMPRESA, role: "gestor" },
-        "INSERT INTO public.crm_leads (company_id, name) VALUES ($1, 'Pelo browser')", [EMPRESA]),
+      comoGestoraA((c) =>
+        c.query("INSERT INTO public.crm_leads (company_id, name) VALUES ($1, 'Pelo browser')", [EMPRESA]),
+      ),
     );
     expect(erro).toMatch(/permission denied|row-level security/i);
   });
 
   it("🔴 anon não lê nada", async () => {
-    await novaLead();
-    const erro = await erroDe(() => como("anon", null, "SELECT * FROM public.crm_leads"));
+    await novaLead(pool);
+    const erro = await erroDe(() =>
+      comoUtilizador(container.connection, { papel: "anon" }, (c) =>
+        c.query("SELECT * FROM public.crm_leads"),
+      ),
+    );
     expect(erro).toMatch(/permission denied/i);
   });
 });
@@ -491,16 +410,11 @@ describe("101 — quem pode ler e quem pode escrever", () => {
 // ═══════════════════════════════════════════════════════════════════════════
 
 describe("102 — a visita comercial", () => {
-  beforeEach(async () => {
-    // A 101 já foi aplicada pelo beforeEach global; a 102 assenta em cima.
-    await pool.query(MIGRATION_102());
-  });
-
   const AMANHA = "2026-09-16 10:00:00+01";
   const AMANHA_FIM = "2026-09-16 11:00:00+01";
 
   async function novaVisita(extra: Record<string, unknown> = {}) {
-    const leadId = (extra.lead_id as string) ?? (await novaLead());
+    const leadId = (extra.lead_id as string) ?? (await novaLead(pool));
     const campos: Record<string, unknown> = {
       company_id: EMPRESA,
       lead_id: leadId,
@@ -522,7 +436,7 @@ describe("102 — a visita comercial", () => {
   });
 
   it("sem a 101, recusa-se a correr", async () => {
-    await baseline();
+    await baseline({ aplicarCrm: false });
     const erro = await erroDe(() => pool.query(MIGRATION_102()));
     expect(erro).toContain("CRM_VISITS_102_PRECONDITION_FAILED");
     expect(erro).toContain("crm_leads");
@@ -542,7 +456,7 @@ describe("102 — a visita comercial", () => {
   });
 
   it("🔴 exactamente um destinatário: lead ou cliente, nunca ambos", async () => {
-    const leadId = await novaLead();
+    const leadId = await novaLead(pool);
     const erroAmbos = await erroDe(() =>
       novaVisita({ lead_id: leadId, client_id: CLIENTE_A }),
     );
@@ -610,13 +524,13 @@ describe("102 — a visita comercial", () => {
   });
 
   it("🔴 uma visita não pode ser marcada à lead de outra empresa", async () => {
-    const leadDaOutra = await novaLead({}, OUTRA);
+    const leadDaOutra = await novaLead(pool, { empresa: OUTRA });
     const erro = await erroDe(() => novaVisita({ lead_id: leadDaOutra }));
     expect(erro).toContain("crm_visits_lead_mesma_empresa");
   });
 
   it("apagar a lead leva as visitas dela", async () => {
-    const leadId = await novaLead();
+    const leadId = await novaLead(pool);
     await novaVisita({ lead_id: leadId });
     await pool.query("DELETE FROM public.crm_leads WHERE id = $1", [leadId]);
     const { rows } = await pool.query("SELECT count(*)::int n FROM public.crm_visits");
@@ -639,6 +553,12 @@ describe("102 — a visita comercial", () => {
 
   it("o rollback leva a tabela e deixa as leads onde estão", async () => {
     await novaVisita();
+
+    // 🔴 Pela ordem inversa. `crm_quotes.visit_id` é uma FK composta para
+    //    `crm_visits`, por isso a 103 tem de sair primeiro — o Postgres recusa
+    //    com «other objects depend on it», que é ele a confirmar a dependência.
+    await pool.query(ROLLBACK_104());
+    await pool.query(ROLLBACK_103());
     await pool.query(ROLLBACK_102());
 
     const { rows: t } = await pool.query(`

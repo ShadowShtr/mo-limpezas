@@ -86,8 +86,10 @@ BEGIN
   END IF;
 
   IF to_regclass('public.crm_leads_id_company_unique') IS NULL
-     OR to_regclass('public.clients_id_company_unique') IS NULL THEN
-    RAISE EXCEPTION 'CRM_QUOTES_103_PRECONDITION_FAILED: índices (id, company_id) ausentes';
+     OR to_regclass('public.clients_id_company_unique') IS NULL
+     OR to_regclass('public.crm_visits_id_company_unique') IS NULL
+     OR to_regclass('public.profiles_id_company_unique') IS NULL THEN
+    RAISE EXCEPTION 'CRM_QUOTES_103_PRECONDITION_FAILED: índices (id, company_id) ausentes (101/102/086)';
   END IF;
 
   IF to_regprocedure('public.update_updated_at()') IS NULL
@@ -120,7 +122,12 @@ CREATE TABLE IF NOT EXISTS public.crm_quotes (
   lead_id         uuid,
   client_id       uuid,
   -- De onde saíram as medidas, quando saíram de uma visita.
-  visit_id        uuid REFERENCES public.crm_visits(id) ON DELETE SET NULL,
+  --
+  -- 🔴 Sem `REFERENCES` na coluna: a FK é COMPOSTA. Uma FK simples aceitaria a
+  --    visita de OUTRA empresa — o id é um uuid válido, e as Server Actions
+  --    escrevem com service_role, que é BYPASSRLS. «Difícil de adivinhar» não
+  --    é uma garantia de integridade.
+  visit_id        uuid,
 
   -- ── Identidade do documento ──────────────────────────────────────────────
   quote_number    text NOT NULL,          -- 'ORC2026/001' | 'ORC2026/001-R1'
@@ -178,7 +185,7 @@ CREATE TABLE IF NOT EXISTS public.crm_quotes (
   converted_contract_id uuid,
   converted_service_id  uuid,
 
-  created_by      uuid REFERENCES public.profiles(id) ON DELETE SET NULL,
+  created_by      uuid,
   created_at      timestamptz NOT NULL DEFAULT now(),
   updated_at      timestamptz NOT NULL DEFAULT now(),
 
@@ -215,6 +222,26 @@ ALTER TABLE public.crm_quotes DROP CONSTRAINT IF EXISTS crm_quotes_cliente_mesma
 ALTER TABLE public.crm_quotes
   ADD CONSTRAINT crm_quotes_cliente_mesma_empresa
   FOREIGN KEY (client_id, company_id) REFERENCES public.clients (id, company_id) ON DELETE RESTRICT;
+
+-- 🔴 A visita e o autor têm de ser da MESMA empresa do orçamento.
+--
+--    `ON DELETE NO ACTION`: numa FK composta o SET NULL poria `company_id` a
+--    NULL, que é NOT NULL. Apagar uma visita que já deu origem a um orçamento
+--    passa a ser bloqueado — o que faz sentido: a visita é a prova das medidas
+--    que produziram aquele preço.
+ALTER TABLE public.crm_quotes DROP CONSTRAINT IF EXISTS crm_quotes_visita_mesma_empresa;
+ALTER TABLE public.crm_quotes
+  ADD CONSTRAINT crm_quotes_visita_mesma_empresa
+  FOREIGN KEY (visit_id, company_id)
+  REFERENCES public.crm_visits (id, company_id)
+  ON DELETE NO ACTION;
+
+ALTER TABLE public.crm_quotes DROP CONSTRAINT IF EXISTS crm_quotes_created_by_mesma_empresa;
+ALTER TABLE public.crm_quotes
+  ADD CONSTRAINT crm_quotes_created_by_mesma_empresa
+  FOREIGN KEY (created_by, company_id)
+  REFERENCES public.profiles (id, company_id)
+  ON DELETE NO ACTION;
 
 -- A cadeia de revisões aponta para dentro da própria tabela. Diferida, pela
 -- razão explicada na declaração da coluna: durante a revisão, a antiga aponta
@@ -374,6 +401,28 @@ BEGIN
   IF p_items IS NULL OR jsonb_array_length(p_items) = 0 THEN
     RAISE EXCEPTION 'Um orçamento sem linhas é um documento a zero que parece emitido.'
       USING ERRCODE = 'check_violation';
+  END IF;
+
+  -- 🔴 Coerência LÓGICA da visita — o que a FK composta não consegue dizer.
+  --
+  --    A FK garante que a visita é da mesma empresa. Não garante que é da
+  --    mesma LEAD: dentro da mesma empresa, nada impediria orçamentar a lead A
+  --    com as medições da visita à lead B. As áreas e horas dessa visita
+  --    entrariam num preço que não lhes diz respeito.
+  IF p_visit_id IS NOT NULL THEN
+    PERFORM 1
+       FROM public.crm_visits v
+      WHERE v.id = p_visit_id
+        AND v.company_id = p_company_id
+        AND (
+          (p_lead_id   IS NOT NULL AND v.lead_id   IS NOT DISTINCT FROM p_lead_id)
+       OR (p_client_id IS NOT NULL AND v.client_id IS NOT DISTINCT FROM p_client_id)
+        );
+
+    IF NOT FOUND THEN
+      RAISE EXCEPTION 'QUOTE_VISIT_MISMATCH: a visita não pertence a este destinatário'
+        USING ERRCODE = 'check_violation';
+    END IF;
   END IF;
 
   -- 🔴 Sem `assert_financial_period_dates_open_locked`. Ver o cabeçalho: um
@@ -690,6 +739,22 @@ BEGIN
 
   IF v_faltam IS NOT NULL THEN
     RAISE EXCEPTION 'CRM_QUOTES_103_POSTSTATE_FAILED: índices únicos em falta %', v_faltam;
+  END IF;
+
+  SELECT array_agg(esperada.nome) INTO v_faltam
+    FROM (VALUES
+      ('crm_quotes_lead_mesma_empresa'),
+      ('crm_quotes_cliente_mesma_empresa'),
+      ('crm_quotes_visita_mesma_empresa'),
+      ('crm_quotes_created_by_mesma_empresa'),
+      ('crm_quote_items_quote_mesma_empresa')
+    ) AS esperada(nome)
+   WHERE NOT EXISTS (
+     SELECT 1 FROM pg_constraint WHERE conname = esperada.nome
+   );
+
+  IF v_faltam IS NOT NULL THEN
+    RAISE EXCEPTION 'CRM_QUOTES_103_POSTSTATE_FAILED: FKs compostas em falta %', v_faltam;
   END IF;
 
   SELECT array_agg(esperada.nome) INTO v_faltam

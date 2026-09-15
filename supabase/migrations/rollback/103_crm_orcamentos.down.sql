@@ -10,10 +10,12 @@
 --    Se a segunda devolver mais que zero, exportar antes de apagar — há
 --    documentos que saíram de casa.
 --
+-- 🔴 ROLLBACK_DATA_POLICY: em produção com dados reais, este ficheiro NÃO é o
+--    rollback operacional — ver a nota na 104.down.
+--
 -- Não toca em `invoices`, `services`, `contracts` nem em nada financeiro: a
 -- 103 também não tocou. Um orçamento aceite que já tenha gerado contrato deixa
--- esse contrato exactamente onde está — é um registo de primeira classe, e a
--- conversão é irreversível por desenho.
+-- esse contrato exactamente onde está.
 
 DROP FUNCTION IF EXISTS public.set_crm_quote_status(uuid, uuid, uuid, text, text);
 DROP FUNCTION IF EXISTS public.revise_crm_quote(uuid, uuid, uuid, date, date, numeric, boolean, numeric, text, jsonb);

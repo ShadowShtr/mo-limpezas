@@ -29,7 +29,6 @@ import {
   type ActionResult,
 } from "@/lib/action-result";
 import { AUTH_GUARD_CODES, requireProfile } from "@/lib/auth-guard";
-import type { createAdminClient } from "@/lib/supabase/admin";
 import { auditLog } from "@/lib/audit";
 import { invalidateBusinessState } from "@/lib/revalidate-business";
 import { logQueryFailure } from "@/lib/query-error";
@@ -39,14 +38,12 @@ import {
   LEAD_VALUE_KINDS,
   MANUAL_INTERACTION_KINDS,
 } from "@/lib/crm/sources";
-import {
-  LEAD_STAGES,
-  LEAD_STAGE_LABELS,
-  canTransition,
-  isLeadStage,
-  requiresLostReason,
-  type LeadStage,
-} from "@/lib/crm/stages";
+// 🔴 `canTransition`, `requiresLostReason` e as etiquetas deixaram de ser
+//    usadas aqui: as regras de transição passaram para a RPC
+//    `move_crm_lead_stage_atomic`, que é agora a autoridade. Continuam a viver
+//    em `src/lib/crm/stages.ts` para a interface só oferecer o que passa — e
+//    `crm-quotes-vocabulary.test.ts` compara as duas listas.
+import { LEAD_STAGES, type LeadStage } from "@/lib/crm/stages";
 
 // ── A forma que a interface recebe ──────────────────────────────────────────
 
@@ -149,6 +146,54 @@ const leadSchema = z.object({
 });
 
 export type LeadInput = z.input<typeof leadSchema>;
+
+/** Traduz os erros das RPCs do funil para frases que se leem. */
+function erroDoFunil(contexto: string, err: unknown): ActionResult<never> {
+  const msg = err instanceof Error ? err.message : String(err);
+
+  if (msg.includes("LEAD_STAGE_CONFLICT")) {
+    return actionFailure(
+      ACTION_ERROR_CODES.CONFLICT,
+      "Esta lead foi movida entretanto por outra pessoa. Recarregue o quadro para ver onde está.",
+    );
+  }
+  if (msg.includes("LEAD_WIN_REQUIRES_CONVERSION")) {
+    return actionFailure(
+      ACTION_ERROR_CODES.BUSINESS_RULE,
+      "Para dar uma lead como ganha, converta-a em cliente a partir do orçamento aceite.",
+    );
+  }
+  if (msg.includes("LEAD_ALREADY_WON")) {
+    return actionFailure(
+      ACTION_ERROR_CODES.BUSINESS_RULE,
+      "Esta lead já foi convertida em cliente e não volta ao funil.",
+    );
+  }
+  if (msg.includes("LEAD_LOST_REQUIRES_REASON")) {
+    return actionFailure(
+      ACTION_ERROR_CODES.BUSINESS_RULE,
+      "Indique o motivo da perda.",
+      { lostReason: ["Escolha um motivo."] },
+    );
+  }
+  if (msg.includes("LEAD_STAGE_UNKNOWN")) {
+    return actionFailure(ACTION_ERROR_CODES.VALIDATION, "Esse estado não existe no funil.");
+  }
+  if (msg.includes("LEAD_NOT_FOUND")) {
+    return actionFailure(ACTION_ERROR_CODES.NOT_FOUND, "Lead não encontrada.");
+  }
+  if (msg.includes("REORDER_INVALID_ITEMS") || msg.includes("REORDER_DUPLICATE_IDS")) {
+    return actionFailure(
+      ACTION_ERROR_CODES.CONFLICT,
+      "O quadro mudou entretanto. Recarregue para ver a ordem actual.",
+    );
+  }
+  if (msg.includes("REORDER_INVALID_POSITION")) {
+    return actionFailure(ACTION_ERROR_CODES.VALIDATION, "Posição inválida.");
+  }
+
+  return internalFailure(contexto, err, ACTION_ERROR_CODES.PERSISTENCE);
+}
 
 /** Traduz a recusa do guard para a mensagem desta área. */
 function recusa(code: string): ActionResult<never> {
@@ -359,6 +404,14 @@ export async function updateLead(
 
 const moverSchema = z.object({
   stage: z.enum(LEAD_STAGES),
+  /**
+   * De que coluna o cartão veio, na leitura de quem o arrastou.
+   *
+   * 🔴 É o controlo de concorrência. Sem ele, duas pessoas a mover o mesmo
+   *    cartão dão last-write-wins, e a segunda apaga a decisão da primeira sem
+   *    que nenhuma das duas saiba.
+   */
+  expectedStage: z.enum(LEAD_STAGES).optional().nullable(),
   lostReason: z.enum(LEAD_LOST_REASONS).optional().nullable(),
   lostReasonNotes: z.string().trim().max(1000).optional().nullable(),
 });
@@ -366,15 +419,17 @@ const moverSchema = z.object({
 /**
  * Move a lead no funil.
  *
- * As três regras que esta função existe para garantir — e que a base também
- * garante, porque uma regra só no formulário é uma regra que a próxima página
- * esquece:
+ * 🔴 Uma chamada de RPC, e mais nada.
  *
- *   1. a transição tem de ser permitida a partir do estado actual;
- *   2. perder exige motivo;
- *   3. ganhar **não** se faz por aqui — passa pela conversão, que cria o
- *      cliente. Deixar marcar "ganho" sem cliente daria uma lead ganha que
- *      não gerou nada, e o CHECK da base recusá-la-ia com um erro técnico.
+ *    A versão anterior fazia `UPDATE` e depois registava a interacção em
+ *    best-effort, engolindo o erro. Isso permitia o estado «a lead mudou de
+ *    coluna e a timeline não diz porquê» — e a timeline existe precisamente
+ *    para responder a isso. Agora as duas escritas são uma transação só, e se
+ *    o diário falhar o estado volta atrás com ele.
+ *
+ * As regras (transição válida, motivo obrigatório na perda, `ganho` só por
+ * conversão) vivem na RPC, que é a autoridade. Aqui só se traduzem os códigos
+ * de erro para frases que se leem.
  */
 export async function moveLeadStage(
   leadId: string,
@@ -389,30 +444,8 @@ export async function moveLeadStage(
   const { admin, profile } = guard;
   const destino = parsed.data.stage;
 
-  const { data: atual, error: erroLeitura } = await admin
-    .from("crm_leads")
-    .select("id, name, stage")
-    .eq("company_id", profile.company_id)
-    .eq("id", leadId)
-    .maybeSingle();
-
-  if (erroLeitura) {
-    logQueryFailure("moveLeadStage.read", erroLeitura);
-    return internalFailure("moveLeadStage", erroLeitura, ACTION_ERROR_CODES.PERSISTENCE);
-  }
-  if (!atual) return actionFailure(ACTION_ERROR_CODES.NOT_FOUND, "Lead não encontrada.");
-
-  const origem = atual.stage;
-  if (!isLeadStage(origem)) {
-    return internalFailure(
-      "moveLeadStage",
-      new Error(`estado desconhecido na base: ${origem}`),
-      ACTION_ERROR_CODES.INTERNAL,
-    );
-  }
-
-  if (origem === destino) return actionSuccess({ stage: destino });
-
+  // Verificação amiga ANTES de chamar a RPC: `ganho` tem um caminho próprio, e
+  // uma mensagem que diz o que fazer vale mais do que um código de erro.
   if (destino === "ganho") {
     return actionFailure(
       ACTION_ERROR_CODES.BUSINESS_RULE,
@@ -420,16 +453,7 @@ export async function moveLeadStage(
     );
   }
 
-  if (!canTransition(origem, destino)) {
-    return actionFailure(
-      ACTION_ERROR_CODES.BUSINESS_RULE,
-      origem === "ganho"
-        ? "Esta lead já foi convertida em cliente e não volta ao funil."
-        : `Não é possível passar de ${LEAD_STAGE_LABELS[origem]} para ${LEAD_STAGE_LABELS[destino]}.`,
-    );
-  }
-
-  if (requiresLostReason(destino) && !parsed.data.lostReason) {
+  if (destino === "perdido" && !parsed.data.lostReason) {
     return actionFailure(
       ACTION_ERROR_CODES.BUSINESS_RULE,
       "Indique o motivo da perda — é o que permite saber depois porque é que se perde trabalho.",
@@ -437,58 +461,37 @@ export async function moveLeadStage(
     );
   }
 
-  const agora = new Date().toISOString();
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data, error } = await (admin as any).rpc("move_crm_lead_stage_atomic", {
+      p_company_id: profile.company_id,
+      p_lead_id: leadId,
+      p_expected_stage: parsed.data.expectedStage ?? null,
+      p_new_stage: destino,
+      p_actor: profile.id,
+      p_lost_reason: parsed.data.lostReason ?? null,
+      p_lost_reason_notes: parsed.data.lostReasonNotes ?? null,
+    });
 
-  // Reabrir uma lead perdida limpa o desfecho: deixá-lo para trás faria uma
-  // lead activa continuar a contar como perdida no relatório de motivos.
-  const patch =
-    destino === "perdido"
-      ? {
-          stage: destino,
-          lost_at: agora,
-          lost_reason: parsed.data.lostReason ?? null,
-          lost_reason_notes: parsed.data.lostReasonNotes ?? null,
-        }
-      : {
-          stage: destino,
-          lost_at: null,
-          lost_reason: null,
-          lost_reason_notes: null,
-        };
+    if (error) return erroDoFunil("moveLeadStage", new Error(error.message));
 
-  const { error } = await admin
-    .from("crm_leads")
-    .update(patch)
-    .eq("company_id", profile.company_id)
-    .eq("id", leadId);
+    await auditLog({
+      companyId: profile.company_id,
+      actorId: profile.id,
+      action: "lead_stage_changed",
+      entityType: "crm_lead",
+      entityId: leadId,
+      before: { stage: parsed.data.expectedStage ?? null },
+      after: { stage: destino, lost_reason: parsed.data.lostReason ?? null },
+    }, admin);
 
-  if (error) {
-    logQueryFailure("moveLeadStage", error);
-    return internalFailure("moveLeadStage", error, ACTION_ERROR_CODES.PERSISTENCE);
+    invalidateBusinessState({ domains: ["leads"] });
+
+    const linha = Array.isArray(data) ? data[0] : data;
+    return actionSuccess({ stage: (linha?.stage as LeadStage) ?? destino });
+  } catch (err) {
+    return erroDoFunil("moveLeadStage", err);
   }
-
-  // A timeline regista a mudança. Sem isto, abrir a ficha três semanas depois
-  // não diz quando é que a lead parou — e é essa a pergunta que se faz.
-  await registarInteracao(admin, {
-    companyId: profile.company_id,
-    leadId,
-    kind: "sistema",
-    summary: `Estado alterado de ${LEAD_STAGE_LABELS[origem]} para ${LEAD_STAGE_LABELS[destino]}.`,
-    authorId: profile.id,
-  });
-
-  await auditLog({
-    companyId: profile.company_id,
-    actorId: profile.id,
-    action: "lead_stage_changed",
-    entityType: "crm_lead",
-    entityId: leadId,
-    before: { stage: origem },
-    after: { stage: destino, lost_reason: parsed.data.lostReason ?? null },
-  }, admin);
-
-  invalidateBusinessState({ domains: ["leads"] });
-  return actionSuccess({ stage: destino });
 }
 
 const ordemSchema = z.object({
@@ -499,13 +502,27 @@ const ordemSchema = z.object({
 /**
  * Guarda a ordem manual dos cartões dentro de uma coluna.
  *
+ * 🔴 Uma chamada de RPC, e mais nada.
+ *
+ *    A versão anterior fazia N `UPDATE` sequenciais. Se o terceiro falhasse,
+ *    os dois primeiros ficavam gravados e o quadro ficava numa ordem que
+ *    ninguém tinha escolhido. A RPC valida tudo antes de escrever seja o que
+ *    for, e escreve numa instrução só.
+ *
  * Separada de `moveLeadStage` de propósito: arrastar para priorizar não é uma
  * mudança de estado e não deve encher a timeline nem a auditoria.
  */
 export async function reorderLeads(
+  stage: string,
   ordens: z.input<typeof ordemSchema>[],
 ): Promise<ActionResult<{ atualizadas: number }>> {
-  const parsed = z.array(ordemSchema).max(500).safeParse(ordens);
+  const parsed = z
+    .object({
+      stage: z.enum(LEAD_STAGES),
+      ordens: z.array(ordemSchema).max(500),
+    })
+    .safeParse({ stage, ordens });
+
   if (!parsed.success) return validationFailure(parsed.error);
 
   const guard = await requireProfile({ roles: ["admin", "gestor"] });
@@ -513,21 +530,23 @@ export async function reorderLeads(
 
   const { admin, profile } = guard;
 
-  for (const { leadId, boardOrder } of parsed.data) {
-    const { error } = await admin
-      .from("crm_leads")
-      .update({ board_order: boardOrder })
-      .eq("company_id", profile.company_id)
-      .eq("id", leadId);
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data, error } = await (admin as any).rpc("reorder_crm_leads_atomic", {
+      p_company_id: profile.company_id,
+      p_stage: parsed.data.stage,
+      p_items: parsed.data.ordens,
+      p_actor: profile.id,
+    });
 
-    if (error) {
-      logQueryFailure("reorderLeads", error);
-      return internalFailure("reorderLeads", error, ACTION_ERROR_CODES.PERSISTENCE);
-    }
+    if (error) return erroDoFunil("reorderLeads", new Error(error.message));
+
+    invalidateBusinessState({ domains: ["leads"] });
+    const linha = Array.isArray(data) ? data[0] : data;
+    return actionSuccess({ atualizadas: Number(linha?.atualizadas ?? parsed.data.ordens.length) });
+  } catch (err) {
+    return erroDoFunil("reorderLeads", err);
   }
-
-  invalidateBusinessState({ domains: ["leads"] });
-  return actionSuccess({ atualizadas: parsed.data.length });
 }
 
 const interacaoSchema = z.object({
@@ -629,38 +648,14 @@ export async function archiveLead(leadId: string): Promise<ActionResult<{ id: st
 }
 
 // ── Interno ─────────────────────────────────────────────────────────────────
-
-// O mesmo tipo que `src/lib/audit.ts` usa. Derivá-lo do retorno de
-// `requireProfile` não funciona: esse retorno é uma união, e o ramo de falha
-// não tem `admin` — o condicional resolvia para `never`.
-type AdminClient = ReturnType<typeof createAdminClient>;
-
-/**
- * Escreve na timeline sem deixar que uma falha aqui parta a operação
- * principal — mesmo princípio de `auditLog`. Uma mudança de estado que
- * aconteceu não pode ser desfeita porque o registo do diário falhou; o que se
- * perde é uma linha da timeline, e isso fica no log do servidor.
- */
-async function registarInteracao(
-  admin: AdminClient,
-  args: {
-    companyId: string;
-    leadId: string;
-    kind: string;
-    summary: string;
-    authorId: string | null;
-  },
-): Promise<void> {
-  try {
-    const { error } = await admin.from("crm_lead_interactions").insert({
-      company_id: args.companyId,
-      lead_id: args.leadId,
-      kind: args.kind,
-      summary: args.summary,
-      author_id: args.authorId,
-    });
-    if (error) logQueryFailure("registarInteracao", error);
-  } catch (err) {
-    console.error("[registarInteracao] falhou:", err);
-  }
-}
+//
+// 🔴 `registarInteracao` foi REMOVIDA nesta ronda, e a ausência é o ponto.
+//
+//    Era o helper que escrevia no diário em best-effort, a seguir ao `UPDATE`
+//    do estado, engolindo o erro. Permitia a lead mudar de coluna sem a
+//    timeline registar porquê — e é para responder a isso que a timeline
+//    existe.
+//
+//    O diário passou a ser escrito DENTRO de `move_crm_lead_stage_atomic`, na
+//    mesma transação do estado. Deixar aqui o helper antigo seria deixar à mão
+//    o caminho que se acabou de fechar.

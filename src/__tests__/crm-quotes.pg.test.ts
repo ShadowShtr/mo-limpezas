@@ -18,14 +18,19 @@ import { join } from "node:path";
 import pg from "pg";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { startPostgresContainer, type PostgresContainer } from "./helpers/pg-container";
+import {
+  EMPRESA,
+  OUTRA,
+  ACTOR,
+  ACTOR_OUTRA,
+  CLIENTE_A,
+  comoUtilizador,
+  montarPalcoCrm,
+} from "./helpers/crm-pg-harness";
 
 const ROOT = process.cwd();
 const CONTAINER = `crmquotes-${process.pid}`;
 
-const EMPRESA = "11111111-1111-4111-8111-111111111111";
-const OUTRA = "22222222-2222-4222-8222-222222222222";
-const ACTOR = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
-const CLIENTE_A = "c1111111-1111-4111-8111-111111111111";
 
 let container: PostgresContainer;
 let pool: pg.Pool;
@@ -37,72 +42,19 @@ const ITENS = JSON.stringify([
   { description: "Vidros exteriores", quantity: 1, unit: "servico", unit_price: 80 },
 ]);
 
-async function baseline() {
-  await pool.query(`
-    DROP SCHEMA IF EXISTS public CASCADE;
-    CREATE SCHEMA public;
-    GRANT USAGE ON SCHEMA public TO anon, authenticated, service_role;
-
-    CREATE TABLE public.companies (id uuid PRIMARY KEY, name text NOT NULL);
-    CREATE TABLE public.profiles (
-      id uuid PRIMARY KEY,
-      company_id uuid NOT NULL REFERENCES public.companies(id) ON DELETE CASCADE,
-      full_name text NOT NULL, role text NOT NULL DEFAULT 'colaborador'
-    );
-    CREATE TABLE public.clients (
-      id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-      company_id uuid NOT NULL REFERENCES public.companies(id) ON DELETE CASCADE,
-      name text NOT NULL
-    );
-    CREATE TABLE public.locations (
-      id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-      company_id uuid NOT NULL REFERENCES public.companies(id) ON DELETE CASCADE,
-      client_id uuid NOT NULL REFERENCES public.clients(id) ON DELETE CASCADE,
-      name text NOT NULL, address text NOT NULL
-    );
-    CREATE TABLE public.company_settings (
-      id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-      company_id uuid NOT NULL REFERENCES public.companies(id) ON DELETE CASCADE,
-      vat_rate numeric(5,2) NOT NULL DEFAULT 23,
-      invoice_prefix text NOT NULL DEFAULT 'F'
-    );
-    CREATE TABLE public.data_history (
-      id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-      table_name text NOT NULL, row_id uuid, op text NOT NULL,
-      old_data jsonb, new_data jsonb, actor uuid,
-      changed_at timestamptz NOT NULL DEFAULT now()
-    );
-
-    CREATE FUNCTION public.update_updated_at() RETURNS trigger
-      LANGUAGE plpgsql AS $$ BEGIN NEW.updated_at = now(); RETURN NEW; END $$;
-    CREATE FUNCTION public.fn_capture_history() RETURNS trigger
-      LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
-      BEGIN
-        IF TG_OP = 'DELETE' THEN RETURN OLD; END IF;
-        RETURN NEW;
-      END $$;
-    CREATE FUNCTION public.get_my_company_id() RETURNS uuid
-      LANGUAGE sql STABLE AS $$ SELECT current_setting('teste.company', true)::uuid $$;
-    CREATE FUNCTION public.get_my_role() RETURNS text
-      LANGUAGE sql STABLE AS $$ SELECT current_setting('teste.role', true) $$;
-
-    CREATE UNIQUE INDEX clients_id_company_unique ON public.clients (id, company_id);
-  `);
-
-  await pool.query("INSERT INTO public.companies (id, name) VALUES ($1, 'A'), ($2, 'B')", [EMPRESA, OUTRA]);
-  await pool.query(
-    "INSERT INTO public.profiles (id, company_id, full_name, role) VALUES ($1, $2, 'Gestora', 'gestor')",
-    [ACTOR, EMPRESA],
-  );
-  await pool.query("INSERT INTO public.clients (id, company_id, name) VALUES ($1, $2, 'Cliente A')", [
-    CLIENTE_A,
-    EMPRESA,
-  ]);
-  await pool.query("INSERT INTO public.company_settings (company_id) VALUES ($1), ($2)", [EMPRESA, OUTRA]);
-
-  await pool.query(sql("supabase/migrations/101_crm_leads.sql"));
-  await pool.query(sql("supabase/migrations/102_crm_visitas_comerciais.sql"));
-  await pool.query(sql("supabase/migrations/103_crm_orcamentos.sql"));
+/**
+ * O palco: a forma REAL do schema de produção + as migrations do CRM.
+ *
+ * 🔴 A versão anterior escrevia aqui um baseline à mão, com 7 tabelas. Provava
+ *    coisas verdadeiras sobre um mundo que não é o nosso — sem as FKs reais,
+ *    sem as políticas reais, sem os grants reais, e com `service_role` sem
+ *    BYPASSRLS (o que fazia uma recusa passar pela razão errada).
+ *
+ *    Ver `helpers/crm-pg-harness.ts` para o porquê e para o que o fixture não
+ *    traz.
+ */
+async function baseline(opts: { aplicarCrm?: boolean } = {}) {
+  await montarPalcoCrm(pool, opts);
 }
 
 async function novaLead(empresa = EMPRESA): Promise<string> {
@@ -128,6 +80,10 @@ async function criar(opts: {
   const c = opts.client ?? pool;
   const empresa = opts.empresa ?? EMPRESA;
   const leadId = opts.leadId === undefined ? await novaLead(empresa) : opts.leadId;
+  // 🔴 O autor tem de ser da MESMA empresa do orçamento: a FK composta
+  //    `crm_quotes_created_by_mesma_empresa` recusa o contrário. Foi
+  //    exactamente o que aconteceu quando este palco passou a ser o real.
+  const actor = empresa === EMPRESA ? ACTOR : ACTOR_OUTRA;
 
   const { rows } = await c.query(
     `SELECT * FROM public.create_crm_quote_with_items(
@@ -141,7 +97,7 @@ async function criar(opts: {
       opts.validoAte ?? "2030-12-31",
       opts.descontoPct ?? 0,
       opts.comIva ?? true,
-      ACTOR,
+      actor,
       opts.itens ?? ITENS,
     ],
   );
@@ -167,11 +123,6 @@ beforeAll(async () => {
     serverFlags: ["shared_buffers=16MB", "max_connections=25", "work_mem=1MB"],
   });
   pool = new pg.Pool({ ...container.connection, max: 6 });
-  await pool.query(`
-    DO $$ BEGIN CREATE ROLE anon; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
-    DO $$ BEGIN CREATE ROLE authenticated; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
-    DO $$ BEGIN CREATE ROLE service_role BYPASSRLS; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
-  `);
 }, 180_000);
 
 afterAll(async () => {
@@ -513,60 +464,54 @@ describe("103 — isolamento e integridade", () => {
 });
 
 describe("103 — quem pode ler e escrever", () => {
-  async function como(
-    papel: "anon" | "authenticated",
-    identidade: { company: string; role: string } | null,
-    q: string,
-  ) {
-    const c = new pg.Client({ ...container.connection });
-    await c.connect();
-    try {
-      await c.query(`SET ROLE ${papel}`);
-      if (identidade) {
-        await c.query("SELECT set_config('teste.company', $1, false)", [identidade.company]);
-        await c.query("SELECT set_config('teste.role', $1, false)", [identidade.role]);
-      }
-      return await c.query(q);
-    } finally {
-      await c.end();
-    }
-  }
+  const comoGestora = <T,>(userId: string, fn: (c: pg.Client) => Promise<T>) =>
+    comoUtilizador(container.connection, { papel: "authenticated", userId }, fn);
 
   it("gestor lê os orçamentos da sua empresa e não os de outra", async () => {
     await criar({ empresa: EMPRESA });
     await criar({ empresa: OUTRA });
 
-    const meus = await como("authenticated", { company: EMPRESA, role: "gestor" },
-      "SELECT count(*)::int n FROM public.crm_quotes");
+    const meus = await comoGestora(ACTOR, (c) =>
+      c.query("SELECT count(*)::int n FROM public.crm_quotes"));
     expect(meus.rows[0].n).toBe(1);
   });
 
   it("🔴 colaboradora não vê orçamentos", async () => {
     await criar();
-    const r = await como("authenticated", { company: EMPRESA, role: "colaborador" },
-      "SELECT count(*)::int n FROM public.crm_quotes");
+    await pool.query("UPDATE public.profiles SET role='colaborador' WHERE id=$1", [ACTOR]);
+    const r = await comoGestora(ACTOR, (c) =>
+      c.query("SELECT count(*)::int n FROM public.crm_quotes"));
     expect(r.rows[0].n).toBe(0);
   });
 
   it("🔴 authenticated não escreve, e não executa as RPC", async () => {
     const erroEscrita = await erroDe(() =>
-      como("authenticated", { company: EMPRESA, role: "gestor" },
-        `INSERT INTO public.crm_quotes (company_id, lead_id, quote_number, quote_year, quote_seq,
-           root_quote_id, issue_date, valid_until, subtotal, vat_rate, vat_amount, total)
-         VALUES ('${EMPRESA}', NULL, 'X', 2026, 1, gen_random_uuid(), current_date, current_date, 0, 23, 0, 0)`),
+      comoGestora(ACTOR, (c) =>
+        c.query(
+          `INSERT INTO public.crm_quotes (company_id, lead_id, quote_number, quote_year, quote_seq,
+             root_quote_id, issue_date, valid_until, subtotal, vat_rate, vat_amount, total)
+           VALUES ($1, NULL, 'X', 2026, 1, gen_random_uuid(), current_date, current_date, 0, 23, 0, 0)`,
+          [EMPRESA],
+        ),
+      ),
     );
     expect(erroEscrita).toMatch(/permission denied|row-level security/i);
 
     const erroRpc = await erroDe(() =>
-      como("authenticated", { company: EMPRESA, role: "gestor" },
-        `SELECT public.set_crm_quote_status('${EMPRESA}', gen_random_uuid(), '${ACTOR}', 'enviado', NULL)`),
+      comoGestora(ACTOR, (c) =>
+        c.query("SELECT public.set_crm_quote_status($1, gen_random_uuid(), $2, 'enviado', NULL)",
+          [EMPRESA, ACTOR]),
+      ),
     );
     expect(erroRpc).toMatch(/permission denied/i);
   });
 
   it("🔴 anon não lê nada", async () => {
     await criar();
-    const erro = await erroDe(() => como("anon", null, "SELECT * FROM public.crm_quotes"));
+    const erro = await erroDe(() =>
+      comoUtilizador(container.connection, { papel: "anon" }, (c) =>
+        c.query("SELECT * FROM public.crm_quotes")),
+    );
     expect(erro).toMatch(/permission denied/i);
   });
 });

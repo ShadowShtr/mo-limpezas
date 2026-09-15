@@ -1,12 +1,12 @@
 {
   "generatedBy": "scripts/audit-file-inventory.mjs",
-  "totalFiles": 950,
+  "totalFiles": 953,
   "byStatus": {
-    "MANTER": 927,
+    "MANTER": 930,
     "STANDBY": 23
   },
   "byCategory": {
-    "test": 223,
+    "test": 226,
     "route-ui": 155,
     "migration": 136,
     "lib": 80,
@@ -29,7 +29,7 @@
     "supabase-other": 2
   },
   "byConfidence": {
-    "alta": 929,
+    "alta": 932,
     "média": 15,
     "baixa": 6
   },
@@ -4968,7 +4968,7 @@
       }
     },
     {
-      "path": "src/__tests__/crm-conversion.pg.test.ts",
+      "path": "src/__tests__/crm-auditoria-direcao.pg.test.ts",
       "category": "test",
       "status": "MANTER",
       "confidence": "alta",
@@ -4981,8 +4981,32 @@
         "service-role"
       ],
       "signals": {
-        "serviceRole": 2,
-        "sqlWrite": 21
+        "serviceRole": 1,
+        "sqlWrite": 18
+      },
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/__tests__/crm-conversion.pg.test.ts",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "sqlWrite": 5
       },
       "action": "nenhuma",
       "reason": "suite de testes — corre por convenção do vitest",
@@ -5008,7 +5032,8 @@
       ],
       "risks": [],
       "signals": {
-        "supabase": 2
+        "supabase": 3,
+        "sqlWrite": 1
       },
       "action": "nenhuma",
       "reason": "suite de testes — corre por convenção do vitest",
@@ -5107,8 +5132,8 @@
         "service-role"
       ],
       "signals": {
-        "serviceRole": 2,
-        "sqlWrite": 18,
+        "serviceRole": 1,
+        "sqlWrite": 8,
         "fallbackZero": 1
       },
       "action": "nenhuma",
@@ -5135,8 +5160,35 @@
         "service-role"
       ],
       "signals": {
-        "serviceRole": 2,
-        "sqlWrite": 41
+        "serviceRole": 1,
+        "sqlWrite": 27
+      },
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/__tests__/crm-stage-reorder.pg.test.ts",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [
+        "service-role"
+      ],
+      "signals": {
+        "serviceRole": 3,
+        "sqlWrite": 15
       },
       "action": "nenhuma",
       "reason": "suite de testes — corre por convenção do vitest",
@@ -6776,15 +6828,47 @@
       }
     },
     {
+      "path": "src/__tests__/helpers/crm-pg-harness.ts",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 5,
+      "consumerSample": [
+        "src/__tests__/crm-auditoria-direcao.pg.test.ts",
+        "src/__tests__/crm-conversion.pg.test.ts",
+        "src/__tests__/crm-quotes.pg.test.ts"
+      ],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [
+        "service-role"
+      ],
+      "signals": {
+        "serviceRole": 6,
+        "sqlWrite": 17,
+        "dynamicImport": 2
+      },
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
       "path": "src/__tests__/helpers/pg-container.ts",
       "category": "test",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 16,
+      "consumers": 18,
       "consumerSample": [
         "src/__tests__/bank-reconciliation-period-atomic.pg.test.ts",
         "src/__tests__/cashflow-period-atomic.pg.test.ts",
-        "src/__tests__/crm-conversion.pg.test.ts"
+        "src/__tests__/crm-auditoria-direcao.pg.test.ts"
       ],
       "autoLoaded": false,
       "referencedBy": [],
@@ -6806,7 +6890,7 @@
       "category": "test",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 5,
+      "consumers": 6,
       "consumerSample": [
         "src/__tests__/collaborator-create-name-only-postgres.test.ts",
         "src/__tests__/collaborator-identity-hardening-postgres.test.ts",
@@ -14396,7 +14480,7 @@
       "category": "server-action",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 4,
+      "consumers": 3,
       "consumerSample": [
         "src/app/(dashboard)/dashboard/calendario/_components/service-create-sheet.tsx",
         "src/app/(dashboard)/dashboard/clientes/_components/sheet.tsx",
@@ -14426,7 +14510,7 @@
         "revalidatePath": 6
       },
       "action": "auditar atomicidade (T12/T13)",
-      "reason": "em uso: 4 consumidor(es)",
+      "reason": "em uso: 3 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -14616,7 +14700,7 @@
         "any(1)"
       ],
       "signals": {
-        "supabase": 4,
+        "supabase": 2,
         "serverAction": 1,
         "eslintDisable": 1,
         "anyType": 1,
@@ -14650,19 +14734,19 @@
         "docs"
       ],
       "sideEffects": [
-        "supabase",
         "write"
       ],
       "risks": [
-        "erro-de-query-ignorado(2)"
+        "erro-de-query-ignorado(2)",
+        "any(2)"
       ],
       "signals": {
-        "supabase": 2,
         "serverAction": 1,
-        "write": 7,
+        "write": 4,
         "sqlWrite": 7,
+        "eslintDisable": 2,
+        "anyType": 2,
         "unknownCast": 3,
-        "consoleErr": 1,
         "ignoredError": 2,
         "fallbackArray": 5
       },
@@ -21137,7 +21221,7 @@
       "category": "lib",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 83,
+      "consumers": 82,
       "consumerSample": [
         "src/app/(app)/app/perfil/page.tsx",
         "src/app/(app)/app/servico/[id]/page.tsx",
@@ -21160,7 +21244,7 @@
         "serviceRole": 1
       },
       "action": "nenhuma",
-      "reason": "em uso: 83 consumidor(es)",
+      "reason": "em uso: 82 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -24715,8 +24799,8 @@
       ],
       "signals": {
         "supabase": 3,
-        "serviceRole": 5,
-        "sqlWrite": 42
+        "serviceRole": 9,
+        "sqlWrite": 63
       },
       "action": "nenhuma",
       "reason": "migration versionada — histórico do schema, nunca se apaga",
@@ -24738,8 +24822,8 @@
         "service-role"
       ],
       "signals": {
-        "serviceRole": 2,
-        "sqlWrite": 21
+        "serviceRole": 3,
+        "sqlWrite": 29
       },
       "action": "nenhuma",
       "reason": "migration versionada — histórico do schema, nunca se apaga",
@@ -24761,8 +24845,8 @@
         "service-role"
       ],
       "signals": {
-        "serviceRole": 7,
-        "sqlWrite": 45
+        "serviceRole": 8,
+        "sqlWrite": 52
       },
       "action": "nenhuma",
       "reason": "migration versionada — histórico do schema, nunca se apaga",
@@ -24786,9 +24870,9 @@
         "service-role"
       ],
       "signals": {
-        "supabase": 2,
+        "supabase": 3,
         "serviceRole": 1,
-        "sqlWrite": 6
+        "sqlWrite": 11
       },
       "action": "nenhuma",
       "reason": "migration versionada — histórico do schema, nunca se apaga",
@@ -25373,7 +25457,7 @@
       "sideEffects": [],
       "risks": [],
       "signals": {
-        "sqlWrite": 5
+        "sqlWrite": 6
       },
       "action": "nenhuma",
       "reason": "migration versionada — histórico do schema, nunca se apaga",

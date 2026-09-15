@@ -100,7 +100,9 @@ export function PipelineClient({ leads, erro, membros }: Props) {
 
   const [drag, setDrag] = useState<DragState | null>(null);
   const [alvo, setAlvo] = useState<LeadStage | null>(null);
-  const [aPerder, setAPerder] = useState<{ lead: LeadRow; destino: LeadStage } | null>(null);
+  const [aPerder, setAPerder] = useState<
+    { lead: LeadRow; destino: LeadStage; origem: LeadStage } | null
+  >(null);
   const [aEditar, setAEditar] = useState<LeadRow | null>(null);
   const [aCriar, setACriar] = useState(false);
   const [filtroDono, setFiltroDono] = useState<string>("");
@@ -179,11 +181,11 @@ export function PipelineClient({ leads, erro, membros }: Props) {
       // Perder exige motivo, e a base recusa sem ele. Perguntar antes de
       // gravar evita mostrar um erro técnico a quem só arrastou um cartão.
       if (destino === "perdido") {
-        setAPerder({ lead, destino });
+        setAPerder({ lead, destino, origem: d.origem });
         return;
       }
 
-      aplicarMudanca(lead, destino);
+      aplicarMudanca(lead, destino, d.origem);
     }
 
     window.addEventListener("pointermove", handleMove);
@@ -200,6 +202,7 @@ export function PipelineClient({ leads, erro, membros }: Props) {
   function aplicarMudanca(
     lead: LeadRow,
     destino: LeadStage,
+    origem: LeadStage,
     motivo?: { lostReason: string; lostReasonNotes: string | null },
   ) {
     const antes = lista;
@@ -210,6 +213,10 @@ export function PipelineClient({ leads, erro, membros }: Props) {
     startTransition(async () => {
       const res = await moveLeadStage(lead.id, {
         stage: destino,
+        // 🔴 De onde o cartão veio, na leitura de quem o arrastou. É o que
+        //    permite à base recusar quando outra pessoa já o moveu, em vez de
+        //    a segunda escrita apagar a decisão da primeira.
+        expectedStage: origem,
         lostReason: motivo?.lostReason as never,
         lostReasonNotes: motivo?.lostReasonNotes,
       });
@@ -227,12 +234,15 @@ export function PipelineClient({ leads, erro, membros }: Props) {
   }
 
   /**
-   * A ordem é global por lead (`board_order`), não por coluna: a coluna já é
-   * dada pelo `stage`. Por isso esta função não precisa de saber qual é.
+   * Guarda a ordem dos cartões de UMA coluna.
+   *
+   * 🔴 A coluna vai junto: a RPC valida que todos os cartões pertencem mesmo a
+   *    ela antes de escrever seja o que for. Sem isso, um pedido com um id de
+   *    outra coluna reordenava metade e falhava a meio.
    */
-  function guardarOrdem(ids: string[]) {
+  function guardarOrdem(stage: LeadStage, ids: string[]) {
     startTransition(async () => {
-      const res = await reorderLeads(ids.map((leadId, i) => ({ leadId, boardOrder: i })));
+      const res = await reorderLeads(stage, ids.map((leadId, i) => ({ leadId, boardOrder: i })));
       if (!res.ok) toast(res.error.message, "error");
       else router.refresh();
     });
@@ -384,7 +394,7 @@ export function PipelineClient({ leads, erro, membros }: Props) {
                                   return pos === -1 ? l : { ...l, board_order: pos };
                                 }),
                               );
-                              guardarOrdem(ids);
+                              guardarOrdem(stage, ids);
                             }
                       }
                     />
@@ -417,9 +427,9 @@ export function PipelineClient({ leads, erro, membros }: Props) {
           leadName={aPerder.lead.name}
           onCancel={() => setAPerder(null)}
           onConfirm={(motivo, notas) => {
-            const { lead, destino } = aPerder;
+            const { lead, destino, origem } = aPerder;
             setAPerder(null);
-            aplicarMudanca(lead, destino, { lostReason: motivo, lostReasonNotes: notas });
+            aplicarMudanca(lead, destino, origem, { lostReason: motivo, lostReasonNotes: notas });
           }}
         />
       )}
