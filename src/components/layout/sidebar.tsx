@@ -19,6 +19,7 @@ import {
   CheckSquare,
   Clock,
   Bell,
+  Handshake,
 } from "lucide-react";
 import { logout } from "@/app/actions/auth";
 import { SidebarNotifBadge } from "./sidebar-notif-badge";
@@ -34,6 +35,14 @@ const NAV: NavEntry[] = [
   { href: "/dashboard",               icon: LayoutDashboard, label: "Dashboard", notif: true },
   { href: "/dashboard/calendario",    icon: Calendar,        label: "Calendário" },
   { href: "/dashboard/clientes",      icon: Building2,       label: "Clientes" },
+  // CRM: um item só, como o Financeiro. A navegação fina (Leads, e depois
+  // Visitas e Orçamentos) vive dentro do módulo, em
+  // `src/components/crm/crm-nav.tsx` — a barra lateral ficou plana de
+  // propósito e não volta a crescer três entradas por causa de um módulo.
+  //
+  // Fica a seguir a Clientes porque é a ordem do trabalho: primeiro o funil,
+  // depois quem já é cliente.
+  { href: "/dashboard/crm",           icon: Handshake,       label: "CRM" },
   { href: "/dashboard/contratos",     icon: FileText,        label: "Contratos" },
   { href: "/dashboard/colaboradores", icon: Users,           label: "Colaboradores" },
   { href: "/dashboard/registo-ponto", icon: Clock,           label: "Registo de Ponto" },
