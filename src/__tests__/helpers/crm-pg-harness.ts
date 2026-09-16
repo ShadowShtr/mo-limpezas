@@ -1,0 +1,297 @@
+// ============================================================================
+// Palco partilhado dos ensaios do CRM em Postgres real
+// ============================================================================
+//
+// 🔴 Porque este ficheiro existe.
+//
+//    As primeiras suites do CRM escreviam cada uma o seu baseline à mão: 7
+//    tabelas, sem as FKs reais, sem as políticas reais, sem os grants reais.
+//    É exactamente o defeito que `production-baseline.ts` foi criado para
+//    fechar — «um baseline incompleto não é um ensaio mais simples; é um
+//    ensaio que responde a outra pergunta».
+//
+//    Aqui o palco é a FORMA REAL do schema de produção (47 tabelas, 93
+//    políticas), e por cima dela correm as migrations 101→104 tal como
+//    correriam na base verdadeira.
+//
+// ---------------------------------------------------------------------------
+// Porque não se faz replay de 001→100
+// ---------------------------------------------------------------------------
+//
+// Foi tentado, e não corre de raiz — por três razões que não são do CRM:
+//
+//   · depende de objectos do Supabase que as migrations não criam
+//     (`storage.buckets`, a publicação `supabase_realtime`);
+//   · o runner ordena por `.sort()` alfabético, e os ficheiros datados legados
+//     (`20260608_*`) ficam DEPOIS de `104` — mas criam tabelas que migrations
+//     anteriores já usam;
+//   · há políticas em produção que não existem em migration nenhuma.
+//
+// É dívida conhecida e documentada (`docs/LEDGER-RECONCILIATION-PENDING.md`).
+// `production-baseline.ts` já tinha tomado esta decisão pela mesma razão: o
+// que se quer medir é o schema real, e o schema real é o fixture.
+// ============================================================================
+
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import type pg from "pg";
+
+import { baselineCompleto } from "./production-baseline";
+
+const ROOT = process.cwd();
+
+/** Identidades fixas, para os ensaios poderem falar umas com as outras. */
+export const EMPRESA = "11111111-1111-4111-8111-111111111111";
+export const OUTRA = "22222222-2222-4222-8222-222222222222";
+export const ACTOR = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+export const ACTOR_OUTRA = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
+export const CLIENTE_A = "c1111111-1111-4111-8111-111111111111";
+export const CLIENTE_B = "c2222222-2222-4222-8222-222222222222";
+export const LOCAL_A = "10cac111-1111-4111-8111-111111111111";
+export const LOCAL_B = "10cab222-2222-4222-8222-222222222222";
+
+/**
+ * As migrations do CRM presentes NESTA branch, pela ordem canónica.
+ *
+ * 🔴 Só a 101. Esta PR porta a fundacao do funil e mais nada: a 102, a 103 e a
+ *    104 vivem na branch de integracao e chegarao em PRs proprias, cada uma com
+ *    a sua autorizacao. Listar aqui um ficheiro que a branch nao tem faria o
+ *    palco rebentar no `readFileSync`, antes de qualquer ensaio correr.
+ */
+export const MIGRATIONS_CRM = ["101_crm_leads"] as const;
+
+export const lerSql = (rel: string): string => readFileSync(join(ROOT, rel), "utf8");
+
+export const migrationCrm = (nome: (typeof MIGRATIONS_CRM)[number]): string =>
+  lerSql(`supabase/migrations/${nome}.sql`);
+
+export const rollbackCrm = (nome: (typeof MIGRATIONS_CRM)[number]): string =>
+  lerSql(`supabase/migrations/rollback/${nome}.down.sql`);
+
+/**
+ * Os helpers que as migrations do CRM exigem e que o fixture NÃO traz.
+ *
+ * 🔴 O dump de `production-schema-shape.sql` extrai tabelas, colunas, PK/FK,
+ *    RLS e políticas — não funções nem índices avulsos. `update_updated_at`
+ *    (001) e `fn_capture_history` (059) existem em produção (confirmado por
+ *    leitura read-only) mas não vêm no fixture.
+ *
+ *    Os corpos abaixo são os REAIS, copiados das migrations que os criam, e
+ *    não versões simplificadas: `fn_capture_history` ESCREVE mesmo em
+ *    `data_history`, porque há ensaios de retenção que dependem disso. Um coto
+ *    que devolvesse `NEW` sem escrever daria verde a um teste de histórico que
+ *    não estaria a medir histórico nenhum.
+ *
+ * `get_my_company_id`/`get_my_role` já vêm nos HELPERS_LEGADOS do baseline.
+ */
+const HELPERS_PARA_CRM = `
+-- 001_companies.sql
+CREATE OR REPLACE FUNCTION public.update_updated_at()
+RETURNS TRIGGER AS $upd$
+BEGIN
+  NEW.updated_at = NOW();
+  RETURN NEW;
+END;
+$upd$ LANGUAGE plpgsql;
+
+-- 🔴 data_history JA VEM do fixture — e uma das 47 tabelas reais. O que nao
+--    vem e o DEFAULT da coluna id: em producao e uma sequencia, e o dump
+--    extrai tipos e restricoes, nao defaults de sequencia.
+--
+--    Sem isto, o primeiro trigger de historico rebenta com «null value in
+--    column id». Foi assim que se descobriu — o palco fiel tropeca onde o
+--    baseline artificial passava, porque esse inventava uma data_history com
+--    gen_random_uuid() que producao nao tem.
+ALTER TABLE public.data_history
+  ALTER COLUMN id ADD GENERATED BY DEFAULT AS IDENTITY;
+
+-- 059_rede_seguranca.sql
+CREATE OR REPLACE FUNCTION public.fn_capture_history()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $hist$
+BEGIN
+  IF TG_OP = 'DELETE' THEN
+    INSERT INTO public.data_history (table_name, row_id, op, old_data, actor)
+    VALUES (TG_TABLE_NAME, OLD.id, 'DELETE', to_jsonb(OLD), auth.uid());
+    RETURN OLD;
+  END IF;
+
+  IF to_jsonb(OLD) IS DISTINCT FROM to_jsonb(NEW) THEN
+    INSERT INTO public.data_history (table_name, row_id, op, old_data, new_data, actor)
+    VALUES (TG_TABLE_NAME, OLD.id, 'UPDATE', to_jsonb(OLD), to_jsonb(NEW), auth.uid());
+  END IF;
+  RETURN NEW;
+END;
+$hist$;
+`;
+
+type Executor = pg.Pool | pg.Client;
+
+/**
+ * Levanta o palco: schema real de produção + as quatro migrations do CRM.
+ *
+ * `aplicarCrm: false` deixa o palco no estado PRÉ-CRM — é o que os ensaios de
+ * precondição precisam para provar que uma migration se recusa a correr quando
+ * lhe falta o que ela própria exige.
+ */
+export async function montarPalcoCrm(
+  db: Executor,
+  opts: { aplicarCrm?: boolean } = {},
+): Promise<void> {
+  await db.query("DROP SCHEMA IF EXISTS public CASCADE; CREATE SCHEMA public;");
+  await db.query("DROP SCHEMA IF EXISTS auth CASCADE;");
+  await db.query(baselineCompleto());
+
+  // 🔴 `clients_id_company_unique` é criado pela 086, e a 101 exige-o como
+  //    precondição. O dump do fixture extrai tabelas, colunas, PK/FK, RLS e
+  //    políticas — não índices únicos avulsos — por isso recria-se aqui.
+  //
+  //    Confirmado por leitura read-only que EXISTE mesmo em produção. Sem
+  //    isso, a precondição da 101 falharia na aplicação real, e é precisamente
+  //    esse tipo de surpresa que um palco fiel serve para apanhar antes.
+  await db.query(`
+    CREATE UNIQUE INDEX IF NOT EXISTS clients_id_company_unique
+      ON public.clients (id, company_id);
+  `);
+
+  await db.query(HELPERS_PARA_CRM);
+
+  // 🔴 `service_role` TEM de ser BYPASSRLS, como em produção.
+  //
+  //    Confirmado por leitura read-only da base real: `rolbypassrls = true`
+  //    para `service_role`, `false` para `anon` e `authenticated`. O andaime de
+  //    `production-baseline.ts` cria a role sem esse atributo — basta-lhe, pois
+  //    os ensaios que o usam medem RLS de `authenticated`.
+  //
+  //    Para o CRM não basta, e a diferença é o oposto de académica: as Server
+  //    Actions escrevem TODAS por `service_role`. Sem BYPASSRLS, uma escrita
+  //    cross-company é recusada pelo RLS no ensaio e **passa pela razão
+  //    errada** — daria verde a um isolamento que em produção não existe,
+  //    porque lá o RLS nem sequer é avaliado para esta role.
+  //
+  //    Com BYPASSRLS, o que recusa é a integridade referencial: as FKs
+  //    compostas. Que é exactamente o que se quer provar.
+  await db.query("ALTER ROLE service_role BYPASSRLS;");
+
+  await semearDuasEmpresas(db);
+
+  if (opts.aplicarCrm !== false) {
+    for (const m of MIGRATIONS_CRM) await db.query(migrationCrm(m));
+  }
+}
+
+/**
+ * Duas empresas com gestora, cliente e local.
+ *
+ * Duas, e não uma: metade dos invariantes do CRM são sobre isolamento, e não
+ * se prova isolamento com uma empresa só.
+ */
+export async function semearDuasEmpresas(db: Executor): Promise<void> {
+  await db.query(
+    "INSERT INTO public.companies (id, name, slug) VALUES ($1, 'Empresa A', 'a'), ($2, 'Empresa B', 'b')",
+    [EMPRESA, OUTRA],
+  );
+  await db.query(
+    "INSERT INTO auth.users (id, email) VALUES ($1, 'gestora.a@teste.pt'), ($2, 'gestora.b@teste.pt')",
+    [ACTOR, ACTOR_OUTRA],
+  );
+  await db.query(
+    `INSERT INTO public.profiles (id, company_id, full_name, role)
+     VALUES ($1, $2, 'Gestora A', 'gestor'), ($3, $4, 'Gestora B', 'gestor')`,
+    [ACTOR, EMPRESA, ACTOR_OUTRA, OUTRA],
+  );
+  await db.query(
+    "INSERT INTO public.clients (id, company_id, name) VALUES ($1, $2, 'Cliente A'), ($3, $4, 'Cliente B')",
+    [CLIENTE_A, EMPRESA, CLIENTE_B, OUTRA],
+  );
+  await db.query(
+    `INSERT INTO public.locations (id, company_id, client_id, name, address)
+     VALUES ($1, $2, $3, 'Sede A', 'Rua A, 1'), ($4, $5, $6, 'Sede B', 'Rua B, 2')`,
+    [LOCAL_A, EMPRESA, CLIENTE_A, LOCAL_B, OUTRA, CLIENTE_B],
+  );
+  await db.query("INSERT INTO public.company_settings (company_id) VALUES ($1), ($2)", [
+    EMPRESA,
+    OUTRA,
+  ]);
+}
+
+/** Cria uma lead e devolve o id. */
+export async function novaLead(
+  db: Executor,
+  opts: { nome?: string; empresa?: string; campos?: Record<string, unknown> } = {},
+): Promise<string> {
+  const campos: Record<string, unknown> = {
+    company_id: opts.empresa ?? EMPRESA,
+    name: opts.nome ?? "Condomínio Teste",
+    ...(opts.campos ?? {}),
+  };
+  const colunas = Object.keys(campos);
+  const marcas = colunas.map((_, i) => `$${i + 1}`).join(", ");
+  const { rows } = await db.query(
+    `INSERT INTO public.crm_leads (${colunas.join(", ")}) VALUES (${marcas}) RETURNING id`,
+    Object.values(campos),
+  );
+  return rows[0].id as string;
+}
+
+/** Corre `fn` e devolve a mensagem de erro, ou `null` se não levantou. */
+export async function erroDe(fn: () => Promise<unknown>): Promise<string | null> {
+  try {
+    await fn();
+    return null;
+  } catch (e) {
+    return (e as Error).message;
+  }
+}
+
+/**
+ * Corre `fn` como um utilizador autenticado, com a identidade que as políticas
+ * consultam.
+ *
+ * 🔴 O baseline real resolve a identidade por `auth.uid()`, que lê
+ *    `request.jwt.claim.sub` — não por um `current_setting` inventado. É assim
+ *    que a base decide em produção, e é assim que se mede aqui.
+ */
+export async function comoUtilizador<T>(
+  connection: pg.ClientConfig,
+  args: { papel: "anon" | "authenticated"; userId?: string },
+  fn: (c: pg.Client) => Promise<T>,
+): Promise<T> {
+  const { Client } = await import("pg");
+  const c = new Client(connection);
+  await c.connect();
+  try {
+    if (args.userId) {
+      await c.query("SELECT set_config('request.jwt.claim.sub', $1, false)", [args.userId]);
+    }
+    await c.query(`SET ROLE ${args.papel}`);
+    return await fn(c);
+  } finally {
+    await c.end();
+  }
+}
+
+/** Corre `fn` como `service_role` — a via privilegiada que as actions usam. */
+export async function comoServiceRole<T>(
+  connection: pg.ClientConfig,
+  fn: (c: pg.Client) => Promise<T>,
+): Promise<T> {
+  const { Client } = await import("pg");
+  const c = new Client(connection);
+  await c.connect();
+  try {
+    await c.query("SET ROLE service_role");
+    return await fn(c);
+  } finally {
+    await c.end();
+  }
+}
+
+/** Quantas linhas tem uma tabela — para medir deltas em ensaios de falha. */
+export async function contar(db: Executor, tabela: string): Promise<number> {
+  const { rows } = await db.query(`SELECT count(*)::int n FROM public.${tabela}`);
+  return rows[0].n as number;
+}
