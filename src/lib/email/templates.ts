@@ -221,6 +221,64 @@ export function passwordRecoveryTemplate(d: PasswordRecoveryData) {
   return { subject, html };
 }
 
+
+// ─── Orçamento ────────────────────────────────────────────────────────────────
+
+export interface QuoteEmailData {
+  clientName: string;
+  quoteNumber: string;
+  total: number;
+  validUntil: string;   // "YYYY-MM-DD"
+  companyPhone: string;
+  /** Mensagem escrita pelo gestor, opcional. Substitui o parágrafo genérico. */
+  customMessage?: string | null;
+}
+
+/**
+ * O email que acompanha o PDF do orçamento.
+ *
+ * 🔴 O valor e a validade aparecem no corpo, e não só no anexo: muita gente lê
+ *    o email no telemóvel e nunca abre o PDF. Um email que obrigue a abrir o
+ *    anexo para saber quanto custa é um email que fica sem resposta.
+ *
+ * 🔴 Tudo o que vem de dados é escapado. `customMessage` é escrito por uma
+ *    pessoa e vai dentro de HTML.
+ */
+export function quoteEmailTemplate(d: QuoteEmailData) {
+  const subject = `Orçamento ${d.quoteNumber} | Mó Limpezas`;
+  const [ano, mes, dia] = d.validUntil.slice(0, 10).split("-");
+
+  const corpo = d.customMessage
+    ? `<p style="margin:0 0 16px;font-size:15px;color:#374151;line-height:1.6;">${escHtml(d.customMessage).replace(/\n/g, "<br/>")}</p>`
+    : `<p style="margin:0 0 16px;font-size:15px;color:#374151;line-height:1.6;">
+         Conforme combinado, segue em anexo o orçamento para o serviço de limpeza.
+         Ficamos à disposição para qualquer esclarecimento.
+       </p>`;
+
+  const html = layout(`
+    <h1 style="margin:0 0 16px;font-size:20px;color:#111827;">Orçamento ${escHtml(d.quoteNumber)}</h1>
+    <p style="margin:0 0 16px;font-size:15px;color:#374151;">Olá ${escHtml(d.clientName)},</p>
+    ${corpo}
+    <table width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 20px;border:1px solid #e5e7eb;border-radius:8px;">
+      <tr>
+        <td style="padding:14px 16px;border-bottom:1px solid #e5e7eb;font-size:14px;color:#6b7280;">Total</td>
+        <td style="padding:14px 16px;border-bottom:1px solid #e5e7eb;font-size:18px;font-weight:700;color:#16A34A;text-align:right;">${fmtEuro(d.total)}</td>
+      </tr>
+      <tr>
+        <td style="padding:14px 16px;font-size:14px;color:#6b7280;">Válido até</td>
+        <td style="padding:14px 16px;font-size:14px;color:#374151;text-align:right;">${dia}/${mes}/${ano}</td>
+      </tr>
+    </table>
+    <p style="margin:0;font-size:13px;color:#6b7280;line-height:1.6;">
+      O detalhe completo está no PDF em anexo. Para aceitar ou tirar dúvidas,
+      basta responder a este email ou ligar para
+      <a href="tel:${escHtml(d.companyPhone)}" style="color:#16A34A;text-decoration:none;">${escHtml(d.companyPhone)}</a>.
+    </p>
+  `);
+
+  return { subject, html };
+}
+
 // ─── Utilitário ───────────────────────────────────────────────────────────────
 
 function escHtml(str: string): string {

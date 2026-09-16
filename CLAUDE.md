@@ -80,6 +80,77 @@ não instrução a repetir.
 
 ## ⚡ PRÓXIMA TASK A EXECUTAR
 
+## 📍 PONTO DE PARAGEM — 2026-09-15 (módulo CRM construído, migrations POR APLICAR)
+
+**Branch:** `feat/crm-leads-fundacao` (7 commits, a partir de `origin/master` `bf3b217`).
+**Estado:** construído e verde localmente. **Nada foi publicado. Nada foi aplicado
+em produção. Nenhuma PR foi aberta no GitHub.**
+
+Módulo novo de CRM — pipeline de leads, visitas comerciais e orçamentos —
+pedido pelo dono a 2026-09-15 a partir de screenshots de outro produto
+(ServiSync). Não existia nada de CRM no repositório: nem tabela, nem rota, nem
+action.
+
+### 🔴 O que falta, e a ordem obrigatória
+
+As quatro migrations **não estão aplicadas**. O código que as consome está
+commitado mas **não pode ser publicado antes delas** (AGENTS.md secção 4).
+
+| # | Migration | O que cria |
+|---|---|---|
+| 101 | `101_crm_leads.sql` | `crm_leads`, `crm_lead_interactions` |
+| 102 | `102_crm_visitas_comerciais.sql` | `crm_visits` |
+| 103 | `103_crm_orcamentos.sql` | `crm_quotes`, `crm_quote_items`, 3 RPC, `company_settings.quote_prefix` |
+| 104 | `104_crm_conversao_lead.sql` | `link_crm_lead_conversion` |
+
+Todas têm rollback em `supabase/migrations/rollback/`. Todas foram ensaiadas
+contra Postgres real (Docker) — precondições fail-closed, idempotência,
+pós-estado e rollback incluídos.
+
+**Cada aplicação exige autorização explícita do dono na conversa do dia.**
+A 103 acrescenta uma coluna a `company_settings`, que é tabela viva.
+
+### Decisões que não são óbvias e não devem ser revertidas por distração
+
+- **A numeração dos orçamentos usa `quote_seq` (coluna), não o `regexp_match`
+  das facturas.** `ORC2026/001-R1` não casa com `'/(\d+)$'`: o MAX daria NULL e
+  o orçamento seguinte reemitiria o 001, colidindo com um documento já enviado
+  a um cliente. A 103 explica isto no cabeçalho.
+- **Uma visita comercial não é um `services`.** Mesmo argumento que a 086 já
+  usou para recusar representar uma cobrança com um serviço a fingir. O
+  pós-estado da 102 FALHA se alguém lhe acrescentar `team_id`,
+  `calculated_value`, `payment_status` ou `hourly_rate`.
+- **Os orçamentos não invocam o protocolo de período financeiro.** Orçamentar
+  num mês fechado é legítimo — um orçamento não é documento fiscal.
+- **A conversão não cria contratos nem serviços.** Abre o formulário
+  pré-preenchido; quem grava é o gestor. Decisão explícita do dono.
+- **Os estados do funil são um CHECK, não colunas configuráveis** como as do
+  Kanban das Tarefas: carregam regras (`perdido` exige motivo, `ganho` exige
+  cliente) que têm de ser imponíveis na base.
+
+### Verificação feita
+
+`npm test` → 4883 testes, 210 ficheiros, verde. `npx tsc --noEmit`,
+`npm run lint:strict` e `npm run build` limpos. `reports/code-audit.json` e
+`reports/file-classification.json` regenerados.
+
+Provas contra Postgres real (Docker): schema e CHECKs das 101/102, numeração
+sequencial com 5 sessões concorrentes, revisões e transições de estado da 103,
+paridade cêntimo a cêntimo entre o total mostrado no ecrã e o gravado pela
+RPC, e a idempotência da conversão com duas ligações em simultâneo.
+
+**Por verificar:** o smoke visual. Depende das migrations aplicadas — ninguém
+abriu ainda o módulo num browser contra uma base real.
+
+### Próximos passos
+
+1. Rever o diff das 7 PRs.
+2. Pedir autorização e aplicar a 101 → publicar a PR do pipeline.
+3. Repetir para 102/visitas, 103/orçamentos, 104/conversão.
+4. Smoke ao vivo: criar lead, arrastar no funil, marcar visita, gerar
+   orçamento, ver o PDF, enviar email para um endereço próprio, aceitar,
+   converter, e confirmar que o calendário só muda quando o gestor grava.
+
 ## 📍 ATUALIZAÇÃO — 2026-08-25 (estado atual do ledger de migrations)
 
 > 🔴 **O bloco de 2026-08-17, mais abaixo, é uma fotografia histórica daquele

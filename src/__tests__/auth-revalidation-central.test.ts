@@ -329,7 +329,23 @@ describe("nenhuma outra action foi migrada nesta PR", () => {
     expect(comRevalidateDireto.length).toBeGreaterThan(0);
   });
 
-  it("settings.ts é a única action a usar ActionResult", () => {
+  it("só o piloto e os módulos nascidos no formato usam ActionResult", () => {
+    // O inventário da adopção gradual (padrão de engenharia, secção 3).
+    //
+    // `settings.ts` é o piloto da T05 — uma **migração** de área existente, e
+    // essas continuam a fazer-se uma de cada vez.
+    //
+    // `crm-leads.ts` está aqui por outra razão: é um módulo **novo**, e o
+    // padrão manda que um módulo novo nasça já no formato em vez de nascer no
+    // antigo para depois ser migrado. Não migrou consumidor nenhum — não
+    // tinha nenhum.
+    //
+    // Acrescentar uma entrada a esta lista é uma decisão que se lê no diff. É
+    // esse o objectivo deste teste: as outras actions não podem ser migradas
+    // por arrasto, escondidas numa PR que muda comportamento.
+    const NASCIDAS_NO_FORMATO = ["crm-conversao.ts", "crm-leads.ts", "crm-orcamentos.ts", "crm-visitas.ts"];
+    const PILOTO = ["settings.ts"];
+
     const actionsDir = path.join(ROOT, "src/app/actions");
 
     const comActionResult = fs
@@ -341,6 +357,6 @@ describe("nenhuma outra action foi migrada nesta PR", () => {
         ),
       );
 
-    expect(comActionResult).toEqual(["settings.ts"]);
+    expect(comActionResult.sort()).toEqual([...PILOTO, ...NASCIDAS_NO_FORMATO].sort());
   });
 });
