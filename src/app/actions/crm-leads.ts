@@ -176,6 +176,18 @@ function erroDoFunil(contexto: string, err: unknown): ActionResult<never> {
       { lostReason: ["Escolha um motivo."] },
     );
   }
+  if (msg.includes("LEAD_TRANSITION_NOT_ALLOWED")) {
+    return actionFailure(
+      ACTION_ERROR_CODES.BUSINESS_RULE,
+      "Esse cartão não pode ir dessa coluna para essa. Recarregue o quadro para ver os destinos possíveis.",
+    );
+  }
+  if (msg.includes("LEAD_EXPECTED_STAGE_REQUIRED")) {
+    return actionFailure(
+      ACTION_ERROR_CODES.VALIDATION,
+      "Falta dizer de que coluna o cartão veio. Recarregue o quadro e tente outra vez.",
+    );
+  }
   if (msg.includes("LEAD_STAGE_UNKNOWN")) {
     return actionFailure(ACTION_ERROR_CODES.VALIDATION, "Esse estado não existe no funil.");
   }
@@ -188,7 +200,7 @@ function erroDoFunil(contexto: string, err: unknown): ActionResult<never> {
       "O quadro mudou entretanto. Recarregue para ver a ordem actual.",
     );
   }
-  if (msg.includes("REORDER_INVALID_POSITION")) {
+  if (msg.includes("REORDER_INVALID_POSITION") || msg.includes("REORDER_INVALID_UUID")) {
     return actionFailure(ACTION_ERROR_CODES.VALIDATION, "Posição inválida.");
   }
 
@@ -407,11 +419,20 @@ const moverSchema = z.object({
   /**
    * De que coluna o cartão veio, na leitura de quem o arrastou.
    *
-   * 🔴 É o controlo de concorrência. Sem ele, duas pessoas a mover o mesmo
-   *    cartão dão last-write-wins, e a segunda apaga a decisão da primeira sem
-   *    que nenhuma das duas saiba.
+   * 🔴 É o controlo de concorrência, e é OBRIGATÓRIO.
+   *
+   *    Enquanto era opcional, omiti-lo desligava o controlo: a RPC só comparava
+   *    o estado quando o valor vinha preenchido, e sem ele duas pessoas a mover
+   *    o mesmo cartão davam last-write-wins — a segunda apagava a decisão da
+   *    primeira sem que nenhuma das duas soubesse.
+   *
+   *    «A interface envia sempre» não é garantia nenhuma: é uma expectativa
+   *    sobre um caminho de escrita. O contrato canónico exige-o aqui, e a RPC
+   *    recusa o NULL explicitamente — as duas pontas fecham, não só esta.
    */
-  expectedStage: z.enum(LEAD_STAGES).optional().nullable(),
+  expectedStage: z.enum(LEAD_STAGES, {
+    error: "Indique de que coluna o cartão veio — é o que impede sobrepor a decisão de outra pessoa.",
+  }),
   lostReason: z.enum(LEAD_LOST_REASONS).optional().nullable(),
   lostReasonNotes: z.string().trim().max(1000).optional().nullable(),
 });
@@ -466,7 +487,7 @@ export async function moveLeadStage(
     const { data, error } = await (admin as any).rpc("move_crm_lead_stage_atomic", {
       p_company_id: profile.company_id,
       p_lead_id: leadId,
-      p_expected_stage: parsed.data.expectedStage ?? null,
+      p_expected_stage: parsed.data.expectedStage,
       p_new_stage: destino,
       p_actor: profile.id,
       p_lost_reason: parsed.data.lostReason ?? null,
@@ -481,7 +502,7 @@ export async function moveLeadStage(
       action: "lead_stage_changed",
       entityType: "crm_lead",
       entityId: leadId,
-      before: { stage: parsed.data.expectedStage ?? null },
+      before: { stage: parsed.data.expectedStage },
       after: { stage: destino, lost_reason: parsed.data.lostReason ?? null },
     }, admin);
 

@@ -533,3 +533,88 @@ describe("🔴 8 — conversão: NO_PARTIAL_STATE", () => {
     expect(lead.converted_client_id).toBeNull();
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 🔴 OS GUARDAS QUE TÊM DE VIVER NO RUNTIME
+// ═══════════════════════════════════════════════════════════════════════════
+//
+// Quase tudo o resto desta ronda foi para dentro da base, que é onde as regras
+// pertencem: é o único ponto por onde todos os caminhos de escrita passam.
+//
+// Estes dois não podem ir para lá, e a razão é a mesma nos dois casos — o que
+// está em causa acontece FORA da transação:
+//
+//   · o email sai por uma API externa. Quando a RPC recusasse, o PDF já estava
+//     na caixa de correio do cliente, e um email não se desenvia;
+//   · a idempotência do FLUXO decide-se na resposta HTTP, que é onde o retry
+//     nasce. A RPC pode ser perfeitamente idempotente e a action transformar o
+//     retry num erro à mesma — foi exactamente o que aconteceu.
+//
+// São, por isso, verificados por leitura do código: o que se mede é que o
+// guarda existe e está no sítio certo da sequência.
+
+describe("🔴 guardas de runtime — os que a base não pode impor", () => {
+  const ler = (rel: string) => readFileSync(join(ROOT, rel), "utf8");
+
+  it("🔴 SUPERSEDED_EMAIL_GUARD — recusa ANTES do Resend", () => {
+    const src = ler("src/app/actions/crm-orcamentos.ts");
+    const corpo = src.slice(src.indexOf("export async function sendQuoteByEmail"));
+
+    const guarda = corpo.indexOf("quote.superseded_by_id");
+    const envio = corpo.indexOf("resend.emails.send");
+
+    expect(guarda, "o guarda de superseded tem de existir").toBeGreaterThan(-1);
+    expect(envio, "e o envio também").toBeGreaterThan(-1);
+    expect(
+      guarda,
+      "🔴 REJECTED BEFORE external email — depois do envio não serve de nada",
+    ).toBeLessThan(envio);
+
+    expect(corpo, "a coluna tem de ser lida").toContain("superseded_by_id");
+  });
+
+  it("🔴 ACTION_RETRY_IDEMPOTENT — a action não transforma um retry em CONFLICT", () => {
+    const src = ler("src/app/actions/crm-conversao.ts");
+    const corpo = src.slice(src.indexOf("export async function converterLeadEmCliente"));
+
+    // O padrão que foi removido: ver `converted_client_id` na pré-leitura e
+    // devolver CONFLICT. Isso fazia RPC_IDEMPOTENT != FLOW_IDEMPOTENT.
+    const linhas = corpo.split("\n").filter((l) => !l.trimStart().startsWith("//"));
+    const semComentarios = linhas.join("\n");
+
+    expect(
+      semComentarios,
+      "a pré-leitura não pode decidir que já foi convertida",
+    ).not.toMatch(/converted_client_id[\s\S]{0,200}ACTION_ERROR_CODES\.CONFLICT/);
+
+    // Quem decide é a RPC, e é ela que devolve os ids existentes.
+    expect(semComentarios).toContain("convert_crm_lead_atomic");
+    expect(semComentarios, "e o resultado dela é que é devolvido").toContain("ja_convertida");
+  });
+
+  it("🔴 a conversão não cria cliente nem local fora da RPC", () => {
+    const src = ler("src/app/actions/crm-conversao.ts");
+    const corpo = src.slice(src.indexOf("export async function converterLeadEmCliente"));
+    const semComentarios = corpo
+      .split("\n").filter((l) => !l.trimStart().startsWith("//")).join("\n");
+
+    expect(semComentarios, "criar fora da RPC reabre o cliente órfão")
+      .not.toMatch(/\.from\("clients"\)[\s\S]{0,80}\.insert\(/);
+    expect(semComentarios)
+      .not.toMatch(/\.from\("locations"\)[\s\S]{0,80}\.insert\(/);
+    expect(semComentarios, "e a action antiga não pode voltar")
+      .not.toContain("createClienteComLocal(");
+  });
+
+  it("🔴 a timeline de orçamentos está declarada como DERIVED/BEST_EFFORT", () => {
+    // Não é uma preferência de estilo: é a decisão de domínio que justifica
+    // `registarNaLead` engolir a falha. Enquanto estiver declarada assim,
+    // nenhum ecrã pode apresentar `crm_lead_interactions` como histórico
+    // completo de orçamentos — a verdade está em `crm_quotes`.
+    const src = ler("src/app/actions/crm-orcamentos.ts");
+    const doc = src.slice(0, src.indexOf("async function registarNaLead"));
+
+    expect(doc).toContain("DERIVED / BEST_EFFORT");
+    expect(doc, "e a razão tem de estar escrita").toContain("crm_quotes");
+  });
+});

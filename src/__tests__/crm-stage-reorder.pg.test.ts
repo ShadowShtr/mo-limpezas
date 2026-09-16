@@ -21,6 +21,12 @@
 import pg from "pg";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
+import {
+  LEAD_STAGES,
+  TRANSICOES,
+  type LeadStage,
+} from "@/lib/crm/stages";
+
 import { startPostgresContainer, type PostgresContainer } from "./helpers/pg-container";
 import {
   ACTOR,
@@ -265,21 +271,233 @@ describe("🔴 CONCURRENT_STAGE_CHANGE — só uma vence", () => {
     expect(await diario(id)).toBe(1);
   });
 
-  it("sem expected_stage, a última escrita ganha — e é por isso que a UI o envia", async () => {
-    // Documenta o comportamento: `p_expected_stage` NULL desliga o controlo de
-    // concorrência. A interface envia-o sempre; este teste existe para que a
-    // consequência de o omitir esteja escrita.
+  // 🔴 Esta prova substitui uma anterior que DOCUMENTAVA last-write-wins com
+  //    `p_expected_stage` NULL («a interface envia-o sempre»). Enquanto o NULL
+  //    era aceite, o controlo de concorrência era opcional — e um controlo que
+  //    o chamador pode desligar não é fail-closed. O contrato passou a exigi-lo
+  //    nas duas pontas: o schema da Server Action e a própria RPC.
+  it("🔴 EXPECTED_STAGE_NULL — recusado, sem escrever", async () => {
     const id = await novaLead(pool);
-    await mover({ leadId: id, de: null, para: "contactado" });
-    await mover({ leadId: id, de: null, para: "visita_agendada" });
-    expect((await lerLead(id)).stage).toBe("visita_agendada");
+    const erro = await erroDe(() => mover({ leadId: id, de: null, para: "contactado" }));
+
+    expect(erro).toContain("LEAD_EXPECTED_STAGE_REQUIRED");
+    expect((await lerLead(id)).stage, "zero writes").toBe("novo");
+    expect(await diario(id)).toBe(0);
+  });
+
+  it("🔴 EXPECTED_STAGE_STALE — recusado com CONFLICT, sem escrever", async () => {
+    const id = await novaLead(pool);
+    await mover({ leadId: id, de: "novo", para: "contactado" });
+
+    // Quem ainda via o cartão em 'novo' chega atrasado.
+    const erro = await erroDe(() => mover({ leadId: id, de: "novo", para: "orcamento_enviado" }));
+
+    expect(erro).toContain("LEAD_STAGE_CONFLICT");
+    expect((await lerLead(id)).stage, "ZERO_WRITES_ON_CONFLICT").toBe("contactado");
+    expect(await diario(id), "ZERO_WRITES_ON_CONFLICT").toBe(1);
+  });
+
+  it("EXPECTED_STAGE_CORRECT — passa", async () => {
+    const id = await novaLead(pool);
+    await mover({ leadId: id, de: "novo", para: "contactado" });
+    expect((await lerLead(id)).stage).toBe("contactado");
+  });
+
+  it("um expected_stage inventado é recusado sem escrever", async () => {
+    const id = await novaLead(pool);
+    const erro = await erroDe(() => mover({ leadId: id, de: "negociacao", para: "contactado" }));
+
+    expect(erro).toContain("LEAD_STAGE_UNKNOWN");
+    expect((await lerLead(id)).stage).toBe("novo");
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 🔴 A MATRIZ — a RPC é a autoridade, ou não é
+// ═══════════════════════════════════════════════════════════════════════════
+//
+// Antes desta ronda a RPC verificava estado conhecido, `ganho` só por conversão,
+// não sair de `ganho`, motivo na perda e o `expected_stage` — mas NÃO o par
+// (origem → destino) contra a matriz canónica. `visita_agendada → novo` passava
+// na base apesar de a interface nunca o oferecer, e a frase «as regras de
+// transição vivem na RPC» era falsa: viviam no ecrã.
+//
+// Isto percorre as 36 combinações e compara a base com `TRANSICOES` do
+// TypeScript, uma a uma.
+
+describe("🔴 TRANSITION_MATRIX_PARITY — SQL e TypeScript dizem o mesmo", () => {
+  /**
+   * Põe a lead no estado pedido, seja qual for — incluindo `ganho`, que a RPC
+   * não deixa assumir por movimento. Escreve direto com service_role, que é
+   * exactamente o caminho privilegiado contra o qual as invariantes existem.
+   */
+  async function leadEm(stage: LeadStage): Promise<string> {
+    const id = await novaLead(pool);
+    if (stage === "novo") return id;
+
+    if (stage === "ganho") {
+      const { rows: c } = await pool.query(
+        "INSERT INTO public.clients (company_id, name) VALUES ($1,'C') RETURNING id", [EMPRESA]);
+      const { rows: l } = await pool.query(
+        "INSERT INTO public.locations (company_id, client_id, name, address) VALUES ($1,$2,'L','R') RETURNING id",
+        [EMPRESA, c[0].id]);
+      await pool.query(
+        `UPDATE public.crm_leads SET stage='ganho', won_at=now(),
+                converted_client_id=$2, converted_location_id=$3 WHERE id=$1`,
+        [id, c[0].id, l[0].id]);
+      return id;
+    }
+
+    if (stage === "perdido") {
+      await pool.query(
+        "UPDATE public.crm_leads SET stage='perdido', lost_at=now(), lost_reason='preco' WHERE id=$1",
+        [id]);
+      return id;
+    }
+
+    await pool.query("UPDATE public.crm_leads SET stage=$2 WHERE id=$1", [id, stage]);
+    return id;
+  }
+
+  for (const origem of LEAD_STAGES) {
+    for (const destino of LEAD_STAGES) {
+      if (origem === destino) continue; // idempotente, coberto noutro bloco
+
+      const permitidoNoTs = TRANSICOES[origem].includes(destino);
+
+      it(`${origem} -> ${destino} — ${permitidoNoTs ? "ALLOWED" : "REJECTED"} no TypeScript`, async () => {
+        const id = await leadEm(origem);
+        const erro = await erroDe(() =>
+          mover({ leadId: id, de: origem, para: destino, motivo: "preco" }),
+        );
+
+        // 🔴 `ganho` é o único ponto onde as duas regras não coincidem, e é
+        //    deliberado: a matriz diz que chegar a `ganho` é um percurso
+        //    legítimo do funil — e é. O que muda é o CAMINHO DE ESCRITA:
+        //    ganhar é converter (104), não arrastar o cartão. A conversão cria
+        //    o cliente; marcar `ganho` aqui deixaria uma lead ganha sem ninguém
+        //    a quem faturar, que a constraint `crm_leads_ganho_exige_conversao`
+        //    também já não permite.
+        if (destino === "ganho") {
+          expect(erro, "ganho só por conversão").toContain(
+            origem === "ganho" ? "LEAD_ALREADY_WON" : "LEAD_WIN_REQUIRES_CONVERSION",
+          );
+          return;
+        }
+
+        if (origem === "ganho") {
+          expect(erro, "sair de ganho reescreveria a história de um cliente real")
+            .toContain("LEAD_ALREADY_WON");
+          expect(permitidoNoTs, "o TypeScript também fecha ganho").toBe(false);
+          return;
+        }
+
+        if (permitidoNoTs) {
+          expect(erro, `a matriz TS permite ${origem} -> ${destino}, a base recusou`).toBeNull();
+          expect((await lerLead(id)).stage).toBe(destino);
+        } else {
+          expect(erro, `a matriz TS recusa ${origem} -> ${destino}, a base deixou passar`)
+            .toContain("LEAD_TRANSITION_NOT_ALLOWED");
+          expect((await lerLead(id)).stage, "zero writes").toBe(origem);
+          expect(await diario(id)).toBe(0);
+        }
+      });
+    }
+  }
+
+  it("UNKNOWN / FORBIDDEN = FAIL_CLOSED — nenhum estado fora da matriz passa", async () => {
+    const id = await novaLead(pool);
+    for (const inventado of ["negociacao", "", "GANHO", "novo ", "'; DROP TABLE crm_leads; --"]) {
+      const erro = await erroDe(() => mover({ leadId: id, de: "novo", para: inventado }));
+      expect(erro, `«${inventado}» não pode passar`).toContain("LEAD_STAGE_UNKNOWN");
+    }
+    expect((await lerLead(id)).stage).toBe("novo");
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 🔴 GANHO_SEM_CONVERSAO — a invariante nas DUAS direcções
+// ═══════════════════════════════════════════════════════════════════════════
+//
+// `crm_leads_conversao_so_se_ganha` só proibia apontar para um cliente fora de
+// `ganho`. O estado simétrico — `stage='ganho'` com `converted_client_id` NULL
+// — passava, e é um negócio dado como fechado que nunca produziu ninguém a quem
+// faturar. Escreve-se aqui com service_role direto, que é o caminho
+// privilegiado real: BYPASSRLS e com escrita concedida.
+
+describe("🔴 GANHO_SEM_CONVERSAO_REJECTED — service_role direto", () => {
+  it("GANHO_SEM_CLIENTE = REJECTED", async () => {
+    const id = await novaLead(pool);
+    const erro = await erroDe(() =>
+      pool.query("UPDATE public.crm_leads SET stage='ganho', won_at=now() WHERE id=$1", [id]),
+    );
+
+    expect(erro).toContain("crm_leads_ganho_exige_conversao");
+    expect((await lerLead(id)).stage, "zero writes").toBe("novo");
+  });
+
+  it("GANHO_SEM_LOCAL = REJECTED", async () => {
+    const id = await novaLead(pool);
+    const { rows: c } = await pool.query(
+      "INSERT INTO public.clients (company_id, name) VALUES ($1,'C') RETURNING id", [EMPRESA]);
+
+    const erro = await erroDe(() =>
+      pool.query(
+        `UPDATE public.crm_leads SET stage='ganho', won_at=now(), converted_client_id=$2
+          WHERE id=$1`, [id, c[0].id]),
+    );
+
+    // Barrado pelo par (`crm_leads_conversao_coerente`) ou pela invariante
+    // nova — as duas dizem a mesma coisa sobre este estado. O que importa é
+    // que NÃO passa.
+    expect(erro).toMatch(/crm_leads_conversao_coerente|crm_leads_ganho_exige_conversao/);
+    expect((await lerLead(id)).stage, "zero writes").toBe("novo");
+  });
+
+  it("CONVERTED_IDS_FORA_DE_GANHO = REJECTED", async () => {
+    const id = await novaLead(pool);
+    const { rows: c } = await pool.query(
+      "INSERT INTO public.clients (company_id, name) VALUES ($1,'C') RETURNING id", [EMPRESA]);
+    const { rows: l } = await pool.query(
+      "INSERT INTO public.locations (company_id, client_id, name, address) VALUES ($1,$2,'L','R') RETURNING id",
+      [EMPRESA, c[0].id]);
+
+    const erro = await erroDe(() =>
+      pool.query(
+        `UPDATE public.crm_leads SET converted_client_id=$2, converted_location_id=$3
+          WHERE id=$1`, [id, c[0].id, l[0].id]),
+    );
+
+    expect(erro).toContain("crm_leads_conversao_so_se_ganha");
+    expect((await lerLead(id)).converted_client_id, "zero writes").toBeNull();
+  });
+
+  it("CONVERSAO_VALIDA = PASS — as três coisas juntas passam", async () => {
+    const id = await novaLead(pool);
+    const { rows: c } = await pool.query(
+      "INSERT INTO public.clients (company_id, name) VALUES ($1,'C') RETURNING id", [EMPRESA]);
+    const { rows: l } = await pool.query(
+      "INSERT INTO public.locations (company_id, client_id, name, address) VALUES ($1,$2,'L','R') RETURNING id",
+      [EMPRESA, c[0].id]);
+
+    await pool.query(
+      `UPDATE public.crm_leads SET stage='ganho', won_at=now(),
+              converted_client_id=$2, converted_location_id=$3 WHERE id=$1`,
+      [id, c[0].id, l[0].id]);
+
+    const lead = await lerLead(id);
+    expect(lead.stage).toBe("ganho");
+    expect(lead.converted_client_id).toBe(c[0].id);
+    expect(lead.converted_location_id).toBe(l[0].id);
   });
 });
 
 describe("🔴 isolamento — a lead de outra empresa não se move", () => {
   it("mesmo com o id certo, a empresa errada não encontra a lead", async () => {
     const idB = await novaLead(pool, { empresa: OUTRA });
-    const erro = await erroDe(() => mover({ leadId: idB, para: "contactado", empresa: EMPRESA }));
+    const erro = await erroDe(() =>
+      mover({ leadId: idB, de: "novo", para: "contactado", empresa: EMPRESA }),
+    );
     expect(erro).toContain("LEAD_NOT_FOUND");
     expect((await lerLead(idB)).stage).toBe("novo");
   });
@@ -288,6 +506,166 @@ describe("🔴 isolamento — a lead de outra empresa não se move", () => {
 // ═══════════════════════════════════════════════════════════════════════════
 // REORDENAR
 // ═══════════════════════════════════════════════════════════════════════════
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 🔴 REORDER_VS_STAGE_MOVE — a janela de corrida que existia entre as duas RPC
+// ═══════════════════════════════════════════════════════════════════════════
+//
+// A versão anterior de `reorder_crm_leads_atomic` validava que todos os cartões
+// estavam em `p_stage` com um SELECT SEM LOCK, e o UPDATE final filtrava por
+// `id` e `company_id` — não por `stage`. Entre as duas coisas,
+// `move_crm_lead_stage_atomic` podia mover um dos cartões para outra coluna; o
+// reorder, já decidido com a leitura velha, escrevia na mesma o `board_order`
+// de um cartão que entretanto deixara de estar ali.
+//
+// Agora o reorder tranca TODAS as leads-alvo (por id, ordenadas — nunca por
+// `stage`, que é o campo que pode ter mudado) ANTES de decidir. O resultado
+// passa a ser serializável: ou o move entra primeiro e o reorder recusa o
+// pedido stale inteiro, ou o reorder entra primeiro e o move acontece depois.
+
+describe("🔴 REORDER_VS_STAGE_MOVE — serializável, nos dois sentidos", () => {
+  async function tresNovas() {
+    return [
+      await novaLead(pool, { nome: "A" }),
+      await novaLead(pool, { nome: "B" }),
+      await novaLead(pool, { nome: "C" }),
+    ];
+  }
+
+  const lerOrdem = async (id: string) =>
+    (await pool.query("SELECT stage, board_order FROM public.crm_leads WHERE id=$1", [id])).rows[0];
+
+  it("o move entra primeiro → o reorder recusa o pedido stale, e não escreve nada", async () => {
+    const [a, b, c] = await tresNovas();
+
+    const sMove = new pg.Client({ ...container.connection });
+    const sReorder = new pg.Client({ ...container.connection });
+    await sMove.connect();
+    await sReorder.connect();
+
+    try {
+      // Sessão 1 move `b` para outra coluna e COMMITA — é o estado real quando
+      // o reorder chegar.
+      await sMove.query("BEGIN");
+      await mover({ leadId: b, de: "novo", para: "contactado" }, sMove);
+      await sMove.query("COMMIT");
+
+      // Sessão 2 chega com a leitura antiga: ainda julga que `b` está em 'novo'.
+      await sReorder.query("BEGIN");
+      const erro = await erroDe(() =>
+        reordenar(
+          {
+            stage: "novo",
+            itens: [
+              { leadId: c, boardOrder: 0 },
+              { leadId: b, boardOrder: 1 },
+              { leadId: a, boardOrder: 2 },
+            ],
+          },
+          sReorder,
+        ),
+      );
+      await sReorder.query("ROLLBACK");
+
+      expect(erro, "o pedido inteiro é stale").toContain("REORDER_INVALID_ITEMS");
+    } finally {
+      await sMove.end();
+      await sReorder.end();
+    }
+
+    // 🔴 ZERO_PARTIAL_REORDER: nem os cartões que NÃO se moveram foram tocados.
+    expect((await lerOrdem(a)).board_order, "ZERO_PARTIAL_REORDER").toBe(0);
+    expect((await lerOrdem(c)).board_order, "ZERO_PARTIAL_REORDER").toBe(0);
+
+    // E o cartão movido ficou onde o move o pôs, com a ordem que já tinha —
+    // nunca com uma posição atribuída na coluna antiga.
+    const movido = await lerOrdem(b);
+    expect(movido.stage).toBe("contactado");
+    expect(movido.board_order).toBe(0);
+  });
+
+  it("o reorder entra primeiro → o move espera no lock e acontece depois", async () => {
+    const [a, b, c] = await tresNovas();
+
+    const sReorder = new pg.Client({ ...container.connection });
+    const sMove = new pg.Client({ ...container.connection });
+    await sReorder.connect();
+    await sMove.connect();
+
+    try {
+      // Sessão 1 reordena e NÃO commita: os locks ficam de pé.
+      await sReorder.query("BEGIN");
+      await reordenar(
+        {
+          stage: "novo",
+          itens: [
+            { leadId: c, boardOrder: 0 },
+            { leadId: b, boardOrder: 1 },
+            { leadId: a, boardOrder: 2 },
+          ],
+        },
+        sReorder,
+      );
+
+      // Sessão 2 tenta mover `b`. Tem de BLOQUEAR — se passasse já, a janela
+      // de corrida continuaria aberta.
+      let moveTerminou = false;
+      const move = mover({ leadId: b, de: "novo", para: "contactado" }, sMove)
+        .then(() => { moveTerminou = true; });
+
+      await new Promise((r) => setTimeout(r, 400));
+      expect(moveTerminou, "o move tem de esperar pelo lock do reorder").toBe(false);
+
+      await sReorder.query("COMMIT");
+      await move;
+      expect(moveTerminou).toBe(true);
+    } finally {
+      await sReorder.end();
+      await sMove.end();
+    }
+
+    // A ordem do reorder ficou aplicada, e o move aconteceu por cima dela.
+    expect((await lerOrdem(a)).board_order).toBe(2);
+    expect((await lerOrdem(c)).board_order).toBe(0);
+    const movido = await lerOrdem(b);
+    expect(movido.stage).toBe("contactado");
+    expect(movido.board_order, "a posição que o reorder lhe deu, na coluna onde estava").toBe(1);
+  });
+
+  it("dois reorders concorrentes não entram em deadlock — a ordem de lock é determinística", async () => {
+    const [a, b, c] = await tresNovas();
+
+    const s1 = new pg.Client({ ...container.connection });
+    const s2 = new pg.Client({ ...container.connection });
+    await s1.connect();
+    await s2.connect();
+
+    try {
+      // As duas listas em ordens OPOSTAS: é o padrão que produz deadlock quando
+      // cada sessão tranca pela ordem em que os itens chegam.
+      const r1 = reordenar(
+        { stage: "novo", itens: [
+          { leadId: a, boardOrder: 0 }, { leadId: b, boardOrder: 1 }, { leadId: c, boardOrder: 2 }] },
+        s1,
+      );
+      const r2 = reordenar(
+        { stage: "novo", itens: [
+          { leadId: c, boardOrder: 0 }, { leadId: b, boardOrder: 1 }, { leadId: a, boardOrder: 2 }] },
+        s2,
+      );
+
+      const resultados = await Promise.allSettled([r1, r2]);
+      const mortos = resultados.filter(
+        (r) => r.status === "rejected" && String((r as PromiseRejectedResult).reason).includes("deadlock"),
+      );
+      expect(mortos, "ordem de lock determinística = sem deadlock").toHaveLength(0);
+      expect(resultados.filter((r) => r.status === "fulfilled")).toHaveLength(2);
+    } finally {
+      await s1.end();
+      await s2.end();
+    }
+  });
+});
 
 describe("🔴 REORDER — tudo ou nada", () => {
   async function tresNaMesmaColuna() {

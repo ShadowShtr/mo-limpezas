@@ -400,6 +400,151 @@ describe("🔴 D — retry depois do sucesso", () => {
       "SELECT count(*)::int n FROM public.crm_lead_interactions WHERE lead_id = $1", [leadId]);
     expect(rows[0].n).toBe(1);
   });
+
+  // 🔴 TIMELINE_DUPLICATES = 0, também com orçamento pelo meio — o caminho que
+  //    o runtime usa de facto.
+  it("o retry com orçamento devolve os mesmos ids e não duplica nada", async () => {
+    const leadId = await leadComMorada();
+    const quoteId = await orcamentoAceite(leadId);
+
+    const primeira = await converter({ leadId, quoteId });
+    const clientes = await contar(pool, "clients");
+    const locais = await contar(pool, "locations");
+
+    const segunda = await converter({ leadId, quoteId });
+
+    expect(segunda.rows[0].client_id, "SAME_CLIENT_ID").toBe(primeira.rows[0].client_id);
+    expect(segunda.rows[0].location_id, "SAME_LOCATION_ID").toBe(primeira.rows[0].location_id);
+    expect(await contar(pool, "clients") - clientes, "NEW_CLIENTS").toBe(0);
+    expect(await contar(pool, "locations") - locais, "NEW_LOCATIONS").toBe(0);
+
+    const { rows } = await pool.query(
+      "SELECT count(*)::int n FROM public.crm_lead_interactions WHERE lead_id = $1", [leadId]);
+    expect(rows[0].n, "TIMELINE_DUPLICATES").toBe(1);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 🔴 SUPERSEDED_CONVERSION — uma revisão substituída não gera cliente
+// ═══════════════════════════════════════════════════════════════════════════
+//
+// A RPC validava `quote.lead_id = lead` e `status = 'aceite'`. Nenhuma das duas
+// exclui uma revisão ANTIGA: ela fica com o estado que tinha quando foi
+// substituída, e uma R0 aceite antes de a R1 existir continua a dizer 'aceite'
+// para sempre. A conversão podia nascer de um preço que a revisão seguinte já
+// tinha substituído.
+
+describe("🔴 SUPERSEDED_CONVERSION — REJECTED, com zero escritas", () => {
+  it("uma revisão substituída não dá origem a cliente", async () => {
+    const leadId = await leadComMorada();
+    const r0 = await orcamentoAceite(leadId);
+
+    // A R0 está 'aceite'. Cria-se a R1 a partir dela — a R0 fica substituída e
+    // MANTÉM o 'aceite', que é precisamente o buraco.
+    await pool.query(
+      "UPDATE public.crm_quotes SET status='enviado', accepted_at=NULL WHERE id=$1", [r0]);
+    const r1 = await pool.query(
+      `SELECT * FROM public.revise_crm_quote($1,$2,$3,current_date,'2030-12-31',0,true,23,NULL,$4::jsonb)`,
+      [EMPRESA, r0, ACTOR, ITENS],
+    );
+    await pool.query("UPDATE public.crm_quotes SET status='aceite', accepted_at=now() WHERE id=$1", [r0]);
+
+    const antesClientes = await contar(pool, "clients");
+    const antesLocais = await contar(pool, "locations");
+
+    const erro = await erroDe(() => converter({ leadId, quoteId: r0 }));
+
+    expect(erro).toContain("QUOTE_ALREADY_SUPERSEDED");
+
+    // ZERO_SIDE_EFFECTS
+    expect(await contar(pool, "clients") - antesClientes, "NEW_CLIENTS").toBe(0);
+    expect(await contar(pool, "locations") - antesLocais, "NEW_LOCATIONS").toBe(0);
+    const lead = await lerLead(leadId);
+    expect(lead.stage, "a lead não foi dada como ganha").toBe("novo");
+    expect(lead.converted_client_id).toBeNull();
+
+    // E a revisão viva continua a poder converter — o guarda não fecha o fluxo.
+    await pool.query("SELECT public.set_crm_quote_status($1,$2,$3,'enviado',NULL)",
+      [EMPRESA, r1.rows[0].quote_id, ACTOR]);
+    await pool.query("SELECT public.set_crm_quote_status($1,$2,$3,'aceite',NULL)",
+      [EMPRESA, r1.rows[0].quote_id, ACTOR]);
+
+    const ok = await converter({ leadId, quoteId: r1.rows[0].quote_id });
+    expect(ok.rows[0].client_id).toBeTruthy();
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 🔴 PROVENANCE_AFTER_CONVERSION — de que lead nasceu este cliente
+// ═══════════════════════════════════════════════════════════════════════════
+//
+// A conversão põe `crm_quotes.lead_id = NULL` e `client_id = <novo cliente>`,
+// porque `crm_quotes_tem_destinatario` obriga a exactamente um dos dois.
+// Enquanto a proveniência vivia em `lead_id`, essa escrita apagava-a.
+//
+// A cadeia que tem de continuar provável depois da conversão:
+//
+//   LEAD → VISITA → ORÇAMENTO (+ revisões) → CONVERSÃO → CLIENTE → LOCAL
+
+describe("🔴 PROVENANCE_AFTER_CONVERSION", () => {
+  it("o orçamento convertido continua a apontar para a lead de onde nasceu", async () => {
+    const leadId = await leadComMorada();
+    const quoteId = await orcamentoAceite(leadId);
+    await converter({ leadId, quoteId });
+
+    const { rows } = await pool.query(
+      "SELECT lead_id, client_id, source_lead_id FROM public.crm_quotes WHERE id = $1", [quoteId]);
+
+    expect(rows[0].lead_id, "o destinatário passou a ser o cliente").toBeNull();
+    expect(rows[0].client_id, "e é o cliente novo").toBeTruthy();
+    expect(rows[0].source_lead_id, "🔴 a proveniência sobreviveu").toBe(leadId);
+  });
+
+  it("a cadeia toda é navegável nos dois sentidos depois da conversão", async () => {
+    const leadId = await leadComMorada();
+    const quoteId = await orcamentoAceite(leadId);
+    const res = await converter({ leadId, quoteId });
+    const clientId = res.rows[0].client_id as string;
+
+    // Sentido lead → cliente.
+    const lead = await lerLead(leadId);
+    expect(lead.converted_client_id).toBe(clientId);
+    expect(lead.converted_location_id).toBe(res.rows[0].location_id);
+
+    // Sentido cliente → lead, passando pelo orçamento.
+    const { rows } = await pool.query(
+      `SELECT q.source_lead_id
+         FROM public.crm_quotes q
+        WHERE q.client_id = $1 AND q.company_id = $2`, [clientId, EMPRESA]);
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0].source_lead_id, "de que lead nasceu este cliente").toBe(leadId);
+  });
+
+  it("a proveniência não se perde ao longo da cadeia de revisões", async () => {
+    const leadId = await leadComMorada();
+    const r0 = await orcamentoAceite(leadId);
+    await pool.query("UPDATE public.crm_quotes SET status='enviado', accepted_at=NULL WHERE id=$1", [r0]);
+    const r1 = await pool.query(
+      `SELECT * FROM public.revise_crm_quote($1,$2,$3,current_date,'2030-12-31',0,true,23,NULL,$4::jsonb)`,
+      [EMPRESA, r0, ACTOR, ITENS],
+    );
+    await pool.query("SELECT public.set_crm_quote_status($1,$2,$3,'enviado',NULL)",
+      [EMPRESA, r1.rows[0].quote_id, ACTOR]);
+    await pool.query("SELECT public.set_crm_quote_status($1,$2,$3,'aceite',NULL)",
+      [EMPRESA, r1.rows[0].quote_id, ACTOR]);
+
+    await converter({ leadId, quoteId: r1.rows[0].quote_id });
+
+    const { rows } = await pool.query(
+      `SELECT id, revision, source_lead_id FROM public.crm_quotes
+        WHERE company_id = $1 ORDER BY revision`, [EMPRESA]);
+
+    expect(rows).toHaveLength(2);
+    for (const r of rows) {
+      expect(r.source_lead_id, `revisão ${r.revision}`).toBe(leadId);
+    }
+  });
 });
 
 // ═══════════════════════════════════════════════════════════════════════════

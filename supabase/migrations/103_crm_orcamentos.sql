@@ -119,8 +119,38 @@ CREATE TABLE IF NOT EXISTS public.crm_quotes (
   company_id      uuid NOT NULL REFERENCES public.companies(id) ON DELETE CASCADE,
 
   -- A quem: uma lead, ou um cliente que já existe (proposta de serviço novo).
+  --
+  -- 🔴 Estas duas colunas são o DESTINATÁRIO ATUAL, e só isso. São estado
+  --    corrente, mutável: a conversão troca `lead_id` por `client_id`, porque o
+  --    documento passa a ser de um cliente que agora existe.
   lead_id         uuid,
   client_id       uuid,
+
+  -- 🔴 De que lead NASCEU este orçamento. Imutável, e deliberadamente separada
+  --    de `lead_id`.
+  --
+  --    O problema que esta coluna fecha: `crm_quotes_tem_destinatario` obriga a
+  --    exactamente um de (`lead_id`, `client_id`), por isso a conversão TEM de
+  --    pôr `lead_id` a NULL ao preencher `client_id`. Enquanto a proveniência
+  --    vivia em `lead_id`, essa escrita apagava-a — e com ela a resposta a «de
+  --    que lead, de que visita e de que orçamento é que este cliente nasceu?».
+  --    `getQuotes({ leadId })` deixava de encontrar o orçamento que fechou o
+  --    negócio, que é justamente o que se quer ver ao abrir a lead.
+  --
+  --    Uma coluna não pode ser ao mesmo tempo estado corrente e facto histórico.
+  --    «A quem está endereçado hoje» muda; «de onde veio» não muda nunca —
+  --    depois de escrita na criação, nenhum caminho lhe toca outra vez. É o
+  --    mesmo princípio que já governa `crm_leads.converted_client_id` do outro
+  --    lado da mesma relação, e é isso que torna a cadeia navegável nos dois
+  --    sentidos:
+  --
+  --      lead ──source_lead_id──> quote ──client_id──> cliente
+  --      lead <──converted_client_id── (a lead aponta para o cliente que gerou)
+  --
+  --    NULL quando o orçamento nasceu já de um cliente (proposta de serviço
+  --    novo a quem já é cliente): aí não houve lead nenhuma, e inventar uma
+  --    seria pior do que a ausência.
+  source_lead_id  uuid,
   -- De onde saíram as medidas, quando saíram de uma visita.
   --
   -- 🔴 Sem `REFERENCES` na coluna: a FK é COMPOSTA. Uma FK simples aceitaria a
@@ -212,11 +242,63 @@ COMMENT ON TABLE public.crm_quotes IS
   'reemitiria o 001. Editar um orcamento ENVIADO cria uma revisao nova (mesma '
   'quote_seq, revision+1) e a anterior mantem o seu estado; um ACEITE e imutavel.';
 
+-- `CREATE TABLE IF NOT EXISTS` não acrescenta colunas a uma tabela existente.
+ALTER TABLE public.crm_quotes ADD COLUMN IF NOT EXISTS source_lead_id uuid;
+
+-- Numa base onde a 103 já tenha corrido numa versão anterior, a proveniência
+-- dos orçamentos ainda por converter está em `lead_id` e é recuperável. A dos
+-- já convertidos não é — e não se inventa: fica NULL, que diz «não se sabe»,
+-- em vez de um palpite que diria «foi esta».
+UPDATE public.crm_quotes
+   SET source_lead_id = lead_id
+ WHERE source_lead_id IS NULL
+   AND lead_id IS NOT NULL;
+
 -- As FKs compostas: destinatário da mesma empresa.
 ALTER TABLE public.crm_quotes DROP CONSTRAINT IF EXISTS crm_quotes_lead_mesma_empresa;
 ALTER TABLE public.crm_quotes
   ADD CONSTRAINT crm_quotes_lead_mesma_empresa
   FOREIGN KEY (lead_id, company_id) REFERENCES public.crm_leads (id, company_id) ON DELETE CASCADE;
+
+-- 🔴 A proveniência também é composta, pela mesma razão que o destinatário: um
+--    uuid válido de OUTRA empresa passaria numa FK simples.
+--
+--    `ON DELETE CASCADE` como o `lead_id`: se a lead for apagada, o orçamento
+--    que dela nasceu vai com ela — é a mesma história, e um orçamento órfão de
+--    uma lead que já não existe não tem quem o explique.
+ALTER TABLE public.crm_quotes DROP CONSTRAINT IF EXISTS crm_quotes_source_lead_mesma_empresa;
+ALTER TABLE public.crm_quotes
+  ADD CONSTRAINT crm_quotes_source_lead_mesma_empresa
+  FOREIGN KEY (source_lead_id, company_id)
+  REFERENCES public.crm_leads (id, company_id) ON DELETE CASCADE;
+
+-- 🔴 A proveniência não se reescreve.
+--
+--    É a única garantia de que «de que lead nasceu este cliente» continua a ser
+--    respondível meses depois. Sem ela, a coluna seria só mais um campo que
+--    algum caminho de escrita futuro poderia actualizar «para ficar coerente»
+--    — que é exactamente como a informação histórica se perde.
+CREATE OR REPLACE FUNCTION public.crm_quotes_proveniencia_imutavel()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $imutavel$
+BEGIN
+  -- Preencher um valor em branco não é reescrever história — é registá-la, e é
+  -- o que o backfill desta migration faz numa base que já tinha a 103 antiga.
+  -- O que não se admite é ALTERAR uma proveniência já conhecida, nem apagá-la.
+  IF OLD.source_lead_id IS NOT NULL
+     AND NEW.source_lead_id IS DISTINCT FROM OLD.source_lead_id THEN
+    RAISE EXCEPTION 'QUOTE_SOURCE_LEAD_IMMUTABLE: de % para %',
+      OLD.source_lead_id, NEW.source_lead_id USING ERRCODE = 'check_violation';
+  END IF;
+  RETURN NEW;
+END;
+$imutavel$;
+
+DROP TRIGGER IF EXISTS crm_quotes_proveniencia_imutavel ON public.crm_quotes;
+CREATE TRIGGER crm_quotes_proveniencia_imutavel
+  BEFORE UPDATE ON public.crm_quotes
+  FOR EACH ROW EXECUTE FUNCTION public.crm_quotes_proveniencia_imutavel();
 
 ALTER TABLE public.crm_quotes DROP CONSTRAINT IF EXISTS crm_quotes_cliente_mesma_empresa;
 ALTER TABLE public.crm_quotes
@@ -243,13 +325,60 @@ ALTER TABLE public.crm_quotes
   REFERENCES public.profiles (id, company_id)
   ON DELETE NO ACTION;
 
+-- 🔴 A chave candidata que as FKs compostas para dentro desta mesma tabela
+--    exigem. Tem de existir ANTES delas — uma FK composta sem o índice único
+--    correspondente é recusada pelo Postgres na criação.
+CREATE UNIQUE INDEX IF NOT EXISTS crm_quotes_id_company_unique
+  ON public.crm_quotes (id, company_id);
+
 -- A cadeia de revisões aponta para dentro da própria tabela. Diferida, pela
 -- razão explicada na declaração da coluna: durante a revisão, a antiga aponta
 -- por um instante para uma linha que ainda não foi inserida.
+--
+-- 🔴 Duas correcções em relação à primeira versão desta constraint.
+--
+-- 1. COMPOSTA, como todas as outras referências desta tabela.
+--
+--    `FOREIGN KEY (superseded_by_id) REFERENCES crm_quotes (id)` garante que a
+--    linha apontada existe — não que seja da MESMA empresa. As referências para
+--    fora (lead, client, visit, created_by) já eram compostas; as referências
+--    da tabela para si própria não eram, e eram precisamente as que ficavam
+--    sem rede. Como `service_role` é BYPASSRLS e tem escrita, o isolamento da
+--    cadeia de revisões não pode assentar em RLS: tem de assentar na chave.
+--
+-- 2. RESTRICT em vez de SET NULL.
+--
+--    `ON DELETE SET NULL` parecia inofensivo e não era: apagar a revisão nova
+--    punha `superseded_by_id` a NULL na velha — e o índice parcial
+--    `uq_crm_quotes_revisao_viva` conta como VIVA toda a linha com
+--    `superseded_by_id IS NULL`. Uma revisão substituída, e possivelmente já
+--    recusada, voltava a ser o documento vivo do orçamento sem que ninguém o
+--    tivesse decidido. Um orçamento não se apaga; corrige-se com uma revisão.
 ALTER TABLE public.crm_quotes DROP CONSTRAINT IF EXISTS crm_quotes_superseded_fk;
 ALTER TABLE public.crm_quotes
   ADD CONSTRAINT crm_quotes_superseded_fk
-  FOREIGN KEY (superseded_by_id) REFERENCES public.crm_quotes (id) ON DELETE SET NULL
+  FOREIGN KEY (superseded_by_id, company_id)
+  REFERENCES public.crm_quotes (id, company_id)
+  ON DELETE RESTRICT
+  DEFERRABLE INITIALLY DEFERRED;
+
+-- 🔴 `root_quote_id` não tinha FK NENHUMA.
+--
+--    É a coluna que diz «todas estas revisões são o mesmo documento», e é a
+--    chave do índice que garante uma só revisão viva por documento. Sem FK,
+--    nada impedia apontá-la para um orçamento de outra empresa — e a partir daí
+--    a cadeia de revisões de duas empresas partilharia a mesma raiz, com um
+--    índice parcial a decidir qual delas tem a revisão viva.
+--
+-- Diferida pela mesma razão que a de cima: a primeira revisão de um documento
+-- tem `root_quote_id = id`, e a linha aponta para si própria no instante em que
+-- é inserida.
+ALTER TABLE public.crm_quotes DROP CONSTRAINT IF EXISTS crm_quotes_root_fk;
+ALTER TABLE public.crm_quotes
+  ADD CONSTRAINT crm_quotes_root_fk
+  FOREIGN KEY (root_quote_id, company_id)
+  REFERENCES public.crm_quotes (id, company_id)
+  ON DELETE RESTRICT
   DEFERRABLE INITIALLY DEFERRED;
 
 -- Dois orçamentos com o mesmo número seriam dois documentos a dizer-se o mesmo.
@@ -273,9 +402,6 @@ CREATE INDEX IF NOT EXISTS idx_crm_quotes_lead
   ON public.crm_quotes (company_id, lead_id);
 CREATE INDEX IF NOT EXISTS idx_crm_quotes_client
   ON public.crm_quotes (company_id, client_id);
-
-CREATE UNIQUE INDEX IF NOT EXISTS crm_quotes_id_company_unique
-  ON public.crm_quotes (id, company_id);
 
 DROP TRIGGER IF EXISTS crm_quotes_updated_at ON public.crm_quotes;
 CREATE TRIGGER crm_quotes_updated_at
@@ -455,14 +581,17 @@ BEGIN
   v_total := v_base + v_iva;
 
   INSERT INTO public.crm_quotes (
-    id, company_id, lead_id, client_id, visit_id,
+    id, company_id, lead_id, client_id, source_lead_id, visit_id,
     quote_number, quote_year, quote_seq, revision, root_quote_id,
     issue_date, valid_until, status,
     pricing_kind, subtotal, discount_pct, apply_vat, vat_rate, vat_amount, total,
     proposed_frequency, proposed_weekdays, payment_terms, notes, internal_notes,
     created_by
   ) VALUES (
-    v_id, p_company_id, p_lead_id, p_client_id, p_visit_id,
+    -- `source_lead_id` nasce igual a `lead_id` e nunca mais muda. Quando o
+    -- orcamento nasce de um cliente que ja existe, p_lead_id e NULL e a
+    -- proveniencia fica NULL — nao houve lead nenhuma.
+    v_id, p_company_id, p_lead_id, p_client_id, p_lead_id, p_visit_id,
     v_numero, p_year, v_seq, 0, v_id,
     p_issue_date, p_valid_until, 'rascunho',
     COALESCE(p_pricing_kind, 'pontual'), v_subtotal, COALESCE(p_discount_pct, 0),
@@ -602,14 +731,16 @@ BEGIN
   -- A revisão nasce em rascunho e sem as datas de envio/decisão da anterior:
   -- é um documento novo, ainda não enviado.
   INSERT INTO public.crm_quotes (
-    id, company_id, lead_id, client_id, visit_id,
+    id, company_id, lead_id, client_id, source_lead_id, visit_id,
     quote_number, quote_year, quote_seq, revision, root_quote_id,
     issue_date, valid_until, status,
     pricing_kind, subtotal, discount_pct, apply_vat, vat_rate, vat_amount, total,
     proposed_frequency, proposed_weekdays, payment_terms, notes, internal_notes,
     created_by
   ) VALUES (
-    v_id, p_company_id, v_antiga.lead_id, v_antiga.client_id, v_antiga.visit_id,
+    -- A revisao herda a proveniencia da anterior: e o MESMO documento, e a lead
+    -- de que nasceu nao muda por se lhe corrigir um preco.
+    v_id, p_company_id, v_antiga.lead_id, v_antiga.client_id, v_antiga.source_lead_id, v_antiga.visit_id,
     v_numero, v_antiga.quote_year, v_antiga.quote_seq, v_revisao, v_antiga.root_quote_id,
     p_issue_date, p_valid_until, 'rascunho',
     v_antiga.pricing_kind, v_subtotal, COALESCE(p_discount_pct, 0),
@@ -661,6 +792,28 @@ BEGIN
 
   IF NOT FOUND THEN
     RAISE EXCEPTION 'QUOTE_NOT_FOUND' USING ERRCODE = 'no_data_found';
+  END IF;
+
+  -- 🔴 Uma revisão substituída é HISTÓRIA, e história não muda de estado.
+  --
+  --    `revise_crm_quote` preenche `superseded_by_id` na revisão antiga e
+  --    preserva o estado que ela tinha — o que está certo. Mas nada impedia,
+  --    depois disso, mexer-lhe no estado por aqui. Bastava:
+  --
+  --      R0 'enviado' → cria-se R1 → R0 fica superseded, ainda 'enviado'
+  --      → alguém marca R0 como 'aceite'
+  --
+  --    e a partir daí a R0 podia voltar a circular e até dar origem à conversão,
+  --    com um preço que a revisão seguinte já tinha substituído. A integridade
+  --    da cadeia de revisões depende de as revisões antigas serem apenas
+  --    legíveis.
+  --
+  --    Antes da idempotência de propósito: repetir uma operação sobre um
+  --    documento substituído continua a ser uma operação sobre um documento
+  --    substituído.
+  IF v_atual.superseded_by_id IS NOT NULL THEN
+    RAISE EXCEPTION 'QUOTE_ALREADY_SUPERSEDED: substituido por %', v_atual.superseded_by_id
+      USING ERRCODE = 'check_violation';
   END IF;
 
   IF v_atual.status = p_status THEN
@@ -747,7 +900,13 @@ BEGIN
       ('crm_quotes_cliente_mesma_empresa'),
       ('crm_quotes_visita_mesma_empresa'),
       ('crm_quotes_created_by_mesma_empresa'),
-      ('crm_quote_items_quote_mesma_empresa')
+      ('crm_quote_items_quote_mesma_empresa'),
+      -- 🔴 As referências da tabela para SI PRÓPRIA. Eram as únicas que não
+      --    eram compostas, e por isso as únicas onde a cadeia de revisões podia
+      --    atravessar empresas.
+      ('crm_quotes_superseded_fk'),
+      ('crm_quotes_root_fk'),
+      ('crm_quotes_source_lead_mesma_empresa')
     ) AS esperada(nome)
    WHERE NOT EXISTS (
      SELECT 1 FROM pg_constraint WHERE conname = esperada.nome
@@ -755,6 +914,35 @@ BEGIN
 
   IF v_faltam IS NOT NULL THEN
     RAISE EXCEPTION 'CRM_QUOTES_103_POSTSTATE_FAILED: FKs compostas em falta %', v_faltam;
+  END IF;
+
+  -- 🔴 As duas auto-referências têm de ser COMPOSTAS (duas colunas), não
+  --    simples. Verificar só o nome deixaria passar a versão antiga da
+  --    constraint, que existia e não isolava nada.
+  IF EXISTS (
+    SELECT 1 FROM pg_constraint
+     WHERE conname IN ('crm_quotes_superseded_fk', 'crm_quotes_root_fk',
+                       'crm_quotes_source_lead_mesma_empresa')
+       AND conrelid = 'public.crm_quotes'::regclass
+       AND array_length(conkey, 1) <> 2
+  ) THEN
+    RAISE EXCEPTION 'CRM_QUOTES_103_POSTSTATE_FAILED: FK de auto-referência não é composta';
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+     WHERE table_schema = 'public' AND table_name = 'crm_quotes'
+       AND column_name = 'source_lead_id'
+  ) THEN
+    RAISE EXCEPTION 'CRM_QUOTES_103_POSTSTATE_FAILED: crm_quotes.source_lead_id ausente — a proveniência morreria na conversão';
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_trigger
+     WHERE tgname = 'crm_quotes_proveniencia_imutavel'
+       AND tgrelid = 'public.crm_quotes'::regclass
+  ) THEN
+    RAISE EXCEPTION 'CRM_QUOTES_103_POSTSTATE_FAILED: trigger de imutabilidade da proveniência ausente';
   END IF;
 
   SELECT array_agg(esperada.nome) INTO v_faltam

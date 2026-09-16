@@ -269,7 +269,29 @@ CREATE TABLE IF NOT EXISTS public.crm_leads (
   -- Uma lead 'novo' a apontar para um cliente é um estado que nenhum caminho
   -- do código produz, e que a leitura não saberia interpretar.
   CONSTRAINT crm_leads_conversao_so_se_ganha
-    CHECK (converted_client_id IS NULL OR stage = 'ganho')
+    CHECK (converted_client_id IS NULL OR stage = 'ganho'),
+
+  -- 🔴 O INVERSO da constraint acima, e não é redundante com ela.
+  --
+  --    `crm_leads_conversao_so_se_ganha` só proíbe apontar para um cliente
+  --    fora de `ganho`. Sozinha, deixava passar o estado simétrico e igualmente
+  --    proibido:
+  --
+  --        stage = 'ganho', won_at = now(), converted_client_id = NULL
+  --
+  --    Isto é uma lead marcada como ganha que nunca produziu cliente nenhum.
+  --    Contamina o funil (conta como negócio fechado), contamina o relatório de
+  --    conversão, e não há ficha de cliente onde ir ver o que foi vendido. A
+  --    documentação da tabela já dizia «ganho exige cliente» — mas a base não o
+  --    impunha, e a RPC de movimento não é o único caminho de escrita:
+  --    `service_role` é BYPASSRLS e escreve direto.
+  --
+  --    Ganhar é converter. Um estado `ganho` sem conversão não pode existir.
+  CONSTRAINT crm_leads_ganho_exige_conversao
+    CHECK (
+      stage <> 'ganho'
+      OR (converted_client_id IS NOT NULL AND converted_location_id IS NOT NULL)
+    )
 );
 
 COMMENT ON TABLE public.crm_leads IS
@@ -281,6 +303,18 @@ COMMENT ON TABLE public.crm_leads IS
   'apareceu. Nunca converter uma lead em clients por UPDATE direto. Os '
   'estados sao um CHECK e nao colunas configuraveis: perdido exige motivo e '
   'ganho exige cliente, e essas regras tem de viver na base.';
+
+-- `CREATE TABLE IF NOT EXISTS` não acrescenta uma constraint a uma tabela que
+-- já exista com outra forma. Este bloco é o que torna a invariante acima
+-- reparável numa base onde a 101 já tenha corrido numa versão anterior.
+ALTER TABLE public.crm_leads
+  DROP CONSTRAINT IF EXISTS crm_leads_ganho_exige_conversao;
+ALTER TABLE public.crm_leads
+  ADD CONSTRAINT crm_leads_ganho_exige_conversao
+  CHECK (
+    stage <> 'ganho'
+    OR (converted_client_id IS NOT NULL AND converted_location_id IS NOT NULL)
+  );
 
 -- 🔴 Duas FKs separadas para `companies` e `clients` não impediriam apontar
 --    para um cliente de OUTRA empresa. A FK composta obriga — e obriga na
@@ -522,7 +556,55 @@ DECLARE
     'novo', 'Novo', 'contactado', 'Contactado', 'visita_agendada', 'Visita agendada',
     'orcamento_enviado', 'Orçamento enviado', 'ganho', 'Ganho', 'perdido', 'Perdido'
   );
+  -- 🔴 A matriz canónica de transições, à letra igual à de
+  --    `src/lib/crm/stages.ts` (`TRANSICOES`).
+  --
+  --    Antes desta versão a RPC verificava apenas estado conhecido, `ganho` só
+  --    por conversão, não sair de `ganho`, motivo na perda e o `expected_stage`.
+  --    NÃO verificava o par (origem → destino) contra a matriz, e por isso
+  --    aceitava transições que a interface nunca oferece — `visita_agendada`
+  --    → `novo`, por exemplo. Enquanto assim fosse, a frase «as regras de
+  --    transição vivem na RPC, que é a autoridade» era falsa: viviam no ecrã, e
+  --    o ecrã não é o único caminho de escrita.
+  --
+  --    As duas listas têm de permanecer semanticamente iguais.
+  --    `crm-stage-reorder.pg.test.ts` percorre as 36 combinações FROM×TO e
+  --    compara uma com a outra — divergir passa a ser um teste vermelho, não
+  --    uma descoberta em produção.
+  v_transicoes constant jsonb := jsonb_build_object(
+    'novo',              jsonb_build_array('contactado', 'visita_agendada', 'orcamento_enviado', 'ganho', 'perdido'),
+    'contactado',        jsonb_build_array('novo', 'visita_agendada', 'orcamento_enviado', 'ganho', 'perdido'),
+    'visita_agendada',   jsonb_build_array('contactado', 'orcamento_enviado', 'ganho', 'perdido'),
+    'orcamento_enviado', jsonb_build_array('visita_agendada', 'contactado', 'ganho', 'perdido'),
+    -- Terminal: a conversão já criou um cliente real.
+    'ganho',             jsonb_build_array(),
+    'perdido',           jsonb_build_array('novo', 'contactado', 'visita_agendada', 'orcamento_enviado')
+  );
 BEGIN
+  -- ── Contrato, antes de tocar em linha nenhuma ─────────────────────────────
+  --
+  -- 🔴 `p_expected_stage` NULL deixou de ser aceite.
+  --
+  --    Enquanto o NULL era tolerado, o controlo de concorrência era opcional:
+  --    quem não o enviasse obtinha last-write-wins e a segunda escrita apagava
+  --    a decisão da primeira sem ninguém saber. «A interface envia sempre» não
+  --    é uma garantia — é uma expectativa sobre um caminho de escrita, e há
+  --    outros (`service_role` é BYPASSRLS). Um controlo que o chamador pode
+  --    desligar não é fail-closed.
+  IF p_expected_stage IS NULL THEN
+    RAISE EXCEPTION 'LEAD_EXPECTED_STAGE_REQUIRED: a origem tem de ser declarada'
+      USING ERRCODE = 'check_violation';
+  END IF;
+
+  -- Fail-closed sobre estados desconhecidos, nos dois lados do par.
+  IF NOT (v_etiquetas ? p_new_stage) THEN
+    RAISE EXCEPTION 'LEAD_STAGE_UNKNOWN: %', p_new_stage USING ERRCODE = 'check_violation';
+  END IF;
+
+  IF NOT (v_etiquetas ? p_expected_stage) THEN
+    RAISE EXCEPTION 'LEAD_STAGE_UNKNOWN: %', p_expected_stage USING ERRCODE = 'check_violation';
+  END IF;
+
   SELECT * INTO v_atual
     FROM public.crm_leads
    WHERE id = p_lead_id AND company_id = p_company_id
@@ -534,7 +616,7 @@ BEGIN
 
   -- 🔴 Controlo de concorrência. Sem isto, duas sessões a mover o mesmo cartão
   --    dariam last-write-wins e a segunda apagaria a decisão da primeira.
-  IF p_expected_stage IS NOT NULL AND v_atual.stage <> p_expected_stage THEN
+  IF v_atual.stage <> p_expected_stage THEN
     RAISE EXCEPTION 'LEAD_STAGE_CONFLICT: esperado %, actual %', p_expected_stage, v_atual.stage
       USING ERRCODE = 'serialization_failure';
   END IF;
@@ -548,7 +630,11 @@ BEGIN
   -- 🔴 `ganho` NÃO se marca por aqui. Ganhar é converter, e converter cria um
   --    cliente — o que acontece em `convert_crm_lead_atomic` (104). Deixar
   --    marcar aqui daria uma lead ganha sem cliente, que o CHECK
-  --    `crm_leads_conversao_so_se_ganha` nem sequer permite.
+  --    `crm_leads_ganho_exige_conversao` nem sequer permite.
+  --
+  --    Esta regra é uma camada ADICIONAL à matriz, não uma cópia dela: a matriz
+  --    diz que `novo → ganho` é um percurso legítimo do funil, e é — só que o
+  --    caminho de escrita é a conversão, não o arrastar do cartão.
   IF p_new_stage = 'ganho' THEN
     RAISE EXCEPTION 'LEAD_WIN_REQUIRES_CONVERSION' USING ERRCODE = 'check_violation';
   END IF;
@@ -558,8 +644,10 @@ BEGIN
     RAISE EXCEPTION 'LEAD_ALREADY_WON' USING ERRCODE = 'check_violation';
   END IF;
 
-  IF NOT (v_etiquetas ? p_new_stage) THEN
-    RAISE EXCEPTION 'LEAD_STAGE_UNKNOWN: %', p_new_stage USING ERRCODE = 'check_violation';
+  -- 🔴 A matriz, finalmente aplicada.
+  IF NOT (v_transicoes -> v_atual.stage) @> to_jsonb(p_new_stage) THEN
+    RAISE EXCEPTION 'LEAD_TRANSITION_NOT_ALLOWED: % -> %', v_atual.stage, p_new_stage
+      USING ERRCODE = 'check_violation';
   END IF;
 
   IF p_new_stage = 'perdido' AND (p_lost_reason IS NULL OR btrim(p_lost_reason) = '') THEN
@@ -613,12 +701,32 @@ DECLARE
   v_total     integer;
   v_validas   integer;
   v_distintas integer;
+  v_ids       uuid[];
+  v_trancadas integer;
 BEGIN
   IF p_items IS NULL OR jsonb_array_length(p_items) = 0 THEN
     atualizadas := 0; RETURN NEXT; RETURN;
   END IF;
 
+  IF NOT (
+    SELECT bool_and(jsonb_typeof(i) = 'object') FROM jsonb_array_elements(p_items) AS i
+  ) THEN
+    RAISE EXCEPTION 'REORDER_INVALID_ITEMS: elementos nao sao objectos'
+      USING ERRCODE = 'check_violation';
+  END IF;
+
   v_total := jsonb_array_length(p_items);
+
+  -- 🔴 Os ids têm de ser UUIDs ANTES de qualquer cast: um cast que rebenta a
+  --    meio dá um erro de tipo em vez de uma recusa legível, e o fail-closed
+  --    fica a depender da ordem de avaliação do planeador.
+  IF EXISTS (
+    SELECT 1 FROM jsonb_array_elements(p_items) AS i
+     WHERE COALESCE(i->>'leadId', '') !~*
+       '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+  ) THEN
+    RAISE EXCEPTION 'REORDER_INVALID_UUID' USING ERRCODE = 'check_violation';
+  END IF;
 
   -- Sem ids repetidos: duas posições para o mesmo cartão é um pedido incoerente.
   SELECT count(DISTINCT (i->>'leadId')) INTO v_distintas
@@ -628,32 +736,76 @@ BEGIN
     RAISE EXCEPTION 'REORDER_DUPLICATE_IDS' USING ERRCODE = 'check_violation';
   END IF;
 
-  -- Todos os ids têm de existir, ser desta empresa E estar na coluna que o
-  -- pedido diz. Validado ANTES de escrever — é isto que impede a ordem parcial.
-  SELECT count(*) INTO v_validas
-    FROM jsonb_array_elements(p_items) AS i
-    JOIN public.crm_leads l
-      ON l.id = (i->>'leadId')::uuid
-     AND l.company_id = p_company_id
-     AND l.stage = p_stage;
-
-  IF v_validas <> v_total THEN
-    RAISE EXCEPTION 'REORDER_INVALID_ITEMS: % de % validos', v_validas, v_total
-      USING ERRCODE = 'check_violation';
-  END IF;
-
   IF EXISTS (
     SELECT 1 FROM jsonb_array_elements(p_items) AS i
-     WHERE (i->>'boardOrder')::int < 0 OR (i->>'boardOrder')::int > 100000
+     WHERE jsonb_typeof(i->'boardOrder') <> 'number'
+        OR (i->>'boardOrder')::numeric <> trunc((i->>'boardOrder')::numeric)
+        OR (i->>'boardOrder')::numeric < 0
+        OR (i->>'boardOrder')::numeric > 100000
   ) THEN
     RAISE EXCEPTION 'REORDER_INVALID_POSITION' USING ERRCODE = 'check_violation';
   END IF;
 
+  -- ── O lock, ANTES da decisão ───────────────────────────────────────────────
+  --
+  -- 🔴 A versão anterior tinha uma janela de corrida silenciosa.
+  --
+  --    Validava que todos os cartões estavam em `p_stage` com um SELECT sem
+  --    lock, e só depois escrevia. O UPDATE final filtrava por `id` e
+  --    `company_id` — mas NÃO por `stage`. Entre a validação e a escrita,
+  --    `move_crm_lead_stage_atomic` podia mover um desses cartões para outra
+  --    coluna; o reorder antigo, já decidido com a leitura velha, alterava na
+  --    mesma o `board_order` de um cartão que entretanto deixara de estar ali.
+  --    O cartão ficava na coluna nova com a posição que lhe fora atribuída na
+  --    coluna antiga, e nada no sistema registava a contradição.
+  --
+  --    Não bastava acrescentar `AND l.stage = p_stage` ao UPDATE: isso trocava
+  --    a escrita errada por uma escrita PARCIAL — os cartões não movidos
+  --    reordenavam, o movido não, e o resultado continuava a ser uma ordem que
+  --    ninguém pediu. A decisão tem de ser tomada sobre estado que já não pode
+  --    mudar por baixo dela.
+  --
+  -- Por isso: trancar TODAS as leads-alvo primeiro, por `id` e `company_id`
+  -- (nunca por `stage` — é exactamente o campo que pode ter mudado), e só
+  -- depois validar. `ORDER BY id` dá uma ordem de aquisição determinística, que
+  -- é o que impede dois reorders concorrentes de se cruzarem em deadlock. Os
+  -- locks ficam até ao commit.
+  SELECT array_agg(DISTINCT (i->>'leadId')::uuid) INTO v_ids
+    FROM jsonb_array_elements(p_items) AS i;
+
+  SELECT count(*) INTO v_trancadas
+    FROM (
+      SELECT l.id
+        FROM public.crm_leads l
+       WHERE l.id = ANY(v_ids)
+         AND l.company_id = p_company_id
+       ORDER BY l.id
+         FOR UPDATE
+    ) AS trancadas;
+
+  -- Agora sim, sob os locks: todos existem, são desta empresa E continuam na
+  -- coluna que o pedido declara. Se outra sessão moveu um deles, este pedido é
+  -- stale e é recusado inteiro.
+  SELECT count(*) INTO v_validas
+    FROM public.crm_leads l
+   WHERE l.id = ANY(v_ids)
+     AND l.company_id = p_company_id
+     AND l.stage = p_stage;
+
+  IF v_trancadas <> v_total OR v_validas <> v_total THEN
+    RAISE EXCEPTION 'REORDER_INVALID_ITEMS: % de % validos', v_validas, v_total
+      USING ERRCODE = 'check_violation';
+  END IF;
+
+  -- `AND l.stage = p_stage` aqui é cinto sobre suspensórios: sob os locks
+  -- acima o estado já não pode mudar. Fica porque uma escrita que depende de
+  -- uma leitura anterior deve repetir a condição de que depende.
   UPDATE public.crm_leads l
      SET board_order = (i->>'boardOrder')::int
     FROM jsonb_array_elements(p_items) AS i
    WHERE l.id = (i->>'leadId')::uuid
      AND l.company_id = p_company_id
+     AND l.stage = p_stage
      AND l.board_order IS DISTINCT FROM (i->>'boardOrder')::int;
 
   atualizadas := v_total;
@@ -730,7 +882,10 @@ BEGIN
       ('crm_lead_interactions_author_mesma_empresa',   'public.crm_lead_interactions'),
       -- O CHECK do motivo de perda é metade da razão de esta tabela existir.
       ('crm_leads_perdida_exige_motivo',               'public.crm_leads'),
-      ('crm_leads_conversao_so_se_ganha',              'public.crm_leads')
+      ('crm_leads_conversao_so_se_ganha',              'public.crm_leads'),
+      -- 🔴 E o inverso: `ganho` sem cliente e local é um negócio fechado que
+      --    não produziu ninguém a quem faturar. As duas direcções, ou nenhuma.
+      ('crm_leads_ganho_exige_conversao',              'public.crm_leads')
     ) AS esperado(nome, tabela)
    WHERE NOT EXISTS (
      SELECT 1 FROM pg_constraint

@@ -322,6 +322,79 @@ describe("103 — as revisões", () => {
     expect(erro).toContain("QUOTE_ACCEPTED_IMMUTABLE");
   });
 
+  // ═════════════════════════════════════════════════════════════════════════
+  // 🔴 SUPERSEDED — uma revisão substituída é histórico, e histórico não muda
+  // ═════════════════════════════════════════════════════════════════════════
+  //
+  // `revise_crm_quote` já preenchia `superseded_by_id` na antiga e preservava o
+  // estado dela. O que faltava era impedir operações NOVAS sobre esse
+  // documento: `set_crm_quote_status` não olhava para `superseded_by_id`, e por
+  // isso a sequência abaixo era possível.
+  //
+  //   R0 enviada → cria-se R1 → R0 fica superseded, ainda 'enviado'
+  //              → alguém marca R0 como 'aceite'
+  //              → R0 volta a circular e pode até dar origem à conversão
+  //
+  // A revisão antiga continua LEGÍVEL como história. O que não pode é voltar a
+  // participar em nada.
+
+  it("🔴 SUPERSEDED_STATUS_CHANGE = REJECTED", async () => {
+    const q = await enviado();
+    await rever(q.id);
+
+    const antes = await estadoDe(q.id);
+    const erro = await erroDe(() =>
+      pool.query("SELECT public.set_crm_quote_status($1,$2,$3,'recusado','mudou de ideias')",
+        [EMPRESA, q.id, ACTOR]),
+    );
+
+    expect(erro).toContain("QUOTE_ALREADY_SUPERSEDED");
+
+    // ZERO_SIDE_EFFECTS: nem o estado, nem as datas, nem o motivo.
+    const depois = await estadoDe(q.id);
+    expect(depois.status).toBe(antes.status);
+    expect(depois.rejected_at).toBeNull();
+    expect(depois.rejection_reason).toBeNull();
+  });
+
+  it("🔴 SUPERSEDED_ACCEPT = REJECTED — é este que alimentava a conversão", async () => {
+    const q = await enviado();
+    await rever(q.id);
+
+    const erro = await erroDe(() =>
+      pool.query("SELECT public.set_crm_quote_status($1,$2,$3,'aceite',NULL)",
+        [EMPRESA, q.id, ACTOR]),
+    );
+
+    expect(erro).toContain("QUOTE_ALREADY_SUPERSEDED");
+    const depois = await estadoDe(q.id);
+    expect(depois.status, "ZERO_SIDE_EFFECTS").toBe("enviado");
+    expect(depois.accepted_at).toBeNull();
+  });
+
+  it("a revisão antiga continua LEGÍVEL como histórico — não se apaga nem reescreve", async () => {
+    const q = await enviado();
+    const r1 = await rever(q.id);
+    const antiga = await estadoDe(q.id);
+
+    expect(antiga, "a linha continua lá").toBeDefined();
+    expect(antiga.status, "com o estado que teve").toBe("enviado");
+    expect(antiga.sent_at, "e a data em que o teve").not.toBeNull();
+    expect(antiga.superseded_by_id).toBe(r1.rows[0].quote_id);
+  });
+
+  it("a revisão VIVA continua a aceitar operações — o guarda não fecha a porta toda", async () => {
+    const q = await enviado();
+    const r1 = await rever(q.id);
+
+    await pool.query("SELECT public.set_crm_quote_status($1,$2,$3,'enviado',NULL)",
+      [EMPRESA, r1.rows[0].quote_id, ACTOR]);
+    await pool.query("SELECT public.set_crm_quote_status($1,$2,$3,'aceite',NULL)",
+      [EMPRESA, r1.rows[0].quote_id, ACTOR]);
+
+    expect((await estadoDe(r1.rows[0].quote_id)).status).toBe("aceite");
+  });
+
   it("um rascunho não se revê — edita-se em cima", async () => {
     const q = await criar();
     const erro = await erroDe(() => rever(q.id));
@@ -460,6 +533,178 @@ describe("103 — isolamento e integridade", () => {
     await pool.query("DELETE FROM public.crm_quotes WHERE id = $1", [q.id]);
     const { rows } = await pool.query("SELECT count(*)::int n FROM public.crm_quote_items");
     expect(rows[0].n).toBe(0);
+  });
+
+  // ═════════════════════════════════════════════════════════════════════════
+  // 🔴 QUOTE_CHAIN_CROSS_COMPANY — as auto-referências eram a porta aberta
+  // ═════════════════════════════════════════════════════════════════════════
+  //
+  // `lead_id`, `client_id`, `visit_id` e `created_by` já eram FKs COMPOSTAS. As
+  // referências da tabela para SI PRÓPRIA — `superseded_by_id` e
+  // `root_quote_id` — não eram: a primeira tinha uma FK simples para
+  // `crm_quotes(id)`, a segunda não tinha FK nenhuma.
+  //
+  // Escreve-se aqui com service_role direto, que é o caminho real: BYPASSRLS e
+  // com escrita concedida. Confiar em RLS para isto seria confiar na camada que
+  // este papel ignora por desenho.
+
+  it("🔴 CROSS_COMPANY_QUOTE_CHAIN — superseded_by_id não atravessa empresas", async () => {
+    const a = await criar({ empresa: EMPRESA });
+    const b = await criar({ empresa: OUTRA });
+
+    const erro = await erroDe(() =>
+      pool.query("UPDATE public.crm_quotes SET superseded_by_id = $2 WHERE id = $1", [a.id, b.id]),
+    );
+
+    expect(erro).toMatch(/crm_quotes_superseded_fk|violates foreign key/i);
+    expect((await estadoDe(a.id)).superseded_by_id, "zero writes").toBeNull();
+  });
+
+  it("🔴 CROSS_COMPANY_QUOTE_CHAIN — root_quote_id não atravessa empresas", async () => {
+    const a = await criar({ empresa: EMPRESA });
+    const b = await criar({ empresa: OUTRA });
+
+    const erro = await erroDe(() =>
+      pool.query("UPDATE public.crm_quotes SET root_quote_id = $2 WHERE id = $1", [a.id, b.id]),
+    );
+
+    expect(erro).toMatch(/crm_quotes_root_fk|violates foreign key/i);
+    expect((await estadoDe(a.id)).root_quote_id, "zero writes").toBe(a.id);
+  });
+
+  it("CROSS_COMPANY_QUOTE_CHAIN = 0 — nenhuma cadeia cruzada sobrevive na base", async () => {
+    await criar({ empresa: EMPRESA });
+    await criar({ empresa: OUTRA });
+
+    const { rows } = await pool.query(`
+      SELECT count(*)::int n
+        FROM public.crm_quotes q
+        JOIN public.crm_quotes alvo
+          ON alvo.id IN (q.superseded_by_id, q.root_quote_id)
+       WHERE alvo.company_id <> q.company_id`);
+
+    expect(rows[0].n).toBe(0);
+  });
+
+  it("apagar uma revisão que substituiu outra é BLOQUEADO — não ressuscita a antiga", async () => {
+    // Com `ON DELETE SET NULL` (a versão anterior), apagar a R1 punha
+    // `superseded_by_id` a NULL na R0 — e o índice parcial
+    // `uq_crm_quotes_revisao_viva` passava a contar a R0 como a revisão VIVA
+    // do documento, sem ninguém o ter decidido.
+    const q = await criar();
+    await pool.query("SELECT public.set_crm_quote_status($1,$2,$3,'enviado',NULL)", [EMPRESA, q.id, ACTOR]);
+    const r1 = await pool.query(
+      `SELECT * FROM public.revise_crm_quote($1,$2,$3,current_date,'2030-12-31',0,true,23,NULL,$4::jsonb)`,
+      [EMPRESA, q.id, ACTOR, ITENS],
+    );
+
+    const erro = await erroDe(() =>
+      pool.query("DELETE FROM public.crm_quotes WHERE id = $1", [r1.rows[0].quote_id]),
+    );
+
+    expect(erro).toMatch(/crm_quotes_superseded_fk|crm_quotes_root_fk|violates foreign key/i);
+    expect((await estadoDe(q.id)).superseded_by_id, "a antiga continua substituída")
+      .toBe(r1.rows[0].quote_id);
+  });
+
+  // ═════════════════════════════════════════════════════════════════════════
+  // 🔴 PROVENIÊNCIA — de que lead nasceu este orçamento
+  // ═════════════════════════════════════════════════════════════════════════
+
+  it("source_lead_id nasce igual a lead_id", async () => {
+    const lead = await novaLead();
+    const q = await criar({ leadId: lead });
+    const linha = await estadoDe(q.id);
+
+    expect(linha.lead_id).toBe(lead);
+    expect(linha.source_lead_id).toBe(lead);
+  });
+
+  it("um orçamento a um cliente que já existe não tem proveniência de lead", async () => {
+    const q = await criar({ leadId: null, clientId: CLIENTE_A });
+    expect((await estadoDe(q.id)).source_lead_id, "não houve lead nenhuma").toBeNull();
+  });
+
+  it("a revisão herda a proveniência — é o mesmo documento", async () => {
+    const lead = await novaLead();
+    const q = await criar({ leadId: lead });
+    await pool.query("SELECT public.set_crm_quote_status($1,$2,$3,'enviado',NULL)", [EMPRESA, q.id, ACTOR]);
+    const r1 = await pool.query(
+      `SELECT * FROM public.revise_crm_quote($1,$2,$3,current_date,'2030-12-31',0,true,23,NULL,$4::jsonb)`,
+      [EMPRESA, q.id, ACTOR, ITENS],
+    );
+
+    expect((await estadoDe(r1.rows[0].quote_id)).source_lead_id).toBe(lead);
+  });
+
+  it("🔴 a proveniência é IMUTÁVEL — nem service_role a reescreve", async () => {
+    const lead = await novaLead();
+    const outra = await novaLead();
+    const q = await criar({ leadId: lead });
+
+    const erro = await erroDe(() =>
+      pool.query("UPDATE public.crm_quotes SET source_lead_id = $2 WHERE id = $1", [q.id, outra]),
+    );
+
+    expect(erro).toContain("QUOTE_SOURCE_LEAD_IMMUTABLE");
+    expect((await estadoDe(q.id)).source_lead_id).toBe(lead);
+  });
+
+  it("apagá-la também é reescrever história", async () => {
+    const lead = await novaLead();
+    const q = await criar({ leadId: lead });
+
+    const erro = await erroDe(() =>
+      pool.query("UPDATE public.crm_quotes SET source_lead_id = NULL WHERE id = $1", [q.id]),
+    );
+
+    expect(erro).toContain("QUOTE_SOURCE_LEAD_IMMUTABLE");
+  });
+
+  it("🔴 source_lead_id não aponta para lead de outra empresa", async () => {
+    const leadDaOutra = await novaLead(OUTRA);
+
+    // 🔴 Um orçamento endereçado a um CLIENTE: nasce com `source_lead_id` NULL.
+    //    Tem de ser este o palco — num orçamento que já tem proveniência, quem
+    //    recusa primeiro é o trigger de imutabilidade, e o teste passaria sem
+    //    nunca chegar a exercer a FK. O que se quer provar aqui é a FK.
+    const q = await criar({ leadId: null, clientId: CLIENTE_A, empresa: EMPRESA });
+    expect((await estadoDe(q.id)).source_lead_id).toBeNull();
+
+    const erro = await erroDe(() =>
+      pool.query("UPDATE public.crm_quotes SET source_lead_id = $2 WHERE id = $1",
+        [q.id, leadDaOutra]),
+    );
+
+    expect(erro).toMatch(/crm_quotes_source_lead_mesma_empresa|violates foreign key/i);
+    expect((await estadoDe(q.id)).source_lead_id, "zero writes").toBeNull();
+  });
+
+  it("as duas guardas da proveniência cobrem casos diferentes, e as duas fecham", async () => {
+    // O trigger protege uma proveniência JÁ conhecida de ser alterada.
+    // A FK protege QUALQUER escrita de apontar para fora da empresa.
+    // Nenhuma das duas sozinha cobre os dois casos.
+    const lead = await novaLead();
+    const q = await criar({ leadId: lead });
+    const outraDaMesmaEmpresa = await novaLead();
+
+    expect(
+      await erroDe(() =>
+        pool.query("UPDATE public.crm_quotes SET source_lead_id = $2 WHERE id = $1",
+          [q.id, outraDaMesmaEmpresa]),
+      ),
+      "mesma empresa, mas reescrita → o trigger",
+    ).toContain("QUOTE_SOURCE_LEAD_IMMUTABLE");
+
+    const semProveniencia = await criar({ leadId: null, clientId: CLIENTE_A });
+    const leadDaOutra = await novaLead(OUTRA);
+    expect(
+      await erroDe(() =>
+        pool.query("UPDATE public.crm_quotes SET source_lead_id = $2 WHERE id = $1",
+          [semProveniencia.id, leadDaOutra]),
+      ),
+      "em branco, mas outra empresa → a FK",
+    ).toMatch(/crm_quotes_source_lead_mesma_empresa|violates foreign key/i);
   });
 });
 

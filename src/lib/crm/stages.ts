@@ -97,7 +97,18 @@ export function isClosedStage(stage: LeadStage): boolean {
  *   · ir para o próprio estado — arrastar um cartão para a coluna onde já
  *     está não é uma mudança, e registá-la encheria a timeline de ruído.
  */
-const TRANSICOES: Record<LeadStage, readonly LeadStage[]> = {
+/**
+ * 🔴 Exportada de propósito, e não por conveniência de import.
+ *
+ * A mesma matriz existe em SQL, dentro de `move_crm_lead_stage_atomic` (101) —
+ * a RPC é a autoridade, porque é o único ponto por onde todos os caminhos de
+ * escrita passam. Duas cópias da mesma regra divergem em silêncio a menos que
+ * alguém as compare; `crm-stage-reorder.pg.test.ts` percorre as 36 combinações
+ * FROM×TO contra o Postgres real e falha se discordarem.
+ *
+ * Exportar isto é o que torna essa comparação possível.
+ */
+export const TRANSICOES: Record<LeadStage, readonly LeadStage[]> = {
   novo: ["contactado", "visita_agendada", "orcamento_enviado", "ganho", "perdido"],
   contactado: ["novo", "visita_agendada", "orcamento_enviado", "ganho", "perdido"],
   visita_agendada: ["contactado", "orcamento_enviado", "ganho", "perdido"],

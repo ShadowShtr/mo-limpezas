@@ -58,6 +58,12 @@ function erroDaConversao(contexto: string, err: unknown): ActionResult<never> {
       "Esse orçamento é de outra lead. Escolha o orçamento aceite desta.",
     );
   }
+  if (msg.includes("QUOTE_ALREADY_SUPERSEDED")) {
+    return actionFailure(
+      ACTION_ERROR_CODES.BUSINESS_RULE,
+      "Esse orçamento foi substituído por uma revisão mais recente. Converta a partir da revisão em vigor.",
+    );
+  }
   if (msg.includes("QUOTE_NOT_ACCEPTED")) {
     return actionFailure(
       ACTION_ERROR_CODES.BUSINESS_RULE,
@@ -136,14 +142,26 @@ export async function converterLeadEmCliente(
   }
   if (!lead) return actionFailure(ACTION_ERROR_CODES.NOT_FOUND, "Lead não encontrada.");
 
-  // A guarda também está na RPC; aqui devolve-se uma frase útil em vez de
-  // deixar chegar ao passo que cria o cliente.
-  if (lead.converted_client_id) {
-    return actionFailure(
-      ACTION_ERROR_CODES.CONFLICT,
-      "Esta lead já foi convertida em cliente.",
-    );
-  }
+  // 🔴 Uma lead já convertida NÃO é um erro aqui.
+  //
+  //    A versão anterior devolvia CONFLICT neste ponto, a partir desta leitura.
+  //    O efeito era que a RPC era idempotente e o FLUXO não — a mesma distinção
+  //    que a 104 existe para fechar, reaberta uma camada acima:
+  //
+  //      pedido 1 → converte e COMMITA; a resposta perde-se na rede
+  //      pedido 2 (o retry, idêntico) → esta leitura vê converted_client_id
+  //                                     e devolve CONFLICT
+  //
+  //    Quem tentou converter fica sem saber se ficou feito, e um retry de HTTP
+  //    — que é automático em qualquer proxy — passa a parecer uma falha.
+  //
+  //    Quem decide se já foi convertido é `convert_crm_lead_atomic`, que o faz
+  //    sob `FOR UPDATE` e devolve os MESMOS ids com `ja_convertida = true`. Esta
+  //    leitura serve só para saber que as validações abaixo já não se aplicam:
+  //    uma lead convertida não precisa de ser revalidada para nada, e exigir-lhe
+  //    a morada outra vez transformaria o retry num erro por um campo que já
+  //    não é usado.
+  const jaConvertidaNaLeitura = Boolean(lead.converted_client_id);
 
   // ── 2. O orçamento aceite, se houver ──────────────────────────────────────
   interface OrcamentoAceite {
@@ -174,7 +192,11 @@ export async function converterLeadEmCliente(
 
     // 🔴 Só um orçamento aceite converte. Converter a partir de um rascunho
     //    criaria um cliente com base num preço que ninguém aprovou.
-    if (q.status !== "aceite") {
+    //
+    //    Pela mesma razão do passo 3, não se aplica a um retry sobre uma lead
+    //    já convertida: aí o orçamento serve apenas para saber para onde levar
+    //    o gestor, e a conversão que ele justificou já aconteceu.
+    if (!jaConvertidaNaLeitura && q.status !== "aceite") {
       return actionFailure(
         ACTION_ERROR_CODES.BUSINESS_RULE,
         "Só um orçamento aceite pode dar origem a um cliente. Marque-o como aceite primeiro.",
@@ -205,10 +227,17 @@ export async function converterLeadEmCliente(
   }
 
   // ── 3. O que impede avançar ───────────────────────────────────────────────
+  //
+  // Só se aplica a uma conversão que ainda vai acontecer. Num retry sobre uma
+  // lead já convertida a RPC devolve os ids existentes sem sequer olhar para
+  // estes campos — e recusar aqui por falta de morada seria inventar um erro
+  // para uma operação que já está feita.
   const dadosLead = lead as unknown as LeadParaConverter;
-  const impedimento = porqueNaoConverte(dadosLead, { items: itens, visitAddress: moradaDaVisita });
-  if (impedimento) {
-    return actionFailure(ACTION_ERROR_CODES.BUSINESS_RULE, impedimento);
+  if (!jaConvertidaNaLeitura) {
+    const impedimento = porqueNaoConverte(dadosLead, { items: itens, visitAddress: moradaDaVisita });
+    if (impedimento) {
+      return actionFailure(ACTION_ERROR_CODES.BUSINESS_RULE, impedimento);
+    }
   }
 
   // ── 4. Converter — cliente, local e lead numa transação só ────────────────

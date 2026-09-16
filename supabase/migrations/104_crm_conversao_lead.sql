@@ -185,6 +185,19 @@ BEGIN
         USING ERRCODE = 'check_violation';
     END IF;
 
+    -- 🔴 E tem de ser a revisão VIVA.
+    --
+    --    Validar `status = 'aceite'` não chega: uma revisão antiga fica com o
+    --    estado que tinha quando foi substituída, e uma R0 aceite antes de a R1
+    --    existir continua a dizer 'aceite' para sempre. Sem esta guarda, a
+    --    conversão podia nascer de um preço e de condições que a revisão
+    --    seguinte já tinha substituído — e o cliente ficaria criado a partir de
+    --    um documento que ninguém considera em vigor.
+    IF v_quote.superseded_by_id IS NOT NULL THEN
+      RAISE EXCEPTION 'QUOTE_ALREADY_SUPERSEDED: substituido por %', v_quote.superseded_by_id
+        USING ERRCODE = 'check_violation';
+    END IF;
+
     -- Converter a partir de um rascunho criaria um cliente com base num preço
     -- que ninguém aprovou.
     IF v_quote.status <> 'aceite' THEN

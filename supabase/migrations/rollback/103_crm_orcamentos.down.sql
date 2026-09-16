@@ -24,6 +24,11 @@ DROP FUNCTION IF EXISTS public.create_crm_quote_with_items(uuid, uuid, uuid, uui
 DROP TABLE IF EXISTS public.crm_quote_items;
 DROP TABLE IF EXISTS public.crm_quotes;
 
+-- A função do trigger de imutabilidade da proveniência sobrevive ao DROP TABLE
+-- (o trigger morre com a tabela, a função não). Sem isto, reaplicar a 103
+-- encontrava uma função órfã de uma versão anterior.
+DROP FUNCTION IF EXISTS public.crm_quotes_proveniencia_imutavel();
+
 -- `company_settings.quote_prefix` fica de propósito.
 --
 -- É uma coluna com valor por omissão, não custa nada, e apagá-la obrigaria a

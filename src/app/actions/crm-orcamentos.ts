@@ -137,6 +137,12 @@ function erroDaRpc(contexto: string, err: unknown): ActionResult<never> {
       "A validade deste orçamento já passou. Reveja-o com uma data nova antes de o dar como aceite.",
     );
   }
+  if (msg.includes("QUOTE_ALREADY_SUPERSEDED")) {
+    return actionFailure(
+      ACTION_ERROR_CODES.BUSINESS_RULE,
+      "Este orçamento foi substituído por uma revisão mais recente. Trabalhe sobre a revisão em vigor — esta fica como histórico.",
+    );
+  }
   if (msg.includes("QUOTE_TRANSITION_NOT_ALLOWED")) {
     return actionFailure(ACTION_ERROR_CODES.BUSINESS_RULE, "Essa mudança de estado não é possível.");
   }
@@ -252,7 +258,27 @@ export async function getQuotes(opts?: {
     .eq("company_id", profile.company_id);
 
   if (!opts?.incluirSubstituidas) query = query.is("superseded_by_id", null);
-  if (opts?.leadId) query = query.eq("lead_id", opts.leadId);
+  // 🔴 `source_lead_id`, não `lead_id`.
+  //
+  //    A conversão põe `lead_id` a NULL (o destinatário passa a ser o cliente),
+  //    e enquanto este filtro olhava para `lead_id` a ficha da lead deixava de
+  //    mostrar precisamente o orçamento que fechou o negócio — o único que
+  //    interessa ver lá. `source_lead_id` é imutável, por isso a lista continua
+  //    completa depois da conversão.
+  //
+  //    O `or` mantém os orçamentos anteriores à coluna existir, cuja
+  //    proveniência só está em `lead_id`.
+  if (opts?.leadId) {
+    // 🔴 `.or()` constrói uma expressão de filtro em TEXTO. Interpolar aqui um
+    //    valor não validado seria injeção no PostgREST — os outros filtros usam
+    //    `.eq()`, que vai parametrizado, e por isso não tinham este problema.
+    const leadIdValido = z.uuid().safeParse(opts.leadId);
+    if (!leadIdValido.success) return validationFailure(leadIdValido.error);
+
+    query = query.or(
+      `source_lead_id.eq.${leadIdValido.data},lead_id.eq.${leadIdValido.data}`,
+    );
+  }
 
   const { data, error } = await query
     .order("quote_year", { ascending: false })
@@ -592,7 +618,7 @@ export async function sendQuoteByEmail(
 
   const { data: quote, error } = await admin
     .from("crm_quotes")
-    .select("id, lead_id, quote_number, total, valid_until, status")
+    .select("id, lead_id, quote_number, total, valid_until, status, superseded_by_id")
     .eq("company_id", profile.company_id)
     .eq("id", quoteId)
     .maybeSingle();
@@ -602,6 +628,25 @@ export async function sendQuoteByEmail(
     return internalFailure("sendQuoteByEmail", error, ACTION_ERROR_CODES.PERSISTENCE);
   }
   if (!quote) return actionFailure(ACTION_ERROR_CODES.NOT_FOUND, "Orçamento não encontrado.");
+
+  // 🔴 Uma revisão substituída não volta a circular — e a recusa tem de
+  //    acontecer ANTES do Resend.
+  //
+  //    Este é o único dos três guardas de `superseded` que não pode viver só na
+  //    base: quando a RPC de estado recusasse, o email já tinha saído. Um
+  //    documento enviado não se desenvia, e o cliente ficaria com dois PDFs com
+  //    preços diferentes e nenhuma indicação de qual vale.
+  //
+  //    A verificação é uma leitura e pode ficar velha entre o SELECT e o envio.
+  //    Não é o controlo de concorrência da cadeia de revisões — esse está na
+  //    base, em `revise_crm_quote` e no índice parcial. É o que impede o efeito
+  //    externo e irreversível no caso normal, que é onde ele acontece.
+  if (quote.superseded_by_id) {
+    return actionFailure(
+      ACTION_ERROR_CODES.BUSINESS_RULE,
+      "Este orçamento foi substituído por uma revisão mais recente. Envie a revisão em vigor.",
+    );
+  }
 
   // 🔴 Um orçamento aceite ou anulado não se reenvia: o primeiro já produziu um
   //    acordo, o segundo acabou. Reenviar qualquer um deles poria em circulação
@@ -724,7 +769,39 @@ async function resolverNomes(
   return nomes;
 }
 
-/** Escreve na timeline sem deixar que uma falha aqui parta a operação. */
+/**
+ * Escreve na timeline sem deixar que uma falha aqui parta a operação.
+ *
+ * ── 🔴 DECISÃO EXPLÍCITA: para eventos de ORÇAMENTO, esta timeline é
+ *    DERIVED / BEST_EFFORT, e não histórico autoritativo. ───────────────────
+ *
+ * A pergunta que isto responde é: se este INSERT falhar, perdeu-se um facto?
+ * Para orçamentos, não. Tudo o que estas linhas contam está gravado, de forma
+ * autoritativa e atomicamente, em `crm_quotes`:
+ *
+ *   · que foi emitido, quando e por quem → `issue_date`, `created_by`
+ *   · que foi enviado e quando           → `status`, `sent_at`
+ *   · que foi aceite ou recusado, quando → `accepted_at`, `rejected_at`,
+ *                                          `rejection_reason`
+ *   · que foi revisto, e por qual        → `revision`, `root_quote_id`,
+ *                                          `superseded_by_id`
+ *
+ * Essas colunas são escritas DENTRO das RPC, na mesma transação da mutação que
+ * descrevem. A timeline é uma projeção legível delas — um buraco aqui custa uma
+ * linha num ecrã, não um facto.
+ *
+ * 🔴 Isto NÃO vale para os eventos de ESTADO DA LEAD. Esses são escritos dentro
+ *    de `move_crm_lead_stage_atomic` (101) e de `convert_crm_lead_atomic` (104),
+ *    na mesma transação, precisamente porque aí a timeline É a única prova de
+ *    porquê e quando o cartão mudou de coluna — não há outra coluna que o diga.
+ *    A diferença entre os dois casos é essa, e é a razão de um ser best-effort
+ *    e o outro não.
+ *
+ * Consequência a respeitar: nenhum ecrã, relatório ou export pode apresentar
+ * `crm_lead_interactions` como histórico COMPLETO de orçamentos. Se algum dia
+ * for preciso prometer isso, este INSERT tem de passar para dentro das RPC de
+ * orçamento — não basta acrescentar-lhe um retry.
+ */
 async function registarNaLead(
   admin: NonNullable<AdminClient>,
   companyId: string,
