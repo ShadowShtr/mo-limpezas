@@ -1,13 +1,13 @@
 {
   "inventorySource": "git ls-files",
   "summary": {
-    "repositoryFiles": 898,
-    "textFiles": 885,
-    "sourceFiles": 626,
-    "textLines": 218785,
+    "repositoryFiles": 905,
+    "textFiles": 892,
+    "sourceFiles": 631,
+    "textLines": 221513,
     "typescriptDiagnostics": 0,
     "productionEntries": 71,
-    "unreachableProductionModules": 40,
+    "unreachableProductionModules": 42,
     "exactDuplicateFileGroups": 0
   },
   "highConfidence": {
@@ -54,6 +54,8 @@
       "src/domain/scheduling/recurrence-compat.ts",
       "src/lib/bank-import/pdf.ts",
       "src/lib/bank-import/xlsx.ts",
+      "src/lib/crm/sources.ts",
+      "src/lib/crm/stages.ts",
       "src/lib/finance-write-surface.ts",
       "src/lib/payments-month-materialization.ts",
       "src/types/supabase.ts"
@@ -93,6 +95,8 @@
       "src/domain/scheduling/occurrence-repair.ts",
       "src/domain/scheduling/reconciliation.ts",
       "src/domain/scheduling/recurrence-compat.ts",
+      "src/lib/crm/sources.ts",
+      "src/lib/crm/stages.ts",
       "src/lib/finance-write-surface.ts"
     ],
     "testSignupCalls": [
