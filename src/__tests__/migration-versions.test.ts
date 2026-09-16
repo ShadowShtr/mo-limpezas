@@ -33,10 +33,34 @@ function ficheiros(): string[] {
   return fs.readdirSync(DIR).filter((f) => f.endsWith(".sql")).sort();
 }
 
-/** `071_x.sql` → `071`. Devolve `null` para as datadas e para o resto. */
+/**
+ * `071_x.sql` → `071`. `101a_x.sql` → `101a`. `null` para as datadas e o resto.
+ *
+ * 🔴 O sufixo de letra é a forma dos HOTFIXES de uma migration JÁ APLICADA.
+ *
+ *    Nasceu com a `101a`: a `101` estava aplicada em produção e com checksum no
+ *    ledger, o defeito era de ACL e tinha de ser corrigido ANTES do trabalho
+ *    funcional já desenhado para a `102`. Editar a `101` criaria checksum drift
+ *    histórico; tomar o `102` empurraria trabalho planeado. Entre dois inteiros
+ *    consecutivos não há inteiro — há um sufixo.
+ *
+ *    A ordem de aplicação é a ordem lexicográfica do nome do ficheiro
+ *    (`migration-runner-core.mjs`), e o sufixo cai onde se quer: `'_'` (0x5F)
+ *    vem antes de `'a'` (0x61), logo `101_` < `101a_`; e `101a` < `102` pelo
+ *    terceiro dígito.
+ *
+ * A versão devolvida inclui o sufixo de propósito: `101` e `101a` são versões
+ * DISTINTAS, e é isso que mantém a unicidade a funcionar nos dois sentidos —
+ * duas `101a` colidem, e uma `101a` não colide com a `101`.
+ */
 function versaoSequencial(nome: string): string | null {
-  const m = /^(\d{3})_/.exec(nome);
+  const m = /^(\d{3}[a-z]?)_/.exec(nome);
   return m ? m[1] : null;
+}
+
+/** `101a` → 101. O inteiro de base, para medir saltos na sequência. */
+function numeroBase(versao: string): number {
+  return Number(versao.slice(0, 3));
 }
 
 describe("migrations — a versão identifica uma só migration", () => {
@@ -72,8 +96,8 @@ describe("migrations — a versão identifica uma só migration", () => {
   });
 
   it("todos os nomes seguem um dos dois esquemas conhecidos", () => {
-    const estranhos = ficheiros().filter((f) => !/^(\d{3}|\d{8})_/.test(f));
-    expect(estranhos, "nome de migration fora dos dois padrões").toEqual([]);
+    const estranhos = ficheiros().filter((f) => !/^(\d{3}[a-z]?|\d{8})_/.test(f));
+    expect(estranhos, "nome de migration fora dos padrões conhecidos").toEqual([]);
   });
 
   it("a sequência só tem os saltos que estão documentados", () => {
@@ -94,11 +118,17 @@ describe("migrations — a versão identifica uma só migration", () => {
     // O teste continua a existir para apanhar o **próximo** salto.
     const AUSENTES_CONHECIDAS = [66, 67];
 
-    const nums = ficheiros()
-      .map(versaoSequencial)
-      .filter((v): v is string => v !== null)
-      .map(Number)
-      .sort((a, b) => a - b);
+    // 🔴 Pelo inteiro de BASE, não pela versão completa: `101a` é um hotfix da
+    //    `101`, não um degrau novo da sequência. Contá-lo como 101 é o que
+    //    impede `Number("101a")` → NaN de envenenar a deteção de saltos.
+    const nums = [
+      ...new Set(
+        ficheiros()
+          .map(versaoSequencial)
+          .filter((v): v is string => v !== null)
+          .map(numeroBase),
+      ),
+    ].sort((a, b) => a - b);
 
     const faltam: number[] = [];
     for (let n = nums[0]; n < nums[nums.length - 1]; n++) {

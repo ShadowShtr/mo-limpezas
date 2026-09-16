@@ -53,12 +53,15 @@ export const LOCAL_B = "10cab222-2222-4222-8222-222222222222";
 /**
  * As migrations do CRM presentes NESTA branch, pela ordem canónica.
  *
- * 🔴 Só a 101. Esta PR porta a fundacao do funil e mais nada: a 102, a 103 e a
+ * 🔴 A fundacao do funil e o hotfix de ACL que lhe pertence. A 102, a 103 e a
  *    104 vivem na branch de integracao e chegarao em PRs proprias, cada uma com
  *    a sua autorizacao. Listar aqui um ficheiro que a branch nao tem faria o
  *    palco rebentar no `readFileSync`, antes de qualquer ensaio correr.
  */
-export const MIGRATIONS_CRM = ["101_crm_leads"] as const;
+export const MIGRATIONS_CRM = [
+  "101_crm_leads",
+  "101a_crm_rpc_acl_hardening",
+] as const;
 
 export const lerSql = (rel: string): string => readFileSync(join(ROOT, rel), "utf8");
 
@@ -139,7 +142,11 @@ type Executor = pg.Pool | pg.Client;
  */
 export async function montarPalcoCrm(
   db: Executor,
-  opts: { aplicarCrm?: boolean } = {},
+  opts: {
+    aplicarCrm?: boolean;
+    /** Aplica ate esta migration, inclusive, e para. Ver o uso mais abaixo. */
+    pararEm?: (typeof MIGRATIONS_CRM)[number];
+  } = {},
 ): Promise<void> {
   await db.query("DROP SCHEMA IF EXISTS public CASCADE; CREATE SCHEMA public;");
   await db.query("DROP SCHEMA IF EXISTS auth CASCADE;");
@@ -176,10 +183,37 @@ export async function montarPalcoCrm(
   //    compostas. Que é exactamente o que se quer provar.
   await db.query("ALTER ROLE service_role BYPASSRLS;");
 
+  // 🔴 Os DEFAULT PRIVILEGES do Supabase. Sem isto, o palco mente.
+  //
+  //    Numa instancia Supabase, o papel `postgres` tem default privileges no
+  //    schema `public` que concedem EXECUTE a `anon`, `authenticated` e
+  //    `service_role` em TODAS as funcoes novas. Cada `CREATE FUNCTION` nasce
+  //    ja com esses grants NOMINAIS no `proacl`.
+  //
+  //    Um Postgres cru nao tem nada disso: uma funcao nova nasce so com o
+  //    EXECUTE implicito de PUBLIC. A consequencia era que o ensaio de
+  //    permissoes da 101 media um mundo que nao existe — `REVOKE FROM PUBLIC`
+  //    bastava aqui, e em producao nao bastava. O ensaio passava, e o ACL real
+  //    ficava aberto a `anon`.
+  //
+  //    Esta linha e o que torna o palco fiel. Corre ANTES das migrations, como
+  //    em producao, e e aplicada ao papel que cria as funcoes (`postgres`, o
+  //    utilizador da ligacao do contentor).
+  await db.query(`
+    ALTER DEFAULT PRIVILEGES IN SCHEMA public
+      GRANT EXECUTE ON FUNCTIONS TO anon, authenticated, service_role;
+  `);
+
   await semearDuasEmpresas(db);
 
   if (opts.aplicarCrm !== false) {
-    for (const m of MIGRATIONS_CRM) await db.query(migrationCrm(m));
+    // `pararEm` deixa montar o palco no estado INTERMEDIO — por exemplo, com a
+    // 101 aplicada e a 101a ainda nao. E o que permite provar que o defeito de
+    // ACL existe mesmo, em vez de so afirmar que a correccao funciona.
+    for (const m of MIGRATIONS_CRM) {
+      await db.query(migrationCrm(m));
+      if (opts.pararEm === m) break;
+    }
   }
 }
 
