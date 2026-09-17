@@ -34,6 +34,15 @@
 import { readFileSync } from "node:fs";
 import pg from "pg";
 
+// 🔴 O leitor de `.env.local` é o comum, e não um parser próprio.
+//
+//    `admin-script-guard.test.ts` recusa scripts com o seu próprio parser, e
+//    a razão é histórica: eram sete, cada um com regras ligeiramente
+//    diferentes, e nenhum a dizer para onde apontava. Este script existe
+//    exactamente para apontar a produção — ser ele a reinventar a leitura
+//    seria o pior sítio possível para o fazer.
+import { loadEnvFile } from "./lib/admin-db.mjs";
+
 const PERGUNTA = `
   SELECT
     con.conname AS restricao,
@@ -90,8 +99,7 @@ async function main() {
     process.exit(2);
   }
 
-  const env = readFileSync(".env.local", "utf8");
-  const url = (env.match(/^SUPABASE_DB_URL=(.*)$/m) ?? [])[1]?.trim();
+  const url = loadEnvFile().SUPABASE_DB_URL;
   if (!url) {
     console.error("SUPABASE_DB_URL não está em .env.local.");
     process.exit(2);
