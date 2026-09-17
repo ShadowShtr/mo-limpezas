@@ -1,5 +1,5 @@
 -- ============================================================================
--- Os helpers de autorização COMO ESTÃO EM PRODUÇÃO, antes da 102
+-- Os helpers de autorização COMO ESTÃO EM PRODUÇÃO, antes da 101c
 -- ============================================================================
 --
 -- 🔴 Copiados do catálogo vivo, não das migrations.

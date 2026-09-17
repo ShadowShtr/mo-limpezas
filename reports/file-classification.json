@@ -1,16 +1,16 @@
 {
   "generatedBy": "scripts/audit-file-inventory.mjs",
-  "totalFiles": 933,
+  "totalFiles": 939,
   "byStatus": {
-    "MANTER": 910,
-    "STANDBY": 23
+    "MANTER": 915,
+    "STANDBY": 24
   },
   "byCategory": {
-    "test": 222,
+    "test": 223,
     "route-ui": 141,
-    "migration": 134,
+    "migration": 136,
     "lib": 80,
-    "script": 63,
+    "script": 64,
     "domain": 56,
     "doc": 47,
     "server-action": 44,
@@ -20,7 +20,7 @@
     "api-route": 16,
     "config": 12,
     "asset": 8,
-    "report": 5,
+    "report": 7,
     "script-historico": 4,
     "other": 2,
     "ci": 2,
@@ -29,14 +29,14 @@
     "supabase-other": 2
   },
   "byConfidence": {
-    "alta": 912,
-    "média": 15,
+    "alta": 917,
+    "média": 16,
     "baixa": 6
   },
   "scriptRisk": {
     "SAFE_OFFLINE": 33,
     "ADMIN_GUARDED_WRITE": 11,
-    "WRITE_CAPABLE": 9,
+    "WRITE_CAPABLE": 10,
     "ADMIN_READ": 6,
     "READ_ONLY": 4
   },
@@ -1941,6 +1941,48 @@
       "manualDecision": false
     },
     {
+      "path": "reports/identity-drift-manifest.json",
+      "category": "report",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [
+        "service-role"
+      ],
+      "signals": {
+        "serviceRole": 8,
+        "sqlWrite": 100
+      },
+      "action": "nenhuma",
+      "reason": "configuração/infra",
+      "manualDecision": false
+    },
+    {
+      "path": "reports/identity-provenance-check.json",
+      "category": "report",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [
+        "service-role"
+      ],
+      "signals": {
+        "serviceRole": 10,
+        "sqlWrite": 100
+      },
+      "action": "nenhuma",
+      "reason": "configuração/infra",
+      "manualDecision": false
+    },
+    {
       "path": "reports/ignored-query-errors.json",
       "category": "report",
       "status": "MANTER",
@@ -2108,6 +2150,38 @@
         "allClosed": false
       },
       "scriptRisk": "SAFE_OFFLINE"
+    },
+    {
+      "path": "scripts/audit-identity-drift-manifest.ts",
+      "category": "script",
+      "status": "STANDBY",
+      "confidence": "média",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [
+        "service-role"
+      ],
+      "signals": {
+        "serviceRole": 2,
+        "sqlWrite": 4,
+        "consoleLog": 8,
+        "consoleErr": 2,
+        "fallbackZero": 1,
+        "dynamicImport": 1
+      },
+      "action": "T17-B: confirmar se ainda é preciso",
+      "reason": "capaz de escrever na base",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": true,
+        "dynamicImport": true,
+        "allClosed": false
+      },
+      "scriptRisk": "WRITE_CAPABLE"
     },
     {
       "path": "scripts/audit-ignored-query-errors.mjs",
@@ -3179,11 +3253,11 @@
       "category": "script",
       "status": "MANTER",
       "confidence": "média",
-      "consumers": 17,
+      "consumers": 18,
       "consumerSample": [
+        "scripts/audit-identity-drift-manifest.ts",
         "scripts/audit-status-authorization-surface.mjs",
-        "scripts/backup-all.mjs",
-        "scripts/backup-now.mjs"
+        "scripts/backup-all.mjs"
       ],
       "autoLoaded": false,
       "referencedBy": [
@@ -4539,6 +4613,34 @@
       "sideEffects": [],
       "risks": [],
       "signals": {},
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/__tests__/canonical-path-101b-101c.pg.test.ts",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [
+        "service-role"
+      ],
+      "signals": {
+        "serviceRole": 2,
+        "sqlWrite": 20,
+        "dynamicImport": 1
+      },
       "action": "nenhuma",
       "reason": "suite de testes — corre por convenção do vitest",
       "manualDecision": false,
@@ -6704,7 +6806,7 @@
       "manualDecision": false
     },
     {
-      "path": "src/__tests__/fixtures/pre-102-authorization-helpers.sql",
+      "path": "src/__tests__/fixtures/pre-101c-authorization-helpers.sql",
       "category": "test",
       "status": "MANTER",
       "confidence": "alta",
@@ -6827,11 +6929,11 @@
       "category": "test",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 3,
+      "consumers": 5,
       "consumerSample": [
+        "scripts/audit-identity-drift-manifest.ts",
         "scripts/generate-profile-fk-inventory.ts",
-        "src/__tests__/collaborator-lifecycle-postgres.test.ts",
-        "src/__tests__/crm-stage-reorder.pg.test.ts"
+        "src/__tests__/canonical-path-101b-101c.pg.test.ts"
       ],
       "autoLoaded": false,
       "referencedBy": [],
@@ -6859,11 +6961,11 @@
       "category": "test",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 16,
+      "consumers": 18,
       "consumerSample": [
+        "scripts/audit-identity-drift-manifest.ts",
         "scripts/generate-profile-fk-inventory.ts",
-        "src/__tests__/bank-reconciliation-period-atomic.pg.test.ts",
-        "src/__tests__/cashflow-period-atomic.pg.test.ts"
+        "src/__tests__/bank-reconciliation-period-atomic.pg.test.ts"
       ],
       "autoLoaded": false,
       "referencedBy": [],
@@ -6885,11 +6987,11 @@
       "category": "test",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 7,
+      "consumers": 9,
       "consumerSample": [
-        "src/__tests__/collaborator-create-name-only-postgres.test.ts",
-        "src/__tests__/collaborator-identity-hardening-postgres.test.ts",
-        "src/__tests__/fin-period-production-shadow.pg.test.ts"
+        "scripts/audit-identity-drift-manifest.ts",
+        "src/__tests__/canonical-path-101b-101c.pg.test.ts",
+        "src/__tests__/collaborator-create-name-only-postgres.test.ts"
       ],
       "autoLoaded": false,
       "referencedBy": [],
@@ -8262,7 +8364,7 @@
       "signals": {
         "supabase": 1,
         "env": 2,
-        "sqlWrite": 10,
+        "sqlWrite": 16,
         "unknownCast": 1,
         "fallbackArray": 1,
         "dynamicImport": 2
@@ -9302,7 +9404,7 @@
       }
     },
     {
-      "path": "src/__tests__/status-authorization-102.pg.test.ts",
+      "path": "src/__tests__/status-authorization-101c.pg.test.ts",
       "category": "test",
       "status": "MANTER",
       "confidence": "alta",
@@ -24256,7 +24358,28 @@
       "manualDecision": false
     },
     {
-      "path": "supabase/migrations/102_status_participa_da_autorizacao.sql",
+      "path": "supabase/migrations/101b_identity_reconciliation.sql",
+      "category": "migration",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [
+        "service-role"
+      ],
+      "signals": {
+        "serviceRole": 1,
+        "sqlWrite": 111
+      },
+      "action": "nenhuma",
+      "reason": "migration versionada — histórico do schema, nunca se apaga",
+      "manualDecision": false
+    },
+    {
+      "path": "supabase/migrations/101c_status_participa_da_autorizacao.sql",
       "category": "migration",
       "status": "MANTER",
       "confidence": "alta",
@@ -24882,7 +25005,25 @@
       "manualDecision": false
     },
     {
-      "path": "supabase/migrations/rollback/102_status_participa_da_autorizacao.down.sql",
+      "path": "supabase/migrations/rollback/101b_identity_reconciliation.recovery.sql",
+      "category": "migration",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "sqlWrite": 3
+      },
+      "action": "nenhuma",
+      "reason": "migration versionada — histórico do schema, nunca se apaga",
+      "manualDecision": false
+    },
+    {
+      "path": "supabase/migrations/rollback/101c_status_participa_da_autorizacao.down.sql",
       "category": "migration",
       "status": "MANTER",
       "confidence": "alta",

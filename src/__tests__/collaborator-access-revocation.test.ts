@@ -85,7 +85,7 @@ describe("quem pode entrar", () => {
     // Se divergirem, a aplicação e a base discordam sobre quem trabalha aqui,
     // e o buraco reabre pelo lado mais permissivo.
     const migracao = readFileSync(
-      join(process.cwd(), "supabase/migrations/102_status_participa_da_autorizacao.sql"),
+      join(process.cwd(), "supabase/migrations/101c_status_participa_da_autorizacao.sql"),
       "utf8",
     );
     expect(migracao).toContain("status = 'ativo'");

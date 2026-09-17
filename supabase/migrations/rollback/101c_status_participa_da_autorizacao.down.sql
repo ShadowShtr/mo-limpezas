@@ -1,5 +1,5 @@
 -- ============================================================================
--- ROLLBACK da 102 — repor os helpers como estavam
+-- ROLLBACK da 101c — repor os helpers como estavam
 -- ============================================================================
 --
 -- 🔴 O que este rollback repõe é o BURACO, e é preciso dizê-lo em voz alta.
@@ -13,11 +13,11 @@
 --    pressão. Mas não é uma operação neutra, e quem o correr tem de saber que
 --    está a reabrir a janela, não a «voltar ao normal».
 --
---    Se a 102 tiver de ser revertida por causar um problema de acesso
+--    Se a 101c tiver de ser revertida por causar um problema de acesso
 --    legítimo, o caminho preferível é corrigir os perfis afectados
 --    (`status = 'ativo'` a quem deve ter acesso) em vez de reverter a regra.
 --
--- Os corpos abaixo são os que estavam em produção antes da 102, copiados de
+-- Os corpos abaixo são os que estavam em produção antes da 101c (e que a 101b canonicaliza), copiados de
 -- `pg_get_functiondef` — incluindo a ausência de `search_path` em
 -- `can_access_service`, que era o estado real.
 -- ============================================================================

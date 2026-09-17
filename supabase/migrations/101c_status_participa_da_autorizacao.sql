@@ -1,5 +1,5 @@
 -- ============================================================================
--- 102 — o estado do colaborador passa a decidir na própria base
+-- 101c — o estado do colaborador passa a decidir na própria base
 -- ============================================================================
 --
 -- 🔴 O QUE ESTA MIGRATION FECHA
@@ -15,6 +15,30 @@
 --    aplicação a recusá-lo.
 --
 --    A revogação só é imediata quando chega aqui.
+--
+-- ----------------------------------------------------------------------------
+-- PORQUE É QUE ESTA É A `101c` E NÃO A `102`
+-- ----------------------------------------------------------------------------
+--
+-- O `102` não está livre. O cabeçalho da `101a` reserva-o explicitamente para
+-- as visitas comerciais, e a PR #179 — aberta, em rascunho — traz já
+-- `102_crm_visitas_comerciais`, `103_crm_orcamentos` e `104_crm_conversao_lead`.
+-- Tomar o `102` era empurrar trabalho planeado de outra frente.
+--
+-- Entre dois inteiros consecutivos não há inteiro: há um sufixo. `101b` e
+-- `101c` estavam livres e ordenam onde têm de ordenar — a ordem de aplicação
+-- é a lexicográfica do nome, e `101a` < `101b` < `101c` < `102`.
+--
+-- ----------------------------------------------------------------------------
+-- A `101b` VEM ANTES, E NÃO POR ARRUMAÇÃO
+-- ----------------------------------------------------------------------------
+--
+-- Esta migration substitui `get_my_profile_id()` — uma função que o
+-- repositório, sozinho, não sabia construir: existe em produção por via de
+-- rascunhos aplicados fora do runner. A `101b` canonicaliza esse estado. Sem
+-- ela, esta migration depende de um drift que nenhuma migration explica, e a
+-- prova de que funciona só responderia «funciona sobre o que já lá está» —
+-- nunca «a cadeia do repositório chega aqui».
 --
 -- ----------------------------------------------------------------------------
 -- PORQUE É QUE SÃO DUAS FUNÇÕES, E NÃO NOVENTA E SETE POLÍTICAS
@@ -82,19 +106,19 @@ BEGIN
     SELECT 1 FROM information_schema.columns
     WHERE table_schema = 'public' AND table_name = 'profiles' AND column_name = 'status'
   ) THEN
-    RAISE EXCEPTION '102: public.profiles.status não existe — nada a fazer aqui.';
+    RAISE EXCEPTION '101c: public.profiles.status não existe — nada a fazer aqui.';
   END IF;
 
   IF NOT EXISTS (
     SELECT 1 FROM information_schema.columns
     WHERE table_schema = 'public' AND table_name = 'profiles' AND column_name = 'auth_user_id'
   ) THEN
-    RAISE EXCEPTION '102: public.profiles.auth_user_id não existe — get_my_profile_id() depende dela.';
+    RAISE EXCEPTION '101c: public.profiles.auth_user_id não existe — get_my_profile_id() depende dela.';
   END IF;
 
   IF NOT EXISTS (SELECT 1 FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
                  WHERE n.nspname = 'public' AND p.proname = 'get_my_profile_id') THEN
-    RAISE EXCEPTION '102: public.get_my_profile_id() não existe — esta migration substitui-a, não a inventa.';
+    RAISE EXCEPTION '101c: public.get_my_profile_id() não existe — aplicar a 101b primeiro.';
   END IF;
 END $pre$;
 
@@ -131,7 +155,7 @@ $function$;
 COMMENT ON FUNCTION public.get_my_profile_id() IS
   'Identidade de quem chama, e SÓ quando está activa. `get_my_company_id` e '
   '`get_my_role` derivam daqui, por isso é este o sítio onde a revogação '
-  'chega à base — ver a migration 102.';
+  'chega à base — ver a migration 101c.';
 
 -- ----------------------------------------------------------------------------
 -- A excepção que resolvia por fora
@@ -177,4 +201,4 @@ $function$;
 
 COMMENT ON FUNCTION public.can_access_service(uuid) IS
   'Acesso de uma colaboradora a um serviço. Resolve a identidade por '
-  'get_my_profile_id(), e portanto exige perfil activo — ver a migration 102.';
+  'get_my_profile_id(), e portanto exige perfil activo — ver a migration 101c.';

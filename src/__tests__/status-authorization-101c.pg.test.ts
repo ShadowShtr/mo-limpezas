@@ -1,8 +1,22 @@
 // ============================================================================
-// 102 — a revogação chega à base, provada na fronteira DB/RLS
+// 101c — a revogação chega à base: PISTA A, o ensaio sobre a forma VIVA
 // ============================================================================
 //
 // 🔴 Porque é que os ensaios anteriores não bastavam.
+//
+// 🔴 O QUE ESTA PISTA RESPONDE, E O QUE NÃO RESPONDE.
+//
+//    Esta monta a forma VIVA de produção — incluindo o drift de identidade —
+//    e prova que a 101c funciona sobre ela. É a pergunta operacional: «ao
+//    aplicar isto à base real, o que acontece?»
+//
+//    NÃO responde à outra: «a cadeia canónica do repositório chega ao
+//    preestado de que esta migration depende?». Essa é a PISTA B,
+//    `canonical-path-101b-101c.pg.test.ts`, e existe porque a fixture usada
+//    aqui FABRICA o drift em vez de o construir a partir das migrations.
+//
+//    Duas perguntas, duas pistas. Uma prova só, montada sobre a fixture,
+//    respondia à primeira e dava a impressão de ter respondido às duas.
 //
 //    `collaborator-access-revocation.test.ts` prova que as Server Actions
 //    recusam quem levou saída. Prova-o com mocks do Next.js — e o que estava
@@ -28,7 +42,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { startPostgresContainer, type PostgresContainer } from "./helpers/pg-container";
 import { baselineCompleto } from "./helpers/production-baseline";
 
-const CONTAINER = `status-authz-${process.pid}`;
+const CONTAINER = `status-authz-a-${process.pid}`;
 const LENTO = { timeout: 120_000 };
 
 const EMPRESA = "11111111-1111-4111-8111-111111111111";
@@ -42,9 +56,9 @@ let pool: pg.Pool;
 
 const lerSql = (rel: string) => readFileSync(join(process.cwd(), rel), "utf8");
 
-const PRE_102 = "src/__tests__/fixtures/pre-102-authorization-helpers.sql";
-const MIGRATION_102 = "supabase/migrations/102_status_participa_da_autorizacao.sql";
-const ROLLBACK_102 = "supabase/migrations/rollback/102_status_participa_da_autorizacao.down.sql";
+const PRE_101C = "src/__tests__/fixtures/pre-101c-authorization-helpers.sql";
+const MIGRATION_101C = "supabase/migrations/101c_status_participa_da_autorizacao.sql";
+const ROLLBACK_101C = "supabase/migrations/rollback/101c_status_participa_da_autorizacao.down.sql";
 
 /**
  * Uma ligação com a identidade de um utilizador autenticado.
@@ -88,13 +102,13 @@ async function servicosVisiveis(authUserId: string): Promise<number> {
   });
 }
 
-async function montarPalco(aplicar102: boolean): Promise<void> {
+async function montarPalco(aplicar101c: boolean): Promise<void> {
   await pool.query("DROP SCHEMA IF EXISTS public CASCADE; CREATE SCHEMA public;");
   await pool.query("DROP SCHEMA IF EXISTS auth CASCADE;");
   await pool.query(baselineCompleto());
   await pool.query("ALTER ROLE service_role BYPASSRLS;");
-  await pool.query(lerSql(PRE_102));
-  if (aplicar102) await pool.query(lerSql(MIGRATION_102));
+  await pool.query(lerSql(PRE_101C));
+  if (aplicar101c) await pool.query(lerSql(MIGRATION_101C));
   await semear();
 }
 
@@ -163,7 +177,7 @@ afterAll(async () => {
 });
 
 // ---------------------------------------------------------------------------
-describe("ANTES da 102 — o buraco existe mesmo", () => {
+describe("ANTES da 101c — o buraco existe mesmo", () => {
   beforeEach(async () => { await montarPalco(false); }, 120_000);
 
   it("🔴 um perfil inativo continua a ler pela base, com o mesmo token", LENTO, async () => {
@@ -190,7 +204,7 @@ describe("ANTES da 102 — o buraco existe mesmo", () => {
 });
 
 // ---------------------------------------------------------------------------
-describe("DEPOIS da 102", () => {
+describe("DEPOIS da 101c", () => {
   beforeEach(async () => { await montarPalco(true); }, 120_000);
 
   it("A. perfil ativo — o acesso legítimo continua exactamente igual", LENTO, async () => {
@@ -328,7 +342,7 @@ describe("o rollback repõe o estado anterior — incluindo o buraco", () => {
     await pool.query("UPDATE public.profiles SET status='inativo' WHERE id=$1", [GESTORA]);
     expect(await servicosVisiveis(GESTORA)).toBe(0);
 
-    await pool.query(lerSql(ROLLBACK_102));
+    await pool.query(lerSql(ROLLBACK_101C));
 
     // 🔴 É isto que o rollback custa, e está escrito no próprio ficheiro.
     expect(await servicosVisiveis(GESTORA)).toBeGreaterThan(0);
