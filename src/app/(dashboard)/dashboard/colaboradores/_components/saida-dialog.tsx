@@ -63,7 +63,7 @@ export function SaidaColaboradorDialog({ trigger, colaboradorId, nome, companyId
     setErro(null);
     setACarregar(true);
     // A contagem é pedida ao abrir, e não no arranque da lista: são
-    // quarenta e seis contagens por pessoa, e fazê-las para trinta linhas que
+    // quarenta e oito contagens por pessoa, e fazê-las para trinta linhas que
     // ninguém vai tocar seria pagar o preço todo para não mostrar nada.
     const resultado = await avaliarSaidaColaborador(colaboradorId, companyId);
     setACarregar(false);

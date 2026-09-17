@@ -43,33 +43,70 @@ async function resolverActor(): Promise<Actor | null> {
 }
 
 /**
- * A pessoa sobre quem se está a operar.
+ * Porque é que isto não é `Pessoa | null`.
  *
- * 🔴 `auth_user_id` vem do resolver, não de um `select` directo.
+ * 🔴 `null` não consegue dizer PORQUÊ, e aqui os porquês não são o mesmo.
  *
- *    Este ficheiro foi escrito inteiro para o modelo em que o perfil e a
- *    conta são coisas separadas — e a coluna que os liga ainda vive em
- *    `supabase/migrations/draft/`. Num base sem ela, o `select` que a pedia
- *    devolvia erro, `data` vinha nula, e TODAS as operações de acesso
- *    respondiam «Pessoa não encontrada.» — uma falha de schema disfarçada de
- *    pessoa inexistente.
+ *    A versão anterior devolvia `null` para três coisas diferentes — a pessoa
+ *    não existe, a leitura falhou, a identidade não se resolveu — e as quatro
+ *    actions traduziam todas para «Pessoa não encontrada.». Um `08006`, um
+ *    timeout, uma chave sem permissão: tudo chegava a quem administra como um
+ *    perfil inexistente, e quem lesse isso ia procurar a pessoa em vez da
+ *    base.
  *
- *    `resolverIdentidadeAuth` sabe os dois mundos e diz em qual está. Aqui e
- *    em `desativarColaborador`, que é o ponto: uma regra, um sítio.
+ *    Pior: `resolverIdentidadeAuth` tinha sido escrito de propósito para
+ *    separar «a coluna `auth_user_id` não existe» (42703, resolve-se pelo
+ *    legado) de uma falha a sério. Essa distinção era feita com cuidado e
+ *    destruída duas linhas depois.
  */
-async function carregarPessoa(id: string): Promise<Pessoa | null> {
+type ResultadoPessoa =
+  | { ok: true; pessoa: Pessoa }
+  | { ok: false; codigo: "NAO_ENCONTRADA" | "LEITURA_FALHOU" | "IDENTIDADE_FALHOU"; erro: string };
+
+async function carregarPessoa(id: string): Promise<ResultadoPessoa> {
   const admin = createAdminClient();
-  const { data } = await admin
+  const { data, error } = await admin
     .from("profiles")
     .select("id, company_id, full_name")
     .eq("id", id)
     .maybeSingle();
-  if (!data) return null;
+
+  // 🔴 Um erro de leitura não é uma pessoa que não existe.
+  //
+  //    `maybeSingle()` devolve `data: null` nos dois casos, e a versão
+  //    anterior não os separava: um timeout, um `08006`, uma chave sem
+  //    permissão — tudo saía daqui como `null` e chegava a quem administra
+  //    como «Pessoa não encontrada.». Quem lesse isso ia procurar o perfil,
+  //    não a base.
+  if (error) return { ok: false, codigo: "LEITURA_FALHOU", erro: error.message };
+  if (!data) return { ok: false, codigo: "NAO_ENCONTRADA", erro: "Pessoa não encontrada." };
 
   const identidade = await resolverIdentidadeAuth(admin, id);
-  if (!identidade.ok) return null;
+  // O resolver já distingue «a coluna não existe» (e resolve pelo legado) de
+  // uma falha a sério. Achatar isso outra vez aqui desfazia esse trabalho —
+  // que foi exactamente o defeito que a revalidação apanhou.
+  if (!identidade.ok) return { ok: false, codigo: "IDENTIDADE_FALHOU", erro: identidade.erro };
 
-  return { ...(data as Omit<Pessoa, "auth_user_id">), auth_user_id: identidade.authUserId };
+  return {
+    ok: true,
+    pessoa: { ...(data as Omit<Pessoa, "auth_user_id">), auth_user_id: identidade.authUserId },
+  };
+}
+
+/**
+ * A recusa que uma falha de carregamento produz.
+ *
+ * Existe para as quatro actions dizerem a mesma coisa sobre a mesma falha. Um
+ * erro operacional é nomeado como operacional — e nenhuma delas chega a falar
+ * com o Auth nem a escrever fosse o que fosse.
+ */
+function recusaDeCarregamento(r: Extract<ResultadoPessoa, { ok: false }>): Resultado {
+  if (r.codigo === "NAO_ENCONTRADA") return { ok: false, error: r.erro };
+  return {
+    ok: false,
+    error: `Não foi possível confirmar quem é esta pessoa: ${r.erro}. `
+      + "Nada foi alterado — tente outra vez.",
+  };
 }
 
 /**
@@ -93,8 +130,9 @@ export async function criarAcesso(
   const actor = await resolverActor();
   if (!actor) return { ok: false, error: "Não autenticado." };
 
-  const pessoa = await carregarPessoa(profileId);
-  if (!pessoa) return { ok: false, error: "Pessoa não encontrada." };
+  const carregada = await carregarPessoa(profileId);
+  if (!carregada.ok) return recusaDeCarregamento(carregada);
+  const { pessoa } = carregada;
 
   const permissao = podeCriarAcesso(actor, pessoa);
   if (!permissao.permitido) return { ok: false, error: permissao.motivo };
@@ -168,8 +206,9 @@ export async function definirSenhaTemporaria(
   const actor = await resolverActor();
   if (!actor) return { ok: false, error: "Não autenticado." };
 
-  const pessoa = await carregarPessoa(profileId);
-  if (!pessoa) return { ok: false, error: "Pessoa não encontrada." };
+  const carregada = await carregarPessoa(profileId);
+  if (!carregada.ok) return recusaDeCarregamento(carregada);
+  const { pessoa } = carregada;
 
   const permissao = exigeAcessoExistente(actor, pessoa, "definir senha");
   if (!permissao.permitido) return { ok: false, error: permissao.motivo };
@@ -219,8 +258,9 @@ export async function desativarAcesso(profileId: string): Promise<Resultado> {
   const actor = await resolverActor();
   if (!actor) return { ok: false, error: "Não autenticado." };
 
-  const pessoa = await carregarPessoa(profileId);
-  if (!pessoa) return { ok: false, error: "Pessoa não encontrada." };
+  const carregada = await carregarPessoa(profileId);
+  if (!carregada.ok) return recusaDeCarregamento(carregada);
+  const { pessoa } = carregada;
 
   const permissao = exigeAcessoExistente(actor, pessoa, "desactivar");
   if (!permissao.permitido) return { ok: false, error: permissao.motivo };
@@ -249,8 +289,9 @@ export async function reativarAcesso(profileId: string): Promise<Resultado> {
   const actor = await resolverActor();
   if (!actor) return { ok: false, error: "Não autenticado." };
 
-  const pessoa = await carregarPessoa(profileId);
-  if (!pessoa) return { ok: false, error: "Pessoa não encontrada." };
+  const carregada = await carregarPessoa(profileId);
+  if (!carregada.ok) return recusaDeCarregamento(carregada);
+  const { pessoa } = carregada;
 
   const permissao = exigeAcessoExistente(actor, pessoa, "reactivar");
   if (!permissao.permitido) return { ok: false, error: permissao.motivo };

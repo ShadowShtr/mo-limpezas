@@ -5,7 +5,7 @@
 // 🔴 Porque é que isto é um gerador e não uma lista escrita à mão.
 //
 //    O fluxo antigo de remoção de um colaborador anulava NOVE colunas. O
-//    catálogo tem quarenta e seis. A lista tinha sido escrita à mão uma vez e
+//    catálogo tem quarenta e oito. A lista tinha sido escrita à mão uma vez e
 //    nunca mais foi lida contra a base: cada migration que acrescentou uma
 //    referência a `profiles` — a conciliação bancária, os períodos
 //    financeiros, as tarefas de gestão, o funil de leads — alargou o buraco

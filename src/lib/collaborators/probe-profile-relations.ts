@@ -58,7 +58,7 @@ type ContagemPorTabela = {
 /**
  * Quantas sondagens correm ao mesmo tempo.
  *
- * Quarenta e seis pedidos de uma vez esgotariam o pool do PostgREST e as
+ * Quarenta e oito pedidos de uma vez esgotariam o pool do PostgREST e as
  * falhas de saturação chegariam aqui como sondagens falhadas — o guard
  * recusaria por não conseguir ler, e a recusa pareceria um defeito. Em lotes,
  * o custo é uma fracção de segundo e a leitura é fiável.

@@ -7,7 +7,7 @@
 //    `deleteColaborador` corria uma sequência de UPDATEs independentes para
 //    anular a autoria da pessoa — serviços, contratos, faltas, férias,
 //    faturas, folha — e só depois chamava `deleteUser`. Nove colunas. O
-//    catálogo tem quarenta e seis.
+//    catálogo tem quarenta e oito.
 //
 //    Duas consequências, e a segunda é a grave:
 //
@@ -37,7 +37,7 @@
 //
 // `NO_DATA_LOSS` não distingue entre perder autoria e perder o registo
 // inteiro. Por isso o inventário é percorrido todo, e uma única linha em
-// qualquer uma das quarenta e seis referências chega para recusar.
+// qualquer uma das quarenta e oito referências chega para recusar.
 // ============================================================================
 
 import { INVENTARIO_FK_PERFIS } from "./profile-fk-inventory";
@@ -157,7 +157,14 @@ export function resumirPorArea(
  */
 export function explicarVeredicto(v: VeredictoRemocao, nome: string): string {
   if (v.elegivel) {
-    return `${nome} não tem registos associados. A conta pode ser eliminada sem perder nada.`;
+    // 🔴 «Elegível» deixou de querer dizer «vai ser eliminada».
+    //
+    //    O veredicto continua a ser verdade — não há registos — mas a
+    //    eliminação física está suspensa enquanto a corrida entre sondar e
+    //    apagar não tiver garantia na base (ver `deleteColaborador`). Prometer
+    //    aqui uma eliminação que a action recusa seria a interface a discordar
+    //    do servidor, que é o defeito que esta alteração inteira veio fechar.
+    return `${nome} não tem registos associados no sistema.`;
   }
   if (v.codigo === "TEM_HISTORICO") {
     const areas = resumirPorArea(v.relacoes).map((a) => a.nome);

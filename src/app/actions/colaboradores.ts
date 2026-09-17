@@ -584,7 +584,7 @@ export async function desativarColaborador(id: string, companyId: string) {
  * 🔴 Porque é que esta operação recusa sempre, e o que falta para voltar.
  * ===========================================================================
  *
- * O desenho era: sondar as 46 referências, e só apagar se TODAS vierem a
+ * O desenho era: sondar as 48 referências, e só apagar se TODAS vierem a
  * zero. As provas passavam. A conclusão «zero relações, logo apagar não
  * destrói nada» está certa — e não é atómica.
  *
@@ -606,7 +606,7 @@ export async function desativarColaborador(id: string, companyId: string) {
  * não podia ser cumprida.
  *
  * Fechá-lo a sério exige que a decisão e o apagar aconteçam no mesmo
- * instante, dentro da base: um `DELETE` que verifique as 46 referências na
+ * instante, dentro da base: um `DELETE` que verifique as 48 referências na
  * própria instrução, ou um trigger em `profiles` que recuse. Qualquer das
  * duas é schema, e a 102 não abre aqui.
  *
