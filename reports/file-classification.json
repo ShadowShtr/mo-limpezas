@@ -1,20 +1,20 @@
 {
   "generatedBy": "scripts/audit-file-inventory.mjs",
-  "totalFiles": 911,
+  "totalFiles": 920,
   "byStatus": {
-    "MANTER": 888,
+    "MANTER": 897,
     "STANDBY": 23
   },
   "byCategory": {
-    "test": 216,
-    "route-ui": 140,
+    "test": 218,
+    "route-ui": 141,
     "migration": 132,
-    "lib": 77,
-    "script": 59,
-    "domain": 52,
+    "lib": 78,
+    "script": 60,
+    "domain": 55,
     "doc": 47,
     "server-action": 44,
-    "src-other": 42,
+    "src-other": 43,
     "component": 32,
     "doc-historico": 16,
     "api-route": 16,
@@ -29,7 +29,7 @@
     "supabase-other": 2
   },
   "byConfidence": {
-    "alta": 890,
+    "alta": 899,
     "média": 15,
     "baixa": 6
   },
@@ -37,7 +37,8 @@
     "SAFE_OFFLINE": 33,
     "ADMIN_GUARDED_WRITE": 11,
     "WRITE_CAPABLE": 9,
-    "ADMIN_READ": 6
+    "ADMIN_READ": 6,
+    "READ_ONLY": 1
   },
   "files": [
     {
@@ -2844,6 +2845,33 @@
       "scriptRisk": "SAFE_OFFLINE"
     },
     {
+      "path": "scripts/generate-profile-fk-inventory.ts",
+      "category": "script",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "sqlWrite": 1,
+        "consoleLog": 1,
+        "consoleErr": 1
+      },
+      "action": "nenhuma",
+      "reason": "script de leitura",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": true,
+        "dynamicImport": true,
+        "allClosed": false
+      },
+      "scriptRisk": "READ_ONLY"
+    },
+    {
       "path": "scripts/geocode-locations.mjs",
       "category": "script",
       "status": "MANTER",
@@ -4797,6 +4825,59 @@
       }
     },
     {
+      "path": "src/__tests__/collaborator-lifecycle-actions.test.ts",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [
+        "supabase"
+      ],
+      "risks": [],
+      "signals": {
+        "supabase": 2,
+        "sqlWrite": 14,
+        "fallbackZero": 1,
+        "dynamicImport": 3
+      },
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/__tests__/collaborator-lifecycle-postgres.test.ts",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "sqlWrite": 39
+      },
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
       "path": "src/__tests__/collaborator-name-only.test.ts",
       "category": "test",
       "status": "MANTER",
@@ -6570,8 +6651,10 @@
       "category": "test",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 1,
+      "consumers": 3,
       "consumerSample": [
+        "scripts/generate-profile-fk-inventory.ts",
+        "src/__tests__/collaborator-lifecycle-postgres.test.ts",
         "src/__tests__/crm-stage-reorder.pg.test.ts"
       ],
       "autoLoaded": false,
@@ -6600,11 +6683,11 @@
       "category": "test",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 13,
+      "consumers": 15,
       "consumerSample": [
+        "scripts/generate-profile-fk-inventory.ts",
         "src/__tests__/bank-reconciliation-period-atomic.pg.test.ts",
-        "src/__tests__/cashflow-period-atomic.pg.test.ts",
-        "src/__tests__/crm-stage-reorder.pg.test.ts"
+        "src/__tests__/cashflow-period-atomic.pg.test.ts"
       ],
       "autoLoaded": false,
       "referencedBy": [],
@@ -11473,6 +11556,32 @@
       }
     },
     {
+      "path": "src/app/(dashboard)/dashboard/colaboradores/_components/saida-dialog.tsx",
+      "category": "route-ui",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 1,
+      "consumerSample": [
+        "src/app/(dashboard)/dashboard/colaboradores/_components/table.tsx"
+      ],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "clientComponent": 1
+      },
+      "action": "nenhuma",
+      "reason": "em uso: 1 consumidor(es)",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
       "path": "src/app/(dashboard)/dashboard/colaboradores/_components/sheet.tsx",
       "category": "route-ui",
       "status": "MANTER",
@@ -13828,11 +13937,11 @@
       "category": "server-action",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 5,
+      "consumers": 6,
       "consumerSample": [
+        "src/__tests__/collaborator-lifecycle-actions.test.ts",
         "src/app/(dashboard)/dashboard/colaboradores/[id]/_components/force-app-update-button.tsx",
-        "src/app/(dashboard)/dashboard/colaboradores/[id]/_components/reset-password-button.tsx",
-        "src/app/(dashboard)/dashboard/colaboradores/[id]/_components/vacation-balance-form.tsx"
+        "src/app/(dashboard)/dashboard/colaboradores/[id]/_components/reset-password-button.tsx"
       ],
       "autoLoaded": false,
       "referencedBy": [
@@ -13841,22 +13950,22 @@
       "sideEffects": [
         "supabase",
         "write",
-        "revalidatePath(6)"
+        "revalidatePath(10)"
       ],
       "risks": [
-        "erro-de-query-ignorado(6)"
+        "erro-de-query-ignorado(7)"
       ],
       "signals": {
         "supabase": 20,
         "serverAction": 1,
-        "write": 12,
-        "sqlWrite": 17,
-        "ignoredError": 6,
-        "revalidatePath": 6,
+        "write": 5,
+        "sqlWrite": 11,
+        "ignoredError": 7,
+        "revalidatePath": 10,
         "dynamicImport": 1
       },
       "action": "auditar atomicidade (T12/T13)",
-      "reason": "em uso: 5 consumidor(es)",
+      "reason": "em uso: 6 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -16973,6 +17082,87 @@
       }
     },
     {
+      "path": "src/domain/collaborators/lifecycle-types.ts",
+      "category": "domain",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 4,
+      "consumerSample": [
+        "src/__tests__/collaborator-lifecycle-postgres.test.ts",
+        "src/domain/collaborators/lifecycle.ts",
+        "src/domain/collaborators/profile-fk-inventory.ts"
+      ],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {},
+      "action": "nenhuma",
+      "reason": "em uso: 4 consumidor(es)",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/domain/collaborators/lifecycle.ts",
+      "category": "domain",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 4,
+      "consumerSample": [
+        "src/__tests__/collaborator-lifecycle-actions.test.ts",
+        "src/__tests__/collaborator-lifecycle-postgres.test.ts",
+        "src/app/actions/colaboradores.ts"
+      ],
+      "autoLoaded": false,
+      "referencedBy": [
+        "docs"
+      ],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "sqlWrite": 4,
+        "fallbackZero": 1
+      },
+      "action": "nenhuma",
+      "reason": "em uso: 4 consumidor(es)",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/domain/collaborators/profile-fk-inventory.ts",
+      "category": "domain",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 1,
+      "consumerSample": [
+        "src/domain/collaborators/lifecycle.ts"
+      ],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {},
+      "action": "nenhuma",
+      "reason": "em uso: 1 consumidor(es)",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
       "path": "src/domain/dashboard/client-summary.ts",
       "category": "domain",
       "status": "MANTER",
@@ -18150,7 +18340,7 @@
       "category": "domain",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 48,
+      "consumers": 49,
       "consumerSample": [
         "src/__tests__/update-notice-modal.test.tsx",
         "src/__tests__/update-notices-eligibility.test.ts",
@@ -18165,7 +18355,7 @@
       "risks": [],
       "signals": {},
       "action": "nenhuma",
-      "reason": "em uso: 48 consumidor(es), configuração",
+      "reason": "em uso: 49 consumidor(es), configuração",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -18844,6 +19034,36 @@
       },
       "action": "nenhuma",
       "reason": "em uso: 6 consumidor(es)",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/lib/collaborators/probe-profile-relations.ts",
+      "category": "lib",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 1,
+      "consumerSample": [
+        "src/app/actions/colaboradores.ts"
+      ],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [
+        "supabase"
+      ],
+      "risks": [],
+      "signals": {
+        "supabase": 2,
+        "sqlWrite": 1,
+        "unknownCast": 1
+      },
+      "action": "nenhuma",
+      "reason": "em uso: 1 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -20216,7 +20436,7 @@
       "category": "lib",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 78,
+      "consumers": 79,
       "consumerSample": [
         "src/app/(app)/app/perfil/page.tsx",
         "src/app/(app)/app/servico/[id]/page.tsx",
@@ -20239,7 +20459,7 @@
         "serviceRole": 1
       },
       "action": "nenhuma",
-      "reason": "em uso: 78 consumidor(es)",
+      "reason": "em uso: 79 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -21506,6 +21726,32 @@
     },
     {
       "path": "src/release-notes/2026-09-11-pagamentos-ordem-vencimento.ts",
+      "category": "src-other",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 1,
+      "consumerSample": [
+        "src/release-notes/index.ts"
+      ],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "sqlWrite": 1
+      },
+      "action": "nenhuma",
+      "reason": "em uso: 1 consumidor(es)",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/release-notes/2026-09-17-saida-de-colaboradores.ts",
       "category": "src-other",
       "status": "MANTER",
       "confidence": "alta",
