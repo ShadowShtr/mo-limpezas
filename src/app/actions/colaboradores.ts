@@ -8,6 +8,10 @@ import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { auditLog } from "@/lib/audit";
 import { isNoRowsError, logQueryFailure, queryFailure } from "@/lib/query-error";
+import { sondarRelacoesDoPerfil } from "@/lib/collaborators/probe-profile-relations";
+import {
+  avaliarRemocao, explicarVeredicto, resumirPorArea,
+} from "@/domain/collaborators/lifecycle";
 
 export interface ColaboradorInput {
   full_name: string;
@@ -367,12 +371,47 @@ export async function forceAppUpdate(id: string) {
   return { ok: true as const, sent };
 }
 
-export async function deleteColaborador(id: string, companyId: string) {
+// ============================================================================
+// SAÍDA DE UM COLABORADOR
+// ============================================================================
+//
+// 🔴 O que estava aqui, e porque teve de sair.
+//
+//    `deleteColaborador` corria nove UPDATEs a anular autoria — serviços,
+//    contratos, faltas, férias, faturas, folha — e só depois chamava
+//    `deleteUser`. O catálogo tem QUARENTA E SEIS colunas a apontar para
+//    `profiles`; o inventário gerado em `profile-fk-inventory.ts` lista-as
+//    todas.
+//
+//    As trinta e sete que faltavam (fluxo de caixa, pagamentos fixos,
+//    períodos financeiros, conciliação bancária, importações de extrato,
+//    tarefas de gestão, documentos, funil de leads) bloqueavam o `deleteUser`
+//    no fim. E quando bloqueavam, as nove primeiras já tinham sido anuladas:
+//    o perfil ficava, e o histórico ficava sem autor. Era o estado proibido
+//    — PROFILE_EXISTS e HISTORY_PARTIALLY_CLEARED ao mesmo tempo — e chegava
+//    lá por um caminho normal, não por azar.
+//
+//    Não havia como fechá-lo com uma transação: a chave administrativa fala
+//    por HTTP, cada pedido confirma-se sozinho, e o `deleteUser` do Auth nem
+//    sequer é o mesmo sistema. Com nove escritas antes de um apagar que pode
+//    recusar, alguma ordem de falha deixa sempre metade feita.
+//
+//    Por isso a correção não é uma transação. É deixar de haver escritas: a
+//    saída de uma pessoa com histórico é uma DESATIVAÇÃO, e a desativação não
+//    toca em autoria nenhuma. O estado proibido deixa de ser possível porque
+//    deixa de ter onde nascer.
+//
+// A eliminação física sobrevive, mas só onde é inofensiva: um perfil criado
+// por engano, sem uma única linha em parte alguma. E aí não há nada para
+// limpar antes.
+// ============================================================================
+
+/** Quem pede, sobre quem, e se pode. Partilhado pelas três operações. */
+async function resolverAlvoDeSaida(id: string, companyId: string) {
   const supabase = await createClient();
   const admin = createAdminClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { ok: false as const, error: "Não autenticado." };
-  if (user.id === id) return { ok: false as const, error: "Não podes excluir a tua própria conta." };
 
   const { data: caller } = await admin
     .from("profiles").select("company_id, role").eq("id", user.id).single();
@@ -382,31 +421,167 @@ export async function deleteColaborador(id: string, companyId: string) {
   if (caller.company_id !== companyId) return { ok: false as const, error: "Empresa inválida." };
 
   const { data: target, error: targetError } = await admin
-    .from("profiles").select("id, company_id, full_name").eq("id", id).single();
-  // Decide QUEM é eliminado, e a verificação de empresa depende disto.
+    .from("profiles").select("id, company_id, full_name, status").eq("id", id).single();
+  // Decide SOBRE QUEM se opera, e a verificação de empresa depende disto.
   if (targetError && !isNoRowsError(targetError)) {
-    return queryFailure("deleteColaborador:target", targetError);
+    return queryFailure("saidaColaborador:target", targetError);
   }
   if (!target || target.company_id !== companyId) {
     return { ok: false as const, error: "Colaboradora inválida." };
   }
 
-  // Anula referências RESTRICT a este perfil (senão o cascade do auth bloqueia).
-  // Preserva os registos (serviços, contratos, faturas, etc.), só remove a autoria.
-  await admin.from("services").update({ created_by: null }).eq("company_id", companyId).eq("created_by", id);
-  await admin.from("services").update({ cancelled_by: null }).eq("company_id", companyId).eq("cancelled_by", id);
-  await admin.from("contracts").update({ created_by: null }).eq("company_id", companyId).eq("created_by", id);
-  await admin.from("absences").update({ created_by: null }).eq("company_id", companyId).eq("created_by", id);
-  await admin.from("absences").update({ approved_by: null }).eq("company_id", companyId).eq("approved_by", id);
-  await admin.from("absences").update({ replaced_by: null }).eq("company_id", companyId).eq("replaced_by", id);
-  await admin.from("vacation_requests").update({ reviewed_by: null }).eq("company_id", companyId).eq("reviewed_by", id);
-  await admin.from("invoices").update({ created_by: null }).eq("company_id", companyId).eq("created_by", id);
-  await admin.from("payroll_records").update({ approved_by: null }).eq("company_id", companyId).eq("approved_by", id);
+  return { ok: true as const, admin, actorId: user.id, target };
+}
 
-  // Apaga o utilizador auth → cascade do profile (team_members, timesheets,
-  // ausências, férias, folha, reforços, notificações).
+/**
+ * O que acontece a esta pessoa se a quisermos tirar do sistema.
+ *
+ * Só lê. Existe para a interface poder dizer a verdade ANTES de alguém
+ * carregar em alguma coisa — a caixa de confirmação antiga prometia «os
+ * serviços e contratos ficam, sem a autoria», que era ao mesmo tempo o que
+ * acontecia e aquilo que nunca devia ter acontecido.
+ */
+export async function avaliarSaidaColaborador(id: string, companyId: string) {
+  const alvo = await resolverAlvoDeSaida(id, companyId);
+  if (!alvo.ok) return alvo;
+
+  const sondagens = await sondarRelacoesDoPerfil(alvo.admin, id);
+  const veredicto = avaliarRemocao(sondagens);
+
+  return {
+    ok: true as const,
+    nome: alvo.target.full_name,
+    status: alvo.target.status as string,
+    proprioUtilizador: alvo.actorId === id,
+    veredicto,
+    areas: resumirPorArea(veredicto.relacoes),
+    explicacao: explicarVeredicto(veredicto, alvo.target.full_name),
+  };
+}
+
+/**
+ * Desativar: a saída normal.
+ *
+ * Tira o acesso e marca o perfil como inativo. Não apaga nada, não anula
+ * nada, e é reversível — reativar devolve a mesma conta, não cria outra.
+ *
+ * 🔴 A ordem das duas escritas não é indiferente, e a razão é de segurança.
+ *
+ *    O banimento vem primeiro. Se o `status` falhar a seguir, a pessoa fica
+ *    fora e o perfil continua a dizer «ativo»: visível, corrigível, e sem
+ *    ninguém a entrar. Pela ordem contrária, uma falha deixaria o perfil
+ *    marcado como inativo com a conta a funcionar — alguém que já saiu, a
+ *    entrar, e a lista a garantir que não.
+ *
+ *    Nenhuma das ordens perde dados; só uma delas erra para o lado seguro.
+ */
+export async function desativarColaborador(id: string, companyId: string) {
+  const alvo = await resolverAlvoDeSaida(id, companyId);
+  if (!alvo.ok) return alvo;
+  const { admin, actorId, target } = alvo;
+
+  // Desativar-se a si própria trancava a porta por dentro: quem o fizesse
+  // perdia o acesso e ficava sem forma de o repor.
+  if (actorId === id) {
+    return { ok: false as const, error: "Não podes desativar a tua própria conta." };
+  }
+
+  // Um perfil pode nunca ter tido conta de acesso — foi criado com o nome e
+  // mais nada. Não é uma avaria, e não impede a desativação.
+  const { data: conta } = await admin.auth.admin.getUserById(id);
+  if (conta?.user) {
+    // Um banimento longo é a forma de o Supabase representar «não entra», e
+    // preserva a conta — que é precisamente o que se quer.
+    const { error: erroBan } = await admin.auth.admin.updateUserById(id, {
+      ban_duration: "876000h",
+    });
+    if (erroBan) return { ok: false as const, error: erroBan.message };
+  }
+
+  const { error: erroEstado } = await admin
+    .from("profiles").update({ status: "inativo" }).eq("id", id).eq("company_id", companyId);
+  if (erroEstado) {
+    return {
+      ok: false as const,
+      error: "O acesso foi retirado, mas o estado do perfil não ficou gravado. "
+        + "Repita a operação — nada se perdeu.",
+    };
+  }
+
+  await auditLog({
+    companyId,
+    actorId,
+    action: "collaborator_deactivated",
+    entityType: "profile",
+    entityId: id,
+    meta: { target_name: target.full_name, tinha_acesso: Boolean(conta?.user) },
+    source: "dashboard",
+  }, admin);
+
+  revalidatePath("/dashboard/colaboradores");
+  revalidatePath(`/dashboard/colaboradores/${id}`);
+  revalidatePath("/dashboard/equipas");
+  revalidatePath("/dashboard/calendario");
+  return { ok: true as const, nome: target.full_name };
+}
+
+/**
+ * Eliminar fisicamente — só quando não há nada atrás.
+ *
+ * 🔴 Fecha para o lado seguro em três situações, e nenhuma delas é
+ *    contornável pela interface:
+ *
+ *      · encontrou registos       → recusa, e diz quais;
+ *      · não conseguiu ler alguma referência → recusa;
+ *      · ficou alguma por sondar  → recusa.
+ *
+ *    As duas últimas não são «provavelmente não há nada». São «não se sabe»,
+ *    e não se sabe nunca autoriza um apagar.
+ *
+ * 🔴 Não há aqui um único UPDATE. Se a sondagem diz que não existe relação
+ *    nenhuma, não há autoria para anular; se diz que existe, não se apaga. O
+ *    caminho que produzia meio-histórico não foi corrigido — foi removido.
+ */
+export async function deleteColaborador(id: string, companyId: string) {
+  const alvo = await resolverAlvoDeSaida(id, companyId);
+  if (!alvo.ok) return alvo;
+  const { admin, actorId, target } = alvo;
+
+  if (actorId === id) return { ok: false as const, error: "Não podes excluir a tua própria conta." };
+
+  const sondagens = await sondarRelacoesDoPerfil(admin, id);
+  const veredicto = avaliarRemocao(sondagens);
+
+  if (!veredicto.elegivel) {
+    return {
+      ok: false as const,
+      error: explicarVeredicto(veredicto, target.full_name),
+      codigo: veredicto.codigo,
+      areas: resumirPorArea(veredicto.relacoes),
+    };
+  }
+
   const { error } = await admin.auth.admin.deleteUser(id);
-  if (error) return { ok: false as const, error: error.message };
+  if (error) {
+    // O Auth recusou. Como não se anulou nada antes, não há meio-estado: o
+    // perfil está exactamente como estava.
+    return { ok: false as const, error: error.message };
+  }
+
+  // Um perfil sem conta de acesso não desaparece com o `deleteUser` — não há
+  // utilizador para cascatar. É preciso apagar a linha, e ela não tem nada
+  // atrás (foi isso que a sondagem provou).
+  await admin.from("profiles").delete().eq("id", id).eq("company_id", companyId);
+
+  await auditLog({
+    companyId,
+    actorId,
+    action: "collaborator_deleted",
+    entityType: "profile",
+    entityId: id,
+    meta: { target_name: target.full_name, sem_historico: true },
+    source: "dashboard",
+  }, admin);
 
   revalidatePath("/dashboard/colaboradores");
   revalidatePath("/dashboard/equipas");
