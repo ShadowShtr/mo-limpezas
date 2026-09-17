@@ -5,6 +5,7 @@ import { DashboardShell } from "@/components/layout/dashboard-shell";
 import { SwUpdatePrompt } from "@/components/pwa/sw-update-prompt";
 import { UpdateNoticeModal } from "@/components/update-notices/update-notice-modal";
 import { getPendingNotices } from "@/app/actions/update-notices";
+import { perfilPodeEntrar } from "@/domain/collaborators/access-state";
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient();
@@ -15,7 +16,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
   const admin = createAdminClient();
   const { data: profile, error: profileError } = await admin
     .from("profiles")
-    .select("full_name, role, avatar_url")
+    .select("full_name, role, avatar_url, status")
     .eq("id", user.id)
     .maybeSingle();
 
@@ -31,6 +32,16 @@ export default async function DashboardLayout({ children }: { children: React.Re
     await supabase.auth.signOut();
     redirect("/login?error=profile");
   }
+  // 🔴 A saída vale já — ver a nota igual no layout da app móvel.
+  //
+  //    Antes do desvio por papel, de propósito: uma gestora que levou saída
+  //    não deve ser mandada para `/app` nem para lado nenhum dentro do
+  //    sistema. Sai.
+  if (!perfilPodeEntrar((profile as { status?: string | null }).status)) {
+    await supabase.auth.signOut();
+    redirect("/login?error=inactive");
+  }
+
   if (profile.role === "colaborador") redirect("/app");
 
   // Avisos por ler. `getPendingNotices` nunca lança: um erro devolve lista

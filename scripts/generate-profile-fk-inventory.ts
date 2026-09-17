@@ -27,7 +27,29 @@ import { writeFileSync } from "node:fs";
 import pg from "pg";
 
 import { startPostgresContainer } from "../src/__tests__/helpers/pg-container";
-import { montarPalcoCrm } from "../src/__tests__/helpers/crm-pg-harness";
+import { montarPalcoCrm, lerSql } from "../src/__tests__/helpers/crm-pg-harness";
+
+/**
+ * O que o palco do CRM não traz e a base real tem.
+ *
+ * 🔴 Isto não é um detalhe de fixture. A primeira versão deste inventário
+ *    saiu com 46 referências; o catálogo de produção tem 48. As duas em falta
+ *    eram `manual_charges.created_by` e `manual_charges.voided_by`, criadas
+ *    pela 086 — depois do dia em que `production-schema-shape.sql` foi
+ *    extraído.
+ *
+ *    Ou seja: um inventário gerado de um retrato tem a idade do retrato, e
+ *    um guard cego a duas colunas é um guard que autoriza apagar um perfil
+ *    responsável por movimentos manuais. Ambas são `SET NULL`, por isso nem
+ *    sequer bloqueariam o DELETE — desapareceriam em silêncio, que é a pior
+ *    das duas maneiras de falhar.
+ *
+ *    Só a confrontação com a base viva o apanhou
+ *    (`scripts/verify-profile-fk-inventory-live.mjs`), e é por isso que essa
+ *    confrontação passou a ser parte de fechar esta alteração, e não um
+ *    extra.
+ */
+const EXTRAS_FORA_DO_FIXTURE = ["src/__tests__/fixtures/086-manual-charges-table.sql"];
 
 const DESTINO = "src/domain/collaborators/profile-fk-inventory.ts";
 
@@ -104,6 +126,7 @@ const AREAS: Record<string, string> = {
   invoices: "financeiro",
   cash_flow_entries: "financeiro",
   fixed_variable_payments: "financeiro",
+  manual_charges: "financeiro",
   financial_periods: "financeiro",
   bank_reconciliation_matches: "conciliacao",
   bank_statement_imports: "conciliacao",
@@ -175,6 +198,7 @@ async function main(): Promise<void> {
   try {
     await db.connect();
     await montarPalcoCrm(db);
+    for (const extra of EXTRAS_FORA_DO_FIXTURE) await db.query(lerSql(extra));
     const linhas = await lerInventarioDoCatalogo(db);
     const semColuna = linhas.filter((l) => !l.coluna);
     if (semColuna.length > 0) {

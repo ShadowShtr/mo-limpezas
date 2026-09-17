@@ -130,6 +130,10 @@ export const CODIGOS_CONHECIDOS = [
   "UNAUTHENTICATED",
   "PROFILE_NOT_FOUND",
   "FORBIDDEN",
+  // «Já não trabalha aqui» — distinto de FORBIDDEN, que é «papel insuficiente».
+  // Nos logs a diferença importa: um pico disto é uma saída a ser aplicada a
+  // uma sessão ainda aberta, não alguém a bater numa permissão que lhe falta.
+  "INACTIVE",
   // src/lib/finance-period-guard.ts — assertFinancialPeriodOpen
   "INVALID_DATE",
   "FINANCIAL_PERIOD_STATE_UNKNOWN",

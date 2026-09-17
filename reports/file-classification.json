@@ -2856,7 +2856,7 @@
       "sideEffects": [],
       "risks": [],
       "signals": {
-        "sqlWrite": 1,
+        "sqlWrite": 2,
         "consoleLog": 1,
         "consoleErr": 1
       },
@@ -4839,7 +4839,7 @@
       "risks": [],
       "signals": {
         "supabase": 2,
-        "sqlWrite": 14,
+        "sqlWrite": 18,
         "fallbackZero": 1,
         "dynamicImport": 3
       },
@@ -4865,7 +4865,7 @@
       "sideEffects": [],
       "risks": [],
       "signals": {
-        "sqlWrite": 39
+        "sqlWrite": 47
       },
       "action": "nenhuma",
       "reason": "suite de testes — corre por convenção do vitest",
@@ -5786,7 +5786,7 @@
       "sideEffects": [],
       "risks": [],
       "signals": {
-        "sqlWrite": 4
+        "sqlWrite": 5
       },
       "action": "nenhuma",
       "reason": "suite de testes — corre por convenção do vitest",
@@ -9668,9 +9668,13 @@
       "referencedBy": [
         "docs"
       ],
-      "sideEffects": [],
+      "sideEffects": [
+        "supabase"
+      ],
       "risks": [],
-      "signals": {},
+      "signals": {
+        "supabase": 3
+      },
       "action": "nenhuma",
       "reason": "em uso: convenção do Next",
       "manualDecision": false,
@@ -13539,7 +13543,7 @@
       ],
       "risks": [],
       "signals": {
-        "supabase": 6,
+        "supabase": 7,
         "sqlWrite": 4,
         "consoleErr": 1
       },
@@ -13950,7 +13954,7 @@
       "sideEffects": [
         "supabase",
         "write",
-        "revalidatePath(10)"
+        "revalidatePath(7)"
       ],
       "risks": [
         "erro-de-query-ignorado(7)"
@@ -13958,10 +13962,10 @@
       "signals": {
         "supabase": 20,
         "serverAction": 1,
-        "write": 5,
-        "sqlWrite": 11,
+        "write": 4,
+        "sqlWrite": 13,
         "ignoredError": 7,
-        "revalidatePath": 10,
+        "revalidatePath": 7,
         "dynamicImport": 1
       },
       "action": "auditar atomicidade (T12/T13)",
@@ -20524,7 +20528,7 @@
         "erro-de-query-ignorado(1)"
       ],
       "signals": {
-        "supabase": 4,
+        "supabase": 3,
         "env": 2,
         "consoleErr": 1,
         "ignoredError": 1
@@ -20544,11 +20548,11 @@
       "category": "lib",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 68,
+      "consumers": 69,
       "consumerSample": [
         "src/app/(app)/app/escala/page.tsx",
-        "src/app/(app)/app/page.tsx",
-        "src/app/(app)/app/ponto/page.tsx"
+        "src/app/(app)/app/layout.tsx",
+        "src/app/(app)/app/page.tsx"
       ],
       "autoLoaded": false,
       "referencedBy": [
@@ -20566,7 +20570,7 @@
         "env": 2
       },
       "action": "nenhuma",
-      "reason": "em uso: 68 consumidor(es), CI, configuração",
+      "reason": "em uso: 69 consumidor(es), CI, configuração",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,

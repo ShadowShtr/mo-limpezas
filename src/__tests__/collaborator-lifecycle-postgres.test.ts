@@ -41,9 +41,21 @@ import {
   EMPRESA,
   LOCAL_A,
   OUTRA,
+  lerSql,
   montarPalcoCrm,
   novaLead,
 } from "./helpers/crm-pg-harness";
+
+/**
+ * 🔴 O palco do CRM tem a forma de produção à data em que o dump foi tirado,
+ *    e a 086 é posterior. Sem esta linha, o catálogo aqui teria 46 referências
+ *    e o de produção 48 — e o ensaio do inventário ficaria verde sobre um
+ *    guard cego a `manual_charges.created_by` e `manual_charges.voided_by`.
+ *
+ *    Foi assim que aconteceu à primeira. Só `verify-profile-fk-inventory-live`
+ *    apanhou, porque só ele pergunta à base a sério.
+ */
+const EXTRAS_FORA_DO_FIXTURE = ["src/__tests__/fixtures/086-manual-charges-table.sql"];
 
 const CONTAINER = `colablifecycle-${process.pid}`;
 const LENTO = { timeout: 120_000 };
@@ -145,6 +157,7 @@ afterAll(async () => {
 
 beforeEach(async () => {
   await montarPalcoCrm(pool);
+  for (const extra of EXTRAS_FORA_DO_FIXTURE) await pool.query(lerSql(extra));
   await semearPessoas(pool);
 });
 
@@ -160,9 +173,9 @@ describe("inventário de FKs para profiles", () => {
     expect(doFicheiro).toEqual(doCatalogo);
   });
 
-  it("cobre as quarenta e seis, e não as nove que o fluxo antigo conhecia", LENTO, async () => {
+  it("cobre as quarenta e oito, e não as nove que o fluxo antigo conhecia", LENTO, async () => {
     const doCatalogo = await lerCatalogo(pool);
-    expect(doCatalogo.length).toBe(46);
+    expect(doCatalogo.length).toBe(48);
 
     // As nove do fluxo antigo, tal como lá estavam escritas.
     const antigas = [
@@ -172,7 +185,7 @@ describe("inventário de FKs para profiles", () => {
     ];
     const todas = INVENTARIO_FK_PERFIS.map((r) => `${r.tabela}.${r.coluna}`);
     for (const a of antigas) expect(todas).toContain(a);
-    expect(todas.filter((t) => !antigas.includes(t)).length).toBe(37);
+    expect(todas.filter((t) => !antigas.includes(t)).length).toBe(39);
   });
 
   it("uma FK nova e desconhecida deixa o guard vermelho", LENTO, async () => {
@@ -557,5 +570,69 @@ describe("isolamento entre empresas", () => {
       pool.query("UPDATE public.crm_leads SET owner_id=$1 WHERE id=$2", [ACTOR_OUTRA, lead]),
     ).rejects.toThrow();
     await pool.query("UPDATE public.crm_leads SET owner_id=$1 WHERE id=$2", [ACTOR, lead]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+describe("102.3 — a corrida entre sondar e apagar", () => {
+  /**
+   * 🔴 O ensaio que retirou a eliminação física da aplicação.
+   *
+   *    A sondagem e o apagar são duas chamadas HTTP separadas, e nada segura
+   *    a base entre elas. O que se mede aqui é o que acontece quando nasce uma
+   *    relação nesse intervalo — e a resposta depende da FK.
+   */
+  it("numa FK que bloqueia, a base salva a operação", LENTO, async () => {
+    // Sondagem: limpo.
+    expect(avaliarRemocao(await sondar(pool, SAI)).elegivel).toBe(true);
+
+    // ... e entretanto alguém cria um registo com autoria desta pessoa.
+    await pool.query(
+      "INSERT INTO public.management_tasks (company_id, title, created_by) VALUES ($1,'Nasceu agora',$2)",
+      [EMPRESA, SAI],
+    );
+
+    // O DELETE é recusado. Não foi este código que protegeu — foi o NO ACTION.
+    await expect(
+      pool.query("DELETE FROM public.profiles WHERE id = $1", [SAI]),
+    ).rejects.toThrow();
+  });
+
+  it("🔴 numa FK em CASCADE, a base NÃO salva — e a linha desaparece", LENTO, async () => {
+    expect(avaliarRemocao(await sondar(pool, SAI)).elegivel).toBe(true);
+
+    // `notifications.user_id` é ON DELETE CASCADE, como outras treze.
+    await pool.query(
+      `INSERT INTO public.notifications (company_id, user_id, type, title)
+       VALUES ($1,$2,'aviso','Nasceu agora')`,
+      [EMPRESA, SAI],
+    );
+    const antes = await pool.query(
+      "SELECT count(*)::int n FROM public.notifications WHERE user_id=$1", [SAI],
+    );
+    expect(antes.rows[0].n).toBe(1);
+
+    // O DELETE passa. Sem erro, sem aviso.
+    await pool.query("DELETE FROM public.profiles WHERE id = $1", [SAI]);
+
+    const depois = await pool.query(
+      "SELECT count(*)::int n FROM public.notifications WHERE user_id=$1", [SAI],
+    );
+    expect(depois.rows[0].n).toBe(0);
+    // Uma linha criada DEPOIS da sondagem foi apagada por ela.
+    //
+    // É por isto que `deleteColaborador` recusa sempre: o veredicto do guard
+    // é verdadeiro no instante em que é calculado e deixa de o ser antes de
+    // ser usado. Só uma garantia dentro da própria instrução de DELETE fecha
+    // isto, e isso é schema.
+  });
+
+  it("quantas referências desaparecem em silêncio", LENTO, async () => {
+    // O tamanho do problema, para não ficar por «algumas».
+    const cascata = INVENTARIO_FK_PERFIS.filter((r) => r.onDelete === "CASCADE");
+    expect(cascata.length).toBe(14);
+    expect(cascata.map((r) => r.tabela)).toContain("timesheets");
+    expect(cascata.map((r) => r.tabela)).toContain("payroll_records");
+    expect(cascata.map((r) => r.tabela)).toContain("daily_clocks");
   });
 });

@@ -9,6 +9,14 @@ export interface CurrentProfile {
   full_name: string;
   role: string;
   avatar_url: string | null;
+  /**
+   * 🔴 Aqui porque os layouts têm de o poder ver.
+   *
+   *    Sem o estado, a app móvel e o dashboard deixavam entrar quem já tinha
+   *    levado saída enquanto o token não expirasse. Quem lê este perfil para
+   *    decidir acesso passa por `perfilPodeEntrar`.
+   */
+  status: string | null;
 }
 
 /**
@@ -32,7 +40,7 @@ export const getCurrentProfile = cache(async (): Promise<CurrentProfile | null> 
   const admin = createAdminClient();
   const { data } = await admin
     .from("profiles")
-    .select("id, company_id, full_name, role, avatar_url")
+    .select("id, company_id, full_name, role, avatar_url, status")
     .eq("id", user.id)
     .single();
 

@@ -9,9 +9,11 @@ import { revalidatePath } from "next/cache";
 import { auditLog } from "@/lib/audit";
 import { isNoRowsError, logQueryFailure, queryFailure } from "@/lib/query-error";
 import { sondarRelacoesDoPerfil } from "@/lib/collaborators/probe-profile-relations";
+import { resolverIdentidadeAuth } from "@/lib/collaborators/auth-identity";
 import {
   avaliarRemocao, explicarVeredicto, resumirPorArea,
 } from "@/domain/collaborators/lifecycle";
+import { ESTADO_DE_SAIDA } from "@/domain/collaborators/access-state";
 
 export interface ColaboradorInput {
   full_name: string;
@@ -456,6 +458,10 @@ export async function avaliarSaidaColaborador(id: string, companyId: string) {
     veredicto,
     areas: resumirPorArea(veredicto.relacoes),
     explicacao: explicarVeredicto(veredicto, alvo.target.full_name),
+    // A interface não decide isto sozinha: quem sabe que a eliminação está
+    // suspensa é o servidor, e um ecrã que o inferisse por sua conta voltaria
+    // a divergir da action no dia em que ela mudar.
+    eliminacaoSuspensa: ELIMINACAO_FISICA_SUSPENSA,
   };
 }
 
@@ -486,25 +492,67 @@ export async function desativarColaborador(id: string, companyId: string) {
     return { ok: false as const, error: "Não podes desativar a tua própria conta." };
   }
 
+  // 🔴 O id da conta NUNCA se assume igual ao do perfil.
+  //
+  //    O repositório tem dois modelos de identidade a coexistir, e escrever
+  //    `getUserById(id)` aqui escolhia o legado em silêncio — na mesma
+  //    aplicação onde `collaborator-access.ts` já usa `auth_user_id`. O
+  //    resolver é o único sítio onde essa regra vive.
+  const identidade = await resolverIdentidadeAuth(admin, id);
+  if (!identidade.ok) return { ok: false as const, error: identidade.erro };
+
   // Um perfil pode nunca ter tido conta de acesso — foi criado com o nome e
   // mais nada. Não é uma avaria, e não impede a desativação.
-  const { data: conta } = await admin.auth.admin.getUserById(id);
-  if (conta?.user) {
-    // Um banimento longo é a forma de o Supabase representar «não entra», e
-    // preserva a conta — que é precisamente o que se quer.
-    const { error: erroBan } = await admin.auth.admin.updateUserById(id, {
-      ban_duration: "876000h",
-    });
-    if (erroBan) return { ok: false as const, error: erroBan.message };
+  let contaBanida = false;
+  if (identidade.authUserId) {
+    const { data: conta } = await admin.auth.admin.getUserById(identidade.authUserId);
+    if (conta?.user) {
+      // Um banimento longo é a forma de o Supabase representar «não entra», e
+      // preserva a conta — que é precisamente o que se quer.
+      const { error: erroBan } = await admin.auth.admin.updateUserById(identidade.authUserId, {
+        ban_duration: "876000h",
+      });
+      if (erroBan) return { ok: false as const, error: erroBan.message };
+      contaBanida = true;
+    }
   }
 
+  // 🔴 O banimento sozinho NÃO tira o acesso, e é por isso que esta escrita é
+  //    a que conta.
+  //
+  //    Banir impede o login seguinte; o access token já emitido continua
+  //    válido até ao `exp`. Quem estivesse autenticado continuava a trabalhar.
+  //    É `status` que `requireProfile`, os dois layouts e o proxy consultam a
+  //    cada pedido — e é isso que torna a saída imediata.
+  //
+  //    Logo, se esta escrita falhar, a operação FALHOU, mesmo com a conta já
+  //    banida. Dizer «acesso retirado» aqui seria repetir a promessa que esta
+  //    task veio desfazer.
   const { error: erroEstado } = await admin
-    .from("profiles").update({ status: "inativo" }).eq("id", id).eq("company_id", companyId);
+    .from("profiles").update({ status: ESTADO_DE_SAIDA })
+    .eq("id", id).eq("company_id", companyId);
   if (erroEstado) {
     return {
       ok: false as const,
-      error: "O acesso foi retirado, mas o estado do perfil não ficou gravado. "
-        + "Repita a operação — nada se perdeu.",
+      error: "Não foi possível concluir a saída: o estado do perfil não ficou gravado. "
+        + (contaBanida
+          ? "A conta já não aceita entradas novas, mas uma sessão aberta pode continuar "
+            + "a funcionar até repetir esta operação. "
+          : "")
+        + "Nada se perdeu — repita.",
+    };
+  }
+
+  // E confirma-se que ficou mesmo. Um `update` sem erro que não encontrou
+  // linha nenhuma devolve sucesso; auditar «desativado» sobre isso seria
+  // registar uma coisa que não aconteceu.
+  const { data: confirmacao, error: erroConfirmacao } = await admin
+    .from("profiles").select("status").eq("id", id).maybeSingle();
+  if (erroConfirmacao || !confirmacao
+      || (confirmacao as { status?: string | null }).status !== ESTADO_DE_SAIDA) {
+    return {
+      ok: false as const,
+      error: "A saída não ficou confirmada no perfil. Repita a operação — nada se perdeu.",
     };
   }
 
@@ -514,7 +562,11 @@ export async function desativarColaborador(id: string, companyId: string) {
     action: "collaborator_deactivated",
     entityType: "profile",
     entityId: id,
-    meta: { target_name: target.full_name, tinha_acesso: Boolean(conta?.user) },
+    meta: {
+      target_name: target.full_name,
+      tinha_acesso: contaBanida,
+      identidade: identidade.origem,
+    },
     source: "dashboard",
   }, admin);
 
@@ -526,29 +578,71 @@ export async function desativarColaborador(id: string, companyId: string) {
 }
 
 /**
- * Eliminar fisicamente — só quando não há nada atrás.
+ * Eliminar fisicamente — SUSPENSO.
  *
- * 🔴 Fecha para o lado seguro em três situações, e nenhuma delas é
- *    contornável pela interface:
+ * ===========================================================================
+ * 🔴 Porque é que esta operação recusa sempre, e o que falta para voltar.
+ * ===========================================================================
  *
- *      · encontrou registos       → recusa, e diz quais;
- *      · não conseguiu ler alguma referência → recusa;
- *      · ficou alguma por sondar  → recusa.
+ * O desenho era: sondar as 46 referências, e só apagar se TODAS vierem a
+ * zero. As provas passavam. A conclusão «zero relações, logo apagar não
+ * destrói nada» está certa — e não é atómica.
  *
- *    As duas últimas não são «provavelmente não há nada». São «não se sabe»,
- *    e não se sabe nunca autoriza um apagar.
+ * Entre a sondagem e o apagar há duas chamadas HTTP separadas, e nada segura
+ * a base entretanto. Outra pessoa, ou um cron, pode criar uma relação nesse
+ * intervalo. O que acontece a seguir depende da referência:
  *
- * 🔴 Não há aqui um único UPDATE. Se a sondagem diz que não existe relação
- *    nenhuma, não há autoria para anular; se diz que existe, não se apaga. O
- *    caminho que produzia meio-histórico não foi corrigido — foi removido.
+ *   · numa FK `RESTRICT`/`NO ACTION`, a base recusa o DELETE. A corrida é
+ *     desagradável mas não perde nada — foi a integridade referencial que
+ *     salvou a operação, não este código;
+ *
+ *   · numa FK `ON DELETE CASCADE` — e há catorze delas: ponto, faltas,
+ *     férias, folha, equipas, reforços, notificações, documentos — a base
+ *     NÃO recusa. Apaga a linha nova em silêncio, junto com o perfil.
+ *
+ * Ou seja: `NO_DATA_LOSS` estava provado para uma sequência sem concorrência,
+ * e por provar debaixo dela. Não é uma falha teórica; é o mesmo tipo de
+ * defeito que esta branch veio fechar — uma garantia afirmada num sítio onde
+ * não podia ser cumprida.
+ *
+ * Fechá-lo a sério exige que a decisão e o apagar aconteçam no mesmo
+ * instante, dentro da base: um `DELETE` que verifique as 46 referências na
+ * própria instrução, ou um trigger em `profiles` que recuse. Qualquer das
+ * duas é schema, e a 102 não abre aqui.
+ *
+ * Até lá, a operação retira-se em vez de ficar «quase certa». O que se perde
+ * é a capacidade de apagar um perfil criado por engano — que fica desativado,
+ * fora das equipas, das escalas e da folha, e sem acesso. O que se ganha é
+ * não haver um caminho na aplicação que possa apagar um registo que alguém
+ * acabou de criar.
+ *
+ * A função continua aqui, a recusar, e não foi apagada de propósito: é o
+ * sítio onde a razão está escrita, e o ensaio que a obriga a recusar é o que
+ * impede alguém de reintroduzir um apagar ingénuo por baixo.
+ *
+ * Para reabrir: garantia atómica na base + o ensaio de corrida
+ * («sondagem a zero → nasce relação CASCADE → tentar apagar → perfil e
+ * relação sobrevivem») a passar contra ela.
+ *
+ * 🔴 Não exportado. Um ficheiro `"use server"` só pode exportar funções
+ *    assíncronas — exportar esta constante rebentaria em runtime com «a
+ *    "use server" file can only export async functions», e o `tsc` não o
+ *    apanha. Quem precisa do valor recebe-o dentro do resultado de
+ *    `avaliarSaidaColaborador`.
  */
+const ELIMINACAO_FISICA_SUSPENSA = true;
+
 export async function deleteColaborador(id: string, companyId: string) {
+  // A autorização corre na mesma, e primeiro: quem não podia pedir isto
+  // continua a não poder, e a recusa que recebe é a dele, não esta.
   const alvo = await resolverAlvoDeSaida(id, companyId);
   if (!alvo.ok) return alvo;
   const { admin, actorId, target } = alvo;
 
   if (actorId === id) return { ok: false as const, error: "Não podes excluir a tua própria conta." };
 
+  // A sondagem corre para a mensagem poder ser verdadeira sobre este caso
+  // concreto — mas o resultado dela já não autoriza nada.
   const sondagens = await sondarRelacoesDoPerfil(admin, id);
   const veredicto = avaliarRemocao(sondagens);
 
@@ -561,30 +655,14 @@ export async function deleteColaborador(id: string, companyId: string) {
     };
   }
 
-  const { error } = await admin.auth.admin.deleteUser(id);
-  if (error) {
-    // O Auth recusou. Como não se anulou nada antes, não há meio-estado: o
-    // perfil está exactamente como estava.
-    return { ok: false as const, error: error.message };
-  }
-
-  // Um perfil sem conta de acesso não desaparece com o `deleteUser` — não há
-  // utilizador para cascatar. É preciso apagar a linha, e ela não tem nada
-  // atrás (foi isso que a sondagem provou).
-  await admin.from("profiles").delete().eq("id", id).eq("company_id", companyId);
-
-  await auditLog({
-    companyId,
-    actorId,
-    action: "collaborator_deleted",
-    entityType: "profile",
-    entityId: id,
-    meta: { target_name: target.full_name, sem_historico: true },
-    source: "dashboard",
-  }, admin);
-
-  revalidatePath("/dashboard/colaboradores");
-  revalidatePath("/dashboard/equipas");
-  revalidatePath("/dashboard/calendario");
-  return { ok: true as const };
+  return {
+    ok: false as const,
+    codigo: "ELIMINACAO_SUSPENSA" as const,
+    areas: [],
+    error:
+      `${target.full_name} não tem registos no sistema, mas a eliminação definitiva está `
+      + "suspensa: entre a verificação e o apagar, alguém pode criar um registo que seria "
+      + "apagado com o perfil. Até isso ficar garantido pela base de dados, a saída faz-se "
+      + "por desativação — a pessoa deixa de entrar e sai das equipas, escalas e folha.",
+  };
 }

@@ -17,20 +17,27 @@
 //    ficar sem saber quem o fez.
 //
 // Este ecrã não pergunta «tem a certeza?» antes de saber a resposta. Abre,
-// conta o que existe, e só depois mostra o que é possível fazer. A eliminação
-// definitiva não está escondida atrás de um aviso — está AUSENTE enquanto
-// houver registos, porque um botão desativado convida a procurar a forma de o
-// destravar, e aqui não há forma nenhuma.
+// conta o que existe, e só depois mostra o que é possível fazer.
+//
+// 🔴 A eliminação definitiva não está aqui, nem sequer desativada.
+//
+//    Chegou a estar, para perfis sem qualquer registo. Saiu porque a decisão
+//    («zero relações, logo apagar não destrói nada») e o apagar acontecem em
+//    dois momentos, e entre eles alguém pode criar um registo que as catorze
+//    referências em CASCADE levariam sem aviso. A razão inteira está em
+//    `deleteColaborador`.
+//
+//    Um botão cinzento teria sido pior do que nenhum: convida a procurar como
+//    o destravar, e sugere que a operação é possível e só falta uma condição.
+//    Não falta — falta uma garantia na base de dados.
 // ============================================================================
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { createPortal } from "react-dom";
-import { AlertTriangle, Archive, Loader2, Trash2, X } from "lucide-react";
+import { AlertTriangle, Archive, Loader2, X } from "lucide-react";
 
-import {
-  avaliarSaidaColaborador, desativarColaborador, deleteColaborador,
-} from "@/app/actions/colaboradores";
+import { avaliarSaidaColaborador, desativarColaborador } from "@/app/actions/colaboradores";
 
 type Avaliacao = Awaited<ReturnType<typeof avaliarSaidaColaborador>>;
 type AvaliacaoOk = Extract<Avaliacao, { ok: true }>;
@@ -48,14 +55,12 @@ export function SaidaColaboradorDialog({ trigger, colaboradorId, nome, companyId
   const [avaliacao, setAvaliacao] = useState<AvaliacaoOk | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const [aCarregar, setACarregar] = useState(false);
-  const [confirmaEliminar, setConfirmaEliminar] = useState(false);
   const [aExecutar, executar] = useTransition();
 
   async function abrir() {
     setAberto(true);
     setAvaliacao(null);
     setErro(null);
-    setConfirmaEliminar(false);
     setACarregar(true);
     // A contagem é pedida ao abrir, e não no arranque da lista: são
     // quarenta e seis contagens por pessoa, e fazê-las para trinta linhas que
@@ -70,29 +75,12 @@ export function SaidaColaboradorDialog({ trigger, colaboradorId, nome, companyId
     setAberto(false);
     setAvaliacao(null);
     setErro(null);
-    setConfirmaEliminar(false);
   }
 
   function desativar() {
     executar(async () => {
       const r = await desativarColaborador(colaboradorId, companyId);
       if (!r.ok) { setErro(r.error); return; }
-      fechar();
-      router.refresh();
-    });
-  }
-
-  function eliminar() {
-    executar(async () => {
-      const r = await deleteColaborador(colaboradorId, companyId);
-      if (!r.ok) {
-        // A recusa pode chegar aqui mesmo depois de a avaliação ter dito que
-        // era possível: alguém pode ter criado um registo entretanto. O
-        // servidor decide outra vez, e é a decisão dele que vale.
-        setErro(r.error);
-        setConfirmaEliminar(false);
-        return;
-      }
       fechar();
       router.refresh();
     });
@@ -184,48 +172,23 @@ export function SaidaColaboradorDialog({ trigger, colaboradorId, nome, companyId
               {aExecutar ? <Loader2 className="size-4 animate-spin" /> : <Archive className="size-4" />}
               Desativar e retirar o acesso
             </button>
+            {/* 🔴 «Deixa de entrar» é agora uma afirmação que se cumpre.
+                Enquanto era só o banimento no Auth, uma sessão aberta
+                continuava a funcionar até o token expirar; o estado do perfil
+                passou a ser lido em cada pedido. */}
             <p className="text-center text-xs text-[var(--color-text-muted)]">
-              A pessoa deixa de entrar e sai das equipas, escalas e folha.
-              Tudo o que fez continua no sistema. É reversível.
+              A pessoa deixa de entrar imediatamente, mesmo com a aplicação aberta,
+              e sai das equipas, escalas e folha. Tudo o que fez continua no
+              sistema. É reversível.
             </p>
 
-            {avaliacao.veredicto.elegivel && !avaliacao.proprioUtilizador && (
-              <div className="pt-2">
-                {!confirmaEliminar ? (
-                  <button
-                    onClick={() => setConfirmaEliminar(true)}
-                    disabled={aExecutar}
-                    className="flex w-full items-center justify-center gap-2 rounded-lg border border-[var(--color-border)] bg-white px-4 py-2 text-sm text-[var(--color-text-sub)] transition-colors hover:border-red-200 hover:text-red-600 disabled:opacity-50"
-                  >
-                    <Trash2 className="size-4" />
-                    Eliminar definitivamente
-                  </button>
-                ) : (
-                  <div className="space-y-2 rounded-lg bg-red-50 p-3">
-                    <p className="text-xs text-red-700">
-                      {nome} não tem nenhum registo no sistema. Eliminar apaga o perfil e
-                      a conta de acesso, e não pode ser desfeito.
-                    </p>
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => setConfirmaEliminar(false)}
-                        disabled={aExecutar}
-                        className="flex-1 rounded-lg border border-[var(--color-border)] bg-white px-3 py-2 text-sm text-[var(--color-text-sub)] disabled:opacity-50"
-                      >
-                        Cancelar
-                      </button>
-                      <button
-                        onClick={eliminar}
-                        disabled={aExecutar}
-                        className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-red-600 px-3 py-2 text-sm font-medium text-white disabled:opacity-50"
-                      >
-                        {aExecutar && <Loader2 className="size-4 animate-spin" />}
-                        Eliminar
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
+            {avaliacao.veredicto.elegivel && avaliacao.eliminacaoSuspensa && (
+              <p className="rounded-lg bg-[var(--color-background)] p-3 text-xs text-[var(--color-text-sub)]">
+                {nome} não tem registos no sistema, mas eliminar de vez está
+                indisponível: entre a verificação e o apagar, alguém pode criar um
+                registo que seria apagado sem aviso. Desativar é seguro e faz o
+                mesmo trabalho.
+              </p>
             )}
 
             {avaliacao.proprioUtilizador && (

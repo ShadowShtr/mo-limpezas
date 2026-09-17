@@ -22,6 +22,7 @@ import {
   validarSenhaTemporaria, compensacaoNecessaria,
   type Actor, type Pessoa,
 } from "@/domain/collaborators/access-lifecycle";
+import { resolverIdentidadeAuth } from "@/lib/collaborators/auth-identity";
 
 type Resultado = { ok: true } | { ok: false; error: string };
 
@@ -41,15 +42,34 @@ async function resolverActor(): Promise<Actor | null> {
   return { profile_id: data.id, company_id: data.company_id, role: data.role };
 }
 
-/** A pessoa sobre quem se está a operar. */
+/**
+ * A pessoa sobre quem se está a operar.
+ *
+ * 🔴 `auth_user_id` vem do resolver, não de um `select` directo.
+ *
+ *    Este ficheiro foi escrito inteiro para o modelo em que o perfil e a
+ *    conta são coisas separadas — e a coluna que os liga ainda vive em
+ *    `supabase/migrations/draft/`. Num base sem ela, o `select` que a pedia
+ *    devolvia erro, `data` vinha nula, e TODAS as operações de acesso
+ *    respondiam «Pessoa não encontrada.» — uma falha de schema disfarçada de
+ *    pessoa inexistente.
+ *
+ *    `resolverIdentidadeAuth` sabe os dois mundos e diz em qual está. Aqui e
+ *    em `desativarColaborador`, que é o ponto: uma regra, um sítio.
+ */
 async function carregarPessoa(id: string): Promise<Pessoa | null> {
   const admin = createAdminClient();
   const { data } = await admin
     .from("profiles")
-    .select("id, company_id, full_name, auth_user_id")
+    .select("id, company_id, full_name")
     .eq("id", id)
     .maybeSingle();
-  return (data as Pessoa) ?? null;
+  if (!data) return null;
+
+  const identidade = await resolverIdentidadeAuth(admin, id);
+  if (!identidade.ok) return null;
+
+  return { ...(data as Omit<Pessoa, "auth_user_id">), auth_user_id: identidade.authUserId };
 }
 
 /**

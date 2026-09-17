@@ -49,6 +49,8 @@ export const INVENTARIO_FK_PERFIS: readonly ReferenciaPerfil[] = [
   { tabela: "invoices", coluna: "created_by", restricao: "invoices_created_by_fkey", onDelete: "NO ACTION", composta: false, area: "financeiro" },
   { tabela: "management_tasks", coluna: "assigned_to", restricao: "management_tasks_assigned_to_fkey", onDelete: "NO ACTION", composta: false, area: "tarefas" },
   { tabela: "management_tasks", coluna: "created_by", restricao: "management_tasks_created_by_fkey", onDelete: "NO ACTION", composta: false, area: "tarefas" },
+  { tabela: "manual_charges", coluna: "created_by", restricao: "manual_charges_created_by_fkey", onDelete: "SET NULL", composta: false, area: "financeiro" },
+  { tabela: "manual_charges", coluna: "voided_by", restricao: "manual_charges_voided_by_fkey", onDelete: "SET NULL", composta: false, area: "financeiro" },
   { tabela: "notifications", coluna: "user_id", restricao: "notifications_user_id_fkey", onDelete: "CASCADE", composta: false, area: "notificacoes" },
   { tabela: "payroll_records", coluna: "approved_by", restricao: "payroll_records_approved_by_fkey", onDelete: "NO ACTION", composta: false, area: "payroll" },
   { tabela: "payroll_records", coluna: "collaborator_id", restricao: "payroll_records_collaborator_id_fkey", onDelete: "CASCADE", composta: false, area: "payroll" },

@@ -7,8 +7,8 @@ export const nota: ReleaseNote = {
   title: "Colaboradores: dar saída sem perder o histórico",
   message:
     "O botão de eliminar deu lugar a «Dar saída», que começa por mostrar tudo o que está "
-    + "ligado àquela pessoa. Quem tem histórico passa a ser desativada: deixa de entrar e sai "
-    + "das equipas, escalas e folha, mas tudo o que fez continua lá, com o nome de quem o fez. "
-    + "Eliminar de vez só aparece para quem não tem mesmo nenhum registo — até aqui, podia "
-    + "deixar serviços e faturas sem se saber quem os fizera.",
+    + "ligado àquela pessoa. A saída faz-se por desativação: deixa de entrar de imediato, "
+    + "mesmo com a aplicação aberta, e sai das equipas, escalas e folha — mas tudo o que fez "
+    + "continua lá, com o nome de quem o fez. Eliminar de vez deixou de existir: podia apagar "
+    + "registos sem aviso.",
 };
