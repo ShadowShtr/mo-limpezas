@@ -1,14 +1,14 @@
 {
   "generatedBy": "scripts/audit-file-inventory.mjs",
-  "totalFiles": 909,
+  "totalFiles": 911,
   "byStatus": {
-    "MANTER": 886,
+    "MANTER": 888,
     "STANDBY": 23
   },
   "byCategory": {
     "test": 216,
     "route-ui": 140,
-    "migration": 130,
+    "migration": 132,
     "lib": 77,
     "script": 59,
     "domain": 52,
@@ -29,7 +29,7 @@
     "supabase-other": 2
   },
   "byConfidence": {
-    "alta": 888,
+    "alta": 890,
     "média": 15,
     "baixa": 6
   },
@@ -4952,7 +4952,7 @@
         "service-role"
       ],
       "signals": {
-        "serviceRole": 6,
+        "serviceRole": 16,
         "sqlWrite": 27
       },
       "action": "nenhuma",
@@ -6581,8 +6581,8 @@
         "service-role"
       ],
       "signals": {
-        "serviceRole": 6,
-        "sqlWrite": 17,
+        "serviceRole": 8,
+        "sqlWrite": 18,
         "dynamicImport": 2
       },
       "action": "nenhuma",
@@ -23696,6 +23696,27 @@
       "manualDecision": false
     },
     {
+      "path": "supabase/migrations/101a_crm_rpc_acl_hardening.sql",
+      "category": "migration",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [
+        "service-role"
+      ],
+      "signals": {
+        "serviceRole": 13,
+        "sqlWrite": 5
+      },
+      "action": "nenhuma",
+      "reason": "migration versionada — histórico do schema, nunca se apaga",
+      "manualDecision": false
+    },
+    {
       "path": "supabase/migrations/20260608_new_features.sql",
       "category": "migration",
       "status": "MANTER",
@@ -24275,6 +24296,27 @@
       "risks": [],
       "signals": {
         "sqlWrite": 6
+      },
+      "action": "nenhuma",
+      "reason": "migration versionada — histórico do schema, nunca se apaga",
+      "manualDecision": false
+    },
+    {
+      "path": "supabase/migrations/rollback/101a_crm_rpc_acl_hardening.down.sql",
+      "category": "migration",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [
+        "service-role"
+      ],
+      "signals": {
+        "serviceRole": 6,
+        "sqlWrite": 3
       },
       "action": "nenhuma",
       "reason": "migration versionada — histórico do schema, nunca se apaga",

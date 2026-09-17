@@ -36,8 +36,8 @@ import {
   contar,
   erroDe,
   migrationCrm,
-  rollbackCrm,
   montarPalcoCrm,
+  rollbackCrm,
   novaLead,
 } from "./helpers/crm-pg-harness";
 
@@ -771,17 +771,174 @@ describe("🔴 REORDER — tudo ou nada", () => {
 });
 
 describe("🔴 permissões das RPCs do funil", () => {
+  /** O ACL de EXECUTE lido do catálogo, por papel. PUBLIC é o grantee 0. */
+  async function aclDe(assinatura: string) {
+    const { rows } = await pool.query(
+      `SELECT
+         p.proacl IS NULL                                        AS sem_acl,
+         p.prosecdef                                             AS security_definer,
+         COALESCE(bool_or(a.grantee = 0), false)                 AS publico,
+         COALESCE(bool_or(a.grantee = to_regrole('anon')::oid), false)          AS anon,
+         COALESCE(bool_or(a.grantee = to_regrole('authenticated')::oid), false) AS authenticated,
+         COALESCE(bool_or(a.grantee = to_regrole('service_role')::oid), false)  AS service_role,
+         p.proconfig                                             AS config
+       FROM pg_proc p
+       LEFT JOIN LATERAL aclexplode(p.proacl) AS a
+         ON a.privilege_type = 'EXECUTE'
+      WHERE p.oid = $1::regprocedure
+      GROUP BY p.proacl, p.prosecdef, p.proconfig`,
+      [assinatura],
+    );
+    return rows[0];
+  }
+
+  const MOVER = "public.move_crm_lead_stage_atomic(uuid, uuid, text, text, uuid, text, text)";
+  const REORDENAR = "public.reorder_crm_leads_atomic(uuid, text, jsonb, uuid)";
+
+  // ═════════════════════════════════════════════════════════════════════════
+  // 🔴 O defeito que a 101a fecha — provado, não afirmado
+  // ═════════════════════════════════════════════════════════════════════════
+  //
+  // Este ensaio monta o palco com a 101 aplicada e a 101a AINDA NÃO, sob os
+  // DEFAULT PRIVILEGES reais do Supabase, e mede o ACL que daí resulta.
+  //
+  // É o ensaio que faltava. A versão anterior deste ficheiro afirmava que
+  // «authenticated não executa nenhuma delas» e passava — mas passava porque o
+  // palco era um Postgres cru, sem os default privileges. Em produção, cada
+  // `CREATE FUNCTION` nasce com `anon=EXECUTE` e `authenticated=EXECUTE`, e o
+  // `REVOKE ... FROM PUBLIC` da 101 remove outra coisa: o privilégio implícito
+  // de PUBLIC, não os grants nominais. O ensaio dava verde a um ACL que na
+  // base real estava aberto.
+  it("🔴 SÓ COM A 101, o ACL fica aberto a anon e authenticated", async () => {
+    await montarPalcoCrm(pool, { pararEm: "101_crm_leads" });
+
+    for (const fn of [MOVER, REORDENAR]) {
+      const acl = await aclDe(fn);
+
+      expect(acl.publico, `${fn}: a 101 revoga mesmo o PUBLIC`).toBe(false);
+      expect(acl.service_role, `${fn}: e concede a service_role`).toBe(true);
+
+      // 🔴 E é isto que passava despercebido.
+      expect(acl.anon, `${fn}: DEFAULT PRIVILEGES deixaram anon com EXECUTE`).toBe(true);
+      expect(
+        acl.authenticated,
+        `${fn}: DEFAULT PRIVILEGES deixaram authenticated com EXECUTE`,
+      ).toBe(true);
+
+      // E sem `search_path` fixo, ao contrário da convenção desde a 091.
+      expect(acl.config, `${fn}: a 101 não fixa search_path`).toBeNull();
+    }
+
+    // 🔴 E a consequência executável, que é o que interessa: sob a 101 sozinha,
+    //    `anon` CONSEGUE invocar a função.
+    //
+    //    A chamada falha — mas falha depois de entrar, no ACL da TABELA. O erro
+    //    não é `permission denied for function`, e é essa a diferença entre
+    //    «não pode chamar» e «pode chamar e não consegue fazer nada lá dentro».
+    //    O que estava aberto era a invocação: uma função que toma locks de
+    //    linha, alcançável da Internet sem sessão.
+    //
+    //    É este ensaio que FALHA com a 101 sozinha e passa depois da 101a: o
+    //    `anon não executa nenhuma delas`, mais abaixo, exige exactamente o
+    //    `permission denied` que aqui ainda não acontece.
+    const id = await novaLead(pool);
+    const c = new pg.Client({ ...container.connection });
+    await c.connect();
+    try {
+      await c.query("SET ROLE anon");
+      const erro = await erroDe(() => mover({ leadId: id, de: "novo", para: "contactado" }, c));
+      expect(erro, "anon chegou a entrar na função").not.toBeNull();
+      expect(
+        erro,
+        "🔴 sob a 101 sozinha o bloqueio NÃO é da função — é da tabela lá dentro",
+      ).not.toMatch(/permission denied for function/i);
+    } finally {
+      await c.end();
+    }
+  });
+
+  it("🔴 DEPOIS DA 101a, o ACL fecha — e só service_role fica", async () => {
+    // `beforeEach` já aplicou as duas; explícito para o ensaio ser legível
+    // isolado deste ficheiro.
+    await montarPalcoCrm(pool);
+
+    for (const fn of [MOVER, REORDENAR]) {
+      const acl = await aclDe(fn);
+
+      expect(acl.sem_acl, `${fn}: proacl NULL = EXECUTE para PUBLIC`).toBe(false);
+      expect(acl.security_definer, `${fn}: SECURITY INVOKER`).toBe(false);
+      expect(acl.publico, `${fn}: PUBLIC EXECUTE`).toBe(false);
+      expect(acl.anon, `${fn}: anon EXECUTE`).toBe(false);
+      expect(acl.authenticated, `${fn}: authenticated EXECUTE`).toBe(false);
+      expect(acl.service_role, `${fn}: service_role EXECUTE`).toBe(true);
+      // Um só `SET`, e é o `search_path` — não se prende a forma exacta com
+      // que o catálogo normaliza o valor, que é detalhe de versão.
+      expect(acl.config, `${fn}: search_path fixo`).toHaveLength(1);
+      expect(acl.config[0], `${fn}: search_path fixo`).toMatch(
+        /^search_path=.*pg_catalog/,
+      );
+    }
+  });
+
+  it("anon não executa nenhuma delas", async () => {
+    const id = await novaLead(pool);
+    const c = new pg.Client({ ...container.connection });
+    await c.connect();
+    try {
+      await c.query("SET ROLE anon");
+      expect(await erroDe(() => mover({ leadId: id, de: "novo", para: "contactado" }, c)))
+        .toMatch(/permission denied/i);
+      expect(await erroDe(() => reordenar({ stage: "novo", itens: [] }, c)))
+        .toMatch(/permission denied/i);
+    } finally {
+      await c.end();
+    }
+  });
+
   it("authenticated não executa nenhuma delas", async () => {
     const id = await novaLead(pool);
     const c = new pg.Client({ ...container.connection });
     await c.connect();
     try {
       await c.query("SET ROLE authenticated");
-      expect(await erroDe(() => mover({ leadId: id, para: "contactado" }, c))).toMatch(/permission denied/i);
+      expect(await erroDe(() => mover({ leadId: id, de: "novo", para: "contactado" }, c)))
+        .toMatch(/permission denied/i);
       expect(await erroDe(() => reordenar({ stage: "novo", itens: [] }, c))).toMatch(/permission denied/i);
     } finally {
       await c.end();
     }
+  });
+
+  it("service_role continua a executar — fechar de mais partiria a aplicação", async () => {
+    const id = await novaLead(pool);
+    const c = new pg.Client({ ...container.connection });
+    await c.connect();
+    try {
+      await c.query("SET ROLE service_role");
+      expect(await erroDe(() => mover({ leadId: id, de: "novo", para: "contactado" }, c))).toBeNull();
+    } finally {
+      await c.end();
+    }
+    expect((await lerLead(id)).stage).toBe("contactado");
+  });
+
+  it("🔴 o search_path fixo não muda o comportamento das RPC", async () => {
+    // O endurecimento só vale se for inerte. Um chamador com `search_path`
+    // hostil — incluindo `pg_temp` à frente — tem de obter exactamente o mesmo
+    // resultado.
+    const id = await novaLead(pool);
+    const c = new pg.Client({ ...container.connection });
+    await c.connect();
+    try {
+      await c.query("CREATE TEMP TABLE crm_leads (id uuid, stage text)");
+      await c.query("SET search_path = pg_temp, public");
+      expect(await erroDe(() => mover({ leadId: id, de: "novo", para: "contactado" }, c))).toBeNull();
+    } finally {
+      await c.end();
+    }
+
+    expect((await lerLead(id)).stage, "escreveu na tabela real").toBe("contactado");
+    expect(await diario(id)).toBe(1);
   });
 });
 
@@ -921,5 +1078,68 @@ describe("🔴 101 — aplicar, desfazer, reaplicar", () => {
 
     expect((await lerLead(id)).stage).toBe("contactado");
     expect(await diario(id)).toBe(1);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 🔴 101a — aplicar, desfazer, reaplicar
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe("🔴 101a — o hotfix de ACL e o seu rollback", () => {
+  const MOVER = "public.move_crm_lead_stage_atomic(uuid, uuid, text, text, uuid, text, text)";
+
+  const aclAnon = async () =>
+    (await pool.query(
+      `SELECT COALESCE(bool_or(a.grantee = to_regrole('anon')::oid), false) AS anon
+         FROM pg_proc p
+         LEFT JOIN LATERAL aclexplode(p.proacl) AS a ON a.privilege_type = 'EXECUTE'
+        WHERE p.oid = $1::regprocedure
+        GROUP BY p.proacl`,
+      [MOVER],
+    )).rows[0].anon as boolean;
+
+  it("correr a 101a duas vezes não parte nada", async () => {
+    await expect(
+      pool.query(migrationCrm("101a_crm_rpc_acl_hardening")),
+    ).resolves.toBeDefined();
+    await expect(
+      pool.query(migrationCrm("101a_crm_rpc_acl_hardening")),
+    ).resolves.toBeDefined();
+
+    expect(await aclAnon(), "continua fechada").toBe(false);
+  });
+
+  it("🔴 ROLLBACK_101A_REOPENS_KNOWN_PRIVILEGE_BUG — e é de propósito", async () => {
+    expect(await aclAnon(), "fechada pela 101a").toBe(false);
+
+    await pool.query(rollbackCrm("101a_crm_rpc_acl_hardening"));
+
+    // O prestate É o defeito. Um rollback que repusesse um estado melhor não
+    // seria um rollback — esconderia que a 101a é a única coisa entre produção
+    // e este ACL. Mesma decisão, e mesma razão, que o rollback da 084.
+    expect(await aclAnon(), "o buraco volta — ROLLBACK_UNSAFE_BY_DESIGN").toBe(true);
+
+    const { rows } = await pool.query(
+      "SELECT proconfig FROM pg_proc WHERE oid = $1::regprocedure", [MOVER]);
+    expect(rows[0].proconfig, "e o search_path volta a ser o do chamador").toBeNull();
+  });
+
+  it("reaplicar a 101a depois do rollback volta a fechar tudo", async () => {
+    await pool.query(rollbackCrm("101a_crm_rpc_acl_hardening"));
+    expect(await aclAnon()).toBe(true);
+
+    await pool.query(migrationCrm("101a_crm_rpc_acl_hardening"));
+    expect(await aclAnon()).toBe(false);
+
+    // E a RPC continua a funcionar por service_role.
+    const id = await novaLead(pool);
+    await mover({ leadId: id, de: "novo", para: "contactado" });
+    expect((await lerLead(id)).stage).toBe("contactado");
+  });
+
+  it("a 101a recusa-se a correr sem a 101", async () => {
+    await montarPalcoCrm(pool, { aplicarCrm: false });
+    const erro = await erroDe(() => pool.query(migrationCrm("101a_crm_rpc_acl_hardening")));
+    expect(erro).toContain("CRM_ACL_101A_PRECONDITION_FAILED");
   });
 });
