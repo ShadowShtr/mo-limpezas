@@ -23,31 +23,41 @@
 //    layout do dashboard, o layout da app e o proxy. Todos leem daqui.
 //
 // ----------------------------------------------------------------------------
-// Porque é que `null` deixa entrar
+// Uma lista de quem ENTRA, e não de quem não entra
 // ----------------------------------------------------------------------------
 //
-// `profiles.status` é anulável e só ganhou `DEFAULT 'ativo'` em 002. Uma linha
-// com `status` a NULL é uma pessoa normal cujo estado ninguém escreveu — não
-// é uma pessoa que levou saída.
+// 🔴 A primeira versão desta regra era uma lista de exclusão: entrava tudo
+//    menos `inativo`, `suspenso` e `arquivado`. `null`, vazio e qualquer
+//    estado desconhecido passavam.
 //
-// Fechar na ausência seria o instinto («fail-closed»), e aqui seria o erro:
-// trancava fora toda a gente cujo estado nunca foi tocado, num sistema em uso
-// real, por causa de uma coluna anulável. O que se fecha é a saída EXPLÍCITA
-// — alguém escreveu «inativo», «suspenso» ou «arquivado» naquela linha. É uma
-// lista de quem NÃO entra, e é curta de propósito: um estado novo que ninguém
-// mapeie aqui deixa entrar, em vez de trancar meia empresa em silêncio.
+//    O argumento era defensável — `status` é anulável, e fechar na ausência
+//    podia trancar fora quem nunca teve o estado escrito. Mas era um receio,
+//    não um facto, e a direcção mandou medi-lo. Medido (leitura read-only de
+//    produção): `status` NULL = 0 linhas, vazio = 0 linhas, e o `CHECK` da
+//    base só admite `ativo | inativo | suspenso`.
 //
-// A contrapartida é o ensaio `access-state.test.ts`, que obriga esta lista a
-// conter todos os estados de saída que o sistema sabe escrever.
+//    Ou seja: o caso que a lista de exclusão protegia não existe, e em troca
+//    ela deixava entrar qualquer estado novo que alguém inventasse — em
+//    silêncio, que é exactamente como um buraco de acesso nasce.
+//
+//    `UNKNOWN_STATE = FAIL_CLOSED`. Entra quem está explicitamente activo.
+//
+//    Esta regra é a MESMA que a migration 102 põe em `get_my_profile_id()`
+//    (`status = 'ativo'`). Duas camadas, uma regra — se divergirem, a
+//    aplicação e a base passam a discordar sobre quem trabalha aqui.
 // ============================================================================
+
+/** O único estado que dá acesso. */
+export const ESTADO_ATIVO = "ativo";
 
 /**
  * Os estados que significam «esta pessoa já não trabalha aqui».
  *
- * `arquivado` está aqui apesar de o `CHECK` da base ainda não o aceitar: o
- * Zod de `colaboradores.ts` declara-o, e um estado que a aplicação sabe
- * escrever tem de ser um estado que a aplicação sabe recusar. O dia em que os
- * dois lados forem alinhados, esta lista já está certa.
+ * 🔴 Já não é isto que decide o acesso — `perfilPodeEntrar` compara com
+ *    `ESTADO_ATIVO`. Fica porque continua a ser útil para NOMEAR uma saída
+ *    (e o ensaio obriga `ESTADO_DE_SAIDA` a estar cá dentro), mas quem
+ *    acrescentar um estado novo a esta lista não muda o acesso: um estado
+ *    desconhecido já não entra, esteja ou não aqui.
  */
 export const ESTADOS_SEM_ACESSO = ["inativo", "suspenso", "arquivado"] as const;
 
@@ -62,12 +72,14 @@ export const ESTADO_DE_SAIDA: EstadoSemAcesso = "inativo";
  * Só o estado. Não decide papéis nem empresa — quem chama já o fez, e
  * misturar as três decisões numa função só tornaria impossível dizer qual
  * delas recusou.
+ *
+ * 🔴 Sem `trim()` nem `toLowerCase()`, de propósito. A base guarda `'ativo'`
+ *    exacto e o `CHECK` não admite outra coisa; normalizar aqui faria
+ *    `' ATIVO '` entrar na aplicação e ser recusado pela 102 na base — duas
+ *    respostas diferentes à mesma pergunta. O ensaio fixa isso.
  */
 export function perfilPodeEntrar(status: string | null | undefined): boolean {
-  if (status === null || status === undefined) return true;
-  const normalizado = status.trim().toLowerCase();
-  if (normalizado === "") return true;
-  return !(ESTADOS_SEM_ACESSO as readonly string[]).includes(normalizado);
+  return status === ESTADO_ATIVO;
 }
 
 /**

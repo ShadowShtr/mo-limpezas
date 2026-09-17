@@ -1,0 +1,614 @@
+{
+  "geradoEm": "2026-09-17T16:17:45.124Z",
+  "projeto": "ceqzxgizhgmvcniapyla",
+  "totais": {
+    "policies": 97,
+    "funcoes": 270,
+    "securityDefiner": 24,
+    "policiesComAuthUidDirecto": 0,
+    "policiesQueConsultamProfilesStatus": 0
+  },
+  "distribuicaoDeEstados": [
+    {
+      "status": "ativo",
+      "n": 36
+    },
+    {
+      "status": "suspenso",
+      "n": 9
+    },
+    {
+      "status": "inativo",
+      "n": 1
+    }
+  ],
+  "checkDeStatus": [
+    "CHECK ((status = ANY (ARRAY['ativo'::text, 'inativo'::text, 'suspenso'::text])))"
+  ],
+  "colunasProfiles": [
+    {
+      "column_name": "id",
+      "data_type": "uuid",
+      "is_nullable": "NO",
+      "def": ""
+    },
+    {
+      "column_name": "company_id",
+      "data_type": "uuid",
+      "is_nullable": "NO",
+      "def": ""
+    },
+    {
+      "column_name": "full_name",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "def": ""
+    },
+    {
+      "column_name": "phone",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "def": ""
+    },
+    {
+      "column_name": "email",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "def": ""
+    },
+    {
+      "column_name": "nif",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "def": ""
+    },
+    {
+      "column_name": "iban",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "def": ""
+    },
+    {
+      "column_name": "avatar_url",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "def": ""
+    },
+    {
+      "column_name": "role",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "def": "'colaborador'::text"
+    },
+    {
+      "column_name": "contracted_hours_month",
+      "data_type": "numeric",
+      "is_nullable": "YES",
+      "def": "168"
+    },
+    {
+      "column_name": "contract_start",
+      "data_type": "date",
+      "is_nullable": "YES",
+      "def": ""
+    },
+    {
+      "column_name": "contract_end",
+      "data_type": "date",
+      "is_nullable": "YES",
+      "def": ""
+    },
+    {
+      "column_name": "vacation_balance",
+      "data_type": "numeric",
+      "is_nullable": "YES",
+      "def": "22"
+    },
+    {
+      "column_name": "skills",
+      "data_type": "ARRAY",
+      "is_nullable": "YES",
+      "def": "'{}'::text[]"
+    },
+    {
+      "column_name": "availability",
+      "data_type": "jsonb",
+      "is_nullable": "YES",
+      "def": "'{\"fri\": true, \"mon\": true, \"sat\": false, \"sun\": false, \"thu\": true, \"tue\": true, \"wed\": true}'::jsonb"
+    },
+    {
+      "column_name": "status",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "def": "'ativo'::text"
+    },
+    {
+      "column_name": "invited_at",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "YES",
+      "def": ""
+    },
+    {
+      "column_name": "invite_accepted_at",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "YES",
+      "def": ""
+    },
+    {
+      "column_name": "created_at",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "YES",
+      "def": "now()"
+    },
+    {
+      "column_name": "updated_at",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "YES",
+      "def": "now()"
+    },
+    {
+      "column_name": "hourly_rate",
+      "data_type": "numeric",
+      "is_nullable": "YES",
+      "def": "NULL::numeric"
+    },
+    {
+      "column_name": "auth_user_id",
+      "data_type": "uuid",
+      "is_nullable": "YES",
+      "def": ""
+    },
+    {
+      "column_name": "must_change_password",
+      "data_type": "boolean",
+      "is_nullable": "NO",
+      "def": "false"
+    },
+    {
+      "column_name": "base_salary_monthly",
+      "data_type": "numeric",
+      "is_nullable": "YES",
+      "def": ""
+    }
+  ],
+  "consumidores": {
+    "get_my_profile_id": {
+      "policies": [
+        "absences.absences_manager_select",
+        "absences.absences_own_select",
+        "app_notice_reads.read own reads",
+        "attachments.company members delete attachments",
+        "attachments.company members insert attachments",
+        "attachments.company members read attachments",
+        "audit_logs.audit_logs_admin_read",
+        "background_jobs.background_jobs_admin_read",
+        "bank_accounts.bank_accounts_admin",
+        "bank_reconciliation_matches.bank_reconciliation_matches_admin",
+        "bank_statement_imports.bank_statement_imports_admin",
+        "bank_transactions.bank_transactions_admin",
+        "building_cards.building_cards_company_isolation",
+        "building_cards.building_cards_delete",
+        "building_cards.building_cards_insert",
+        "building_cards.building_cards_update",
+        "cash_flow_entries.cash_flow_admin",
+        "client_notifications.managers manage client notifications",
+        "clients.clients_collaborator_select",
+        "collaborator_documents.colaboradoras submetem relatórios de avaria",
+        "collaborator_documents.colaboradoras veem os seus docs visíveis",
+        "collaborator_documents.gestores gerem documentos da empresa",
+        "collaborator_ride_assignments.collaborator_ride_company_isolation",
+        "collaborator_ride_assignments.collaborator_ride_delete",
+        "collaborator_ride_assignments.collaborator_ride_insert",
+        "collaborator_ride_assignments.collaborator_ride_update",
+        "companies.users see own company",
+        "company_change_events.managers see company change events",
+        "contracts.contracts_manager_select",
+        "daily_clocks.daily_clocks_own",
+        "expense_categories.expense_categories_read",
+        "expense_categories.expense_categories_write",
+        "financial_periods.financial_periods_read",
+        "financial_periods.financial_periods_write",
+        "invoice_items.managers manage invoice items",
+        "invoices.managers manage invoices",
+        "locations.locations_collaborator_select",
+        "management_tasks.management_tasks_admin",
+        "notifications.managers create notifications",
+        "notifications.users see own notifications",
+        "payroll_records.collaborators see own payroll",
+        "payroll_records.managers manage payroll",
+        "platform_admins.read own platform admin row",
+        "profiles.profiles_insert_admin",
+        "profiles.profiles_select",
+        "profiles.profiles_update_own",
+        "push_subscriptions.users manage own push subs",
+        "service_photos.service_photos_manager_read",
+        "service_photos.service_photos_own_read",
+        "service_reinforcements.reinforcements_select",
+        "team_members.company team members",
+        "teams.company teams",
+        "timesheets.collaborators create own timesheets",
+        "timesheets.collaborators see own timesheets",
+        "timesheets.managers see company timesheets",
+        "timesheets.timesheets_collaborator_insert",
+        "timesheets.timesheets_collaborator_update",
+        "timesheets.timesheets_manager_select",
+        "timesheets.timesheets_own_select",
+        "vacation_requests.vacation_requests_insert",
+        "vacation_requests.vacation_requests_select",
+        "vehicle_allocations.vehicle_allocations_company_isolation",
+        "vehicle_allocations.vehicle_allocations_delete",
+        "vehicle_allocations.vehicle_allocations_insert",
+        "vehicle_allocations.vehicle_allocations_update",
+        "vehicles.vehicles_company_isolation",
+        "vehicles.vehicles_delete",
+        "vehicles.vehicles_insert",
+        "vehicles.vehicles_update"
+      ],
+      "funcoes": [
+        "get_my_company_id",
+        "get_my_role"
+      ]
+    },
+    "get_my_company_id": {
+      "policies": [
+        "absences.absences_manage",
+        "absences.absences_manager_select",
+        "bank_accounts.bank_accounts_admin",
+        "bank_reconciliation_matches.bank_reconciliation_matches_admin",
+        "bank_statement_imports.bank_statement_imports_admin",
+        "bank_transactions.bank_transactions_admin",
+        "cash_flow_entries.cash_flow_admin",
+        "clients.clients_collaborator_select",
+        "clients.clients_manage",
+        "company_settings.company_settings_manage",
+        "company_settings.company_settings_select",
+        "contracts.contracts_manage",
+        "contracts.contracts_manager_select",
+        "crm_lead_interactions.crm_lead_interactions_manager_select",
+        "crm_leads.crm_leads_manager_select",
+        "daily_clocks.daily_clocks_manager_select",
+        "fixed_variable_payments.payments_manager_select",
+        "locations.locations_collaborator_select",
+        "locations.locations_manage",
+        "management_tasks.management_tasks_admin",
+        "manual_charges.manual_charges_manager_select",
+        "payment_cashflow_provenance.payment_cashflow_provenance_select",
+        "payment_cashflow_provenance.payment_cashflow_provenance_write",
+        "profiles.profiles_insert_admin",
+        "profiles.profiles_manage_company",
+        "profiles.profiles_select",
+        "profiles.profiles_update_own",
+        "service_price_audit.price_audit_manage",
+        "service_reinforcements.reinforcements_manage",
+        "service_reinforcements.reinforcements_select",
+        "services.services_manage",
+        "team_members.team_members_manage",
+        "team_members.team_members_select",
+        "teams.teams_manage",
+        "teams.teams_select",
+        "timesheets.timesheets_manager_manage",
+        "timesheets.timesheets_manager_select",
+        "vacation_requests.vacation_requests_insert",
+        "vacation_requests.vacation_requests_manage",
+        "vacation_requests.vacation_requests_select"
+      ],
+      "funcoes": [
+        "fn_guard_profile_tenant_role"
+      ]
+    },
+    "get_my_role": {
+      "policies": [
+        "absences.absences_manage",
+        "clients.clients_manage",
+        "company_settings.company_settings_manage",
+        "contracts.contracts_manage",
+        "crm_lead_interactions.crm_lead_interactions_manager_select",
+        "crm_leads.crm_leads_manager_select",
+        "daily_clocks.daily_clocks_manager_select",
+        "fixed_variable_payments.payments_manager_select",
+        "locations.locations_manage",
+        "manual_charges.manual_charges_manager_select",
+        "profiles.profiles_insert_admin",
+        "profiles.profiles_manage_company",
+        "service_price_audit.price_audit_manage",
+        "service_reinforcements.reinforcements_manage",
+        "services.services_manage",
+        "team_members.team_members_manage",
+        "teams.teams_manage",
+        "timesheets.timesheets_manager_manage",
+        "vacation_requests.vacation_requests_manage",
+        "vacation_requests.vacation_requests_select"
+      ],
+      "funcoes": [
+        "fn_guard_profile_tenant_role"
+      ]
+    },
+    "can_access_service": {
+      "policies": [
+        "clients.clients_collaborator_select",
+        "locations.locations_collaborator_select",
+        "services.services_collaborator_select"
+      ],
+      "funcoes": []
+    }
+  },
+  "authUidDirecto": [],
+  "helpersQueDecidemSemEstado": [
+    {
+      "nome": "can_access_service",
+      "olhaAoEstado": false
+    },
+    {
+      "nome": "get_my_profile_id",
+      "olhaAoEstado": false
+    }
+  ],
+  "corposDosHelpers": [
+    {
+      "nome": "can_access_service",
+      "securityDefiner": true,
+      "config": "",
+      "corpo": "CREATE OR REPLACE FUNCTION public.can_access_service(p_service_id uuid)\n RETURNS boolean\n LANGUAGE sql\n STABLE SECURITY DEFINER\nAS $function$\r\n  SELECT EXISTS (\r\n    SELECT 1\r\n    FROM   services s\r\n    INNER  JOIN profiles p ON p.id = auth.uid() AND p.company_id = s.company_id\r\n    WHERE  s.id = p_service_id\r\n    AND (\r\n      EXISTS (\r\n        SELECT 1 FROM team_members tm\r\n        WHERE  tm.team_id        = s.team_id\r\n        AND    tm.collaborator_id = auth.uid()\r\n        AND   (tm.left_at IS NULL OR tm.left_at > NOW())\r\n      )\r\n      OR EXISTS (\r\n        SELECT 1 FROM service_reinforcements sr\r\n        WHERE  sr.service_id     = s.id\r\n        AND    sr.collaborator_id = auth.uid()\r\n      )\r\n    )\r\n  )\r\n$function$\n"
+    },
+    {
+      "nome": "get_my_company_id",
+      "securityDefiner": true,
+      "config": "{search_path=public}",
+      "corpo": "CREATE OR REPLACE FUNCTION public.get_my_company_id()\n RETURNS uuid\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\r\n  SELECT company_id FROM profiles WHERE id = public.get_my_profile_id() LIMIT 1;\r\n$function$\n"
+    },
+    {
+      "nome": "get_my_profile_id",
+      "securityDefiner": true,
+      "config": "{search_path=public}",
+      "corpo": "CREATE OR REPLACE FUNCTION public.get_my_profile_id()\n RETURNS uuid\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\r\n  SELECT id FROM profiles WHERE auth_user_id = auth.uid()\r\n  UNION ALL\r\n  SELECT id FROM profiles p\r\n   WHERE p.id = auth.uid()\r\n     AND EXISTS (SELECT 1 FROM auth.users u WHERE u.id = p.id)\r\n     AND NOT EXISTS (SELECT 1 FROM profiles x WHERE x.auth_user_id = auth.uid())\r\n  LIMIT 1;\r\n$function$\n"
+    },
+    {
+      "nome": "get_my_role",
+      "securityDefiner": true,
+      "config": "{search_path=public}",
+      "corpo": "CREATE OR REPLACE FUNCTION public.get_my_role()\n RETURNS text\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\r\n  SELECT role FROM profiles WHERE id = public.get_my_profile_id() LIMIT 1;\r\n$function$\n"
+    }
+  ],
+  "securityDefiner": [
+    {
+      "nome": "adjust_payroll_record_atomic",
+      "args": "p_company_id uuid, p_record_id uuid, p_patch jsonb, p_actor uuid",
+      "config": "{search_path=public}",
+      "acl": "{postgres=X/postgres,service_role=X/postgres}",
+      "olhaAoEstado": true,
+      "alcancavelPorAutenticado": false,
+      "consultaIdentidade": false,
+      "semSearchPath": false
+    },
+    {
+      "nome": "approve_payroll_records_atomic",
+      "args": "p_company_id uuid, p_record_ids uuid[], p_actor uuid",
+      "config": "{search_path=public}",
+      "acl": "{postgres=X/postgres,service_role=X/postgres}",
+      "olhaAoEstado": true,
+      "alcancavelPorAutenticado": false,
+      "consultaIdentidade": false,
+      "semSearchPath": false
+    },
+    {
+      "nome": "archive_expired_documents",
+      "args": "p_company_id uuid",
+      "config": "{\"search_path=pg_catalog, public\"}",
+      "acl": "{postgres=X/postgres,service_role=X/postgres}",
+      "olhaAoEstado": false,
+      "alcancavelPorAutenticado": false,
+      "consultaIdentidade": false,
+      "semSearchPath": false
+    },
+    {
+      "nome": "assert_payroll_actor",
+      "args": "p_company_id uuid, p_actor uuid",
+      "config": "{search_path=public}",
+      "acl": "{postgres=X/postgres,service_role=X/postgres}",
+      "olhaAoEstado": false,
+      "alcancavelPorAutenticado": false,
+      "consultaIdentidade": false,
+      "semSearchPath": false
+    },
+    {
+      "nome": "can_access_service",
+      "args": "p_service_id uuid",
+      "config": "",
+      "acl": "{=X/postgres,postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}",
+      "olhaAoEstado": false,
+      "alcancavelPorAutenticado": false,
+      "consultaIdentidade": true,
+      "semSearchPath": true
+    },
+    {
+      "nome": "complete_domain_mutation",
+      "args": "p_company_id uuid, p_mutation_id uuid, p_domain text, p_operation text, p_request_hash text, p_status text, p_result jsonb, p_entity_id uuid",
+      "config": "{\"search_path=public, pg_temp\"}",
+      "acl": "{postgres=X/postgres,service_role=X/postgres}",
+      "olhaAoEstado": true,
+      "alcancavelPorAutenticado": false,
+      "consultaIdentidade": false,
+      "semSearchPath": false
+    },
+    {
+      "nome": "delete_calendar_service_safe",
+      "args": "p_service_id uuid, p_scope text, p_company_id uuid, p_actor uuid",
+      "config": "{search_path=public}",
+      "acl": "{postgres=X/postgres,service_role=X/postgres}",
+      "olhaAoEstado": true,
+      "alcancavelPorAutenticado": false,
+      "consultaIdentidade": false,
+      "semSearchPath": false
+    },
+    {
+      "nome": "delete_client_atomic",
+      "args": "p_client_id uuid, p_company_id uuid, p_actor uuid, p_mutation_id uuid, p_expected_revision integer",
+      "config": "{search_path=public}",
+      "acl": "{postgres=X/postgres,service_role=X/postgres}",
+      "olhaAoEstado": true,
+      "alcancavelPorAutenticado": false,
+      "consultaIdentidade": false,
+      "semSearchPath": false
+    },
+    {
+      "nome": "detect_schedule_conflicts",
+      "args": "p_start date, p_end date",
+      "config": "{\"search_path=pg_catalog, public\"}",
+      "acl": "{postgres=X/postgres,service_role=X/postgres}",
+      "olhaAoEstado": true,
+      "alcancavelPorAutenticado": false,
+      "consultaIdentidade": false,
+      "semSearchPath": false
+    },
+    {
+      "nome": "find_or_conflict_domain_mutation",
+      "args": "p_company_id uuid, p_mutation_id uuid, p_operation text, p_request_hash text",
+      "config": "{\"search_path=public, pg_temp\"}",
+      "acl": "{postgres=X/postgres,service_role=X/postgres}",
+      "olhaAoEstado": true,
+      "alcancavelPorAutenticado": false,
+      "consultaIdentidade": false,
+      "semSearchPath": false
+    },
+    {
+      "nome": "fn_capture_history",
+      "args": "",
+      "config": "{search_path=public}",
+      "acl": "{=X/postgres,postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}",
+      "olhaAoEstado": false,
+      "alcancavelPorAutenticado": false,
+      "consultaIdentidade": true,
+      "semSearchPath": false
+    },
+    {
+      "nome": "fn_guard_location_rate",
+      "args": "",
+      "config": "{search_path=public}",
+      "acl": "{=X/postgres,postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}",
+      "olhaAoEstado": true,
+      "alcancavelPorAutenticado": false,
+      "consultaIdentidade": false,
+      "semSearchPath": false
+    },
+    {
+      "nome": "get_documents_to_archive",
+      "args": "p_company_id uuid",
+      "config": "{\"search_path=pg_catalog, public\"}",
+      "acl": "{postgres=X/postgres,service_role=X/postgres}",
+      "olhaAoEstado": false,
+      "alcancavelPorAutenticado": false,
+      "consultaIdentidade": false,
+      "semSearchPath": false
+    },
+    {
+      "nome": "get_my_company_id",
+      "args": "",
+      "config": "{search_path=public}",
+      "acl": "{=X/postgres,postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}",
+      "olhaAoEstado": false,
+      "alcancavelPorAutenticado": false,
+      "consultaIdentidade": true,
+      "semSearchPath": false
+    },
+    {
+      "nome": "get_my_profile_id",
+      "args": "",
+      "config": "{search_path=public}",
+      "acl": "{postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}",
+      "olhaAoEstado": false,
+      "alcancavelPorAutenticado": false,
+      "consultaIdentidade": true,
+      "semSearchPath": false
+    },
+    {
+      "nome": "get_my_role",
+      "args": "",
+      "config": "{search_path=public}",
+      "acl": "{=X/postgres,postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}",
+      "olhaAoEstado": false,
+      "alcancavelPorAutenticado": false,
+      "consultaIdentidade": true,
+      "semSearchPath": false
+    },
+    {
+      "nome": "get_service_company_id",
+      "args": "p_service_id uuid",
+      "config": "{search_path=public}",
+      "acl": "{=X/postgres,postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}",
+      "olhaAoEstado": false,
+      "alcancavelPorAutenticado": false,
+      "consultaIdentidade": false,
+      "semSearchPath": false
+    },
+    {
+      "nome": "handle_new_user",
+      "args": "",
+      "config": "{\"search_path=pg_catalog, public\"}",
+      "acl": "{=X/postgres,postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}",
+      "olhaAoEstado": false,
+      "alcancavelPorAutenticado": false,
+      "consultaIdentidade": false,
+      "semSearchPath": false
+    },
+    {
+      "nome": "lock_domain_mutation",
+      "args": "p_company_id uuid, p_mutation_id uuid",
+      "config": "{\"search_path=public, pg_temp\"}",
+      "acl": "{postgres=X/postgres,service_role=X/postgres}",
+      "olhaAoEstado": false,
+      "alcancavelPorAutenticado": false,
+      "consultaIdentidade": false,
+      "semSearchPath": false
+    },
+    {
+      "nome": "mark_payroll_paid_atomic",
+      "args": "p_company_id uuid, p_record_ids uuid[], p_paid_on date, p_actor uuid",
+      "config": "{search_path=public}",
+      "acl": "{postgres=X/postgres,service_role=X/postgres}",
+      "olhaAoEstado": true,
+      "alcancavelPorAutenticado": false,
+      "consultaIdentidade": false,
+      "semSearchPath": false
+    },
+    {
+      "nome": "next_company_sequence",
+      "args": "p_company_id uuid",
+      "config": "{\"search_path=public, pg_temp\"}",
+      "acl": "{postgres=X/postgres,service_role=X/postgres}",
+      "olhaAoEstado": false,
+      "alcancavelPorAutenticado": false,
+      "consultaIdentidade": false,
+      "semSearchPath": false
+    },
+    {
+      "nome": "record_company_change_event",
+      "args": "p_company_id uuid, p_mutation_id uuid, p_domain text, p_event_type text, p_entity_ids uuid[], p_scopes text[], p_affected_from date, p_affected_to date, p_payload jsonb",
+      "config": "{\"search_path=public, pg_temp\"}",
+      "acl": "{postgres=X/postgres,service_role=X/postgres}",
+      "olhaAoEstado": false,
+      "alcancavelPorAutenticado": false,
+      "consultaIdentidade": false,
+      "semSearchPath": false
+    },
+    {
+      "nome": "set_invoice_status_atomic",
+      "args": "p_invoice_id uuid, p_company_id uuid, p_actor uuid, p_status text, p_payment_method text, p_mutation_id uuid, p_expected_revision integer",
+      "config": "{\"search_path=pg_catalog, public\"}",
+      "acl": "{postgres=X/postgres,service_role=X/postgres}",
+      "olhaAoEstado": true,
+      "alcancavelPorAutenticado": false,
+      "consultaIdentidade": false,
+      "semSearchPath": false
+    },
+    {
+      "nome": "upsert_payroll_records_atomic",
+      "args": "p_company_id uuid, p_period_year integer, p_period_month integer, p_records jsonb, p_actor uuid",
+      "config": "{search_path=public}",
+      "acl": "{postgres=X/postgres,service_role=X/postgres}",
+      "olhaAoEstado": true,
+      "alcancavelPorAutenticado": false,
+      "consultaIdentidade": false,
+      "semSearchPath": false
+    }
+  ]
+}

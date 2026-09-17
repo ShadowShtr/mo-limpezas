@@ -36,7 +36,9 @@ const authChamado: string[] = [];
 const getUser = vi.fn();
 
 /** Como a base responde. Cada cenário escolhe o seu. */
-type Cenario = "normal" | "leitura-falha" | "identidade-falha" | "coluna-ausente" | "sem-perfil";
+type Cenario =
+  | "normal" | "leitura-falha" | "identidade-falha" | "coluna-ausente" | "sem-perfil"
+  | "ator-falha" | "ator-inexistente" | "ator-inativo";
 let cenario: Cenario = "normal";
 
 const ACTOR = "gestora-1";
@@ -46,10 +48,18 @@ const CONTA_DA_ANA = "auth-user-da-ana";
 const ERRO_LIGACAO = { code: "08006", message: "connection failure" };
 
 function respostaProfiles(colunas: string): { data?: unknown; error?: unknown } {
-  // Quem pede: resolvido antes de `carregarPessoa` e nunca afectado pelos
-  // cenários — senão o teste estaria a medir a autenticação, não a identidade.
+  // Quem pede. O resolver canónico pede `role` e `status` na mesma linha.
   if (colunas.includes("role")) {
-    return { data: { id: ACTOR, company_id: "empresa-1", role: "admin" }, error: null };
+    if (cenario === "ator-falha") return { data: null, error: ERRO_LIGACAO };
+    if (cenario === "ator-inexistente") return { data: null, error: null };
+    return {
+      data: {
+        id: ACTOR, company_id: "empresa-1", role: "admin",
+        status: cenario === "ator-inativo" ? "inativo" : "ativo",
+        auth_user_id: ACTOR,
+      },
+      error: null,
+    };
   }
 
   if (colunas.includes("auth_user_id")) {
@@ -236,4 +246,55 @@ describe("102.2b — o legado usa o id certo, e diz que é o legado", () => {
     // Os dois ids são diferentes no palco deste ficheiro, de propósito.
     expect(ALVO).not.toBe(CONTA_DA_ANA);
   });
+});
+
+// ---------------------------------------------------------------------------
+describe("P1 — uma falha da base não vira «Não autenticado»", () => {
+  for (const action of ACTIONS) {
+    describe(action.nome, () => {
+      it("🔴 o ator não se resolve por falha real — e a mensagem não mente", async () => {
+        cenario = "ator-falha";
+        const res = await action.correr();
+
+        expect(res.ok).toBe(false);
+        // Era isto que saía antes: uma falha de infraestrutura vestida de
+        // sessão inexistente, a mandar quem administra investigar o login.
+        expect(res.error).not.toBe("Não autenticado.");
+        expect(res.error).toContain("confirmar a tua sessão");
+      });
+
+      it("e não escreve nem chama o Auth", async () => {
+        cenario = "ator-falha";
+        await action.correr();
+        expect(authChamado).toEqual([]);
+        expect(escritas).toEqual([]);
+      });
+
+      it("sem sessão continua a dizer «Não autenticado»", async () => {
+        // O contrapeso: a mensagem certa não pode desaparecer.
+        getUser.mockResolvedValue({ data: { user: null } });
+        const res = await action.correr();
+        expect(res).toMatchObject({ ok: false, error: "Não autenticado." });
+        expect(escritas).toEqual([]);
+      });
+
+      it("um ator sem perfil diz isso, e não «não autenticado»", async () => {
+        cenario = "ator-inexistente";
+        const res = await action.correr();
+        expect(res).toMatchObject({ ok: false, error: "Perfil não encontrado." });
+        expect(escritas).toEqual([]);
+      });
+
+      it("🔴 um ator que já saiu não administra acessos de ninguém", async () => {
+        // Estas actions correm por `service_role`, que tem BYPASSRLS — a 102
+        // não as trava. A verificação tem de estar na própria action.
+        cenario = "ator-inativo";
+        const res = await action.correr();
+        expect(res.ok).toBe(false);
+        expect(res.error).toContain("acesso foi desativado");
+        expect(authChamado).toEqual([]);
+        expect(escritas).toEqual([]);
+      });
+    });
+  }
 });

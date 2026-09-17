@@ -2,15 +2,30 @@ import { redirect } from "next/navigation";
 import { AppHeader } from "@/components/layout/app-header";
 import { BottomNav } from "@/components/layout/bottom-nav";
 import { PwaRegister } from "./_components/pwa-register";
-import { getCurrentProfile } from "@/lib/auth/current-user";
+import { resolverPerfilDaSessao } from "@/lib/auth/current-user";
+import {
+  MENSAGEM_FALHA_INFRA, RESOLUCAO_CODES,
+} from "@/lib/collaborators/current-profile-resolver";
 import { createClient } from "@/lib/supabase/server";
 import { perfilPodeEntrar } from "@/domain/collaborators/access-state";
 import { ConnectionBanner } from "@/components/ui/connection-banner";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
-  const profile = await getCurrentProfile();
+  const resolucao = await resolverPerfilDaSessao();
 
-  if (!profile) redirect("/login");
+  // 🔴 Uma falha da base NÃO termina a sessão de ninguém.
+  //
+  //    `getCurrentProfile()` devolvia `null` tanto para «não há perfil» como
+  //    para «a base não respondeu», e daqui saía sempre um redirect para o
+  //    login. Num incidente de infraestrutura isso expulsa toda a gente que
+  //    esteja a trabalhar e apaga a causa — foi assim que um `Unregistered API
+  //    key` deste projeto apareceu como um ciclo de login.
+  if (!resolucao.ok && resolucao.codigo === RESOLUCAO_CODES.PROFILE_DB_FAILURE) {
+    console.error("[app] perfil não resolvido", { erro: resolucao.erro });
+    throw new Error(MENSAGEM_FALHA_INFRA);
+  }
+  if (!resolucao.ok) redirect("/login");
+  const profile = resolucao.perfil;
 
   // 🔴 A saída tem de valer já, não quando o token expirar.
   //

@@ -23,23 +23,60 @@ import {
   type Actor, type Pessoa,
 } from "@/domain/collaborators/access-lifecycle";
 import { resolverIdentidadeAuth } from "@/lib/collaborators/auth-identity";
+import {
+  MENSAGEM_FALHA_INFRA, RESOLUCAO_CODES, resolverPerfilAutenticado,
+  type ResolucaoCode,
+} from "@/lib/collaborators/current-profile-resolver";
+import { MENSAGEM_SEM_ACESSO, perfilPodeEntrar } from "@/domain/collaborators/access-state";
 
 type Resultado = { ok: true } | { ok: false; error: string };
 
-/** Quem está a pedir, e de que empresa — lido da base, não do pedido. */
-async function resolverActor(): Promise<Actor | null> {
+type ResultadoActor =
+  | { ok: true; actor: Actor }
+  | { ok: false; codigo: ResolucaoCode | "INACTIVE"; erro: string };
+
+/**
+ * Quem está a pedir, e de que empresa — lido da base, não do pedido.
+ *
+ * 🔴 Devolvia `null`, e as quatro actions traduziam isso para
+ *    «Não autenticado.». Ou seja: um timeout da base, um `08006` ou uma chave
+ *    administrativa inválida saíam daqui como «não há sessão» — e mandavam
+ *    quem administra investigar o login em vez da infraestrutura.
+ *
+ *    É o mesmo defeito que a 102.2b fechou em `carregarPessoa`, um andar
+ *    acima. Aqui era pior, porque a mensagem apontava para o sítio errado.
+ *
+ *    `AUTH_MISSING` e `PROFILE_DB_FAILURE` deixaram de ser a mesma coisa.
+ */
+async function resolverActor(): Promise<ResultadoActor> {
   const supabase = await createClient();
   const admin = createAdminClient();
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return null;
+  if (!user) {
+    return { ok: false, codigo: RESOLUCAO_CODES.AUTH_MISSING, erro: "Não autenticado." };
+  }
 
-  const { data } = await admin
-    .from("profiles")
-    .select("id, company_id, role")
-    .eq("id", user.id)
-    .maybeSingle();
-  if (!data) return null;
-  return { profile_id: data.id, company_id: data.company_id, role: data.role };
+  const resolucao = await resolverPerfilAutenticado(admin, user.id);
+  if (!resolucao.ok) {
+    return {
+      ok: false,
+      codigo: resolucao.codigo,
+      erro: resolucao.codigo === RESOLUCAO_CODES.PROFILE_DB_FAILURE
+        ? MENSAGEM_FALHA_INFRA
+        : "Perfil não encontrado.",
+    };
+  }
+
+  // 🔴 Quem já saiu não administra acessos de ninguém. A 102 fecha isto na
+  //    base para o utilizador comum, mas estas actions correm por
+  //    `service_role`, que tem BYPASSRLS — a RLS não as trava. A verificação
+  //    tem de estar aqui.
+  if (!perfilPodeEntrar(resolucao.perfil.status)) {
+    return { ok: false, codigo: "INACTIVE", erro: MENSAGEM_SEM_ACESSO };
+  }
+
+  const p = resolucao.perfil;
+  return { ok: true, actor: { profile_id: p.id, company_id: p.company_id, role: p.role } };
 }
 
 /**
@@ -127,8 +164,9 @@ function recusaDeCarregamento(r: Extract<ResultadoPessoa, { ok: false }>): Resul
 export async function criarAcesso(
   profileId: string, senhaTemporaria: string,
 ): Promise<Resultado> {
-  const actor = await resolverActor();
-  if (!actor) return { ok: false, error: "Não autenticado." };
+  const resolvido = await resolverActor();
+  if (!resolvido.ok) return { ok: false, error: resolvido.erro };
+  const { actor } = resolvido;
 
   const carregada = await carregarPessoa(profileId);
   if (!carregada.ok) return recusaDeCarregamento(carregada);
@@ -203,8 +241,9 @@ export async function criarAcesso(
 export async function definirSenhaTemporaria(
   profileId: string, senhaTemporaria: string,
 ): Promise<Resultado> {
-  const actor = await resolverActor();
-  if (!actor) return { ok: false, error: "Não autenticado." };
+  const resolvido = await resolverActor();
+  if (!resolvido.ok) return { ok: false, error: resolvido.erro };
+  const { actor } = resolvido;
 
   const carregada = await carregarPessoa(profileId);
   if (!carregada.ok) return recusaDeCarregamento(carregada);
@@ -255,8 +294,9 @@ export async function definirSenhaTemporaria(
  *    devolve-lhe a mesma, não cria outra.
  */
 export async function desativarAcesso(profileId: string): Promise<Resultado> {
-  const actor = await resolverActor();
-  if (!actor) return { ok: false, error: "Não autenticado." };
+  const resolvido = await resolverActor();
+  if (!resolvido.ok) return { ok: false, error: resolvido.erro };
+  const { actor } = resolvido;
 
   const carregada = await carregarPessoa(profileId);
   if (!carregada.ok) return recusaDeCarregamento(carregada);
@@ -286,8 +326,9 @@ export async function desativarAcesso(profileId: string): Promise<Resultado> {
 
 /** Devolver o acesso — a mesma conta, não uma nova. */
 export async function reativarAcesso(profileId: string): Promise<Resultado> {
-  const actor = await resolverActor();
-  if (!actor) return { ok: false, error: "Não autenticado." };
+  const resolvido = await resolverActor();
+  if (!resolvido.ok) return { ok: false, error: resolvido.erro };
+  const { actor } = resolvido;
 
   const carregada = await carregarPessoa(profileId);
   if (!carregada.ok) return recusaDeCarregamento(carregada);

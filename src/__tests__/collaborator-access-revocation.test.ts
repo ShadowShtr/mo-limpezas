@@ -25,8 +25,12 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+
 import {
   ESTADOS_SEM_ACESSO,
+  ESTADO_ATIVO,
   ESTADO_DE_SAIDA,
   perfilPodeEntrar,
 } from "@/domain/collaborators/access-state";
@@ -53,22 +57,39 @@ describe("quem pode entrar", () => {
     expect(perfilPodeEntrar(ESTADO_DE_SAIDA)).toBe(false);
   });
 
-  it("não se importa com maiúsculas nem espaços", () => {
+  it("🔴 `null`, vazio e desconhecido NÃO entram", () => {
+    // A primeira versão desta regra era uma lista de exclusão: entrava tudo o
+    // que não estivesse nela. O argumento era o receio de trancar fora quem
+    // nunca teve estado escrito — e foi medido em produção (read-only):
+    // `status` NULL = 0 linhas, vazio = 0 linhas. O caso que a excepção
+    // protegia não existe, e em troca ela deixava entrar qualquer estado novo
+    // que alguém inventasse, em silêncio.
+    expect(perfilPodeEntrar(null)).toBe(false);
+    expect(perfilPodeEntrar(undefined)).toBe(false);
+    expect(perfilPodeEntrar("")).toBe(false);
+    expect(perfilPodeEntrar("ferias")).toBe(false);
+    expect(perfilPodeEntrar("arquivado")).toBe(false);
+  });
+
+  it("🔴 e não se normaliza — a base compara 'ativo' exacto", () => {
+    // `trim()`/`toLowerCase()` fariam a aplicação aceitar o que a migration
+    // 102 recusa na base, e as duas camadas passariam a dar respostas
+    // diferentes à mesma pergunta.
     expect(perfilPodeEntrar("  Inativo  ")).toBe(false);
-    expect(perfilPodeEntrar("INATIVO")).toBe(false);
+    expect(perfilPodeEntrar("ATIVO")).toBe(false);
+    expect(perfilPodeEntrar(" ativo")).toBe(false);
+    expect(perfilPodeEntrar("ativo")).toBe(true);
   });
 
-  it("🔴 `null` deixa entrar — e é de propósito", () => {
-    // `profiles.status` é anulável. Uma linha sem estado é uma pessoa cujo
-    // estado ninguém escreveu, não uma pessoa que levou saída. Fechar na
-    // ausência trancava fora quem nunca foi tocado, num sistema em uso real.
-    expect(perfilPodeEntrar(null)).toBe(true);
-    expect(perfilPodeEntrar(undefined)).toBe(true);
-    expect(perfilPodeEntrar("")).toBe(true);
-  });
-
-  it("um estado desconhecido deixa entrar, em vez de trancar meia empresa", () => {
-    expect(perfilPodeEntrar("ferias")).toBe(true);
+  it("a regra da aplicação é a MESMA que a 102 põe na base", () => {
+    // Se divergirem, a aplicação e a base discordam sobre quem trabalha aqui,
+    // e o buraco reabre pelo lado mais permissivo.
+    const migracao = readFileSync(
+      join(process.cwd(), "supabase/migrations/102_status_participa_da_autorizacao.sql"),
+      "utf8",
+    );
+    expect(migracao).toContain("status = 'ativo'");
+    expect(ESTADO_ATIVO).toBe("ativo");
   });
 });
 
@@ -153,9 +174,12 @@ describe("o guard das actions", () => {
     expect(g.code).toBe("INACTIVE");
   });
 
-  it("um perfil sem estado continua a passar", async () => {
+  it("🔴 um perfil sem estado NÃO passa", async () => {
     perfilNaBase = { ...perfilNaBase, status: null };
-    expect((await guard()).ok).toBe(true);
+    const g = await guard();
+    expect(g.ok).toBe(false);
+    if (g.ok) return;
+    expect(g.code).toBe("INACTIVE");
   });
 });
 

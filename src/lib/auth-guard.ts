@@ -1,6 +1,9 @@
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { MENSAGEM_SEM_ACESSO, perfilPodeEntrar } from "@/domain/collaborators/access-state";
+import {
+  MENSAGEM_FALHA_INFRA, RESOLUCAO_CODES, resolverPerfilAutenticado,
+} from "@/lib/collaborators/current-profile-resolver";
 
 export interface AuthedProfile {
   id: string;
@@ -36,6 +39,15 @@ export const AUTH_GUARD_CODES = {
    *    levasse saída continuava a escrever no sistema até lá.
    */
   INACTIVE: "INACTIVE",
+  /**
+   * 🔴 A base não respondeu — e isso NÃO é `PROFILE_NOT_FOUND`.
+   *
+   *    Separado porque as consequências são opostas: «não existe» é uma
+   *    anomalia de dados que se investiga no perfil; isto é infraestrutura, e
+   *    quem o vir tem de olhar para a base ou para a chave. Tratá-los como o
+   *    mesmo mandava investigar o sítio errado — e já mandou, neste projeto.
+   */
+  PROFILE_LOOKUP_FAILED: "PROFILE_LOOKUP_FAILED",
 } as const;
 
 export type AuthGuardCode =
@@ -76,19 +88,31 @@ export async function requireProfile(
   }
 
   const admin = createAdminClient();
-  const { data: profile } = await admin
-    .from("profiles")
-    .select("id, company_id, role, status")
-    .eq("id", user.id)
-    .single();
+  // 🔴 Pelo resolver, e não por um `select` próprio. Antes, `!profile` cobria
+  //    «não existe» e «a leitura falhou» com a mesma resposta — e uma chave
+  //    administrativa inválida saía daqui como perfil inexistente.
+  const resolucao = await resolverPerfilAutenticado(admin, user.id);
 
-  if (!profile) {
+  if (!resolucao.ok) {
+    if (resolucao.codigo === RESOLUCAO_CODES.PROFILE_DB_FAILURE) {
+      // Não se sabe. Não é «não existe», e não é «não autenticado».
+      console.error("[requireProfile] perfil não resolvido", {
+        userId: user.id, erro: resolucao.erro,
+      });
+      return {
+        ok: false,
+        code: AUTH_GUARD_CODES.PROFILE_LOOKUP_FAILED,
+        error: MENSAGEM_FALHA_INFRA,
+      };
+    }
     return {
       ok: false,
       code: AUTH_GUARD_CODES.PROFILE_NOT_FOUND,
       error: "Perfil não encontrado.",
     };
   }
+
+  const profile = resolucao.perfil;
 
   // 🔴 O estado ANTES do papel, e de propósito.
   //
@@ -115,5 +139,5 @@ export async function requireProfile(
     };
   }
 
-  return { ok: true, profile: profile as AuthedProfile, admin };
+  return { ok: true, profile, admin };
 }

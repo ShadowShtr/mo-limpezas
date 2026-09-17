@@ -93,13 +93,13 @@ describe("MASTER_REGEX_SANITIZER_SUPERSEDED", () => {
     expect(SINK_SEM_COMENTARIOS).not.toMatch(/slice\(\s*0?\s*,?\s*60\s*\)/);
   });
 
-  it("o conjunto fechado tem os catorze códigos do domínio, sem repetições", () => {
-    // Catorze desde 2026-09-17: `INACTIVE` entrou com a saída de
-    // colaboradores. O número está aqui à mão de propósito — é o que obriga
+  it("o conjunto fechado tem os quinze códigos do domínio, sem repetições", () => {
+    // Quinze desde 2026-09-17: `INACTIVE` e `PROFILE_LOOKUP_FAILED`
+    // entraram com a saída de colaboradores. O número está aqui à mão de propósito — é o que obriga
     // quem acrescenta um código a passar por este ficheiro e a decidir se o
     // novo é mesmo do domínio ou se é um valor que não devia chegar aos logs.
     expect(new Set(CODIGOS_CONHECIDOS).size).toBe(CODIGOS_CONHECIDOS.length);
-    expect(CODIGOS_CONHECIDOS.length).toBe(14);
+    expect(CODIGOS_CONHECIDOS.length).toBe(15);
   });
 });
 

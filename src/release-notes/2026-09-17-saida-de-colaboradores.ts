@@ -9,6 +9,6 @@ export const nota: ReleaseNote = {
     "O botão de eliminar deu lugar a «Dar saída», que começa por mostrar tudo o que está "
     + "ligado àquela pessoa. A saída faz-se por desativação: deixa de entrar de imediato, "
     + "mesmo com a aplicação aberta, e sai das equipas, escalas e folha — mas tudo o que fez "
-    + "continua lá, com o nome de quem o fez. Eliminar de vez deixou de existir: podia apagar "
-    + "registos sem aviso.",
+    + "continua lá, com o nome de quem o fez. Quem estiver marcado como inativo ou suspenso "
+    + "deixa de conseguir entrar. Eliminar de vez deixou de existir.",
 };
