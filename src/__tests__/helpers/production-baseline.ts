@@ -90,7 +90,12 @@ END $papeis$;
 CREATE FUNCTION public.get_my_company_id() RETURNS uuid LANGUAGE sql STABLE AS $f$ SELECT NULL::uuid $f$;
 CREATE FUNCTION public.get_my_role() RETURNS text LANGUAGE sql STABLE AS $f$ SELECT NULL::text $f$;
 CREATE FUNCTION public.get_service_company_id(p uuid) RETURNS uuid LANGUAGE sql STABLE AS $f$ SELECT NULL::uuid $f$;
-CREATE FUNCTION public.can_access_service(p uuid) RETURNS boolean LANGUAGE sql STABLE AS $f$ SELECT true $f$;
+-- 🔴 p_service_id, e nao p: e o nome do parametro EM PRODUCAO.
+--    CREATE OR REPLACE recusa-se a renomear um parametro, e as politicas do
+--    fixture dependem desta funcao — o que impede simplesmente apaga-la. Com
+--    o nome errado aqui, qualquer ensaio que substitua esta funcao pelo corpo
+--    real rebenta com «cannot change name of input parameter».
+CREATE FUNCTION public.can_access_service(p_service_id uuid) RETURNS boolean LANGUAGE sql STABLE AS $f$ SELECT true $f$;
 `;
 
 /**
