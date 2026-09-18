@@ -94,20 +94,20 @@ const WRITERS: Record<string, string[]> = {
  * INSERT directo desapareceu do código.
  */
 const EXCECOES: Array<{ ficheiro: string; tabela: string; dono: string; razao: string }> = [
-  {
-    ficheiro: "src/app/actions/colaboradores.ts",
-    tabela: "invoices",
-    dono: "—",
-    razao:
-      "Anonimização de `created_by` ao remover uma pessoa. Não toca em valor, " +
-      "data nem estado: nada aqui muda o que um mês vale.",
-  },
-  {
-    ficheiro: "src/app/actions/colaboradores.ts",
-    tabela: "payroll_records",
-    dono: "—",
-    razao: "Anonimização de `approved_by`, pela mesma razão.",
-  },
+  // 🔴 Duas excepções saíram daqui, e vale a pena dizer porquê.
+  //
+  //    Eram `invoices.created_by` e `payroll_records.approved_by`, anuladas por
+  //    `deleteColaborador` ao eliminar uma pessoa. A justificação — «não toca em
+  //    valor, data nem estado: nada aqui muda o que um mês vale» — estava certa
+  //    sobre o VALOR do mês e calada sobre o resto: apagavam quem tinha emitido
+  //    a fatura e quem tinha aprovado a folha, e faziam-no ANTES de um DELETE
+  //    que outra referência qualquer podia recusar. Uma fatura fechada ficava
+  //    sem autor sem que o perfil chegasse a desaparecer.
+  //
+  //    A eliminação física está fechada, e com ela desapareceram os UPDATEs.
+  //    Este ficheiro voltou a ficar vermelho no instante em que isso aconteceu
+  //    — tal como tinha acontecido com a folha. É a segunda vez que o
+  //    inventário de excepções dá pela sua própria dívida a ser paga.
   {
     ficheiro: "src/lib/payments-month-materialization.ts",
     tabela: "fixed_variable_payments",

@@ -1,12 +1,12 @@
 {
   "generatedBy": "scripts/audit-file-inventory.mjs",
-  "totalFiles": 918,
+  "totalFiles": 919,
   "byStatus": {
-    "MANTER": 894,
+    "MANTER": 895,
     "STANDBY": 24
   },
   "byCategory": {
-    "test": 218,
+    "test": 219,
     "route-ui": 140,
     "migration": 134,
     "lib": 77,
@@ -29,7 +29,7 @@
     "supabase-other": 2
   },
   "byConfidence": {
-    "alta": 896,
+    "alta": 897,
     "média": 16,
     "baixa": 6
   },
@@ -1932,7 +1932,7 @@
       ],
       "signals": {
         "supabase": 1,
-        "sqlWrite": 26,
+        "sqlWrite": 28,
         "debugger": 6,
         "revalidatePath": 38
       },
@@ -5818,7 +5818,7 @@
       "sideEffects": [],
       "risks": [],
       "signals": {
-        "sqlWrite": 4
+        "sqlWrite": 5
       },
       "action": "nenhuma",
       "reason": "suite de testes — corre por convenção do vitest",
@@ -6646,6 +6646,35 @@
       "sideEffects": [],
       "risks": [],
       "signals": {},
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/__tests__/hard-delete-bloqueado.test.ts",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [
+        "supabase"
+      ],
+      "risks": [],
+      "signals": {
+        "supabase": 2,
+        "sqlWrite": 11,
+        "eslintDisable": 2,
+        "dynamicImport": 5
+      },
       "action": "nenhuma",
       "reason": "suite de testes — corre por convenção do vitest",
       "manualDecision": false,
@@ -13972,9 +14001,9 @@
       "confidence": "alta",
       "consumers": 5,
       "consumerSample": [
+        "src/__tests__/hard-delete-bloqueado.test.ts",
         "src/app/(dashboard)/dashboard/colaboradores/[id]/_components/force-app-update-button.tsx",
-        "src/app/(dashboard)/dashboard/colaboradores/[id]/_components/reset-password-button.tsx",
-        "src/app/(dashboard)/dashboard/colaboradores/[id]/_components/vacation-balance-form.tsx"
+        "src/app/(dashboard)/dashboard/colaboradores/[id]/_components/reset-password-button.tsx"
       ],
       "autoLoaded": false,
       "referencedBy": [
@@ -13983,7 +14012,7 @@
       "sideEffects": [
         "supabase",
         "write",
-        "revalidatePath(6)"
+        "revalidatePath(3)"
       ],
       "risks": [
         "erro-de-query-ignorado(6)"
@@ -13991,10 +14020,10 @@
       "signals": {
         "supabase": 20,
         "serverAction": 1,
-        "write": 12,
-        "sqlWrite": 17,
+        "write": 3,
+        "sqlWrite": 10,
         "ignoredError": 6,
-        "revalidatePath": 6,
+        "revalidatePath": 3,
         "dynamicImport": 1
       },
       "action": "auditar atomicidade (T12/T13)",
