@@ -1,16 +1,16 @@
 {
   "generatedBy": "scripts/audit-file-inventory.mjs",
-  "totalFiles": 918,
+  "totalFiles": 919,
   "byStatus": {
     "MANTER": 894,
-    "STANDBY": 24
+    "STANDBY": 25
   },
   "byCategory": {
     "test": 218,
     "route-ui": 140,
     "migration": 134,
     "lib": 77,
-    "script": 62,
+    "script": 63,
     "domain": 52,
     "doc": 47,
     "server-action": 44,
@@ -30,13 +30,13 @@
   },
   "byConfidence": {
     "alta": 896,
-    "média": 16,
+    "média": 17,
     "baixa": 6
   },
   "scriptRisk": {
     "SAFE_OFFLINE": 33,
+    "WRITE_CAPABLE": 11,
     "ADMIN_GUARDED_WRITE": 11,
-    "WRITE_CAPABLE": 10,
     "ADMIN_READ": 6,
     "READ_ONLY": 2
   },
@@ -3163,7 +3163,7 @@
       "category": "script",
       "status": "MANTER",
       "confidence": "média",
-      "consumers": 17,
+      "consumers": 18,
       "consumerSample": [
         "scripts/audit-identity-drift-manifest.ts",
         "scripts/audit-status-authorization-surface.mjs",
@@ -3518,6 +3518,33 @@
         "allClosed": false
       },
       "scriptRisk": "SAFE_OFFLINE"
+    },
+    {
+      "path": "scripts/preflight-101b.mjs",
+      "category": "script",
+      "status": "STANDBY",
+      "confidence": "média",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "sqlWrite": 5,
+        "consoleLog": 13,
+        "consoleErr": 4
+      },
+      "action": "T17-B: confirmar se ainda é preciso",
+      "reason": "capaz de escrever na base",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": true,
+        "dynamicImport": true,
+        "allClosed": false
+      },
+      "scriptRisk": "WRITE_CAPABLE"
     },
     {
       "path": "scripts/read-production-migration-ledger.mjs",
