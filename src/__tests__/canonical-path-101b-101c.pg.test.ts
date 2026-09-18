@@ -1,5 +1,5 @@
 // ============================================================================
-// PISTA B — a cadeia CANÓNICA constrói a identidade sozinha (101b)
+// PISTA B — a cadeia CANÓNICA chega lá sozinha
 // ============================================================================
 //
 // 🔴 O defeito de prova que este ficheiro fecha.
@@ -26,9 +26,7 @@
 //        baseline canónico (forma versionada de produção, PRÉ-drift)
 //      + 101 + 101a
 //      + 101b   ← tem de CRIAR a identidade
-//
-// A 101c e a revogação por estado vivem na PR seguinte, e são provadas lá:
-// esta PR entrega apenas a reconciliação, para poder ser aplicada sozinha.
+//      + 101c   ← tem de fechar a autorização por estado
 //
 // ----------------------------------------------------------------------------
 // Sobre não replicar 001→101a
@@ -66,12 +64,30 @@ const COLAB = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
 const SEM_CONTA = "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee";
 
 const M_101B = "supabase/migrations/101b_identity_reconciliation.sql";
+const M_101C = "supabase/migrations/101c_status_participa_da_autorizacao.sql";
 
 let container: PostgresContainer;
 let pool: pg.Pool;
 
 const lerSql = (rel: string) => readFileSync(join(process.cwd(), rel), "utf8");
 
+async function comoUtilizador<T>(authUserId: string, fn: (c: pg.Client) => Promise<T>): Promise<T> {
+  const c = new pg.Client({ ...container.connection });
+  await c.connect();
+  try {
+    await c.query("SELECT set_config('request.jwt.claim.sub', $1, false)", [authUserId]);
+    await c.query("SET ROLE authenticated");
+    return await fn(c);
+  } finally {
+    await c.end().catch(() => { /* já fechada */ });
+  }
+}
+
+const servicosVisiveis = (authUserId: string) =>
+  comoUtilizador(authUserId, async (c) => {
+    const { rows } = await c.query("SELECT count(*)::int n FROM public.services");
+    return rows[0].n as number;
+  });
 
 /**
  * Um perfil SEM conta no Auth — só possível DEPOIS da 101b.
@@ -178,6 +194,10 @@ describe("o preestado NÃO existe antes da 101b", () => {
     expect(funcao.rows[0].n).toBe(0);
   });
 
+  it("e a 101c recusa-se a correr sozinha, em vez de silenciosamente não fazer nada", LENTO, async () => {
+    await baseCanonica();
+    await expect(pool.query(lerSql(M_101C))).rejects.toThrow(/101c|get_my_profile_id/i);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -257,6 +277,55 @@ describe("101b — constrói a identidade a partir do canónico", () => {
 });
 
 // ---------------------------------------------------------------------------
+describe("101c — sobre o que a 101b construiu, não sobre uma fixture", () => {
+  async function cadeiaCompleta(): Promise<void> {
+    await baseCanonica();
+    await pool.query(lerSql(M_101B));
+    await pool.query(lerSql(M_101C));
+  }
+
+  it("ativo → acesso", LENTO, async () => {
+    await cadeiaCompleta();
+    expect(await servicosVisiveis(GESTORA)).toBeGreaterThan(0);
+  });
+
+  it("🔴 inativo → o mesmo token deixa de ler", LENTO, async () => {
+    await cadeiaCompleta();
+    expect(await servicosVisiveis(GESTORA)).toBeGreaterThan(0);
+
+    await pool.query("UPDATE public.profiles SET status='inativo' WHERE id=$1", [GESTORA]);
+    expect(await servicosVisiveis(GESTORA)).toBe(0);
+  });
+
+  it("suspenso → nega", LENTO, async () => {
+    await cadeiaCompleta();
+    await pool.query("UPDATE public.profiles SET status='suspenso' WHERE id=$1", [GESTORA]);
+    expect(await servicosVisiveis(GESTORA)).toBe(0);
+  });
+
+  it("desconhecido e nulo → negam", LENTO, async () => {
+    await cadeiaCompleta();
+    await pool.query("ALTER TABLE public.profiles DROP CONSTRAINT IF EXISTS profiles_status_check");
+    for (const estado of [null, "", "arquivado", "ATIVO"]) {
+      await pool.query("UPDATE public.profiles SET status=$2 WHERE id=$1", [GESTORA, estado]);
+      expect(await servicosVisiveis(GESTORA), `status=${JSON.stringify(estado)}`).toBe(0);
+    }
+  });
+
+  it("volta a ativo → devolve o acesso", LENTO, async () => {
+    await cadeiaCompleta();
+    await pool.query("UPDATE public.profiles SET status='inativo' WHERE id=$1", [GESTORA]);
+    expect(await servicosVisiveis(GESTORA)).toBe(0);
+    await pool.query("UPDATE public.profiles SET status='ativo' WHERE id=$1", [GESTORA]);
+    expect(await servicosVisiveis(GESTORA)).toBeGreaterThan(0);
+  });
+
+  it("a ordem inversa não passa — 101c antes de 101b é recusada", LENTO, async () => {
+    await baseCanonica();
+    await expect(pool.query(lerSql(M_101C))).rejects.toThrow();
+  });
+});
+
 // ---------------------------------------------------------------------------
 describe("o `102` fica livre para o CRM", () => {
   it("nenhuma migration desta frente ocupa 102, 103 ou 104", LENTO, async () => {
