@@ -57,6 +57,7 @@ let pool: pg.Pool;
 const lerSql = (rel: string) => readFileSync(join(process.cwd(), rel), "utf8");
 
 const PRE_101C = "src/__tests__/fixtures/pre-101c-authorization-helpers.sql";
+const M_101B = "supabase/migrations/101b_identity_reconciliation.sql";
 const MIGRATION_101C = "supabase/migrations/101c_status_participa_da_autorizacao.sql";
 const ROLLBACK_101C = "supabase/migrations/rollback/101c_status_participa_da_autorizacao.down.sql";
 
@@ -346,5 +347,73 @@ describe("o rollback repõe o estado anterior — incluindo o buraco", () => {
 
     // 🔴 É isto que o rollback custa, e está escrito no próprio ficheiro.
     expect(await servicosVisiveis(GESTORA)).toBeGreaterThan(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+describe("101b sobre o estado VIVO — sem churn", () => {
+  /**
+   * 🔴 «No-op semântico» não é «no-op operacional», e a diferença é toda em
+   *    produção.
+   *
+   *    A primeira versão da 101b era a cópia dos três rascunhos: 72 DROP
+   *    POLICY e 70 CREATE POLICY sobre 39 tabelas vivas, para chegar a um
+   *    estado onde já estava. Dizia de si própria que era um no-op. Não era.
+   *
+   *    A medida aqui é o OID: uma política largada e recriada muda de OID.
+   *    Comparar antes/depois responde à pergunta certa — «executou DDL?» — em
+   *    vez da pergunta fácil, «ficou no sítio certo?».
+   */
+  const oidsDasPoliticas = async () => {
+    const { rows } = await pool.query(`
+      SELECT pol.oid::bigint AS oid, pol.polname AS nome, c.relname AS tabela
+        FROM pg_policy pol JOIN pg_class c ON c.oid = pol.polrelid
+        JOIN pg_namespace n ON n.oid = c.relnamespace
+       WHERE n.nspname = 'public'
+       ORDER BY c.relname, pol.polname
+    `);
+    return rows as { oid: string; nome: string; tabela: string }[];
+  };
+
+  it("🔴 zero políticas recriadas, zero linhas de profiles alteradas", LENTO, async () => {
+    // O palco vivo: a forma real de produção, com o drift já lá.
+    await montarPalco(false);
+
+    // ...e já com a 101b aplicada uma vez, que é o estado de produção hoje.
+    await pool.query(lerSql(M_101B));
+
+    const antes = await oidsDasPoliticas();
+    const perfisAntes = await pool.query(
+      "SELECT id, auth_user_id, status FROM public.profiles ORDER BY id",
+    );
+
+    // A segunda corrida é a que produção veria.
+    await pool.query(lerSql(M_101B));
+
+    const depois = await oidsDasPoliticas();
+    const perfisDepois = await pool.query(
+      "SELECT id, auth_user_id, status FROM public.profiles ORDER BY id",
+    );
+
+    const recriadas = depois.filter((d) => {
+      const a = antes.find((x) => x.nome === d.nome && x.tabela === d.tabela);
+      return !a || a.oid !== d.oid;
+    });
+
+    expect(recriadas.map((r) => `${r.tabela}.${r.nome}`)).toEqual([]);
+    expect(depois.length).toBe(antes.length);
+    expect(perfisDepois.rows).toEqual(perfisAntes.rows);
+  });
+
+  it("e mesmo assim deixa o catálogo no alvo", LENTO, async () => {
+    await montarPalco(false);
+    await pool.query(lerSql(M_101B));
+
+    const { rows } = await pool.query(`
+      SELECT count(*)::int n FROM pg_policies
+       WHERE schemaname='public'
+         AND (COALESCE(qual,'') || ' ' || COALESCE(with_check,'')) ~ 'auth\.uid\(\)'
+    `);
+    expect(rows[0].n).toBe(0);
   });
 });

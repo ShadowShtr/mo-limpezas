@@ -276,7 +276,7 @@ describe("102.2 — a identidade da conta vem do resolver", () => {
 
 // ---------------------------------------------------------------------------
 describe("desativar", () => {
-  it("bane a conta ANTES de marcar o estado", async () => {
+  it("🔴 marca o estado ANTES de banir — a ordem inverteu-se, e é de propósito", async () => {
     const ordem: string[] = [];
     updateUserById.mockImplementation(async () => { ordem.push("ban"); return { error: null }; });
 
@@ -284,25 +284,41 @@ describe("desativar", () => {
 
     const estado = dbOps.find((o) => o.op === "update");
     expect((estado?.payload as { status: string }).status).toBe(ESTADO_DE_SAIDA);
+
+    // 🔴 Este teste afirmava o contrário — «bane a conta ANTES de marcar o
+    //    estado» — e estava certo enquanto `status` era decoração: o ban era a
+    //    única defesa real.
+    //
+    //    Com a 101c deixou de ser. `status` é o que a RLS consulta, e a ordem
+    //    antiga tinha um buraco: ban ✓ / status ✗ deixava um token já emitido
+    //    a ler e escrever na base. Agora status ✓ / ban ✗ deixa a pessoa a
+    //    autenticar-se e a não conseguir fazer nada — que é o lado seguro.
+    //
+    //    A regra está em `access-cycle.ts`: o que FECHA vai primeiro.
     expect(ordem).toEqual(["ban"]);
   });
 
-  it("se o banimento falhar, o estado não muda", async () => {
+  it("🔴 se o banimento falhar, o acesso JÁ está fechado — e é falha na mesma", async () => {
     updateUserById.mockResolvedValue({ error: { message: "auth em baixo" } });
-    expect((await desativar()).ok).toBe(false);
-    expect(escritas()).toEqual([]);
-  });
-
-  it("🔴 se o estado não ficar gravado, a operação FALHA — mesmo com a conta banida", async () => {
-    // O banimento sozinho não tira o acesso a quem já está autenticado. É o
-    // `status` que o guard lê a cada pedido. Dizer «acesso retirado» com essa
-    // escrita falhada seria repetir a promessa que a 102.1 veio desfazer.
-    falhaUpdatePerfil = true;
     const res = await desativar();
+
     expect(res.ok).toBe(false);
     if (res.ok) return;
-    expect(res.error).toContain("não ficou gravado");
-    expect(res.error).toContain("sessão aberta");
+    // Uma falha parcial nunca é reportada como sucesso...
+    expect(res.error).toContain("revogado");
+    // ...mas o estado ficou gravado, e é isso que corta quem já está dentro.
+    const estado = dbOps.find((o) => o.op === "update");
+    expect((estado?.payload as { status: string }).status).toBe(ESTADO_DE_SAIDA);
+  });
+
+  it("🔴 se o estado não gravar, a operação falha e o Auth nem é chamado", async () => {
+    falhaUpdatePerfil = true;
+    const res = await desativar();
+
+    expect(res.ok).toBe(false);
+    // Nada de banir uma conta cuja revogação não ficou registada: seria
+    // fechar a porta da frente e deixar a de trás aberta.
+    expect(updateUserById).not.toHaveBeenCalled();
   });
 
   it("🔴 um update que não encontrou linha nenhuma não conta como saída", async () => {
@@ -311,8 +327,7 @@ describe("desativar", () => {
     estadoConfirmado = null;
     const res = await desativar();
     expect(res.ok).toBe(false);
-    if (res.ok) return;
-    expect(res.error).toContain("não ficou confirmada");
+    expect(updateUserById).not.toHaveBeenCalled();
   });
 
   it("nem uma confirmação com o estado errado", async () => {

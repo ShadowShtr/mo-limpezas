@@ -23,6 +23,7 @@ import {
   type Actor, type Pessoa,
 } from "@/domain/collaborators/access-lifecycle";
 import { resolverIdentidadeAuth } from "@/lib/collaborators/auth-identity";
+import { devolverAcesso, tirarAcesso } from "@/lib/collaborators/access-cycle";
 import {
   MENSAGEM_FALHA_INFRA, RESOLUCAO_CODES, resolverPerfilAutenticado,
   type ResolucaoCode,
@@ -305,12 +306,17 @@ export async function desativarAcesso(profileId: string): Promise<Resultado> {
   const permissao = exigeAcessoExistente(actor, pessoa, "desactivar");
   if (!permissao.permitido) return { ok: false, error: permissao.motivo };
 
-  const admin = createAdminClient();
-  // Um banimento longo é a forma de o Supabase representar «não entra», e
-  // preserva a conta — que é precisamente o que se quer.
-  const { error } = await admin.auth.admin.updateUserById(
-    pessoa.auth_user_id as string, { ban_duration: "876000h" });
-  if (error) return { ok: false, error: error.message };
+  // 🔴 Pelo ciclo canónico — o MESMO que a lista de colaboradores usa.
+  //
+  //    Antes, isto apenas banía a conta. Com a 101c, `profiles.status` é o que
+  //    a base consulta: banir sem o escrever deixava um token antigo a
+  //    trabalhar como se nada fosse. A desativação estava «feita» no ecrã e
+  //    não estava no sistema.
+  const resultado = await tirarAcesso(createAdminClient(), {
+    profileId: pessoa.id,
+    companyId: pessoa.company_id,
+  });
+  if (!resultado.ok) return { ok: false, error: resultado.erro };
 
   await auditLog({
     companyId: actor.company_id,
@@ -318,9 +324,11 @@ export async function desativarAcesso(profileId: string): Promise<Resultado> {
     action: "access_disabled",
     entityType: "profile",
     entityId: pessoa.id,
+    meta: { tinha_conta: resultado.tocouNaConta },
   });
 
   revalidatePath(`/dashboard/colaboradores/${pessoa.id}`);
+  revalidatePath("/dashboard/colaboradores");
   return { ok: true };
 }
 
@@ -337,10 +345,14 @@ export async function reativarAcesso(profileId: string): Promise<Resultado> {
   const permissao = exigeAcessoExistente(actor, pessoa, "reactivar");
   if (!permissao.permitido) return { ok: false, error: permissao.motivo };
 
-  const admin = createAdminClient();
-  const { error } = await admin.auth.admin.updateUserById(
-    pessoa.auth_user_id as string, { ban_duration: "none" });
-  if (error) return { ok: false, error: error.message };
+  // 🔴 Desbanir sozinho devolvia a porta e não a autorização: a pessoa
+  //    entrava e era recusada em tudo, porque `status` continuava `inativo`.
+  //    O ciclo canónico faz as duas coisas, e pela ordem segura.
+  const resultado = await devolverAcesso(createAdminClient(), {
+    profileId: pessoa.id,
+    companyId: pessoa.company_id,
+  });
+  if (!resultado.ok) return { ok: false, error: resultado.erro };
 
   await auditLog({
     companyId: actor.company_id,
@@ -348,8 +360,10 @@ export async function reativarAcesso(profileId: string): Promise<Resultado> {
     action: "access_reenabled",
     entityType: "profile",
     entityId: pessoa.id,
+    meta: { tinha_conta: resultado.tocouNaConta },
   });
 
   revalidatePath(`/dashboard/colaboradores/${pessoa.id}`);
+  revalidatePath("/dashboard/colaboradores");
   return { ok: true };
 }

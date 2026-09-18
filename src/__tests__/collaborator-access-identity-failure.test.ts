@@ -40,6 +40,8 @@ type Cenario =
   | "normal" | "leitura-falha" | "identidade-falha" | "coluna-ausente" | "sem-perfil"
   | "ator-falha" | "ator-inexistente" | "ator-inativo";
 let cenario: Cenario = "normal";
+/** O estado que a base passa a ter depois de o ciclo escrever. */
+let statusNaBase = "ativo";
 
 const ACTOR = "gestora-1";
 const ALVO = "perfil-da-ana";
@@ -70,6 +72,13 @@ function respostaProfiles(colunas: string): { data?: unknown; error?: unknown } 
     return { data: { id: ALVO, auth_user_id: CONTA_DA_ANA }, error: null };
   }
 
+  // O ciclo de acesso escreve `status` e confirma-o por leitura. Sem este
+  // ramo, a confirmação lia a linha errada e a operação dava-se por não
+  // concluída — o mock estaria a medir o mock.
+  if (colunas.trim() === "status") {
+    return { data: { status: statusNaBase }, error: null };
+  }
+
   if (colunas.includes("full_name")) {
     if (cenario === "leitura-falha") return { data: null, error: ERRO_LIGACAO };
     if (cenario === "sem-perfil") return { data: null, error: null };
@@ -90,6 +99,8 @@ function makeBuilder(table: string) {
     if (["insert", "update", "upsert", "delete"].includes(nome)) {
       op = nome;
       escritas.push(`${table}:${nome}`);
+      const payload = args[0] as { status?: string } | undefined;
+      if (nome === "update" && payload?.status) statusNaBase = payload.status;
     }
     return b;
   };

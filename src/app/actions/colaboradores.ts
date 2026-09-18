@@ -9,11 +9,10 @@ import { revalidatePath } from "next/cache";
 import { auditLog } from "@/lib/audit";
 import { isNoRowsError, logQueryFailure, queryFailure } from "@/lib/query-error";
 import { sondarRelacoesDoPerfil } from "@/lib/collaborators/probe-profile-relations";
-import { resolverIdentidadeAuth } from "@/lib/collaborators/auth-identity";
+import { tirarAcesso } from "@/lib/collaborators/access-cycle";
 import {
   avaliarRemocao, explicarVeredicto, resumirPorArea,
 } from "@/domain/collaborators/lifecycle";
-import { ESTADO_DE_SAIDA } from "@/domain/collaborators/access-state";
 
 export interface ColaboradorInput {
   full_name: string;
@@ -492,69 +491,14 @@ export async function desativarColaborador(id: string, companyId: string) {
     return { ok: false as const, error: "Não podes desativar a tua própria conta." };
   }
 
-  // 🔴 O id da conta NUNCA se assume igual ao do perfil.
+  // 🔴 Pelo ciclo canónico — o MESMO que a ficha individual usa.
   //
-  //    O repositório tem dois modelos de identidade a coexistir, e escrever
-  //    `getUserById(id)` aqui escolhia o legado em silêncio — na mesma
-  //    aplicação onde `collaborator-access.ts` já usa `auth_user_id`. O
-  //    resolver é o único sítio onde essa regra vive.
-  const identidade = await resolverIdentidadeAuth(admin, id);
-  if (!identidade.ok) return { ok: false as const, error: identidade.erro };
-
-  // Um perfil pode nunca ter tido conta de acesso — foi criado com o nome e
-  // mais nada. Não é uma avaria, e não impede a desativação.
-  let contaBanida = false;
-  if (identidade.authUserId) {
-    const { data: conta } = await admin.auth.admin.getUserById(identidade.authUserId);
-    if (conta?.user) {
-      // Um banimento longo é a forma de o Supabase representar «não entra», e
-      // preserva a conta — que é precisamente o que se quer.
-      const { error: erroBan } = await admin.auth.admin.updateUserById(identidade.authUserId, {
-        ban_duration: "876000h",
-      });
-      if (erroBan) return { ok: false as const, error: erroBan.message };
-      contaBanida = true;
-    }
-  }
-
-  // 🔴 O banimento sozinho NÃO tira o acesso, e é por isso que esta escrita é
-  //    a que conta.
-  //
-  //    Banir impede o login seguinte; o access token já emitido continua
-  //    válido até ao `exp`. Quem estivesse autenticado continuava a trabalhar.
-  //    É `status` que `requireProfile`, os dois layouts e o proxy consultam a
-  //    cada pedido — e é isso que torna a saída imediata.
-  //
-  //    Logo, se esta escrita falhar, a operação FALHOU, mesmo com a conta já
-  //    banida. Dizer «acesso retirado» aqui seria repetir a promessa que esta
-  //    task veio desfazer.
-  const { error: erroEstado } = await admin
-    .from("profiles").update({ status: ESTADO_DE_SAIDA })
-    .eq("id", id).eq("company_id", companyId);
-  if (erroEstado) {
-    return {
-      ok: false as const,
-      error: "Não foi possível concluir a saída: o estado do perfil não ficou gravado. "
-        + (contaBanida
-          ? "A conta já não aceita entradas novas, mas uma sessão aberta pode continuar "
-            + "a funcionar até repetir esta operação. "
-          : "")
-        + "Nada se perdeu — repita.",
-    };
-  }
-
-  // E confirma-se que ficou mesmo. Um `update` sem erro que não encontrou
-  // linha nenhuma devolve sucesso; auditar «desativado» sobre isso seria
-  // registar uma coisa que não aconteceu.
-  const { data: confirmacao, error: erroConfirmacao } = await admin
-    .from("profiles").select("status").eq("id", id).maybeSingle();
-  if (erroConfirmacao || !confirmacao
-      || (confirmacao as { status?: string | null }).status !== ESTADO_DE_SAIDA) {
-    return {
-      ok: false as const,
-      error: "A saída não ficou confirmada no perfil. Repita a operação — nada se perdeu.",
-    };
-  }
+  //    Havia dois fluxos de desativação a divergir: este escrevia `status` e
+  //    banía a conta; o da ficha (`desativarAcesso`) só banía. Com a 101c, um
+  //    perfil desativado pela ficha ficava com `status = 'ativo'` e o token
+  //    antigo continuava a resolver na base. A regra vive agora num sítio só.
+  const resultado = await tirarAcesso(admin, { profileId: id, companyId });
+  if (!resultado.ok) return { ok: false as const, error: resultado.erro };
 
   await auditLog({
     companyId,
@@ -562,11 +506,7 @@ export async function desativarColaborador(id: string, companyId: string) {
     action: "collaborator_deactivated",
     entityType: "profile",
     entityId: id,
-    meta: {
-      target_name: target.full_name,
-      tinha_acesso: contaBanida,
-      identidade: identidade.origem,
-    },
+    meta: { target_name: target.full_name, tinha_acesso: resultado.tocouNaConta },
     source: "dashboard",
   }, admin);
 
