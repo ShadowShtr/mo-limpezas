@@ -32,6 +32,8 @@
 // Um teste que olhasse só para `res.ok === false` daria verde ao defeito.
 // ============================================================================
 
+import fs from "node:fs";
+import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 interface OpDb { table: string; op: string }
@@ -169,9 +171,6 @@ describe("a autorização continua a decidir primeiro", () => {
 // ---------------------------------------------------------------------------
 describe("o caminho destrutivo não voltou", () => {
   const fonte = () => {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const fs = require("node:fs") as typeof import("node:fs");
-    const path = require("node:path") as typeof import("node:path");
     const bruto = fs.readFileSync(
       path.join(process.cwd(), "src/app/actions/colaboradores.ts"), "utf8",
     );
@@ -199,9 +198,6 @@ describe("o caminho destrutivo não voltou", () => {
   });
 
   it("a lista de colaboradores já não tem botão de eliminar", () => {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const fs = require("node:fs") as typeof import("node:fs");
-    const path = require("node:path") as typeof import("node:path");
     const tabela = fs.readFileSync(
       path.join(process.cwd(),
         "src/app/(dashboard)/dashboard/colaboradores/_components/table.tsx"), "utf8",
