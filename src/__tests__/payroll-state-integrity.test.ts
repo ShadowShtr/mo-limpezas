@@ -232,7 +232,10 @@ vi.mock("@/lib/finance-period-guard", () => ({
   }),
 }));
 
-const ACTOR = { id: "actor-1", company_id: "empresa-1", role: "admin" };
+// `status` é obrigatório desde a 102: `requireProfile` recusa quem não esteja
+// explicitamente activo, e um ator de ensaio sem estado seria recusado — e
+// bem, porque é isso que a base passou a fazer também.
+const ACTOR = { id: "actor-1", company_id: "empresa-1", role: "admin", status: "ativo" };
 
 /** Estado base: ator válido, um colaborador, nada configurado, mês vazio. */
 function cenarioBase(over: Record<string, { data?: unknown; error?: unknown }> = {}) {

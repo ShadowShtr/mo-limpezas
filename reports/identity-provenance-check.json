@@ -1,0 +1,1599 @@
+{
+  "geradoEm": "2026-09-17T17:52:09.005Z",
+  "projeto": "ceqzxgizhgmvcniapyla",
+  "canonico": "production-schema-shape + HELPERS_LEGADOS + 101 + 101a (sem fixtures de drift)",
+  "totais": {
+    "objetos": 162,
+    "CANONICAL_AND_LIVE": 126,
+    "LIVE_ONLY": 30,
+    "DIVERGENT": 4,
+    "CANONICAL_ONLY": 2
+  },
+  "dominioDeIdentidade": {
+    "objetos": 107,
+    "CANONICAL_AND_LIVE": 97,
+    "DIVERGENT": 4,
+    "CANONICAL_ONLY": 1,
+    "LIVE_ONLY": 5
+  },
+  "identidade": [
+    {
+      "chave": "coluna::auth_user_id",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "uuid null=YES def=-",
+      "producao": "uuid null=YES def=-"
+    },
+    {
+      "chave": "coluna::must_change_password",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "boolean null=NO def=false",
+      "producao": "boolean null=NO def=false"
+    },
+    {
+      "chave": "funcao::can_access_service",
+      "classificacao": "DIVERGENT",
+      "canonico": "CREATE OR REPLACE FUNCTION public.can_access_service(p_service_id uuid) RETURNS boolean LANGUAGE sql STABLE AS $function$ SELECT true $function$ | secdef=false | config=- | acl=-",
+      "producao": "CREATE OR REPLACE FUNCTION public.can_access_service(p_service_id uuid) RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER AS $function$ SELECT EXISTS ( SELECT 1 FROM services s INNER JOIN profiles p ON p.id = auth.uid() AND p.company_id = s.company_id WHERE s.id = p_service_id AND ( EXISTS ( SELECT 1 FROM team_members tm WHERE tm.team_id = s.team_id AND tm.collaborator_id = auth.uid() AND (tm.left_at IS NULL OR tm.left_at > NOW()) ) OR EXISTS ( SELECT 1 FROM service_reinforcements sr WHERE sr.service_id = s.id AND sr.collaborator_id = auth.uid() ) ) ) $function$ | secdef=true | config=- | acl={=X/postgres,postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}"
+    },
+    {
+      "chave": "funcao::get_my_company_id",
+      "classificacao": "DIVERGENT",
+      "canonico": "CREATE OR REPLACE FUNCTION public.get_my_company_id() RETURNS uuid LANGUAGE sql STABLE SECURITY DEFINER SET search_path TO 'public' AS $function$ SELECT company_id FROM profiles WHERE id = public.get_my_profile_id() LIMIT 1; $function$ | secdef=true | config={search_path=public} | acl=-",
+      "producao": "CREATE OR REPLACE FUNCTION public.get_my_company_id() RETURNS uuid LANGUAGE sql STABLE SECURITY DEFINER SET search_path TO 'public' AS $function$ SELECT company_id FROM profiles WHERE id = public.get_my_profile_id() LIMIT 1; $function$ | secdef=true | config={search_path=public} | acl={=X/postgres,postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}"
+    },
+    {
+      "chave": "funcao::get_my_profile_id",
+      "classificacao": "DIVERGENT",
+      "canonico": "CREATE OR REPLACE FUNCTION public.get_my_profile_id() RETURNS uuid LANGUAGE sql STABLE SECURITY DEFINER SET search_path TO 'public' AS $function$ SELECT id FROM profiles WHERE auth_user_id = auth.uid() UNION ALL -- 🔴 O ramo de compatibilidade exige que a conta **exista mesmo** no Auth. -- -- Sem esse `EXISTS`, uma pessoa sem conta de acesso ficava alcançável por -- quem soubesse o seu id: bastava um token com aquele `sub` e a função -- respondia por ela. Antes desta migration isso era impossível — o `id` -- de um perfil era, por construção, o id de uma conta. Ao permitir -- pessoas sem conta, a equivalência deixou de valer, e mantê-la sem -- verificação abria exactamente o buraco que a coluna nova existe para -- fechar. Foi um teste que o apanhou, não uma revisão do texto. SELECT id FROM profiles p WHERE p.id = auth.uid() AND EXISTS (SELECT 1 FROM auth.users u WHERE u.id = p.id) AND NOT EXISTS (SELECT 1 FROM profiles x WHERE x.auth_user_id = auth.uid()) LIMIT 1; $function$ | secdef=true | config={search_path=public} | acl={postgres=X/postgres,authenticated=X/postgres,anon=X/postgres,service_role=X/postgres}",
+      "producao": "CREATE OR REPLACE FUNCTION public.get_my_profile_id() RETURNS uuid LANGUAGE sql STABLE SECURITY DEFINER SET search_path TO 'public' AS $function$ SELECT id FROM profiles WHERE auth_user_id = auth.uid() UNION ALL SELECT id FROM profiles p WHERE p.id = auth.uid() AND EXISTS (SELECT 1 FROM auth.users u WHERE u.id = p.id) AND NOT EXISTS (SELECT 1 FROM profiles x WHERE x.auth_user_id = auth.uid()) LIMIT 1; $function$ | secdef=true | config={search_path=public} | acl={postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}"
+    },
+    {
+      "chave": "funcao::get_my_role",
+      "classificacao": "DIVERGENT",
+      "canonico": "CREATE OR REPLACE FUNCTION public.get_my_role() RETURNS text LANGUAGE sql STABLE SECURITY DEFINER SET search_path TO 'public' AS $function$ SELECT role FROM profiles WHERE id = public.get_my_profile_id() LIMIT 1; $function$ | secdef=true | config={search_path=public} | acl=-",
+      "producao": "CREATE OR REPLACE FUNCTION public.get_my_role() RETURNS text LANGUAGE sql STABLE SECURITY DEFINER SET search_path TO 'public' AS $function$ SELECT role FROM profiles WHERE id = public.get_my_profile_id() LIMIT 1; $function$ | secdef=true | config={search_path=public} | acl={=X/postgres,postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}"
+    },
+    {
+      "chave": "indice::idx_profiles_company_auth",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "CREATE INDEX idx_profiles_company_auth ON public.profiles USING btree (company_id, auth_user_id)",
+      "producao": "CREATE INDEX idx_profiles_company_auth ON public.profiles USING btree (company_id, auth_user_id)"
+    },
+    {
+      "chave": "indice::uq_profiles_auth_user_id",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "CREATE UNIQUE INDEX uq_profiles_auth_user_id ON public.profiles USING btree (auth_user_id) WHERE (auth_user_id IS NOT NULL)",
+      "producao": "CREATE UNIQUE INDEX uq_profiles_auth_user_id ON public.profiles USING btree (auth_user_id) WHERE (auth_user_id IS NOT NULL)"
+    },
+    {
+      "chave": "policy::absences.absences_manage",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "ALL | ((company_id = get_my_company_id()) AND (get_my_role() = ANY (ARRAY['admin'::text, 'gestor'::text]))) | -",
+      "producao": "ALL | ((company_id = get_my_company_id()) AND (get_my_role() = ANY (ARRAY['admin'::text, 'gestor'::text]))) | -"
+    },
+    {
+      "chave": "policy::absences.absences_manager_select",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "SELECT | ((company_id = get_my_company_id()) AND (( SELECT profiles.role FROM profiles WHERE (profiles.id = get_my_profile_id())) = ANY (ARRAY['admin'::text, 'gestor'::text]))) | -",
+      "producao": "SELECT | ((company_id = get_my_company_id()) AND (( SELECT profiles.role FROM profiles WHERE (profiles.id = get_my_profile_id())) = ANY (ARRAY['admin'::text, 'gestor'::text]))) | -"
+    },
+    {
+      "chave": "policy::absences.absences_own_select",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "SELECT | (collaborator_id = get_my_profile_id()) | -",
+      "producao": "SELECT | (collaborator_id = get_my_profile_id()) | -"
+    },
+    {
+      "chave": "policy::app_notice_reads.read own reads",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "SELECT | (profile_id = get_my_profile_id()) | -",
+      "producao": "SELECT | (profile_id = get_my_profile_id()) | -"
+    },
+    {
+      "chave": "policy::attachments.company members delete attachments",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "DELETE | (company_id IN ( SELECT profiles.company_id FROM profiles WHERE (profiles.id = get_my_profile_id()))) | -",
+      "producao": "DELETE | (company_id IN ( SELECT profiles.company_id FROM profiles WHERE (profiles.id = get_my_profile_id()))) | -"
+    },
+    {
+      "chave": "policy::attachments.company members insert attachments",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "INSERT | - | (company_id IN ( SELECT profiles.company_id FROM profiles WHERE (profiles.id = get_my_profile_id())))",
+      "producao": "INSERT | - | (company_id IN ( SELECT profiles.company_id FROM profiles WHERE (profiles.id = get_my_profile_id())))"
+    },
+    {
+      "chave": "policy::attachments.company members read attachments",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "SELECT | (company_id IN ( SELECT profiles.company_id FROM profiles WHERE (profiles.id = get_my_profile_id()))) | -",
+      "producao": "SELECT | (company_id IN ( SELECT profiles.company_id FROM profiles WHERE (profiles.id = get_my_profile_id()))) | -"
+    },
+    {
+      "chave": "policy::audit_logs.audit_logs_admin_read",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "SELECT | ((company_id = ( SELECT profiles.company_id FROM profiles WHERE (profiles.id = get_my_profile_id()))) AND (( SELECT profiles.role FROM profiles WHERE (profiles.id = get_my_profile_id())) = ANY (ARRAY['admin'::text, 'gestor'::text]))) | -",
+      "producao": "SELECT | ((company_id = ( SELECT profiles.company_id FROM profiles WHERE (profiles.id = get_my_profile_id()))) AND (( SELECT profiles.role FROM profiles WHERE (profiles.id = get_my_profile_id())) = ANY (ARRAY['admin'::text, 'gestor'::text]))) | -"
+    },
+    {
+      "chave": "policy::background_jobs.background_jobs_admin_read",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "SELECT | ((( SELECT profiles.role FROM profiles WHERE (profiles.id = get_my_profile_id())) = ANY (ARRAY['admin'::text, 'gestor'::text])) AND ((company_id IS NULL) OR (company_id = ( SELECT profiles.company_id FROM profiles WHERE (profiles.id = get_my_profile_id()))))) | -",
+      "producao": "SELECT | ((( SELECT profiles.role FROM profiles WHERE (profiles.id = get_my_profile_id())) = ANY (ARRAY['admin'::text, 'gestor'::text])) AND ((company_id IS NULL) OR (company_id = ( SELECT profiles.company_id FROM profiles WHERE (profiles.id = get_my_profile_id()))))) | -"
+    },
+    {
+      "chave": "policy::bank_accounts.bank_accounts_admin",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "ALL | ((company_id = get_my_company_id()) AND (( SELECT profiles.role FROM profiles WHERE (profiles.id = get_my_profile_id())) = ANY (ARRAY['admin'::text, 'gestor'::text]))) | ((company_id = get_my_company_id()) AND (( SELECT profiles.role FROM profiles WHERE (profiles.id = get_my_profile_id())) = ANY (ARRAY['admin'::text, 'gestor'::text])))",
+      "producao": "ALL | ((company_id = get_my_company_id()) AND (( SELECT profiles.role FROM profiles WHERE (profiles.id = get_my_profile_id())) = ANY (ARRAY['admin'::text, 'gestor'::text]))) | ((company_id = get_my_company_id()) AND (( SELECT profiles.role FROM profiles WHERE (profiles.id = get_my_profile_id())) = ANY (ARRAY['admin'::text, 'gestor'::text])))"
+    },
+    {
+      "chave": "policy::bank_reconciliation_matches.bank_reconciliation_matches_admin",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "ALL | ((company_id = get_my_company_id()) AND (( SELECT profiles.role FROM profiles WHERE (profiles.id = get_my_profile_id())) = ANY (ARRAY['admin'::text, 'gestor'::text]))) | ((company_id = get_my_company_id()) AND (( SELECT profiles.role FROM profiles WHERE (profiles.id = get_my_profile_id())) = ANY (ARRAY['admin'::text, 'gestor'::text])))",
+      "producao": "ALL | ((company_id = get_my_company_id()) AND (( SELECT profiles.role FROM profiles WHERE (profiles.id = get_my_profile_id())) = ANY (ARRAY['admin'::text, 'gestor'::text]))) | ((company_id = get_my_company_id()) AND (( SELECT profiles.role FROM profiles WHERE (profiles.id = get_my_profile_id())) = ANY (ARRAY['admin'::text, 'gestor'::text])))"
+    },
+    {
+      "chave": "policy::bank_statement_imports.bank_statement_imports_admin",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "ALL | ((company_id = get_my_company_id()) AND (( SELECT profiles.role FROM profiles WHERE (profiles.id = get_my_profile_id())) = ANY (ARRAY['admin'::text, 'gestor'::text]))) | ((company_id = get_my_company_id()) AND (( SELECT profiles.role FROM profiles WHERE (profiles.id = get_my_profile_id())) = ANY (ARRAY['admin'::text, 'gestor'::text])))",
+      "producao": "ALL | ((company_id = get_my_company_id()) AND (( SELECT profiles.role FROM profiles WHERE (profiles.id = get_my_profile_id())) = ANY (ARRAY['admin'::text, 'gestor'::text]))) | ((company_id = get_my_company_id()) AND (( SELECT profiles.role FROM profiles WHERE (profiles.id = get_my_profile_id())) = ANY (ARRAY['admin'::text, 'gestor'::text])))"
+    },
+    {
+      "chave": "policy::bank_transactions.bank_transactions_admin",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "ALL | ((company_id = get_my_company_id()) AND (( SELECT profiles.role FROM profiles WHERE (profiles.id = get_my_profile_id())) = ANY (ARRAY['admin'::text, 'gestor'::text]))) | ((company_id = get_my_company_id()) AND (( SELECT profiles.role FROM profiles WHERE (profiles.id = get_my_profile_id())) = ANY (ARRAY['admin'::text, 'gestor'::text])))",
+      "producao": "ALL | ((company_id = get_my_company_id()) AND (( SELECT profiles.role FROM profiles WHERE (profiles.id = get_my_profile_id())) = ANY (ARRAY['admin'::text, 'gestor'::text]))) | ((company_id = get_my_company_id()) AND (( SELECT profiles.role FROM profiles WHERE (profiles.id = get_my_profile_id())) = ANY (ARRAY['admin'::text, 'gestor'::text])))"
+    },
+    {
+      "chave": "policy::building_cards.building_cards_company_isolation",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "ALL | (company_id IN ( SELECT profiles.company_id FROM profiles WHERE (profiles.id = get_my_profile_id()))) | -",
+      "producao": "ALL | (company_id IN ( SELECT profiles.company_id FROM profiles WHERE (profiles.id = get_my_profile_id()))) | -"
+    },
+    {
+      "chave": "policy::building_cards.building_cards_delete",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "DELETE | (company_id IN ( SELECT profiles.company_id FROM profiles WHERE ((profiles.id = get_my_profile_id()) AND (profiles.role = ANY (ARRAY['admin'::text, 'gestor'::text]))))) | -",
+      "producao": "DELETE | (company_id IN ( SELECT profiles.company_id FROM profiles WHERE ((profiles.id = get_my_profile_id()) AND (profiles.role = ANY (ARRAY['admin'::text, 'gestor'::text]))))) | -"
+    },
+    {
+      "chave": "policy::building_cards.building_cards_insert",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "INSERT | - | (company_id IN ( SELECT profiles.company_id FROM profiles WHERE ((profiles.id = get_my_profile_id()) AND (profiles.role = ANY (ARRAY['admin'::text, 'gestor'::text])))))",
+      "producao": "INSERT | - | (company_id IN ( SELECT profiles.company_id FROM profiles WHERE ((profiles.id = get_my_profile_id()) AND (profiles.role = ANY (ARRAY['admin'::text, 'gestor'::text])))))"
+    },
+    {
+      "chave": "policy::building_cards.building_cards_update",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "UPDATE | (company_id IN ( SELECT profiles.company_id FROM profiles WHERE ((profiles.id = get_my_profile_id()) AND (profiles.role = ANY (ARRAY['admin'::text, 'gestor'::text]))))) | -",
+      "producao": "UPDATE | (company_id IN ( SELECT profiles.company_id FROM profiles WHERE ((profiles.id = get_my_profile_id()) AND (profiles.role = ANY (ARRAY['admin'::text, 'gestor'::text]))))) | -"
+    },
+    {
+      "chave": "policy::cash_flow_entries.cash_flow_admin",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "ALL | ((company_id = get_my_company_id()) AND (( SELECT profiles.role FROM profiles WHERE (profiles.id = get_my_profile_id())) = ANY (ARRAY['admin'::text, 'gestor'::text]))) | ((company_id = get_my_company_id()) AND (( SELECT profiles.role FROM profiles WHERE (profiles.id = get_my_profile_id())) = ANY (ARRAY['admin'::text, 'gestor'::text])))",
+      "producao": "ALL | ((company_id = get_my_company_id()) AND (( SELECT profiles.role FROM profiles WHERE (profiles.id = get_my_profile_id())) = ANY (ARRAY['admin'::text, 'gestor'::text]))) | ((company_id = get_my_company_id()) AND (( SELECT profiles.role FROM profiles WHERE (profiles.id = get_my_profile_id())) = ANY (ARRAY['admin'::text, 'gestor'::text])))"
+    },
+    {
+      "chave": "policy::client_notifications.managers manage client notifications",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "ALL | ((company_id = ( SELECT profiles.company_id FROM profiles WHERE (profiles.id = get_my_profile_id()))) AND (( SELECT profiles.role FROM profiles WHERE (profiles.id = get_my_profile_id())) = ANY (ARRAY['admin'::text, 'gestor'::text]))) | -",
+      "producao": "ALL | ((company_id = ( SELECT profiles.company_id FROM profiles WHERE (profiles.id = get_my_profile_id()))) AND (( SELECT profiles.role FROM profiles WHERE (profiles.id = get_my_profile_id())) = ANY (ARRAY['admin'::text, 'gestor'::text]))) | -"
+    },
+    {
+      "chave": "policy::clients.clients_collaborator_select",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "SELECT | ((company_id = get_my_company_id()) AND (( SELECT profiles.role FROM profiles WHERE (profiles.id = get_my_profile_id())) <> ALL (ARRAY['admin'::text, 'gestor'::text])) AND (EXISTS ( SELECT 1 FROM (locations l JOIN services s ON ((s.location_id = l.id))) WHERE ((l.client_id = clients.id) AND can_access_service(s.id))))) | -",
+      "producao": "SELECT | ((company_id = get_my_company_id()) AND (( SELECT profiles.role FROM profiles WHERE (profiles.id = get_my_profile_id())) <> ALL (ARRAY['admin'::text, 'gestor'::text])) AND (EXISTS ( SELECT 1 FROM (locations l JOIN services s ON ((s.location_id = l.id))) WHERE ((l.client_id = clients.id) AND can_access_service(s.id))))) | -"
+    },
+    {
+      "chave": "policy::clients.clients_manage",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "ALL | ((company_id = get_my_company_id()) AND (get_my_role() = ANY (ARRAY['admin'::text, 'gestor'::text]))) | -",
+      "producao": "ALL | ((company_id = get_my_company_id()) AND (get_my_role() = ANY (ARRAY['admin'::text, 'gestor'::text]))) | -"
+    },
+    {
+      "chave": "policy::collaborator_documents.colaboradoras submetem relatórios de avaria",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "INSERT | - | ((collaborator_id = get_my_profile_id()) AND (category = 'avaria'::text) AND (visible_to_collaborator = true) AND (uploaded_by_role = 'colaboradora'::text))",
+      "producao": "INSERT | - | ((collaborator_id = get_my_profile_id()) AND (category = 'avaria'::text) AND (visible_to_collaborator = true) AND (uploaded_by_role = 'colaboradora'::text))"
+    },
+    {
+      "chave": "policy::collaborator_documents.colaboradoras veem os seus docs visíveis",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "SELECT | ((collaborator_id = get_my_profile_id()) AND (visible_to_collaborator = true)) | -",
+      "producao": "SELECT | ((collaborator_id = get_my_profile_id()) AND (visible_to_collaborator = true)) | -"
+    },
+    {
+      "chave": "policy::collaborator_documents.gestores gerem documentos da empresa",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "ALL | (company_id IN ( SELECT profiles.company_id FROM profiles WHERE ((profiles.id = get_my_profile_id()) AND (profiles.role = ANY (ARRAY['gestor'::text, 'admin'::text]))))) | (company_id IN ( SELECT profiles.company_id FROM profiles WHERE ((profiles.id = get_my_profile_id()) AND (profiles.role = ANY (ARRAY['gestor'::text, 'admin'::text])))))",
+      "producao": "ALL | (company_id IN ( SELECT profiles.company_id FROM profiles WHERE ((profiles.id = get_my_profile_id()) AND (profiles.role = ANY (ARRAY['gestor'::text, 'admin'::text]))))) | (company_id IN ( SELECT profiles.company_id FROM profiles WHERE ((profiles.id = get_my_profile_id()) AND (profiles.role = ANY (ARRAY['gestor'::text, 'admin'::text])))))"
+    },
+    {
+      "chave": "policy::collaborator_ride_assignments.collaborator_ride_company_isolation",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "ALL | (company_id IN ( SELECT profiles.company_id FROM profiles WHERE (profiles.id = get_my_profile_id()))) | -",
+      "producao": "ALL | (company_id IN ( SELECT profiles.company_id FROM profiles WHERE (profiles.id = get_my_profile_id()))) | -"
+    },
+    {
+      "chave": "policy::collaborator_ride_assignments.collaborator_ride_delete",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "DELETE | (company_id IN ( SELECT profiles.company_id FROM profiles WHERE ((profiles.id = get_my_profile_id()) AND (profiles.role = ANY (ARRAY['admin'::text, 'gestor'::text]))))) | -",
+      "producao": "DELETE | (company_id IN ( SELECT profiles.company_id FROM profiles WHERE ((profiles.id = get_my_profile_id()) AND (profiles.role = ANY (ARRAY['admin'::text, 'gestor'::text]))))) | -"
+    },
+    {
+      "chave": "policy::collaborator_ride_assignments.collaborator_ride_insert",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "INSERT | - | (company_id IN ( SELECT profiles.company_id FROM profiles WHERE ((profiles.id = get_my_profile_id()) AND (profiles.role = ANY (ARRAY['admin'::text, 'gestor'::text])))))",
+      "producao": "INSERT | - | (company_id IN ( SELECT profiles.company_id FROM profiles WHERE ((profiles.id = get_my_profile_id()) AND (profiles.role = ANY (ARRAY['admin'::text, 'gestor'::text])))))"
+    },
+    {
+      "chave": "policy::collaborator_ride_assignments.collaborator_ride_update",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "UPDATE | (company_id IN ( SELECT profiles.company_id FROM profiles WHERE ((profiles.id = get_my_profile_id()) AND (profiles.role = ANY (ARRAY['admin'::text, 'gestor'::text]))))) | -",
+      "producao": "UPDATE | (company_id IN ( SELECT profiles.company_id FROM profiles WHERE ((profiles.id = get_my_profile_id()) AND (profiles.role = ANY (ARRAY['admin'::text, 'gestor'::text]))))) | -"
+    },
+    {
+      "chave": "policy::companies.users see own company",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "SELECT | (id = ( SELECT profiles.company_id FROM profiles WHERE (profiles.id = get_my_profile_id()))) | -",
+      "producao": "SELECT | (id = ( SELECT profiles.company_id FROM profiles WHERE (profiles.id = get_my_profile_id()))) | -"
+    },
+    {
+      "chave": "policy::company_change_events.managers see company change events",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "SELECT | ((company_id = ( SELECT profiles.company_id FROM profiles WHERE (profiles.id = get_my_profile_id()))) AND (( SELECT profiles.role FROM profiles WHERE (profiles.id = get_my_profile_id())) = ANY (ARRAY['admin'::text, 'gestor'::text]))) | -",
+      "producao": "SELECT | ((company_id = ( SELECT profiles.company_id FROM profiles WHERE (profiles.id = get_my_profile_id()))) AND (( SELECT profiles.role FROM profiles WHERE (profiles.id = get_my_profile_id())) = ANY (ARRAY['admin'::text, 'gestor'::text]))) | -"
+    },
+    {
+      "chave": "policy::company_settings.company_settings_manage",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "ALL | ((company_id = get_my_company_id()) AND (get_my_role() = 'admin'::text)) | -",
+      "producao": "ALL | ((company_id = get_my_company_id()) AND (get_my_role() = 'admin'::text)) | -"
+    },
+    {
+      "chave": "policy::company_settings.company_settings_select",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "SELECT | (company_id = get_my_company_id()) | -",
+      "producao": "SELECT | (company_id = get_my_company_id()) | -"
+    },
+    {
+      "chave": "policy::contracts.contracts_manage",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "ALL | ((company_id = get_my_company_id()) AND (get_my_role() = ANY (ARRAY['admin'::text, 'gestor'::text]))) | -",
+      "producao": "ALL | ((company_id = get_my_company_id()) AND (get_my_role() = ANY (ARRAY['admin'::text, 'gestor'::text]))) | -"
+    },
+    {
+      "chave": "policy::contracts.contracts_manager_select",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "SELECT | ((company_id = get_my_company_id()) AND (( SELECT profiles.role FROM profiles WHERE (profiles.id = get_my_profile_id())) = ANY (ARRAY['admin'::text, 'gestor'::text]))) | -",
+      "producao": "SELECT | ((company_id = get_my_company_id()) AND (( SELECT profiles.role FROM profiles WHERE (profiles.id = get_my_profile_id())) = ANY (ARRAY['admin'::text, 'gestor'::text]))) | -"
+    },
+    {
+      "chave": "policy::crm_lead_interactions.crm_lead_interactions_manager_select",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "SELECT | ((company_id = get_my_company_id()) AND (get_my_role() = ANY (ARRAY['admin'::text, 'gestor'::text]))) | -",
+      "producao": "SELECT | ((company_id = get_my_company_id()) AND (get_my_role() = ANY (ARRAY['admin'::text, 'gestor'::text]))) | -"
+    },
+    {
+      "chave": "policy::crm_leads.crm_leads_manager_select",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "SELECT | ((company_id = get_my_company_id()) AND (get_my_role() = ANY (ARRAY['admin'::text, 'gestor'::text]))) | -",
+      "producao": "SELECT | ((company_id = get_my_company_id()) AND (get_my_role() = ANY (ARRAY['admin'::text, 'gestor'::text]))) | -"
+    },
+    {
+      "chave": "policy::daily_clocks.daily_clocks_manager_select",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "SELECT | ((company_id = get_my_company_id()) AND (get_my_role() = ANY (ARRAY['admin'::text, 'gestor'::text]))) | -",
+      "producao": "SELECT | ((company_id = get_my_company_id()) AND (get_my_role() = ANY (ARRAY['admin'::text, 'gestor'::text]))) | -"
+    },
+    {
+      "chave": "policy::daily_clocks.daily_clocks_own",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "ALL | (collaborator_id = get_my_profile_id()) | (collaborator_id = get_my_profile_id())",
+      "producao": "ALL | (collaborator_id = get_my_profile_id()) | (collaborator_id = get_my_profile_id())"
+    },
+    {
+      "chave": "policy::expense_categories.expense_categories_read",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "SELECT | (company_id IN ( SELECT profiles.company_id FROM profiles WHERE (profiles.id = get_my_profile_id()))) | -",
+      "producao": "SELECT | (company_id IN ( SELECT profiles.company_id FROM profiles WHERE (profiles.id = get_my_profile_id()))) | -"
+    },
+    {
+      "chave": "policy::expense_categories.expense_categories_write",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "ALL | (company_id IN ( SELECT profiles.company_id FROM profiles WHERE ((profiles.id = get_my_profile_id()) AND (profiles.role = ANY (ARRAY['admin'::text, 'gestor'::text]))))) | -",
+      "producao": "ALL | (company_id IN ( SELECT profiles.company_id FROM profiles WHERE ((profiles.id = get_my_profile_id()) AND (profiles.role = ANY (ARRAY['admin'::text, 'gestor'::text]))))) | -"
+    },
+    {
+      "chave": "policy::financial_periods.financial_periods_read",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "SELECT | (company_id IN ( SELECT profiles.company_id FROM profiles WHERE (profiles.id = get_my_profile_id()))) | -",
+      "producao": "SELECT | (company_id IN ( SELECT profiles.company_id FROM profiles WHERE (profiles.id = get_my_profile_id()))) | -"
+    },
+    {
+      "chave": "policy::financial_periods.financial_periods_write",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "ALL | (company_id IN ( SELECT profiles.company_id FROM profiles WHERE ((profiles.id = get_my_profile_id()) AND (profiles.role = ANY (ARRAY['admin'::text, 'gestor'::text]))))) | -",
+      "producao": "ALL | (company_id IN ( SELECT profiles.company_id FROM profiles WHERE ((profiles.id = get_my_profile_id()) AND (profiles.role = ANY (ARRAY['admin'::text, 'gestor'::text]))))) | -"
+    },
+    {
+      "chave": "policy::fixed_variable_payments.company members manage fixed variable payments",
+      "classificacao": "CANONICAL_ONLY",
+      "canonico": "ALL | (company_id IN ( SELECT profiles.company_id FROM profiles WHERE (profiles.id = get_my_profile_id()))) | -"
+    },
+    {
+      "chave": "policy::fixed_variable_payments.payments_manager_select",
+      "classificacao": "LIVE_ONLY",
+      "producao": "SELECT | ((company_id = get_my_company_id()) AND (get_my_role() = ANY (ARRAY['admin'::text, 'gestor'::text]))) | -"
+    },
+    {
+      "chave": "policy::invoice_items.managers manage invoice items",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "ALL | ((( SELECT invoices.company_id FROM invoices WHERE (invoices.id = invoice_items.invoice_id)) = ( SELECT profiles.company_id FROM profiles WHERE (profiles.id = get_my_profile_id()))) AND (( SELECT profiles.role FROM profiles WHERE (profiles.id = get_my_profile_id())) = ANY (ARRAY['admin'::text, 'gestor'::text]))) | -",
+      "producao": "ALL | ((( SELECT invoices.company_id FROM invoices WHERE (invoices.id = invoice_items.invoice_id)) = ( SELECT profiles.company_id FROM profiles WHERE (profiles.id = get_my_profile_id()))) AND (( SELECT profiles.role FROM profiles WHERE (profiles.id = get_my_profile_id())) = ANY (ARRAY['admin'::text, 'gestor'::text]))) | -"
+    },
+    {
+      "chave": "policy::invoices.managers manage invoices",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "ALL | ((company_id = ( SELECT profiles.company_id FROM profiles WHERE (profiles.id = get_my_profile_id()))) AND (( SELECT profiles.role FROM profiles WHERE (profiles.id = get_my_profile_id())) = ANY (ARRAY['admin'::text, 'gestor'::text]))) | -",
+      "producao": "ALL | ((company_id = ( SELECT profiles.company_id FROM profiles WHERE (profiles.id = get_my_profile_id()))) AND (( SELECT profiles.role FROM profiles WHERE (profiles.id = get_my_profile_id())) = ANY (ARRAY['admin'::text, 'gestor'::text]))) | -"
+    },
+    {
+      "chave": "policy::locations.locations_collaborator_select",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "SELECT | ((company_id = get_my_company_id()) AND (( SELECT profiles.role FROM profiles WHERE (profiles.id = get_my_profile_id())) <> ALL (ARRAY['admin'::text, 'gestor'::text])) AND (EXISTS ( SELECT 1 FROM services s WHERE ((s.location_id = locations.id) AND can_access_service(s.id))))) | -",
+      "producao": "SELECT | ((company_id = get_my_company_id()) AND (( SELECT profiles.role FROM profiles WHERE (profiles.id = get_my_profile_id())) <> ALL (ARRAY['admin'::text, 'gestor'::text])) AND (EXISTS ( SELECT 1 FROM services s WHERE ((s.location_id = locations.id) AND can_access_service(s.id))))) | -"
+    },
+    {
+      "chave": "policy::locations.locations_manage",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "ALL | ((company_id = get_my_company_id()) AND (get_my_role() = ANY (ARRAY['admin'::text, 'gestor'::text]))) | -",
+      "producao": "ALL | ((company_id = get_my_company_id()) AND (get_my_role() = ANY (ARRAY['admin'::text, 'gestor'::text]))) | -"
+    },
+    {
+      "chave": "policy::management_tasks.management_tasks_admin",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "ALL | ((company_id = get_my_company_id()) AND (( SELECT profiles.role FROM profiles WHERE (profiles.id = get_my_profile_id())) = ANY (ARRAY['admin'::text, 'gestor'::text]))) | ((company_id = get_my_company_id()) AND (( SELECT profiles.role FROM profiles WHERE (profiles.id = get_my_profile_id())) = ANY (ARRAY['admin'::text, 'gestor'::text])))",
+      "producao": "ALL | ((company_id = get_my_company_id()) AND (( SELECT profiles.role FROM profiles WHERE (profiles.id = get_my_profile_id())) = ANY (ARRAY['admin'::text, 'gestor'::text]))) | ((company_id = get_my_company_id()) AND (( SELECT profiles.role FROM profiles WHERE (profiles.id = get_my_profile_id())) = ANY (ARRAY['admin'::text, 'gestor'::text])))"
+    },
+    {
+      "chave": "policy::manual_charges.manual_charges_manager_select",
+      "classificacao": "LIVE_ONLY",
+      "producao": "SELECT | ((company_id = get_my_company_id()) AND (get_my_role() = ANY (ARRAY['admin'::text, 'gestor'::text]))) | -"
+    },
+    {
+      "chave": "policy::notifications.managers create notifications",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "INSERT | - | (company_id = ( SELECT profiles.company_id FROM profiles WHERE (profiles.id = get_my_profile_id())))",
+      "producao": "INSERT | - | (company_id = ( SELECT profiles.company_id FROM profiles WHERE (profiles.id = get_my_profile_id())))"
+    },
+    {
+      "chave": "policy::notifications.users see own notifications",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "ALL | (user_id = get_my_profile_id()) | -",
+      "producao": "ALL | (user_id = get_my_profile_id()) | -"
+    },
+    {
+      "chave": "policy::payment_cashflow_provenance.payment_cashflow_provenance_select",
+      "classificacao": "LIVE_ONLY",
+      "producao": "SELECT | (company_id = get_my_company_id()) | -"
+    },
+    {
+      "chave": "policy::payment_cashflow_provenance.payment_cashflow_provenance_write",
+      "classificacao": "LIVE_ONLY",
+      "producao": "ALL | (company_id = get_my_company_id()) | (company_id = get_my_company_id())"
+    },
+    {
+      "chave": "policy::payroll_records.collaborators see own payroll",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "SELECT | (collaborator_id = get_my_profile_id()) | -",
+      "producao": "SELECT | (collaborator_id = get_my_profile_id()) | -"
+    },
+    {
+      "chave": "policy::payroll_records.managers manage payroll",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "ALL | ((company_id = ( SELECT profiles.company_id FROM profiles WHERE (profiles.id = get_my_profile_id()))) AND (( SELECT profiles.role FROM profiles WHERE (profiles.id = get_my_profile_id())) = ANY (ARRAY['admin'::text, 'gestor'::text]))) | -",
+      "producao": "ALL | ((company_id = ( SELECT profiles.company_id FROM profiles WHERE (profiles.id = get_my_profile_id()))) AND (( SELECT profiles.role FROM profiles WHERE (profiles.id = get_my_profile_id())) = ANY (ARRAY['admin'::text, 'gestor'::text]))) | -"
+    },
+    {
+      "chave": "policy::platform_admins.read own platform admin row",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "SELECT | (profile_id = get_my_profile_id()) | -",
+      "producao": "SELECT | (profile_id = get_my_profile_id()) | -"
+    },
+    {
+      "chave": "policy::profiles.profiles_insert_admin",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "INSERT | - | ((id = get_my_profile_id()) OR ((company_id = get_my_company_id()) AND (get_my_role() = ANY (ARRAY['admin'::text, 'gestor'::text]))))",
+      "producao": "INSERT | - | ((id = get_my_profile_id()) OR ((company_id = get_my_company_id()) AND (get_my_role() = ANY (ARRAY['admin'::text, 'gestor'::text]))))"
+    },
+    {
+      "chave": "policy::profiles.profiles_manage_company",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "ALL | ((company_id = get_my_company_id()) AND (get_my_role() = ANY (ARRAY['admin'::text, 'gestor'::text]))) | -",
+      "producao": "ALL | ((company_id = get_my_company_id()) AND (get_my_role() = ANY (ARRAY['admin'::text, 'gestor'::text]))) | -"
+    },
+    {
+      "chave": "policy::profiles.profiles_select",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "SELECT | ((id = get_my_profile_id()) OR (company_id = get_my_company_id())) | -",
+      "producao": "SELECT | ((id = get_my_profile_id()) OR (company_id = get_my_company_id())) | -"
+    },
+    {
+      "chave": "policy::profiles.profiles_update_own",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "UPDATE | (id = get_my_profile_id()) | ((id = get_my_profile_id()) AND (company_id = get_my_company_id()))",
+      "producao": "UPDATE | (id = get_my_profile_id()) | ((id = get_my_profile_id()) AND (company_id = get_my_company_id()))"
+    },
+    {
+      "chave": "policy::push_subscriptions.users manage own push subs",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "ALL | (user_id = get_my_profile_id()) | -",
+      "producao": "ALL | (user_id = get_my_profile_id()) | -"
+    },
+    {
+      "chave": "policy::service_photos.service_photos_manager_read",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "SELECT | ((company_id = ( SELECT profiles.company_id FROM profiles WHERE (profiles.id = get_my_profile_id()))) AND (( SELECT profiles.role FROM profiles WHERE (profiles.id = get_my_profile_id())) = ANY (ARRAY['admin'::text, 'gestor'::text]))) | -",
+      "producao": "SELECT | ((company_id = ( SELECT profiles.company_id FROM profiles WHERE (profiles.id = get_my_profile_id()))) AND (( SELECT profiles.role FROM profiles WHERE (profiles.id = get_my_profile_id())) = ANY (ARRAY['admin'::text, 'gestor'::text]))) | -"
+    },
+    {
+      "chave": "policy::service_photos.service_photos_own_read",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "SELECT | (collaborator_id = get_my_profile_id()) | -",
+      "producao": "SELECT | (collaborator_id = get_my_profile_id()) | -"
+    },
+    {
+      "chave": "policy::service_price_audit.price_audit_manage",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "ALL | ((get_service_company_id(service_id) = get_my_company_id()) AND (get_my_role() = ANY (ARRAY['admin'::text, 'gestor'::text]))) | -",
+      "producao": "ALL | ((get_service_company_id(service_id) = get_my_company_id()) AND (get_my_role() = ANY (ARRAY['admin'::text, 'gestor'::text]))) | -"
+    },
+    {
+      "chave": "policy::service_reinforcements.reinforcements_manage",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "ALL | ((get_service_company_id(service_id) = get_my_company_id()) AND (get_my_role() = ANY (ARRAY['admin'::text, 'gestor'::text]))) | -",
+      "producao": "ALL | ((get_service_company_id(service_id) = get_my_company_id()) AND (get_my_role() = ANY (ARRAY['admin'::text, 'gestor'::text]))) | -"
+    },
+    {
+      "chave": "policy::service_reinforcements.reinforcements_select",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "SELECT | ((collaborator_id = get_my_profile_id()) OR (get_service_company_id(service_id) = get_my_company_id())) | -",
+      "producao": "SELECT | ((collaborator_id = get_my_profile_id()) OR (get_service_company_id(service_id) = get_my_company_id())) | -"
+    },
+    {
+      "chave": "policy::services.services_collaborator_select",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "SELECT | can_access_service(id) | -",
+      "producao": "SELECT | can_access_service(id) | -"
+    },
+    {
+      "chave": "policy::services.services_manage",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "ALL | ((company_id = get_my_company_id()) AND (get_my_role() = ANY (ARRAY['admin'::text, 'gestor'::text]))) | -",
+      "producao": "ALL | ((company_id = get_my_company_id()) AND (get_my_role() = ANY (ARRAY['admin'::text, 'gestor'::text]))) | -"
+    },
+    {
+      "chave": "policy::team_members.company team members",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "ALL | (( SELECT teams.company_id FROM teams WHERE (teams.id = team_members.team_id)) = ( SELECT profiles.company_id FROM profiles WHERE (profiles.id = get_my_profile_id()))) | -",
+      "producao": "ALL | (( SELECT teams.company_id FROM teams WHERE (teams.id = team_members.team_id)) = ( SELECT profiles.company_id FROM profiles WHERE (profiles.id = get_my_profile_id()))) | -"
+    },
+    {
+      "chave": "policy::team_members.team_members_manage",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "ALL | ((team_id IN ( SELECT teams.id FROM teams WHERE (teams.company_id = get_my_company_id()))) AND (get_my_role() = ANY (ARRAY['admin'::text, 'gestor'::text]))) | -",
+      "producao": "ALL | ((team_id IN ( SELECT teams.id FROM teams WHERE (teams.company_id = get_my_company_id()))) AND (get_my_role() = ANY (ARRAY['admin'::text, 'gestor'::text]))) | -"
+    },
+    {
+      "chave": "policy::team_members.team_members_select",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "SELECT | (team_id IN ( SELECT teams.id FROM teams WHERE (teams.company_id = get_my_company_id()))) | -",
+      "producao": "SELECT | (team_id IN ( SELECT teams.id FROM teams WHERE (teams.company_id = get_my_company_id()))) | -"
+    },
+    {
+      "chave": "policy::teams.company teams",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "ALL | (company_id = ( SELECT profiles.company_id FROM profiles WHERE (profiles.id = get_my_profile_id()))) | -",
+      "producao": "ALL | (company_id = ( SELECT profiles.company_id FROM profiles WHERE (profiles.id = get_my_profile_id()))) | -"
+    },
+    {
+      "chave": "policy::teams.teams_manage",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "ALL | ((company_id = get_my_company_id()) AND (get_my_role() = ANY (ARRAY['admin'::text, 'gestor'::text]))) | -",
+      "producao": "ALL | ((company_id = get_my_company_id()) AND (get_my_role() = ANY (ARRAY['admin'::text, 'gestor'::text]))) | -"
+    },
+    {
+      "chave": "policy::teams.teams_select",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "SELECT | (company_id = get_my_company_id()) | -",
+      "producao": "SELECT | (company_id = get_my_company_id()) | -"
+    },
+    {
+      "chave": "policy::timesheets.collaborators create own timesheets",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "INSERT | - | (collaborator_id = get_my_profile_id())",
+      "producao": "INSERT | - | (collaborator_id = get_my_profile_id())"
+    },
+    {
+      "chave": "policy::timesheets.collaborators see own timesheets",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "SELECT | (collaborator_id = get_my_profile_id()) | -",
+      "producao": "SELECT | (collaborator_id = get_my_profile_id()) | -"
+    },
+    {
+      "chave": "policy::timesheets.managers see company timesheets",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "ALL | ((company_id = ( SELECT profiles.company_id FROM profiles WHERE (profiles.id = get_my_profile_id()))) AND (( SELECT profiles.role FROM profiles WHERE (profiles.id = get_my_profile_id())) = ANY (ARRAY['admin'::text, 'gestor'::text]))) | -",
+      "producao": "ALL | ((company_id = ( SELECT profiles.company_id FROM profiles WHERE (profiles.id = get_my_profile_id()))) AND (( SELECT profiles.role FROM profiles WHERE (profiles.id = get_my_profile_id())) = ANY (ARRAY['admin'::text, 'gestor'::text]))) | -"
+    },
+    {
+      "chave": "policy::timesheets.timesheets_collaborator_insert",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "INSERT | - | (collaborator_id = get_my_profile_id())",
+      "producao": "INSERT | - | (collaborator_id = get_my_profile_id())"
+    },
+    {
+      "chave": "policy::timesheets.timesheets_collaborator_update",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "UPDATE | (collaborator_id = get_my_profile_id()) | -",
+      "producao": "UPDATE | (collaborator_id = get_my_profile_id()) | -"
+    },
+    {
+      "chave": "policy::timesheets.timesheets_manager_manage",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "ALL | ((company_id = get_my_company_id()) AND (get_my_role() = ANY (ARRAY['admin'::text, 'gestor'::text]))) | -",
+      "producao": "ALL | ((company_id = get_my_company_id()) AND (get_my_role() = ANY (ARRAY['admin'::text, 'gestor'::text]))) | -"
+    },
+    {
+      "chave": "policy::timesheets.timesheets_manager_select",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "SELECT | ((company_id = get_my_company_id()) AND (( SELECT profiles.role FROM profiles WHERE (profiles.id = get_my_profile_id())) = ANY (ARRAY['admin'::text, 'gestor'::text]))) | -",
+      "producao": "SELECT | ((company_id = get_my_company_id()) AND (( SELECT profiles.role FROM profiles WHERE (profiles.id = get_my_profile_id())) = ANY (ARRAY['admin'::text, 'gestor'::text]))) | -"
+    },
+    {
+      "chave": "policy::timesheets.timesheets_own_select",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "SELECT | (collaborator_id = get_my_profile_id()) | -",
+      "producao": "SELECT | (collaborator_id = get_my_profile_id()) | -"
+    },
+    {
+      "chave": "policy::vacation_requests.vacation_requests_insert",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "INSERT | - | ((collaborator_id = get_my_profile_id()) AND (company_id = get_my_company_id()))",
+      "producao": "INSERT | - | ((collaborator_id = get_my_profile_id()) AND (company_id = get_my_company_id()))"
+    },
+    {
+      "chave": "policy::vacation_requests.vacation_requests_manage",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "ALL | ((company_id = get_my_company_id()) AND (get_my_role() = ANY (ARRAY['admin'::text, 'gestor'::text]))) | -",
+      "producao": "ALL | ((company_id = get_my_company_id()) AND (get_my_role() = ANY (ARRAY['admin'::text, 'gestor'::text]))) | -"
+    },
+    {
+      "chave": "policy::vacation_requests.vacation_requests_select",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "SELECT | ((collaborator_id = get_my_profile_id()) OR ((company_id = get_my_company_id()) AND (get_my_role() = ANY (ARRAY['admin'::text, 'gestor'::text])))) | -",
+      "producao": "SELECT | ((collaborator_id = get_my_profile_id()) OR ((company_id = get_my_company_id()) AND (get_my_role() = ANY (ARRAY['admin'::text, 'gestor'::text])))) | -"
+    },
+    {
+      "chave": "policy::vehicle_allocations.vehicle_allocations_company_isolation",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "ALL | (company_id IN ( SELECT profiles.company_id FROM profiles WHERE (profiles.id = get_my_profile_id()))) | -",
+      "producao": "ALL | (company_id IN ( SELECT profiles.company_id FROM profiles WHERE (profiles.id = get_my_profile_id()))) | -"
+    },
+    {
+      "chave": "policy::vehicle_allocations.vehicle_allocations_delete",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "DELETE | (company_id IN ( SELECT profiles.company_id FROM profiles WHERE ((profiles.id = get_my_profile_id()) AND (profiles.role = ANY (ARRAY['admin'::text, 'gestor'::text]))))) | -",
+      "producao": "DELETE | (company_id IN ( SELECT profiles.company_id FROM profiles WHERE ((profiles.id = get_my_profile_id()) AND (profiles.role = ANY (ARRAY['admin'::text, 'gestor'::text]))))) | -"
+    },
+    {
+      "chave": "policy::vehicle_allocations.vehicle_allocations_insert",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "INSERT | - | (company_id IN ( SELECT profiles.company_id FROM profiles WHERE ((profiles.id = get_my_profile_id()) AND (profiles.role = ANY (ARRAY['admin'::text, 'gestor'::text])))))",
+      "producao": "INSERT | - | (company_id IN ( SELECT profiles.company_id FROM profiles WHERE ((profiles.id = get_my_profile_id()) AND (profiles.role = ANY (ARRAY['admin'::text, 'gestor'::text])))))"
+    },
+    {
+      "chave": "policy::vehicle_allocations.vehicle_allocations_update",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "UPDATE | (company_id IN ( SELECT profiles.company_id FROM profiles WHERE ((profiles.id = get_my_profile_id()) AND (profiles.role = ANY (ARRAY['admin'::text, 'gestor'::text]))))) | -",
+      "producao": "UPDATE | (company_id IN ( SELECT profiles.company_id FROM profiles WHERE ((profiles.id = get_my_profile_id()) AND (profiles.role = ANY (ARRAY['admin'::text, 'gestor'::text]))))) | -"
+    },
+    {
+      "chave": "policy::vehicles.vehicles_company_isolation",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "ALL | (company_id IN ( SELECT profiles.company_id FROM profiles WHERE (profiles.id = get_my_profile_id()))) | -",
+      "producao": "ALL | (company_id IN ( SELECT profiles.company_id FROM profiles WHERE (profiles.id = get_my_profile_id()))) | -"
+    },
+    {
+      "chave": "policy::vehicles.vehicles_delete",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "DELETE | (company_id IN ( SELECT profiles.company_id FROM profiles WHERE ((profiles.id = get_my_profile_id()) AND (profiles.role = ANY (ARRAY['admin'::text, 'gestor'::text]))))) | -",
+      "producao": "DELETE | (company_id IN ( SELECT profiles.company_id FROM profiles WHERE ((profiles.id = get_my_profile_id()) AND (profiles.role = ANY (ARRAY['admin'::text, 'gestor'::text]))))) | -"
+    },
+    {
+      "chave": "policy::vehicles.vehicles_insert",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "INSERT | - | (company_id IN ( SELECT profiles.company_id FROM profiles WHERE ((profiles.id = get_my_profile_id()) AND (profiles.role = ANY (ARRAY['admin'::text, 'gestor'::text])))))",
+      "producao": "INSERT | - | (company_id IN ( SELECT profiles.company_id FROM profiles WHERE ((profiles.id = get_my_profile_id()) AND (profiles.role = ANY (ARRAY['admin'::text, 'gestor'::text])))))"
+    },
+    {
+      "chave": "policy::vehicles.vehicles_update",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "UPDATE | (company_id IN ( SELECT profiles.company_id FROM profiles WHERE ((profiles.id = get_my_profile_id()) AND (profiles.role = ANY (ARRAY['admin'::text, 'gestor'::text]))))) | -",
+      "producao": "UPDATE | (company_id IN ( SELECT profiles.company_id FROM profiles WHERE ((profiles.id = get_my_profile_id()) AND (profiles.role = ANY (ARRAY['admin'::text, 'gestor'::text]))))) | -"
+    },
+    {
+      "chave": "restricao::profiles_auth_user_id_fkey",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "FOREIGN KEY (auth_user_id) REFERENCES auth.users(id) ON DELETE SET NULL",
+      "producao": "FOREIGN KEY (auth_user_id) REFERENCES auth.users(id) ON DELETE SET NULL"
+    },
+    {
+      "chave": "secdef::can_access_service(p_service_id uuid)",
+      "classificacao": "LIVE_ONLY",
+      "producao": "config=-"
+    },
+    {
+      "chave": "secdef::get_my_company_id()",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "config={search_path=public}",
+      "producao": "config={search_path=public}"
+    },
+    {
+      "chave": "secdef::get_my_profile_id()",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "config={search_path=public}",
+      "producao": "config={search_path=public}"
+    },
+    {
+      "chave": "secdef::get_my_role()",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "config={search_path=public}",
+      "producao": "config={search_path=public}"
+    }
+  ],
+  "tudo": [
+    {
+      "chave": "coluna::auth_user_id",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "uuid null=YES def=-",
+      "producao": "uuid null=YES def=-"
+    },
+    {
+      "chave": "coluna::availability",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "jsonb null=YES def='{\"fri\": true, \"mon\": true, \"sat\": false, \"sun\": false, \"thu\": true, \"tue\": true, \"wed\": true}'::jsonb",
+      "producao": "jsonb null=YES def='{\"fri\": true, \"mon\": true, \"sat\": false, \"sun\": false, \"thu\": true, \"tue\": true, \"wed\": true}'::jsonb"
+    },
+    {
+      "chave": "coluna::avatar_url",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "text null=YES def=-",
+      "producao": "text null=YES def=-"
+    },
+    {
+      "chave": "coluna::base_salary_monthly",
+      "classificacao": "LIVE_ONLY",
+      "producao": "numeric null=YES def=-"
+    },
+    {
+      "chave": "coluna::company_id",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "uuid null=NO def=-",
+      "producao": "uuid null=NO def=-"
+    },
+    {
+      "chave": "coluna::contract_end",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "date null=YES def=-",
+      "producao": "date null=YES def=-"
+    },
+    {
+      "chave": "coluna::contract_start",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "date null=YES def=-",
+      "producao": "date null=YES def=-"
+    },
+    {
+      "chave": "coluna::contracted_hours_month",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "numeric null=YES def=168",
+      "producao": "numeric null=YES def=168"
+    },
+    {
+      "chave": "coluna::created_at",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "timestamp with time zone null=YES def=now()",
+      "producao": "timestamp with time zone null=YES def=now()"
+    },
+    {
+      "chave": "coluna::email",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "text null=YES def=-",
+      "producao": "text null=YES def=-"
+    },
+    {
+      "chave": "coluna::full_name",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "text null=NO def=-",
+      "producao": "text null=NO def=-"
+    },
+    {
+      "chave": "coluna::hourly_rate",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "numeric null=YES def=NULL::numeric",
+      "producao": "numeric null=YES def=NULL::numeric"
+    },
+    {
+      "chave": "coluna::iban",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "text null=YES def=-",
+      "producao": "text null=YES def=-"
+    },
+    {
+      "chave": "coluna::id",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "uuid null=NO def=-",
+      "producao": "uuid null=NO def=-"
+    },
+    {
+      "chave": "coluna::invite_accepted_at",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "timestamp with time zone null=YES def=-",
+      "producao": "timestamp with time zone null=YES def=-"
+    },
+    {
+      "chave": "coluna::invited_at",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "timestamp with time zone null=YES def=-",
+      "producao": "timestamp with time zone null=YES def=-"
+    },
+    {
+      "chave": "coluna::must_change_password",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "boolean null=NO def=false",
+      "producao": "boolean null=NO def=false"
+    },
+    {
+      "chave": "coluna::nif",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "text null=YES def=-",
+      "producao": "text null=YES def=-"
+    },
+    {
+      "chave": "coluna::phone",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "text null=YES def=-",
+      "producao": "text null=YES def=-"
+    },
+    {
+      "chave": "coluna::role",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "text null=NO def='colaborador'::text",
+      "producao": "text null=NO def='colaborador'::text"
+    },
+    {
+      "chave": "coluna::skills",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "ARRAY null=YES def='{}'::text[]",
+      "producao": "ARRAY null=YES def='{}'::text[]"
+    },
+    {
+      "chave": "coluna::status",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "text null=YES def='ativo'::text",
+      "producao": "text null=YES def='ativo'::text"
+    },
+    {
+      "chave": "coluna::updated_at",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "timestamp with time zone null=YES def=now()",
+      "producao": "timestamp with time zone null=YES def=now()"
+    },
+    {
+      "chave": "coluna::vacation_balance",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "numeric null=YES def=22",
+      "producao": "numeric null=YES def=22"
+    },
+    {
+      "chave": "funcao::can_access_service",
+      "classificacao": "DIVERGENT",
+      "canonico": "CREATE OR REPLACE FUNCTION public.can_access_service(p_service_id uuid) RETURNS boolean LANGUAGE sql STABLE AS $function$ SELECT true $function$ | secdef=false | config=- | acl=-",
+      "producao": "CREATE OR REPLACE FUNCTION public.can_access_service(p_service_id uuid) RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER AS $function$ SELECT EXISTS ( SELECT 1 FROM services s INNER JOIN profiles p ON p.id = auth.uid() AND p.company_id = s.company_id WHERE s.id = p_service_id AND ( EXISTS ( SELECT 1 FROM team_members tm WHERE tm.team_id = s.team_id AND tm.collaborator_id = auth.uid() AND (tm.left_at IS NULL OR tm.left_at > NOW()) ) OR EXISTS ( SELECT 1 FROM service_reinforcements sr WHERE sr.service_id = s.id AND sr.collaborator_id = auth.uid() ) ) ) $function$ | secdef=true | config=- | acl={=X/postgres,postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}"
+    },
+    {
+      "chave": "funcao::get_my_company_id",
+      "classificacao": "DIVERGENT",
+      "canonico": "CREATE OR REPLACE FUNCTION public.get_my_company_id() RETURNS uuid LANGUAGE sql STABLE SECURITY DEFINER SET search_path TO 'public' AS $function$ SELECT company_id FROM profiles WHERE id = public.get_my_profile_id() LIMIT 1; $function$ | secdef=true | config={search_path=public} | acl=-",
+      "producao": "CREATE OR REPLACE FUNCTION public.get_my_company_id() RETURNS uuid LANGUAGE sql STABLE SECURITY DEFINER SET search_path TO 'public' AS $function$ SELECT company_id FROM profiles WHERE id = public.get_my_profile_id() LIMIT 1; $function$ | secdef=true | config={search_path=public} | acl={=X/postgres,postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}"
+    },
+    {
+      "chave": "funcao::get_my_profile_id",
+      "classificacao": "DIVERGENT",
+      "canonico": "CREATE OR REPLACE FUNCTION public.get_my_profile_id() RETURNS uuid LANGUAGE sql STABLE SECURITY DEFINER SET search_path TO 'public' AS $function$ SELECT id FROM profiles WHERE auth_user_id = auth.uid() UNION ALL -- 🔴 O ramo de compatibilidade exige que a conta **exista mesmo** no Auth. -- -- Sem esse `EXISTS`, uma pessoa sem conta de acesso ficava alcançável por -- quem soubesse o seu id: bastava um token com aquele `sub` e a função -- respondia por ela. Antes desta migration isso era impossível — o `id` -- de um perfil era, por construção, o id de uma conta. Ao permitir -- pessoas sem conta, a equivalência deixou de valer, e mantê-la sem -- verificação abria exactamente o buraco que a coluna nova existe para -- fechar. Foi um teste que o apanhou, não uma revisão do texto. SELECT id FROM profiles p WHERE p.id = auth.uid() AND EXISTS (SELECT 1 FROM auth.users u WHERE u.id = p.id) AND NOT EXISTS (SELECT 1 FROM profiles x WHERE x.auth_user_id = auth.uid()) LIMIT 1; $function$ | secdef=true | config={search_path=public} | acl={postgres=X/postgres,authenticated=X/postgres,anon=X/postgres,service_role=X/postgres}",
+      "producao": "CREATE OR REPLACE FUNCTION public.get_my_profile_id() RETURNS uuid LANGUAGE sql STABLE SECURITY DEFINER SET search_path TO 'public' AS $function$ SELECT id FROM profiles WHERE auth_user_id = auth.uid() UNION ALL SELECT id FROM profiles p WHERE p.id = auth.uid() AND EXISTS (SELECT 1 FROM auth.users u WHERE u.id = p.id) AND NOT EXISTS (SELECT 1 FROM profiles x WHERE x.auth_user_id = auth.uid()) LIMIT 1; $function$ | secdef=true | config={search_path=public} | acl={postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}"
+    },
+    {
+      "chave": "funcao::get_my_role",
+      "classificacao": "DIVERGENT",
+      "canonico": "CREATE OR REPLACE FUNCTION public.get_my_role() RETURNS text LANGUAGE sql STABLE SECURITY DEFINER SET search_path TO 'public' AS $function$ SELECT role FROM profiles WHERE id = public.get_my_profile_id() LIMIT 1; $function$ | secdef=true | config={search_path=public} | acl=-",
+      "producao": "CREATE OR REPLACE FUNCTION public.get_my_role() RETURNS text LANGUAGE sql STABLE SECURITY DEFINER SET search_path TO 'public' AS $function$ SELECT role FROM profiles WHERE id = public.get_my_profile_id() LIMIT 1; $function$ | secdef=true | config={search_path=public} | acl={=X/postgres,postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}"
+    },
+    {
+      "chave": "indice::idx_profiles_company",
+      "classificacao": "LIVE_ONLY",
+      "producao": "CREATE INDEX idx_profiles_company ON public.profiles USING btree (company_id)"
+    },
+    {
+      "chave": "indice::idx_profiles_company_auth",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "CREATE INDEX idx_profiles_company_auth ON public.profiles USING btree (company_id, auth_user_id)",
+      "producao": "CREATE INDEX idx_profiles_company_auth ON public.profiles USING btree (company_id, auth_user_id)"
+    },
+    {
+      "chave": "indice::idx_profiles_role",
+      "classificacao": "LIVE_ONLY",
+      "producao": "CREATE INDEX idx_profiles_role ON public.profiles USING btree (company_id, role)"
+    },
+    {
+      "chave": "indice::profiles_id_company_unique",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "CREATE UNIQUE INDEX profiles_id_company_unique ON public.profiles USING btree (id, company_id)",
+      "producao": "CREATE UNIQUE INDEX profiles_id_company_unique ON public.profiles USING btree (id, company_id)"
+    },
+    {
+      "chave": "indice::profiles_pkey",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "CREATE UNIQUE INDEX profiles_pkey ON public.profiles USING btree (id)",
+      "producao": "CREATE UNIQUE INDEX profiles_pkey ON public.profiles USING btree (id)"
+    },
+    {
+      "chave": "indice::uq_profiles_auth_user_id",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "CREATE UNIQUE INDEX uq_profiles_auth_user_id ON public.profiles USING btree (auth_user_id) WHERE (auth_user_id IS NOT NULL)",
+      "producao": "CREATE UNIQUE INDEX uq_profiles_auth_user_id ON public.profiles USING btree (auth_user_id) WHERE (auth_user_id IS NOT NULL)"
+    },
+    {
+      "chave": "policy::_migrations._migrations_deny_public_roles",
+      "classificacao": "LIVE_ONLY",
+      "producao": "ALL | false | false"
+    },
+    {
+      "chave": "policy::absences.absences_manage",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "ALL | ((company_id = get_my_company_id()) AND (get_my_role() = ANY (ARRAY['admin'::text, 'gestor'::text]))) | -",
+      "producao": "ALL | ((company_id = get_my_company_id()) AND (get_my_role() = ANY (ARRAY['admin'::text, 'gestor'::text]))) | -"
+    },
+    {
+      "chave": "policy::absences.absences_manager_select",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "SELECT | ((company_id = get_my_company_id()) AND (( SELECT profiles.role FROM profiles WHERE (profiles.id = get_my_profile_id())) = ANY (ARRAY['admin'::text, 'gestor'::text]))) | -",
+      "producao": "SELECT | ((company_id = get_my_company_id()) AND (( SELECT profiles.role FROM profiles WHERE (profiles.id = get_my_profile_id())) = ANY (ARRAY['admin'::text, 'gestor'::text]))) | -"
+    },
+    {
+      "chave": "policy::absences.absences_own_select",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "SELECT | (collaborator_id = get_my_profile_id()) | -",
+      "producao": "SELECT | (collaborator_id = get_my_profile_id()) | -"
+    },
+    {
+      "chave": "policy::app_notice_reads.read own reads",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "SELECT | (profile_id = get_my_profile_id()) | -",
+      "producao": "SELECT | (profile_id = get_my_profile_id()) | -"
+    },
+    {
+      "chave": "policy::attachments.company members delete attachments",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "DELETE | (company_id IN ( SELECT profiles.company_id FROM profiles WHERE (profiles.id = get_my_profile_id()))) | -",
+      "producao": "DELETE | (company_id IN ( SELECT profiles.company_id FROM profiles WHERE (profiles.id = get_my_profile_id()))) | -"
+    },
+    {
+      "chave": "policy::attachments.company members insert attachments",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "INSERT | - | (company_id IN ( SELECT profiles.company_id FROM profiles WHERE (profiles.id = get_my_profile_id())))",
+      "producao": "INSERT | - | (company_id IN ( SELECT profiles.company_id FROM profiles WHERE (profiles.id = get_my_profile_id())))"
+    },
+    {
+      "chave": "policy::attachments.company members read attachments",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "SELECT | (company_id IN ( SELECT profiles.company_id FROM profiles WHERE (profiles.id = get_my_profile_id()))) | -",
+      "producao": "SELECT | (company_id IN ( SELECT profiles.company_id FROM profiles WHERE (profiles.id = get_my_profile_id()))) | -"
+    },
+    {
+      "chave": "policy::audit_logs.audit_logs_admin_read",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "SELECT | ((company_id = ( SELECT profiles.company_id FROM profiles WHERE (profiles.id = get_my_profile_id()))) AND (( SELECT profiles.role FROM profiles WHERE (profiles.id = get_my_profile_id())) = ANY (ARRAY['admin'::text, 'gestor'::text]))) | -",
+      "producao": "SELECT | ((company_id = ( SELECT profiles.company_id FROM profiles WHERE (profiles.id = get_my_profile_id()))) AND (( SELECT profiles.role FROM profiles WHERE (profiles.id = get_my_profile_id())) = ANY (ARRAY['admin'::text, 'gestor'::text]))) | -"
+    },
+    {
+      "chave": "policy::audit_logs.audit_logs_service_insert",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "INSERT | - | true",
+      "producao": "INSERT | - | true"
+    },
+    {
+      "chave": "policy::background_jobs.background_jobs_admin_read",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "SELECT | ((( SELECT profiles.role FROM profiles WHERE (profiles.id = get_my_profile_id())) = ANY (ARRAY['admin'::text, 'gestor'::text])) AND ((company_id IS NULL) OR (company_id = ( SELECT profiles.company_id FROM profiles WHERE (profiles.id = get_my_profile_id()))))) | -",
+      "producao": "SELECT | ((( SELECT profiles.role FROM profiles WHERE (profiles.id = get_my_profile_id())) = ANY (ARRAY['admin'::text, 'gestor'::text])) AND ((company_id IS NULL) OR (company_id = ( SELECT profiles.company_id FROM profiles WHERE (profiles.id = get_my_profile_id()))))) | -"
+    },
+    {
+      "chave": "policy::background_jobs.background_jobs_service_write",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "ALL | true | true",
+      "producao": "ALL | true | true"
+    },
+    {
+      "chave": "policy::bank_accounts.bank_accounts_admin",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "ALL | ((company_id = get_my_company_id()) AND (( SELECT profiles.role FROM profiles WHERE (profiles.id = get_my_profile_id())) = ANY (ARRAY['admin'::text, 'gestor'::text]))) | ((company_id = get_my_company_id()) AND (( SELECT profiles.role FROM profiles WHERE (profiles.id = get_my_profile_id())) = ANY (ARRAY['admin'::text, 'gestor'::text])))",
+      "producao": "ALL | ((company_id = get_my_company_id()) AND (( SELECT profiles.role FROM profiles WHERE (profiles.id = get_my_profile_id())) = ANY (ARRAY['admin'::text, 'gestor'::text]))) | ((company_id = get_my_company_id()) AND (( SELECT profiles.role FROM profiles WHERE (profiles.id = get_my_profile_id())) = ANY (ARRAY['admin'::text, 'gestor'::text])))"
+    },
+    {
+      "chave": "policy::bank_reconciliation_matches.bank_reconciliation_matches_admin",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "ALL | ((company_id = get_my_company_id()) AND (( SELECT profiles.role FROM profiles WHERE (profiles.id = get_my_profile_id())) = ANY (ARRAY['admin'::text, 'gestor'::text]))) | ((company_id = get_my_company_id()) AND (( SELECT profiles.role FROM profiles WHERE (profiles.id = get_my_profile_id())) = ANY (ARRAY['admin'::text, 'gestor'::text])))",
+      "producao": "ALL | ((company_id = get_my_company_id()) AND (( SELECT profiles.role FROM profiles WHERE (profiles.id = get_my_profile_id())) = ANY (ARRAY['admin'::text, 'gestor'::text]))) | ((company_id = get_my_company_id()) AND (( SELECT profiles.role FROM profiles WHERE (profiles.id = get_my_profile_id())) = ANY (ARRAY['admin'::text, 'gestor'::text])))"
+    },
+    {
+      "chave": "policy::bank_statement_imports.bank_statement_imports_admin",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "ALL | ((company_id = get_my_company_id()) AND (( SELECT profiles.role FROM profiles WHERE (profiles.id = get_my_profile_id())) = ANY (ARRAY['admin'::text, 'gestor'::text]))) | ((company_id = get_my_company_id()) AND (( SELECT profiles.role FROM profiles WHERE (profiles.id = get_my_profile_id())) = ANY (ARRAY['admin'::text, 'gestor'::text])))",
+      "producao": "ALL | ((company_id = get_my_company_id()) AND (( SELECT profiles.role FROM profiles WHERE (profiles.id = get_my_profile_id())) = ANY (ARRAY['admin'::text, 'gestor'::text]))) | ((company_id = get_my_company_id()) AND (( SELECT profiles.role FROM profiles WHERE (profiles.id = get_my_profile_id())) = ANY (ARRAY['admin'::text, 'gestor'::text])))"
+    },
+    {
+      "chave": "policy::bank_transactions.bank_transactions_admin",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "ALL | ((company_id = get_my_company_id()) AND (( SELECT profiles.role FROM profiles WHERE (profiles.id = get_my_profile_id())) = ANY (ARRAY['admin'::text, 'gestor'::text]))) | ((company_id = get_my_company_id()) AND (( SELECT profiles.role FROM profiles WHERE (profiles.id = get_my_profile_id())) = ANY (ARRAY['admin'::text, 'gestor'::text])))",
+      "producao": "ALL | ((company_id = get_my_company_id()) AND (( SELECT profiles.role FROM profiles WHERE (profiles.id = get_my_profile_id())) = ANY (ARRAY['admin'::text, 'gestor'::text]))) | ((company_id = get_my_company_id()) AND (( SELECT profiles.role FROM profiles WHERE (profiles.id = get_my_profile_id())) = ANY (ARRAY['admin'::text, 'gestor'::text])))"
+    },
+    {
+      "chave": "policy::building_cards.building_cards_company_isolation",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "ALL | (company_id IN ( SELECT profiles.company_id FROM profiles WHERE (profiles.id = get_my_profile_id()))) | -",
+      "producao": "ALL | (company_id IN ( SELECT profiles.company_id FROM profiles WHERE (profiles.id = get_my_profile_id()))) | -"
+    },
+    {
+      "chave": "policy::building_cards.building_cards_delete",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "DELETE | (company_id IN ( SELECT profiles.company_id FROM profiles WHERE ((profiles.id = get_my_profile_id()) AND (profiles.role = ANY (ARRAY['admin'::text, 'gestor'::text]))))) | -",
+      "producao": "DELETE | (company_id IN ( SELECT profiles.company_id FROM profiles WHERE ((profiles.id = get_my_profile_id()) AND (profiles.role = ANY (ARRAY['admin'::text, 'gestor'::text]))))) | -"
+    },
+    {
+      "chave": "policy::building_cards.building_cards_insert",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "INSERT | - | (company_id IN ( SELECT profiles.company_id FROM profiles WHERE ((profiles.id = get_my_profile_id()) AND (profiles.role = ANY (ARRAY['admin'::text, 'gestor'::text])))))",
+      "producao": "INSERT | - | (company_id IN ( SELECT profiles.company_id FROM profiles WHERE ((profiles.id = get_my_profile_id()) AND (profiles.role = ANY (ARRAY['admin'::text, 'gestor'::text])))))"
+    },
+    {
+      "chave": "policy::building_cards.building_cards_update",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "UPDATE | (company_id IN ( SELECT profiles.company_id FROM profiles WHERE ((profiles.id = get_my_profile_id()) AND (profiles.role = ANY (ARRAY['admin'::text, 'gestor'::text]))))) | -",
+      "producao": "UPDATE | (company_id IN ( SELECT profiles.company_id FROM profiles WHERE ((profiles.id = get_my_profile_id()) AND (profiles.role = ANY (ARRAY['admin'::text, 'gestor'::text]))))) | -"
+    },
+    {
+      "chave": "policy::cash_flow_entries.cash_flow_admin",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "ALL | ((company_id = get_my_company_id()) AND (( SELECT profiles.role FROM profiles WHERE (profiles.id = get_my_profile_id())) = ANY (ARRAY['admin'::text, 'gestor'::text]))) | ((company_id = get_my_company_id()) AND (( SELECT profiles.role FROM profiles WHERE (profiles.id = get_my_profile_id())) = ANY (ARRAY['admin'::text, 'gestor'::text])))",
+      "producao": "ALL | ((company_id = get_my_company_id()) AND (( SELECT profiles.role FROM profiles WHERE (profiles.id = get_my_profile_id())) = ANY (ARRAY['admin'::text, 'gestor'::text]))) | ((company_id = get_my_company_id()) AND (( SELECT profiles.role FROM profiles WHERE (profiles.id = get_my_profile_id())) = ANY (ARRAY['admin'::text, 'gestor'::text])))"
+    },
+    {
+      "chave": "policy::client_notifications.managers manage client notifications",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "ALL | ((company_id = ( SELECT profiles.company_id FROM profiles WHERE (profiles.id = get_my_profile_id()))) AND (( SELECT profiles.role FROM profiles WHERE (profiles.id = get_my_profile_id())) = ANY (ARRAY['admin'::text, 'gestor'::text]))) | -",
+      "producao": "ALL | ((company_id = ( SELECT profiles.company_id FROM profiles WHERE (profiles.id = get_my_profile_id()))) AND (( SELECT profiles.role FROM profiles WHERE (profiles.id = get_my_profile_id())) = ANY (ARRAY['admin'::text, 'gestor'::text]))) | -"
+    },
+    {
+      "chave": "policy::clients.clients_collaborator_select",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "SELECT | ((company_id = get_my_company_id()) AND (( SELECT profiles.role FROM profiles WHERE (profiles.id = get_my_profile_id())) <> ALL (ARRAY['admin'::text, 'gestor'::text])) AND (EXISTS ( SELECT 1 FROM (locations l JOIN services s ON ((s.location_id = l.id))) WHERE ((l.client_id = clients.id) AND can_access_service(s.id))))) | -",
+      "producao": "SELECT | ((company_id = get_my_company_id()) AND (( SELECT profiles.role FROM profiles WHERE (profiles.id = get_my_profile_id())) <> ALL (ARRAY['admin'::text, 'gestor'::text])) AND (EXISTS ( SELECT 1 FROM (locations l JOIN services s ON ((s.location_id = l.id))) WHERE ((l.client_id = clients.id) AND can_access_service(s.id))))) | -"
+    },
+    {
+      "chave": "policy::clients.clients_manage",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "ALL | ((company_id = get_my_company_id()) AND (get_my_role() = ANY (ARRAY['admin'::text, 'gestor'::text]))) | -",
+      "producao": "ALL | ((company_id = get_my_company_id()) AND (get_my_role() = ANY (ARRAY['admin'::text, 'gestor'::text]))) | -"
+    },
+    {
+      "chave": "policy::collaborator_documents.colaboradoras submetem relatórios de avaria",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "INSERT | - | ((collaborator_id = get_my_profile_id()) AND (category = 'avaria'::text) AND (visible_to_collaborator = true) AND (uploaded_by_role = 'colaboradora'::text))",
+      "producao": "INSERT | - | ((collaborator_id = get_my_profile_id()) AND (category = 'avaria'::text) AND (visible_to_collaborator = true) AND (uploaded_by_role = 'colaboradora'::text))"
+    },
+    {
+      "chave": "policy::collaborator_documents.colaboradoras veem os seus docs visíveis",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "SELECT | ((collaborator_id = get_my_profile_id()) AND (visible_to_collaborator = true)) | -",
+      "producao": "SELECT | ((collaborator_id = get_my_profile_id()) AND (visible_to_collaborator = true)) | -"
+    },
+    {
+      "chave": "policy::collaborator_documents.gestores gerem documentos da empresa",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "ALL | (company_id IN ( SELECT profiles.company_id FROM profiles WHERE ((profiles.id = get_my_profile_id()) AND (profiles.role = ANY (ARRAY['gestor'::text, 'admin'::text]))))) | (company_id IN ( SELECT profiles.company_id FROM profiles WHERE ((profiles.id = get_my_profile_id()) AND (profiles.role = ANY (ARRAY['gestor'::text, 'admin'::text])))))",
+      "producao": "ALL | (company_id IN ( SELECT profiles.company_id FROM profiles WHERE ((profiles.id = get_my_profile_id()) AND (profiles.role = ANY (ARRAY['gestor'::text, 'admin'::text]))))) | (company_id IN ( SELECT profiles.company_id FROM profiles WHERE ((profiles.id = get_my_profile_id()) AND (profiles.role = ANY (ARRAY['gestor'::text, 'admin'::text])))))"
+    },
+    {
+      "chave": "policy::collaborator_ride_assignments.collaborator_ride_company_isolation",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "ALL | (company_id IN ( SELECT profiles.company_id FROM profiles WHERE (profiles.id = get_my_profile_id()))) | -",
+      "producao": "ALL | (company_id IN ( SELECT profiles.company_id FROM profiles WHERE (profiles.id = get_my_profile_id()))) | -"
+    },
+    {
+      "chave": "policy::collaborator_ride_assignments.collaborator_ride_delete",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "DELETE | (company_id IN ( SELECT profiles.company_id FROM profiles WHERE ((profiles.id = get_my_profile_id()) AND (profiles.role = ANY (ARRAY['admin'::text, 'gestor'::text]))))) | -",
+      "producao": "DELETE | (company_id IN ( SELECT profiles.company_id FROM profiles WHERE ((profiles.id = get_my_profile_id()) AND (profiles.role = ANY (ARRAY['admin'::text, 'gestor'::text]))))) | -"
+    },
+    {
+      "chave": "policy::collaborator_ride_assignments.collaborator_ride_insert",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "INSERT | - | (company_id IN ( SELECT profiles.company_id FROM profiles WHERE ((profiles.id = get_my_profile_id()) AND (profiles.role = ANY (ARRAY['admin'::text, 'gestor'::text])))))",
+      "producao": "INSERT | - | (company_id IN ( SELECT profiles.company_id FROM profiles WHERE ((profiles.id = get_my_profile_id()) AND (profiles.role = ANY (ARRAY['admin'::text, 'gestor'::text])))))"
+    },
+    {
+      "chave": "policy::collaborator_ride_assignments.collaborator_ride_update",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "UPDATE | (company_id IN ( SELECT profiles.company_id FROM profiles WHERE ((profiles.id = get_my_profile_id()) AND (profiles.role = ANY (ARRAY['admin'::text, 'gestor'::text]))))) | -",
+      "producao": "UPDATE | (company_id IN ( SELECT profiles.company_id FROM profiles WHERE ((profiles.id = get_my_profile_id()) AND (profiles.role = ANY (ARRAY['admin'::text, 'gestor'::text]))))) | -"
+    },
+    {
+      "chave": "policy::companies.users see own company",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "SELECT | (id = ( SELECT profiles.company_id FROM profiles WHERE (profiles.id = get_my_profile_id()))) | -",
+      "producao": "SELECT | (id = ( SELECT profiles.company_id FROM profiles WHERE (profiles.id = get_my_profile_id()))) | -"
+    },
+    {
+      "chave": "policy::company_change_events.managers see company change events",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "SELECT | ((company_id = ( SELECT profiles.company_id FROM profiles WHERE (profiles.id = get_my_profile_id()))) AND (( SELECT profiles.role FROM profiles WHERE (profiles.id = get_my_profile_id())) = ANY (ARRAY['admin'::text, 'gestor'::text]))) | -",
+      "producao": "SELECT | ((company_id = ( SELECT profiles.company_id FROM profiles WHERE (profiles.id = get_my_profile_id()))) AND (( SELECT profiles.role FROM profiles WHERE (profiles.id = get_my_profile_id())) = ANY (ARRAY['admin'::text, 'gestor'::text]))) | -"
+    },
+    {
+      "chave": "policy::company_settings.company_settings_manage",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "ALL | ((company_id = get_my_company_id()) AND (get_my_role() = 'admin'::text)) | -",
+      "producao": "ALL | ((company_id = get_my_company_id()) AND (get_my_role() = 'admin'::text)) | -"
+    },
+    {
+      "chave": "policy::company_settings.company_settings_select",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "SELECT | (company_id = get_my_company_id()) | -",
+      "producao": "SELECT | (company_id = get_my_company_id()) | -"
+    },
+    {
+      "chave": "policy::contracts.contracts_manage",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "ALL | ((company_id = get_my_company_id()) AND (get_my_role() = ANY (ARRAY['admin'::text, 'gestor'::text]))) | -",
+      "producao": "ALL | ((company_id = get_my_company_id()) AND (get_my_role() = ANY (ARRAY['admin'::text, 'gestor'::text]))) | -"
+    },
+    {
+      "chave": "policy::contracts.contracts_manager_select",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "SELECT | ((company_id = get_my_company_id()) AND (( SELECT profiles.role FROM profiles WHERE (profiles.id = get_my_profile_id())) = ANY (ARRAY['admin'::text, 'gestor'::text]))) | -",
+      "producao": "SELECT | ((company_id = get_my_company_id()) AND (( SELECT profiles.role FROM profiles WHERE (profiles.id = get_my_profile_id())) = ANY (ARRAY['admin'::text, 'gestor'::text]))) | -"
+    },
+    {
+      "chave": "policy::crm_lead_interactions.crm_lead_interactions_manager_select",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "SELECT | ((company_id = get_my_company_id()) AND (get_my_role() = ANY (ARRAY['admin'::text, 'gestor'::text]))) | -",
+      "producao": "SELECT | ((company_id = get_my_company_id()) AND (get_my_role() = ANY (ARRAY['admin'::text, 'gestor'::text]))) | -"
+    },
+    {
+      "chave": "policy::crm_leads.crm_leads_manager_select",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "SELECT | ((company_id = get_my_company_id()) AND (get_my_role() = ANY (ARRAY['admin'::text, 'gestor'::text]))) | -",
+      "producao": "SELECT | ((company_id = get_my_company_id()) AND (get_my_role() = ANY (ARRAY['admin'::text, 'gestor'::text]))) | -"
+    },
+    {
+      "chave": "policy::daily_clocks.daily_clocks_manager_select",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "SELECT | ((company_id = get_my_company_id()) AND (get_my_role() = ANY (ARRAY['admin'::text, 'gestor'::text]))) | -",
+      "producao": "SELECT | ((company_id = get_my_company_id()) AND (get_my_role() = ANY (ARRAY['admin'::text, 'gestor'::text]))) | -"
+    },
+    {
+      "chave": "policy::daily_clocks.daily_clocks_own",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "ALL | (collaborator_id = get_my_profile_id()) | (collaborator_id = get_my_profile_id())",
+      "producao": "ALL | (collaborator_id = get_my_profile_id()) | (collaborator_id = get_my_profile_id())"
+    },
+    {
+      "chave": "policy::domain_mutations.service role domain mutations",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "ALL | false | false",
+      "producao": "ALL | false | false"
+    },
+    {
+      "chave": "policy::expense_categories.expense_categories_read",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "SELECT | (company_id IN ( SELECT profiles.company_id FROM profiles WHERE (profiles.id = get_my_profile_id()))) | -",
+      "producao": "SELECT | (company_id IN ( SELECT profiles.company_id FROM profiles WHERE (profiles.id = get_my_profile_id()))) | -"
+    },
+    {
+      "chave": "policy::expense_categories.expense_categories_write",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "ALL | (company_id IN ( SELECT profiles.company_id FROM profiles WHERE ((profiles.id = get_my_profile_id()) AND (profiles.role = ANY (ARRAY['admin'::text, 'gestor'::text]))))) | -",
+      "producao": "ALL | (company_id IN ( SELECT profiles.company_id FROM profiles WHERE ((profiles.id = get_my_profile_id()) AND (profiles.role = ANY (ARRAY['admin'::text, 'gestor'::text]))))) | -"
+    },
+    {
+      "chave": "policy::financial_periods.financial_periods_read",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "SELECT | (company_id IN ( SELECT profiles.company_id FROM profiles WHERE (profiles.id = get_my_profile_id()))) | -",
+      "producao": "SELECT | (company_id IN ( SELECT profiles.company_id FROM profiles WHERE (profiles.id = get_my_profile_id()))) | -"
+    },
+    {
+      "chave": "policy::financial_periods.financial_periods_write",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "ALL | (company_id IN ( SELECT profiles.company_id FROM profiles WHERE ((profiles.id = get_my_profile_id()) AND (profiles.role = ANY (ARRAY['admin'::text, 'gestor'::text]))))) | -",
+      "producao": "ALL | (company_id IN ( SELECT profiles.company_id FROM profiles WHERE ((profiles.id = get_my_profile_id()) AND (profiles.role = ANY (ARRAY['admin'::text, 'gestor'::text]))))) | -"
+    },
+    {
+      "chave": "policy::fixed_variable_payments.company members manage fixed variable payments",
+      "classificacao": "CANONICAL_ONLY",
+      "canonico": "ALL | (company_id IN ( SELECT profiles.company_id FROM profiles WHERE (profiles.id = get_my_profile_id()))) | -"
+    },
+    {
+      "chave": "policy::fixed_variable_payments.payments_manager_select",
+      "classificacao": "LIVE_ONLY",
+      "producao": "SELECT | ((company_id = get_my_company_id()) AND (get_my_role() = ANY (ARRAY['admin'::text, 'gestor'::text]))) | -"
+    },
+    {
+      "chave": "policy::invoice_items.managers manage invoice items",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "ALL | ((( SELECT invoices.company_id FROM invoices WHERE (invoices.id = invoice_items.invoice_id)) = ( SELECT profiles.company_id FROM profiles WHERE (profiles.id = get_my_profile_id()))) AND (( SELECT profiles.role FROM profiles WHERE (profiles.id = get_my_profile_id())) = ANY (ARRAY['admin'::text, 'gestor'::text]))) | -",
+      "producao": "ALL | ((( SELECT invoices.company_id FROM invoices WHERE (invoices.id = invoice_items.invoice_id)) = ( SELECT profiles.company_id FROM profiles WHERE (profiles.id = get_my_profile_id()))) AND (( SELECT profiles.role FROM profiles WHERE (profiles.id = get_my_profile_id())) = ANY (ARRAY['admin'::text, 'gestor'::text]))) | -"
+    },
+    {
+      "chave": "policy::invoices.managers manage invoices",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "ALL | ((company_id = ( SELECT profiles.company_id FROM profiles WHERE (profiles.id = get_my_profile_id()))) AND (( SELECT profiles.role FROM profiles WHERE (profiles.id = get_my_profile_id())) = ANY (ARRAY['admin'::text, 'gestor'::text]))) | -",
+      "producao": "ALL | ((company_id = ( SELECT profiles.company_id FROM profiles WHERE (profiles.id = get_my_profile_id()))) AND (( SELECT profiles.role FROM profiles WHERE (profiles.id = get_my_profile_id())) = ANY (ARRAY['admin'::text, 'gestor'::text]))) | -"
+    },
+    {
+      "chave": "policy::locations.locations_collaborator_select",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "SELECT | ((company_id = get_my_company_id()) AND (( SELECT profiles.role FROM profiles WHERE (profiles.id = get_my_profile_id())) <> ALL (ARRAY['admin'::text, 'gestor'::text])) AND (EXISTS ( SELECT 1 FROM services s WHERE ((s.location_id = locations.id) AND can_access_service(s.id))))) | -",
+      "producao": "SELECT | ((company_id = get_my_company_id()) AND (( SELECT profiles.role FROM profiles WHERE (profiles.id = get_my_profile_id())) <> ALL (ARRAY['admin'::text, 'gestor'::text])) AND (EXISTS ( SELECT 1 FROM services s WHERE ((s.location_id = locations.id) AND can_access_service(s.id))))) | -"
+    },
+    {
+      "chave": "policy::locations.locations_manage",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "ALL | ((company_id = get_my_company_id()) AND (get_my_role() = ANY (ARRAY['admin'::text, 'gestor'::text]))) | -",
+      "producao": "ALL | ((company_id = get_my_company_id()) AND (get_my_role() = ANY (ARRAY['admin'::text, 'gestor'::text]))) | -"
+    },
+    {
+      "chave": "policy::management_tasks.management_tasks_admin",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "ALL | ((company_id = get_my_company_id()) AND (( SELECT profiles.role FROM profiles WHERE (profiles.id = get_my_profile_id())) = ANY (ARRAY['admin'::text, 'gestor'::text]))) | ((company_id = get_my_company_id()) AND (( SELECT profiles.role FROM profiles WHERE (profiles.id = get_my_profile_id())) = ANY (ARRAY['admin'::text, 'gestor'::text])))",
+      "producao": "ALL | ((company_id = get_my_company_id()) AND (( SELECT profiles.role FROM profiles WHERE (profiles.id = get_my_profile_id())) = ANY (ARRAY['admin'::text, 'gestor'::text]))) | ((company_id = get_my_company_id()) AND (( SELECT profiles.role FROM profiles WHERE (profiles.id = get_my_profile_id())) = ANY (ARRAY['admin'::text, 'gestor'::text])))"
+    },
+    {
+      "chave": "policy::manual_charges.manual_charges_manager_select",
+      "classificacao": "LIVE_ONLY",
+      "producao": "SELECT | ((company_id = get_my_company_id()) AND (get_my_role() = ANY (ARRAY['admin'::text, 'gestor'::text]))) | -"
+    },
+    {
+      "chave": "policy::notifications.managers create notifications",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "INSERT | - | (company_id = ( SELECT profiles.company_id FROM profiles WHERE (profiles.id = get_my_profile_id())))",
+      "producao": "INSERT | - | (company_id = ( SELECT profiles.company_id FROM profiles WHERE (profiles.id = get_my_profile_id())))"
+    },
+    {
+      "chave": "policy::notifications.users see own notifications",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "ALL | (user_id = get_my_profile_id()) | -",
+      "producao": "ALL | (user_id = get_my_profile_id()) | -"
+    },
+    {
+      "chave": "policy::payment_cashflow_provenance.payment_cashflow_provenance_select",
+      "classificacao": "LIVE_ONLY",
+      "producao": "SELECT | (company_id = get_my_company_id()) | -"
+    },
+    {
+      "chave": "policy::payment_cashflow_provenance.payment_cashflow_provenance_write",
+      "classificacao": "LIVE_ONLY",
+      "producao": "ALL | (company_id = get_my_company_id()) | (company_id = get_my_company_id())"
+    },
+    {
+      "chave": "policy::payroll_records.collaborators see own payroll",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "SELECT | (collaborator_id = get_my_profile_id()) | -",
+      "producao": "SELECT | (collaborator_id = get_my_profile_id()) | -"
+    },
+    {
+      "chave": "policy::payroll_records.managers manage payroll",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "ALL | ((company_id = ( SELECT profiles.company_id FROM profiles WHERE (profiles.id = get_my_profile_id()))) AND (( SELECT profiles.role FROM profiles WHERE (profiles.id = get_my_profile_id())) = ANY (ARRAY['admin'::text, 'gestor'::text]))) | -",
+      "producao": "ALL | ((company_id = ( SELECT profiles.company_id FROM profiles WHERE (profiles.id = get_my_profile_id()))) AND (( SELECT profiles.role FROM profiles WHERE (profiles.id = get_my_profile_id())) = ANY (ARRAY['admin'::text, 'gestor'::text]))) | -"
+    },
+    {
+      "chave": "policy::platform_admins.read own platform admin row",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "SELECT | (profile_id = get_my_profile_id()) | -",
+      "producao": "SELECT | (profile_id = get_my_profile_id()) | -"
+    },
+    {
+      "chave": "policy::profiles.profiles_insert_admin",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "INSERT | - | ((id = get_my_profile_id()) OR ((company_id = get_my_company_id()) AND (get_my_role() = ANY (ARRAY['admin'::text, 'gestor'::text]))))",
+      "producao": "INSERT | - | ((id = get_my_profile_id()) OR ((company_id = get_my_company_id()) AND (get_my_role() = ANY (ARRAY['admin'::text, 'gestor'::text]))))"
+    },
+    {
+      "chave": "policy::profiles.profiles_manage_company",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "ALL | ((company_id = get_my_company_id()) AND (get_my_role() = ANY (ARRAY['admin'::text, 'gestor'::text]))) | -",
+      "producao": "ALL | ((company_id = get_my_company_id()) AND (get_my_role() = ANY (ARRAY['admin'::text, 'gestor'::text]))) | -"
+    },
+    {
+      "chave": "policy::profiles.profiles_select",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "SELECT | ((id = get_my_profile_id()) OR (company_id = get_my_company_id())) | -",
+      "producao": "SELECT | ((id = get_my_profile_id()) OR (company_id = get_my_company_id())) | -"
+    },
+    {
+      "chave": "policy::profiles.profiles_update_own",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "UPDATE | (id = get_my_profile_id()) | ((id = get_my_profile_id()) AND (company_id = get_my_company_id()))",
+      "producao": "UPDATE | (id = get_my_profile_id()) | ((id = get_my_profile_id()) AND (company_id = get_my_company_id()))"
+    },
+    {
+      "chave": "policy::push_subscriptions.users manage own push subs",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "ALL | (user_id = get_my_profile_id()) | -",
+      "producao": "ALL | (user_id = get_my_profile_id()) | -"
+    },
+    {
+      "chave": "policy::service_photos.service_photos_manager_read",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "SELECT | ((company_id = ( SELECT profiles.company_id FROM profiles WHERE (profiles.id = get_my_profile_id()))) AND (( SELECT profiles.role FROM profiles WHERE (profiles.id = get_my_profile_id())) = ANY (ARRAY['admin'::text, 'gestor'::text]))) | -",
+      "producao": "SELECT | ((company_id = ( SELECT profiles.company_id FROM profiles WHERE (profiles.id = get_my_profile_id()))) AND (( SELECT profiles.role FROM profiles WHERE (profiles.id = get_my_profile_id())) = ANY (ARRAY['admin'::text, 'gestor'::text]))) | -"
+    },
+    {
+      "chave": "policy::service_photos.service_photos_own_read",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "SELECT | (collaborator_id = get_my_profile_id()) | -",
+      "producao": "SELECT | (collaborator_id = get_my_profile_id()) | -"
+    },
+    {
+      "chave": "policy::service_price_audit.price_audit_manage",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "ALL | ((get_service_company_id(service_id) = get_my_company_id()) AND (get_my_role() = ANY (ARRAY['admin'::text, 'gestor'::text]))) | -",
+      "producao": "ALL | ((get_service_company_id(service_id) = get_my_company_id()) AND (get_my_role() = ANY (ARRAY['admin'::text, 'gestor'::text]))) | -"
+    },
+    {
+      "chave": "policy::service_reinforcements.reinforcements_manage",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "ALL | ((get_service_company_id(service_id) = get_my_company_id()) AND (get_my_role() = ANY (ARRAY['admin'::text, 'gestor'::text]))) | -",
+      "producao": "ALL | ((get_service_company_id(service_id) = get_my_company_id()) AND (get_my_role() = ANY (ARRAY['admin'::text, 'gestor'::text]))) | -"
+    },
+    {
+      "chave": "policy::service_reinforcements.reinforcements_select",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "SELECT | ((collaborator_id = get_my_profile_id()) OR (get_service_company_id(service_id) = get_my_company_id())) | -",
+      "producao": "SELECT | ((collaborator_id = get_my_profile_id()) OR (get_service_company_id(service_id) = get_my_company_id())) | -"
+    },
+    {
+      "chave": "policy::services.services_collaborator_select",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "SELECT | can_access_service(id) | -",
+      "producao": "SELECT | can_access_service(id) | -"
+    },
+    {
+      "chave": "policy::services.services_manage",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "ALL | ((company_id = get_my_company_id()) AND (get_my_role() = ANY (ARRAY['admin'::text, 'gestor'::text]))) | -",
+      "producao": "ALL | ((company_id = get_my_company_id()) AND (get_my_role() = ANY (ARRAY['admin'::text, 'gestor'::text]))) | -"
+    },
+    {
+      "chave": "policy::team_members.company team members",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "ALL | (( SELECT teams.company_id FROM teams WHERE (teams.id = team_members.team_id)) = ( SELECT profiles.company_id FROM profiles WHERE (profiles.id = get_my_profile_id()))) | -",
+      "producao": "ALL | (( SELECT teams.company_id FROM teams WHERE (teams.id = team_members.team_id)) = ( SELECT profiles.company_id FROM profiles WHERE (profiles.id = get_my_profile_id()))) | -"
+    },
+    {
+      "chave": "policy::team_members.team_members_manage",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "ALL | ((team_id IN ( SELECT teams.id FROM teams WHERE (teams.company_id = get_my_company_id()))) AND (get_my_role() = ANY (ARRAY['admin'::text, 'gestor'::text]))) | -",
+      "producao": "ALL | ((team_id IN ( SELECT teams.id FROM teams WHERE (teams.company_id = get_my_company_id()))) AND (get_my_role() = ANY (ARRAY['admin'::text, 'gestor'::text]))) | -"
+    },
+    {
+      "chave": "policy::team_members.team_members_select",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "SELECT | (team_id IN ( SELECT teams.id FROM teams WHERE (teams.company_id = get_my_company_id()))) | -",
+      "producao": "SELECT | (team_id IN ( SELECT teams.id FROM teams WHERE (teams.company_id = get_my_company_id()))) | -"
+    },
+    {
+      "chave": "policy::teams.company teams",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "ALL | (company_id = ( SELECT profiles.company_id FROM profiles WHERE (profiles.id = get_my_profile_id()))) | -",
+      "producao": "ALL | (company_id = ( SELECT profiles.company_id FROM profiles WHERE (profiles.id = get_my_profile_id()))) | -"
+    },
+    {
+      "chave": "policy::teams.teams_manage",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "ALL | ((company_id = get_my_company_id()) AND (get_my_role() = ANY (ARRAY['admin'::text, 'gestor'::text]))) | -",
+      "producao": "ALL | ((company_id = get_my_company_id()) AND (get_my_role() = ANY (ARRAY['admin'::text, 'gestor'::text]))) | -"
+    },
+    {
+      "chave": "policy::teams.teams_select",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "SELECT | (company_id = get_my_company_id()) | -",
+      "producao": "SELECT | (company_id = get_my_company_id()) | -"
+    },
+    {
+      "chave": "policy::timesheets.collaborators create own timesheets",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "INSERT | - | (collaborator_id = get_my_profile_id())",
+      "producao": "INSERT | - | (collaborator_id = get_my_profile_id())"
+    },
+    {
+      "chave": "policy::timesheets.collaborators see own timesheets",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "SELECT | (collaborator_id = get_my_profile_id()) | -",
+      "producao": "SELECT | (collaborator_id = get_my_profile_id()) | -"
+    },
+    {
+      "chave": "policy::timesheets.managers see company timesheets",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "ALL | ((company_id = ( SELECT profiles.company_id FROM profiles WHERE (profiles.id = get_my_profile_id()))) AND (( SELECT profiles.role FROM profiles WHERE (profiles.id = get_my_profile_id())) = ANY (ARRAY['admin'::text, 'gestor'::text]))) | -",
+      "producao": "ALL | ((company_id = ( SELECT profiles.company_id FROM profiles WHERE (profiles.id = get_my_profile_id()))) AND (( SELECT profiles.role FROM profiles WHERE (profiles.id = get_my_profile_id())) = ANY (ARRAY['admin'::text, 'gestor'::text]))) | -"
+    },
+    {
+      "chave": "policy::timesheets.timesheets_collaborator_insert",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "INSERT | - | (collaborator_id = get_my_profile_id())",
+      "producao": "INSERT | - | (collaborator_id = get_my_profile_id())"
+    },
+    {
+      "chave": "policy::timesheets.timesheets_collaborator_update",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "UPDATE | (collaborator_id = get_my_profile_id()) | -",
+      "producao": "UPDATE | (collaborator_id = get_my_profile_id()) | -"
+    },
+    {
+      "chave": "policy::timesheets.timesheets_manager_manage",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "ALL | ((company_id = get_my_company_id()) AND (get_my_role() = ANY (ARRAY['admin'::text, 'gestor'::text]))) | -",
+      "producao": "ALL | ((company_id = get_my_company_id()) AND (get_my_role() = ANY (ARRAY['admin'::text, 'gestor'::text]))) | -"
+    },
+    {
+      "chave": "policy::timesheets.timesheets_manager_select",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "SELECT | ((company_id = get_my_company_id()) AND (( SELECT profiles.role FROM profiles WHERE (profiles.id = get_my_profile_id())) = ANY (ARRAY['admin'::text, 'gestor'::text]))) | -",
+      "producao": "SELECT | ((company_id = get_my_company_id()) AND (( SELECT profiles.role FROM profiles WHERE (profiles.id = get_my_profile_id())) = ANY (ARRAY['admin'::text, 'gestor'::text]))) | -"
+    },
+    {
+      "chave": "policy::timesheets.timesheets_own_select",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "SELECT | (collaborator_id = get_my_profile_id()) | -",
+      "producao": "SELECT | (collaborator_id = get_my_profile_id()) | -"
+    },
+    {
+      "chave": "policy::vacation_requests.vacation_requests_insert",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "INSERT | - | ((collaborator_id = get_my_profile_id()) AND (company_id = get_my_company_id()))",
+      "producao": "INSERT | - | ((collaborator_id = get_my_profile_id()) AND (company_id = get_my_company_id()))"
+    },
+    {
+      "chave": "policy::vacation_requests.vacation_requests_manage",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "ALL | ((company_id = get_my_company_id()) AND (get_my_role() = ANY (ARRAY['admin'::text, 'gestor'::text]))) | -",
+      "producao": "ALL | ((company_id = get_my_company_id()) AND (get_my_role() = ANY (ARRAY['admin'::text, 'gestor'::text]))) | -"
+    },
+    {
+      "chave": "policy::vacation_requests.vacation_requests_select",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "SELECT | ((collaborator_id = get_my_profile_id()) OR ((company_id = get_my_company_id()) AND (get_my_role() = ANY (ARRAY['admin'::text, 'gestor'::text])))) | -",
+      "producao": "SELECT | ((collaborator_id = get_my_profile_id()) OR ((company_id = get_my_company_id()) AND (get_my_role() = ANY (ARRAY['admin'::text, 'gestor'::text])))) | -"
+    },
+    {
+      "chave": "policy::vehicle_allocations.vehicle_allocations_company_isolation",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "ALL | (company_id IN ( SELECT profiles.company_id FROM profiles WHERE (profiles.id = get_my_profile_id()))) | -",
+      "producao": "ALL | (company_id IN ( SELECT profiles.company_id FROM profiles WHERE (profiles.id = get_my_profile_id()))) | -"
+    },
+    {
+      "chave": "policy::vehicle_allocations.vehicle_allocations_delete",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "DELETE | (company_id IN ( SELECT profiles.company_id FROM profiles WHERE ((profiles.id = get_my_profile_id()) AND (profiles.role = ANY (ARRAY['admin'::text, 'gestor'::text]))))) | -",
+      "producao": "DELETE | (company_id IN ( SELECT profiles.company_id FROM profiles WHERE ((profiles.id = get_my_profile_id()) AND (profiles.role = ANY (ARRAY['admin'::text, 'gestor'::text]))))) | -"
+    },
+    {
+      "chave": "policy::vehicle_allocations.vehicle_allocations_insert",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "INSERT | - | (company_id IN ( SELECT profiles.company_id FROM profiles WHERE ((profiles.id = get_my_profile_id()) AND (profiles.role = ANY (ARRAY['admin'::text, 'gestor'::text])))))",
+      "producao": "INSERT | - | (company_id IN ( SELECT profiles.company_id FROM profiles WHERE ((profiles.id = get_my_profile_id()) AND (profiles.role = ANY (ARRAY['admin'::text, 'gestor'::text])))))"
+    },
+    {
+      "chave": "policy::vehicle_allocations.vehicle_allocations_update",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "UPDATE | (company_id IN ( SELECT profiles.company_id FROM profiles WHERE ((profiles.id = get_my_profile_id()) AND (profiles.role = ANY (ARRAY['admin'::text, 'gestor'::text]))))) | -",
+      "producao": "UPDATE | (company_id IN ( SELECT profiles.company_id FROM profiles WHERE ((profiles.id = get_my_profile_id()) AND (profiles.role = ANY (ARRAY['admin'::text, 'gestor'::text]))))) | -"
+    },
+    {
+      "chave": "policy::vehicles.vehicles_company_isolation",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "ALL | (company_id IN ( SELECT profiles.company_id FROM profiles WHERE (profiles.id = get_my_profile_id()))) | -",
+      "producao": "ALL | (company_id IN ( SELECT profiles.company_id FROM profiles WHERE (profiles.id = get_my_profile_id()))) | -"
+    },
+    {
+      "chave": "policy::vehicles.vehicles_delete",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "DELETE | (company_id IN ( SELECT profiles.company_id FROM profiles WHERE ((profiles.id = get_my_profile_id()) AND (profiles.role = ANY (ARRAY['admin'::text, 'gestor'::text]))))) | -",
+      "producao": "DELETE | (company_id IN ( SELECT profiles.company_id FROM profiles WHERE ((profiles.id = get_my_profile_id()) AND (profiles.role = ANY (ARRAY['admin'::text, 'gestor'::text]))))) | -"
+    },
+    {
+      "chave": "policy::vehicles.vehicles_insert",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "INSERT | - | (company_id IN ( SELECT profiles.company_id FROM profiles WHERE ((profiles.id = get_my_profile_id()) AND (profiles.role = ANY (ARRAY['admin'::text, 'gestor'::text])))))",
+      "producao": "INSERT | - | (company_id IN ( SELECT profiles.company_id FROM profiles WHERE ((profiles.id = get_my_profile_id()) AND (profiles.role = ANY (ARRAY['admin'::text, 'gestor'::text])))))"
+    },
+    {
+      "chave": "policy::vehicles.vehicles_update",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "UPDATE | (company_id IN ( SELECT profiles.company_id FROM profiles WHERE ((profiles.id = get_my_profile_id()) AND (profiles.role = ANY (ARRAY['admin'::text, 'gestor'::text]))))) | -",
+      "producao": "UPDATE | (company_id IN ( SELECT profiles.company_id FROM profiles WHERE ((profiles.id = get_my_profile_id()) AND (profiles.role = ANY (ARRAY['admin'::text, 'gestor'::text]))))) | -"
+    },
+    {
+      "chave": "restricao::profiles_auth_user_id_fkey",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "FOREIGN KEY (auth_user_id) REFERENCES auth.users(id) ON DELETE SET NULL",
+      "producao": "FOREIGN KEY (auth_user_id) REFERENCES auth.users(id) ON DELETE SET NULL"
+    },
+    {
+      "chave": "restricao::profiles_company_id_fkey",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE",
+      "producao": "FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE"
+    },
+    {
+      "chave": "restricao::profiles_pkey",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "PRIMARY KEY (id)",
+      "producao": "PRIMARY KEY (id)"
+    },
+    {
+      "chave": "restricao::profiles_role_check",
+      "classificacao": "LIVE_ONLY",
+      "producao": "CHECK ((role = ANY (ARRAY['admin'::text, 'gestor'::text, 'colaborador'::text])))"
+    },
+    {
+      "chave": "restricao::profiles_status_check",
+      "classificacao": "LIVE_ONLY",
+      "producao": "CHECK ((status = ANY (ARRAY['ativo'::text, 'inativo'::text, 'suspenso'::text])))"
+    },
+    {
+      "chave": "secdef::adjust_payroll_record_atomic(p_company_id uuid, p_record_id uuid, p_patch jsonb, p_actor uuid)",
+      "classificacao": "LIVE_ONLY",
+      "producao": "config={search_path=public}"
+    },
+    {
+      "chave": "secdef::approve_payroll_records_atomic(p_company_id uuid, p_record_ids uuid[], p_actor uuid)",
+      "classificacao": "LIVE_ONLY",
+      "producao": "config={search_path=public}"
+    },
+    {
+      "chave": "secdef::archive_expired_documents(p_company_id uuid)",
+      "classificacao": "LIVE_ONLY",
+      "producao": "config={\"search_path=pg_catalog, public\"}"
+    },
+    {
+      "chave": "secdef::assert_payroll_actor(p_company_id uuid, p_actor uuid)",
+      "classificacao": "LIVE_ONLY",
+      "producao": "config={search_path=public}"
+    },
+    {
+      "chave": "secdef::can_access_service(p_service_id uuid)",
+      "classificacao": "LIVE_ONLY",
+      "producao": "config=-"
+    },
+    {
+      "chave": "secdef::complete_domain_mutation(p_company_id uuid, p_mutation_id uuid, p_domain text, p_operation text, p_request_hash text, p_status text, p_result jsonb, p_entity_id uuid)",
+      "classificacao": "LIVE_ONLY",
+      "producao": "config={\"search_path=public, pg_temp\"}"
+    },
+    {
+      "chave": "secdef::delete_calendar_service_safe(p_service_id uuid, p_scope text, p_company_id uuid, p_actor uuid)",
+      "classificacao": "LIVE_ONLY",
+      "producao": "config={search_path=public}"
+    },
+    {
+      "chave": "secdef::delete_client_atomic(p_client_id uuid, p_company_id uuid, p_actor uuid, p_mutation_id uuid, p_expected_revision integer)",
+      "classificacao": "LIVE_ONLY",
+      "producao": "config={search_path=public}"
+    },
+    {
+      "chave": "secdef::detect_schedule_conflicts(p_start date, p_end date)",
+      "classificacao": "LIVE_ONLY",
+      "producao": "config={\"search_path=pg_catalog, public\"}"
+    },
+    {
+      "chave": "secdef::find_or_conflict_domain_mutation(p_company_id uuid, p_mutation_id uuid, p_operation text, p_request_hash text)",
+      "classificacao": "LIVE_ONLY",
+      "producao": "config={\"search_path=public, pg_temp\"}"
+    },
+    {
+      "chave": "secdef::fn_capture_history()",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "config={search_path=public}",
+      "producao": "config={search_path=public}"
+    },
+    {
+      "chave": "secdef::fn_guard_location_rate()",
+      "classificacao": "LIVE_ONLY",
+      "producao": "config={search_path=public}"
+    },
+    {
+      "chave": "secdef::get_documents_to_archive(p_company_id uuid)",
+      "classificacao": "LIVE_ONLY",
+      "producao": "config={\"search_path=pg_catalog, public\"}"
+    },
+    {
+      "chave": "secdef::get_my_company_id()",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "config={search_path=public}",
+      "producao": "config={search_path=public}"
+    },
+    {
+      "chave": "secdef::get_my_profile_id()",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "config={search_path=public}",
+      "producao": "config={search_path=public}"
+    },
+    {
+      "chave": "secdef::get_my_role()",
+      "classificacao": "CANONICAL_AND_LIVE",
+      "canonico": "config={search_path=public}",
+      "producao": "config={search_path=public}"
+    },
+    {
+      "chave": "secdef::get_service_company_id(p uuid)",
+      "classificacao": "CANONICAL_ONLY",
+      "canonico": "config=-"
+    },
+    {
+      "chave": "secdef::get_service_company_id(p_service_id uuid)",
+      "classificacao": "LIVE_ONLY",
+      "producao": "config={search_path=public}"
+    },
+    {
+      "chave": "secdef::handle_new_user()",
+      "classificacao": "LIVE_ONLY",
+      "producao": "config={\"search_path=pg_catalog, public\"}"
+    },
+    {
+      "chave": "secdef::lock_domain_mutation(p_company_id uuid, p_mutation_id uuid)",
+      "classificacao": "LIVE_ONLY",
+      "producao": "config={\"search_path=public, pg_temp\"}"
+    },
+    {
+      "chave": "secdef::mark_payroll_paid_atomic(p_company_id uuid, p_record_ids uuid[], p_paid_on date, p_actor uuid)",
+      "classificacao": "LIVE_ONLY",
+      "producao": "config={search_path=public}"
+    },
+    {
+      "chave": "secdef::next_company_sequence(p_company_id uuid)",
+      "classificacao": "LIVE_ONLY",
+      "producao": "config={\"search_path=public, pg_temp\"}"
+    },
+    {
+      "chave": "secdef::record_company_change_event(p_company_id uuid, p_mutation_id uuid, p_domain text, p_event_type text, p_entity_ids uuid[], p_scopes text[], p_affected_from date, p_affected_to date, p_payload jsonb)",
+      "classificacao": "LIVE_ONLY",
+      "producao": "config={\"search_path=public, pg_temp\"}"
+    },
+    {
+      "chave": "secdef::set_invoice_status_atomic(p_invoice_id uuid, p_company_id uuid, p_actor uuid, p_status text, p_payment_method text, p_mutation_id uuid, p_expected_revision integer)",
+      "classificacao": "LIVE_ONLY",
+      "producao": "config={\"search_path=pg_catalog, public\"}"
+    },
+    {
+      "chave": "secdef::upsert_payroll_records_atomic(p_company_id uuid, p_period_year integer, p_period_month integer, p_records jsonb, p_actor uuid)",
+      "classificacao": "LIVE_ONLY",
+      "producao": "config={search_path=public}"
+    }
+  ]
+}

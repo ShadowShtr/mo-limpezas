@@ -1,26 +1,26 @@
 {
   "generatedBy": "scripts/audit-file-inventory.mjs",
-  "totalFiles": 921,
+  "totalFiles": 943,
   "byStatus": {
-    "MANTER": 897,
+    "MANTER": 919,
     "STANDBY": 24
   },
   "byCategory": {
-    "test": 219,
-    "route-ui": 140,
+    "test": 225,
+    "route-ui": 141,
     "migration": 136,
-    "lib": 77,
-    "script": 62,
-    "domain": 52,
+    "lib": 82,
+    "script": 64,
+    "domain": 56,
     "doc": 47,
     "server-action": 44,
-    "src-other": 42,
+    "src-other": 43,
     "component": 32,
     "doc-historico": 16,
     "api-route": 16,
     "config": 12,
     "asset": 8,
-    "report": 4,
+    "report": 7,
     "script-historico": 4,
     "other": 2,
     "ci": 2,
@@ -29,7 +29,7 @@
     "supabase-other": 2
   },
   "byConfidence": {
-    "alta": 899,
+    "alta": 921,
     "média": 16,
     "baixa": 6
   },
@@ -38,7 +38,7 @@
     "ADMIN_GUARDED_WRITE": 11,
     "WRITE_CAPABLE": 10,
     "ADMIN_READ": 6,
-    "READ_ONLY": 2
+    "READ_ONLY": 4
   },
   "files": [
     {
@@ -1941,6 +1941,48 @@
       "manualDecision": false
     },
     {
+      "path": "reports/identity-drift-manifest.json",
+      "category": "report",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [
+        "service-role"
+      ],
+      "signals": {
+        "serviceRole": 8,
+        "sqlWrite": 100
+      },
+      "action": "nenhuma",
+      "reason": "configuração/infra",
+      "manualDecision": false
+    },
+    {
+      "path": "reports/identity-provenance-check.json",
+      "category": "report",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [
+        "service-role"
+      ],
+      "signals": {
+        "serviceRole": 10,
+        "sqlWrite": 100
+      },
+      "action": "nenhuma",
+      "reason": "configuração/infra",
+      "manualDecision": false
+    },
+    {
       "path": "reports/ignored-query-errors.json",
       "category": "report",
       "status": "MANTER",
@@ -1960,6 +2002,27 @@
         "sqlWrite": 1,
         "fallbackZero": 2,
         "fallbackArray": 34
+      },
+      "action": "nenhuma",
+      "reason": "configuração/infra",
+      "manualDecision": false
+    },
+    {
+      "path": "reports/status-authorization-surface.json",
+      "category": "report",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [
+        "service-role"
+      ],
+      "signals": {
+        "serviceRole": 24,
+        "sqlWrite": 2
       },
       "action": "nenhuma",
       "reason": "configuração/infra",
@@ -2903,6 +2966,33 @@
       "scriptRisk": "SAFE_OFFLINE"
     },
     {
+      "path": "scripts/generate-profile-fk-inventory.ts",
+      "category": "script",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "sqlWrite": 2,
+        "consoleLog": 1,
+        "consoleErr": 1
+      },
+      "action": "nenhuma",
+      "reason": "script de leitura",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": true,
+        "dynamicImport": true,
+        "allClosed": false
+      },
+      "scriptRisk": "READ_ONLY"
+    },
+    {
       "path": "scripts/geocode-locations.mjs",
       "category": "script",
       "status": "MANTER",
@@ -3163,7 +3253,7 @@
       "category": "script",
       "status": "MANTER",
       "confidence": "média",
-      "consumers": 17,
+      "consumers": 18,
       "consumerSample": [
         "scripts/audit-identity-drift-manifest.ts",
         "scripts/audit-status-authorization-surface.mjs",
@@ -4061,6 +4151,32 @@
       "scriptRisk": "SAFE_OFFLINE"
     },
     {
+      "path": "scripts/verify-profile-fk-inventory-live.mjs",
+      "category": "script",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "consoleLog": 3,
+        "consoleErr": 9
+      },
+      "action": "nenhuma",
+      "reason": "script de leitura",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": true,
+        "dynamicImport": true,
+        "allClosed": false
+      },
+      "scriptRisk": "READ_ONLY"
+    },
+    {
       "path": "scripts/verify-profile-guards.mjs",
       "category": "script",
       "status": "STANDBY",
@@ -4091,6 +4207,66 @@
         "allClosed": false
       },
       "scriptRisk": "WRITE_CAPABLE"
+    },
+    {
+      "path": "src/__tests__/access-cycle-parity.test.ts",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [
+        "supabase"
+      ],
+      "risks": [
+        "any(1)"
+      ],
+      "signals": {
+        "supabase": 1,
+        "sqlWrite": 12,
+        "eslintDisable": 1,
+        "anyType": 1,
+        "dynamicImport": 4
+      },
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/__tests__/access-section-real-path.test.ts",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [
+        "supabase"
+      ],
+      "risks": [],
+      "signals": {
+        "supabase": 6,
+        "sqlWrite": 4,
+        "dynamicImport": 7
+      },
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
     },
     {
       "path": "src/__tests__/action-result.test.ts",
@@ -4727,6 +4903,37 @@
       }
     },
     {
+      "path": "src/__tests__/collaborator-access-identity-failure.test.ts",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [
+        "supabase"
+      ],
+      "risks": [
+        "service-role"
+      ],
+      "signals": {
+        "supabase": 2,
+        "serviceRole": 1,
+        "sqlWrite": 7,
+        "dynamicImport": 6
+      },
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
       "path": "src/__tests__/collaborator-access-lifecycle.test.ts",
       "category": "test",
       "status": "MANTER",
@@ -4738,6 +4945,34 @@
       "sideEffects": [],
       "risks": [],
       "signals": {
+        "dynamicImport": 2
+      },
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/__tests__/collaborator-access-revocation.test.ts",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [
+        "supabase"
+      ],
+      "risks": [],
+      "signals": {
+        "supabase": 2,
+        "sqlWrite": 7,
         "dynamicImport": 2
       },
       "action": "nenhuma",
@@ -4898,6 +5133,59 @@
       "risks": [],
       "signals": {
         "sqlWrite": 29
+      },
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/__tests__/collaborator-lifecycle-actions.test.ts",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [
+        "supabase"
+      ],
+      "risks": [],
+      "signals": {
+        "supabase": 2,
+        "sqlWrite": 19,
+        "fallbackZero": 1,
+        "dynamicImport": 3
+      },
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/__tests__/collaborator-lifecycle-postgres.test.ts",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "sqlWrite": 47
       },
       "action": "nenhuma",
       "reason": "suite de testes — corre por convenção do vitest",
@@ -5818,7 +6106,7 @@
       "sideEffects": [],
       "risks": [],
       "signals": {
-        "sqlWrite": 4
+        "sqlWrite": 5
       },
       "action": "nenhuma",
       "reason": "suite de testes — corre por convenção do vitest",
@@ -6701,11 +6989,11 @@
       "category": "test",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 3,
+      "consumers": 5,
       "consumerSample": [
         "scripts/audit-identity-drift-manifest.ts",
-        "src/__tests__/canonical-path-101b-101c.pg.test.ts",
-        "src/__tests__/crm-stage-reorder.pg.test.ts"
+        "scripts/generate-profile-fk-inventory.ts",
+        "src/__tests__/canonical-path-101b-101c.pg.test.ts"
       ],
       "autoLoaded": false,
       "referencedBy": [],
@@ -6733,11 +7021,11 @@
       "category": "test",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 16,
+      "consumers": 18,
       "consumerSample": [
         "scripts/audit-identity-drift-manifest.ts",
-        "src/__tests__/bank-reconciliation-period-atomic.pg.test.ts",
-        "src/__tests__/canonical-path-101b-101c.pg.test.ts"
+        "scripts/generate-profile-fk-inventory.ts",
+        "src/__tests__/bank-reconciliation-period-atomic.pg.test.ts"
       ],
       "autoLoaded": false,
       "referencedBy": [],
@@ -8136,7 +8424,7 @@
       "signals": {
         "supabase": 1,
         "env": 2,
-        "sqlWrite": 10,
+        "sqlWrite": 16,
         "unknownCast": 1,
         "fallbackArray": 1,
         "dynamicImport": 2
@@ -9745,9 +10033,14 @@
       "referencedBy": [
         "docs"
       ],
-      "sideEffects": [],
+      "sideEffects": [
+        "supabase"
+      ],
       "risks": [],
-      "signals": {},
+      "signals": {
+        "supabase": 3,
+        "consoleErr": 1
+      },
       "action": "nenhuma",
       "reason": "em uso: convenção do Next",
       "manualDecision": false,
@@ -11627,6 +11920,32 @@
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": true,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/app/(dashboard)/dashboard/colaboradores/_components/saida-dialog.tsx",
+      "category": "route-ui",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 1,
+      "consumerSample": [
+        "src/app/(dashboard)/dashboard/colaboradores/_components/table.tsx"
+      ],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "clientComponent": 1
+      },
+      "action": "nenhuma",
+      "reason": "em uso: 1 consumidor(es)",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
         "cliEntrypoint": false,
         "dynamicImport": true,
         "allClosed": false
@@ -13590,9 +13909,9 @@
       ],
       "risks": [],
       "signals": {
-        "supabase": 6,
+        "supabase": 5,
         "sqlWrite": 4,
-        "consoleErr": 1
+        "consoleErr": 2
       },
       "action": "nenhuma",
       "reason": "em uso: convenção do Next",
@@ -13988,11 +14307,11 @@
       "category": "server-action",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 5,
+      "consumers": 7,
       "consumerSample": [
-        "src/app/(dashboard)/dashboard/colaboradores/[id]/_components/force-app-update-button.tsx",
-        "src/app/(dashboard)/dashboard/colaboradores/[id]/_components/reset-password-button.tsx",
-        "src/app/(dashboard)/dashboard/colaboradores/[id]/_components/vacation-balance-form.tsx"
+        "src/__tests__/access-section-real-path.test.ts",
+        "src/__tests__/collaborator-lifecycle-actions.test.ts",
+        "src/app/(dashboard)/dashboard/colaboradores/[id]/_components/force-app-update-button.tsx"
       ],
       "autoLoaded": false,
       "referencedBy": [
@@ -14001,7 +14320,7 @@
       "sideEffects": [
         "supabase",
         "write",
-        "revalidatePath(6)"
+        "revalidatePath(7)"
       ],
       "risks": [
         "erro-de-query-ignorado(6)"
@@ -14009,14 +14328,14 @@
       "signals": {
         "supabase": 20,
         "serverAction": 1,
-        "write": 12,
-        "sqlWrite": 17,
+        "write": 3,
+        "sqlWrite": 11,
         "ignoredError": 6,
-        "revalidatePath": 6,
+        "revalidatePath": 7,
         "dynamicImport": 1
       },
       "action": "auditar atomicidade (T12/T13)",
-      "reason": "em uso: 5 consumidor(es)",
+      "reason": "em uso: 7 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -14030,8 +14349,10 @@
       "category": "server-action",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 1,
+      "consumers": 3,
       "consumerSample": [
+        "src/__tests__/access-section-real-path.test.ts",
+        "src/__tests__/collaborator-access-identity-failure.test.ts",
         "src/app/(dashboard)/dashboard/colaboradores/[id]/_components/access-section.tsx"
       ],
       "autoLoaded": false,
@@ -14039,19 +14360,22 @@
       "sideEffects": [
         "supabase",
         "write",
-        "revalidatePath(4)"
+        "revalidatePath(6)"
       ],
-      "risks": [],
+      "risks": [
+        "service-role"
+      ],
       "signals": {
         "supabase": 10,
         "serverAction": 1,
+        "serviceRole": 1,
         "write": 2,
         "sqlWrite": 2,
         "fallbackZero": 1,
-        "revalidatePath": 4
+        "revalidatePath": 6
       },
       "action": "auditar atomicidade (T12/T13)",
-      "reason": "em uso: 1 consumidor(es)",
+      "reason": "em uso: 3 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -14668,8 +14992,9 @@
       "category": "server-action",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 2,
+      "consumers": 3,
       "consumerSample": [
+        "src/__tests__/collaborator-access-revocation.test.ts",
         "src/app/(dashboard)/dashboard/tarefas/_components/tasks-client.tsx",
         "src/app/(dashboard)/dashboard/tarefas/page.tsx"
       ],
@@ -14700,7 +15025,7 @@
         "revalidatePath": 6
       },
       "action": "auditar atomicidade (T12/T13)",
-      "reason": "em uso: 2 consumidor(es)",
+      "reason": "em uso: 3 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -15935,12 +16260,9 @@
       "sideEffects": [
         "supabase"
       ],
-      "risks": [
-        "erro-de-query-ignorado(1)"
-      ],
+      "risks": [],
       "signals": {
-        "supabase": 3,
-        "ignoredError": 1
+        "supabase": 3
       },
       "action": "nenhuma",
       "reason": "em uso: convenção do Next",
@@ -17109,6 +17431,32 @@
       }
     },
     {
+      "path": "src/domain/collaborators/access-state.ts",
+      "category": "domain",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 10,
+      "consumerSample": [
+        "src/__tests__/access-cycle-parity.test.ts",
+        "src/__tests__/collaborator-access-revocation.test.ts",
+        "src/__tests__/collaborator-lifecycle-actions.test.ts"
+      ],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {},
+      "action": "nenhuma",
+      "reason": "em uso: 10 consumidor(es)",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
       "path": "src/domain/collaborators/create-input.ts",
       "category": "domain",
       "status": "MANTER",
@@ -17116,6 +17464,87 @@
       "consumers": 1,
       "consumerSample": [
         "src/__tests__/collaborator-name-only.test.ts"
+      ],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {},
+      "action": "nenhuma",
+      "reason": "em uso: 1 consumidor(es)",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/domain/collaborators/lifecycle-types.ts",
+      "category": "domain",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 4,
+      "consumerSample": [
+        "src/__tests__/collaborator-lifecycle-postgres.test.ts",
+        "src/domain/collaborators/lifecycle.ts",
+        "src/domain/collaborators/profile-fk-inventory.ts"
+      ],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {},
+      "action": "nenhuma",
+      "reason": "em uso: 4 consumidor(es)",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/domain/collaborators/lifecycle.ts",
+      "category": "domain",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 4,
+      "consumerSample": [
+        "src/__tests__/collaborator-lifecycle-actions.test.ts",
+        "src/__tests__/collaborator-lifecycle-postgres.test.ts",
+        "src/app/actions/colaboradores.ts"
+      ],
+      "autoLoaded": false,
+      "referencedBy": [
+        "docs"
+      ],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "sqlWrite": 4,
+        "fallbackZero": 1
+      },
+      "action": "nenhuma",
+      "reason": "em uso: 4 consumidor(es)",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/domain/collaborators/profile-fk-inventory.ts",
+      "category": "domain",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 1,
+      "consumerSample": [
+        "src/domain/collaborators/lifecycle.ts"
       ],
       "autoLoaded": false,
       "referencedBy": [],
@@ -18310,7 +18739,7 @@
       "category": "domain",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 48,
+      "consumers": 49,
       "consumerSample": [
         "src/__tests__/update-notice-modal.test.tsx",
         "src/__tests__/update-notices-eligibility.test.ts",
@@ -18325,7 +18754,7 @@
       "risks": [],
       "signals": {},
       "action": "nenhuma",
-      "reason": "em uso: 48 consumidor(es), configuração",
+      "reason": "em uso: 49 consumidor(es), configuração",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -18494,11 +18923,11 @@
       "category": "lib",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 26,
+      "consumers": 27,
       "consumerSample": [
         "src/__tests__/auth-revalidation-central.test.ts",
-        "src/app/actions/absences.ts",
-        "src/app/actions/attachments.ts"
+        "src/__tests__/collaborator-access-revocation.test.ts",
+        "src/app/actions/absences.ts"
       ],
       "autoLoaded": false,
       "referencedBy": [
@@ -18507,15 +18936,13 @@
       "sideEffects": [
         "supabase"
       ],
-      "risks": [
-        "erro-de-query-ignorado(1)"
-      ],
+      "risks": [],
       "signals": {
         "supabase": 7,
-        "ignoredError": 1
+        "consoleErr": 1
       },
       "action": "nenhuma",
-      "reason": "em uso: 26 consumidor(es)",
+      "reason": "em uso: 27 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -18561,7 +18988,7 @@
       "category": "lib",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 6,
+      "consumers": 8,
       "consumerSample": [
         "src/app/(app)/app/escala/page.tsx",
         "src/app/(app)/app/layout.tsx",
@@ -18577,7 +19004,7 @@
         "supabase": 6
       },
       "action": "nenhuma",
-      "reason": "em uso: 6 consumidor(es)",
+      "reason": "em uso: 8 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -19004,6 +19431,164 @@
       },
       "action": "nenhuma",
       "reason": "em uso: 6 consumidor(es)",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/lib/collaborators/access-cycle.ts",
+      "category": "lib",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 3,
+      "consumerSample": [
+        "src/__tests__/access-cycle-parity.test.ts",
+        "src/app/actions/colaboradores.ts",
+        "src/app/actions/collaborator-access.ts"
+      ],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [
+        "supabase",
+        "write"
+      ],
+      "risks": [
+        "erro-de-query-ignorado(1)"
+      ],
+      "signals": {
+        "supabase": 2,
+        "write": 1,
+        "sqlWrite": 2,
+        "ignoredError": 1
+      },
+      "action": "nenhuma",
+      "reason": "em uso: 3 consumidor(es)",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/lib/collaborators/auth-identity.ts",
+      "category": "lib",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 3,
+      "consumerSample": [
+        "src/app/actions/collaborator-access.ts",
+        "src/lib/collaborators/access-cycle.ts",
+        "src/lib/collaborators/read-access-state.ts"
+      ],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [
+        "supabase"
+      ],
+      "risks": [],
+      "signals": {
+        "supabase": 2
+      },
+      "action": "nenhuma",
+      "reason": "em uso: 3 consumidor(es)",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/lib/collaborators/current-profile-resolver.ts",
+      "category": "lib",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 5,
+      "consumerSample": [
+        "src/app/(app)/app/layout.tsx",
+        "src/app/(dashboard)/layout.tsx",
+        "src/app/actions/collaborator-access.ts"
+      ],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [
+        "supabase"
+      ],
+      "risks": [],
+      "signals": {
+        "supabase": 2
+      },
+      "action": "nenhuma",
+      "reason": "em uso: 5 consumidor(es)",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/lib/collaborators/probe-profile-relations.ts",
+      "category": "lib",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 1,
+      "consumerSample": [
+        "src/app/actions/colaboradores.ts"
+      ],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [
+        "supabase"
+      ],
+      "risks": [],
+      "signals": {
+        "supabase": 2,
+        "sqlWrite": 1,
+        "unknownCast": 1
+      },
+      "action": "nenhuma",
+      "reason": "em uso: 1 consumidor(es)",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/lib/collaborators/read-access-state.ts",
+      "category": "lib",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 2,
+      "consumerSample": [
+        "src/__tests__/access-section-real-path.test.ts",
+        "src/app/(dashboard)/dashboard/colaboradores/[id]/page.tsx"
+      ],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [
+        "supabase"
+      ],
+      "risks": [
+        "erro-de-query-ignorado(1)"
+      ],
+      "signals": {
+        "supabase": 2,
+        "ignoredError": 1
+      },
+      "action": "nenhuma",
+      "reason": "em uso: 2 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -20163,7 +20748,7 @@
       "category": "lib",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 27,
+      "consumers": 28,
       "consumerSample": [
         "src/__tests__/query-error.test.ts",
         "src/app/(dashboard)/dashboard/calendario/_actions/create-service.ts",
@@ -20179,7 +20764,7 @@
         "consoleErr": 1
       },
       "action": "nenhuma",
-      "reason": "em uso: 27 consumidor(es)",
+      "reason": "em uso: 28 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -20376,11 +20961,11 @@
       "category": "lib",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 78,
+      "consumers": 83,
       "consumerSample": [
+        "src/__tests__/access-section-real-path.test.ts",
         "src/app/(app)/app/perfil/page.tsx",
-        "src/app/(app)/app/servico/[id]/page.tsx",
-        "src/app/(dashboard)/dashboard/calendario/_actions/create-service.ts"
+        "src/app/(app)/app/servico/[id]/page.tsx"
       ],
       "autoLoaded": false,
       "referencedBy": [
@@ -20399,7 +20984,7 @@
         "serviceRole": 1
       },
       "action": "nenhuma",
-      "reason": "em uso: 78 consumidor(es)",
+      "reason": "em uso: 83 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -20464,7 +21049,7 @@
         "erro-de-query-ignorado(1)"
       ],
       "signals": {
-        "supabase": 4,
+        "supabase": 3,
         "env": 2,
         "consoleErr": 1,
         "ignoredError": 1
@@ -20484,11 +21069,11 @@
       "category": "lib",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 68,
+      "consumers": 69,
       "consumerSample": [
         "src/app/(app)/app/escala/page.tsx",
-        "src/app/(app)/app/page.tsx",
-        "src/app/(app)/app/ponto/page.tsx"
+        "src/app/(app)/app/layout.tsx",
+        "src/app/(app)/app/page.tsx"
       ],
       "autoLoaded": false,
       "referencedBy": [
@@ -20506,7 +21091,7 @@
         "env": 2
       },
       "action": "nenhuma",
-      "reason": "em uso: 68 consumidor(es), CI, configuração",
+      "reason": "em uso: 69 consumidor(es), CI, configuração",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -21666,6 +22251,32 @@
     },
     {
       "path": "src/release-notes/2026-09-11-pagamentos-ordem-vencimento.ts",
+      "category": "src-other",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 1,
+      "consumerSample": [
+        "src/release-notes/index.ts"
+      ],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "sqlWrite": 1
+      },
+      "action": "nenhuma",
+      "reason": "em uso: 1 consumidor(es)",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/release-notes/2026-09-17-saida-de-colaboradores.ts",
       "category": "src-other",
       "status": "MANTER",
       "confidence": "alta",
