@@ -86,10 +86,26 @@
 -- par LF/CRLF está pinado porque o ledger deste projecto mistura as duas
 -- representações por história — o que se quer apanhar é CONTEÚDO diferente,
 -- não fim-de-linha diferente.
+--
+-- ---------------------------------------------------------------------------
+-- 🔴 Não aplicar pelo SQL Editor
+-- ---------------------------------------------------------------------------
+--
+-- O portão abaixo NÃO impede o SQL Editor de correr este ficheiro: produção
+-- já tem as linhas da 101, 101a e 101b, por isso a cadeia passa, a tabela é
+-- criada — e o Editor não escreve no ledger. O resultado é precisamente o
+-- estado que o portão existe para apanhar: `EFFECT_WITHOUT_LEDGER`, criado
+-- por quem estava a tentar ser cuidadoso.
+--
+-- A regra é de procedimento, não de SQL: esta migration aplica-se PELO RUNNER
+-- CANÓNICO, que escreve o efeito e a linha na mesma transação. O portão
+-- protege a segunda aplicação, não a primeira.
 -- ============================================================================
 
 DO $proveniencia$
 DECLARE
+  v_ledger boolean;
+  v_tabela boolean;
   v_faltam text[];
   v_erradas text[];
 BEGIN
@@ -100,14 +116,30 @@ BEGIN
       'CRM_VISITS_102_LEDGER_AUSENTE: public._migrations não existe — a 102 só corre pelo runner canónico';
   END IF;
 
-  IF EXISTS (SELECT 1 FROM public._migrations WHERE name = '102_crm_visitas_comerciais.sql') THEN
-    RAISE EXCEPTION
-      'CRM_VISITS_102_JA_APLICADA: já há linha de ledger para a 102 — reaplicar alteraria restrições e ACL de uma tabela com dados';
-  END IF;
+  v_ledger := EXISTS (
+    SELECT 1 FROM public._migrations WHERE name = '102_crm_visitas_comerciais.sql'
+  );
+  v_tabela := to_regclass('public.crm_visits') IS NOT NULL;
 
-  -- 🔴 EFFECT_WITHOUT_LEDGER. O objecto existe e a proveniência não. Não se
-  --    adopta: quem o criou sabe o que lá pôs, e esta migration não sabe.
-  IF to_regclass('public.crm_visits') IS NOT NULL THEN
+  -- 🔴 Os quatro estados, cada um com o seu nome. Colapsá-los mascara drift:
+  --    «já aplicada» com a tabela desaparecida é uma coisa MUITO diferente de
+  --    «já aplicada» com a tabela lá — e só um nome próprio permite a quem
+  --    opera saber qual dos dois tem à frente.
+  --
+  --      ledger  tabela
+  --        0       0     → aplicar (o único caminho que segue)
+  --        0       1     → EFFECT_WITHOUT_LEDGER
+  --        1       0     → LEDGER_WITHOUT_EFFECT
+  --        1       1     → JA_APLICADA
+  IF v_ledger AND v_tabela THEN
+    RAISE EXCEPTION
+      'CRM_VISITS_102_JA_APLICADA: linha de ledger e tabela presentes — reaplicar alteraria restrições e ACL de uma tabela com dados';
+  ELSIF v_ledger AND NOT v_tabela THEN
+    RAISE EXCEPTION
+      'CRM_VISITS_102_LEDGER_WITHOUT_EFFECT: há linha de ledger da 102 mas public.crm_visits não existe — alguém desfez o efeito sem desfazer a proveniência; decida primeiro o que é verdade';
+  ELSIF NOT v_ledger AND v_tabela THEN
+    -- O objecto existe e a proveniência não. Não se adopta: quem o criou sabe
+    -- o que lá pôs, e esta migration não sabe.
     RAISE EXCEPTION
       'CRM_VISITS_102_EFFECT_WITHOUT_LEDGER: public.crm_visits já existe sem linha de ledger da 102 — estado desconhecido, nada foi alterado';
   END IF;

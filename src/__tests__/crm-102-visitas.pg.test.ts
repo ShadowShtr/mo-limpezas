@@ -36,12 +36,14 @@
 // ============================================================================
 
 import { createHash } from "node:crypto";
-import { readFileSync } from "node:fs";
+import { copyFileSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import pg from "pg";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
+import { runMigrations } from "../../scripts/lib/migration-runner-core.mjs";
 import { startPostgresContainer, type PostgresContainer } from "./helpers/pg-container";
 import { baselineCompleto } from "./helpers/production-baseline";
 import { MIGRATIONS_CRM, migrationCrm } from "./helpers/crm-pg-harness";
@@ -77,6 +79,8 @@ const CADEIA = [
   "101a_crm_rpc_acl_hardening.sql",
   "101b_identity_reconciliation.sql",
 ] as const;
+
+const M_102_NOME = "102_crm_visitas_comerciais.sql";
 
 let container: PostgresContainer;
 let pool: pg.Pool;
@@ -165,7 +169,17 @@ async function cadeiaDoMaster(aplicar102: boolean): Promise<void> {
   // O `DROP SCHEMA public CASCADE` acima leva o ledger à frente, por isso ele
   // é reposto aqui — a 102 exige ver a cadeia provada, não apenas o schema.
   await montarLedger();
-  if (aplicar102) await pool.query(lerSql(M_102));
+  if (aplicar102) {
+    await pool.query(lerSql(M_102));
+    // 🔴 O runner grava o efeito e a linha na MESMA transação. Um palco que
+    //    aplicasse a 102 sem gravar a linha estaria a encenar um estado que a
+    //    aplicação real nunca produz — e foi isso que deixou o rollback e o
+    //    ledger assimétricos sem ninguém dar por isso.
+    await pool.query(
+      "INSERT INTO public._migrations (name, checksum) VALUES ($1, $2)",
+      [M_102_NOME, checksumLf(M_102_NOME)],
+    );
+  }
 }
 
 async function semear(): Promise<void> {
@@ -381,12 +395,19 @@ describe("proveniência: efeito sem ledger falha fechado", () => {
     await expect(pool.query(lerSql(M_102))).rejects.toThrow(/LEDGER_AUSENTE/);
   });
 
-  it("a 102 recusa-se a correr duas vezes sobre a mesma linha de ledger", LENTO, async () => {
+  it("1/1 — a 102 recusa-se a correr duas vezes", LENTO, async () => {
     await cadeiaDoMaster(true);
-    await pool.query(
-      "INSERT INTO public._migrations (name, checksum) VALUES ('102_crm_visitas_comerciais.sql','x')");
-
     await expect(pool.query(lerSql(M_102))).rejects.toThrow(/JA_APLICADA/);
+  });
+
+  it("🔴 1/0 — LEDGER_WITHOUT_EFFECT tem nome próprio, e não é JA_APLICADA", LENTO, async () => {
+    await cadeiaDoMaster(true);
+    // O efeito desapareceu e a proveniência ficou. Responder «já aplicada»
+    // aqui mascararia exactamente o drift que interessa ver.
+    await pool.query("DROP TABLE public.crm_visits");
+
+    await expect(pool.query(lerSql(M_102)))
+      .rejects.toThrow(/LEDGER_WITHOUT_EFFECT/);
   });
 
   it("CHAIN_101_101A_101B_102: com a cadeia inteira provada, aplica", LENTO, async () => {
@@ -547,8 +568,15 @@ describe("permissões", () => {
 //    prova. A visita é o único registo do que se foi ver ao local — área,
 //    horas estimadas, notas — e não se reconstrói a partir de nada.
 describe("rollback", () => {
-  it("ROLLBACK_EMPTY: tabela vazia — desfaz, e deixa a 101 de pé", LENTO, async () => {
+  const linhaLedger102 = async (): Promise<number> => {
+    const { rows } = await pool.query(
+      "SELECT count(*)::int n FROM public._migrations WHERE name=$1", [M_102_NOME]);
+    return rows[0].n as number;
+  };
+
+  it("ROLLBACK_EMPTY: tabela vazia — desfaz efeito E proveniência", LENTO, async () => {
     await cadeiaDoMaster(true);
+    expect(await linhaLedger102()).toBe(1);
 
     await pool.query(lerSql(ROLLBACK_102));
 
@@ -558,6 +586,44 @@ describe("rollback", () => {
     expect(rows[0].visitas).toBeNull();
     // 🔴 O funil não pode ir atrás: a 101 está aplicada em produção.
     expect(rows[0].leads).toBe("crm_leads");
+
+    // 🔴 SIMETRIA. Deixar a linha para trás daria `ledger=1 / tabela=0`: o
+    //    runner julgaria a 102 aplicada e nunca mais a reconstruiria.
+    expect(await linhaLedger102()).toBe(0);
+  });
+
+  it("🔴 não apaga uma crm_visits que não é sua", LENTO, async () => {
+    await cadeiaDoMaster(false);
+    await pool.query("CREATE TABLE public.crm_visits (id uuid PRIMARY KEY, alheia text)");
+
+    await expect(pool.query(lerSql(ROLLBACK_102)))
+      .rejects.toThrow(/TABELA_ALIENADA/);
+
+    const { rows } = await pool.query("SELECT to_regclass('public.crm_visits') AS t");
+    expect(rows[0].t).toBe("crm_visits");
+  });
+
+  it("🔴 ledger sem efeito: não arruma a linha em silêncio", LENTO, async () => {
+    await cadeiaDoMaster(true);
+    await pool.query("DROP TABLE public.crm_visits");
+
+    // Apagar a linha aqui seria auto-reconciliação — apagaria a prova de que
+    // alguém desfez o efeito por fora.
+    await expect(pool.query(lerSql(ROLLBACK_102)))
+      .rejects.toThrow(/ROLLBACK_LEDGER_WITHOUT_EFFECT/);
+    expect(await linhaLedger102()).toBe(1);
+  });
+
+  it("🔴 checksum divergente: a tabela à frente não é a desta migration", LENTO, async () => {
+    await cadeiaDoMaster(true);
+    await pool.query(
+      "UPDATE public._migrations SET checksum=$1 WHERE name=$2", ["0".repeat(64), M_102_NOME]);
+
+    await expect(pool.query(lerSql(ROLLBACK_102)))
+      .rejects.toThrow(/ROLLBACK_CHECKSUM_DIVERGENTE/);
+
+    const { rows } = await pool.query("SELECT to_regclass('public.crm_visits') AS t");
+    expect(rows[0].t).toBe("crm_visits");
   });
 
   it("🔴 ROLLBACK_WITH_DATA: com uma visita — RECUSADO, e nada se perde", LENTO, async () => {
@@ -611,13 +677,149 @@ describe("rollback", () => {
     expect(rows[0].t).toBe("crm_visits");
   });
 
-  it("sem tabela nenhuma, o rollback é um no-op idempotente", LENTO, async () => {
+  it("sem tabela nem linha, o rollback é um no-op idempotente", LENTO, async () => {
     await cadeiaDoMaster(true);
     await pool.query(lerSql(ROLLBACK_102));
     // Segunda vez: não rebenta, não faz nada.
     await pool.query(lerSql(ROLLBACK_102));
     const { rows } = await pool.query("SELECT to_regclass('public.crm_visits') AS t");
     expect(rows[0].t).toBeNull();
+    expect(await linhaLedger102()).toBe(0);
+  });
+
+  // -------------------------------------------------------------------------
+  // 🔴 A CORRIDA. É o ensaio que a versão anterior não tinha, e por isso a
+  //    frase «não há janela entre verificar e apagar» era falsa: um bloco não
+  //    é um lock. Se o `LOCK TABLE` sair do rollback, este teste fica
+  //    vermelho — a contagem passa a ver zero e a visita vai à frente.
+  // -------------------------------------------------------------------------
+  it("🔴 writer concorrente: a visita commitada durante o rollback SOBREVIVE", LENTO, async () => {
+    await cadeiaDoMaster(true);
+
+    const escritor = new pg.Client({ ...container.connection });
+    await escritor.connect();
+    const desfazedor = new pg.Client({ ...container.connection });
+    await desfazedor.connect();
+
+    try {
+      // O writer abre e insere, sem commitar: segura um lock de linha.
+      await escritor.query("BEGIN");
+      await escritor.query(
+        `INSERT INTO public.crm_visits (company_id, client_id, scheduled_start, scheduled_end, created_by)
+         VALUES ($1,$2,now(),now() + interval '1 hour',$3)`,
+        [EMPRESA, CLIENTE_A, GESTORA],
+      );
+
+      // O rollback arranca e fica pendurado no ACCESS EXCLUSIVE.
+      const rollback = desfazedor.query(lerSql(ROLLBACK_102));
+      const resultado = rollback.then(() => "passou").catch((e: Error) => e.message);
+
+      // Tempo suficiente para o rollback chegar ao lock e ficar à espera.
+      await new Promise((r) => setTimeout(r, 1_500));
+      await escritor.query("COMMIT");
+
+      // Ao obter o lock, conta DEPOIS do commit — e vê a visita.
+      expect(await resultado).toMatch(/ROLLBACK_RECUSADO/);
+    } finally {
+      await escritor.end().catch(() => { /* já fechada */ });
+      await desfazedor.end().catch(() => { /* já fechada */ });
+    }
+
+    const { rows } = await pool.query("SELECT count(*)::int n FROM public.crm_visits");
+    expect(rows[0].n).toBe(1);
+    expect(await linhaLedger102()).toBe(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 🔴 O CAMINHO OPERACIONAL REAL.
+//
+// Tudo acima corre a 102 com `pool.query(...)`, que é o ficheiro mas não é a
+// operação: quem aplica é o runner, e é ele que escreve a linha do ledger na
+// mesma transação. Sem este bloco, a simetria entre rollback e ledger ficava
+// por provar — encenada pelo palco em vez de medida.
+// ---------------------------------------------------------------------------
+describe("ciclo completo pelo runner canónico", () => {
+  const silencio = { log: () => { }, logWarn: () => { }, logError: () => { } };
+
+  /** Um directório de migrations só com a 102 — o `--only` do runner. */
+  function dirSoComA102(): string {
+    const dir = mkdtempSync(join(tmpdir(), "crm102-runner-"));
+    copyFileSync(join(process.cwd(), M_102), join(dir, M_102_NOME));
+    return dir;
+  }
+
+  async function estado(c: pg.Client): Promise<{ schema: boolean; ledger: boolean }> {
+    const { rows } = await c.query(
+      `SELECT to_regclass('public.crm_visits') IS NOT NULL AS schema,
+              EXISTS (SELECT 1 FROM public._migrations WHERE name=$1) AS ledger`,
+      [M_102_NOME],
+    );
+    return { schema: rows[0].schema as boolean, ledger: rows[0].ledger as boolean };
+  }
+
+  it("🔴 aplicar → rollback → reaplicar, com efeito e proveniência sempre juntos", LENTO, async () => {
+    await cadeiaDoMaster(false);
+    const dir = dirSoComA102();
+    const client = new pg.Client({ ...container.connection });
+    await client.connect();
+
+    try {
+      // 1. aplicar pelo runner
+      const primeira = await runMigrations({
+        client, migrationsDir: dir, rootDir: process.cwd(),
+        apply: true, ...silencio,
+      });
+      expect(primeira.exitCode).toBe(0);
+      expect(await estado(client)).toEqual({ schema: true, ledger: true });
+
+      // O que ficou no ledger é o checksum canónico — é dele que o rollback
+      // depende, e é isto que amarra o valor pinado lá dentro ao ficheiro.
+      const { rows: cs } = await client.query(
+        "SELECT checksum FROM public._migrations WHERE name=$1", [M_102_NOME]);
+      expect(cs[0].checksum).toBe(checksumLf(M_102_NOME));
+
+      // 2. rollback com a tabela vazia
+      await client.query(lerSql(ROLLBACK_102));
+      expect(await estado(client)).toEqual({ schema: false, ledger: false });
+
+      // 3. reaplicar pelo runner — só possível porque a linha saiu
+      const segunda = await runMigrations({
+        client, migrationsDir: dir, rootDir: process.cwd(),
+        apply: true, ...silencio,
+      });
+      expect(segunda.exitCode).toBe(0);
+      expect(await estado(client)).toEqual({ schema: true, ledger: true });
+    } finally {
+      await client.end().catch(() => { /* já fechada */ });
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("🔴 o runner não reaplica a 102 enquanto a linha lá estiver", LENTO, async () => {
+    await cadeiaDoMaster(false);
+    const dir = dirSoComA102();
+    const client = new pg.Client({ ...container.connection });
+    await client.connect();
+
+    try {
+      await runMigrations({
+        client, migrationsDir: dir, rootDir: process.cwd(),
+        apply: true, ...silencio,
+      });
+      const repetida = await runMigrations({
+        client, migrationsDir: dir, rootDir: process.cwd(),
+        apply: true, ...silencio,
+      });
+      // 🔴 `exitCode 0` é a prova. Se o runner tivesse voltado a correr o
+      //    ficheiro, o portão de proveniência respondia JA_APLICADA e a
+      //    corrida saía a 1 — a 102 já não é reentrante por desenho.
+      expect(repetida.exitCode).toBe(0);
+      expect(await estado(client)).toEqual({ schema: true, ledger: true });
+    } finally {
+      await client.end().catch(() => { /* já fechada */ });
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });
 
