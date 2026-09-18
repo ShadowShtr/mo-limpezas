@@ -358,7 +358,26 @@ describe("guardas permanentes da retenção", () => {
         const sql = fs.readFileSync(path.join(dir, f), "utf8");
         const executavel = sql
           .split("\n").filter((l) => !l.trimStart().startsWith("--")).join("\n");
-        return /\bexpires_at\b/.test(executavel) || /\bcollaborator_documents\b/.test(executavel);
+        // 🔴 `expires_at` continua absoluto: uma data de expiração escrita
+        //    numa migration É o defeito que esta guarda existe para apanhar.
+        if (/\bexpires_at\b/.test(executavel)) return true;
+
+        // 🔴 Para `collaborator_documents`, a guarda estreitou — e explica-se.
+        //
+        //    Dizia «nenhuma migration menciona esta tabela», o que apanhava
+        //    coisas sem relação nenhuma com retenção. A `101b` reescreve as
+        //    POLÍTICAS da tabela para resolverem identidade por
+        //    `get_my_profile_id()` em vez de `auth.uid()`: não toca em
+        //    ficheiros, nem em datas, nem em linhas.
+        //
+        //    Recusar isso obrigaria a excluir esta tabela de qualquer
+        //    alteração transversal de RLS para sempre, e a guarda acabaria
+        //    contornada com uma excepção em vez de lida. O que não pode
+        //    acontecer é uma migration a ESCREVER ou REDEFINIR a tabela — e é
+        //    isso que se mede agora.
+        return executavel.split("\n").some((l) =>
+          /\bcollaborator_documents\b/.test(l)
+          && /\b(UPDATE|DELETE\s+FROM|INSERT\s+INTO|ALTER\s+TABLE|TRUNCATE|DROP\s+TABLE)\b/i.test(l));
       });
     expect(tocamNaRetencao, "migration a mexer na retenção de documentos").toEqual([]);
     // Nenhuma escrita em massa sobre expires_at em lado nenhum.

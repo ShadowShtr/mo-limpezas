@@ -22,34 +22,129 @@ import {
   validarSenhaTemporaria, compensacaoNecessaria,
   type Actor, type Pessoa,
 } from "@/domain/collaborators/access-lifecycle";
+import { resolverIdentidadeAuth } from "@/lib/collaborators/auth-identity";
+import { devolverAcesso, tirarAcesso } from "@/lib/collaborators/access-cycle";
+import {
+  MENSAGEM_FALHA_INFRA, RESOLUCAO_CODES, resolverPerfilAutenticado,
+  type ResolucaoCode,
+} from "@/lib/collaborators/current-profile-resolver";
+import { MENSAGEM_SEM_ACESSO, perfilPodeEntrar } from "@/domain/collaborators/access-state";
 
 type Resultado = { ok: true } | { ok: false; error: string };
 
-/** Quem está a pedir, e de que empresa — lido da base, não do pedido. */
-async function resolverActor(): Promise<Actor | null> {
+type ResultadoActor =
+  | { ok: true; actor: Actor }
+  | { ok: false; codigo: ResolucaoCode | "INACTIVE"; erro: string };
+
+/**
+ * Quem está a pedir, e de que empresa — lido da base, não do pedido.
+ *
+ * 🔴 Devolvia `null`, e as quatro actions traduziam isso para
+ *    «Não autenticado.». Ou seja: um timeout da base, um `08006` ou uma chave
+ *    administrativa inválida saíam daqui como «não há sessão» — e mandavam
+ *    quem administra investigar o login em vez da infraestrutura.
+ *
+ *    É o mesmo defeito que a 102.2b fechou em `carregarPessoa`, um andar
+ *    acima. Aqui era pior, porque a mensagem apontava para o sítio errado.
+ *
+ *    `AUTH_MISSING` e `PROFILE_DB_FAILURE` deixaram de ser a mesma coisa.
+ */
+async function resolverActor(): Promise<ResultadoActor> {
   const supabase = await createClient();
   const admin = createAdminClient();
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return null;
+  if (!user) {
+    return { ok: false, codigo: RESOLUCAO_CODES.AUTH_MISSING, erro: "Não autenticado." };
+  }
 
-  const { data } = await admin
-    .from("profiles")
-    .select("id, company_id, role")
-    .eq("id", user.id)
-    .maybeSingle();
-  if (!data) return null;
-  return { profile_id: data.id, company_id: data.company_id, role: data.role };
+  const resolucao = await resolverPerfilAutenticado(admin, user.id);
+  if (!resolucao.ok) {
+    return {
+      ok: false,
+      codigo: resolucao.codigo,
+      erro: resolucao.codigo === RESOLUCAO_CODES.PROFILE_DB_FAILURE
+        ? MENSAGEM_FALHA_INFRA
+        : "Perfil não encontrado.",
+    };
+  }
+
+  // 🔴 Quem já saiu não administra acessos de ninguém. A 102 fecha isto na
+  //    base para o utilizador comum, mas estas actions correm por
+  //    `service_role`, que tem BYPASSRLS — a RLS não as trava. A verificação
+  //    tem de estar aqui.
+  if (!perfilPodeEntrar(resolucao.perfil.status)) {
+    return { ok: false, codigo: "INACTIVE", erro: MENSAGEM_SEM_ACESSO };
+  }
+
+  const p = resolucao.perfil;
+  return { ok: true, actor: { profile_id: p.id, company_id: p.company_id, role: p.role } };
 }
 
-/** A pessoa sobre quem se está a operar. */
-async function carregarPessoa(id: string): Promise<Pessoa | null> {
+/**
+ * Porque é que isto não é `Pessoa | null`.
+ *
+ * 🔴 `null` não consegue dizer PORQUÊ, e aqui os porquês não são o mesmo.
+ *
+ *    A versão anterior devolvia `null` para três coisas diferentes — a pessoa
+ *    não existe, a leitura falhou, a identidade não se resolveu — e as quatro
+ *    actions traduziam todas para «Pessoa não encontrada.». Um `08006`, um
+ *    timeout, uma chave sem permissão: tudo chegava a quem administra como um
+ *    perfil inexistente, e quem lesse isso ia procurar a pessoa em vez da
+ *    base.
+ *
+ *    Pior: `resolverIdentidadeAuth` tinha sido escrito de propósito para
+ *    separar «a coluna `auth_user_id` não existe» (42703, resolve-se pelo
+ *    legado) de uma falha a sério. Essa distinção era feita com cuidado e
+ *    destruída duas linhas depois.
+ */
+type ResultadoPessoa =
+  | { ok: true; pessoa: Pessoa }
+  | { ok: false; codigo: "NAO_ENCONTRADA" | "LEITURA_FALHOU" | "IDENTIDADE_FALHOU"; erro: string };
+
+async function carregarPessoa(id: string): Promise<ResultadoPessoa> {
   const admin = createAdminClient();
-  const { data } = await admin
+  const { data, error } = await admin
     .from("profiles")
-    .select("id, company_id, full_name, auth_user_id")
+    .select("id, company_id, full_name")
     .eq("id", id)
     .maybeSingle();
-  return (data as Pessoa) ?? null;
+
+  // 🔴 Um erro de leitura não é uma pessoa que não existe.
+  //
+  //    `maybeSingle()` devolve `data: null` nos dois casos, e a versão
+  //    anterior não os separava: um timeout, um `08006`, uma chave sem
+  //    permissão — tudo saía daqui como `null` e chegava a quem administra
+  //    como «Pessoa não encontrada.». Quem lesse isso ia procurar o perfil,
+  //    não a base.
+  if (error) return { ok: false, codigo: "LEITURA_FALHOU", erro: error.message };
+  if (!data) return { ok: false, codigo: "NAO_ENCONTRADA", erro: "Pessoa não encontrada." };
+
+  const identidade = await resolverIdentidadeAuth(admin, id);
+  // O resolver já distingue «a coluna não existe» (e resolve pelo legado) de
+  // uma falha a sério. Achatar isso outra vez aqui desfazia esse trabalho —
+  // que foi exactamente o defeito que a revalidação apanhou.
+  if (!identidade.ok) return { ok: false, codigo: "IDENTIDADE_FALHOU", erro: identidade.erro };
+
+  return {
+    ok: true,
+    pessoa: { ...(data as Omit<Pessoa, "auth_user_id">), auth_user_id: identidade.authUserId },
+  };
+}
+
+/**
+ * A recusa que uma falha de carregamento produz.
+ *
+ * Existe para as quatro actions dizerem a mesma coisa sobre a mesma falha. Um
+ * erro operacional é nomeado como operacional — e nenhuma delas chega a falar
+ * com o Auth nem a escrever fosse o que fosse.
+ */
+function recusaDeCarregamento(r: Extract<ResultadoPessoa, { ok: false }>): Resultado {
+  if (r.codigo === "NAO_ENCONTRADA") return { ok: false, error: r.erro };
+  return {
+    ok: false,
+    error: `Não foi possível confirmar quem é esta pessoa: ${r.erro}. `
+      + "Nada foi alterado — tente outra vez.",
+  };
 }
 
 /**
@@ -70,11 +165,13 @@ async function carregarPessoa(id: string): Promise<Pessoa | null> {
 export async function criarAcesso(
   profileId: string, senhaTemporaria: string,
 ): Promise<Resultado> {
-  const actor = await resolverActor();
-  if (!actor) return { ok: false, error: "Não autenticado." };
+  const resolvido = await resolverActor();
+  if (!resolvido.ok) return { ok: false, error: resolvido.erro };
+  const { actor } = resolvido;
 
-  const pessoa = await carregarPessoa(profileId);
-  if (!pessoa) return { ok: false, error: "Pessoa não encontrada." };
+  const carregada = await carregarPessoa(profileId);
+  if (!carregada.ok) return recusaDeCarregamento(carregada);
+  const { pessoa } = carregada;
 
   const permissao = podeCriarAcesso(actor, pessoa);
   if (!permissao.permitido) return { ok: false, error: permissao.motivo };
@@ -145,11 +242,13 @@ export async function criarAcesso(
 export async function definirSenhaTemporaria(
   profileId: string, senhaTemporaria: string,
 ): Promise<Resultado> {
-  const actor = await resolverActor();
-  if (!actor) return { ok: false, error: "Não autenticado." };
+  const resolvido = await resolverActor();
+  if (!resolvido.ok) return { ok: false, error: resolvido.erro };
+  const { actor } = resolvido;
 
-  const pessoa = await carregarPessoa(profileId);
-  if (!pessoa) return { ok: false, error: "Pessoa não encontrada." };
+  const carregada = await carregarPessoa(profileId);
+  if (!carregada.ok) return recusaDeCarregamento(carregada);
+  const { pessoa } = carregada;
 
   const permissao = exigeAcessoExistente(actor, pessoa, "definir senha");
   if (!permissao.permitido) return { ok: false, error: permissao.motivo };
@@ -196,21 +295,28 @@ export async function definirSenhaTemporaria(
  *    devolve-lhe a mesma, não cria outra.
  */
 export async function desativarAcesso(profileId: string): Promise<Resultado> {
-  const actor = await resolverActor();
-  if (!actor) return { ok: false, error: "Não autenticado." };
+  const resolvido = await resolverActor();
+  if (!resolvido.ok) return { ok: false, error: resolvido.erro };
+  const { actor } = resolvido;
 
-  const pessoa = await carregarPessoa(profileId);
-  if (!pessoa) return { ok: false, error: "Pessoa não encontrada." };
+  const carregada = await carregarPessoa(profileId);
+  if (!carregada.ok) return recusaDeCarregamento(carregada);
+  const { pessoa } = carregada;
 
   const permissao = exigeAcessoExistente(actor, pessoa, "desactivar");
   if (!permissao.permitido) return { ok: false, error: permissao.motivo };
 
-  const admin = createAdminClient();
-  // Um banimento longo é a forma de o Supabase representar «não entra», e
-  // preserva a conta — que é precisamente o que se quer.
-  const { error } = await admin.auth.admin.updateUserById(
-    pessoa.auth_user_id as string, { ban_duration: "876000h" });
-  if (error) return { ok: false, error: error.message };
+  // 🔴 Pelo ciclo canónico — o MESMO que a lista de colaboradores usa.
+  //
+  //    Antes, isto apenas banía a conta. Com a 101c, `profiles.status` é o que
+  //    a base consulta: banir sem o escrever deixava um token antigo a
+  //    trabalhar como se nada fosse. A desativação estava «feita» no ecrã e
+  //    não estava no sistema.
+  const resultado = await tirarAcesso(createAdminClient(), {
+    profileId: pessoa.id,
+    companyId: pessoa.company_id,
+  });
+  if (!resultado.ok) return { ok: false, error: resultado.erro };
 
   await auditLog({
     companyId: actor.company_id,
@@ -218,27 +324,35 @@ export async function desativarAcesso(profileId: string): Promise<Resultado> {
     action: "access_disabled",
     entityType: "profile",
     entityId: pessoa.id,
+    meta: { tinha_conta: resultado.tocouNaConta },
   });
 
   revalidatePath(`/dashboard/colaboradores/${pessoa.id}`);
+  revalidatePath("/dashboard/colaboradores");
   return { ok: true };
 }
 
 /** Devolver o acesso — a mesma conta, não uma nova. */
 export async function reativarAcesso(profileId: string): Promise<Resultado> {
-  const actor = await resolverActor();
-  if (!actor) return { ok: false, error: "Não autenticado." };
+  const resolvido = await resolverActor();
+  if (!resolvido.ok) return { ok: false, error: resolvido.erro };
+  const { actor } = resolvido;
 
-  const pessoa = await carregarPessoa(profileId);
-  if (!pessoa) return { ok: false, error: "Pessoa não encontrada." };
+  const carregada = await carregarPessoa(profileId);
+  if (!carregada.ok) return recusaDeCarregamento(carregada);
+  const { pessoa } = carregada;
 
   const permissao = exigeAcessoExistente(actor, pessoa, "reactivar");
   if (!permissao.permitido) return { ok: false, error: permissao.motivo };
 
-  const admin = createAdminClient();
-  const { error } = await admin.auth.admin.updateUserById(
-    pessoa.auth_user_id as string, { ban_duration: "none" });
-  if (error) return { ok: false, error: error.message };
+  // 🔴 Desbanir sozinho devolvia a porta e não a autorização: a pessoa
+  //    entrava e era recusada em tudo, porque `status` continuava `inativo`.
+  //    O ciclo canónico faz as duas coisas, e pela ordem segura.
+  const resultado = await devolverAcesso(createAdminClient(), {
+    profileId: pessoa.id,
+    companyId: pessoa.company_id,
+  });
+  if (!resultado.ok) return { ok: false, error: resultado.erro };
 
   await auditLog({
     companyId: actor.company_id,
@@ -246,8 +360,10 @@ export async function reativarAcesso(profileId: string): Promise<Resultado> {
     action: "access_reenabled",
     entityType: "profile",
     entityId: pessoa.id,
+    meta: { tinha_conta: resultado.tocouNaConta },
   });
 
   revalidatePath(`/dashboard/colaboradores/${pessoa.id}`);
+  revalidatePath("/dashboard/colaboradores");
   return { ok: true };
 }
