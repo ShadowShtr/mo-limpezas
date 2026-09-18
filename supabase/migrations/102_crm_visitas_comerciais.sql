@@ -54,7 +54,107 @@
 --   · não mexe no calendário — a vista do calendário, se vier, lê esta tabela
 --     como camada sobreposta e não altera o modelo de `services`;
 --   · não publica nada no Realtime.
+--
+-- ---------------------------------------------------------------------------
+-- 🔴 SCHEMA_EFFECT != MIGRATION_PROVENANCE
+-- ---------------------------------------------------------------------------
+--
+-- Este ficheiro corria com `CREATE TABLE IF NOT EXISTS`. Parecia prudente e
+-- era o contrário: se `crm_visits` já existisse — criada à mão, por um SQL
+-- Editor, por um ensaio esquecido, por uma branch antiga — a migration
+-- adoptava esse objecto em silêncio e passava a alterar-lhe restrições,
+-- triggers, políticas e ACL, como se ela própria o tivesse feito.
+--
+-- Uma tabela existir não prova quem a criou. Só o ledger prova, e este
+-- projecto já pagou essa lição: `docs/LEDGER-RECONCILIATION-PENDING.md`
+-- existe porque migrations aplicadas fora do runner não deixaram linha, e
+-- durante semanas ninguém sabia distinguir «aplicada» de «materializada».
+--
+-- Por isso o portão abaixo, antes de tudo o resto. O estado esperado de uma
+-- aplicação canónica nova é:
+--
+--     102 no ledger = ABSENT   E   public.crm_visits = ABSENT
+--
+-- Qualquer outra combinação é desconhecida, e desconhecido falha fechado —
+-- com zero mutações, porque nada corre depois de um RAISE.
+--
+-- A cadeia de que a 102 depende é verificada pela mesma medida: as três
+-- migrations que a precedem têm de ter linha no ledger E o checksum do
+-- conteúdo canónico. Os valores pinados abaixo são os que produção tem hoje
+-- (leitura read-only, 2026-09-18) e batem com o que
+-- `checksumForNewMigration` calcula sobre o ficheiro deste repositório. O
+-- par LF/CRLF está pinado porque o ledger deste projecto mistura as duas
+-- representações por história — o que se quer apanhar é CONTEÚDO diferente,
+-- não fim-de-linha diferente.
 -- ============================================================================
+
+DO $proveniencia$
+DECLARE
+  v_faltam text[];
+  v_erradas text[];
+BEGIN
+  -- Sem ledger não há proveniência nenhuma que se possa provar. Esta
+  -- migration não corre à mão.
+  IF to_regclass('public._migrations') IS NULL THEN
+    RAISE EXCEPTION
+      'CRM_VISITS_102_LEDGER_AUSENTE: public._migrations não existe — a 102 só corre pelo runner canónico';
+  END IF;
+
+  IF EXISTS (SELECT 1 FROM public._migrations WHERE name = '102_crm_visitas_comerciais.sql') THEN
+    RAISE EXCEPTION
+      'CRM_VISITS_102_JA_APLICADA: já há linha de ledger para a 102 — reaplicar alteraria restrições e ACL de uma tabela com dados';
+  END IF;
+
+  -- 🔴 EFFECT_WITHOUT_LEDGER. O objecto existe e a proveniência não. Não se
+  --    adopta: quem o criou sabe o que lá pôs, e esta migration não sabe.
+  IF to_regclass('public.crm_visits') IS NOT NULL THEN
+    RAISE EXCEPTION
+      'CRM_VISITS_102_EFFECT_WITHOUT_LEDGER: public.crm_visits já existe sem linha de ledger da 102 — estado desconhecido, nada foi alterado';
+  END IF;
+
+  SELECT array_agg(requisito.nome ORDER BY requisito.nome) INTO v_faltam
+    FROM (VALUES
+      ('101_crm_leads.sql'),
+      ('101a_crm_rpc_acl_hardening.sql'),
+      ('101b_identity_reconciliation.sql')
+    ) AS requisito(nome)
+   WHERE NOT EXISTS (
+     SELECT 1 FROM public._migrations m WHERE m.name = requisito.nome
+   );
+
+  IF v_faltam IS NOT NULL THEN
+    RAISE EXCEPTION
+      'CRM_VISITS_102_MISSING_PREREQUISITE_LEDGER: sem linha de ledger para % — a cadeia 101→101a→101b não está provada',
+      v_faltam;
+  END IF;
+
+  -- Um checksum NULL no ledger também cai aqui, de propósito: não saber é
+  -- indistinguível de estar errado.
+  SELECT array_agg(requisito.nome ORDER BY requisito.nome) INTO v_erradas
+    FROM (VALUES
+      ('101_crm_leads.sql',
+       '92fb13678187609c7951faaae6dcf3a3688f04694efb4b34c6f04e23aee46942',
+       '34b8faa0ff93f1e04f67e2674ae3c4c0a1862a161032ea757a3bb9a672673d3a'),
+      ('101a_crm_rpc_acl_hardening.sql',
+       '51aca907d2e9310f36d01901f5bb4911f8a951a536bcb9886071b0ef1d0528fb',
+       '38f3b18b2df003d06541b7b468b1a26206c36e8df3c320db87d268b8aa393c77'),
+      ('101b_identity_reconciliation.sql',
+       '33614ef362300bca1a4a9bff8928172b45f2418b9409bb8eaaaa2e1805f4e136',
+       'ec91be0fe7be42872931990b76cca0ec9159138a2f95dca0ca540d8537ee4537')
+    ) AS requisito(nome, lf, crlf)
+   WHERE NOT EXISTS (
+     SELECT 1 FROM public._migrations m
+      WHERE m.name = requisito.nome
+        AND m.checksum IN (requisito.lf, requisito.crlf)
+   );
+
+  IF v_erradas IS NOT NULL THEN
+    RAISE EXCEPTION
+      'CRM_VISITS_102_CHECKSUM_MISMATCH_PREREQUISITE: o ledger tem outro conteúdo para % — a cadeia sob a 102 não é a canónica',
+      v_erradas;
+  END IF;
+END
+$proveniencia$;
 
 DO $precondicoes$
 BEGIN
@@ -87,7 +187,10 @@ BEGIN
 END
 $precondicoes$;
 
-CREATE TABLE IF NOT EXISTS public.crm_visits (
+-- 🔴 Sem `IF NOT EXISTS`, e de propósito. O portão acima já provou que a
+--    tabela não existe; se existisse aqui, alguma coisa correu entre as duas
+--    e o certo é rebentar, não adoptar.
+CREATE TABLE public.crm_visits (
   id              uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   company_id      uuid NOT NULL REFERENCES public.companies(id) ON DELETE CASCADE,
 
