@@ -1,0 +1,110 @@
+-- ============================================================================
+-- 101b — RECUPERAÇÃO PARA A FRENTE. Não há `down`.
+-- ============================================================================
+--
+-- 🔴 Porque é que este ficheiro se chama `.recovery.sql` e não `.down.sql`.
+--
+--    Um `down` promete uma coisa: desfaz o que a migration fez e devolve o
+--    estado anterior. Aqui essa promessa seria falsa, e falsa de um modo
+--    perigoso.
+--
+--    A 101b não INTRODUZ a identidade separada — CANONICALIZA a que produção
+--    já tem e usa. No momento em que isto é escrito, o catálogo vivo tem:
+--
+--      · `profiles.auth_user_id` preenchido em 29 perfis;
+--      · 69 políticas a resolver identidade por `get_my_profile_id()`;
+--      · a FK `profiles_id_fkey` (perfil → auth.users) JÁ REMOVIDA.
+--
+--    Correr um `down` a sério — largar a coluna, repor `auth.uid()` nas 69
+--    políticas, recriar a FK — não é «voltar atrás». É partir o login de quem
+--    está a trabalhar, e recriar uma FK que só passa se todos os perfis
+--    tiverem conta no Auth, coisa que já não é verdade (29 de 46).
+--
+--    Um `down` destrutivo aqui seria uma arma carregada à espera de uma noite
+--    má. Por isso não existe.
+--
+-- ----------------------------------------------------------------------------
+-- O QUE FAZER QUANDO ALGO CORRE MAL
+-- ----------------------------------------------------------------------------
+--
+-- A 101b corre dentro da transação do runner. Se falhar a meio, não deixa
+-- rasto: nem schema, nem linha no ledger. Não há nada para recuperar.
+--
+-- O caso que interessa é o outro: aplicou, e a seguir descobre-se um
+-- problema. Aí a pergunta não é «como desfaço a identidade» — é «o que é que
+-- está errado».
+--
+--   · Alguém sem acesso que devia ter?
+--     Não se reverte a identidade. Verifica-se `profiles.auth_user_id` dessa
+--     pessoa e liga-se à conta certa. O diagnóstico está mais abaixo.
+--
+--   · A revogação por estado a recusar quem não devia?
+--     Isso é a 101c, e essa TEM um `down` seguro
+--     (`rollback/101c_status_participa_da_autorizacao.down.sql`), porque só
+--     substitui corpos de funções e o preestado é o desta 101b.
+--
+--   · O `get_my_profile_id()` a resolver mal?
+--     Substitui-se o corpo. É uma função, não um schema: `CREATE OR REPLACE`
+--     resolve, sem tocar em dados.
+--
+-- FORWARD_RECOVERY. NO_DATA_LOSS.
+--
+-- ----------------------------------------------------------------------------
+-- DIAGNÓSTICO — só leitura, seguro de correr a qualquer momento
+-- ----------------------------------------------------------------------------
+--
+-- Nada aqui escreve. Serve para responder «em que estado é que isto está?»
+-- antes de decidir seja o que for.
+
+-- Quantos perfis, e quantos ligados a uma conta.
+--   SELECT count(*) AS perfis,
+--          count(auth_user_id) AS ligados,
+--          count(*) FILTER (WHERE auth_user_id IS NOT NULL AND auth_user_id <> id)
+--            AS ligados_a_outro_id
+--     FROM public.profiles;
+
+-- Perfis com conta no Auth mas sem ligação gravada — os que o backfill
+-- guardado da 101b teria apanhado. Deve dar zero depois de aplicar.
+--   SELECT p.id, p.full_name
+--     FROM public.profiles p
+--     JOIN auth.users u ON u.id = p.id
+--    WHERE p.auth_user_id IS NULL;
+
+-- Ligações que apontam para contas que já não existem. Deve dar zero: a FK
+-- `profiles_auth_user_id_fkey` é `ON DELETE SET NULL`.
+--   SELECT p.id, p.auth_user_id
+--     FROM public.profiles p
+--    WHERE p.auth_user_id IS NOT NULL
+--      AND NOT EXISTS (SELECT 1 FROM auth.users u WHERE u.id = p.auth_user_id);
+
+-- Políticas que ainda resolvem identidade pelo caminho antigo. Deve dar zero.
+--   SELECT tablename, policyname
+--     FROM pg_policies
+--    WHERE schemaname = 'public'
+--      AND (COALESCE(qual,'') || COALESCE(with_check,'')) ~ 'auth\.uid\(\)';
+
+-- Os quatro helpers e a sua forma actual.
+--   SELECT p.proname, p.prosecdef, p.proconfig, pg_get_functiondef(p.oid)
+--     FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+--    WHERE n.nspname = 'public'
+--      AND p.proname IN ('get_my_profile_id','get_my_company_id',
+--                        'get_my_role','can_access_service');
+
+-- ----------------------------------------------------------------------------
+-- A única operação de recuperação que faz sentido aqui
+-- ----------------------------------------------------------------------------
+--
+-- Religar um perfil à conta certa. Escreve UMA linha, nomeada, e nunca em
+-- lote. Deliberadamente comentada: quem a correr tem de a descomentar e
+-- preencher, e portanto de olhar para o que está a fazer.
+--
+--   UPDATE public.profiles
+--      SET auth_user_id = '<id-da-conta-no-auth>'
+--    WHERE id = '<id-do-perfil>'
+--      AND auth_user_id IS DISTINCT FROM '<id-da-conta-no-auth>';
+--
+-- Desligar (a pessoa fica sem entrar, o perfil e a história ficam):
+--
+--   UPDATE public.profiles SET auth_user_id = NULL WHERE id = '<id-do-perfil>';
+
+SELECT 'ficheiro de recuperação — nada foi executado' AS aviso;
