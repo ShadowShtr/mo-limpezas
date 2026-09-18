@@ -158,7 +158,10 @@ vi.mock("@/lib/supabase/admin", () => ({
 }));
 vi.mock("next/cache", () => ({ revalidatePath: () => {} }));
 
-const ACTOR = { id: "actor-1", company_id: "empresa-1", role: "admin" };
+  // `status` é obrigatório desde a 102: `requireProfile` recusa quem não
+  // esteja explicitamente activo, e um ator de ensaio sem estado seria
+  // recusado — correctamente.
+const ACTOR = { id: "actor-1", company_id: "empresa-1", role: "admin", status: "ativo" };
 const FALHA = { data: null, error: { code: "57014", message: "canceling statement" } };
 
 const CANDIDATOS = [

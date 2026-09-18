@@ -34,6 +34,8 @@
  */
 
 /** Uma pessoa, como a base a conhece. */
+import { perfilPodeEntrar } from "./access-state";
+
 export interface Pessoa {
   id: string;
   company_id: string;
@@ -83,21 +85,42 @@ export function podeGerirAcesso(actor: Actor, alvo: Pessoa): Decisao {
 /**
  * O estado do acesso, como o perfil o mostra.
  *
- * `disabled` distingue-se de `sem acesso` de propósito: uma pessoa a quem o
+ * `desativado` distingue-se de `sem_acesso` de propósito: uma pessoa a quem o
  * acesso foi retirado teve-o, e voltar a dar-lho é reactivar a mesma conta —
  * não criar outra.
  */
 export type EstadoAcesso = "sem_acesso" | "ativo" | "desativado" | "troca_pendente";
 
+/**
+ * 🔴 `status` entrou aqui, e a razão não é cosmética.
+ *
+ *    Esta função decidia `desativado` só por `conta.disabled` — o banimento no
+ *    Auth. E o ecrã que a chama nunca lia esse campo: passava
+ *    `{ must_change_password }` e mais nada. Resultado: `desativado` era
+ *    INALCANÇÁVEL na ficha, o botão «Reativar acesso» nunca aparecia, e o
+ *    cartão podia dizer «Ativo» ao lado de um perfil marcado Inativo.
+ *
+ *    Com a 101c, `profiles.status` é o que a base consulta para autorizar.
+ *    Deixá-lo fora do modelo visual do acesso seria mostrar uma coisa e
+ *    aplicar outra.
+ *
+ *    As duas fontes contam, e a mais restritiva ganha: basta uma delas dizer
+ *    que não há acesso para não haver acesso.
+ */
 export function estadoAcesso(
   pessoa: Pessoa,
   conta: { disabled?: boolean; must_change_password?: boolean } | null,
+  status?: string | null,
 ): EstadoAcesso {
   if (pessoa.auth_user_id === null || conta === null) return "sem_acesso";
   if (conta.disabled) return "desativado";
+  // `status` é opcional para não partir quem ainda não o passa, mas quando vem
+  // e não é `ativo`, manda. `perfilPodeEntrar` é a mesma regra da 101c.
+  if (status !== undefined && !perfilPodeEntrar(status)) return "desativado";
   if (conta.must_change_password) return "troca_pendente";
   return "ativo";
 }
+
 
 /**
  * Criar acesso é uma operação **nova**, não a repetição de outra.
