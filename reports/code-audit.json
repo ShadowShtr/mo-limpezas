@@ -1,11 +1,11 @@
 {
   "inventorySource": "git ls-files",
   "summary": {
-    "repositoryFiles": 913,
-    "textFiles": 900,
-    "sourceFiles": 634,
-    "textLines": 223506,
-    "typescriptDiagnostics": 1,
+    "repositoryFiles": 914,
+    "textFiles": 901,
+    "sourceFiles": 635,
+    "textLines": 223847,
+    "typescriptDiagnostics": 0,
     "productionEntries": 71,
     "unreachableProductionModules": 42,
     "exactDuplicateFileGroups": 0
@@ -152,15 +152,5 @@
       "src/lib/payroll-calc.ts"
     ]
   },
-  "diagnostics": [
-    {
-      "code": 6133,
-      "category": "Error",
-      "message": "'servicosVisiveis' is declared but its value is never read.",
-      "location": {
-        "file": "src/__tests__/canonical-path-101b.pg.test.ts",
-        "line": 87
-      }
-    }
-  ]
+  "diagnostics": []
 }

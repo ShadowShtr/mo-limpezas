@@ -1,12 +1,12 @@
 {
   "generatedBy": "scripts/audit-file-inventory.mjs",
-  "totalFiles": 917,
+  "totalFiles": 918,
   "byStatus": {
-    "MANTER": 893,
+    "MANTER": 894,
     "STANDBY": 24
   },
   "byCategory": {
-    "test": 217,
+    "test": 218,
     "route-ui": 140,
     "migration": 134,
     "lib": 77,
@@ -29,7 +29,7 @@
     "supabase-other": 2
   },
   "byConfidence": {
-    "alta": 895,
+    "alta": 896,
     "média": 16,
     "baixa": 6
   },
@@ -6683,7 +6683,7 @@
       "category": "test",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 3,
+      "consumers": 4,
       "consumerSample": [
         "scripts/audit-identity-drift-manifest.ts",
         "src/__tests__/canonical-path-101b.pg.test.ts",
@@ -6715,7 +6715,7 @@
       "category": "test",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 15,
+      "consumers": 16,
       "consumerSample": [
         "scripts/audit-identity-drift-manifest.ts",
         "src/__tests__/bank-reconciliation-period-atomic.pg.test.ts",
@@ -6741,7 +6741,7 @@
       "category": "test",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 8,
+      "consumers": 9,
       "consumerSample": [
         "scripts/audit-identity-drift-manifest.ts",
         "src/__tests__/canonical-path-101b.pg.test.ts",
@@ -6957,6 +6957,33 @@
       "sideEffects": [],
       "risks": [],
       "signals": {},
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/__tests__/live-noop-101b.pg.test.ts",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [
+        "service-role"
+      ],
+      "signals": {
+        "serviceRole": 2,
+        "sqlWrite": 11
+      },
       "action": "nenhuma",
       "reason": "suite de testes — corre por convenção do vitest",
       "manualDecision": false,
@@ -23845,8 +23872,8 @@
         "service-role"
       ],
       "signals": {
-        "serviceRole": 1,
-        "sqlWrite": 13
+        "serviceRole": 2,
+        "sqlWrite": 11
       },
       "action": "nenhuma",
       "reason": "migration versionada — histórico do schema, nunca se apaga",
