@@ -20279,12 +20279,12 @@
         "docs"
       ],
       "sideEffects": [
-        "revalidatePath(9)"
+        "revalidatePath(11)"
       ],
       "risks": [],
       "signals": {
         "fallbackArray": 1,
-        "revalidatePath": 9
+        "revalidatePath": 11
       },
       "action": "nenhuma",
       "reason": "em uso: 6 consumidor(es)",
@@ -21808,7 +21808,7 @@
       "risks": [],
       "signals": {
         "supabase": 1,
-        "sqlWrite": 89
+        "sqlWrite": 93
       },
       "action": "nenhuma",
       "reason": "em uso: 26 consumidor(es)",

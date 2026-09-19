@@ -326,6 +326,24 @@ export type Database = {
         Update: Record<string, never>;
         Relationships: [];
       };
+      // ── CRM (migration 101) ────────────────────────────────────────────────
+      // Os literais de `stage`, `source`, `lost_reason` e `estimated_value_kind`
+      // vivem em `src/lib/crm/` e são comparados com os CHECK da migration por
+      // `src/__tests__/crm-stages.test.ts`. Aqui ficam como `string` de
+      // propósito: duplicar a união num terceiro sítio daria três listas para
+      // manter em vez de duas.
+      crm_leads: {
+        Row: { id: string; company_id: string; name: string; lead_type: "individual" | "empresa"; contact_name: string | null; email: string | null; phone: string | null; nif: string | null; address: string | null; lat: number | null; lng: number | null; stage: string; board_order: number; source: string | null; source_detail: string | null; owner_id: string | null; estimated_value: number | null; estimated_value_kind: string; next_action_at: string | null; next_action_note: string | null; service_type: string | null; frequency_hint: string | null; notes: string | null; won_at: string | null; lost_at: string | null; lost_reason: string | null; lost_reason_notes: string | null; converted_client_id: string | null; converted_location_id: string | null; archived_at: string | null; created_by: string | null; created_at: string; updated_at: string };
+        Insert: { company_id: string; name: string; lead_type?: "individual" | "empresa"; contact_name?: string | null; email?: string | null; phone?: string | null; nif?: string | null; address?: string | null; lat?: number | null; lng?: number | null; stage?: string; board_order?: number; source?: string | null; source_detail?: string | null; owner_id?: string | null; estimated_value?: number | null; estimated_value_kind?: string; next_action_at?: string | null; next_action_note?: string | null; service_type?: string | null; frequency_hint?: string | null; notes?: string | null; created_by?: string | null };
+        Update: { name?: string; lead_type?: "individual" | "empresa"; contact_name?: string | null; email?: string | null; phone?: string | null; nif?: string | null; address?: string | null; lat?: number | null; lng?: number | null; stage?: string; board_order?: number; source?: string | null; source_detail?: string | null; owner_id?: string | null; estimated_value?: number | null; estimated_value_kind?: string; next_action_at?: string | null; next_action_note?: string | null; service_type?: string | null; frequency_hint?: string | null; notes?: string | null; won_at?: string | null; lost_at?: string | null; lost_reason?: string | null; lost_reason_notes?: string | null; converted_client_id?: string | null; converted_location_id?: string | null; archived_at?: string | null; updated_at?: string };
+        Relationships: [];
+      };
+      crm_lead_interactions: {
+        Row: { id: string; company_id: string; lead_id: string; kind: string; summary: string; occurred_at: string; author_id: string | null; created_at: string; updated_at: string };
+        Insert: { company_id: string; lead_id: string; kind: string; summary: string; occurred_at?: string; author_id?: string | null };
+        Update: { summary?: string; occurred_at?: string; updated_at?: string };
+        Relationships: [];
+      };
     };
     Views: {
       services_full: {
