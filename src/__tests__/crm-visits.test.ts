@@ -137,13 +137,53 @@ describe("CRM visitas — as actions", () => {
     expect(ACTIONS.trimStart().startsWith('"use server"')).toBe(true);
   });
 
-  it("toda a action passa pelo guard e filtra a empresa", () => {
-    for (const fn of ["getVisits", "scheduleVisit", "setVisitOutcome"]) {
-      expect(CODIGO, `${fn} em falta`).toContain(`export async function ${fn}`);
+  // 🔴 Contar `requireProfile(` não protege nada.
+  //
+  //    A versão anterior deste teste verificava que havia três chamadas. Um
+  //    `requireProfile()` sem `roles` numa delas mantinha a contagem em três e
+  //    passava a verde — com a action aberta a qualquer perfil autenticado.
+  //
+  //    Agora mede-se o corpo de CADA função: tem de exigir admin/gestor, e
+  //    nenhuma pode chamar o guard sem papéis.
+  const ACTIONS_EXPORTADAS = ["getVisits", "scheduleVisit", "setVisitOutcome"] as const;
+
+  /** O corpo de uma função exportada, até à seguinte (ou ao fim do ficheiro). */
+  function corpoDa(fn: string): string {
+    const inicio = CODIGO.indexOf(`export async function ${fn}`);
+    expect(inicio, `${fn} em falta`).toBeGreaterThan(-1);
+    const resto = CODIGO.slice(inicio + 1);
+    const proximo = resto.indexOf("export async function ");
+    return proximo === -1 ? resto : resto.slice(0, proximo);
+  }
+
+  it.each(ACTIONS_EXPORTADAS)("🔴 %s exige admin/gestor, explicitamente", (fn) => {
+    const corpo = corpoDa(fn);
+    expect(corpo, `${fn} não exige papéis`)
+      .toContain('requireProfile({ roles: ["admin", "gestor"] })');
+  });
+
+  it("🔴 nenhuma action chama o guard sem papéis", () => {
+    // `requireProfile(` seguido de algo que não seja `{ roles:` — inclui
+    // `requireProfile()` e `requireProfile({ ... })` sem `roles`.
+    const semPapeis = CODIGO.match(/requireProfile\(\s*(?!\{\s*roles:)/g) ?? [];
+    expect(semPapeis, "há um requireProfile sem roles").toHaveLength(0);
+  });
+
+  it("cada action filtra pela empresa do actor", () => {
+    for (const fn of ACTIONS_EXPORTADAS) {
+      expect(corpoDa(fn), `${fn} não filtra por empresa`)
+        .toContain('eq("company_id", profile.company_id)');
     }
-    const chamadas = CODIGO.match(/requireProfile\(/g) ?? [];
-    expect(chamadas.length).toBe(3);
-    expect(CODIGO).toContain('eq("company_id", profile.company_id)');
+  });
+
+  // 🔴 A FK da 102 garante «mesma empresa». Não garante papel nem estado.
+  //    Sem esta verificação, uma chamada directa à action punha uma
+  //    colaboradora como responsável por uma visita que a RLS não a deixa ler.
+  it("🔴 o responsável é validado no servidor, não só no formulário", () => {
+    const corpo = corpoDa("scheduleVisit");
+    expect(corpo).toContain('in("role", ["admin", "gestor"])');
+    expect(corpo).toContain('eq("status", "ativo")');
+    expect(corpo).toContain("ACTION_ERROR_CODES.BUSINESS_RULE");
   });
 
   // 🔴 `rescheduleVisit` existia na branch ampla e nenhum ecrã lhe chamava.

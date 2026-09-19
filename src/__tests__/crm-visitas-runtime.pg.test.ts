@@ -44,6 +44,8 @@ const OUTRA = "22222222-2222-4222-8222-222222222222";
 const GESTORA = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 const GESTORA_OUTRA = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
 const COLAB = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
+const ADMIN = "dddddddd-dddd-4ddd-8ddd-dddddddddddd";
+const GESTOR_INATIVO = "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee";
 const CLIENTE_A = "c1111111-1111-4111-8111-111111111111";
 const CLIENTE_B = "c2222222-2222-4222-8222-222222222222";
 
@@ -106,14 +108,18 @@ async function palco(): Promise<void> {
 async function semear(): Promise<void> {
   await pool.query("INSERT INTO public.companies (id,name,slug) VALUES ($1,'A','a'),($2,'B','b')",
     [EMPRESA, OUTRA]);
-  await pool.query("INSERT INTO auth.users (id,email) VALUES ($1,'g@a.pt'),($2,'g@b.pt'),($3,'c@a.pt')",
-    [GESTORA, GESTORA_OUTRA, COLAB]);
+  await pool.query(
+    `INSERT INTO auth.users (id,email) VALUES
+      ($1,'g@a.pt'),($2,'g@b.pt'),($3,'c@a.pt'),($4,'ad@a.pt'),($5,'gi@a.pt')`,
+    [GESTORA, GESTORA_OUTRA, COLAB, ADMIN, GESTOR_INATIVO]);
   await pool.query(
     `INSERT INTO public.profiles (id, company_id, full_name, role, status, auth_user_id) VALUES
       ($1,$2,'Gestora A','gestor','ativo',$1),
       ($3,$4,'Gestora B','gestor','ativo',$3),
-      ($5,$2,'Colaboradora','colaborador','ativo',$5)`,
-    [GESTORA, EMPRESA, GESTORA_OUTRA, OUTRA, COLAB],
+      ($5,$2,'Colaboradora','colaborador','ativo',$5),
+      ($6,$2,'Admin A','admin','ativo',$6),
+      ($7,$2,'Gestor Saiu','gestor','inativo',$7)`,
+    [GESTORA, EMPRESA, GESTORA_OUTRA, OUTRA, COLAB, ADMIN, GESTOR_INATIVO],
   );
   await pool.query(
     "INSERT INTO public.clients (id,company_id,name) VALUES ($1,$2,'Cliente A'), ($3,$4,'Cliente B')",
@@ -207,6 +213,69 @@ describe("a quem se vai — lead OU cliente", () => {
       scheduled_start: agora.toISOString(),
       scheduled_end: new Date(agora.getTime() - 60_000).toISOString(),
     })).rejects.toThrow(/crm_visits_janela_valida/);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 🔴 Quem pode ser responsável por uma visita.
+//
+//    A FK composta da 102 garante «mesma empresa» e mais nada. O papel e o
+//    estado vivem na regra da action — e viviam SÓ no `<select>` da página,
+//    que é o mesmo que não viverem em lado nenhum para quem chama a Server
+//    Action directamente.
+//
+//    Aqui prova-se a consequência concreta: uma colaboradora responsável por
+//    uma visita ficaria responsável por algo que a RLS não a deixa abrir.
+// ---------------------------------------------------------------------------
+describe("responsável — a regra é do servidor, não do formulário", () => {
+  /** A consulta que `scheduleVisit` faz antes de inserir. */
+  async function aceitavel(perfilId: string): Promise<boolean> {
+    const { rows } = await pool.query(
+      `SELECT 1 FROM public.profiles
+        WHERE id = $1 AND company_id = $2
+          AND role IN ('admin','gestor') AND status = 'ativo'`,
+      [perfilId, EMPRESA],
+    );
+    return rows.length > 0;
+  }
+
+  it("admin activo da empresa: aceite", LENTO, async () => {
+    expect(await aceitavel(ADMIN)).toBe(true);
+    expect(await marcar({ assigned_to: ADMIN })).toBeTruthy();
+  });
+
+  it("gestor activo da empresa: aceite", LENTO, async () => {
+    expect(await aceitavel(GESTORA)).toBe(true);
+    expect(await marcar({ assigned_to: GESTORA })).toBeTruthy();
+  });
+
+  it("🔴 colaboradora da mesma empresa: recusada pela regra", LENTO, async () => {
+    // A FK deixa passar — é da mesma empresa. Quem recusa é a action.
+    expect(await aceitavel(COLAB)).toBe(false);
+  });
+
+  it("🔴 e a razão é esta: ela não conseguiria abrir a própria visita", LENTO, async () => {
+    const v = await marcar({ assigned_to: COLAB });
+    expect(v).toBeTruthy(); // a base aceita: a FK só olha à empresa
+
+    const c = new pg.Client({ ...container.connection });
+    await c.connect();
+    try {
+      await c.query("SELECT set_config('request.jwt.claim.sub', $1, false)", [COLAB]);
+      await c.query("SET ROLE authenticated");
+      const { rows } = await c.query(
+        "SELECT count(*)::int n FROM public.crm_visits WHERE id=$1", [v]);
+      expect(rows[0].n, "responsável sem acesso à própria visita").toBe(0);
+    } finally { await c.end(); }
+  });
+
+  it("🔴 perfil inactivo da empresa: recusado pela regra", LENTO, async () => {
+    expect(await aceitavel(GESTOR_INATIVO)).toBe(false);
+  });
+
+  it("🔴 gestor de outra empresa: recusado pela regra E pela FK", LENTO, async () => {
+    expect(await aceitavel(GESTORA_OUTRA)).toBe(false);
+    await expect(marcar({ assigned_to: GESTORA_OUTRA })).rejects.toThrow();
   });
 });
 

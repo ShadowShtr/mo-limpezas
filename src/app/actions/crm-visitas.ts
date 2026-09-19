@@ -175,6 +175,41 @@ export async function scheduleVisit(input: VisitaInput): Promise<ActionResult<{ 
   const { admin, profile } = guard;
   const d = parsed.data;
 
+  // 🔴 Quem pode ser responsável por uma visita.
+  //
+  //    A FK composta da 102 garante uma coisa só: que o perfil é da mesma
+  //    empresa. NÃO garante o papel nem o estado — e a regra vivia apenas no
+  //    `<select>` da página, que oferece admin/gestor activos.
+  //
+  //    Uma chamada directa à Server Action podia pôr uma colaboradora como
+  //    responsável. O resultado seria um estado incoerente e silencioso: a
+  //    RLS de `crm_visits` só deixa admin/gestor ler, por isso essa pessoa
+  //    ficaria responsável por uma visita que não consegue abrir.
+  //
+  //    A verificação é aqui, antes de qualquer escrita, e não na UI.
+  if (d.assignedTo) {
+    const { data: responsavel, error: erroResponsavel } = await admin
+      .from("profiles")
+      .select("id")
+      .eq("id", d.assignedTo)
+      .eq("company_id", profile.company_id)
+      .in("role", ["admin", "gestor"])
+      .eq("status", "ativo")
+      .maybeSingle();
+
+    if (erroResponsavel) {
+      logQueryFailure("scheduleVisit:responsavel", erroResponsavel);
+      return internalFailure("scheduleVisit", erroResponsavel, ACTION_ERROR_CODES.PERSISTENCE);
+    }
+
+    if (!responsavel) {
+      return actionFailure(
+        ACTION_ERROR_CODES.BUSINESS_RULE,
+        "O responsável por uma visita tem de ser um administrador ou gestor activo desta empresa.",
+      );
+    }
+  }
+
   const { data, error } = await admin
     .from("crm_visits")
     .insert({
