@@ -12,17 +12,16 @@
 // 🔴 Navegar é read-only. Estes são `<Link>`; nenhum dispara acção.
 //
 // ---------------------------------------------------------------------------
-// 🔴 Porque é que só há uma vista aqui
+// 🔴 Quando é que uma vista entra nesta lista
 // ---------------------------------------------------------------------------
 //
-// Visitas e Orçamentos existem como ecrãs, mas as tabelas que eles leem —
-// `crm_visits` (102) e `crm_quotes` (103) — ainda NÃO existem em produção.
-// Uma entrada nesta barra para qualquer uma delas levaria a uma página que
-// rebenta na primeira consulta.
+// Só quando a migration de que depende estiver aplicada em produção. Cada
+// linha nova aqui viaja na mesma PR que o seu schema, nunca antes — uma
+// entrada para um ecrã cuja tabela não existe leva a uma página que rebenta
+// na primeira consulta.
 //
-// A regra é simples e não é temporária: **uma vista só entra nesta lista
-// quando a migration de que depende estiver aplicada em produção.** Cada
-// linha nova aqui viaja na mesma PR que a sua migration, nunca antes.
+// Visitas entrou agora porque a 102 está aplicada (`crm_visits` existe).
+// Orçamentos continua de fora: `crm_quotes` é da 103, e ainda não existe.
 //
 // Há um ensaio que trava a regressão: nenhuma vista pode apontar para uma
 // rota sem página no repositório.
@@ -30,7 +29,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { KanbanSquare } from "lucide-react";
+import { CalendarClock, KanbanSquare } from "lucide-react";
 
 /**
  * As vistas do módulo, por ordem de trabalho.
@@ -41,6 +40,7 @@ import { KanbanSquare } from "lucide-react";
  */
 export const CRM_VIEWS = [
   { href: "/dashboard/crm", label: "Pipeline de Leads", icon: KanbanSquare },
+  { href: "/dashboard/crm/visitas", label: "Visitas", icon: CalendarClock },
 ] as const;
 
 /**
