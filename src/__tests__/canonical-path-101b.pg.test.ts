@@ -258,22 +258,29 @@ describe("101b — constrói a identidade a partir do canónico", () => {
 
 // ---------------------------------------------------------------------------
 // ---------------------------------------------------------------------------
-describe("o `102` fica livre para o CRM", () => {
-  it("nenhuma migration desta frente ocupa 102, 103 ou 104", LENTO, async () => {
-    // O cabeçalho da 101a reserva o `102` para as visitas comerciais, e a PR
-    // #179 traz 102/103/104. Esta frente usa sufixos entre `101a` e `102`.
+describe("o `102` é do CRM", () => {
+  it("a frente de colaboradores não ocupa 102, 103 nem 104", LENTO, async () => {
+    // 🔴 O invariante mudou de forma, não de sentido.
+    //
+    //    Dizia «ninguém ocupa 102/103/104», porque nessa altura estavam por
+    //    tomar e o cabeçalho da 101a reservava-os ao CRM. Agora o CRM está a
+    //    tomá-los — e uma guarda que exigisse a ausência ficaria vermelha
+    //    exactamente quando o plano se cumpre.
+    //
+    //    O que continua a ter de ser verdade é de quem eles são: se um número
+    //    reservado for ocupado, tem de o ser pelo CRM.
     const { readdirSync } = await import("node:fs");
     const nomes = readdirSync(join(process.cwd(), "supabase", "migrations"))
       .filter((f) => f.endsWith(".sql"));
 
     for (const reservado of ["102_", "103_", "104_"]) {
-      expect(
-        nomes.filter((n) => n.startsWith(reservado)),
-        `${reservado} está reservado ao CRM`,
-      ).toEqual([]);
+      const ocupantes = nomes.filter((n) => n.startsWith(reservado));
+      const intrusos = ocupantes.filter((n) => !n.includes("_crm_"));
+      expect(intrusos, `${reservado} está reservado ao CRM`).toEqual([]);
     }
 
-    // E os sufixos desta frente ordenam onde têm de ordenar.
+    // E os sufixos desta frente ordenam onde têm de ordenar: é por isso que
+    // `101b`/`101c` existem em vez de terem roubado o `102`.
     expect(["101a", "101b", "101c", "102"].slice().sort()).toEqual(["101a", "101b", "101c", "102"]);
   });
 });

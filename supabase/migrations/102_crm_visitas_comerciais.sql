@@ -1,0 +1,456 @@
+-- ============================================================================
+-- 102 — CRM: a visita comercial
+-- ============================================================================
+--
+-- O runner é o dono da transação: este ficheiro não abre BEGIN/COMMIT.
+--
+-- Esta migration é FUNDAÇÃO. Cria a tabela que a agenda de visitas vai usar
+-- numa PR seguinte. Não muda nenhum ecrã.
+--
+-- ---------------------------------------------------------------------------
+-- 🔴 Porque é que isto NÃO é uma linha em `services`
+-- ---------------------------------------------------------------------------
+--
+-- É a pergunta mais importante deste ficheiro, e a resposta já está escrita
+-- neste repositório: a 086 rejeitou, por escrito, representar uma cobrança com
+-- um `services` fictício — «criar trabalho a fingir para registar uma cobrança
+-- é mentir a toda a operação para agradar ao financeiro». O argumento vale aqui
+-- sem alteração, e há ainda três razões próprias:
+--
+--   1. `services.location_id` é NOT NULL, e uma lead não tem local. Criar um
+--      `locations` para poder marcar uma visita poria uma morada por
+--      confirmar — de alguém que talvez nunca venha a ser cliente — na lista
+--      de Locais, no Mapa, e nas consultas de contratos.
+--
+--   2. Uma visita comercial não é trabalho executado. Não tem equipa, não tem
+--      ponto, não tem horas a pagar, e não tem valor a facturar. Um `services`
+--      fictício entraria na escala, no espelho de equipas, nos relatórios
+--      operacionais de horas, no realtime de `services` — e, o pior de tudo,
+--      em `getUnbilledServices`, que o listaria como «por facturar». Alguém
+--      acabaria por o facturar.
+--
+--   3. Tornar `services.location_id` nullable para caber aqui obrigaria a
+--      rever dezenas de consumidores que hoje assumem que existe sempre.
+--      Raio de explosão enorme para representar algo que não é um serviço.
+--
+-- Por isso: tabela própria, com o vocabulário do que é — `nao_compareceu`,
+-- `area_sqm`, `estimated_hours` — e sem o vocabulário do que não é.
+--
+-- ---------------------------------------------------------------------------
+-- O que a visita mede, e porquê
+-- ---------------------------------------------------------------------------
+--
+-- `area_sqm`, `estimated_hours` e `frequency_hint` são a razão de a visita
+-- existir: é o que se vai lá ver, e é o que vai pré-preencher as linhas do
+-- orçamento. Uma visita que não deixasse nada registado seria uma entrada de
+-- agenda, não uma etapa comercial.
+--
+-- ---------------------------------------------------------------------------
+-- O que esta migration NÃO faz
+-- ---------------------------------------------------------------------------
+--
+--   · não toca em `services`, `contracts`, `locations` nem em nada financeiro;
+--   · não cria orçamentos (103);
+--   · não mexe no calendário — a vista do calendário, se vier, lê esta tabela
+--     como camada sobreposta e não altera o modelo de `services`;
+--   · não publica nada no Realtime.
+--
+-- ---------------------------------------------------------------------------
+-- 🔴 SCHEMA_EFFECT != MIGRATION_PROVENANCE
+-- ---------------------------------------------------------------------------
+--
+-- Este ficheiro corria com `CREATE TABLE IF NOT EXISTS`. Parecia prudente e
+-- era o contrário: se `crm_visits` já existisse — criada à mão, por um SQL
+-- Editor, por um ensaio esquecido, por uma branch antiga — a migration
+-- adoptava esse objecto em silêncio e passava a alterar-lhe restrições,
+-- triggers, políticas e ACL, como se ela própria o tivesse feito.
+--
+-- Uma tabela existir não prova quem a criou. Só o ledger prova, e este
+-- projecto já pagou essa lição: `docs/LEDGER-RECONCILIATION-PENDING.md`
+-- existe porque migrations aplicadas fora do runner não deixaram linha, e
+-- durante semanas ninguém sabia distinguir «aplicada» de «materializada».
+--
+-- Por isso o portão abaixo, antes de tudo o resto. O estado esperado de uma
+-- aplicação canónica nova é:
+--
+--     102 no ledger = ABSENT   E   public.crm_visits = ABSENT
+--
+-- Qualquer outra combinação é desconhecida, e desconhecido falha fechado —
+-- com zero mutações, porque nada corre depois de um RAISE.
+--
+-- A cadeia de que a 102 depende é verificada pela mesma medida: as três
+-- migrations que a precedem têm de ter linha no ledger E o checksum do
+-- conteúdo canónico. Os valores pinados abaixo são os que produção tem hoje
+-- (leitura read-only, 2026-09-18) e batem com o que
+-- `checksumForNewMigration` calcula sobre o ficheiro deste repositório. O
+-- par LF/CRLF está pinado porque o ledger deste projecto mistura as duas
+-- representações por história — o que se quer apanhar é CONTEÚDO diferente,
+-- não fim-de-linha diferente.
+--
+-- ---------------------------------------------------------------------------
+-- 🔴 Não aplicar pelo SQL Editor
+-- ---------------------------------------------------------------------------
+--
+-- O portão abaixo NÃO impede o SQL Editor de correr este ficheiro: produção
+-- já tem as linhas da 101, 101a e 101b, por isso a cadeia passa, a tabela é
+-- criada — e o Editor não escreve no ledger. O resultado é precisamente o
+-- estado que o portão existe para apanhar: `EFFECT_WITHOUT_LEDGER`, criado
+-- por quem estava a tentar ser cuidadoso.
+--
+-- A regra é de procedimento, não de SQL: esta migration aplica-se PELO RUNNER
+-- CANÓNICO, que escreve o efeito e a linha na mesma transação. O portão
+-- protege a segunda aplicação, não a primeira.
+-- ============================================================================
+
+DO $proveniencia$
+DECLARE
+  v_ledger boolean;
+  v_tabela boolean;
+  v_faltam text[];
+  v_erradas text[];
+BEGIN
+  -- Sem ledger não há proveniência nenhuma que se possa provar. Esta
+  -- migration não corre à mão.
+  IF to_regclass('public._migrations') IS NULL THEN
+    RAISE EXCEPTION
+      'CRM_VISITS_102_LEDGER_AUSENTE: public._migrations não existe — a 102 só corre pelo runner canónico';
+  END IF;
+
+  v_ledger := EXISTS (
+    SELECT 1 FROM public._migrations WHERE name = '102_crm_visitas_comerciais.sql'
+  );
+  v_tabela := to_regclass('public.crm_visits') IS NOT NULL;
+
+  -- 🔴 Os quatro estados, cada um com o seu nome. Colapsá-los mascara drift:
+  --    «já aplicada» com a tabela desaparecida é uma coisa MUITO diferente de
+  --    «já aplicada» com a tabela lá — e só um nome próprio permite a quem
+  --    opera saber qual dos dois tem à frente.
+  --
+  --      ledger  tabela
+  --        0       0     → aplicar (o único caminho que segue)
+  --        0       1     → EFFECT_WITHOUT_LEDGER
+  --        1       0     → LEDGER_WITHOUT_EFFECT
+  --        1       1     → JA_APLICADA
+  IF v_ledger AND v_tabela THEN
+    RAISE EXCEPTION
+      'CRM_VISITS_102_JA_APLICADA: linha de ledger e tabela presentes — reaplicar alteraria restrições e ACL de uma tabela com dados';
+  ELSIF v_ledger AND NOT v_tabela THEN
+    RAISE EXCEPTION
+      'CRM_VISITS_102_LEDGER_WITHOUT_EFFECT: há linha de ledger da 102 mas public.crm_visits não existe — alguém desfez o efeito sem desfazer a proveniência; decida primeiro o que é verdade';
+  ELSIF NOT v_ledger AND v_tabela THEN
+    -- O objecto existe e a proveniência não. Não se adopta: quem o criou sabe
+    -- o que lá pôs, e esta migration não sabe.
+    RAISE EXCEPTION
+      'CRM_VISITS_102_EFFECT_WITHOUT_LEDGER: public.crm_visits já existe sem linha de ledger da 102 — estado desconhecido, nada foi alterado';
+  END IF;
+
+  SELECT array_agg(requisito.nome ORDER BY requisito.nome) INTO v_faltam
+    FROM (VALUES
+      ('101_crm_leads.sql'),
+      ('101a_crm_rpc_acl_hardening.sql'),
+      ('101b_identity_reconciliation.sql')
+    ) AS requisito(nome)
+   WHERE NOT EXISTS (
+     SELECT 1 FROM public._migrations m WHERE m.name = requisito.nome
+   );
+
+  IF v_faltam IS NOT NULL THEN
+    RAISE EXCEPTION
+      'CRM_VISITS_102_MISSING_PREREQUISITE_LEDGER: sem linha de ledger para % — a cadeia 101→101a→101b não está provada',
+      v_faltam;
+  END IF;
+
+  -- Um checksum NULL no ledger também cai aqui, de propósito: não saber é
+  -- indistinguível de estar errado.
+  SELECT array_agg(requisito.nome ORDER BY requisito.nome) INTO v_erradas
+    FROM (VALUES
+      ('101_crm_leads.sql',
+       '92fb13678187609c7951faaae6dcf3a3688f04694efb4b34c6f04e23aee46942',
+       '34b8faa0ff93f1e04f67e2674ae3c4c0a1862a161032ea757a3bb9a672673d3a'),
+      ('101a_crm_rpc_acl_hardening.sql',
+       '51aca907d2e9310f36d01901f5bb4911f8a951a536bcb9886071b0ef1d0528fb',
+       '38f3b18b2df003d06541b7b468b1a26206c36e8df3c320db87d268b8aa393c77'),
+      ('101b_identity_reconciliation.sql',
+       '33614ef362300bca1a4a9bff8928172b45f2418b9409bb8eaaaa2e1805f4e136',
+       'ec91be0fe7be42872931990b76cca0ec9159138a2f95dca0ca540d8537ee4537')
+    ) AS requisito(nome, lf, crlf)
+   WHERE NOT EXISTS (
+     SELECT 1 FROM public._migrations m
+      WHERE m.name = requisito.nome
+        AND m.checksum IN (requisito.lf, requisito.crlf)
+   );
+
+  IF v_erradas IS NOT NULL THEN
+    RAISE EXCEPTION
+      'CRM_VISITS_102_CHECKSUM_MISMATCH_PREREQUISITE: o ledger tem outro conteúdo para % — a cadeia sob a 102 não é a canónica',
+      v_erradas;
+  END IF;
+END
+$proveniencia$;
+
+DO $precondicoes$
+BEGIN
+  IF to_regclass('public.crm_leads') IS NULL THEN
+    RAISE EXCEPTION 'CRM_VISITS_102_PRECONDITION_FAILED: crm_leads ausente (a 101 não correu?)';
+  END IF;
+
+  IF to_regclass('public.crm_leads_id_company_unique') IS NULL THEN
+    RAISE EXCEPTION 'CRM_VISITS_102_PRECONDITION_FAILED: índice crm_leads_id_company_unique ausente (101)';
+  END IF;
+
+  IF to_regclass('public.clients_id_company_unique') IS NULL THEN
+    RAISE EXCEPTION 'CRM_VISITS_102_PRECONDITION_FAILED: índice clients_id_company_unique ausente (086)';
+  END IF;
+
+  -- A FK composta do responsável precisa da chave candidata que a 101 cria.
+  IF to_regclass('public.profiles_id_company_unique') IS NULL THEN
+    RAISE EXCEPTION 'CRM_VISITS_102_PRECONDITION_FAILED: índice profiles_id_company_unique ausente (101)';
+  END IF;
+
+  IF to_regprocedure('public.update_updated_at()') IS NULL
+     OR to_regprocedure('public.fn_capture_history()') IS NULL THEN
+    RAISE EXCEPTION 'CRM_VISITS_102_PRECONDITION_FAILED: update_updated_at()/fn_capture_history() ausentes';
+  END IF;
+
+  IF to_regprocedure('public.get_my_company_id()') IS NULL
+     OR to_regprocedure('public.get_my_role()') IS NULL THEN
+    RAISE EXCEPTION 'CRM_VISITS_102_PRECONDITION_FAILED: get_my_company_id()/get_my_role() ausentes (014)';
+  END IF;
+END
+$precondicoes$;
+
+-- 🔴 Sem `IF NOT EXISTS`, e de propósito. O portão acima já provou que a
+--    tabela não existe; se existisse aqui, alguma coisa correu entre as duas
+--    e o certo é rebentar, não adoptar.
+CREATE TABLE public.crm_visits (
+  id              uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  company_id      uuid NOT NULL REFERENCES public.companies(id) ON DELETE CASCADE,
+
+  -- ── A quem se vai ────────────────────────────────────────────────────────
+  -- Uma visita é a uma lead **ou** a um cliente que já existe (uma proposta de
+  -- serviço novo a quem já é cliente é uma visita comercial na mesma). Nunca
+  -- aos dois, nunca a nenhum — o CHECK abaixo trata disso.
+  lead_id         uuid,
+  client_id       uuid,
+
+  -- ── Quando e com quem ────────────────────────────────────────────────────
+  scheduled_start timestamptz NOT NULL,
+  scheduled_end   timestamptz NOT NULL,
+
+  -- 🔴 Um `profiles`, e nunca um `teams`. Uma visita é de uma pessoa, e pôr
+  --    aqui uma equipa faria a visita aparecer no espelho de equipas e na
+  --    escala — que é precisamente o que esta tabela existe para evitar.
+  --
+  --    Sem `REFERENCES` na coluna: a FK é COMPOSTA (ver secção das FKs). Uma
+  --    FK simples aceitaria o perfil de outra empresa, e as Server Actions
+  --    escrevem com service_role, que é BYPASSRLS.
+  assigned_to     uuid,
+
+  -- Morada própria: a da lead pode ser a da sede e a visita ser a outro sítio.
+  address         text,
+  lat             numeric(10,7),
+  lng             numeric(10,7),
+
+  -- ── Desfecho ─────────────────────────────────────────────────────────────
+  -- `nao_compareceu` é um estado próprio e não um cancelamento: quem marca uma
+  -- visita e não aparece diz alguma coisa sobre a oportunidade que um
+  -- «cancelada» não diz.
+  status          text NOT NULL DEFAULT 'agendada'
+                  CHECK (status IN ('agendada', 'realizada', 'nao_compareceu', 'cancelada')),
+  completed_at    timestamptz,
+  cancelled_at    timestamptz,
+  cancel_reason   text,
+
+  -- ── O que se foi lá medir ────────────────────────────────────────────────
+  outcome_notes   text,
+  area_sqm        numeric(10,2) CHECK (area_sqm IS NULL OR area_sqm > 0),
+  estimated_hours numeric(5,2)  CHECK (estimated_hours IS NULL OR estimated_hours > 0),
+  frequency_hint  text,
+
+  created_by      uuid,
+  created_at      timestamptz NOT NULL DEFAULT now(),
+  updated_at      timestamptz NOT NULL DEFAULT now(),
+
+  -- 🔴 Exactamente um destinatário. Sem isto, uma visita podia ficar órfã
+  --    (sem lead nem cliente) e não aparecer em ficha nenhuma.
+  CONSTRAINT crm_visits_um_destinatario
+    CHECK ((lead_id IS NOT NULL) <> (client_id IS NOT NULL)),
+
+  -- Uma janela que acaba antes de começar não é uma janela.
+  CONSTRAINT crm_visits_janela_valida
+    CHECK (scheduled_end > scheduled_start),
+
+  -- Um desfecho sem data é um desfecho que ninguém consegue situar no tempo.
+  CONSTRAINT crm_visits_realizada_tem_data
+    CHECK (status <> 'realizada' OR completed_at IS NOT NULL),
+  CONSTRAINT crm_visits_cancelada_tem_data
+    CHECK (status <> 'cancelada' OR cancelled_at IS NOT NULL)
+);
+
+COMMENT ON TABLE public.crm_visits IS
+  'Visita comercial: a deslocacao para ver o local e orcar. NAO e um servico e '
+  'nunca deve ser convertida num — nao tem equipa, nao tem ponto, nao tem valor '
+  'a facturar, e nao entra na escala, no mapa, nos relatorios operacionais nem '
+  'em getUnbilledServices. area_sqm/estimated_hours/frequency_hint sao o que se '
+  'mede no local e o que pre-preenche as linhas do orcamento. Se o calendario a '
+  'mostrar, le esta tabela como camada sobreposta, sem tocar no modelo de services.';
+
+-- As duas FKs compostas: o destinatário tem de ser da mesma empresa.
+ALTER TABLE public.crm_visits
+  DROP CONSTRAINT IF EXISTS crm_visits_lead_mesma_empresa;
+ALTER TABLE public.crm_visits
+  ADD CONSTRAINT crm_visits_lead_mesma_empresa
+  FOREIGN KEY (lead_id, company_id)
+  REFERENCES public.crm_leads (id, company_id)
+  ON DELETE CASCADE;
+
+ALTER TABLE public.crm_visits
+  DROP CONSTRAINT IF EXISTS crm_visits_cliente_mesma_empresa;
+ALTER TABLE public.crm_visits
+  ADD CONSTRAINT crm_visits_cliente_mesma_empresa
+  FOREIGN KEY (client_id, company_id)
+  REFERENCES public.clients (id, company_id)
+  ON DELETE RESTRICT;
+
+-- 🔴 Quem vai à visita e quem a marcou têm de ser da MESMA empresa.
+--
+--    `ON DELETE NO ACTION` e não `SET NULL`: numa FK composta o SET NULL poria
+--    `company_id` a NULL, que é NOT NULL, e o DELETE do perfil falharia com um
+--    erro incompreensível. Assim, apagar um perfil ainda responsável por
+--    visitas é bloqueado de forma explícita. (Neste projeto um colaborador que
+--    sai passa a `status = 'inativo'`; o perfil não é apagado.)
+ALTER TABLE public.crm_visits DROP CONSTRAINT IF EXISTS crm_visits_assigned_mesma_empresa;
+ALTER TABLE public.crm_visits
+  ADD CONSTRAINT crm_visits_assigned_mesma_empresa
+  FOREIGN KEY (assigned_to, company_id)
+  REFERENCES public.profiles (id, company_id)
+  ON DELETE NO ACTION;
+
+ALTER TABLE public.crm_visits DROP CONSTRAINT IF EXISTS crm_visits_created_by_mesma_empresa;
+ALTER TABLE public.crm_visits
+  ADD CONSTRAINT crm_visits_created_by_mesma_empresa
+  FOREIGN KEY (created_by, company_id)
+  REFERENCES public.profiles (id, company_id)
+  ON DELETE NO ACTION;
+
+-- A chave candidata que a 103 usa para amarrar `crm_quotes.visit_id` à mesma
+-- empresa. Fica aqui porque é desta tabela.
+CREATE UNIQUE INDEX IF NOT EXISTS crm_visits_id_company_unique
+  ON public.crm_visits (id, company_id);
+
+-- A agenda: «o que tenho para ver esta semana».
+CREATE INDEX IF NOT EXISTS idx_crm_visits_company_start
+  ON public.crm_visits (company_id, scheduled_start);
+
+-- As visitas de uma lead, na ficha dela.
+CREATE INDEX IF NOT EXISTS idx_crm_visits_lead
+  ON public.crm_visits (company_id, lead_id, scheduled_start);
+
+CREATE INDEX IF NOT EXISTS idx_crm_visits_client
+  ON public.crm_visits (company_id, client_id, scheduled_start);
+
+-- O acesso quente é a agenda por marcar; as já realizadas são história.
+CREATE INDEX IF NOT EXISTS idx_crm_visits_agendadas
+  ON public.crm_visits (company_id, scheduled_start)
+  WHERE status = 'agendada';
+
+DROP TRIGGER IF EXISTS crm_visits_updated_at ON public.crm_visits;
+CREATE TRIGGER crm_visits_updated_at
+  BEFORE UPDATE ON public.crm_visits
+  FOR EACH ROW EXECUTE FUNCTION public.update_updated_at();
+
+DROP TRIGGER IF EXISTS trg_history ON public.crm_visits;
+CREATE TRIGGER trg_history AFTER UPDATE OR DELETE ON public.crm_visits
+  FOR EACH ROW EXECUTE FUNCTION public.fn_capture_history();
+
+-- ── RLS e ACL — o modelo endurecido pós-084/085 ─────────────────────────────
+
+ALTER TABLE public.crm_visits ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "crm_visits_manager_select" ON public.crm_visits;
+CREATE POLICY "crm_visits_manager_select"
+  ON public.crm_visits
+  FOR SELECT
+  USING (
+    company_id = public.get_my_company_id()
+    AND public.get_my_role() IN ('admin', 'gestor')
+  );
+
+REVOKE ALL PRIVILEGES ON TABLE public.crm_visits FROM PUBLIC;
+REVOKE ALL PRIVILEGES ON TABLE public.crm_visits FROM anon;
+REVOKE ALL PRIVILEGES ON TABLE public.crm_visits FROM authenticated;
+REVOKE ALL PRIVILEGES ON TABLE public.crm_visits FROM service_role;
+
+GRANT SELECT ON TABLE public.crm_visits TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.crm_visits TO service_role;
+
+-- ── Pós-estado ──────────────────────────────────────────────────────────────
+
+DO $posestado$
+DECLARE
+  v_faltam text[];
+  v_rls boolean;
+BEGIN
+  SELECT array_agg(esperado.coluna) INTO v_faltam
+    FROM (VALUES
+      ('lead_id'), ('client_id'), ('scheduled_start'), ('scheduled_end'),
+      ('assigned_to'), ('status'), ('area_sqm'), ('estimated_hours'), ('outcome_notes')
+    ) AS esperado(coluna)
+   WHERE NOT EXISTS (
+     SELECT 1 FROM information_schema.columns c
+      WHERE c.table_schema = 'public' AND c.table_name = 'crm_visits'
+        AND c.column_name = esperado.coluna
+   );
+
+  IF v_faltam IS NOT NULL THEN
+    RAISE EXCEPTION 'CRM_VISITS_102_POSTSTATE_FAILED: colunas em falta %', v_faltam;
+  END IF;
+
+  -- 🔴 A ausência destas é tão importante como a presença das outras. Se
+  --    alguma aparecer, alguém está a transformar a visita num serviço — que
+  --    é exactamente o que o cabeçalho deste ficheiro existe para impedir.
+  SELECT array_agg(proibida.coluna) INTO v_faltam
+    FROM (VALUES ('team_id'), ('calculated_value'), ('payment_status'), ('hourly_rate')) AS proibida(coluna)
+   WHERE EXISTS (
+     SELECT 1 FROM information_schema.columns c
+      WHERE c.table_schema = 'public' AND c.table_name = 'crm_visits'
+        AND c.column_name = proibida.coluna
+   );
+
+  IF v_faltam IS NOT NULL THEN
+    RAISE EXCEPTION
+      'CRM_VISITS_102_POSTSTATE_FAILED: uma visita comercial não é um serviço — colunas indevidas %',
+      v_faltam;
+  END IF;
+
+  SELECT c.relrowsecurity INTO v_rls
+    FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+   WHERE n.nspname = 'public' AND c.relname = 'crm_visits';
+
+  IF NOT coalesce(v_rls, false) THEN
+    RAISE EXCEPTION 'CRM_VISITS_102_POSTSTATE_FAILED: RLS não ficou activa';
+  END IF;
+
+  SELECT array_agg(esperada.nome) INTO v_faltam
+    FROM (VALUES
+      ('crm_visits_um_destinatario'),
+      ('crm_visits_janela_valida'),
+      ('crm_visits_lead_mesma_empresa'),
+      ('crm_visits_cliente_mesma_empresa'),
+      ('crm_visits_assigned_mesma_empresa'),
+      ('crm_visits_created_by_mesma_empresa')
+    ) AS esperada(nome)
+   WHERE NOT EXISTS (
+     SELECT 1 FROM pg_constraint
+      WHERE conname = esperada.nome AND conrelid = 'public.crm_visits'::regclass
+   );
+
+  IF v_faltam IS NOT NULL THEN
+    RAISE EXCEPTION 'CRM_VISITS_102_POSTSTATE_FAILED: restrições em falta %', v_faltam;
+  END IF;
+
+  IF to_regclass('public.crm_visits_id_company_unique') IS NULL THEN
+    RAISE EXCEPTION 'CRM_VISITS_102_POSTSTATE_FAILED: chave candidata (id, company_id) ausente — a 103 precisa dela';
+  END IF;
+END
+$posestado$;
