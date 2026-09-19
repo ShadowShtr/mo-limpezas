@@ -344,6 +344,12 @@ export type Database = {
         Update: { summary?: string; occurred_at?: string; updated_at?: string };
         Relationships: [];
       };
+      crm_visits: {
+        Row: { id: string; company_id: string; lead_id: string | null; client_id: string | null; scheduled_start: string; scheduled_end: string; assigned_to: string | null; address: string | null; lat: number | null; lng: number | null; status: string; completed_at: string | null; cancelled_at: string | null; cancel_reason: string | null; outcome_notes: string | null; area_sqm: number | null; estimated_hours: number | null; frequency_hint: string | null; created_by: string | null; created_at: string; updated_at: string };
+        Insert: { company_id: string; lead_id?: string | null; client_id?: string | null; scheduled_start: string; scheduled_end: string; assigned_to?: string | null; address?: string | null; lat?: number | null; lng?: number | null; status?: string; created_by?: string | null };
+        Update: { lead_id?: string | null; client_id?: string | null; scheduled_start?: string; scheduled_end?: string; assigned_to?: string | null; address?: string | null; lat?: number | null; lng?: number | null; status?: string; completed_at?: string | null; cancelled_at?: string | null; cancel_reason?: string | null; outcome_notes?: string | null; area_sqm?: number | null; estimated_hours?: number | null; frequency_hint?: string | null; updated_at?: string };
+        Relationships: [];
+      };
     };
     Views: {
       services_full: {
