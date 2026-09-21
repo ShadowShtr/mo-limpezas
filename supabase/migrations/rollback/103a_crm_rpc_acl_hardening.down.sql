@@ -46,17 +46,24 @@
 DO $rollback103a$
 DECLARE
   c_migration CONSTANT text := '103a_crm_rpc_acl_hardening.sql';
-  c_lf   CONSTANT text := '7b1ea9168085220cd1c315700257668e4225791e21957794a0d1b85f85694ee8';
-  c_crlf CONSTANT text := '14183a84f4f67f8558ecde5cc958c82401da55678b613e692648ebd239b832b4';
+  c_lf   CONSTANT text := 'e7155eefd62ad6b02b4326ab199cf2bdd0e69986bc58aa9c5f25cbafa570ba1e';
+  c_crlf CONSTANT text := 'de99d39abe19ed97442cf57d7a76451bd310a6fa1f6be161362c70c59fa611e1';
 
   c_criar  CONSTANT text := 'public.create_crm_quote_with_items(uuid, uuid, uuid, uuid, text, integer, date, date, text, numeric, boolean, numeric, text, jsonb, text, text, text, uuid, jsonb)';
   c_rever  CONSTANT text := 'public.revise_crm_quote(uuid, uuid, uuid, date, date, numeric, boolean, numeric, text, jsonb)';
   c_estado CONSTANT text := 'public.set_crm_quote_status(uuid, uuid, uuid, text, text)';
 
+  c_103 CONSTANT text := '103_crm_orcamentos.sql';
+  c_103_checksum CONSTANT text :=
+    '6893946882e2df1af16c79158f3bcbe0324b7cae92845e39d8cb389f8e0260d0';
+
   v_confirmacao text;
   v_checksum text;
+  v_checksum_103 text;
   v_ledger boolean;
   v_faltam text[];
+  v_estados text[];
+  v_post integer;
   f record;
 BEGIN
   -- ── A confirmação explícita, antes de tudo ───────────────────────────────
@@ -98,6 +105,74 @@ BEGIN
   IF v_faltam IS NOT NULL THEN
     RAISE EXCEPTION
       'CRM_103A_ROLLBACK_PRECONDITION_FAILED: RPC em falta ou com outra assinatura: %', v_faltam;
+  END IF;
+
+  -- ── A 103a só existe sobre a 103, e sobre ESTA 103 ───────────────────────
+  --
+  -- Se a proveniência da fundação já estiver partida, não se reabre a ACL nem
+  -- se apaga a linha da 103a como se o mundo estivesse normal.
+  SELECT checksum INTO v_checksum_103 FROM public._migrations WHERE name = c_103;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION
+      'CRM_103A_ROLLBACK_103_AUSENTE: % não está no ledger — a fundação sobre a qual a 103a existe desapareceu; nada foi alterado', c_103;
+  END IF;
+
+  IF v_checksum_103 IS DISTINCT FROM c_103_checksum THEN
+    RAISE EXCEPTION
+      'CRM_103A_ROLLBACK_103_CHECKSUM_DIVERGENTE: o ledger guarda % para a 103 — a fundação não é a que a 103a endureceu; nada foi alterado',
+      coalesce(v_checksum_103, 'NULL');
+  END IF;
+
+  -- ── O que está à frente tem de ser EXACTAMENTE o que a 103a deixou ───────
+  --
+  -- 🔴 Sem isto, o rollback reabria a ACL por cima de um estado que já não
+  --    era o dele: uma RPC re-granted à mão, um search_path trocado, um
+  --    SECURITY DEFINER aparecido. Repor «o estado anterior» a partir de um
+  --    presente desconhecido não repõe nada — inventa.
+  --
+  --    `proacl IS NULL` conta como drift: ACL nula é o default, e o default
+  --    inclui EXECUTE para PUBLIC.
+  WITH alvo(assinatura) AS (VALUES (c_criar), (c_rever), (c_estado)),
+  fn AS (
+    SELECT a.assinatura, p.oid, p.prosecdef, p.proacl, p.proconfig
+      FROM alvo a JOIN pg_proc p ON p.oid = to_regprocedure(a.assinatura)
+  ),
+  acl AS (
+    SELECT fn.assinatura,
+           bool_or(coalesce(g.rolname, 'PUBLIC') = 'PUBLIC') AS tem_public,
+           bool_or(g.rolname = 'anon')                        AS tem_anon,
+           bool_or(g.rolname = 'authenticated')               AS tem_auth,
+           bool_or(g.rolname = 'service_role')                AS tem_sr
+      FROM fn
+      CROSS JOIN LATERAL aclexplode(fn.proacl) x
+      LEFT JOIN pg_roles g ON g.oid = x.grantee
+     WHERE x.privilege_type = 'EXECUTE'
+     GROUP BY fn.assinatura
+  )
+  SELECT array_agg(
+           fn.assinatura || ' = ' ||
+           CASE
+             WHEN fn.proacl IS NULL THEN 'DRIFT(proacl NULL)'
+             WHEN fn.prosecdef       THEN 'DRIFT(SECURITY DEFINER)'
+             WHEN NOT coalesce(acl.tem_public, false)
+              AND NOT coalesce(acl.tem_anon, false)
+              AND NOT coalesce(acl.tem_auth, false)
+              AND coalesce(acl.tem_sr, false)
+              AND 'search_path=pg_catalog, public' = ANY(coalesce(fn.proconfig, '{}'))
+               THEN 'POST'
+             ELSE 'DRIFT'
+           END
+           ORDER BY fn.assinatura)
+    INTO v_estados
+    FROM fn LEFT JOIN acl ON acl.assinatura = fn.assinatura;
+
+  SELECT count(*) FILTER (WHERE e LIKE '% = POST') INTO v_post FROM unnest(v_estados) AS e;
+
+  IF v_post <> 3 THEN
+    RAISE EXCEPTION
+      'CRM_103A_ROLLBACK_POSTSTATE_DRIFT: o estado à frente já não é o que a 103a deixou — %. Nada foi alterado e a linha de ledger ficou intacta',
+      array_to_string(v_estados, ' | ');
   END IF;
 
   -- ── Repor o estado anterior: grants nominais e search_path herdado ───────

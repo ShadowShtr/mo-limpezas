@@ -5128,9 +5128,9 @@
         "service-role"
       ],
       "signals": {
-        "serviceRole": 9,
+        "serviceRole": 15,
         "write": 1,
-        "sqlWrite": 20
+        "sqlWrite": 36
       },
       "action": "nenhuma",
       "reason": "suite de testes — corre por convenção do vitest",
@@ -24653,7 +24653,7 @@
         "service-role"
       ],
       "signals": {
-        "serviceRole": 11,
+        "serviceRole": 14,
         "sqlWrite": 6
       },
       "action": "nenhuma",
@@ -25330,8 +25330,11 @@
       "autoLoaded": false,
       "referencedBy": [],
       "sideEffects": [],
-      "risks": [],
+      "risks": [
+        "service-role"
+      ],
       "signals": {
+        "serviceRole": 1,
         "sqlWrite": 4
       },
       "action": "nenhuma",

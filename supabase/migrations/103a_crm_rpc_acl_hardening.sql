@@ -84,8 +84,9 @@ DECLARE
   c_estado CONSTANT text := 'public.set_crm_quote_status(uuid, uuid, uuid, text, text)';
 
   v_ledger boolean;
-  v_fechadas integer;
-  v_search integer;
+  v_estados text[];
+  v_pre integer;
+  v_post integer;
   v_faltam text[];
   v_checksum text;
 BEGIN
@@ -127,40 +128,95 @@ BEGIN
     RAISE EXCEPTION 'CRM_103A_PRECONDITION_FAILED: papéis em falta: %', v_faltam;
   END IF;
 
-  -- ── Proveniência: ledger 103a × efeito do hotfix ─────────────────────────
+  -- ── Proveniência: ledger 103a × estado CANÓNICO de cada RPC ──────────────
   --
-  -- O «efeito» desta migration são duas coisas, medidas por função: a ACL sem
-  -- `anon`/`authenticated`, e o `search_path` fixo.
+  -- 🔴 Classificar CADA função, e só depois decidir. Contar «quantas têm a ACL
+  --    fechada» e «quantas têm algum search_path» em separado é insuficiente:
+  --    uma RPC com a ACL do poststate e o search_path do prestate contava para
+  --    os dois totais e passava como se estivesse coerente. Um estado misto é
+  --    desconhecido, e desconhecido falha fechado.
+  --
+  -- Cada função é exactamente uma de três coisas:
+  --
+  --   PRE     o que a 103 deixou: PUBLIC não, anon sim, authenticated sim,
+  --           service_role sim, sem search_path fixo, SECURITY INVOKER
+  --   POST    o que a 103a deixa: só service_role, search_path EXACTAMENTE
+  --           `pg_catalog, public`, SECURITY INVOKER
+  --   UNKNOWN tudo o resto
+  --
+  -- 🔴 `proacl IS NULL` é UNKNOWN, nunca «fechada». Numa função, ACL nula é o
+  --    default do PostgreSQL — e o default INCLUI `EXECUTE` para PUBLIC. Lê-la
+  --    como «ninguém tem EXECUTE» seria ler ao contrário.
   v_ledger := EXISTS (SELECT 1 FROM public._migrations WHERE name = '103a_crm_rpc_acl_hardening.sql');
 
-  SELECT count(*) INTO v_fechadas
-    FROM (VALUES (c_criar), (c_rever), (c_estado)) AS f(assinatura)
-   WHERE NOT EXISTS (
-     SELECT 1
-       FROM pg_proc p
-       CROSS JOIN LATERAL aclexplode(p.proacl) a
-       LEFT JOIN pg_roles g ON g.oid = a.grantee
-      WHERE p.oid = to_regprocedure(f.assinatura)
-        AND a.privilege_type = 'EXECUTE'
-        AND coalesce(g.rolname, 'PUBLIC') IN ('PUBLIC', 'anon', 'authenticated')
-   );
+  WITH alvo(assinatura) AS (VALUES (c_criar), (c_rever), (c_estado)),
+  fn AS (
+    SELECT a.assinatura, p.oid, p.prosecdef, p.proacl, p.proconfig
+      FROM alvo a JOIN pg_proc p ON p.oid = to_regprocedure(a.assinatura)
+  ),
+  acl AS (
+    SELECT fn.assinatura,
+           bool_or(coalesce(g.rolname, 'PUBLIC') = 'PUBLIC')   AS tem_public,
+           bool_or(g.rolname = 'anon')                          AS tem_anon,
+           bool_or(g.rolname = 'authenticated')                 AS tem_auth,
+           bool_or(g.rolname = 'service_role')                  AS tem_sr
+      FROM fn
+      CROSS JOIN LATERAL aclexplode(fn.proacl) x
+      LEFT JOIN pg_roles g ON g.oid = x.grantee
+     WHERE x.privilege_type = 'EXECUTE'
+     GROUP BY fn.assinatura
+  )
+  SELECT array_agg(
+           fn.assinatura || ' = ' ||
+           CASE
+             -- ACL por omissão: PUBLIC tem EXECUTE. Não é estado canónico nenhum.
+             WHEN fn.proacl IS NULL THEN 'UNKNOWN(proacl NULL)'
+             WHEN fn.prosecdef       THEN 'UNKNOWN(SECURITY DEFINER)'
+             WHEN NOT coalesce(acl.tem_public, false)
+              AND coalesce(acl.tem_anon, false)
+              AND coalesce(acl.tem_auth, false)
+              AND coalesce(acl.tem_sr, false)
+              AND NOT EXISTS (SELECT 1 FROM unnest(coalesce(fn.proconfig, '{}')) c
+                               WHERE c LIKE 'search_path=%')
+               THEN 'PRE'
+             WHEN NOT coalesce(acl.tem_public, false)
+              AND NOT coalesce(acl.tem_anon, false)
+              AND NOT coalesce(acl.tem_auth, false)
+              AND coalesce(acl.tem_sr, false)
+              AND 'search_path=pg_catalog, public' = ANY(coalesce(fn.proconfig, '{}'))
+               THEN 'POST'
+             ELSE 'UNKNOWN'
+           END
+           ORDER BY fn.assinatura)
+    INTO v_estados
+    FROM fn LEFT JOIN acl ON acl.assinatura = fn.assinatura;
 
-  SELECT count(*) INTO v_search
-    FROM (VALUES (c_criar), (c_rever), (c_estado)) AS f(assinatura)
-    JOIN pg_proc p ON p.oid = to_regprocedure(f.assinatura)
-   WHERE p.proconfig IS NOT NULL
-     AND EXISTS (SELECT 1 FROM unnest(p.proconfig) cfg WHERE cfg LIKE 'search_path=%');
+  SELECT count(*) FILTER (WHERE e LIKE '% = PRE'),
+         count(*) FILTER (WHERE e LIKE '% = POST')
+    INTO v_pre, v_post
+    FROM unnest(v_estados) AS e;
 
-  IF v_ledger AND v_fechadas = 3 AND v_search = 3 THEN
+  IF v_ledger AND v_post = 3 THEN
     RAISE EXCEPTION
-      'CRM_103A_JA_APLICADA: linha de ledger e as três RPC já fechadas — nada a fazer';
+      'CRM_103A_JA_APLICADA: linha de ledger e as três RPC no estado canónico pós-103a — nada a fazer';
+
   ELSIF v_ledger THEN
+    -- Linha presente sem o poststate completo: alguém desfez parte do
+    -- endurecimento, ou nunca chegou a ficar inteiro.
     RAISE EXCEPTION
-      'CRM_103A_LEDGER_WITHOUT_EFFECT: há linha de ledger da 103a mas só % de 3 RPC têm a ACL fechada e % de 3 têm search_path fixo — alguém desfez parte do endurecimento; decida primeiro o que é verdade',
-      v_fechadas, v_search;
-  ELSIF v_fechadas = 3 AND v_search = 3 THEN
+      'CRM_103A_LEDGER_WITHOUT_EFFECT: há linha de ledger da 103a mas o estado não é o pós-103a — %',
+      array_to_string(v_estados, ' | ');
+
+  ELSIF v_post = 3 THEN
     RAISE EXCEPTION
-      'CRM_103A_EFFECT_WITHOUT_LEDGER: as três RPC já estão fechadas e com search_path fixo, mas não há linha de ledger da 103a — estado desconhecido, nada foi alterado';
+      'CRM_103A_EFFECT_WITHOUT_LEDGER: as três RPC já estão no estado pós-103a sem linha de ledger — estado desconhecido, nada foi alterado';
+
+  ELSIF v_pre <> 3 THEN
+    -- 🔴 Nem tudo PRE nem tudo POST: mistura. Não se normaliza o que não se
+    --    percebe — aplicar aqui seria adoptar um estado que ninguém explicou.
+    RAISE EXCEPTION
+      'CRM_103A_PARTIAL_OR_UNKNOWN_EFFECT: as RPC não estão todas no estado pré-103a — %',
+      array_to_string(v_estados, ' | ');
   END IF;
 END
 $proveniencia$;

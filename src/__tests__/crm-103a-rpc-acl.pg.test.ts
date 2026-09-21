@@ -319,6 +319,154 @@ describe("proveniência e precondições da 103a", () => {
 });
 
 // ---------------------------------------------------------------------------
+// 🔴 ESTADO PARCIAL OU MISTO.
+//
+//    A primeira versão deste gate contava, em separado, «quantas RPC têm a ACL
+//    fechada» e «quantas têm algum search_path». Uma função com a ACL do
+//    poststate e o search_path do prestate contava para os dois totais — e com
+//    duas fechadas e uma aberta, a migration seguia e normalizava um estado que
+//    ninguém tinha explicado.
+//
+//    Agora cada função é classificada como PRE, POST ou UNKNOWN, e só depois se
+//    decide. Nem tudo PRE nem tudo POST ⇒ FAIL CLOSED.
+// ---------------------------------------------------------------------------
+describe("estado parcial nunca é adoptado", () => {
+  /** Nada mudou: a migration não chegou a escrever. */
+  async function nadaMudou(): Promise<void> {
+    const { rows } = await pool.query(
+      "SELECT count(*)::int n FROM public._migrations WHERE name=$1", [NOME_103A]);
+    expect(rows[0].n, "não pode ter registado ledger").toBe(0);
+  }
+
+  it("🔴 só UMA RPC fechada à mão: FAIL CLOSED", LENTO, async () => {
+    await palco(false);
+    await pool.query(`REVOKE ALL ON FUNCTION ${RPCS[0]} FROM PUBLIC, anon, authenticated`);
+
+    await expect(pool.query(lerSql(M_103A)))
+      .rejects.toThrow(/PARTIAL_OR_UNKNOWN_EFFECT/);
+    await nadaMudou();
+    // A que estava aberta continua aberta: zero mutações.
+    expect(await quemExecuta(RPCS[1])).toContain("anon");
+  });
+
+  it("🔴 só UMA RPC com search_path: FAIL CLOSED", LENTO, async () => {
+    await palco(false);
+    await pool.query(`ALTER FUNCTION ${RPCS[1]} SET search_path = pg_catalog, public`);
+
+    await expect(pool.query(lerSql(M_103A)))
+      .rejects.toThrow(/PARTIAL_OR_UNKNOWN_EFFECT/);
+    await nadaMudou();
+  });
+
+  it("🔴 ACL do poststate com search_path do prestate na mesma RPC: FAIL CLOSED", LENTO, async () => {
+    // O caso que as contagens separadas deixavam passar.
+    await palco(false);
+    await pool.query(`REVOKE ALL ON FUNCTION ${RPCS[0]} FROM PUBLIC, anon, authenticated`);
+    await pool.query(`REVOKE ALL ON FUNCTION ${RPCS[1]} FROM PUBLIC, anon, authenticated`);
+    await pool.query(`REVOKE ALL ON FUNCTION ${RPCS[2]} FROM PUBLIC, anon, authenticated`);
+    // Só duas ganham search_path — a terceira fica meio-feita.
+    await pool.query(`ALTER FUNCTION ${RPCS[0]} SET search_path = pg_catalog, public`);
+    await pool.query(`ALTER FUNCTION ${RPCS[1]} SET search_path = pg_catalog, public`);
+
+    await expect(pool.query(lerSql(M_103A)))
+      .rejects.toThrow(/PARTIAL_OR_UNKNOWN_EFFECT/);
+    await nadaMudou();
+  });
+
+  it("🔴 search_path com outro valor: não é poststate nem prestate", LENTO, async () => {
+    await palco(false);
+    for (const rpc of RPCS) {
+      await pool.query(`REVOKE ALL ON FUNCTION ${rpc} FROM PUBLIC, anon, authenticated`);
+      await pool.query(`ALTER FUNCTION ${rpc} SET search_path = public`);
+    }
+
+    await expect(pool.query(lerSql(M_103A)))
+      .rejects.toThrow(/PARTIAL_OR_UNKNOWN_EFFECT/);
+    await nadaMudou();
+  });
+
+  // 🔴 Numa FUNÇÃO, `proacl IS NULL` é o default do PostgreSQL — e o default
+  //    INCLUI EXECUTE para PUBLIC. Contá-lo como «fechada» seria ler ao
+  //    contrário, e deixaria passar a função mais aberta de todas.
+  //
+  //    Como se chega lá: uma ACL materializada nunca volta a NULL (medido —
+  //    depois de um REVOKE ou GRANT, fica). Mas um `DROP` + `CREATE` num
+  //    schema sem DEFAULT PRIVILEGES devolve uma função com `proacl` nulo.
+  //    É o que este ensaio reproduz, em vez de o presumir.
+  it("🔴 proacl NULL nunca conta como ACL fechada", LENTO, async () => {
+    await palco(false);
+
+    await pool.query(`
+      ALTER DEFAULT PRIVILEGES IN SCHEMA public
+        REVOKE EXECUTE ON FUNCTIONS FROM anon, authenticated, service_role`);
+    await pool.query(`DROP FUNCTION ${RPCS[2]}`);
+    await pool.query(`
+      CREATE FUNCTION public.set_crm_quote_status(
+        p_company_id uuid, p_quote_id uuid, p_actor uuid, p_status text, p_reason text)
+      RETURNS void LANGUAGE sql AS $f$ SELECT NULL::void $f$`);
+
+    const { rows } = await pool.query(
+      "SELECT proacl IS NULL AS nula FROM pg_proc WHERE oid = $1::regprocedure", [RPCS[2]]);
+    expect(rows[0].nula, "o cenário tem de ser mesmo reproduzido").toBe(true);
+
+    await expect(pool.query(lerSql(M_103A)))
+      .rejects.toThrow(/PARTIAL_OR_UNKNOWN_EFFECT/);
+    await nadaMudou();
+  });
+
+  it("🔴 uma RPC em SECURITY DEFINER é estado desconhecido", LENTO, async () => {
+    await palco(false);
+    await pool.query(`ALTER FUNCTION ${RPCS[2]} SECURITY DEFINER`);
+
+    await expect(pool.query(lerSql(M_103A)))
+      .rejects.toThrow(/PARTIAL_OR_UNKNOWN_EFFECT/);
+    await nadaMudou();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 🔴 JA_APLICADA tem de significar o poststate INTEIRO.
+//
+//    Com contagens fracas, bastava «3 fechadas e 3 com algum search_path» —
+//    e isso continuava verdade com `service_role` sem EXECUTE, ou com o
+//    search_path errado. Dizer «já aplicada» nesses casos é dizer que está
+//    tudo bem a quem tem a aplicação partida.
+// ---------------------------------------------------------------------------
+describe("ledger presente com estado que não é o poststate", () => {
+  it("🔴 service_role sem EXECUTE: não é JA_APLICADA", LENTO, async () => {
+    await palco(true);
+    await pool.query(`REVOKE EXECUTE ON FUNCTION ${RPCS[0]} FROM service_role`);
+
+    await expect(pool.query(lerSql(M_103A)))
+      .rejects.toThrow(/LEDGER_WITHOUT_EFFECT/);
+  });
+
+  it("🔴 search_path com outro valor: não é JA_APLICADA", LENTO, async () => {
+    await palco(true);
+    await pool.query(`ALTER FUNCTION ${RPCS[1]} SET search_path = public`);
+
+    await expect(pool.query(lerSql(M_103A)))
+      .rejects.toThrow(/LEDGER_WITHOUT_EFFECT/);
+  });
+
+  it("🔴 search_path removido: não é JA_APLICADA", LENTO, async () => {
+    await palco(true);
+    await pool.query(`ALTER FUNCTION ${RPCS[2]} RESET search_path`);
+
+    await expect(pool.query(lerSql(M_103A)))
+      .rejects.toThrow(/LEDGER_WITHOUT_EFFECT/);
+  });
+
+  it("🔴 SECURITY DEFINER aparecido: não é JA_APLICADA", LENTO, async () => {
+    await palco(true);
+    await pool.query(`ALTER FUNCTION ${RPCS[0]} SECURITY DEFINER`);
+
+    await expect(pool.query(lerSql(M_103A)))
+      .rejects.toThrow(/LEDGER_WITHOUT_EFFECT/);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // 🔴 O rollback reabre uma porta. Tem de custar mais do que um enter.
 // ---------------------------------------------------------------------------
 describe("rollback — reabrir exige dizê-lo", () => {
@@ -373,6 +521,74 @@ describe("rollback — reabrir exige dizê-lo", () => {
     expect(rows[0].i).toBe("crm_quote_items");
     expect(rows[0].ledger103, "a linha da 103 não é desta migration").toBe(1);
     expect(rows[0].prefixo).toBe(1);
+  });
+
+  // -------------------------------------------------------------------------
+  // 🔴 O rollback tem de provar que o presente é o que ele próprio deixou.
+  //
+  //    Sem isto, reabria a ACL por cima de um estado que já não era o dele —
+  //    uma RPC re-granted à mão, um search_path trocado. Repor «o estado
+  //    anterior» a partir de um presente desconhecido não repõe: inventa.
+  // -------------------------------------------------------------------------
+  const DRIFTS: ReadonlyArray<readonly [string, string]> = [
+    ["anon re-granted à mão", `GRANT EXECUTE ON FUNCTION ${RPCS[0]} TO anon`],
+    ["PUBLIC ganhou EXECUTE", `GRANT EXECUTE ON FUNCTION ${RPCS[1]} TO PUBLIC`],
+    ["service_role perdeu EXECUTE", `REVOKE EXECUTE ON FUNCTION ${RPCS[2]} FROM service_role`],
+    ["search_path mudou", `ALTER FUNCTION ${RPCS[0]} SET search_path = public`],
+    ["search_path desapareceu", `ALTER FUNCTION ${RPCS[1]} RESET search_path`],
+    ["SECURITY DEFINER apareceu", `ALTER FUNCTION ${RPCS[2]} SECURITY DEFINER`],
+  ];
+
+  for (const [nome, ddl] of DRIFTS) {
+    it(`🔴 rollback com drift (${nome}): RECUSA e ledger intacto`, LENTO, async () => {
+      await palco(true);
+      await pool.query(ddl);
+
+      const c = new pg.Client({ ...container.connection });
+      await c.connect();
+      try {
+        await c.query("BEGIN");
+        await c.query("SET LOCAL crm.reabrir_acl_103a = 'confirmo'");
+        await expect(c.query(lerSql(ROLLBACK_103A)))
+          .rejects.toThrow(/ROLLBACK_POSTSTATE_DRIFT/);
+        await c.query("ROLLBACK");
+      } finally { await c.end(); }
+
+      const { rows } = await pool.query(
+        "SELECT count(*)::int n FROM public._migrations WHERE name=$1", [NOME_103A]);
+      expect(rows[0].n, "a linha da 103a tem de ficar").toBe(1);
+    });
+  }
+
+  it("🔴 rollback com a 103 fora do ledger: RECUSA", LENTO, async () => {
+    await palco(true);
+    await pool.query("DELETE FROM public._migrations WHERE name=$1", [NOME_103]);
+
+    const c = new pg.Client({ ...container.connection });
+    await c.connect();
+    try {
+      await c.query("BEGIN");
+      await c.query("SET LOCAL crm.reabrir_acl_103a = 'confirmo'");
+      await expect(c.query(lerSql(ROLLBACK_103A)))
+        .rejects.toThrow(/ROLLBACK_103_AUSENTE/);
+      await c.query("ROLLBACK");
+    } finally { await c.end(); }
+  });
+
+  it("🔴 rollback com checksum divergente da 103: RECUSA", LENTO, async () => {
+    await palco(true);
+    await pool.query("UPDATE public._migrations SET checksum=$1 WHERE name=$2",
+      ["0".repeat(64), NOME_103]);
+
+    const c = new pg.Client({ ...container.connection });
+    await c.connect();
+    try {
+      await c.query("BEGIN");
+      await c.query("SET LOCAL crm.reabrir_acl_103a = 'confirmo'");
+      await expect(c.query(lerSql(ROLLBACK_103A)))
+        .rejects.toThrow(/ROLLBACK_103_CHECKSUM_DIVERGENTE/);
+      await c.query("ROLLBACK");
+    } finally { await c.end(); }
   });
 
   it("🔴 sem linha de ledger da 103a, o rollback recusa", LENTO, async () => {
