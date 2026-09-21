@@ -1,14 +1,14 @@
 {
   "generatedBy": "scripts/audit-file-inventory.mjs",
-  "totalFiles": 942,
+  "totalFiles": 945,
   "byStatus": {
-    "MANTER": 918,
+    "MANTER": 921,
     "STANDBY": 24
   },
   "byCategory": {
-    "test": 223,
+    "test": 224,
     "route-ui": 150,
-    "migration": 136,
+    "migration": 138,
     "lib": 78,
     "script": 62,
     "domain": 52,
@@ -29,7 +29,7 @@
     "supabase-other": 2
   },
   "byConfidence": {
-    "alta": 920,
+    "alta": 923,
     "média": 16,
     "baixa": 6
   },
@@ -5083,6 +5083,36 @@
       }
     },
     {
+      "path": "src/__tests__/crm-103-orcamentos.pg.test.ts",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [
+        "write"
+      ],
+      "risks": [
+        "service-role"
+      ],
+      "signals": {
+        "serviceRole": 7,
+        "write": 1,
+        "sqlWrite": 53
+      },
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
       "path": "src/__tests__/crm-actions-guard.test.ts",
       "category": "test",
       "status": "MANTER",
@@ -6829,7 +6859,7 @@
       "category": "test",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 6,
+      "consumers": 7,
       "consumerSample": [
         "scripts/audit-identity-drift-manifest.ts",
         "src/__tests__/canonical-path-101b.pg.test.ts",
@@ -6861,7 +6891,7 @@
       "category": "test",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 18,
+      "consumers": 19,
       "consumerSample": [
         "scripts/audit-identity-drift-manifest.ts",
         "src/__tests__/bank-reconciliation-period-atomic.pg.test.ts",
@@ -6887,7 +6917,7 @@
       "category": "test",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 11,
+      "consumers": 12,
       "consumerSample": [
         "scripts/audit-identity-drift-manifest.ts",
         "src/__tests__/canonical-path-101b.pg.test.ts",
@@ -13180,7 +13210,9 @@
         "src/__tests__/finance-period-view-identity.test.tsx"
       ],
       "autoLoaded": false,
-      "referencedBy": [],
+      "referencedBy": [
+        "docs"
+      ],
       "sideEffects": [],
       "risks": [],
       "signals": {
@@ -13209,7 +13241,9 @@
         "src/__tests__/pagamentos-fixos-variaveis-regressao.test.tsx"
       ],
       "autoLoaded": false,
-      "referencedBy": [],
+      "referencedBy": [
+        "docs"
+      ],
       "sideEffects": [
         "realtime"
       ],
@@ -17274,7 +17308,9 @@
         "src/components/layout/dashboard-shell.tsx"
       ],
       "autoLoaded": false,
-      "referencedBy": [],
+      "referencedBy": [
+        "docs"
+      ],
       "sideEffects": [
         "network"
       ],
@@ -19776,7 +19812,9 @@
         "src/app/(dashboard)/dashboard/crm/visitas/_components/visit-outcome-sheet.tsx"
       ],
       "autoLoaded": false,
-      "referencedBy": [],
+      "referencedBy": [
+        "docs"
+      ],
       "sideEffects": [],
       "risks": [],
       "signals": {},
@@ -24551,6 +24589,27 @@
       "manualDecision": false
     },
     {
+      "path": "supabase/migrations/103_crm_orcamentos.sql",
+      "category": "migration",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [
+        "service-role"
+      ],
+      "signals": {
+        "serviceRole": 9,
+        "sqlWrite": 66
+      },
+      "action": "nenhuma",
+      "reason": "migration versionada — histórico do schema, nunca se apaga",
+      "manualDecision": false
+    },
+    {
       "path": "supabase/migrations/20260608_new_features.sql",
       "category": "migration",
       "status": "MANTER",
@@ -25187,6 +25246,24 @@
       "risks": [],
       "signals": {
         "sqlWrite": 11
+      },
+      "action": "nenhuma",
+      "reason": "migration versionada — histórico do schema, nunca se apaga",
+      "manualDecision": false
+    },
+    {
+      "path": "supabase/migrations/rollback/103_crm_orcamentos.down.sql",
+      "category": "migration",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "sqlWrite": 24
       },
       "action": "nenhuma",
       "reason": "migration versionada — histórico do schema, nunca se apaga",
