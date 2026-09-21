@@ -87,13 +87,22 @@
 -- migration era adoptada em silêncio, e a partir daí esta migration passava a
 -- alterar-lhe restrições, triggers, políticas e ACL como se a tivesse feito.
 --
--- Os quatro estados, cada um com o seu nome, porque colapsá-los mascara drift:
+-- Cada estado com o seu nome, porque colapsá-los mascara drift. E o que se
+-- conta não é «a tabela existe» — é quantos dos DOZE efeitos exclusivos da 103
+-- estão de pé: as duas tabelas, os cinco índices, as três RPC, a função do
+-- trigger e a coluna `company_settings.quote_prefix`.
 --
---     ledger  tabela
---       0       0     → aplicar (o único caminho que segue)
---       0       1     → EFFECT_WITHOUT_LEDGER
---       1       0     → LEDGER_WITHOUT_EFFECT
---       1       1     → JA_APLICADA
+--     ledger  efeitos
+--       0       0       → aplicar (o único caminho que segue)
+--       0       1..12   → EFFECT_WITHOUT_LEDGER
+--       1       0       → LEDGER_WITHOUT_EFFECT
+--       1       1..11   → LEDGER_WITH_PARTIAL_EFFECT
+--       1       12      → JA_APLICADA
+--
+-- 🔴 `LEDGER_WITH_PARTIAL_EFFECT` existe porque responder «já aplicada» a quem
+--    tem meia migration de pé é a pior resposta possível: diz que está tudo
+--    bem. Uma aplicação interrompida, ou um rollback manual que levou as RPC e
+--    deixou as tabelas, cai exactamente aí.
 --
 -- A cadeia de que a 103 depende — 101, 101a, 101b e agora **102** — tem de ter
 -- linha no ledger E o checksum do conteúdo canónico. Os valores pinados são os
@@ -111,8 +120,8 @@
 DO $proveniencia$
 DECLARE
   v_ledger boolean;
-  v_tabela boolean;
   v_efeitos text[];
+  v_total_efeitos CONSTANT integer := 12;
   v_faltam text[];
   v_erradas text[];
 BEGIN
@@ -149,36 +158,42 @@ BEGIN
       ('RPC set_crm_quote_status',
        to_regprocedure('public.set_crm_quote_status(uuid, uuid, uuid, text, text)')::text),
       ('trigger crm_quotes_proveniencia_imutavel()',
-       to_regprocedure('public.crm_quotes_proveniencia_imutavel()')::text)
+       to_regprocedure('public.crm_quotes_proveniencia_imutavel()')::text),
+      -- 🔴 `company_settings.quote_prefix` é efeito exclusivo da 103 como
+      --    qualquer outro. Não há excepção: uma coluna criada por esta
+      --    migration, encontrada sem a linha de ledger que a explique, é o
+      --    mesmo estado desconhecido que uma tabela órfã.
+      ('coluna company_settings.quote_prefix',
+       (SELECT 'presente' FROM information_schema.columns
+         WHERE table_schema = 'public' AND table_name = 'company_settings'
+           AND column_name = 'quote_prefix'))
     ) AS efeito(nome, presente)
    WHERE efeito.presente IS NOT NULL;
 
-  -- 🔴 `company_settings.quote_prefix` NÃO entra nesta lista, e a ausência é
-  --    deliberada — é a única excepção, e tem de ser dita por extenso.
-  --
-  --    O rollback deixa essa coluna de propósito: é aditiva, tem DEFAULT, e
-  --    removê-la obrigaria a reescrever a linha de configurações de cada
-  --    empresa. Se contasse como «efeito da 103», o estado normal depois de um
-  --    rollback limpo — coluna presente, tabelas ausentes, ledger ausente —
-  --    seria lido como efeito parcial, e a 103 nunca mais poderia ser
-  --    reaplicada. Um portão que se tranca a si próprio não protege nada.
-  --
-  --    A excepção é segura porque a coluna não carrega estrutura da 103
-  --    (não é tabela, índice nem RPC) e o `ADD COLUMN IF NOT EXISTS` é
-  --    idempotente. Há um ensaio que corre rollback → reaplicação
-  --    precisamente para provar isto.
 
-  v_tabela := to_regclass('public.crm_quotes') IS NOT NULL;
+  IF v_ledger AND v_efeitos IS NULL THEN
+    RAISE EXCEPTION
+      'CRM_QUOTES_103_LEDGER_WITHOUT_EFFECT: há linha de ledger da 103 mas nenhum dos seus efeitos existe — alguém desfez o efeito sem desfazer a proveniência; decida primeiro o que é verdade';
 
-  IF v_ledger AND v_tabela THEN
+  ELSIF v_ledger AND array_length(v_efeitos, 1) < v_total_efeitos THEN
+    -- 🔴 Ledger presente e efeito INCOMPLETO.
+    --
+    --    Responder «já aplicada» aqui seria a pior das respostas: diz que
+    --    está tudo bem a quem tem meia migration de pé. Uma aplicação
+    --    interrompida a meio, ou um rollback manual que levou as RPC e
+    --    deixou as tabelas, cai exactamente neste caso — e a lista abaixo
+    --    diz o que ficou, para quem opera decidir com factos.
     RAISE EXCEPTION
-      'CRM_QUOTES_103_JA_APLICADA: linha de ledger e tabela presentes — reaplicar alteraria restrições e ACL de uma tabela com documentos';
-  ELSIF v_ledger AND NOT v_tabela THEN
+      'CRM_QUOTES_103_LEDGER_WITH_PARTIAL_EFFECT: a linha de ledger diz aplicada, mas só % de % efeitos existem (%) — a 103 ficou a meio',
+      array_length(v_efeitos, 1), v_total_efeitos, array_to_string(v_efeitos, ', ');
+
+  ELSIF v_ledger THEN
     RAISE EXCEPTION
-      'CRM_QUOTES_103_LEDGER_WITHOUT_EFFECT: há linha de ledger da 103 mas public.crm_quotes não existe — alguém desfez o efeito sem desfazer a proveniência; decida primeiro o que é verdade';
-  ELSIF NOT v_ledger AND v_efeitos IS NOT NULL THEN
-    -- Cobre a tabela inteira E qualquer pedaço solto: uma RPC órfã, um índice
-    -- exclusivo, o trigger de proveniência sem a tabela a que pertencia.
+      'CRM_QUOTES_103_JA_APLICADA: linha de ledger e efeitos todos presentes — reaplicar alteraria restrições e ACL de tabelas com documentos';
+
+  ELSIF v_efeitos IS NOT NULL THEN
+    -- Cobre as tabelas E qualquer pedaço solto: uma RPC órfã, um índice
+    -- exclusivo, o trigger sem a tabela a que pertencia, a coluna de prefixo.
     RAISE EXCEPTION
       'CRM_QUOTES_103_EFFECT_WITHOUT_LEDGER: já existem efeitos da 103 sem linha de ledger (%) — estado desconhecido, nada foi alterado',
       array_to_string(v_efeitos, ', ');
@@ -255,10 +270,14 @@ BEGIN
 END
 $precondicoes$;
 
--- O prefixo dos orçamentos, a par de `invoice_prefix`. Aditivo, com valor por
--- omissão — nenhuma linha existente precisa de ser tocada.
+-- O prefixo dos orçamentos, a par de `invoice_prefix`.
+--
+-- 🔴 Sem `IF NOT EXISTS`, e de propósito. O portão acima já provou que esta
+--    coluna não existe — ela é um efeito exclusivo da 103 como qualquer
+--    tabela ou RPC. Se aparecer entre o portão e esta linha, alguém está a
+--    mexer na base ao mesmo tempo, e o certo é rebentar em vez de adoptar.
 ALTER TABLE public.company_settings
-  ADD COLUMN IF NOT EXISTS quote_prefix text NOT NULL DEFAULT 'ORC';
+  ADD COLUMN quote_prefix text NOT NULL DEFAULT 'ORC';
 
 -- ───────────────────────────────────────────────────────────────────────────
 -- 1. O orçamento

@@ -21,10 +21,10 @@
 --       0       0     → no-op idempotente
 --       0       1     → ALIENADA: a tabela não é desta migration → RAISE
 --       1       0     → LEDGER_WITHOUT_EFFECT → RAISE (decisão humana)
---       1       1     → checksum → lock → contar → vazia: DROP + DELETE
+--       1       1     → checksum → locks → guardas → DROP tudo + DELETE
 --
 -- ---------------------------------------------------------------------------
--- 🔴 O lock vem ANTES da contagem
+-- 🔴 Os locks vêm ANTES de todas as leituras
 -- ---------------------------------------------------------------------------
 --
 -- Um bloco `DO` não é um lock. Entre o `count(*)` e o `DROP` cabe uma
@@ -32,9 +32,14 @@
 -- `ACCESS EXCLUSIVE`, espera por ela e apaga-o a seguir. A contagem teria dito
 -- zero, e mesmo assim perdia-se um documento.
 --
--- As DUAS tabelas são bloqueadas, e pela ordem em que a 103 as criou:
--- `crm_quotes` primeiro, `crm_quote_items` depois. Ordem fixa é o que impede
--- um deadlock contra qualquer outra coisa que as toque na mesma ordem.
+-- Ordem fixa, do mais partilhado para o mais específico:
+--
+--     company_settings → crm_quotes → crm_quote_items
+--
+-- Todos em `ACCESS EXCLUSIVE`, incluindo `company_settings`: este rollback faz
+-- `DROP COLUMN`, que exige esse nível de qualquer forma. Pedi-lo logo evita
+-- uma promoção de lock a meio, que com um `UPDATE` concorrente à espera é um
+-- deadlock à espera de acontecer.
 --
 -- ---------------------------------------------------------------------------
 -- 🔴 Simetria com o ledger
@@ -45,22 +50,28 @@
 -- reconstruiria. `DROP` e `DELETE` no mesmo bloco, ou nada.
 --
 -- ---------------------------------------------------------------------------
--- 🔴 `company_settings.quote_prefix` — fica, mas só se ninguém lhe tocou
+-- 🔴 `company_settings.quote_prefix` sai também
 -- ---------------------------------------------------------------------------
 --
--- A coluna é aditiva, tem valor por omissão (`'ORC'`), e não custa nada ficar.
--- Removê-la obrigaria a reescrever a linha de configurações de cada empresa
--- para apagar um valor que ninguém pediu para apagar — uma escrita destrutiva
--- a mais, num ficheiro cujo propósito é não destruir.
+-- A coluna é um efeito exclusivo da 103 como qualquer tabela ou RPC. Deixá-la
+-- para trás criava um resíduo que o portão da migration teria de tratar como
+-- excepção — e uma proveniência com excepções é uma proveniência mais fraca.
 --
--- Mas há um caso em que deixá-la em silêncio seria errado: se alguém já
--- CONFIGUROU um prefixo próprio — `ORÇ`, `PROP`, o que for — esse valor é uma
--- decisão da operação, tomada depois da migration. Desfazer a 103 com essa
--- configuração viva deixaria a base num estado que nem é «antes da 103» nem
--- «depois»: uma coluna órfã com uma escolha que ninguém sabe de onde veio.
+-- Um rollback limpo devolve o estado pré-103 REAL:
 --
--- Por isso: prefixo no valor inicial ⇒ segue; prefixo alterado ⇒ RECUSA, e
--- quem opera decide o que fazer à configuração antes de desfazer o resto.
+--     ledger 103 · crm_quotes · crm_quote_items · RPC · trigger · quote_prefix
+--                          todos ABSENT
+--
+-- É isso que torna `APPLY → ROLLBACK → APPLY` um ciclo sem casos especiais.
+--
+-- NO_DATA_LOSS do prefixo, antes de o apagar e já sob lock:
+--
+--   · a coluna existe, é `text`, é `NOT NULL` e tem DEFAULT `'ORC'`;
+--   · nenhuma empresa tem um valor diferente de `'ORC'`.
+--
+-- Um prefixo personalizado é uma decisão da operação, tomada depois da
+-- migration, e não se apaga por arrasto. Um esquema diferente do esperado
+-- também trava: não se normaliza nem se repara o que não se percebe.
 --
 --     UNKNOWN_STATE = FAIL_CLOSED
 --
@@ -72,14 +83,17 @@
 DO $rollback103$
 DECLARE
   c_migration CONSTANT text := '103_crm_orcamentos.sql';
-  c_lf   CONSTANT text := '59c4298988c746b38a63d44836ccf3dce63801ed4910d3d712f68757e75e8dd9';
-  c_crlf CONSTANT text := '5b459bcc5228053a4e269b3365e9a6e3e95cb711afe934adca8e530f1cdc7979';
+  c_lf   CONSTANT text := '6893946882e2df1af16c79158f3bcbe0324b7cae92845e39d8cb389f8e0260d0';
+  c_crlf CONSTANT text := '86cb0b14e78791feeec4c8f8bdcf78fbf92568ec17fd8305407df761166ee4cf';
   v_checksum text;
   v_ledger boolean;
   v_tabela boolean;
   v_orcamentos bigint;
   v_linhas bigint;
   v_prefixos text[];
+  v_tipo text;
+  v_nullable text;
+  v_default text;
 BEGIN
   IF to_regclass('public._migrations') IS NULL THEN
     RAISE EXCEPTION
@@ -125,14 +139,17 @@ BEGIN
   --    Ordem determinística é o que impede um deadlock contra qualquer outra
   --    transação que toque nas mesmas tabelas.
   --
-  --    `company_settings` entra em `SHARE MODE`, que é o mínimo que bloqueia
-  --    um `UPDATE` (ROW EXCLUSIVE) sem impedir leituras. Sem ele havia uma
-  --    corrida real: o rollback lia `quote_prefix = 'ORC'`, alguém gravava
-  --    `'PROP'` a seguir, e o rollback desfazia a 103 com base numa leitura
-  --    que já não era verdade — decidindo com informação velha sobre uma
-  --    configuração que entretanto passou a existir.
+  --    🔴 `company_settings` entra já em `ACCESS EXCLUSIVE`, e não em `SHARE`.
+  --       Este rollback faz `DROP COLUMN`, que precisa de ACCESS EXCLUSIVE de
+  --       qualquer maneira. Pedir o nível final LOGO evita uma promoção de
+  --       lock a meio — e uma promoção com um `UPDATE` concorrente já à espera
+  --       é um deadlock à espera de acontecer.
+  --
+  --       Sem este lock havia uma corrida real: o rollback lia
+  --       `quote_prefix = 'ORC'`, alguém gravava `'PROP'` a seguir, e a 103
+  --       era desfeita com base numa leitura que já não era verdade.
   IF to_regclass('public.company_settings') IS NOT NULL THEN
-    EXECUTE 'LOCK TABLE public.company_settings IN SHARE MODE';
+    EXECUTE 'LOCK TABLE public.company_settings IN ACCESS EXCLUSIVE MODE';
   END IF;
   EXECUTE 'LOCK TABLE public.crm_quotes IN ACCESS EXCLUSIVE MODE';
   IF to_regclass('public.crm_quote_items') IS NOT NULL THEN
@@ -152,12 +169,24 @@ BEGIN
       v_orcamentos, v_linhas;
   END IF;
 
-  -- 🔴 Configuração posterior do utilizador não se destrói por arrasto.
-  IF EXISTS (
-    SELECT 1 FROM information_schema.columns
-     WHERE table_schema = 'public' AND table_name = 'company_settings'
-       AND column_name = 'quote_prefix'
-  ) THEN
+  -- 🔴 O prefixo: validar o esquema E os valores antes de apagar a coluna.
+  SELECT data_type, is_nullable, column_default
+    INTO v_tipo, v_nullable, v_default
+    FROM information_schema.columns
+   WHERE table_schema = 'public' AND table_name = 'company_settings'
+     AND column_name = 'quote_prefix';
+
+  IF FOUND THEN
+    -- Um esquema diferente do que a 103 criou significa que alguém lhe mexeu.
+    -- Não se normaliza nem se repara o que não se percebe.
+    IF v_tipo IS DISTINCT FROM 'text'
+       OR v_nullable IS DISTINCT FROM 'NO'
+       OR v_default IS DISTINCT FROM '''ORC''::text' THEN
+      RAISE EXCEPTION
+        'CRM_QUOTES_103_ROLLBACK_CONFIG_ESQUEMA_INESPERADO: quote_prefix é (tipo=%, nullable=%, default=%) e a 103 criou-a como (text, NO, ''ORC''::text) — alguém lhe mexeu; nada foi apagado',
+        v_tipo, v_nullable, coalesce(v_default, 'NULL');
+    END IF;
+
     EXECUTE $q$
       SELECT array_agg(DISTINCT quote_prefix)
         FROM public.company_settings
@@ -178,6 +207,12 @@ BEGIN
 
   EXECUTE 'DROP TABLE IF EXISTS public.crm_quote_items';
   EXECUTE 'DROP TABLE public.crm_quotes';
+
+  -- A coluna de prefixo sai com o resto. Já foi validada acima, sob o lock que
+  -- este `DROP COLUMN` exige — nada mudou desde então.
+  IF v_tipo IS NOT NULL THEN
+    EXECUTE 'ALTER TABLE public.company_settings DROP COLUMN quote_prefix';
+  END IF;
 
   -- A função do trigger de imutabilidade da proveniência sobrevive ao
   -- `DROP TABLE` (o trigger morre com a tabela, a função não). Sem isto,

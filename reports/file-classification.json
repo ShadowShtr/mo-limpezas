@@ -5100,7 +5100,7 @@
       "signals": {
         "serviceRole": 7,
         "write": 1,
-        "sqlWrite": 42
+        "sqlWrite": 53
       },
       "action": "nenhuma",
       "reason": "suite de testes — corre por convenção do vitest",
@@ -25263,7 +25263,7 @@
       "sideEffects": [],
       "risks": [],
       "signals": {
-        "sqlWrite": 18
+        "sqlWrite": 24
       },
       "action": "nenhuma",
       "reason": "migration versionada — histórico do schema, nunca se apaga",

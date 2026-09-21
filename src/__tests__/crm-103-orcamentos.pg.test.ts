@@ -234,9 +234,18 @@ describe("proveniência — a 103 não adopta o que não criou", () => {
     expect(rows[0].politicas).toBe(0);
   });
 
-  it("🔴 LEDGER_WITHOUT_EFFECT tem nome próprio", LENTO, async () => {
+  it("🔴 LEDGER_WITHOUT_EFFECT: a linha ficou e NENHUM efeito existe", LENTO, async () => {
     await palco(true);
-    await pool.query("DROP TABLE public.crm_quote_items; DROP TABLE public.crm_quotes;");
+    // Desfazer tudo menos a linha — é o que um rollback mal feito deixaria.
+    await pool.query(`
+      DROP FUNCTION public.set_crm_quote_status(uuid, uuid, uuid, text, text);
+      DROP FUNCTION public.revise_crm_quote(uuid, uuid, uuid, date, date, numeric, boolean, numeric, text, jsonb);
+      DROP FUNCTION public.create_crm_quote_with_items(uuid, uuid, uuid, uuid, text, integer, date, date, text, numeric, boolean, numeric, text, jsonb, text, text, text, uuid, jsonb);
+      DROP TABLE public.crm_quote_items;
+      DROP TABLE public.crm_quotes;
+      DROP FUNCTION public.crm_quotes_proveniencia_imutavel();
+      ALTER TABLE public.company_settings DROP COLUMN quote_prefix;`);
+
     await expect(pool.query(lerSql(M_103))).rejects.toThrow(/LEDGER_WITHOUT_EFFECT/);
   });
 
@@ -319,21 +328,48 @@ describe("efeito parcial também é efeito", () => {
     });
   }
 
-  // 🔴 A ÚNICA excepção, e tem de ser provada como excepção.
+  // 🔴 `quote_prefix` é efeito exclusivo como qualquer outro. NÃO há excepção.
   //
-  //    O rollback deixa `company_settings.quote_prefix` de propósito. Se essa
-  //    coluna contasse como efeito parcial, o estado normal depois de um
-  //    rollback limpo seria lido como meio-aplicado e a 103 nunca mais poderia
-  //    ser reaplicada — um portão que se tranca a si próprio.
-  it("quote_prefix sozinho NÃO conta como efeito — é a excepção documentada", LENTO, async () => {
+  //    Houve uma versão desta suite que a tratava como excepção, para o
+  //    rollback poder deixá-la para trás. Uma proveniência com excepções é uma
+  //    proveniência mais fraca: a partir do momento em que um efeito pode ser
+  //    adoptado, a pergunta «quem criou isto?» deixa de ter resposta única.
+  //
+  //    O rollback passou a removê-la, e por isso o ciclo apply → rollback →
+  //    apply funciona sem caso especial nenhum.
+  it("🔴 quote_prefix sozinho: REJEITADO como qualquer outro efeito", LENTO, async () => {
     await palco(false);
     await pool.query(
-      "ALTER TABLE public.company_settings ADD COLUMN IF NOT EXISTS quote_prefix text NOT NULL DEFAULT 'ORC'");
+      "ALTER TABLE public.company_settings ADD COLUMN quote_prefix text NOT NULL DEFAULT 'ORC'");
 
-    await pool.query(lerSql(M_103));
-    const { rows } = await pool.query("SELECT to_regclass('public.crm_quotes') AS q");
-    expect(rows[0].q).toBe("crm_quotes");
+    await expect(pool.query(lerSql(M_103)))
+      .rejects.toThrow(/EFFECT_WITHOUT_LEDGER/);
+
+    const { rows } = await pool.query(`
+      SELECT to_regclass('public.crm_quotes') AS q,
+             (SELECT count(*)::int FROM public._migrations WHERE name=$1) AS ledger`,
+      [NOME_103]);
+    expect(rows[0].q).toBeNull();
+    expect(rows[0].ledger).toBe(0);
   });
+
+  // 🔴 LEDGER_WITH_PARTIAL_EFFECT.
+  //
+  //    Com a linha de ledger presente e só PARTE dos efeitos de pé, responder
+  //    «já aplicada» seria dizer que está tudo bem a quem tem meia migration
+  //    montada. Uma aplicação interrompida, ou um rollback manual que levou as
+  //    RPC e deixou as tabelas, cai exactamente aqui.
+  it("🔴 ledger presente com efeito incompleto não é JA_APLICADA", LENTO, async () => {
+    await palco(true);
+    // Leva só as RPC: as tabelas, os índices e a coluna ficam.
+    await pool.query(`
+      DROP FUNCTION public.set_crm_quote_status(uuid, uuid, uuid, text, text);
+      DROP FUNCTION public.revise_crm_quote(uuid, uuid, uuid, date, date, numeric, boolean, numeric, text, jsonb);`);
+
+    await expect(pool.query(lerSql(M_103)))
+      .rejects.toThrow(/LEDGER_WITH_PARTIAL_EFFECT/);
+  });
+
 });
 
 // ---------------------------------------------------------------------------
@@ -646,12 +682,17 @@ describe("rollback", () => {
       SELECT to_regclass('public.crm_quotes') AS q,
              to_regclass('public.crm_quote_items') AS i,
              to_regclass('public.crm_visits') AS v,
-             to_regprocedure('public.crm_quotes_proveniencia_imutavel()') AS trg`);
+             to_regprocedure('public.crm_quotes_proveniencia_imutavel()') AS trg,
+             (SELECT count(*)::int FROM information_schema.columns
+               WHERE table_schema='public' AND table_name='company_settings'
+                 AND column_name='quote_prefix') AS prefixo`);
     expect(rows[0].q).toBeNull();
     expect(rows[0].i).toBeNull();
+    expect(rows[0].trg).toBeNull();
+    // 🔴 O estado pré-103 REAL: a coluna de prefixo também sai.
+    expect(rows[0].prefixo).toBe(0);
     // 🔴 A 102 não vai atrás.
     expect(rows[0].v).toBe("crm_visits");
-    expect(rows[0].trg).toBeNull();
     expect(await linhaLedger()).toBe(0);
   });
 
@@ -739,16 +780,19 @@ describe("rollback", () => {
       await utilizador.end().catch(() => { /* já fechada */ });
     }
 
-    // Depois do commit o UPDATE segue — a 103 já foi desfeita com a leitura
-    // que era verdade no momento da decisão.
-    expect(resultadoUpdate).toBe("entrou");
+    // 🔴 Depois do commit, a coluna já não existe — logo o UPDATE NÃO pode ter
+    //    sucesso. E isto é o desfecho correcto: a escrita concorrente não se
+    //    perdeu em silêncio, nunca chegou a commitar.
+    expect(resultadoUpdate).not.toBe("entrou");
+    expect(resultadoUpdate).toMatch(/quote_prefix|column/i);
 
     const { rows } = await pool.query(`
       SELECT to_regclass('public.crm_quotes') AS q,
-             (SELECT quote_prefix FROM public.company_settings WHERE company_id=$1) AS prefixo`,
-      [EMPRESA]);
+             (SELECT count(*)::int FROM information_schema.columns
+               WHERE table_schema='public' AND table_name='company_settings'
+                 AND column_name='quote_prefix') AS prefixo`);
     expect(rows[0].q).toBeNull();
-    expect(rows[0].prefixo).toBe("PROP");
+    expect(rows[0].prefixo).toBe(0);
     expect(await linhaLedger()).toBe(0);
   });
 
@@ -783,18 +827,37 @@ describe("rollback", () => {
     expect(await linhaLedger()).toBe(0);
   });
 
-  it("depois do rollback, a 103 volta a aplicar-se com o prefixo já presente", LENTO, async () => {
+  // 🔴 APPLY → ROLLBACK → APPLY, sem casos especiais. É isto que se ganha por
+  //    o rollback devolver o estado pré-103 real, incluindo a coluna.
+  it("ciclo completo: aplicar, desfazer, voltar a aplicar", LENTO, async () => {
     await palco(true);
     await pool.query(lerSql(ROLLBACK_103));
 
-    // A coluna ficou — é a decisão documentada. Reaplicar tem de funcionar.
-    const { rows: antes } = await pool.query(`
-      SELECT count(*)::int n FROM information_schema.columns
-       WHERE table_schema='public' AND table_name='company_settings' AND column_name='quote_prefix'`);
-    expect(antes[0].n).toBe(1);
+    const { rows: vazio } = await pool.query(`
+      SELECT (SELECT count(*)::int FROM information_schema.columns
+               WHERE table_schema='public' AND table_name='company_settings'
+                 AND column_name='quote_prefix') AS prefixo`);
+    expect(vazio[0].prefixo, "o rollback devolve o estado pré-103 inteiro").toBe(0);
 
     await pool.query(lerSql(M_103));
+    const { rows } = await pool.query(`
+      SELECT to_regclass('public.crm_quotes') AS q,
+             (SELECT count(*)::int FROM information_schema.columns
+               WHERE table_schema='public' AND table_name='company_settings'
+                 AND column_name='quote_prefix') AS prefixo`);
+    expect(rows[0].q).toBe("crm_quotes");
+    expect(rows[0].prefixo).toBe(1);
+  });
+
+  it("🔴 esquema do prefixo inesperado: FAIL_CLOSED, e não se repara", LENTO, async () => {
+    await palco(true);
+    await pool.query("ALTER TABLE public.company_settings ALTER COLUMN quote_prefix DROP NOT NULL");
+
+    await expect(pool.query(lerSql(ROLLBACK_103)))
+      .rejects.toThrow(/ROLLBACK_CONFIG_ESQUEMA_INESPERADO/);
+
     const { rows } = await pool.query("SELECT to_regclass('public.crm_quotes') AS q");
     expect(rows[0].q).toBe("crm_quotes");
+    expect(await linhaLedger()).toBe(1);
   });
 });
