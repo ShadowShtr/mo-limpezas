@@ -46,8 +46,8 @@
 DO $rollback103a$
 DECLARE
   c_migration CONSTANT text := '103a_crm_rpc_acl_hardening.sql';
-  c_lf   CONSTANT text := 'e7155eefd62ad6b02b4326ab199cf2bdd0e69986bc58aa9c5f25cbafa570ba1e';
-  c_crlf CONSTANT text := 'de99d39abe19ed97442cf57d7a76451bd310a6fa1f6be161362c70c59fa611e1';
+  c_lf   CONSTANT text := 'bcd107aa0ab837968856150d7ebfa02704cb97f9b4ace10d35ea7dde714ac738';
+  c_crlf CONSTANT text := '35c845fbafb10653add6bc8d14dbe9045a94697906949efe739adbd5fa28fdb4';
 
   c_criar  CONSTANT text := 'public.create_crm_quote_with_items(uuid, uuid, uuid, uuid, text, integer, date, date, text, numeric, boolean, numeric, text, jsonb, text, text, text, uuid, jsonb)';
   c_rever  CONSTANT text := 'public.revise_crm_quote(uuid, uuid, uuid, date, date, numeric, boolean, numeric, text, jsonb)';
@@ -135,15 +135,17 @@ BEGIN
   --    inclui EXECUTE para PUBLIC.
   WITH alvo(assinatura) AS (VALUES (c_criar), (c_rever), (c_estado)),
   fn AS (
-    SELECT a.assinatura, p.oid, p.prosecdef, p.proacl, p.proconfig
+    SELECT a.assinatura, p.oid, p.prosecdef, p.proacl, p.proconfig,
+           (SELECT r.rolname FROM pg_roles r WHERE r.oid = p.proowner) AS dono
       FROM alvo a JOIN pg_proc p ON p.oid = to_regprocedure(a.assinatura)
   ),
   acl AS (
+    -- 🔴 O CONJUNTO de quem tem EXECUTE, e se algum é transmissível. Perguntar
+    --    só por PUBLIC/anon/authenticated deixaria passar um grantee novo.
     SELECT fn.assinatura,
-           bool_or(coalesce(g.rolname, 'PUBLIC') = 'PUBLIC') AS tem_public,
-           bool_or(g.rolname = 'anon')                        AS tem_anon,
-           bool_or(g.rolname = 'authenticated')               AS tem_auth,
-           bool_or(g.rolname = 'service_role')                AS tem_sr
+           array_agg(DISTINCT coalesce(g.rolname, 'PUBLIC')
+                     ORDER BY coalesce(g.rolname, 'PUBLIC')) AS grantees,
+           bool_or(x.is_grantable) AS algum_transmissivel
       FROM fn
       CROSS JOIN LATERAL aclexplode(fn.proacl) x
       LEFT JOIN pg_roles g ON g.oid = x.grantee
@@ -154,14 +156,15 @@ BEGIN
            fn.assinatura || ' = ' ||
            CASE
              WHEN fn.proacl IS NULL THEN 'DRIFT(proacl NULL)'
-             WHEN fn.prosecdef       THEN 'DRIFT(SECURITY DEFINER)'
-             WHEN NOT coalesce(acl.tem_public, false)
-              AND NOT coalesce(acl.tem_anon, false)
-              AND NOT coalesce(acl.tem_auth, false)
-              AND coalesce(acl.tem_sr, false)
+             WHEN fn.prosecdef      THEN 'DRIFT(SECURITY DEFINER)'
+             WHEN fn.dono IS NULL   THEN 'DRIFT(dono desconhecido)'
+             WHEN coalesce(acl.algum_transmissivel, false)
+               THEN 'DRIFT(WITH GRANT OPTION)'
+             WHEN acl.grantees = (SELECT array_agg(DISTINCT r ORDER BY r)
+                                    FROM unnest(ARRAY[fn.dono, 'service_role']) r)
               AND 'search_path=pg_catalog, public' = ANY(coalesce(fn.proconfig, '{}'))
                THEN 'POST'
-             ELSE 'DRIFT'
+             ELSE 'DRIFT(' || coalesce(array_to_string(acl.grantees, '+'), 'sem ACL') || ')'
            END
            ORDER BY fn.assinatura)
     INTO v_estados

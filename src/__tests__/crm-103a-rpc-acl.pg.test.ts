@@ -422,6 +422,52 @@ describe("estado parcial nunca é adoptado", () => {
       .rejects.toThrow(/PARTIAL_OR_UNKNOWN_EFFECT/);
     await nadaMudou();
   });
+
+  // 🔴 GRANTEE INESPERADO.
+  //
+  //    O classificador perguntava «PUBLIC tem? anon tem? service_role tem?» e
+  //    nunca perguntava «há MAIS alguém?». Um `GRANT EXECUTE ... TO intruso`
+  //    respondia a todas essas perguntas da mesma maneira e ficava
+  //    classificado PRE — a 103a revogava PUBLIC/anon/authenticated e deixava
+  //    o intruso com EXECUTE, sem ninguém dar por isso.
+  it("🔴 um papel extra com EXECUTE: FAIL CLOSED", LENTO, async () => {
+    await palco(false);
+    await pool.query("DROP ROLE IF EXISTS intruso; CREATE ROLE intruso");
+    await pool.query(`GRANT EXECUTE ON FUNCTION ${RPCS[0]} TO intruso`);
+
+    await expect(pool.query(lerSql(M_103A)))
+      .rejects.toThrow(/PARTIAL_OR_UNKNOWN_EFFECT/);
+    await nadaMudou();
+
+    // E continua lá: zero mutações, incluindo sobre o intruso.
+    expect(await quemExecuta(RPCS[0])).toContain("intruso");
+  });
+
+  // 🔴 WITH GRANT OPTION: quem pode distribuir o privilégio muda o contrato,
+  //    mesmo sendo o papel certo.
+  it("🔴 service_role com WITH GRANT OPTION: FAIL CLOSED", LENTO, async () => {
+    await palco(false);
+    await pool.query(`GRANT EXECUTE ON FUNCTION ${RPCS[1]} TO service_role WITH GRANT OPTION`);
+
+    await expect(pool.query(lerSql(M_103A)))
+      .rejects.toThrow(/PARTIAL_OR_UNKNOWN_EFFECT/);
+    await nadaMudou();
+  });
+
+  it("o dono da função NÃO é tratado como intruso", LENTO, async () => {
+    // O prestate real inclui o owner na ACL. Se o classificador o lesse como
+    // grantee inesperado, a 103a nunca poderia correr em lado nenhum.
+    await palco(false);
+    const { rows } = await pool.query(
+      `SELECT (SELECT r.rolname FROM pg_roles r WHERE r.oid = p.proowner) AS dono
+         FROM pg_proc p WHERE p.oid = $1::regprocedure`, [RPCS[0]]);
+    expect(await quemExecuta(RPCS[0])).toContain(rows[0].dono);
+
+    // E com o dono na ACL, a migration aplica-se sem problema.
+    await pool.query(lerSql(M_103A));
+    expect(await quemExecuta(RPCS[0])).toEqual(
+      expect.arrayContaining([rows[0].dono, "service_role"]));
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -460,6 +506,23 @@ describe("ledger presente com estado que não é o poststate", () => {
   it("🔴 SECURITY DEFINER aparecido: não é JA_APLICADA", LENTO, async () => {
     await palco(true);
     await pool.query(`ALTER FUNCTION ${RPCS[0]} SECURITY DEFINER`);
+
+    await expect(pool.query(lerSql(M_103A)))
+      .rejects.toThrow(/LEDGER_WITHOUT_EFFECT/);
+  });
+
+  it("🔴 papel extra com EXECUTE depois do hotfix: não é JA_APLICADA", LENTO, async () => {
+    await palco(true);
+    await pool.query("DROP ROLE IF EXISTS intruso; CREATE ROLE intruso");
+    await pool.query(`GRANT EXECUTE ON FUNCTION ${RPCS[1]} TO intruso`);
+
+    await expect(pool.query(lerSql(M_103A)))
+      .rejects.toThrow(/LEDGER_WITHOUT_EFFECT/);
+  });
+
+  it("🔴 service_role com WITH GRANT OPTION depois do hotfix: não é JA_APLICADA", LENTO, async () => {
+    await palco(true);
+    await pool.query(`GRANT EXECUTE ON FUNCTION ${RPCS[2]} TO service_role WITH GRANT OPTION`);
 
     await expect(pool.query(lerSql(M_103A)))
       .rejects.toThrow(/LEDGER_WITHOUT_EFFECT/);
@@ -537,6 +600,10 @@ describe("rollback — reabrir exige dizê-lo", () => {
     ["search_path mudou", `ALTER FUNCTION ${RPCS[0]} SET search_path = public`],
     ["search_path desapareceu", `ALTER FUNCTION ${RPCS[1]} RESET search_path`],
     ["SECURITY DEFINER apareceu", `ALTER FUNCTION ${RPCS[2]} SECURITY DEFINER`],
+    ["um papel extra ganhou EXECUTE",
+      `DROP ROLE IF EXISTS intruso; CREATE ROLE intruso; GRANT EXECUTE ON FUNCTION ${RPCS[0]} TO intruso`],
+    ["service_role ganhou WITH GRANT OPTION",
+      `GRANT EXECUTE ON FUNCTION ${RPCS[1]} TO service_role WITH GRANT OPTION`],
   ];
 
   for (const [nome, ddl] of DRIFTS) {

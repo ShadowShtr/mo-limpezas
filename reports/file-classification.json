@@ -5128,9 +5128,9 @@
         "service-role"
       ],
       "signals": {
-        "serviceRole": 15,
+        "serviceRole": 23,
         "write": 1,
-        "sqlWrite": 36
+        "sqlWrite": 39
       },
       "action": "nenhuma",
       "reason": "suite de testes — corre por convenção do vitest",
@@ -24653,7 +24653,7 @@
         "service-role"
       ],
       "signals": {
-        "serviceRole": 14,
+        "serviceRole": 20,
         "sqlWrite": 6
       },
       "action": "nenhuma",

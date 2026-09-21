@@ -151,45 +151,65 @@ BEGIN
 
   WITH alvo(assinatura) AS (VALUES (c_criar), (c_rever), (c_estado)),
   fn AS (
-    SELECT a.assinatura, p.oid, p.prosecdef, p.proacl, p.proconfig
+    SELECT a.assinatura, p.oid, p.prosecdef, p.proacl, p.proconfig,
+           (SELECT r.rolname FROM pg_roles r WHERE r.oid = p.proowner) AS dono
       FROM alvo a JOIN pg_proc p ON p.oid = to_regprocedure(a.assinatura)
   ),
   acl AS (
+    -- 🔴 O CONJUNTO de quem tem EXECUTE, não a presença de nomes escolhidos.
+    --
+    --    A versão anterior perguntava «PUBLIC tem? anon tem? service_role
+    --    tem?» e nunca perguntava «há mais alguém?». Um
+    --    `GRANT EXECUTE ... TO intruso` respondia a todas as perguntas da
+    --    mesma maneira e passava despercebido — a 103a revogava PUBLIC, anon
+    --    e authenticated, e deixava o intruso com EXECUTE.
+    --
+    --    `is_grantable` entra pela mesma razão: `service_role` com WITH GRANT
+    --    OPTION pode distribuir o privilégio, e isso não é o que a 103a cria.
     SELECT fn.assinatura,
-           bool_or(coalesce(g.rolname, 'PUBLIC') = 'PUBLIC')   AS tem_public,
-           bool_or(g.rolname = 'anon')                          AS tem_anon,
-           bool_or(g.rolname = 'authenticated')                 AS tem_auth,
-           bool_or(g.rolname = 'service_role')                  AS tem_sr
+           array_agg(DISTINCT coalesce(g.rolname, 'PUBLIC')
+                     ORDER BY coalesce(g.rolname, 'PUBLIC')) AS grantees,
+           bool_or(x.is_grantable) AS algum_transmissivel
       FROM fn
       CROSS JOIN LATERAL aclexplode(fn.proacl) x
       LEFT JOIN pg_roles g ON g.oid = x.grantee
      WHERE x.privilege_type = 'EXECUTE'
      GROUP BY fn.assinatura
+  ),
+  esperado AS (
+    -- 🔴 O dono entra nos dois conjuntos: não é intruso, é quem criou a
+    --    função. Derivado de `proowner`, e não escrito à mão — se o dono
+    --    mudar, o contrato acompanha em vez de dar falso alarme.
+    SELECT fn.assinatura,
+           (SELECT array_agg(DISTINCT r ORDER BY r)
+              FROM unnest(ARRAY[fn.dono, 'anon', 'authenticated', 'service_role']) r) AS pre,
+           (SELECT array_agg(DISTINCT r ORDER BY r)
+              FROM unnest(ARRAY[fn.dono, 'service_role']) r) AS post
+      FROM fn
   )
   SELECT array_agg(
            fn.assinatura || ' = ' ||
            CASE
              -- ACL por omissão: PUBLIC tem EXECUTE. Não é estado canónico nenhum.
              WHEN fn.proacl IS NULL THEN 'UNKNOWN(proacl NULL)'
-             WHEN fn.prosecdef       THEN 'UNKNOWN(SECURITY DEFINER)'
-             WHEN NOT coalesce(acl.tem_public, false)
-              AND coalesce(acl.tem_anon, false)
-              AND coalesce(acl.tem_auth, false)
-              AND coalesce(acl.tem_sr, false)
+             WHEN fn.prosecdef      THEN 'UNKNOWN(SECURITY DEFINER)'
+             WHEN fn.dono IS NULL   THEN 'UNKNOWN(dono desconhecido)'
+             WHEN coalesce(acl.algum_transmissivel, false)
+               THEN 'UNKNOWN(WITH GRANT OPTION)'
+             WHEN acl.grantees = esperado.pre
               AND NOT EXISTS (SELECT 1 FROM unnest(coalesce(fn.proconfig, '{}')) c
                                WHERE c LIKE 'search_path=%')
                THEN 'PRE'
-             WHEN NOT coalesce(acl.tem_public, false)
-              AND NOT coalesce(acl.tem_anon, false)
-              AND NOT coalesce(acl.tem_auth, false)
-              AND coalesce(acl.tem_sr, false)
+             WHEN acl.grantees = esperado.post
               AND 'search_path=pg_catalog, public' = ANY(coalesce(fn.proconfig, '{}'))
                THEN 'POST'
-             ELSE 'UNKNOWN'
+             ELSE 'UNKNOWN(' || coalesce(array_to_string(acl.grantees, '+'), 'sem ACL') || ')'
            END
            ORDER BY fn.assinatura)
     INTO v_estados
-    FROM fn LEFT JOIN acl ON acl.assinatura = fn.assinatura;
+    FROM fn
+    LEFT JOIN acl ON acl.assinatura = fn.assinatura
+    JOIN esperado ON esperado.assinatura = fn.assinatura;
 
   SELECT count(*) FILTER (WHERE e LIKE '% = PRE'),
          count(*) FILTER (WHERE e LIKE '% = POST')
@@ -275,18 +295,45 @@ DECLARE
   v_sem_search text[];
   v_definer text[];
 BEGIN
-  -- Ninguém indevido com EXECUTE, nominal ou implícito.
-  SELECT array_agg(DISTINCT f.assinatura) INTO v_abertas
-    FROM (VALUES (c_criar), (c_rever), (c_estado)) AS f(assinatura)
-    JOIN pg_proc p ON p.oid = to_regprocedure(f.assinatura)
-    CROSS JOIN LATERAL aclexplode(p.proacl) a
-    LEFT JOIN pg_roles g ON g.oid = a.grantee
-   WHERE a.privilege_type = 'EXECUTE'
-     AND coalesce(g.rolname, 'PUBLIC') IN ('PUBLIC', 'anon', 'authenticated');
+  -- 🔴 O CONJUNTO de grantees tem de ser exactamente {dono, service_role}.
+  --
+  --    Perguntar «ainda há PUBLIC/anon/authenticated?» responde a metade: um
+  --    `GRANT EXECUTE ... TO intruso` não aparece em nenhuma dessas perguntas.
+  --    Aqui compara-se o conjunto inteiro, e exige-se que nenhum EXECUTE seja
+  --    transmissível (WITH GRANT OPTION).
+  WITH alvo(assinatura) AS (VALUES (c_criar), (c_rever), (c_estado)),
+  fn AS (
+    SELECT a.assinatura, p.oid, p.proacl,
+           (SELECT r.rolname FROM pg_roles r WHERE r.oid = p.proowner) AS dono
+      FROM alvo a JOIN pg_proc p ON p.oid = to_regprocedure(a.assinatura)
+  ),
+  acl AS (
+    SELECT fn.assinatura,
+           array_agg(DISTINCT coalesce(g.rolname, 'PUBLIC')
+                     ORDER BY coalesce(g.rolname, 'PUBLIC')) AS grantees,
+           bool_or(x.is_grantable) AS algum_transmissivel
+      FROM fn
+      CROSS JOIN LATERAL aclexplode(fn.proacl) x
+      LEFT JOIN pg_roles g ON g.oid = x.grantee
+     WHERE x.privilege_type = 'EXECUTE'
+     GROUP BY fn.assinatura
+  )
+  SELECT array_agg(fn.assinatura || ' → ' ||
+                   coalesce(array_to_string(acl.grantees, '+'), 'sem ACL') ||
+                   CASE WHEN coalesce(acl.algum_transmissivel, false)
+                        THEN ' (WITH GRANT OPTION)' ELSE '' END
+                   ORDER BY fn.assinatura)
+    INTO v_abertas
+    FROM fn LEFT JOIN acl ON acl.assinatura = fn.assinatura
+   WHERE acl.grantees IS DISTINCT FROM
+           (SELECT array_agg(DISTINCT r ORDER BY r)
+              FROM unnest(ARRAY[fn.dono, 'service_role']) r)
+      OR coalesce(acl.algum_transmissivel, false);
 
   IF v_abertas IS NOT NULL THEN
     RAISE EXCEPTION
-      'CRM_103A_POSTSTATE_FAILED: ainda há EXECUTE para PUBLIC/anon/authenticated em %', v_abertas;
+      'CRM_103A_POSTSTATE_FAILED: o conjunto de EXECUTE não é {dono, service_role} sem GRANT OPTION — %',
+      array_to_string(v_abertas, ' | ');
   END IF;
 
   -- E `service_role` tem de continuar a conseguir chamar.
