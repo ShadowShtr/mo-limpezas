@@ -492,6 +492,103 @@ describe("🔴 revisão — R0 enviada → R1 rascunho, R0 histórica", () => {
     expect(Number(nova.total)).toBe(110.7);
   });
 
+  it("🔴 COALESCE(p_notes, …): NULL herda, string vazia APAGA", LENTO, async () => {
+    // É o comportamento da RPC que obriga o formulário a enviar sempre o
+    // conteúdo do campo numa revisão. Com `null`, a base repunha exactamente
+    // o texto que a pessoa acabara de apagar — e não havia forma nenhuma de
+    // remover as observações numa revisão.
+    const r0 = await criar({
+      itens: [{ description: "A", quantity: 1, unit: "servico", unit_price: 50 }],
+    });
+    await pool.query(
+      "UPDATE public.crm_quotes SET notes = 'Inclui produtos.' WHERE id = $1", [r0.id]);
+    await pool.query("SELECT public.set_crm_quote_status($1,$2,$3,'enviado',NULL)",
+      [EMPRESA, r0.id, GESTORA]);
+
+    const itens = JSON.stringify([
+      { description: "A", quantity: 1, unit: "servico", unit_price: 60 },
+    ]);
+
+    // NULL: herda.
+    const { rows: comNull } = await pool.query(
+      `SELECT * FROM public.revise_crm_quote(
+         $1,$2,$3,CURRENT_DATE,CURRENT_DATE + 30,0,true,23,NULL,$4::jsonb)`,
+      [EMPRESA, r0.id, GESTORA, itens],
+    );
+    const { rows: herdada } = await pool.query(
+      "SELECT notes FROM public.crm_quotes WHERE id = $1", [comNull[0].quote_id]);
+    expect(herdada[0].notes).toBe("Inclui produtos.");
+
+    // String vazia: apaga.
+    await pool.query("SELECT public.set_crm_quote_status($1,$2,$3,'enviado',NULL)",
+      [EMPRESA, comNull[0].quote_id, GESTORA]);
+    const { rows: comVazio } = await pool.query(
+      `SELECT * FROM public.revise_crm_quote(
+         $1,$2,$3,CURRENT_DATE,CURRENT_DATE + 30,0,true,23,'',$4::jsonb)`,
+      [EMPRESA, comNull[0].quote_id, GESTORA, itens],
+    );
+    const { rows: limpa } = await pool.query(
+      "SELECT notes FROM public.crm_quotes WHERE id = $1", [comVazio[0].quote_id]);
+    expect(limpa[0].notes).toBe("");
+  });
+
+  it("🔴 uma revisão com datas de hoje não nasce expirada", LENTO, async () => {
+    // O formulário abre em `todayInLisbon()` justamente por isto: herdar a
+    // `issue_date` da R0 trazia com ela uma validade no passado, e a R1
+    // nascia inaceitável — só falhava mais tarde, ao ser aceite.
+    const r0 = await criar({
+      itens: [{ description: "A", quantity: 1, unit: "servico", unit_price: 50 }],
+    });
+    await pool.query(
+      `UPDATE public.crm_quotes
+          SET issue_date = CURRENT_DATE - 100, valid_until = CURRENT_DATE - 70
+        WHERE id = $1`, [r0.id]);
+    await pool.query("SELECT public.set_crm_quote_status($1,$2,$3,'enviado',NULL)",
+      [EMPRESA, r0.id, GESTORA]);
+
+    const { rows } = await pool.query(
+      `SELECT * FROM public.revise_crm_quote(
+         $1,$2,$3,CURRENT_DATE,CURRENT_DATE + 30,0,true,23,NULL,$4::jsonb)`,
+      [EMPRESA, r0.id, GESTORA,
+        JSON.stringify([{ description: "A", quantity: 1, unit: "servico", unit_price: 60 }])],
+    );
+
+    // A R1 é aceitável: enviada e aceite, sem QUOTE_EXPIRED_CANNOT_ACCEPT.
+    const r1 = rows[0].quote_id as string;
+    expect((await mudar(r1, "enviado")).ok).toBe(true);
+    expect((await mudar(r1, "aceite")).ok).toBe(true);
+  });
+
+  it("🔴 uma revisão que herdasse a validade da R0 seria inaceitável", LENTO, async () => {
+    // O reverso do ensaio anterior, contra a base: é o estrago concreto que a
+    // correcção evita.
+    const r0 = await criar({
+      itens: [{ description: "A", quantity: 1, unit: "servico", unit_price: 50 }],
+    });
+    await pool.query(
+      `UPDATE public.crm_quotes
+          SET issue_date = CURRENT_DATE - 100, valid_until = CURRENT_DATE - 70
+        WHERE id = $1`, [r0.id]);
+    await pool.query("SELECT public.set_crm_quote_status($1,$2,$3,'enviado',NULL)",
+      [EMPRESA, r0.id, GESTORA]);
+
+    // As datas herdadas: emissão e validade da R0, ambas no passado.
+    const { rows } = await pool.query(
+      `SELECT * FROM public.revise_crm_quote(
+         $1,$2,$3,CURRENT_DATE - 100,CURRENT_DATE - 70,0,true,23,NULL,$4::jsonb)`,
+      [EMPRESA, r0.id, GESTORA,
+        JSON.stringify([{ description: "A", quantity: 1, unit: "servico", unit_price: 60 }])],
+    );
+
+    const r1 = rows[0].quote_id as string;
+    // A base ACEITA criá-la — o CHECK só exige valid_until >= issue_date.
+    expect((await mudar(r1, "enviado")).ok).toBe(true);
+    // E só aqui rebenta, muito depois de o cliente ter aprovado o preço.
+    const r = await mudar(r1, "aceite");
+    expect(r.ok).toBe(false);
+    expect(r.ok === false && r.erro).toContain("QUOTE_EXPIRED_CANNOT_ACCEPT");
+  });
+
   it("🔴 um substituído já não muda de estado", LENTO, async () => {
     const r0 = await criar({
       itens: [{ description: "A", quantity: 1, unit: "servico", unit_price: 50 }],

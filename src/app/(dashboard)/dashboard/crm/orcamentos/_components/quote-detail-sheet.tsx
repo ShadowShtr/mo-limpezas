@@ -24,6 +24,7 @@ import { createPortal } from "react-dom";
 import { Download, FileClock, TriangleAlert, X } from "lucide-react";
 
 import { useToast } from "@/components/ui/toast";
+import { fmtLisbon } from "@/lib/lisbon-time";
 import {
   allowedQuoteTransitions,
   canReviseQuote,
@@ -220,7 +221,15 @@ export function QuoteDetailSheet({
                 <span className="block text-[11.5px]" style={{ color: "var(--color-text-muted)" }}>
                   Enviado
                 </span>
-                {fmtDate(q.sent_at.slice(0, 10))}
+                {/*
+                  🔴 `fmtLisbon`, e não `sent_at.slice(0, 10)`.
+                     `sent_at` é um instante em UTC. Fatiar os dez primeiros
+                     caracteres lê o dia EM UTC: um envio às 00:30 de Lisboa no
+                     verão está gravado como 23:30 do dia anterior, e o ecrã
+                     mostrava a véspera. É o mesmo defeito de fuso que a
+                     auditoria de 2026-07-06 varreu do resto da aplicação.
+                */}
+                {fmtLisbon(q.sent_at, { dateStyle: "medium" })}
               </div>
             )}
             {q.rejection_reason && (

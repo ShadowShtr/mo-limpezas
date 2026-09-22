@@ -5241,7 +5241,7 @@
       "signals": {
         "serviceRole": 2,
         "write": 1,
-        "sqlWrite": 25,
+        "sqlWrite": 28,
         "fallbackZero": 2
       },
       "action": "nenhuma",
@@ -20682,7 +20682,7 @@
       "category": "lib",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 40,
+      "consumers": 41,
       "consumerSample": [
         "src/__tests__/lisbon-time.test.ts",
         "src/app/(app)/app/ausencias/_components/ausencias-client.tsx",
@@ -20696,7 +20696,7 @@
       "risks": [],
       "signals": {},
       "action": "nenhuma",
-      "reason": "em uso: 40 consumidor(es)",
+      "reason": "em uso: 41 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,

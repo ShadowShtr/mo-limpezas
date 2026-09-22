@@ -111,9 +111,29 @@ export function QuoteSheet({
   const [clientId, setClientId] = useState("");
   const [visitId, setVisitId] = useState("");
 
-  const [issueDate, setIssueDate] = useState(base?.quote.issue_date ?? hoje);
+  // 🔴 As datas de uma revisão são de HOJE, e não as herdadas da versão
+  //    anterior.
+  //
+  //    A primeira versão punha `base.quote.issue_date` aqui, com o raciocínio
+  //    de que o formulário devia abrir com o que a R0 tinha. Está errado por
+  //    dois motivos, e o segundo faz estragos:
+  //
+  //      · uma R1 emitida hoje não foi emitida na data da R0 — a data de
+  //        emissão de um documento é o dia em que ele existe;
+  //
+  //      · uma R0 de há três meses traz consigo uma validade de há dois. A
+  //        revisão nascia JÁ EXPIRADA, passava o CHECK (`valid_until >=
+  //        issue_date`, ambos no passado) e só falhava muito mais tarde, com
+  //        `QUOTE_EXPIRED_CANNOT_ACCEPT`, quando alguém tentasse aceitar o
+  //        orçamento que o cliente já tinha aprovado. A saída seria marcar
+  //        enviado e rever outra vez — um número queimado e uma revisão de
+  //        lixo na cadeia.
+  //
+  //    Herdam-se os valores que descrevem o NEGÓCIO (linhas, desconto, IVA).
+  //    Não se herda o que descreve o documento no tempo.
+  const [issueDate, setIssueDate] = useState(hoje);
   const [validUntil, setValidUntil] = useState(
-    addDaysToDateString(base?.quote.issue_date ?? hoje, QUOTE_DEFAULT_VALIDITY_DAYS),
+    addDaysToDateString(hoje, QUOTE_DEFAULT_VALIDITY_DAYS),
   );
   const [pricingKind, setPricingKind] = useState<QuotePricingKind>("pontual");
   const [discountPct, setDiscountPct] = useState(
@@ -221,7 +241,19 @@ export function QuoteSheet({
             validUntil,
             discountPct: Number(discountPct.replace(",", ".")) || 0,
             applyVat,
-            notes: notes || null,
+            // 🔴 `notes`, e NÃO `notes || null` — ao contrário da criação, e a
+            //    diferença não é descuido.
+            //
+            //    `revise_crm_quote` grava `COALESCE(p_notes, v_antiga.notes)`:
+            //    um `null` quer dizer «herda o que lá estava». Como este campo
+            //    abre pré-preenchido com as notas da versão anterior, quem o
+            //    esvazia está a dizer «tira isto» — e enviar `null` fazia a
+            //    base repor exactamente o texto que a pessoa acabou de apagar.
+            //    O ecrã ficava vazio, o PDF saía com as notas velhas, e não
+            //    havia forma nenhuma de as remover numa revisão.
+            //
+            //    Uma string vazia não é `null`: passa pelo COALESCE e limpa.
+            notes,
             items,
           })
         : await createQuote({
