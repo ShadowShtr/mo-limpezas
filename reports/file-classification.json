@@ -1,12 +1,12 @@
 {
   "generatedBy": "scripts/audit-file-inventory.mjs",
-  "totalFiles": 960,
+  "totalFiles": 961,
   "byStatus": {
-    "MANTER": 936,
+    "MANTER": 937,
     "STANDBY": 24
   },
   "byCategory": {
-    "test": 229,
+    "test": 230,
     "route-ui": 155,
     "migration": 140,
     "lib": 79,
@@ -29,7 +29,7 @@
     "supabase-other": 2
   },
   "byConfidence": {
-    "alta": 938,
+    "alta": 939,
     "média": 16,
     "baixa": 6
   },
@@ -5243,6 +5243,34 @@
         "write": 1,
         "sqlWrite": 28,
         "fallbackZero": 2
+      },
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/__tests__/crm-quote-sheet.test.tsx",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [
+        "any(3)"
+      ],
+      "signals": {
+        "eslintDisable": 1,
+        "anyType": 3,
+        "dynamicImport": 1
       },
       "action": "nenhuma",
       "reason": "suite de testes — corre por convenção do vitest",
@@ -12747,8 +12775,9 @@
       "category": "route-ui",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 1,
+      "consumers": 2,
       "consumerSample": [
+        "src/__tests__/crm-quote-sheet.test.tsx",
         "src/app/(dashboard)/dashboard/crm/orcamentos/_components/quotes-client.tsx"
       ],
       "autoLoaded": false,
@@ -12760,7 +12789,7 @@
         "fallbackZero": 1
       },
       "action": "nenhuma",
-      "reason": "em uso: 1 consumidor(es)",
+      "reason": "em uso: 2 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -20076,11 +20105,11 @@
       "category": "lib",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 7,
+      "consumers": 8,
       "consumerSample": [
         "src/__tests__/crm-quote-runtime-parity.pg.test.ts",
-        "src/__tests__/crm-quotes-vocabulary.test.ts",
-        "src/app/(dashboard)/dashboard/crm/orcamentos/_components/quote-detail-sheet.tsx"
+        "src/__tests__/crm-quote-sheet.test.tsx",
+        "src/__tests__/crm-quotes-vocabulary.test.ts"
       ],
       "autoLoaded": false,
       "referencedBy": [],
@@ -20092,7 +20121,7 @@
         "fallbackArray": 1
       },
       "action": "nenhuma",
-      "reason": "em uso: 7 consumidor(es)",
+      "reason": "em uso: 8 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -20682,11 +20711,11 @@
       "category": "lib",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 41,
+      "consumers": 42,
       "consumerSample": [
+        "src/__tests__/crm-quote-sheet.test.tsx",
         "src/__tests__/lisbon-time.test.ts",
-        "src/app/(app)/app/ausencias/_components/ausencias-client.tsx",
-        "src/app/(app)/app/escala/page.tsx"
+        "src/app/(app)/app/ausencias/_components/ausencias-client.tsx"
       ],
       "autoLoaded": false,
       "referencedBy": [
@@ -20696,7 +20725,7 @@
       "risks": [],
       "signals": {},
       "action": "nenhuma",
-      "reason": "em uso: 41 consumidor(es)",
+      "reason": "em uso: 42 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
