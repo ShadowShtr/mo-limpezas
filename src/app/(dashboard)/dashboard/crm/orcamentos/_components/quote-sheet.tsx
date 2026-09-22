@@ -42,6 +42,8 @@ import { Plus, Trash2, X } from "lucide-react";
 import { useToast } from "@/components/ui/toast";
 import { addDaysToDateString, todayInLisbon } from "@/lib/lisbon-time";
 import {
+  hasMaxDecimalPlaces,
+  QUOTE_DECIMAL_MESSAGE,
   QUOTE_DEFAULT_VALIDITY_DAYS,
   QUOTE_PRICING_KINDS,
   QUOTE_PRICING_KIND_LABELS,
@@ -196,14 +198,33 @@ export function QuoteSheet({
     [linhas],
   );
 
+  const descontoNumerico = Number(discountPct.replace(",", ".")) || 0;
+
+  /**
+   * 🔴 Algum valor escrito está fora do domínio que a aritmética reproduz?
+   *
+   *    Seis casas decimais é o limite, e a regra autoritativa é a do servidor
+   *    (`crm-orcamentos.ts` recusa antes da RPC). Esta é a mesma regra, aqui,
+   *    só para dar resposta imediata — e sobretudo para NÃO MOSTRAR UM TOTAL
+   *    que a base não vai confirmar. 100000 × 0,000000051 dá 0,01 na base e
+   *    0,00 aqui: um preview com esse número seria uma promessa falsa.
+   */
+  const foraDeDominio = useMemo(
+    () =>
+      itensNumericos.some(
+        (i) => !hasMaxDecimalPlaces(i.quantity) || !hasMaxDecimalPlaces(i.unit_price),
+      ) || !hasMaxDecimalPlaces(descontoNumerico),
+    [itensNumericos, descontoNumerico],
+  );
+
   const previsao = useMemo(
     () =>
       totaisDoOrcamento(itensNumericos, {
-        discountPct: Number(discountPct.replace(",", ".")) || 0,
+        discountPct: descontoNumerico,
         applyVat,
         vatRate,
       }),
-    [itensNumericos, discountPct, applyVat, vatRate],
+    [itensNumericos, descontoNumerico, applyVat, vatRate],
   );
 
   function alterarLinha(i: number, patch: Partial<LinhaForm>) {
@@ -590,6 +611,16 @@ export function QuoteSheet({
             className="rounded-lg border px-3 py-2 text-[13px]"
             style={{ borderColor: "var(--color-border)", background: "var(--color-background)" }}
           >
+            {foraDeDominio ? (
+              // 🔴 Nenhum número aqui enquanto houver um valor fora do
+              //    domínio. Mostrar um total que a base não vai confirmar é
+              //    pior do que não mostrar total nenhum.
+              <p className="text-[12.5px] text-red-600">
+                {QUOTE_DECIMAL_MESSAGE} Há um valor com casas a mais — o total só é calculado
+                depois de o corrigir.
+              </p>
+            ) : (
+            <>
             <div className="flex justify-between">
               <span style={{ color: "var(--color-text-muted)" }}>Subtotal</span>
               <span>{fmtEur(previsao.subtotal)}</span>
@@ -619,6 +650,8 @@ export function QuoteSheet({
               Pré-visualização. Os valores do documento são os que o servidor gravar.
               {vatRate == null && " A taxa de IVA das definições não carregou."}
             </p>
+            </>
+            )}
           </div>
 
           <label className="block text-[12.5px] font-medium">
@@ -691,7 +724,7 @@ export function QuoteSheet({
           </button>
           <button
             type="submit"
-            disabled={pending || (!eRevisao && !alvoEscolhido)}
+            disabled={pending || foraDeDominio || (!eRevisao && !alvoEscolhido)}
             className="rounded-lg px-4 py-2 text-[13px] font-semibold text-white disabled:opacity-50"
             style={{ background: "#16A34A" }}
           >

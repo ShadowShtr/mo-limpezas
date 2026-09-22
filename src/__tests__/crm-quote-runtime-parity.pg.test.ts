@@ -35,6 +35,7 @@ import { baselineCompleto } from "./helpers/production-baseline";
 import { MIGRATIONS_CRM, migrationCrm } from "./helpers/crm-pg-harness";
 import {
   canTransitionQuote,
+  hasMaxDecimalPlaces,
   QUOTE_STATUSES,
   totaisDoOrcamento,
   type QuoteStatus,
@@ -309,6 +310,19 @@ describe("🔴 paridade de totais — a pré-visualização e o que a base grava
       taxaIva: 6,
     },
     {
+      nome: "seis casas no preço — o limite do domínio",
+      itens: [{ description: "A", quantity: 3, unit: "unidade", unit_price: 0.000001 }],
+    },
+    {
+      nome: "seis casas na quantidade",
+      itens: [{ description: "A", quantity: 1.000001, unit: "hora", unit_price: 99.99 }],
+    },
+    {
+      nome: "seis casas dos dois lados, com desconto de seis casas",
+      itens: [{ description: "A", quantity: 12.345678, unit: "m2", unit_price: 1.234567 }],
+      desconto: 3.141592,
+    },
+    {
       nome: "muitas linhas irregulares",
       itens: [
         { description: "A", quantity: 2.25, unit: "hora", unit_price: 11.11 },
@@ -344,6 +358,32 @@ describe("🔴 paridade de totais — a pré-visualização e o que a base grava
       expect(previsto.total, "total").toBe(base.total);
     });
   }
+
+  it("🔴 fora do domínio, a base e o runtime DIVERGEM — é por isso que se recusa", LENTO, async () => {
+    // Os dois casos que a direcção nomeou. Aqui mede-se a divergência contra o
+    // Postgres a sério: é a justificação do limite de seis casas, e não uma
+    // restrição arbitrária. A action recusa estes valores antes da RPC
+    // (`crm-quote-actions.test.ts`); este ensaio explica porquê.
+    const casos: Array<{ preco: number; base: number }> = [
+      { preco: 0.000000051, base: 0.01 },
+      { preco: 0.000001051, base: 0.11 },
+    ];
+
+    for (const { preco, base } of casos) {
+      const { rows } = await pool.query(
+        "SELECT round(100000::numeric * $1::numeric, 2) AS total", [preco]);
+      expect(Number(rows[0].total), `Postgres para ${preco}`).toBe(base);
+
+      const previsto = totaisDoOrcamento(
+        [{ quantity: 100_000, unit_price: preco }],
+        { discountPct: 0, applyVat: false, vatRate: 0 },
+      );
+      expect(previsto.subtotal, `runtime para ${preco}`).not.toBe(base);
+
+      // E é exactamente por isto que o valor não é aceite.
+      expect(hasMaxDecimalPlaces(preco)).toBe(false);
+    }
+  });
 
   it("🔴 line_total é o da base, e não quantidade × preço no cliente", LENTO, async () => {
     // A coluna é `numeric(10,2)`: 1,5 × 0,33 = 0,495 é gravado como 0,50. Um

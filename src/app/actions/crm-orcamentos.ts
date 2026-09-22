@@ -84,7 +84,10 @@ import { auditLog } from "@/lib/audit";
 import { invalidateBusinessState } from "@/lib/revalidate-business";
 import { logQueryFailure } from "@/lib/query-error";
 import {
+  hasMaxDecimalPlaces,
+  QUOTE_DECIMAL_MESSAGE,
   QUOTE_PRICING_KINDS,
+  QUOTE_STATUS_LABELS,
   QUOTE_STATUSES,
   QUOTE_UNITS,
   type QuoteStatus,
@@ -385,11 +388,30 @@ export async function getQuote(quoteId: string): Promise<ActionResult<QuoteWithI
 
 // ── Escritas (RPC, e só RPC) ────────────────────────────────────────────────
 
+/**
+ * 🔴 O DOMÍNIO DECIMAL é validado AQUI, no servidor, e não no `<input>`.
+ *
+ *    `micros()` trabalha em escala 1e-6 e trunca o que vem além da sexta
+ *    casa. Sem este limite, a action aceitava valores que a pré-visualização
+ *    não reproduz — 100000 × 0,000000051 dá 0,01 na base e 0,00 no ecrã.
+ *
+ *    A UI espelha a regra para dar resposta imediata, mas isso é conforto, não
+ *    é garantia: uma Server Action é um endpoint. Quem lhe chamar directamente
+ *    com sete casas tem de ser recusado antes de a RPC ser invocada, e é o que
+ *    este `refine` faz.
+ */
+const decimalAceite = (campo: string) =>
+  z.number().refine((v) => hasMaxDecimalPlaces(v), { message: `${campo}: ${QUOTE_DECIMAL_MESSAGE}` });
+
 const itemSchema = z.object({
   description: z.string().trim().min(1, "Escreva o que está a orçamentar.").max(500),
-  quantity: z.number().positive("A quantidade tem de ser maior do que zero.").max(100_000),
+  quantity: decimalAceite("Quantidade")
+    .positive("A quantidade tem de ser maior do que zero.")
+    .max(100_000),
   unit: z.enum(QUOTE_UNITS),
-  unitPrice: z.number().min(0, "O preço não pode ser negativo.").max(1_000_000),
+  unitPrice: decimalAceite("Preço")
+    .min(0, "O preço não pode ser negativo.")
+    .max(1_000_000),
 });
 
 const criarSchema = z
@@ -400,7 +422,7 @@ const criarSchema = z
     issueDate: z.iso.date(),
     validUntil: z.iso.date(),
     pricingKind: z.enum(QUOTE_PRICING_KINDS),
-    discountPct: z.number().min(0).max(100).optional().nullable(),
+    discountPct: decimalAceite("Desconto").min(0).max(100).optional().nullable(),
     applyVat: z.boolean().optional().nullable(),
     proposedFrequency: z.string().trim().max(50).optional().nullable(),
     paymentTerms: z.string().trim().max(500).optional().nullable(),
@@ -558,7 +580,7 @@ const revisaoSchema = z
   .object({
     issueDate: z.iso.date(),
     validUntil: z.iso.date(),
-    discountPct: z.number().min(0).max(100).optional().nullable(),
+    discountPct: decimalAceite("Desconto").min(0).max(100).optional().nullable(),
     applyVat: z.boolean().optional().nullable(),
     notes: z.string().trim().max(5000).optional().nullable(),
     items: z.array(itemSchema).min(1, "Uma revisão tem de ter pelo menos uma linha.").max(100),
@@ -618,7 +640,7 @@ export async function reviseQuote(
   if (!settings) {
     return actionFailure(
       ACTION_ERROR_CODES.BUSINESS_RULE,
-      "As definições da empresa não foram encontradas. Não é possível revir sem a taxa de IVA.",
+      "As definições da empresa não foram encontradas. Não é possível rever sem a taxa de IVA.",
     );
   }
 
@@ -652,6 +674,16 @@ export async function reviseQuote(
         ACTION_ERROR_CODES.PERSISTENCE,
       );
     }
+
+    // 🔴 O id da revisão NOVA, e não o da que ficou para trás: é da linha nova
+    //    que saem o número (`…-R1`) e a proveniência herdada.
+    await registarEventoDoOrcamentoNaLead(
+      admin,
+      profile.company_id,
+      String(linha.quote_id),
+      profile.id,
+      (numero) => `Orçamento ${numero} criado como revisão.`,
+    );
 
     await auditLog({
       companyId: profile.company_id,
@@ -728,6 +760,18 @@ export async function setQuoteStatus(
       );
     }
 
+    // A ficha da lead tem de mostrar o percurso completo, e não só a criação:
+    // enviado, aceite, recusado, expirado, anulado. `audit_logs` não serve —
+    // a ficha lê `crm_lead_interactions`.
+    const estadoLegivel = QUOTE_STATUS_LABELS[linha.status as QuoteStatus] ?? linha.status;
+    await registarEventoDoOrcamentoNaLead(
+      admin,
+      profile.company_id,
+      quoteId,
+      profile.id,
+      (numero) => `Orçamento ${numero}: ${estadoLegivel.toLowerCase()}.`,
+    );
+
     await auditLog({
       companyId: profile.company_id,
       actorId: profile.id,
@@ -756,6 +800,63 @@ export async function setQuoteStatus(
  *    A consequência tem de ser dita em voz alta: o diário pode ter buracos.
  *    NENHUM relatório pode contar orçamentos a partir desta tabela.
  */
+/**
+ * Regista na ficha da lead um evento de um orçamento que já existe.
+ *
+ * 🔴 A lead vem de `source_lead_id` da PRÓPRIA LINHA, lida agora — nunca de
+ *    `lead_id`, e nunca de um valor que a action tivesse à mão.
+ *
+ *    `lead_id` é o destinatário ACTUAL e muda: a conversão (104) põe-no a NULL
+ *    ao preencher `client_id`. `source_lead_id` é proveniência imutável, por
+ *    trigger. Uma timeline construída a partir de `lead_id` deixava de
+ *    registar eventos exactamente nos orçamentos que fecharam negócio — os
+ *    convertidos —, que são os que mais interessa ver na ficha.
+ *
+ *    Numa revisão, o id a passar é o da linha NOVA: é dela que sai o número
+ *    (`…-R1`) e a proveniência herdada.
+ *
+ * 🔴 Best-effort, e em voz alta: `crm_lead_interactions` é uma PROJEÇÃO
+ *    DERIVADA. A fonte autoritativa de um orçamento é `crm_quotes`. Uma falha
+ *    aqui não desfaz uma RPC que correu bem — desfazer o documento por causa
+ *    de uma linha de diário seria trocar o essencial pelo acessório. A
+ *    consequência tem de ser dita: o diário pode ter buracos, e NENHUM
+ *    relatório pode contar orçamentos a partir desta tabela.
+ */
+async function registarEventoDoOrcamentoNaLead(
+  admin: AdminClient,
+  companyId: string,
+  quoteId: string,
+  actorId: string,
+  resumo: (quoteNumber: string) => string,
+): Promise<void> {
+  try {
+    const { data, error } = await admin
+      .from("crm_quotes")
+      .select("source_lead_id, quote_number")
+      .eq("company_id", companyId)
+      .eq("id", quoteId)
+      .maybeSingle();
+
+    if (error) {
+      logQueryFailure("registarEventoDoOrcamentoNaLead", error);
+      return;
+    }
+    // Sem linha, ou nascido de um cliente que já existia: não há lead nenhuma
+    // a quem contar a história, e inventar uma seria pior do que o silêncio.
+    if (!data?.source_lead_id) return;
+
+    await registarNaLead(
+      admin,
+      companyId,
+      data.source_lead_id,
+      actorId,
+      resumo(data.quote_number),
+    );
+  } catch (err) {
+    console.error("[registarEventoDoOrcamentoNaLead] falhou:", err);
+  }
+}
+
 async function registarNaLead(
   admin: AdminClient,
   companyId: string,

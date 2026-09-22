@@ -316,6 +316,79 @@ describe("🔴 proveniência — source_lead_id, e não lead_id", () => {
   });
 });
 
+describe("🔴 o domínio decimal é fechado no SERVIDOR", () => {
+  it("quantidade, preço e desconto passam pelo limite", () => {
+    // Uma Server Action é um endpoint: o `<input>` não é um gate. Quem lhe
+    // chamar directamente com sete casas tem de ser recusado antes da RPC.
+    expect(CODIGO).toContain("hasMaxDecimalPlaces");
+    expect(CODIGO).toContain("decimalAceite");
+    for (const campo of ["quantity: decimalAceite", "unitPrice: decimalAceite"]) {
+      expect(CODIGO, `${campo} sem limite decimal`).toContain(campo);
+    }
+    // Os dois `discountPct` — criação e revisão.
+    const descontos = [...CODIGO.matchAll(/discountPct:\s*decimalAceite/g)];
+    expect(descontos.length, "os dois discountPct têm de ser validados").toBe(2);
+  });
+
+  it("🔴 nenhum campo numérico do orçamento escapa ao limite", () => {
+    // Se alguém acrescentar um `z.number()` solto nestes schemas, aparece aqui.
+    const numerosSoltos = [...CODIGO.matchAll(/(quantity|unitPrice|discountPct):\s*z\.number\(/g)];
+    expect(numerosSoltos.map((m) => m[1]), "campo sem `decimalAceite`").toEqual([]);
+  });
+
+  it("a UI espelha a regra, mas não é ela o gate", () => {
+    const formulario = semComentarios(ler(`${UI}/_components/quote-sheet.tsx`));
+    expect(formulario).toContain("hasMaxDecimalPlaces");
+    expect(formulario).toContain("foraDeDominio");
+    // E não mostra um total que a base não vai confirmar.
+    expect(formulario).toContain("foraDeDominio ?");
+  });
+});
+
+describe("🔴 a timeline da lead segue a PROVENIÊNCIA", () => {
+  it("existe um helper que lê a lead da própria linha", () => {
+    expect(CODIGO).toContain("registarEventoDoOrcamentoNaLead");
+    expect(CODIGO).toContain('select("source_lead_id, quote_number")');
+  });
+
+  it("🔴 revisão e mudança de estado registam na ficha da lead", () => {
+    // `audit_logs` não substitui `crm_lead_interactions`: a ficha lê a segunda.
+    for (const fn of ["reviseQuote", "setQuoteStatus"]) {
+      expect(corpoDe(fn), `${fn} não escreve na timeline`)
+        .toContain("registarEventoDoOrcamentoNaLead");
+    }
+  });
+
+  it("🔴 nunca por lead_id — é `source_lead_id` ou nada", () => {
+    // `lead_id` é o destinatário ACTUAL e a conversão (104) põe-no a NULL.
+    // Uma timeline construída a partir dele deixava de registar eventos
+    // exactamente nos orçamentos que fecharam negócio.
+    const helper = CODIGO.slice(CODIGO.indexOf("async function registarEventoDoOrcamentoNaLead"));
+    const corpo = helper.slice(0, helper.indexOf("async function registarNaLead"));
+    expect(corpo).toContain("source_lead_id");
+    expect(corpo).not.toMatch(/(^|[^_])lead_id\s*[,)]/m);
+  });
+
+  it("🔴 best-effort: nunca desfaz a operação principal", () => {
+    const helper = CODIGO.slice(CODIGO.indexOf("async function registarEventoDoOrcamentoNaLead"));
+    const corpo = helper.slice(0, helper.indexOf("async function registarNaLead"));
+    expect(corpo).toContain("try {");
+    expect(corpo).toContain("catch");
+    // Não devolve nada que o chamador possa transformar em falha.
+    expect(corpo).toContain("Promise<void>");
+  });
+
+  it("a timeline só é escrita DEPOIS de a RPC ter corrido bem", () => {
+    for (const fn of ["reviseQuote", "setQuoteStatus"]) {
+      const corpo = corpoDe(fn);
+      const erro = corpo.indexOf("if (error) return erroDaRpc");
+      const timeline = corpo.indexOf("registarEventoDoOrcamentoNaLead");
+      expect(erro, `${fn}: sem tratamento de erro da RPC`).toBeGreaterThan(-1);
+      expect(timeline, `${fn}: timeline antes de saber se a RPC correu`).toBeGreaterThan(erro);
+    }
+  });
+});
+
 describe("🔴 fora de escopo em 103-B1: email e conversão", () => {
   const ficheiros = [ACTIONS, ...ficheirosUi(), "src/lib/crm/quotes.ts"];
 

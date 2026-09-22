@@ -1,12 +1,12 @@
 {
   "generatedBy": "scripts/audit-file-inventory.mjs",
-  "totalFiles": 961,
+  "totalFiles": 962,
   "byStatus": {
-    "MANTER": 937,
+    "MANTER": 938,
     "STANDBY": 24
   },
   "byCategory": {
-    "test": 230,
+    "test": 231,
     "route-ui": 155,
     "migration": 140,
     "lib": 79,
@@ -29,7 +29,7 @@
     "supabase-other": 2
   },
   "byConfidence": {
-    "alta": 939,
+    "alta": 940,
     "média": 16,
     "baixa": 6
   },
@@ -5190,6 +5190,31 @@
         "sqlWrite": 16,
         "revalidatePath": 1,
         "dynamicImport": 2
+      },
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/__tests__/crm-quote-actions.test.ts",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "sqlWrite": 1,
+        "dynamicImport": 1
       },
       "action": "nenhuma",
       "reason": "suite de testes — corre por convenção do vitest",
@@ -14953,11 +14978,11 @@
       "category": "server-action",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 6,
+      "consumers": 7,
       "consumerSample": [
+        "src/__tests__/crm-quote-actions.test.ts",
         "src/__tests__/crm-quote-pdf.test.ts",
-        "src/app/(dashboard)/dashboard/crm/orcamentos/_components/quote-detail-sheet.tsx",
-        "src/app/(dashboard)/dashboard/crm/orcamentos/_components/quote-pdf.ts"
+        "src/app/(dashboard)/dashboard/crm/orcamentos/_components/quote-detail-sheet.tsx"
       ],
       "autoLoaded": false,
       "referencedBy": [],
@@ -14975,13 +15000,13 @@
         "eslintDisable": 3,
         "anyType": 3,
         "unknownCast": 3,
-        "consoleErr": 1,
+        "consoleErr": 2,
         "ignoredError": 2,
         "fallbackZero": 2,
         "fallbackArray": 4
       },
       "action": "auditar atomicidade (T12/T13)",
-      "reason": "em uso: 6 consumidor(es)",
+      "reason": "em uso: 7 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,

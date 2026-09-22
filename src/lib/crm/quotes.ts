@@ -135,6 +135,80 @@ export const QUOTE_PRICING_KIND_LABELS: Record<QuotePricingKind, string> = {
 /** Validade por omissão de um orçamento, em dias. */
 export const QUOTE_DEFAULT_VALIDITY_DAYS = 30;
 
+// ---------------------------------------------------------------------------
+// 🔴 O DOMÍNIO DECIMAL: seis casas, e nem mais uma
+// ---------------------------------------------------------------------------
+//
+// `micros()` trabalha em escala 1e-6 e trunca o que vem além da sexta casa.
+// Enquanto os schemas aceitavam qualquer `number`, isso abria um buraco de
+// paridade — o servidor aceitava valores que a pré-visualização não reproduz:
+//
+//     quantidade 100000 × preço 0,000000051
+//        Postgres  round(0,0051, 2) = 0,01
+//        runtime                     = 0,00      ← a sétima casa desapareceu
+//
+//     quantidade 100000 × preço 0,000001051
+//        Postgres  round(0,1051, 2) = 0,11
+//        runtime                     = 0,10
+//
+// Não se resolve alargando a escala: qualquer escala finita tem uma casa a
+// seguir à última. Resolve-se FECHANDO O DOMÍNIO — o que entra é o que a
+// aritmética reproduz exactamente, e o resto é recusado antes de chegar à RPC.
+//
+// A frase que se pode dizer depois disto é «`totaisDoOrcamento` é paritário
+// com o PostgreSQL para o domínio aceite pelo runtime», e não «para qualquer
+// number».
+
+/** Casas decimais que o runtime reproduz exactamente. */
+export const QUOTE_MAX_DECIMAL_PLACES = 6;
+
+/**
+ * Quantas casas decimais tem o valor, lendo a sua representação decimal.
+ *
+ * 🔴 NÃO se faz `Number.isInteger(value * 1e6)`. A multiplicação em binário
+ *    introduz precisamente o erro que se quer medir: `0.000001051 * 1e6` dá
+ *    1.0509999999999999, que não é inteiro — mas `1.000001 * 1e6` dá
+ *    1000000.9999999999, que também não é, e esse é legítimo. O teste passaria
+ *    a depender do lixo de arredondamento em vez do número escrito.
+ *
+ * 🔴 A notação exponencial TEM de ser tratada. `String(0.000000051)` é
+ *    `"5.1e-8"`: contar o que vem depois de um ponto que não existe daria zero
+ *    casas, e o valor mais perigoso de todos passaria como inteiro.
+ *
+ *    Com expoente, as casas efectivas são `casas(mantissa) − expoente`:
+ *    `5.1e-8` → 1 − (−8) = 9. Um expoente positivo consome casas
+ *    (`1.5e3` = 1500 → 1 − 3 = −2, limitado a 0).
+ *
+ * Um valor não finito devolve `Infinity` — não tem representação decimal, e
+ * falha qualquer limite.
+ */
+export function decimalPlaces(value: number): number {
+  if (!Number.isFinite(value)) return Number.POSITIVE_INFINITY;
+
+  const s = String(Math.abs(value));
+  const e = s.indexOf("e");
+
+  if (e === -1) {
+    const ponto = s.indexOf(".");
+    return ponto === -1 ? 0 : s.length - ponto - 1;
+  }
+
+  const mantissa = s.slice(0, e);
+  const expoente = Number(s.slice(e + 1));
+  const ponto = mantissa.indexOf(".");
+  const casasMantissa = ponto === -1 ? 0 : mantissa.length - ponto - 1;
+
+  return Math.max(0, casasMantissa - expoente);
+}
+
+/** O valor cabe no domínio que a aritmética reproduz exactamente? */
+export function hasMaxDecimalPlaces(value: number, max = QUOTE_MAX_DECIMAL_PLACES): boolean {
+  return decimalPlaces(value) <= max;
+}
+
+/** A mesma frase em todo o lado onde o domínio é recusado. */
+export const QUOTE_DECIMAL_MESSAGE = `Use no máximo ${QUOTE_MAX_DECIMAL_PLACES} casas decimais.`;
+
 export interface QuoteItemAmounts {
   quantity: number;
   unit_price: number;
