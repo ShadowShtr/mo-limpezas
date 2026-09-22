@@ -20,8 +20,9 @@
 // entrada para um ecrã cuja tabela não existe leva a uma página que rebenta
 // na primeira consulta.
 //
-// Visitas entrou agora porque a 102 está aplicada (`crm_visits` existe).
-// Orçamentos continua de fora: `crm_quotes` é da 103, e ainda não existe.
+// Visitas entrou com a 102 (`crm_visits`). Orçamentos entra agora porque a
+// 103 está aplicada e verificada em produção (`crm_quotes`, `crm_quote_items`
+// e as três RPC existem; a 103a fechou-lhes a ACL).
 //
 // Há um ensaio que trava a regressão: nenhuma vista pode apontar para uma
 // rota sem página no repositório.
@@ -29,7 +30,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { CalendarClock, KanbanSquare } from "lucide-react";
+import { CalendarClock, FileText, KanbanSquare } from "lucide-react";
 
 /**
  * As vistas do módulo, por ordem de trabalho.
@@ -41,6 +42,7 @@ import { CalendarClock, KanbanSquare } from "lucide-react";
 export const CRM_VIEWS = [
   { href: "/dashboard/crm", label: "Pipeline de Leads", icon: KanbanSquare },
   { href: "/dashboard/crm/visitas", label: "Visitas", icon: CalendarClock },
+  { href: "/dashboard/crm/orcamentos", label: "Orçamentos", icon: FileText },
 ] as const;
 
 /**
@@ -48,7 +50,8 @@ export const CRM_VIEWS = [
  *
  * Correspondência mais longa primeiro: com rotas aninhadas, `/dashboard/crm`
  * casaria com tudo o que vem abaixo e duas abas ficariam acesas ao mesmo
- * tempo. Continua assim com uma vista só, para o dia em que forem três.
+ * tempo. São três desde a 103 — e `/dashboard/crm/<uuid>` (a ficha de uma
+ * lead) tem de acender Pipeline, não Orçamentos.
  */
 export function activeCrmView(pathname: string): string | null {
   const candidatas = [...CRM_VIEWS]
