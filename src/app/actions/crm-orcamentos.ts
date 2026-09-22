@@ -84,12 +84,17 @@ import { auditLog } from "@/lib/audit";
 import { invalidateBusinessState } from "@/lib/revalidate-business";
 import { logQueryFailure } from "@/lib/query-error";
 import {
+  excedeMontanteMaximo,
   hasMaxDecimalPlaces,
+  QUOTE_AMOUNT_MESSAGE,
   QUOTE_DECIMAL_MESSAGE,
+  QUOTE_DISCOUNT_DECIMAL_MESSAGE,
+  QUOTE_DISCOUNT_MAX_DECIMAL_PLACES,
   QUOTE_PRICING_KINDS,
   QUOTE_STATUS_LABELS,
   QUOTE_STATUSES,
   QUOTE_UNITS,
+  totaisDoOrcamento,
   type QuoteStatus,
 } from "@/lib/crm/quotes";
 
@@ -403,6 +408,21 @@ export async function getQuote(quoteId: string): Promise<ActionResult<QuoteWithI
 const decimalAceite = (campo: string) =>
   z.number().refine((v) => hasMaxDecimalPlaces(v), { message: `${campo}: ${QUOTE_DECIMAL_MESSAGE}` });
 
+/**
+ * 🔴 O desconto tem escala PRÓPRIA: 2 casas, não 6.
+ *
+ *    `discount_pct` é `numeric(5,2)`, e a RPC calcula a base com o valor bruto
+ *    antes de a coluna o arredondar. Com mais casas, o documento persistia
+ *    «3,14 %» e os totais correspondiam a 3,141592 % — o número que se lê e o
+ *    número que fez a conta deixavam de ser o mesmo.
+ */
+const descontoAceite = () =>
+  z
+    .number()
+    .refine((v) => hasMaxDecimalPlaces(v, QUOTE_DISCOUNT_MAX_DECIMAL_PLACES), {
+      message: QUOTE_DISCOUNT_DECIMAL_MESSAGE,
+    });
+
 const itemSchema = z.object({
   description: z.string().trim().min(1, "Escreva o que está a orçamentar.").max(500),
   quantity: decimalAceite("Quantidade")
@@ -422,7 +442,7 @@ const criarSchema = z
     issueDate: z.iso.date(),
     validUntil: z.iso.date(),
     pricingKind: z.enum(QUOTE_PRICING_KINDS),
-    discountPct: decimalAceite("Desconto").min(0).max(100).optional().nullable(),
+    discountPct: descontoAceite().min(0).max(100).optional().nullable(),
     applyVat: z.boolean().optional().nullable(),
     proposedFrequency: z.string().trim().max(50).optional().nullable(),
     paymentTerms: z.string().trim().max(500).optional().nullable(),
@@ -506,6 +526,24 @@ export async function createQuote(
     if (!cliente) return actionFailure(ACTION_ERROR_CODES.NOT_FOUND, "Cliente não encontrado.");
   }
 
+  // 🔴 CABE EM `numeric(10,2)`?
+  //
+  //    O domínio de cada campo isolado não garante isto: 100 000 de quantidade
+  //    e 1 000 000 de preço são ambos aceites e dão 1e11, que não cabe em
+  //    `numeric(10,2)`. Sem esta verificação, a RPC era chamada e o Postgres
+  //    respondia `numeric field overflow` — uma mensagem que ninguém sabe ler
+  //    e que chega depois de a transação já ter começado.
+  //
+  //    A conta é a mesma que a RPC vai fazer, com a taxa de IVA que acabou de
+  //    ser lida do servidor: o IVA entra no total e pode ser ele a estourar.
+  const previsao = totaisDoOrcamento(
+    d.items.map((i) => ({ quantity: i.quantity, unit_price: i.unitPrice })),
+    { discountPct: d.discountPct ?? 0, applyVat: d.applyVat ?? true, vatRate: settings.vat_rate },
+  );
+  if (excedeMontanteMaximo(previsao)) {
+    return actionFailure(ACTION_ERROR_CODES.BUSINESS_RULE, QUOTE_AMOUNT_MESSAGE);
+  }
+
   // 🔴 O ano do NÚMERO é o ano da data de emissão, e não `new Date()`. Emitir
   //    a 2 de Janeiro um orçamento datado de 31 de Dezembro tem de ir para a
   //    série do ano anterior — é dela que o sequencial vem.
@@ -580,7 +618,7 @@ const revisaoSchema = z
   .object({
     issueDate: z.iso.date(),
     validUntil: z.iso.date(),
-    discountPct: decimalAceite("Desconto").min(0).max(100).optional().nullable(),
+    discountPct: descontoAceite().min(0).max(100).optional().nullable(),
     applyVat: z.boolean().optional().nullable(),
     notes: z.string().trim().max(5000).optional().nullable(),
     items: z.array(itemSchema).min(1, "Uma revisão tem de ter pelo menos uma linha.").max(100),
@@ -642,6 +680,24 @@ export async function reviseQuote(
       ACTION_ERROR_CODES.BUSINESS_RULE,
       "As definições da empresa não foram encontradas. Não é possível rever sem a taxa de IVA.",
     );
+  }
+
+  // 🔴 CABE EM `numeric(10,2)`?
+  //
+  //    O domínio de cada campo isolado não garante isto: 100 000 de quantidade
+  //    e 1 000 000 de preço são ambos aceites e dão 1e11, que não cabe em
+  //    `numeric(10,2)`. Sem esta verificação, a RPC era chamada e o Postgres
+  //    respondia `numeric field overflow` — uma mensagem que ninguém sabe ler
+  //    e que chega depois de a transação já ter começado.
+  //
+  //    A conta é a mesma que a RPC vai fazer, com a taxa de IVA que acabou de
+  //    ser lida do servidor: o IVA entra no total e pode ser ele a estourar.
+  const previsao = totaisDoOrcamento(
+    d.items.map((i) => ({ quantity: i.quantity, unit_price: i.unitPrice })),
+    { discountPct: d.discountPct ?? 0, applyVat: d.applyVat ?? true, vatRate: settings.vat_rate },
+  );
+  if (excedeMontanteMaximo(previsao)) {
+    return actionFailure(ACTION_ERROR_CODES.BUSINESS_RULE, QUOTE_AMOUNT_MESSAGE);
   }
 
   try {

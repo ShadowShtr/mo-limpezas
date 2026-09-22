@@ -325,8 +325,11 @@ describe("🔴 o domínio decimal é fechado no SERVIDOR", () => {
     for (const campo of ["quantity: decimalAceite", "unitPrice: decimalAceite"]) {
       expect(CODIGO, `${campo} sem limite decimal`).toContain(campo);
     }
-    // Os dois `discountPct` — criação e revisão.
-    const descontos = [...CODIGO.matchAll(/discountPct:\s*decimalAceite/g)];
+    // 🔴 O desconto tem escala PRÓPRIA — `descontoAceite`, 2 casas, porque
+    //    `discount_pct` é numeric(5,2). O bloco «o desconto tem escala
+    //    própria» mais abaixo é que o verifica; aqui basta que nenhum dos dois
+    //    tenha ficado sem validação nenhuma.
+    const descontos = [...CODIGO.matchAll(/discountPct:\s*\w+\(/g)];
     expect(descontos.length, "os dois discountPct têm de ser validados").toBe(2);
   });
 
@@ -340,8 +343,74 @@ describe("🔴 o domínio decimal é fechado no SERVIDOR", () => {
     const formulario = semComentarios(ler(`${UI}/_components/quote-sheet.tsx`));
     expect(formulario).toContain("hasMaxDecimalPlaces");
     expect(formulario).toContain("foraDeDominio");
-    // E não mostra um total que a base não vai confirmar.
-    expect(formulario).toContain("foraDeDominio ?");
+    // E não mostra um total que a base não vai confirmar. `invalido` junta as
+    // três recusas do servidor: casas a mais nas linhas, casas a mais no
+    // desconto, e montante que não cabe em numeric(10,2).
+    expect(formulario).toContain("invalido ?");
+  });
+});
+
+describe("🔴 o desconto tem escala própria (numeric(5,2))", () => {
+  it("os dois discountPct usam o limite do desconto, não o das linhas", () => {
+    // `decimalAceite` traz 6 casas por omissão — é o domínio das LINHAS. O
+    // desconto é `numeric(5,2)` e a RPC calcula com o valor bruto antes de a
+    // coluna arredondar: seis casas fariam o documento dizer 3,14 % e os
+    // totais valerem 3,141592 %.
+    const descontos = [...CODIGO.matchAll(/discountPct:\s*(\w+)\(/g)].map((m) => m[1]);
+    expect(descontos).toEqual(["descontoAceite", "descontoAceite"]);
+    expect(CODIGO).toContain("QUOTE_DISCOUNT_MAX_DECIMAL_PLACES");
+  });
+
+  it("o limite é 2, e a constante existe", () => {
+    const lib = ler("src/lib/crm/quotes.ts");
+    expect(lib).toContain("QUOTE_DISCOUNT_MAX_DECIMAL_PLACES = 2");
+  });
+
+  it("a UI espelha a escala do desconto", () => {
+    const formulario = semComentarios(ler(`${UI}/_components/quote-sheet.tsx`));
+    expect(formulario).toContain("descontoForaDeDominio");
+    expect(formulario).toContain("QUOTE_DISCOUNT_MAX_DECIMAL_PLACES");
+  });
+});
+
+describe("🔴 os totais têm de caber em numeric(10,2)", () => {
+  it("existe a constante do máximo que a coluna guarda", () => {
+    const lib = ler("src/lib/crm/quotes.ts");
+    expect(lib).toContain("QUOTE_MAX_STORED_AMOUNT = 99_999_999.99");
+    expect(lib).toContain("export function excedeMontanteMaximo");
+  });
+
+  it("🔴 criação e revisão verificam ANTES de chamar a RPC", () => {
+    // O domínio de cada campo isolado não chega: 100 000 × 1 000 000 são ambos
+    // aceites e dão 1e11. Sem isto, o Postgres respondia `numeric field
+    // overflow` depois de a transação começar.
+    for (const fn of ["createQuote", "reviseQuote"]) {
+      const corpo = corpoDe(fn);
+      const guarda = corpo.indexOf("excedeMontanteMaximo");
+      const rpc = corpo.indexOf(".rpc(");
+      expect(guarda, `${fn} não verifica o montante`).toBeGreaterThan(-1);
+      expect(rpc, `${fn} não chama RPC`).toBeGreaterThan(-1);
+      expect(guarda, `${fn}: verificação depois da RPC`).toBeLessThan(rpc);
+    }
+  });
+
+  it("🔴 a verificação usa a taxa de IVA lida do servidor", () => {
+    // Pode ser o IVA a estourar um subtotal que cabia: 99 000 000 cabe,
+    // 121 770 000 não. Por isso a conta vem DEPOIS de ler as definições.
+    for (const fn of ["createQuote", "reviseQuote"]) {
+      const corpo = corpoDe(fn);
+      const settings = corpo.indexOf("company_settings");
+      const guarda = corpo.indexOf("excedeMontanteMaximo");
+      expect(guarda, `${fn}: verifica antes de saber a taxa`).toBeGreaterThan(settings);
+      expect(corpo).toContain("vatRate: settings.vat_rate");
+    }
+  });
+
+  it("a UI espelha o limite e desativa o submit", () => {
+    const formulario = semComentarios(ler(`${UI}/_components/quote-sheet.tsx`));
+    expect(formulario).toContain("excedeMontanteMaximo");
+    expect(formulario).toContain("const invalido =");
+    expect(formulario).toContain("disabled={pending || invalido");
   });
 });
 

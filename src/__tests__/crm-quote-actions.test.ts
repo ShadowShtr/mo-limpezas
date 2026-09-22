@@ -229,6 +229,189 @@ describe("🔴 domínio decimal — o valor fora do domínio não chega à RPC",
 });
 
 // ───────────────────────────────────────────────────────────────────────────
+describe("🔴 o desconto tem escala 2 — `discount_pct` é numeric(5,2)", () => {
+  const ACEITES = [3, 3.1, 3.14, 0, 100, 12.5];
+  const RECUSADOS = [3.141, 3.141592, 0.001, 1.000001];
+
+  for (const desconto of ACEITES) {
+    it(`desconto ${desconto}: aceite`, async () => {
+      const chamadas = duplo({
+        settings: { vat_rate: 23, quote_prefix: "ORC" },
+        rpc: () => ({ data: [{ quote_id: NOVA, quote_number: "ORC2026/001" }], error: null }),
+      });
+
+      const res = await createQuote({ ...CRIAR_BASE, discountPct: desconto });
+
+      expect(res.ok).toBe(true);
+      expect(chamadas.rpc).toHaveLength(1);
+      expect(chamadas.rpc[0].args.p_discount_pct).toBe(desconto);
+    });
+  }
+
+  for (const desconto of RECUSADOS) {
+    it(`🔴 desconto ${desconto}: recusado, e a RPC nunca é chamada`, async () => {
+      // O estrago concreto: com subtotal 10000 e desconto 3,141592 a RPC
+      // calcula a base com 3,141592 % (9685,84) mas a coluna grava 3,14 —
+      // e 3,14 % do mesmo subtotal daria 9686,00. O documento passaria a
+      // dizer uma coisa e os totais a valer outra.
+      const chamadas = duplo({ settings: { vat_rate: 23, quote_prefix: "ORC" } });
+
+      const res = await createQuote({ ...CRIAR_BASE, discountPct: desconto });
+
+      expect(res.ok).toBe(false);
+      expect(chamadas.rpc).toHaveLength(0);
+      if (!res.ok) expect(res.error.code).toBe("VALIDATION");
+    });
+  }
+
+  it("🔴 a revisão tem a mesma escala de desconto", async () => {
+    const chamadas = duplo({ settings: { vat_rate: 23 } });
+    const res = await reviseQuote(QUOTE, { ...REVER_BASE, discountPct: 3.141592 });
+    expect(res.ok).toBe(false);
+    expect(chamadas.rpc).toHaveLength(0);
+  });
+
+  it("a mensagem fala do desconto, não das linhas", async () => {
+    duplo({ settings: { vat_rate: 23, quote_prefix: "ORC" } });
+    const res = await createQuote({ ...CRIAR_BASE, discountPct: 0.001 });
+    expect(res.ok).toBe(false);
+    if (!res.ok) expect(JSON.stringify(res.error)).toContain("desconto");
+  });
+});
+
+// ───────────────────────────────────────────────────────────────────────────
+describe("🔴 os totais têm de caber em numeric(10,2)", () => {
+  it("CASO 1 — subtotal 100 000 000, sem IVA: recusado antes da RPC", async () => {
+    const chamadas = duplo({ settings: { vat_rate: 23, quote_prefix: "ORC" } });
+
+    const res = await createQuote({
+      ...CRIAR_BASE,
+      applyVat: false,
+      items: [{ ...ITEM_OK, quantity: 100, unitPrice: 1_000_000 }],
+    });
+
+    expect(res.ok).toBe(false);
+    expect(chamadas.rpc).toHaveLength(0);
+    if (!res.ok) expect(res.error.code).toBe("BUSINESS_RULE");
+  });
+
+  it("CASO 2 — subtotal 99 000 000 e total 121 770 000 com IVA: recusado", async () => {
+    // 🔴 O subtotal sozinho caberia se o limite fosse por campo. É o IVA que
+    //    estoura o total — daí a verificação ser feita DEPOIS de ler a taxa.
+    const chamadas = duplo({ settings: { vat_rate: 23, quote_prefix: "ORC" } });
+
+    const res = await createQuote({
+      ...CRIAR_BASE,
+      applyVat: true,
+      items: [{ ...ITEM_OK, quantity: 99, unitPrice: 1_000_000 }],
+    });
+
+    expect(res.ok).toBe(false);
+    expect(chamadas.rpc).toHaveLength(0);
+  });
+
+  it("CASO 3 — valor alto mas abaixo do máximo: aceite", async () => {
+    // 🔴 99 000 000 é o MESMO subtotal do CASO 2. A diferença é só o IVA, e é
+    //    isso que este par de ensaios isola: a verificação tem de acontecer
+    //    depois de a taxa ser lida, porque pode ser o IVA a estourar o total.
+    const chamadas = duplo({
+      settings: { vat_rate: 23, quote_prefix: "ORC" },
+      rpc: () => ({ data: [{ quote_id: NOVA, quote_number: "ORC2026/001" }], error: null }),
+    });
+
+    const res = await createQuote({
+      ...CRIAR_BASE,
+      applyVat: false,
+      items: [{ ...ITEM_OK, quantity: 99, unitPrice: 1_000_000 }],
+    });
+
+    expect(res.ok).toBe(true);
+    expect(chamadas.rpc).toHaveLength(1);
+  });
+
+  it("o máximo exacto passa: 99 999 999,99", async () => {
+    const chamadas = duplo({
+      settings: { vat_rate: 0, quote_prefix: "ORC" },
+      rpc: () => ({ data: [{ quote_id: NOVA, quote_number: "ORC2026/001" }], error: null }),
+    });
+
+    // 99 999,99999 × 1 000 = 99 999 999,99 — os dois campos dentro dos seus
+    // próprios limites, e o produto no limite exacto da coluna.
+    const res = await createQuote({
+      ...CRIAR_BASE,
+      applyVat: false,
+      items: [{ ...ITEM_OK, quantity: 99_999.99999, unitPrice: 1_000 }],
+    });
+
+    expect(res.ok).toBe(true);
+    expect(chamadas.rpc).toHaveLength(1);
+  });
+
+  it("🔴 um cêntimo acima do máximo já é recusado", async () => {
+    const chamadas = duplo({ settings: { vat_rate: 0, quote_prefix: "ORC" } });
+
+    // 100 000 × 1 000 = 100 000 000,00 — um cêntimo acima do que cabe.
+    const res = await createQuote({
+      ...CRIAR_BASE,
+      applyVat: false,
+      items: [{ ...ITEM_OK, quantity: 100_000, unitPrice: 1_000 }],
+    });
+
+    expect(res.ok).toBe(false);
+    expect(chamadas.rpc).toHaveLength(0);
+    if (!res.ok) expect(res.error.code).toBe("BUSINESS_RULE");
+  });
+
+  it("🔴 a soma de várias linhas também conta", async () => {
+    // Nenhuma linha isolada passa o limite; o subtotal passa.
+    const chamadas = duplo({ settings: { vat_rate: 0, quote_prefix: "ORC" } });
+
+    const res = await createQuote({
+      ...CRIAR_BASE,
+      applyVat: false,
+      items: [
+        { ...ITEM_OK, quantity: 1, unitPrice: 60_000_000 },
+        { ...ITEM_OK, quantity: 1, unitPrice: 60_000_000 },
+      ],
+    });
+
+    expect(res.ok).toBe(false);
+    expect(chamadas.rpc).toHaveLength(0);
+  });
+
+  it("🔴 a REVISÃO tem o mesmo guard", async () => {
+    const chamadas = duplo({ settings: { vat_rate: 23 } });
+
+    const res = await reviseQuote(QUOTE, {
+      ...REVER_BASE,
+      items: [{ ...ITEM_OK, quantity: 100, unitPrice: 1_000_000 }],
+    });
+
+    expect(res.ok).toBe(false);
+    expect(chamadas.rpc).toHaveLength(0);
+  });
+
+  it("o desconto pode trazer o valor de volta para dentro do limite", async () => {
+    // Prova que a verificação é sobre o que vai ser GRAVADO, e não sobre o
+    // subtotal bruto: com 100 % de desconto, tudo fica a zero.
+    const chamadas = duplo({
+      settings: { vat_rate: 23, quote_prefix: "ORC" },
+      rpc: () => ({ data: [{ quote_id: NOVA, quote_number: "ORC2026/001" }], error: null }),
+    });
+
+    const res = await createQuote({
+      ...CRIAR_BASE,
+      discountPct: 100,
+      items: [{ ...ITEM_OK, quantity: 100, unitPrice: 1_000_000 }],
+    });
+
+    // O subtotal (1e8) continua a ser gravado, por isso é recusado na mesma.
+    expect(res.ok).toBe(false);
+    expect(chamadas.rpc).toHaveLength(0);
+  });
+});
+
+// ───────────────────────────────────────────────────────────────────────────
 describe("🔴 timeline da lead — pela proveniência, e best-effort", () => {
   const QUOTE_LIDO = { source_lead_id: LEAD, quote_number: "ORC2026/001-R1" };
 

@@ -35,7 +35,9 @@ import { baselineCompleto } from "./helpers/production-baseline";
 import { MIGRATIONS_CRM, migrationCrm } from "./helpers/crm-pg-harness";
 import {
   canTransitionQuote,
+  excedeMontanteMaximo,
   hasMaxDecimalPlaces,
+  QUOTE_DISCOUNT_MAX_DECIMAL_PLACES,
   QUOTE_STATUSES,
   totaisDoOrcamento,
   type QuoteStatus,
@@ -398,6 +400,111 @@ describe("🔴 paridade de totais — a pré-visualização e o que a base grava
     );
     expect(Number(rows[0].line_total)).toBe(0.5);
     expect(Number(rows[0].quantity) * Number(rows[0].unit_price)).not.toBe(0.5);
+  });
+});
+
+// ───────────────────────────────────────────────────────────────────────────
+describe("🔴 o que a base faz com valores fora do domínio", () => {
+  it("🔴 desconto com 6 casas: a coluna grava 3,14 e a conta usou 3,141592", LENTO, async () => {
+    // O estrago que o limite de 2 casas evita, medido na base.
+    //
+    // `discount_pct` é numeric(5,2) mas `p_discount_pct` é numeric sem escala:
+    // a RPC calcula a base com o valor bruto e só a coluna arredonda. O
+    // documento persiste um desconto que NÃO é o que fez a conta.
+    const { id } = await criar({
+      itens: [{ description: "A", quantity: 100, unit: "servico", unit_price: 100 }],
+      desconto: 3.141592,
+      aplicaIva: false,
+    });
+
+    const { rows } = await pool.query(
+      "SELECT subtotal, discount_pct, total FROM public.crm_quotes WHERE id = $1", [id]);
+
+    expect(Number(rows[0].subtotal)).toBe(10_000);
+    // A coluna guardou duas casas…
+    expect(Number(rows[0].discount_pct)).toBe(3.14);
+    // …mas o total corresponde a 3,141592 %, não a 3,14 %.
+    expect(Number(rows[0].total)).toBe(9685.84);
+
+    const { rows: comDuas } = await pool.query(
+      "SELECT round(10000::numeric * (1 - 3.14/100), 2) AS base");
+    expect(Number(comDuas[0].base)).toBe(9686);
+    expect(Number(comDuas[0].base)).not.toBe(Number(rows[0].total));
+
+    // É por isto que a action recusa o valor antes de chegar aqui.
+    expect(hasMaxDecimalPlaces(3.141592, QUOTE_DISCOUNT_MAX_DECIMAL_PLACES)).toBe(false);
+  });
+
+  it("desconto com 2 casas: o que está gravado é o que fez a conta", LENTO, async () => {
+    const { id } = await criar({
+      itens: [{ description: "A", quantity: 100, unit: "servico", unit_price: 100 }],
+      desconto: 3.14,
+      aplicaIva: false,
+    });
+
+    const { rows } = await pool.query(
+      "SELECT discount_pct, total FROM public.crm_quotes WHERE id = $1", [id]);
+
+    expect(Number(rows[0].discount_pct)).toBe(3.14);
+    expect(Number(rows[0].total)).toBe(9686);
+  });
+
+  it("🔴 um valor que não cabe em numeric(10,2) rebenta a RPC", LENTO, async () => {
+    // 100 × 1 000 000 = 1e8, e a coluna guarda no máximo 99 999 999,99. Sem o
+    // guard na action, era isto que o utilizador recebia — `numeric field
+    // overflow`, depois de a transação já ter começado.
+    await expect(
+      criar({
+        itens: [{ description: "A", quantity: 100, unit: "servico", unit_price: 1_000_000 }],
+        aplicaIva: false,
+      }),
+    ).rejects.toThrow(/numeric field overflow|out of range/i);
+
+    // O runtime recusa-o antes, e com uma frase que se entende.
+    expect(
+      excedeMontanteMaximo(
+        totaisDoOrcamento(
+          [{ quantity: 100, unit_price: 1_000_000 }],
+          { discountPct: 0, applyVat: false, vatRate: 0 },
+        ),
+      ),
+    ).toBe(true);
+  });
+
+  it("🔴 o IVA também pode estourar um subtotal que cabia", LENTO, async () => {
+    // 99 × 1 000 000 = 99 000 000 cabe; com 23 % de IVA o total é
+    // 121 770 000 e já não cabe. É a razão de a verificação vir depois de a
+    // taxa ser lida.
+    await expect(
+      criar({
+        itens: [{ description: "A", quantity: 99, unit: "servico", unit_price: 1_000_000 }],
+        aplicaIva: true,
+        taxaIva: 23,
+      }),
+    ).rejects.toThrow(/numeric field overflow|out of range/i);
+
+    const semIva = totaisDoOrcamento(
+      [{ quantity: 99, unit_price: 1_000_000 }],
+      { discountPct: 0, applyVat: false, vatRate: 0 },
+    );
+    expect(excedeMontanteMaximo(semIva)).toBe(false);
+
+    const comIva = totaisDoOrcamento(
+      [{ quantity: 99, unit_price: 1_000_000 }],
+      { discountPct: 0, applyVat: true, vatRate: 23 },
+    );
+    expect(excedeMontanteMaximo(comIva)).toBe(true);
+  });
+
+  it("o máximo exacto é aceite pela base", LENTO, async () => {
+    const { id } = await criar({
+      itens: [{ description: "A", quantity: 99_999.99999, unit: "unidade", unit_price: 1_000 }],
+      aplicaIva: false,
+    });
+    const { rows } = await pool.query(
+      "SELECT subtotal, total FROM public.crm_quotes WHERE id = $1", [id]);
+    expect(Number(rows[0].subtotal)).toBe(99_999_999.99);
+    expect(Number(rows[0].total)).toBe(99_999_999.99);
   });
 });
 

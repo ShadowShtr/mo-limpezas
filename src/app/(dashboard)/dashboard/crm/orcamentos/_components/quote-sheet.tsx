@@ -42,8 +42,12 @@ import { Plus, Trash2, X } from "lucide-react";
 import { useToast } from "@/components/ui/toast";
 import { addDaysToDateString, todayInLisbon } from "@/lib/lisbon-time";
 import {
+  excedeMontanteMaximo,
   hasMaxDecimalPlaces,
+  QUOTE_AMOUNT_MESSAGE,
   QUOTE_DECIMAL_MESSAGE,
+  QUOTE_DISCOUNT_DECIMAL_MESSAGE,
+  QUOTE_DISCOUNT_MAX_DECIMAL_PLACES,
   QUOTE_DEFAULT_VALIDITY_DAYS,
   QUOTE_PRICING_KINDS,
   QUOTE_PRICING_KIND_LABELS,
@@ -213,8 +217,19 @@ export function QuoteSheet({
     () =>
       itensNumericos.some(
         (i) => !hasMaxDecimalPlaces(i.quantity) || !hasMaxDecimalPlaces(i.unit_price),
-      ) || !hasMaxDecimalPlaces(descontoNumerico),
-    [itensNumericos, descontoNumerico],
+      ),
+    [itensNumericos],
+  );
+
+  /**
+   * 🔴 O desconto tem escala própria: duas casas, porque `discount_pct` é
+   *    `numeric(5,2)`. Com mais, o documento persistiria «3,14 %» e os totais
+   *    corresponderiam a 3,141592 % — o número que se lê deixava de ser o
+   *    número que fez a conta.
+   */
+  const descontoForaDeDominio = useMemo(
+    () => !hasMaxDecimalPlaces(descontoNumerico, QUOTE_DISCOUNT_MAX_DECIMAL_PLACES),
+    [descontoNumerico],
   );
 
   const previsao = useMemo(
@@ -226,6 +241,19 @@ export function QuoteSheet({
       }),
     [itensNumericos, descontoNumerico, applyVat, vatRate],
   );
+
+  /**
+   * 🔴 Cabe em `numeric(10,2)`? O domínio de cada campo isolado não garante:
+   *    100 000 × 1 000 000 são ambos aceites e dão 1e11.
+   *
+   *    Sem isto, o submit seguia e o Postgres respondia `numeric field
+   *    overflow` — uma mensagem que ninguém sabe ler. A regra autoritativa é a
+   *    do servidor; esta é a mesma, aqui, para não deixar carregar no botão.
+   */
+  const excedeMaximo = useMemo(() => excedeMontanteMaximo(previsao), [previsao]);
+
+  /** Qualquer coisa que o servidor vai recusar. */
+  const invalido = foraDeDominio || descontoForaDeDominio || excedeMaximo;
 
   function alterarLinha(i: number, patch: Partial<LinhaForm>) {
     setLinhas((prev) => prev.map((l, idx) => (idx === i ? { ...l, ...patch } : l)));
@@ -611,13 +639,17 @@ export function QuoteSheet({
             className="rounded-lg border px-3 py-2 text-[13px]"
             style={{ borderColor: "var(--color-border)", background: "var(--color-background)" }}
           >
-            {foraDeDominio ? (
-              // 🔴 Nenhum número aqui enquanto houver um valor fora do
-              //    domínio. Mostrar um total que a base não vai confirmar é
-              //    pior do que não mostrar total nenhum.
+            {invalido ? (
+              // 🔴 Nenhum número aqui enquanto houver um valor que o servidor
+              //    vai recusar. Mostrar um total que a base não vai confirmar
+              //    é pior do que não mostrar total nenhum.
               <p className="text-[12.5px] text-red-600">
-                {QUOTE_DECIMAL_MESSAGE} Há um valor com casas a mais — o total só é calculado
-                depois de o corrigir.
+                {excedeMaximo
+                  ? QUOTE_AMOUNT_MESSAGE
+                  : descontoForaDeDominio
+                    ? QUOTE_DISCOUNT_DECIMAL_MESSAGE
+                    : `${QUOTE_DECIMAL_MESSAGE} Há um valor com casas a mais.`}{" "}
+                O total só é calculado depois de o corrigir.
               </p>
             ) : (
             <>
@@ -724,7 +756,7 @@ export function QuoteSheet({
           </button>
           <button
             type="submit"
-            disabled={pending || foraDeDominio || (!eRevisao && !alvoEscolhido)}
+            disabled={pending || invalido || (!eRevisao && !alvoEscolhido)}
             className="rounded-lg px-4 py-2 text-[13px] font-semibold text-white disabled:opacity-50"
             style={{ background: "#16A34A" }}
           >

@@ -209,6 +209,58 @@ export function hasMaxDecimalPlaces(value: number, max = QUOTE_MAX_DECIMAL_PLACE
 /** A mesma frase em todo o lado onde o domínio é recusado. */
 export const QUOTE_DECIMAL_MESSAGE = `Use no máximo ${QUOTE_MAX_DECIMAL_PLACES} casas decimais.`;
 
+/**
+ * 🔴 O DESCONTO tem escala 2, e não 6.
+ *
+ *    `discount_pct` é `numeric(5,2)`. A RPC calcula a base com o valor BRUTO
+ *    que recebe (`p_discount_pct numeric`, sem escala) e só depois grava a
+ *    coluna, que arredonda. Com seis casas, o documento ficava a dizer uma
+ *    coisa e os totais a valer outra:
+ *
+ *        subtotal 10000, desconto escrito 3,141592
+ *          base calculada pela RPC   9685,84   ← usa 3,141592 %
+ *          discount_pct persistido      3,14
+ *          base que 3,14 % daria     9686,00   ← não é a gravada
+ *
+ *    Quem abrisse o orçamento via «3,14 %» e um total que esse desconto não
+ *    produz. Não há aqui nada a arredondar melhor: o que não cabe na coluna
+ *    não pode entrar na conta.
+ */
+export const QUOTE_DISCOUNT_MAX_DECIMAL_PLACES = 2;
+
+export const QUOTE_DISCOUNT_DECIMAL_MESSAGE =
+  `O desconto aceita no máximo ${QUOTE_DISCOUNT_MAX_DECIMAL_PLACES} casas decimais.`;
+
+/**
+ * O maior valor que `numeric(10,2)` guarda: 99 999 999,99.
+ *
+ * 🔴 `subtotal`, `vat_amount`, `total` e `line_total` são todos
+ *    `numeric(10,2)`. O domínio de cada CAMPO isolado não chega para garantir
+ *    isto — 100 000 de quantidade × 1 000 000 de preço são ambos aceites e dão
+ *    1e11, que não cabe. O Postgres recusaria com `numeric field overflow`,
+ *    uma mensagem que ninguém sabe ler e que chega depois de a transação
+ *    começar. A verificação é sobre o PRODUTO, e faz-se antes da RPC.
+ */
+export const QUOTE_MAX_STORED_AMOUNT = 99_999_999.99;
+
+export const QUOTE_AMOUNT_MESSAGE =
+  "Os valores do orçamento passam o máximo que o sistema guarda (99 999 999,99 €).";
+
+/**
+ * Algum dos valores que vão ser GRAVADOS não cabe em `numeric(10,2)`?
+ *
+ * Basta olhar para estes três: são não negativos e o subtotal é a soma das
+ * linhas, por isso um subtotal que cabe garante que nenhuma `line_total`
+ * individual passa o limite.
+ */
+export function excedeMontanteMaximo(totais: QuoteTotals): boolean {
+  return (
+    totais.subtotal > QUOTE_MAX_STORED_AMOUNT
+    || totais.vatAmount > QUOTE_MAX_STORED_AMOUNT
+    || totais.total > QUOTE_MAX_STORED_AMOUNT
+  );
+}
+
 export interface QuoteItemAmounts {
   quantity: number;
   unit_price: number;
