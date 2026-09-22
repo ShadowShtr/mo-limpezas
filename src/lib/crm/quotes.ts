@@ -159,8 +159,14 @@ export const QUOTE_DEFAULT_VALIDITY_DAYS = 30;
 // com o PostgreSQL para o domínio aceite pelo runtime», e não «para qualquer
 // number».
 
-/** Casas decimais que o runtime reproduz exactamente. */
-export const QUOTE_MAX_DECIMAL_PLACES = 6;
+/**
+ * A escala da ARITMÉTICA: quantas casas `micros()` reproduz exactamente.
+ *
+ * 🔴 NÃO é o domínio de entrada. É um detalhe de cálculo — o domínio aceite
+ *    para cada campo vem da COLUNA onde o valor é gravado, e é sempre menor.
+ *    Ver `QUOTE_ITEM_MAX_DECIMAL_PLACES` e `QUOTE_DISCOUNT_MAX_DECIMAL_PLACES`.
+ */
+export const QUOTE_ARITHMETIC_DECIMAL_PLACES = 6;
 
 /**
  * Quantas casas decimais tem o valor, lendo a sua representação decimal.
@@ -201,13 +207,49 @@ export function decimalPlaces(value: number): number {
   return Math.max(0, casasMantissa - expoente);
 }
 
-/** O valor cabe no domínio que a aritmética reproduz exactamente? */
-export function hasMaxDecimalPlaces(value: number, max = QUOTE_MAX_DECIMAL_PLACES): boolean {
+/**
+ * O valor cabe em `max` casas decimais?
+ *
+ * 🔴 `max` é OBRIGATÓRIO, de propósito. Havia aqui um valor por omissão de 6 —
+ *    a escala da aritmética — e foi assim que as linhas ficaram a aceitar seis
+ *    casas quando as colunas só guardam duas: quem escreveu
+ *    `hasMaxDecimalPlaces(v)` julgou estar a validar o domínio e estava a
+ *    validar outra coisa. Cada chamada diz agora qual é o limite, e o limite
+ *    vem sempre da coluna onde o valor vai ser gravado.
+ */
+export function hasMaxDecimalPlaces(value: number, max: number): boolean {
   return decimalPlaces(value) <= max;
 }
 
-/** A mesma frase em todo o lado onde o domínio é recusado. */
-export const QUOTE_DECIMAL_MESSAGE = `Use no máximo ${QUOTE_MAX_DECIMAL_PLACES} casas decimais.`;
+/**
+ * 🔴 AS LINHAS têm escala 2, porque é isso que as colunas guardam.
+ *
+ *    `crm_quote_items.quantity` e `unit_price` são `numeric(10,2)`, mas a RPC
+ *    calcula `line_total` com o valor BRUTO do JSONB. Aceitar mais casas fazia
+ *    o documento deixar de fechar consigo próprio:
+ *
+ *        preço escrito 0,335 × quantidade 3
+ *          unit_price persistido   0,34
+ *          line_total persistido   1,01   (= round(3 × 0,335, 2))
+ *          3 × 0,34 daria          1,02   ← o que o leitor do PDF faz de cabeça
+ *
+ *        quantidade escrita 1,005 × preço 10
+ *          quantity persistida     1,01
+ *          line_total persistido  10,05
+ *          1,01 × 10 daria        10,10
+ *
+ *    Um documento cujas contas não fecham à vista não se defende, e a culpa
+ *    não é de quem o lê.
+ *
+ * 🔴 REJEITAR, e não arredondar em silêncio. Quem escreve 0,335 não escreveu
+ *    0,34: transformar um no outro sem avisar é perder informação que a pessoa
+ *    julga ter dado. A interface diz qual é o limite e quem quiser 0,34
+ *    escreve 0,34.
+ */
+export const QUOTE_ITEM_MAX_DECIMAL_PLACES = 2;
+
+export const QUOTE_ITEM_DECIMAL_MESSAGE =
+  `Use no máximo ${QUOTE_ITEM_MAX_DECIMAL_PLACES} casas decimais.`;
 
 /**
  * 🔴 O DESCONTO tem escala 2, e não 6.

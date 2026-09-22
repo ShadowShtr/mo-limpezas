@@ -319,10 +319,10 @@ describe("🔴 proveniência — source_lead_id, e não lead_id", () => {
 describe("🔴 o domínio decimal é fechado no SERVIDOR", () => {
   it("quantidade, preço e desconto passam pelo limite", () => {
     // Uma Server Action é um endpoint: o `<input>` não é um gate. Quem lhe
-    // chamar directamente com sete casas tem de ser recusado antes da RPC.
+    // chamar directamente com casas a mais tem de ser recusado antes da RPC.
     expect(CODIGO).toContain("hasMaxDecimalPlaces");
-    expect(CODIGO).toContain("decimalAceite");
-    for (const campo of ["quantity: decimalAceite", "unitPrice: decimalAceite"]) {
+    expect(CODIGO).toContain("itemAceite");
+    for (const campo of ["quantity: itemAceite", "unitPrice: itemAceite"]) {
       expect(CODIGO, `${campo} sem limite decimal`).toContain(campo);
     }
     // 🔴 O desconto tem escala PRÓPRIA — `descontoAceite`, 2 casas, porque
@@ -336,12 +336,43 @@ describe("🔴 o domínio decimal é fechado no SERVIDOR", () => {
   it("🔴 nenhum campo numérico do orçamento escapa ao limite", () => {
     // Se alguém acrescentar um `z.number()` solto nestes schemas, aparece aqui.
     const numerosSoltos = [...CODIGO.matchAll(/(quantity|unitPrice|discountPct):\s*z\.number\(/g)];
-    expect(numerosSoltos.map((m) => m[1]), "campo sem `decimalAceite`").toEqual([]);
+    expect(numerosSoltos.map((m) => m[1]), "campo sem limite de escala").toEqual([]);
+  });
+
+  it("🔴 o limite das linhas é o da COLUNA (2), não o da aritmética (6)", () => {
+    // `quantity` e `unit_price` são numeric(10,2). Com seis casas o documento
+    // deixava de fechar consigo próprio: 0,335 persiste 0,34 e a linha vale
+    // 1,01, quando 3 × 0,34 dá 1,02.
+    const lib = ler("src/lib/crm/quotes.ts");
+    expect(lib).toContain("QUOTE_ITEM_MAX_DECIMAL_PLACES = 2");
+    expect(CODIGO).toContain("QUOTE_ITEM_MAX_DECIMAL_PLACES");
+  });
+
+  it("🔴 `hasMaxDecimalPlaces` não tem limite por omissão", () => {
+    // O default de 6 foi como as linhas ficaram a aceitar seis casas: quem
+    // escreveu `hasMaxDecimalPlaces(v)` julgou estar a validar o domínio.
+    const lib = semComentarios(ler("src/lib/crm/quotes.ts"));
+    expect(lib).toContain("hasMaxDecimalPlaces(value: number, max: number)");
+    expect(lib).not.toMatch(/hasMaxDecimalPlaces\(value: number, max = /);
+  });
+
+  it("🔴 rejeita, não arredonda — nenhum arredondamento silencioso na entrada", () => {
+    // NO_DATA_LOSS: quem escreve 0,335 não escreveu 0,34. O valor vai para a
+    // RPC como foi escrito, ou não vai de todo.
+    const criacao = corpoDe("createQuote");
+    const revisao = corpoDe("reviseQuote");
+    for (const [nome, corpo] of [["createQuote", criacao], ["reviseQuote", revisao]] as const) {
+      expect(corpo, `${nome} arredonda a entrada`).not.toMatch(/toFixed\(|Math\.round\(/);
+    }
+    // As linhas viajam tal como vieram.
+    expect(criacao).toContain("unit_price: i.unitPrice");
+    expect(criacao).toContain("quantity: i.quantity");
   });
 
   it("a UI espelha a regra, mas não é ela o gate", () => {
     const formulario = semComentarios(ler(`${UI}/_components/quote-sheet.tsx`));
     expect(formulario).toContain("hasMaxDecimalPlaces");
+    expect(formulario).toContain("QUOTE_ITEM_MAX_DECIMAL_PLACES");
     expect(formulario).toContain("foraDeDominio");
     // E não mostra um total que a base não vai confirmar. `invalido` junta as
     // três recusas do servidor: casas a mais nas linhas, casas a mais no

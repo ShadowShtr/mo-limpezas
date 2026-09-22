@@ -38,6 +38,7 @@ import {
   excedeMontanteMaximo,
   hasMaxDecimalPlaces,
   QUOTE_DISCOUNT_MAX_DECIMAL_PLACES,
+  QUOTE_ITEM_MAX_DECIMAL_PLACES,
   QUOTE_STATUSES,
   totaisDoOrcamento,
   type QuoteStatus,
@@ -247,12 +248,20 @@ beforeEach(async () => {
 });
 
 // ───────────────────────────────────────────────────────────────────────────
-describe("🔴 paridade de totais — a pré-visualização e o que a base grava", () => {
+describe("🔴 paridade de totais — no DOMÍNIO ACEITE pelo runtime", () => {
   /**
-   * Cenários escolhidos pelos sítios onde o arredondamento decide.
+   * 🔴 Todos os valores têm no máximo DUAS casas nas linhas e no desconto —
+   *    é o que o runtime aceita, porque é o que as colunas guardam.
    *
-   * Os casos de MEIO (0,495 · 8,615 · 0,335) são o coração disto: é ali que
-   * `Math.round` em binário e `round()` em `numeric` discordam.
+   *    O que se afirma com este bloco é: qualquer quantidade ou preço que o
+   *    runtime aceita é preservado fielmente nas colunas E os totais
+   *    reproduzem o PostgreSQL. Não se afirma nada sobre valores que a action
+   *    recusa — esses vivem no bloco «o que a base faz fora do domínio
+   *    aceite», como comportamento cru da base, e não como caso suportado.
+   *
+   *    Os casos de MEIO continuam a ser o coração disto: é onde `Math.round`
+   *    em binário e `round()` em `numeric` discordam. Só que agora são meios
+   *    alcançáveis com duas casas (2,5 × 3,33 = 8,325; 0,50 × 23 % = 0,115).
    */
   const CENARIOS: Array<{
     nome: string;
@@ -273,12 +282,18 @@ describe("🔴 paridade de totais — a pré-visualização e o que a base grava
       ],
     },
     {
-      nome: "meio no preço (8,615 quantizado pela coluna)",
-      itens: [{ description: "A", quantity: 1, unit: "m2", unit_price: 8.615 }],
+      nome: "meio na linha com quantidade fraccionária (2,5 × 3,33 = 8,325)",
+      itens: [{ description: "A", quantity: 2.5, unit: "hora", unit_price: 3.33 }],
     },
     {
-      nome: "meio no preço pequeno (0,335 × 3)",
-      itens: [{ description: "A", quantity: 3, unit: "unidade", unit_price: 0.335 }],
+      nome: "meio no IVA (subtotal 0,50 a 23 % = 0,115)",
+      itens: [{ description: "A", quantity: 1, unit: "servico", unit_price: 0.5 }],
+    },
+    {
+      nome: "meio no desconto (10,05 com 2,5 % = 9,79875)",
+      itens: [{ description: "A", quantity: 1, unit: "servico", unit_price: 10.05 }],
+      desconto: 2.5,
+      aplicaIva: false,
     },
     {
       nome: "desconto de 10% com IVA sobre a base",
@@ -312,17 +327,13 @@ describe("🔴 paridade de totais — a pré-visualização e o que a base grava
       taxaIva: 6,
     },
     {
-      nome: "seis casas no preço — o limite do domínio",
-      itens: [{ description: "A", quantity: 3, unit: "unidade", unit_price: 0.000001 }],
+      nome: "duas casas dos dois lados, com desconto de duas casas",
+      itens: [{ description: "A", quantity: 12.34, unit: "m2", unit_price: 1.23 }],
+      desconto: 3.14,
     },
     {
-      nome: "seis casas na quantidade",
-      itens: [{ description: "A", quantity: 1.000001, unit: "hora", unit_price: 99.99 }],
-    },
-    {
-      nome: "seis casas dos dois lados, com desconto de seis casas",
-      itens: [{ description: "A", quantity: 12.345678, unit: "m2", unit_price: 1.234567 }],
-      desconto: 3.141592,
+      nome: "o cêntimo mais pequeno",
+      itens: [{ description: "A", quantity: 1, unit: "unidade", unit_price: 0.01 }],
     },
     {
       nome: "muitas linhas irregulares",
@@ -358,6 +369,19 @@ describe("🔴 paridade de totais — a pré-visualização e o que a base grava
       expect(previsto.subtotal, "subtotal").toBe(base.subtotal);
       expect(previsto.vatAmount, "IVA").toBe(base.vatAmount);
       expect(previsto.total, "total").toBe(base.total);
+
+      // 🔴 E o que foi escrito é o que ficou gravado: dentro do domínio
+      //    aceite, a coluna `numeric(10,2)` não perde nada.
+      const { rows: linhas } = await pool.query(
+        "SELECT quantity, unit_price FROM public.crm_quote_items WHERE quote_id = $1 ORDER BY position",
+        [id],
+      );
+      c.itens.forEach((item, i) => {
+        expect(hasMaxDecimalPlaces(item.quantity, QUOTE_ITEM_MAX_DECIMAL_PLACES)).toBe(true);
+        expect(hasMaxDecimalPlaces(item.unit_price, QUOTE_ITEM_MAX_DECIMAL_PLACES)).toBe(true);
+        expect(Number(linhas[i].quantity), "quantidade gravada").toBe(item.quantity);
+        expect(Number(linhas[i].unit_price), "preço gravado").toBe(item.unit_price);
+      });
     });
   }
 
@@ -383,7 +407,7 @@ describe("🔴 paridade de totais — a pré-visualização e o que a base grava
       expect(previsto.subtotal, `runtime para ${preco}`).not.toBe(base);
 
       // E é exactamente por isto que o valor não é aceite.
-      expect(hasMaxDecimalPlaces(preco)).toBe(false);
+      expect(hasMaxDecimalPlaces(preco, QUOTE_ITEM_MAX_DECIMAL_PLACES)).toBe(false);
     }
   });
 
@@ -404,7 +428,13 @@ describe("🔴 paridade de totais — a pré-visualização e o que a base grava
 });
 
 // ───────────────────────────────────────────────────────────────────────────
-describe("🔴 o que a base faz com valores fora do domínio", () => {
+describe("🔴 DB_RAW_BEHAVIOR_OUTSIDE_ACCEPTED_DOMAIN", () => {
+  // 🔴 Nada aqui é um caso SUPORTADO. É o comportamento cru da base para
+  //    valores que a Server Action recusa antes de a RPC ser chamada
+  //    (`crm-quote-actions.test.ts` conta as chamadas e exige zero).
+  //
+  //    Estes ensaios existem para documentar PORQUÊ o domínio é o que é: sem
+  //    eles, o limite de duas casas parecia uma restrição arbitrária.
   it("🔴 desconto com 6 casas: a coluna grava 3,14 e a conta usou 3,141592", LENTO, async () => {
     // O estrago que o limite de 2 casas evita, medido na base.
     //
@@ -433,6 +463,64 @@ describe("🔴 o que a base faz com valores fora do domínio", () => {
 
     // É por isto que a action recusa o valor antes de chegar aqui.
     expect(hasMaxDecimalPlaces(3.141592, QUOTE_DISCOUNT_MAX_DECIMAL_PLACES)).toBe(false);
+  });
+
+  it("🔴 preço com 3 casas: o documento não fecha consigo próprio", LENTO, async () => {
+    // 0,335 × 3. A coluna guarda o preço arredondado; `line_total` foi
+    // calculado com o valor bruto. Quem ler o PDF multiplica o que vê e não
+    // chega ao total que lá está.
+    const { id } = await criar({
+      itens: [{ description: "A", quantity: 3, unit: "unidade", unit_price: 0.335 }],
+      aplicaIva: false,
+    });
+
+    const { rows } = await pool.query(
+      "SELECT quantity, unit_price, line_total FROM public.crm_quote_items WHERE quote_id = $1",
+      [id],
+    );
+
+    expect(Number(rows[0].unit_price)).toBe(0.34);   // perdeu a terceira casa
+    expect(Number(rows[0].line_total)).toBe(1.01);   // = round(3 × 0,335, 2)
+    // …e 3 × 0,34, que é a conta que o leitor faz, dá outra coisa.
+    expect(Number(rows[0].quantity) * Number(rows[0].unit_price)).toBeCloseTo(1.02, 10);
+
+    expect(hasMaxDecimalPlaces(0.335, QUOTE_ITEM_MAX_DECIMAL_PLACES)).toBe(false);
+  });
+
+  it("🔴 quantidade com 3 casas: o mesmo, do outro lado", LENTO, async () => {
+    // 1,005 × 10.
+    const { id } = await criar({
+      itens: [{ description: "A", quantity: 1.005, unit: "hora", unit_price: 10 }],
+      aplicaIva: false,
+    });
+
+    const { rows } = await pool.query(
+      "SELECT quantity, unit_price, line_total FROM public.crm_quote_items WHERE quote_id = $1",
+      [id],
+    );
+
+    expect(Number(rows[0].quantity)).toBe(1.01);     // perdeu a terceira casa
+    expect(Number(rows[0].line_total)).toBe(10.05);  // = round(1,005 × 10, 2)
+    expect(Number(rows[0].quantity) * Number(rows[0].unit_price)).toBeCloseTo(10.10, 10);
+
+    expect(hasMaxDecimalPlaces(1.005, QUOTE_ITEM_MAX_DECIMAL_PLACES)).toBe(false);
+  });
+
+  it("dentro do domínio, a mesma conta FECHA", LENTO, async () => {
+    // A propriedade que o limite compra, medida na base.
+    const { id } = await criar({
+      itens: [{ description: "A", quantity: 3, unit: "unidade", unit_price: 0.34 }],
+      aplicaIva: false,
+    });
+
+    const { rows } = await pool.query(
+      "SELECT quantity, unit_price, line_total FROM public.crm_quote_items WHERE quote_id = $1",
+      [id],
+    );
+
+    expect(Number(rows[0].unit_price)).toBe(0.34);
+    expect(Number(rows[0].line_total)).toBe(1.02);
+    expect(Number(rows[0].quantity) * Number(rows[0].unit_price)).toBeCloseTo(1.02, 10);
   });
 
   it("desconto com 2 casas: o que está gravado é o que fez a conta", LENTO, async () => {
@@ -496,15 +584,20 @@ describe("🔴 o que a base faz com valores fora do domínio", () => {
     expect(excedeMontanteMaximo(comIva)).toBe(true);
   });
 
-  it("o máximo exacto é aceite pela base", LENTO, async () => {
+  it("um valor alto e VÁLIDO é aceite pela base: 100 × 999 999,99", LENTO, async () => {
+    // 🔴 Os dois campos com duas casas, como o domínio exige. A versão
+    //    anterior usava 99 999,99999 — cinco casas na quantidade —, que desde
+    //    o blocker 6 já nem sequer é entrada válida.
     const { id } = await criar({
-      itens: [{ description: "A", quantity: 99_999.99999, unit: "unidade", unit_price: 1_000 }],
+      itens: [{ description: "A", quantity: 100, unit: "unidade", unit_price: 999_999.99 }],
       aplicaIva: false,
     });
     const { rows } = await pool.query(
       "SELECT subtotal, total FROM public.crm_quotes WHERE id = $1", [id]);
-    expect(Number(rows[0].subtotal)).toBe(99_999_999.99);
-    expect(Number(rows[0].total)).toBe(99_999_999.99);
+    expect(Number(rows[0].subtotal)).toBe(99_999_999);
+    expect(Number(rows[0].total)).toBe(99_999_999);
+
+    expect(hasMaxDecimalPlaces(999_999.99, QUOTE_ITEM_MAX_DECIMAL_PLACES)).toBe(true);
   });
 });
 

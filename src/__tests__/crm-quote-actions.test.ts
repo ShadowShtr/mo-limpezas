@@ -135,18 +135,34 @@ beforeEach(() => {
 });
 
 // ───────────────────────────────────────────────────────────────────────────
-describe("🔴 domínio decimal — o valor fora do domínio não chega à RPC", () => {
-  const FORA = [0.000000051, 0.000001051, 1.1234567, 0.0000001];
-  const DENTRO = [1, 1.2, 1.123456, 0.000001];
+describe("🔴 as linhas aceitam DUAS casas — é o que numeric(10,2) guarda", () => {
+  const QTD_OK = [1, 1.2, 1.23];
+  const QTD_MAU = [1.234, 1.005, 1.234567, 0.000001];
+  const PRECO_OK = [0.33, 0.34, 100, 999.99];
+  const PRECO_MAU = [0.335, 1.234567, 0.000000051, 0.000001051];
 
-  for (const preco of FORA) {
-    it(`preço ${preco}: recusado, e a RPC nunca é chamada`, async () => {
+  for (const quantity of QTD_OK) {
+    it(`quantidade ${quantity}: aceite, e chega à RPC`, async () => {
+      const chamadas = duplo({
+        settings: { vat_rate: 23, quote_prefix: "ORC" },
+        rpc: () => ({ data: [{ quote_id: NOVA, quote_number: "ORC2026/001" }], error: null }),
+      });
+
+      const res = await createQuote({ ...CRIAR_BASE, items: [{ ...ITEM_OK, quantity }] });
+
+      expect(res.ok).toBe(true);
+      expect(chamadas.rpc).toHaveLength(1);
+      const itens = chamadas.rpc[0].args.p_items as { quantity: number }[];
+      // 🔴 O valor chega INTACTO: não há arredondamento pelo caminho.
+      expect(itens[0].quantity).toBe(quantity);
+    });
+  }
+
+  for (const quantity of QTD_MAU) {
+    it(`🔴 quantidade ${quantity}: recusada, e a RPC nunca é chamada`, async () => {
       const chamadas = duplo({ settings: { vat_rate: 23, quote_prefix: "ORC" } });
 
-      const res = await createQuote({
-        ...CRIAR_BASE,
-        items: [{ ...ITEM_OK, quantity: 100_000, unitPrice: preco }],
-      });
+      const res = await createQuote({ ...CRIAR_BASE, items: [{ ...ITEM_OK, quantity }] });
 
       expect(res.ok).toBe(false);
       expect(chamadas.rpc).toHaveLength(0);
@@ -154,77 +170,79 @@ describe("🔴 domínio decimal — o valor fora do domínio não chega à RPC",
     });
   }
 
-  for (const qtd of FORA) {
-    it(`quantidade ${qtd}: recusada, e a RPC nunca é chamada`, async () => {
+  for (const unitPrice of PRECO_OK) {
+    it(`preço ${unitPrice}: aceite, e chega à RPC`, async () => {
+      const chamadas = duplo({
+        settings: { vat_rate: 23, quote_prefix: "ORC" },
+        rpc: () => ({ data: [{ quote_id: NOVA, quote_number: "ORC2026/001" }], error: null }),
+      });
+
+      const res = await createQuote({ ...CRIAR_BASE, items: [{ ...ITEM_OK, unitPrice }] });
+
+      expect(res.ok).toBe(true);
+      expect(chamadas.rpc).toHaveLength(1);
+      const itens = chamadas.rpc[0].args.p_items as { unit_price: number }[];
+      expect(itens[0].unit_price).toBe(unitPrice);
+    });
+  }
+
+  for (const unitPrice of PRECO_MAU) {
+    it(`🔴 preço ${unitPrice}: recusado, e a RPC nunca é chamada`, async () => {
       const chamadas = duplo({ settings: { vat_rate: 23, quote_prefix: "ORC" } });
 
-      const res = await createQuote({
-        ...CRIAR_BASE,
-        items: [{ ...ITEM_OK, quantity: qtd }],
-      });
+      const res = await createQuote({ ...CRIAR_BASE, items: [{ ...ITEM_OK, unitPrice }] });
 
       expect(res.ok).toBe(false);
       expect(chamadas.rpc).toHaveLength(0);
     });
   }
 
-  it("desconto com sete casas: recusado", async () => {
+  it("🔴 0,335 é RECUSADO, e não arredondado para 0,34", async () => {
+    // NO_DATA_LOSS. Quem escreve 0,335 não escreveu 0,34 — transformar um no
+    // outro em silêncio é perder informação que a pessoa julga ter dado.
+    // E o documento deixaria de fechar: a linha valeria 1,01 (= 3 × 0,335)
+    // com o preço a dizer 0,34, cujo triplo é 1,02.
     const chamadas = duplo({ settings: { vat_rate: 23, quote_prefix: "ORC" } });
-    const res = await createQuote({ ...CRIAR_BASE, discountPct: 1.1234567 });
-    expect(res.ok).toBe(false);
-    expect(chamadas.rpc).toHaveLength(0);
-  });
 
-  it("🔴 a revisão tem o mesmo domínio — não é porta de trás", async () => {
-    const chamadas = duplo({ settings: { vat_rate: 23 } });
-
-    const res = await reviseQuote(QUOTE, {
-      ...REVER_BASE,
-      items: [{ ...ITEM_OK, quantity: 100_000, unitPrice: 0.000000051 }],
+    const res = await createQuote({
+      ...CRIAR_BASE,
+      items: [{ ...ITEM_OK, quantity: 3, unitPrice: 0.335 }],
     });
 
     expect(res.ok).toBe(false);
     expect(chamadas.rpc).toHaveLength(0);
   });
 
-  it("desconto da revisão com sete casas: recusado", async () => {
-    const chamadas = duplo({ settings: { vat_rate: 23 } });
-    const res = await reviseQuote(QUOTE, { ...REVER_BASE, discountPct: 0.0000001 });
+  it("🔴 1,005 na quantidade é RECUSADO, e não arredondado para 1,01", async () => {
+    const chamadas = duplo({ settings: { vat_rate: 23, quote_prefix: "ORC" } });
+
+    const res = await createQuote({
+      ...CRIAR_BASE,
+      items: [{ ...ITEM_OK, quantity: 1.005, unitPrice: 10 }],
+    });
+
     expect(res.ok).toBe(false);
     expect(chamadas.rpc).toHaveLength(0);
   });
 
-  for (const preco of DENTRO) {
-    it(`preço ${preco}: aceite, e chega à RPC`, async () => {
-      const chamadas = duplo({
-        settings: { vat_rate: 23, quote_prefix: "ORC" },
-        rpc: () => ({ data: [{ quote_id: NOVA, quote_number: "ORC2026/001" }], error: null }),
-      });
-
-      const res = await createQuote({
-        ...CRIAR_BASE,
-        items: [{ ...ITEM_OK, quantity: 100_000, unitPrice: preco }],
-      });
-
-      expect(res.ok).toBe(true);
-      expect(chamadas.rpc).toHaveLength(1);
-      expect(chamadas.rpc[0].nome).toBe("create_crm_quote_with_items");
-      const itens = chamadas.rpc[0].args.p_items as { unit_price: number }[];
-      expect(itens[0].unit_price).toBe(preco);
-    });
-  }
+  it("🔴 a revisão tem exactamente o mesmo gate", async () => {
+    for (const items of [
+      [{ ...ITEM_OK, quantity: 1.005 }],
+      [{ ...ITEM_OK, unitPrice: 0.335 }],
+      [{ ...ITEM_OK, unitPrice: 1.234567 }],
+    ]) {
+      const chamadas = duplo({ settings: { vat_rate: 23 } });
+      const res = await reviseQuote(QUOTE, { ...REVER_BASE, items });
+      expect(res.ok).toBe(false);
+      expect(chamadas.rpc).toHaveLength(0);
+    }
+  });
 
   it("a mensagem diz quantas casas são", async () => {
     duplo({ settings: { vat_rate: 23, quote_prefix: "ORC" } });
-    const res = await createQuote({
-      ...CRIAR_BASE,
-      items: [{ ...ITEM_OK, unitPrice: 0.0000001 }],
-    });
+    const res = await createQuote({ ...CRIAR_BASE, items: [{ ...ITEM_OK, unitPrice: 0.335 }] });
     expect(res.ok).toBe(false);
-    if (!res.ok) {
-      const texto = JSON.stringify(res.error);
-      expect(texto).toContain("6 casas decimais");
-    }
+    if (!res.ok) expect(JSON.stringify(res.error)).toContain("2 casas decimais");
   });
 });
 
@@ -329,32 +347,33 @@ describe("🔴 os totais têm de caber em numeric(10,2)", () => {
     expect(chamadas.rpc).toHaveLength(1);
   });
 
-  it("o máximo exacto passa: 99 999 999,99", async () => {
+  it("valor alto e válido: 100 × 999 999,99 = 99 999 999,00", async () => {
+    // 🔴 Os dois campos com DUAS casas, como as colunas exigem, e o produto
+    //    logo abaixo do limite de `numeric(10,2)`. A versão anterior deste
+    //    ensaio usava 99 999,99999 — cinco casas na quantidade —, que desde o
+    //    blocker 6 já nem sequer é entrada válida: passaria pelo motivo errado.
     const chamadas = duplo({
       settings: { vat_rate: 0, quote_prefix: "ORC" },
       rpc: () => ({ data: [{ quote_id: NOVA, quote_number: "ORC2026/001" }], error: null }),
     });
 
-    // 99 999,99999 × 1 000 = 99 999 999,99 — os dois campos dentro dos seus
-    // próprios limites, e o produto no limite exacto da coluna.
     const res = await createQuote({
       ...CRIAR_BASE,
       applyVat: false,
-      items: [{ ...ITEM_OK, quantity: 99_999.99999, unitPrice: 1_000 }],
+      items: [{ ...ITEM_OK, quantity: 100, unitPrice: 999_999.99 }],
     });
 
     expect(res.ok).toBe(true);
     expect(chamadas.rpc).toHaveLength(1);
   });
 
-  it("🔴 um cêntimo acima do máximo já é recusado", async () => {
+  it("🔴 100 × 1 000 000,00 = 100 000 000,00: recusado antes da RPC", async () => {
     const chamadas = duplo({ settings: { vat_rate: 0, quote_prefix: "ORC" } });
 
-    // 100 000 × 1 000 = 100 000 000,00 — um cêntimo acima do que cabe.
     const res = await createQuote({
       ...CRIAR_BASE,
       applyVat: false,
-      items: [{ ...ITEM_OK, quantity: 100_000, unitPrice: 1_000 }],
+      items: [{ ...ITEM_OK, quantity: 100, unitPrice: 1_000_000 }],
     });
 
     expect(res.ok).toBe(false);

@@ -25,7 +25,9 @@ import {
   allowedQuoteTransitions,
   decimalPlaces,
   hasMaxDecimalPlaces,
-  QUOTE_MAX_DECIMAL_PLACES,
+  QUOTE_ARITHMETIC_DECIMAL_PLACES,
+  QUOTE_DISCOUNT_MAX_DECIMAL_PLACES,
+  QUOTE_ITEM_MAX_DECIMAL_PLACES,
   canReviseQuote,
   canTransitionQuote,
   isQuoteFinal,
@@ -241,14 +243,14 @@ describe("totais — a mesma aritmética das RPC", () => {
   });
 });
 
-describe("🔴 o domínio decimal — seis casas, e nem mais uma", () => {
+describe("🔴 o domínio decimal", () => {
   it("conta as casas da representação decimal", () => {
     expect(decimalPlaces(1)).toBe(0);
     expect(decimalPlaces(1.2)).toBe(1);
+    expect(decimalPlaces(1.23)).toBe(2);
     expect(decimalPlaces(1.123456)).toBe(6);
     expect(decimalPlaces(0.000001)).toBe(6);
     expect(decimalPlaces(1.1234567)).toBe(7);
-    expect(decimalPlaces(0.0000001)).toBe(7);
   });
 
   it("🔴 a notação exponencial conta como casas, não como zero", () => {
@@ -266,57 +268,76 @@ describe("🔴 o domínio decimal — seis casas, e nem mais uma", () => {
   });
 
   it("um valor não finito não tem representação decimal", () => {
-    expect(hasMaxDecimalPlaces(Number.NaN)).toBe(false);
-    expect(hasMaxDecimalPlaces(Number.POSITIVE_INFINITY)).toBe(false);
+    expect(hasMaxDecimalPlaces(Number.NaN, 2)).toBe(false);
+    expect(hasMaxDecimalPlaces(Number.POSITIVE_INFINITY, 2)).toBe(false);
   });
 
-  it("o contrato pedido pela direcção, caso a caso", () => {
-    for (const bom of [1, 1.2, 1.123456, 0.000001]) {
-      expect(hasMaxDecimalPlaces(bom), `${bom} devia passar`).toBe(true);
+  it("🔴 `max` é obrigatório — não há default silencioso", () => {
+    // Havia aqui um default de 6 (a escala da ARITMÉTICA) e foi assim que as
+    // linhas ficaram a aceitar seis casas quando as colunas guardam duas:
+    // quem escreveu `hasMaxDecimalPlaces(v)` julgou estar a validar o domínio
+    // e estava a validar outra coisa.
+    expect(hasMaxDecimalPlaces.length).toBe(2);
+  });
+
+  it("🔴 as linhas aceitam DUAS casas — é o que numeric(10,2) guarda", () => {
+    for (const bom of [1, 1.2, 1.23, 0.33, 0.34, 999.99]) {
+      expect(hasMaxDecimalPlaces(bom, QUOTE_ITEM_MAX_DECIMAL_PLACES), `${bom}`).toBe(true);
     }
-    for (const mau of [1.1234567, 0.0000001, 0.000000051, 0.000001051]) {
-      expect(hasMaxDecimalPlaces(mau), `${mau} devia falhar`).toBe(false);
+    for (const mau of [1.234, 1.005, 0.335, 1.234567, 0.000001]) {
+      expect(hasMaxDecimalPlaces(mau, QUOTE_ITEM_MAX_DECIMAL_PLACES), `${mau}`).toBe(false);
     }
+  });
+
+  it("o desconto também: numeric(5,2)", () => {
+    for (const bom of [3, 3.1, 3.14, 100]) {
+      expect(hasMaxDecimalPlaces(bom, QUOTE_DISCOUNT_MAX_DECIMAL_PLACES), `${bom}`).toBe(true);
+    }
+    for (const mau of [3.141, 3.141592, 0.001]) {
+      expect(hasMaxDecimalPlaces(mau, QUOTE_DISCOUNT_MAX_DECIMAL_PLACES), `${mau}`).toBe(false);
+    }
+  });
+
+  it("os limites vêm da COLUNA, não da aritmética", () => {
+    expect(QUOTE_ITEM_MAX_DECIMAL_PLACES).toBe(2);      // numeric(10,2)
+    expect(QUOTE_DISCOUNT_MAX_DECIMAL_PLACES).toBe(2);  // numeric(5,2)
+    // A escala da aritmética é maior, e é só um detalhe de cálculo.
+    expect(QUOTE_ARITHMETIC_DECIMAL_PLACES).toBe(6);
+    const src = readFileSync(join(ROOT, "src/lib/crm/quotes.ts"), "utf8");
+    expect(src).toContain("1_000_000");
   });
 
   it("🔴 não se mede com `value * 1e6`", () => {
     // A multiplicação em binário introduz precisamente o erro que se quer
-    // medir: `1.000001 * 1e6` dá 1000000.9999999999 — não é inteiro, e é
-    // legítimo. O teste passaria a depender do lixo de arredondamento.
+    // medir: `1.000001 * 1e6` dá 1000000.9999999999 — não é inteiro.
     expect(Number.isInteger(1.000001 * 1e6)).toBe(false);
-    expect(hasMaxDecimalPlaces(1.000001)).toBe(true);
+    expect(decimalPlaces(1.000001)).toBe(6);
 
     // Sem comentários: o cabeçalho de `quotes.ts` MENCIONA esta forma para
-    // explicar porque é que não a usa, e um `match` sobre o texto cru casaria
-    // com a explicação em vez do código.
+    // explicar porque é que não a usa.
     const src = readFileSync(join(ROOT, "src/lib/crm/quotes.ts"), "utf8")
       .replace(/\/\*[\s\S]*?\*\//g, "")
       .replace(/(^|[^:])\/\/.*$/gm, "$1");
     expect(src).not.toMatch(/isInteger\([^)]*\*\s*1e6/);
   });
 
-  it("o limite é seis, e é o da escala de `micros`", () => {
-    expect(QUOTE_MAX_DECIMAL_PLACES).toBe(6);
-    const src = readFileSync(join(ROOT, "src/lib/crm/quotes.ts"), "utf8");
-    expect(src).toContain("1_000_000");
-  });
+  it("🔴 dentro do domínio aceite, o valor escrito é o valor gravado", () => {
+    // É a propriedade que o limite de 2 casas compra: `unit_price` cabe na
+    // coluna sem perder nada, e `line_total` fecha com ele.
+    const t = totaisDoOrcamento(
+      [{ quantity: 3, unit_price: 0.34 }],
+      { discountPct: 0, applyVat: false, vatRate: 0 },
+    );
+    expect(t.subtotal).toBe(1.02);   // = 3 × 0,34, que é o que o PDF mostra
 
-  it("🔴 dentro do domínio, a conta é exacta; fora, não seria", () => {
-    // O caso da direcção: 100000 × 0,000000051 dá 0,01 na base e 0,00 aqui.
-    // É por isso que o valor é recusado, e não por gosto de restringir.
+    // Fora do domínio isso deixava de ser verdade — e é por isso que é
+    // recusado, não arredondado.
     const fora = totaisDoOrcamento(
-      [{ quantity: 100_000, unit_price: 0.000000051 }],
+      [{ quantity: 3, unit_price: 0.335 }],
       { discountPct: 0, applyVat: false, vatRate: 0 },
     );
-    expect(fora.subtotal).toBe(0);            // a base daria 0,01
-    expect(hasMaxDecimalPlaces(0.000000051)).toBe(false);
-
-    const dentro = totaisDoOrcamento(
-      [{ quantity: 100_000, unit_price: 0.000001 }],
-      { discountPct: 0, applyVat: false, vatRate: 0 },
-    );
-    expect(dentro.subtotal).toBe(0.1);
-    expect(hasMaxDecimalPlaces(0.000001)).toBe(true);
+    expect(fora.subtotal).toBe(1.01);  // a coluna guardaria 0,34 → 1,02
+    expect(hasMaxDecimalPlaces(0.335, QUOTE_ITEM_MAX_DECIMAL_PLACES)).toBe(false);
   });
 });
 

@@ -45,9 +45,10 @@ import {
   excedeMontanteMaximo,
   hasMaxDecimalPlaces,
   QUOTE_AMOUNT_MESSAGE,
-  QUOTE_DECIMAL_MESSAGE,
   QUOTE_DISCOUNT_DECIMAL_MESSAGE,
   QUOTE_DISCOUNT_MAX_DECIMAL_PLACES,
+  QUOTE_ITEM_DECIMAL_MESSAGE,
+  QUOTE_ITEM_MAX_DECIMAL_PLACES,
   QUOTE_DEFAULT_VALIDITY_DAYS,
   QUOTE_PRICING_KINDS,
   QUOTE_PRICING_KIND_LABELS,
@@ -213,10 +214,19 @@ export function QuoteSheet({
    *    que a base não vai confirmar. 100000 × 0,000000051 dá 0,01 na base e
    *    0,00 aqui: um preview com esse número seria uma promessa falsa.
    */
+  /**
+   * 🔴 Duas casas nas linhas, porque `quantity` e `unit_price` são
+   *    `numeric(10,2)`. Não é a escala da aritmética — é a da coluna.
+   *
+   *    Com mais casas o documento deixava de fechar consigo próprio: 0,335
+   *    persiste como 0,34 e a linha vale 1,01, quando 3 × 0,34 dá 1,02.
+   */
   const foraDeDominio = useMemo(
     () =>
       itensNumericos.some(
-        (i) => !hasMaxDecimalPlaces(i.quantity) || !hasMaxDecimalPlaces(i.unit_price),
+        (i) =>
+          !hasMaxDecimalPlaces(i.quantity, QUOTE_ITEM_MAX_DECIMAL_PLACES)
+          || !hasMaxDecimalPlaces(i.unit_price, QUOTE_ITEM_MAX_DECIMAL_PLACES),
       ),
     [itensNumericos],
   );
@@ -648,7 +658,7 @@ export function QuoteSheet({
                   ? QUOTE_AMOUNT_MESSAGE
                   : descontoForaDeDominio
                     ? QUOTE_DISCOUNT_DECIMAL_MESSAGE
-                    : `${QUOTE_DECIMAL_MESSAGE} Há um valor com casas a mais.`}{" "}
+                    : `${QUOTE_ITEM_DECIMAL_MESSAGE} Há um valor com casas a mais.`}{" "}
                 O total só é calculado depois de o corrigir.
               </p>
             ) : (

@@ -87,9 +87,10 @@ import {
   excedeMontanteMaximo,
   hasMaxDecimalPlaces,
   QUOTE_AMOUNT_MESSAGE,
-  QUOTE_DECIMAL_MESSAGE,
   QUOTE_DISCOUNT_DECIMAL_MESSAGE,
   QUOTE_DISCOUNT_MAX_DECIMAL_PLACES,
+  QUOTE_ITEM_DECIMAL_MESSAGE,
+  QUOTE_ITEM_MAX_DECIMAL_PLACES,
   QUOTE_PRICING_KINDS,
   QUOTE_STATUS_LABELS,
   QUOTE_STATUSES,
@@ -396,17 +397,27 @@ export async function getQuote(quoteId: string): Promise<ActionResult<QuoteWithI
 /**
  * 🔴 O DOMÍNIO DECIMAL é validado AQUI, no servidor, e não no `<input>`.
  *
- *    `micros()` trabalha em escala 1e-6 e trunca o que vem além da sexta
- *    casa. Sem este limite, a action aceitava valores que a pré-visualização
- *    não reproduz — 100000 × 0,000000051 dá 0,01 na base e 0,00 no ecrã.
- *
  *    A UI espelha a regra para dar resposta imediata, mas isso é conforto, não
  *    é garantia: uma Server Action é um endpoint. Quem lhe chamar directamente
- *    com sete casas tem de ser recusado antes de a RPC ser invocada, e é o que
- *    este `refine` faz.
+ *    com casas a mais tem de ser recusado antes de a RPC ser invocada, e é o
+ *    que estes `refine` fazem.
+ *
+ * 🔴 O limite de cada campo vem da COLUNA onde ele é gravado, e não da escala
+ *    da aritmética.
+ *
+ *    `quantity` e `unit_price` são `numeric(10,2)`: duas casas. A RPC calcula
+ *    `line_total` com o valor bruto do JSONB, por isso aceitar mais fazia o
+ *    documento deixar de fechar consigo próprio — 0,335 persiste como 0,34 e
+ *    a linha vale 1,01, quando 3 × 0,34 dá 1,02.
+ *
+ *    E REJEITA-SE, não se arredonda: quem escreve 0,335 não escreveu 0,34, e
+ *    converter um no outro em silêncio é perder informação que a pessoa julga
+ *    ter dado.
  */
-const decimalAceite = (campo: string) =>
-  z.number().refine((v) => hasMaxDecimalPlaces(v), { message: `${campo}: ${QUOTE_DECIMAL_MESSAGE}` });
+const itemAceite = (campo: string) =>
+  z.number().refine((v) => hasMaxDecimalPlaces(v, QUOTE_ITEM_MAX_DECIMAL_PLACES), {
+    message: `${campo}: ${QUOTE_ITEM_DECIMAL_MESSAGE}`,
+  });
 
 /**
  * 🔴 O desconto tem escala PRÓPRIA: 2 casas, não 6.
@@ -425,11 +436,11 @@ const descontoAceite = () =>
 
 const itemSchema = z.object({
   description: z.string().trim().min(1, "Escreva o que está a orçamentar.").max(500),
-  quantity: decimalAceite("Quantidade")
+  quantity: itemAceite("Quantidade")
     .positive("A quantidade tem de ser maior do que zero.")
     .max(100_000),
   unit: z.enum(QUOTE_UNITS),
-  unitPrice: decimalAceite("Preço")
+  unitPrice: itemAceite("Preço")
     .min(0, "O preço não pode ser negativo.")
     .max(1_000_000),
 });
