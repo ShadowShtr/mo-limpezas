@@ -263,6 +263,28 @@ async function nomesDosDestinatarios(
 /**
  * Os orçamentos da empresa, do mais recente para o mais antigo.
  *
+ * ---------------------------------------------------------------------------
+ * 🔴 POR OMISSÃO, SÓ AS REVISÕES VIVAS (`superseded_by_id IS NULL`).
+ * ---------------------------------------------------------------------------
+ *
+ * A lista operacional responde a uma pergunta só: **qual é o orçamento que
+ * vale agora?**
+ *
+ * Sem este filtro, uma cadeia revista aparece duas vezes e mente nas contas.
+ * Com R0 `enviado` e R1 `rascunho` (a viva), a lista mostrava as duas e o
+ * filtro «Enviado» continuava a contar a R0 — um orçamento que já não está em
+ * vigor, a inflar o número de propostas por responder. Quem olhasse para o
+ * ecrã para saber o que tinha em cima da mesa via trabalho que não existe.
+ *
+ * A base continua a guardar R0 e R1 na íntegra: isto é uma decisão de LEITURA,
+ * não de retenção. Nada se apaga, e `getQuote(id)` abre qualquer versão pelo
+ * seu id, viva ou histórica.
+ *
+ * `incluirSubstituidas: true` devolve a cadeia completa, para quando existir
+ * uma vista de histórico. Não há nenhuma neste ciclo — o parâmetro existe para
+ * que a vista futura não tenha de reabrir esta função e mudar o default por
+ * baixo de quem já depende dele.
+ *
  * `leadId` filtra por PROVENIÊNCIA (`source_lead_id`), e não por `lead_id`.
  * 🔴 A diferença conta: depois da conversão (104) `lead_id` fica a NULL, e um
  *    filtro por ele deixaria de encontrar justamente o orçamento que fechou o
@@ -272,6 +294,8 @@ export async function getQuotes(opts?: {
   leadId?: string;
   clientId?: string;
   status?: QuoteStatus;
+  /** 🔴 Só para uma vista de histórico. A lista operacional não passa isto. */
+  incluirSubstituidas?: boolean;
 }): Promise<ActionResult<QuoteRow[]>> {
   const guard = await requireProfile({ roles: ["admin", "gestor"] });
   if (!guard.ok) return recusa(guard.code);
@@ -282,6 +306,12 @@ export async function getQuotes(opts?: {
     .from("crm_quotes")
     .select(QUOTE_SELECT)
     .eq("company_id", profile.company_id);
+
+  // 🔴 `!== true`, e não `!opts?.incluirSubstituidas`: o filtro é o default, e
+  //    só um `true` explícito o desliga. Um valor indefinido, nulo ou vindo de
+  //    um objecto de opções mal construído cai do lado seguro — a lista
+  //    operacional.
+  if (opts?.incluirSubstituidas !== true) query = query.is("superseded_by_id", null);
 
   if (opts?.leadId) query = query.eq("source_lead_id", opts.leadId);
   if (opts?.clientId) query = query.eq("client_id", opts.clientId);

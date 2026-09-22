@@ -8,19 +8,29 @@
 // uma lista ordenada por número decrescente responde melhor — e o número já
 // carrega a ordem cronológica dentro do ano.
 //
-// 🔴 As revisões aparecem TODAS, e não só a viva.
+// 🔴 SÓ AS REVISÕES VIVAS. As substituídas não entram aqui.
 //
-//    Um filtro «só a última» esconderia o R0 que foi enviado ao cliente, e é
-//    justamente esse que alguém vai querer abrir quando o cliente ligar a
-//    falar de um preço que já não é o actual. As substituídas mostram-se
-//    esbatidas, com a marca de histórico — visíveis, e sem se confundirem com
-//    a que conta.
+//    Uma versão anterior deste ecrã mostrava a cadeia toda, esbatendo as
+//    substituídas. Parecia mais informativo e era pior: com R0 «enviado» e R1
+//    «rascunho» (a viva), a lista mostrava as duas e o filtro «Enviado»
+//    contava a R0 — um orçamento que já não está em vigor, a inflar o número
+//    de propostas por responder. Quem olhasse para o ecrã para saber o que
+//    tinha em cima da mesa via trabalho que não existe.
+//
+//    O filtro é de `getQuotes`, no servidor, e não uma escolha deste
+//    componente: uma lista que recebe demais e esconde no cliente continua a
+//    trazer demais para o browser, e a contar mal em qualquer sítio onde
+//    alguém use o comprimento do array.
+//
+//    Nada se perde. A base guarda R0 e R1 na íntegra, e
+//    `getQuotes({ incluirSubstituidas: true })` devolve a cadeia toda no dia
+//    em que houver uma vista de histórico. Não há nenhuma neste ciclo.
 // ============================================================================
 
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { FilePlus2, FileClock, TriangleAlert } from "lucide-react";
+import { FilePlus2, TriangleAlert } from "lucide-react";
 
 import { useToast } from "@/components/ui/toast";
 import { usePagination, Pagination } from "@/components/ui/pagination";
@@ -170,29 +180,20 @@ export function QuotesClient({
               <tbody>
                 {paginacao.pageItems.map((q) => {
                   const estado = isQuoteStatus(q.status) ? q.status : null;
-                  const substituido = q.superseded_by_id !== null;
                   return (
                     <tr
                       key={q.id}
                       className="border-b last:border-0"
-                      style={{
-                        borderColor: "var(--color-border)",
-                        // Histórico: visível, mas sem competir com a versão viva.
-                        opacity: substituido ? 0.6 : 1,
-                      }}
+                      style={{ borderColor: "var(--color-border)" }}
                     >
+                      {/*
+                        Sem marca de «histórico»: aqui só chegam revisões
+                        vivas. O aviso de versão substituída vive no detalhe,
+                        que abre qualquer versão pelo seu id — incluindo uma
+                        que tenha sido substituída entretanto.
+                      */}
                       <td className="px-4 py-3 whitespace-nowrap font-medium">
                         {q.quote_number}
-                        {substituido && (
-                          <span
-                            className="ml-1.5 inline-flex items-center gap-0.5 text-[11px]"
-                            style={{ color: "var(--color-text-muted)" }}
-                            title="Substituído por uma revisão mais recente"
-                          >
-                            <FileClock className="h-3 w-3" />
-                            histórico
-                          </span>
-                        )}
                       </td>
                       <td className="px-4 py-3">
                         {/*

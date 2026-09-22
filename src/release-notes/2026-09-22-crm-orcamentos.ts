@@ -11,7 +11,7 @@ export const nota: ReleaseNote = {
   message:
     "O CRM tem um terceiro separador, Orçamentos. Faça o orçamento a uma lead ou a um cliente, "
     + "com as linhas que quiser, desconto e IVA, e ligue-o à visita onde tirou as medidas. "
-    + "Descarregue o PDF, envie-o e marque depois como enviado, aceite ou recusado. Se o preço "
-    + "mudar depois de já ter saído, faça uma revisão: nasce um documento novo e o anterior "
-    + "fica no histórico. As notas internas não saem no PDF.",
+    + "Descarregue o PDF, envie-o e marque como enviado, aceite ou recusado. Se o preço "
+    + "mudar depois de já ter saído, faça uma revisão: passa a valer o documento novo e o "
+    + "anterior sai da lista. As notas internas não saem no PDF.",
 };

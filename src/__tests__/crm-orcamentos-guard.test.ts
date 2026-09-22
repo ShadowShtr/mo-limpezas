@@ -44,7 +44,10 @@ function exportacoes(src: string): string[] {
  * que insere linhas que nunca insere.
  */
 function corpoDe(nome: string): string {
-  const inicio = CODIGO.indexOf(`export async function ${nome}`);
+  // 🔴 O parêntesis faz parte da busca. Sem ele, `getQuote` casa primeiro com
+  //    `getQuotes` (que aparece antes no ficheiro) e o ensaio passa a medir a
+  //    função errada — um verde que não prova nada sobre a função pedida.
+  const inicio = CODIGO.indexOf(`export async function ${nome}(`);
   if (inicio === -1) throw new Error(`função ${nome} não encontrada`);
   const resto = CODIGO.slice(inicio + 1);
   const fim = resto.search(/\n(export |async function |function |type |const |interface )/);
@@ -243,6 +246,48 @@ describe("o formato do resultado", () => {
 
   it("nunca select(\"*\")", () => {
     expect(CODIGO).not.toContain('select("*")');
+  });
+});
+
+describe("🔴 a lista operacional só traz revisões vivas", () => {
+  it("getQuotes filtra superseded_by_id IS NULL POR OMISSÃO", () => {
+    // Sem isto, uma cadeia revista aparece duas vezes: com R0 «enviado» e R1
+    // «rascunho» (a viva), o filtro «Enviado» contava a R0 — um orçamento que
+    // já não está em vigor, a inflar as propostas por responder.
+    expect(corpoDe("getQuotes")).toContain('is("superseded_by_id", null)');
+  });
+
+  it("🔴 só um `true` explícito desliga o filtro", () => {
+    // `!opts?.incluirSubstituidas` daria o mesmo resultado hoje, mas qualquer
+    // valor estranho — uma string vazia, um `0` — cairia do lado errado. O
+    // default tem de ser o lado seguro.
+    expect(corpoDe("getQuotes")).toContain("opts?.incluirSubstituidas !== true");
+  });
+
+  it("a página da lista usa o default — não pede histórico", () => {
+    const pagina = semComentarios(ler(`${UI}/page.tsx`));
+    expect(pagina).toContain("getQuotes()");
+    expect(pagina).not.toContain("incluirSubstituidas");
+  });
+
+  it("🔴 o filtro é do servidor, não uma escolha do componente", () => {
+    // Uma lista que recebe demais e esconde no cliente continua a trazer
+    // demais para o browser, e a contar mal em qualquer sítio onde alguém use
+    // o comprimento do array.
+    const lista = semComentarios(ler(`${UI}/_components/quotes-client.tsx`));
+    expect(lista).not.toContain("superseded_by_id");
+  });
+
+  it("getQuote(id) continua a abrir qualquer versão, viva ou histórica", () => {
+    // A leitura de UM orçamento é por id e não filtra: quem tem o link de uma
+    // versão substituída tem de a poder ver. É uma decisão de LISTAGEM, não de
+    // retenção — nada se apaga.
+    expect(corpoDe("getQuote")).not.toContain("superseded_by_id");
+  });
+
+  it("o detalhe continua a avisar quando a versão está substituída", () => {
+    const detalhe = semComentarios(ler(`${UI}/_components/quote-detail-sheet.tsx`));
+    expect(detalhe).toContain("superseded_by_id");
   });
 });
 

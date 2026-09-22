@@ -529,6 +529,107 @@ describe("🔴 revisão — R0 enviada → R1 rascunho, R0 histórica", () => {
 });
 
 // ───────────────────────────────────────────────────────────────────────────
+describe("🔴 a lista operacional só vê a revisão viva", () => {
+  /**
+   * A consulta que `getQuotes()` faz por omissão.
+   *
+   * 🔴 O predicado é escrito aqui à mão de propósito: o que se quer medir é o
+   *    COMPORTAMENTO do filtro contra a base, e não que o query builder do
+   *    Supabase o traduza. A tradução é o que o guard estrutural verifica.
+   */
+  const OPERACIONAL = `
+    SELECT quote_number, status FROM public.crm_quotes
+     WHERE company_id = $1 AND superseded_by_id IS NULL
+     ORDER BY quote_seq DESC, revision DESC`;
+
+  const HISTORICO = `
+    SELECT quote_number, status FROM public.crm_quotes
+     WHERE company_id = $1
+     ORDER BY quote_seq DESC, revision DESC`;
+
+  /** R0 enviada, revista para R1. É o caso que a direcção nomeou. */
+  async function cadeiaRevista(): Promise<{ r0: string; r1: string }> {
+    const r0 = await criar({
+      itens: [{ description: "Escadas", quantity: 1, unit: "servico", unit_price: 100 }],
+    });
+    await pool.query("SELECT public.set_crm_quote_status($1,$2,$3,'enviado',NULL)",
+      [EMPRESA, r0.id, GESTORA]);
+    const { rows } = await pool.query(
+      `SELECT * FROM public.revise_crm_quote(
+         $1,$2,$3,CURRENT_DATE,CURRENT_DATE + 30,0,true,23,NULL,$4::jsonb)`,
+      [EMPRESA, r0.id, GESTORA,
+        JSON.stringify([{ description: "Escadas", quantity: 1, unit: "servico", unit_price: 90 }])],
+    );
+    return { r0: r0.numero, r1: rows[0].quote_number as string };
+  }
+
+  it("🔴 R0 enviado → R1: a lista só devolve a R1", LENTO, async () => {
+    const { r0, r1 } = await cadeiaRevista();
+
+    const { rows } = await pool.query(OPERACIONAL, [EMPRESA]);
+    expect(rows.map((r) => r.quote_number)).toEqual([r1]);
+    expect(rows.map((r) => r.quote_number)).not.toContain(r0);
+  });
+
+  it("🔴 o filtro «Enviado» deixa de contar a R0 substituída", LENTO, async () => {
+    // Era o defeito operacional: R0 `enviado` continuava a somar às propostas
+    // por responder, apesar de já não estar em vigor.
+    await cadeiaRevista();
+
+    const { rows } = await pool.query(
+      `${OPERACIONAL.replace("superseded_by_id IS NULL", "superseded_by_id IS NULL AND status = 'enviado'")}`,
+      [EMPRESA],
+    );
+    expect(rows).toHaveLength(0);
+  });
+
+  it("nada se apaga: a cadeia completa continua lá", LENTO, async () => {
+    // É uma decisão de LEITURA, não de retenção.
+    const { r0, r1 } = await cadeiaRevista();
+
+    const { rows } = await pool.query(HISTORICO, [EMPRESA]);
+    expect(rows.map((r) => r.quote_number).sort()).toEqual([r0, r1].sort());
+
+    // E a R0 mantém o estado com que foi enviada ao cliente.
+    expect(rows.find((r) => r.quote_number === r0).status).toBe("enviado");
+  });
+
+  it("uma cadeia sem revisões aparece na mesma", LENTO, async () => {
+    // O filtro não pode esconder o caso normal: `superseded_by_id` é NULL num
+    // orçamento que nunca foi revisto.
+    const q = await criar({
+      itens: [{ description: "A", quantity: 1, unit: "servico", unit_price: 10 }],
+    });
+    const { rows } = await pool.query(OPERACIONAL, [EMPRESA]);
+    expect(rows.map((r) => r.quote_number)).toEqual([q.numero]);
+  });
+
+  it("🔴 duas revisões seguidas: só a última sobrevive à lista", LENTO, async () => {
+    const { r0 } = await cadeiaRevista();
+
+    // A R1 está em rascunho; envia-se e revê-se outra vez.
+    const { rows: viva } = await pool.query(
+      "SELECT id FROM public.crm_quotes WHERE superseded_by_id IS NULL");
+    await pool.query("SELECT public.set_crm_quote_status($1,$2,$3,'enviado',NULL)",
+      [EMPRESA, viva[0].id, GESTORA]);
+    const { rows: r2 } = await pool.query(
+      `SELECT * FROM public.revise_crm_quote(
+         $1,$2,$3,CURRENT_DATE,CURRENT_DATE + 30,0,true,23,NULL,$4::jsonb)`,
+      [EMPRESA, viva[0].id, GESTORA,
+        JSON.stringify([{ description: "Escadas", quantity: 1, unit: "servico", unit_price: 80 }])],
+    );
+
+    const { rows } = await pool.query(OPERACIONAL, [EMPRESA]);
+    expect(rows.map((r) => r.quote_number)).toEqual([r2[0].quote_number]);
+    expect(rows.map((r) => r.quote_number)).not.toContain(r0);
+
+    // As três continuam gravadas.
+    const { rows: todas } = await pool.query(HISTORICO, [EMPRESA]);
+    expect(todas).toHaveLength(3);
+  });
+});
+
+// ───────────────────────────────────────────────────────────────────────────
 describe("🔴 proveniência — source_lead_id nasce certa e não se reescreve", () => {
   it("nasce igual à lead de origem", LENTO, async () => {
     const { id } = await criar({
