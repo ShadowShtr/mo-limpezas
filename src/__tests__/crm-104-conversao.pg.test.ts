@@ -431,6 +431,80 @@ describe("4-6. de onde vem a morada", () => {
     expect(rows[0].address).toBe("Rua da Lead 1, Lisboa");
   });
 
+  // ─────────────────────────────────────────────────────────────────────────
+  // 🔴 BLOCKER 5 — a relação visita ↔ lead pode derivar DEPOIS da criação
+  // ─────────────────────────────────────────────────────────────────────────
+  //
+  // A 103 valida o destinatário da visita quando o orçamento nasce, mas a FK
+  // persistente só prende `(visit_id, company_id)`. Nada impede que
+  // `crm_visits.lead_id` mude a seguir — e é isso que este bloco força.
+
+  it("🔴 D: a visita passou para outra lead → CONVERSION_VISIT_MISMATCH", LENTO, async () => {
+    const leadB = await novaLead({ name: "Beta" });
+    const visita = await novaVisita(leadA, "Morada Visita");
+    const q = await novoOrcamento(leadA, { visitId: visita });
+
+    // 🔴 O drift que o schema permite: a FK do orçamento não prende a lead da
+    //    visita, por isso este UPDATE passa.
+    await pool.query("UPDATE public.crm_visits SET lead_id = $1 WHERE id = $2", [leadB, visita]);
+
+    const antes = await fotografia(leadA, q.id);
+    const contagensAntes = await contagens();
+
+    await expect(converter(leadA, q.id)).rejects.toThrow(/CONVERSION_VISIT_MISMATCH/);
+
+    // 🔴 NUNCA fallback para a lead. Converter com a morada da lead seria
+    //    normalizar em silêncio um estado que ninguém consegue explicar.
+    expect(await fotografia(leadA, q.id)).toEqual(antes);
+    expect(await contagens()).toEqual(contagensAntes);
+  });
+
+  it("🔴 a visita passou a ser de um CLIENTE → CONVERSION_VISIT_MISMATCH", LENTO, async () => {
+    // 🔴 `lead_id = NULL` sozinho não é alcançável: `crm_visits_um_destinatario`
+    //    (102) exige exactamente um destinatário. O drift realista é a visita
+    //    ser reatribuída a um cliente que já existe — e aí `lead_id` fica a
+    //    NULL de forma legítima para a visita, e ilegítima para este orçamento.
+    const visita = await novaVisita(leadA, "Morada Visita");
+    const q = await novoOrcamento(leadA, { visitId: visita });
+
+    await pool.query(
+      "UPDATE public.crm_visits SET lead_id = NULL, client_id = $1 WHERE id = $2",
+      [CLIENTE_A, visita]);
+
+    const antes = await contagens();
+    await expect(converter(leadA, q.id)).rejects.toThrow(/CONVERSION_VISIT_MISMATCH/);
+    expect(await contagens()).toEqual(antes);
+  });
+
+  it("CONTROLO: visita certa e sem morada continua a cair na lead", LENTO, async () => {
+    // 🔴 O fail-closed não pode ter destruído o fallback legítimo. São dois
+    //    casos diferentes: «a visita não tem morada» e «a visita é de outra
+    //    lead».
+    const lead = await novaLead({ address: "Morada Lead" });
+    const visita = await novaVisita(lead, "   ");
+    const q = await novoOrcamento(lead, { visitId: visita });
+
+    const r = await converter(lead, q.id);
+
+    const { rows } = await pool.query(
+      "SELECT address, lat, lng FROM public.locations WHERE id = $1", [r.location_id]);
+    expect(rows[0].address).toBe("Morada Lead");
+    expect(Number(rows[0].lat)).toBeCloseTo(38.7223, 4);
+  });
+
+  it("CONTROLO: visita certa e com morada continua a ganhar à lead", LENTO, async () => {
+    const lead = await novaLead({ address: "Morada Lead" });
+    const visita = await novaVisita(lead, "Morada Visita", { lat: 41.15, lng: -8.61 });
+    const q = await novoOrcamento(lead, { visitId: visita });
+
+    const r = await converter(lead, q.id);
+
+    const { rows } = await pool.query(
+      "SELECT address, lat, lng FROM public.locations WHERE id = $1", [r.location_id]);
+    expect(rows[0].address).toBe("Morada Visita");
+    expect(Number(rows[0].lat)).toBeCloseTo(41.15, 4);
+  });
+
   it("🔴 sem morada em lado nenhum: recusa, e zero vestígios", LENTO, async () => {
     const lead = await novaLead({ address: null });
     const q = await novoOrcamento(lead);

@@ -551,13 +551,47 @@ BEGIN
   v_address := NULL;
 
   IF v_quote.visit_id IS NOT NULL THEN
+    -- 🔴 A visita carrega-se pelo VÍNCULO ESTRUTURAL — o mesmo que a FK da
+    --    103 garante — e só DEPOIS se valida a relação com a lead.
+    --
+    --    A diferença não é de estilo. A versão anterior filtrava as três
+    --    condições de uma vez (`id`, `company_id`, `lead_id`) e, quando não
+    --    encontrava nada, seguia em frente e usava a morada da lead. Isso
+    --    confunde duas situações que não têm nada a ver uma com a outra:
+    --
+    --      «a visita não tem morada»          → fallback legítimo
+    --      «a visita é de OUTRA lead»         → estado impossível
+    --
+    --    O segundo é drift. A 103 valida o destinatário da visita na CRIAÇÃO
+    --    do orçamento, mas a FK persistente só prende `(visit_id, company_id)`
+    --    — nada impede que `crm_visits.lead_id` mude depois. Quando isso
+    --    acontece, converter usando a morada da lead seria normalizar em
+    --    silêncio um estado que ninguém consegue explicar, e produzir um
+    --    cliente cuja proveniência aponta para uma visita que já não é dele.
+    --
+    --    UNKNOWN_STATE = FAIL_CLOSED: não se converte, e não se repara.
     SELECT * INTO v_visita
       FROM public.crm_visits
      WHERE id = v_quote.visit_id
-       AND company_id = p_company_id
-       AND lead_id = p_lead_id;
+       AND company_id = p_company_id;
 
-    IF FOUND AND length(btrim(coalesce(v_visita.address, ''))) > 0 THEN
+    IF NOT FOUND THEN
+      RAISE EXCEPTION
+        'CONVERSION_VISIT_MISMATCH: o orçamento aponta para a visita %, que não existe nesta empresa',
+        v_quote.visit_id USING ERRCODE = 'check_violation';
+    END IF;
+
+    IF v_visita.lead_id IS DISTINCT FROM p_lead_id THEN
+      RAISE EXCEPTION
+        'CONVERSION_VISIT_MISMATCH: a visita % pertence à lead % e o orçamento é da lead %',
+        v_quote.visit_id, coalesce(v_visita.lead_id::text, 'NULL'), p_lead_id
+        USING ERRCODE = 'check_violation';
+    END IF;
+
+    -- 🔴 Só aqui o fallback é legítimo: a visita é mesmo desta lead, apenas
+    --    não tem morada utilizável. Nesse caso usa-se a lead INTEIRA, como
+    --    unidade coerente.
+    IF length(btrim(coalesce(v_visita.address, ''))) > 0 THEN
       v_address := btrim(v_visita.address);
       v_lat := v_visita.lat;
       v_lng := v_visita.lng;

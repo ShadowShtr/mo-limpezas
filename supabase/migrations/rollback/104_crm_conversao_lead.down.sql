@@ -87,7 +87,7 @@ DECLARE
   -- 🔴 O checksum canónico desta 104, tal como o runner o grava.
   --    Se o SQL da 104 mudar, este valor TEM de mudar com ele — há um ensaio
   --    que os compara e fica vermelho se divergirem.
-  CHECKSUM_104 CONSTANT text := '601d6479a4e71d0e9aa8d701cdde995d534d9b01758174fdf6d57b6577401e6e';
+  CHECKSUM_104 CONSTANT text := '963b13b4a2b32422845bd7b22256def3e0edbba88e62e125b5b399881b1a2d9f';
   v_checksum  text;
   v_ledger    boolean;
   v_rpc       oid;
