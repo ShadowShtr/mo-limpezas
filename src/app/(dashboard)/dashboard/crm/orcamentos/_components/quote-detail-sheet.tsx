@@ -21,13 +21,17 @@
 
 import { useEffect, useState, useTransition } from "react";
 import { createPortal } from "react-dom";
-import { Download, FileClock, TriangleAlert, X } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { Download, FileClock, TriangleAlert, UserPlus, X } from "lucide-react";
 
 import { useToast } from "@/components/ui/toast";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { fmtLisbon } from "@/lib/lisbon-time";
 import {
   allowedQuoteTransitions,
+  canConvertQuote,
   canReviseQuote,
+  isConvertedLeadQuote,
   isQuoteStatus,
   QUOTE_STATUS_LABELS,
   QUOTE_PRICING_KIND_LABELS,
@@ -42,6 +46,7 @@ import {
   type QuoteRow,
   type QuoteWithItems,
 } from "@/app/actions/crm-orcamentos";
+import { convertAcceptedQuote } from "@/app/actions/crm-conversao";
 
 import { downloadQuotePdf } from "./quote-pdf";
 
@@ -79,7 +84,31 @@ export function QuoteDetailSheet({
   onRevise,
 }: Props) {
   const { toast } = useToast();
+  const router = useRouter();
   const [pending, startTransition] = useTransition();
+
+  /**
+   * 🔴 Estado PRÓPRIO para a conversão, e não `startTransition`.
+   *
+   *    `ConfirmDialog` faz `await onConfirm()` e fecha-se a seguir. Se o
+   *    `onConfirm` fosse `() => startTransition(async () => { … })`, o
+   *    `startTransition` devolveria `void` — o `await` resolvia de imediato e
+   *    o diálogo fechava ANTES de a conversão terminar, dando a impressão de
+   *    que já estava feita. Com uma Promise verdadeira, o diálogo espera.
+   */
+  const [converting, setConverting] = useState(false);
+
+  /**
+   * 🔴 `busy` cobre QUALQUER escrita em curso, não só a conversão, e é
+   *    declarado ANTES dos `useEffect` que o usam — uma `const` referida numa
+   *    lista de dependências acima da própria declaração rebenta em TDZ.
+   *
+   *    Fechar o painel a meio de uma conversão não a cancela — ela continua no
+   *    servidor —, mas tira o ecrã a quem a lançou e faz perder o resultado. A
+   *    pessoa fica sem saber se o cliente foi criado, e a tentação seguinte é
+   *    clicar outra vez.
+   */
+  const busy = pending || converting;
 
   const [dados, setDados] = useState<QuoteWithItems | null>(null);
   const [erro, setErro] = useState<string | null>(null);
@@ -103,11 +132,11 @@ export function QuoteDetailSheet({
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && !pending) onClose();
+      if (e.key === "Escape" && !busy) onClose();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [onClose, pending]);
+  }, [onClose, busy]);
 
   const q = dados?.quote ?? orcamento;
   const estado: QuoteStatus | null = isQuoteStatus(q.status) ? q.status : null;
@@ -117,6 +146,40 @@ export function QuoteDetailSheet({
   //    `QUOTE_ALREADY_SUPERSEDED`. Por isso a lista de destinos fica vazia:
   //    é a versão viva que se mexe, não esta.
   const destinos = estado && !substituido ? allowedQuoteTransitions(estado) : [];
+
+  /**
+   * A conversão.
+   *
+   * 🔴 `async` de verdade: `ConfirmDialog` faz `await onConfirm()` e só fecha
+   *    quando esta Promise resolver. É isso que impede o diálogo de se fechar
+   *    antes de haver resposta.
+   */
+  async function converter() {
+    setConverting(true);
+    try {
+      const res = await convertAcceptedQuote(q.id);
+
+      if (!res.ok) {
+        // O `ConfirmDialog` fecha-se de qualquer forma (fá-lo no `finally`).
+        // Fica-se no detalhe, com o toast — e sem navegar para lado nenhum.
+        toast(res.error.message, "error");
+        return;
+      }
+
+      toast(
+        res.data.alreadyConverted
+          ? "A lead já estava convertida. A abrir o cliente existente."
+          : "Lead convertida em cliente.",
+        "success",
+      );
+
+      // A invalidação já foi feita no servidor; não é preciso `router.refresh`.
+      onClose();
+      router.push(`/dashboard/clientes/${res.data.clientId}`);
+    } finally {
+      setConverting(false);
+    }
+  }
 
   function mudarEstado(destino: QuoteStatus, razao?: string) {
     startTransition(async () => {
@@ -150,7 +213,7 @@ export function QuoteDetailSheet({
       aria-modal="true"
       aria-labelledby="titulo-detalhe-orcamento"
       onClick={(e) => {
-        if (e.target === e.currentTarget && !pending) onClose();
+        if (e.target === e.currentTarget && !busy) onClose();
       }}
     >
       <div className="flex h-full w-full max-w-xl flex-col bg-white shadow-xl">
@@ -167,7 +230,7 @@ export function QuoteDetailSheet({
               {q.revision > 0 && ` · revisão R${q.revision}`}
             </p>
           </div>
-          <button onClick={onClose} disabled={pending} aria-label="Fechar" className="rounded-lg p-1">
+          <button onClick={onClose} disabled={busy} aria-label="Fechar" className="rounded-lg p-1">
             <X className="h-4 w-4" />
           </button>
         </div>
@@ -370,7 +433,7 @@ export function QuoteDetailSheet({
                     setARecusar(false);
                     setMotivo("");
                   }}
-                  disabled={pending}
+                  disabled={busy}
                   className="rounded-lg border px-2.5 py-1 text-[12.5px] font-medium"
                   style={{ borderColor: "var(--color-border)" }}
                 >
@@ -378,7 +441,7 @@ export function QuoteDetailSheet({
                 </button>
                 <button
                   onClick={() => mudarEstado("recusado", motivo || undefined)}
-                  disabled={pending}
+                  disabled={busy}
                   className="rounded-lg px-2.5 py-1 text-[12.5px] font-semibold text-white disabled:opacity-50"
                   style={{ background: "#B91C1C" }}
                 >
@@ -395,7 +458,7 @@ export function QuoteDetailSheet({
         >
           <button
             onClick={descarregar}
-            disabled={!dados || pending}
+            disabled={!dados || busy}
             className="flex items-center gap-1.5 rounded-lg border px-3 py-2 text-[13px] font-medium disabled:opacity-50"
             style={{ borderColor: "var(--color-border)" }}
           >
@@ -406,13 +469,54 @@ export function QuoteDetailSheet({
           {canReviseQuote(q) && (
             <button
               onClick={() => dados && onRevise(dados)}
-              disabled={!dados || pending}
+              disabled={!dados || busy}
               className="flex items-center gap-1.5 rounded-lg border px-3 py-2 text-[13px] font-medium disabled:opacity-50"
               style={{ borderColor: "var(--color-border)" }}
             >
               <FileClock className="h-4 w-4" />
               Criar revisão
             </button>
+          )}
+
+          {/*
+            🔴 Os dois estados são MUTUAMENTE EXCLUSIVOS, e é por isso que há
+               duas funções em `lib/crm/quotes.ts` em vez de uma expressão
+               repetida: `canConvertQuote` exige `client_id` nulo,
+               `isConvertedLeadQuote` exige-o preenchido.
+
+            🔴 E são ESPELHO DE UX. Quem decide é a RPC, sob lock: entre o que
+               este ecrã mostrou e o clique cabe uma revisão feita por outra
+               pessoa. O botão serve para não oferecer o que a base recusaria.
+          */}
+          {canConvertQuote(q) && (
+            <ConfirmDialog
+              trigger={
+                <button
+                  disabled={busy}
+                  className="flex items-center gap-1.5 rounded-lg px-3 py-2 text-[13px] font-semibold text-white disabled:opacity-50"
+                  style={{ background: "#16A34A" }}
+                >
+                  <UserPlus className="h-4 w-4" />
+                  {converting ? "A converter…" : "Converter em cliente"}
+                </button>
+              }
+              title="Converter esta lead em cliente?"
+              description="Vai criar um cliente e um local com os dados da lead e marcar a lead como ganha. O orçamento mantém-se aceite. Não cria contrato nem agenda serviços — isso faz-se depois na ficha do cliente."
+              confirmLabel="Converter em cliente"
+              variant="default"
+              onConfirm={converter}
+            />
+          )}
+
+          {isConvertedLeadQuote(q) && q.client_id && (
+            <a
+              href={`/dashboard/clientes/${q.client_id}`}
+              className="flex items-center gap-1.5 rounded-lg border px-3 py-2 text-[13px] font-medium"
+              style={{ borderColor: "var(--color-border)" }}
+            >
+              <UserPlus className="h-4 w-4" />
+              Abrir cliente
+            </a>
           )}
 
           <div className="ml-auto flex flex-wrap gap-2">
@@ -424,7 +528,7 @@ export function QuoteDetailSheet({
                   if (destino === "recusado") setARecusar(true);
                   else mudarEstado(destino);
                 }}
-                disabled={pending}
+                disabled={busy}
                 className="rounded-lg px-3 py-2 text-[13px] font-semibold disabled:opacity-50"
                 style={
                   destino === "enviado" || destino === "aceite"

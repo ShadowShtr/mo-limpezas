@@ -216,6 +216,23 @@ export function LeadDetail({ lead, interactions, membros }: Props) {
               className="col-span-2"
             />
           )}
+          {/*
+            🔴 A lead NÃO desaparece quando é convertida — passa a ser a
+               história de como o cliente apareceu. Este link é o que torna
+               essa história navegável: sem ele, a ficha diz «ganho» e não diz
+               para onde.
+
+               `converted_client_id` já vem em `LeadRow`; não é preciso
+               schema novo nem sincronizar dados entre a lead e o cliente.
+          */}
+          {lead.converted_client_id && (
+            <Linha
+              termo="Cliente convertido"
+              valor="Abrir cliente"
+              href={`/dashboard/clientes/${lead.converted_client_id}`}
+              className="col-span-2"
+            />
+          )}
         </dl>
 
         {lead.notes && (

@@ -1,10 +1,10 @@
 {
   "inventorySource": "git ls-files",
   "summary": {
-    "repositoryFiles": 961,
-    "textFiles": 948,
-    "sourceFiles": 674,
-    "textLines": 242632,
+    "repositoryFiles": 966,
+    "textFiles": 953,
+    "sourceFiles": 679,
+    "textLines": 244064,
     "typescriptDiagnostics": 0,
     "productionEntries": 75,
     "unreachableProductionModules": 40,
@@ -101,6 +101,7 @@
     "exactDuplicateFiles": [],
     "directRevalidatePath": [
       "src/__tests__/crm-actions-guard.test.ts",
+      "src/__tests__/crm-conversao-guard.test.ts",
       "src/__tests__/crm-orcamentos-guard.test.ts",
       "src/__tests__/crm-visits.test.ts",
       "src/__tests__/expense-categories-runtime.test.ts",
