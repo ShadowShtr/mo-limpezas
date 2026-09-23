@@ -1,14 +1,14 @@
 {
   "generatedBy": "scripts/audit-file-inventory.mjs",
-  "totalFiles": 962,
+  "totalFiles": 965,
   "byStatus": {
-    "MANTER": 938,
+    "MANTER": 941,
     "STANDBY": 24
   },
   "byCategory": {
-    "test": 231,
+    "test": 232,
     "route-ui": 155,
-    "migration": 140,
+    "migration": 142,
     "lib": 79,
     "script": 62,
     "domain": 52,
@@ -29,7 +29,7 @@
     "supabase-other": 2
   },
   "byConfidence": {
-    "alta": 940,
+    "alta": 943,
     "média": 16,
     "baixa": 6
   },
@@ -5143,6 +5143,36 @@
       }
     },
     {
+      "path": "src/__tests__/crm-104-conversao.pg.test.ts",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [
+        "write"
+      ],
+      "risks": [
+        "service-role"
+      ],
+      "signals": {
+        "serviceRole": 8,
+        "write": 1,
+        "sqlWrite": 56
+      },
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
       "path": "src/__tests__/crm-actions-guard.test.ts",
       "category": "test",
       "status": "MANTER",
@@ -7049,7 +7079,7 @@
       "category": "test",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 9,
+      "consumers": 10,
       "consumerSample": [
         "scripts/audit-identity-drift-manifest.ts",
         "src/__tests__/canonical-path-101b.pg.test.ts",
@@ -7081,7 +7111,7 @@
       "category": "test",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 21,
+      "consumers": 22,
       "consumerSample": [
         "scripts/audit-identity-drift-manifest.ts",
         "src/__tests__/bank-reconciliation-period-atomic.pg.test.ts",
@@ -7107,7 +7137,7 @@
       "category": "test",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 14,
+      "consumers": 15,
       "consumerSample": [
         "scripts/audit-identity-drift-manifest.ts",
         "src/__tests__/canonical-path-101b.pg.test.ts",
@@ -25068,6 +25098,30 @@
       "manualDecision": false
     },
     {
+      "path": "supabase/migrations/104_crm_conversao_lead.sql",
+      "category": "migration",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [
+        "supabase"
+      ],
+      "risks": [
+        "service-role"
+      ],
+      "signals": {
+        "supabase": 1,
+        "serviceRole": 8,
+        "sqlWrite": 17
+      },
+      "action": "nenhuma",
+      "reason": "migration versionada — histórico do schema, nunca se apaga",
+      "manualDecision": false
+    },
+    {
       "path": "supabase/migrations/20260608_new_features.sql",
       "category": "migration",
       "status": "MANTER",
@@ -25743,6 +25797,24 @@
       "signals": {
         "serviceRole": 1,
         "sqlWrite": 4
+      },
+      "action": "nenhuma",
+      "reason": "migration versionada — histórico do schema, nunca se apaga",
+      "manualDecision": false
+    },
+    {
+      "path": "supabase/migrations/rollback/104_crm_conversao_lead.down.sql",
+      "category": "migration",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "sqlWrite": 10
       },
       "action": "nenhuma",
       "reason": "migration versionada — histórico do schema, nunca se apaga",
