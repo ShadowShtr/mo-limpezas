@@ -526,9 +526,23 @@ describe("🔴 fora de escopo em 103-B1: email e conversão", () => {
     }
   });
 
-  it("nenhuma migration 104 nesta PR", () => {
-    const migrations = readdirSync(join(ROOT, "supabase/migrations"));
-    expect(migrations.filter((m) => m.startsWith("104"))).toEqual([]);
+  // 🔴 Este ensaio mudou de alvo quando a 104-A chegou, e a mudança é
+  //    deliberada.
+  //
+  //    Enquanto o 103-B1 estava aberto, o travão era «nenhuma migration 104
+  //    nesta PR» — a fronteira a proteger era a da UNIDADE DE TRABALHO. Essa
+  //    PR fechou e a 104 entrou pela sua própria porta, com a sua autorização.
+  //
+  //    A fronteira que continua a interessar é outra, e é permanente: o
+  //    runtime de orçamentos não chama a conversão. Um orçamento não converte
+  //    ninguém — quem converte é a 104-B, a partir da ficha da lead. Manter a
+  //    asserção antiga seria manter um teste que já não diz nada sobre o
+  //    código que está a proteger.
+  it("🔴 o runtime de orçamentos não chama a RPC de conversão", () => {
+    for (const f of [ACTIONS, ...ficheirosUi()]) {
+      const src = semComentarios(ler(f));
+      expect(src, `${f} chama a conversão`).not.toContain("convert_crm_lead_atomic");
+    }
   });
 });
 
