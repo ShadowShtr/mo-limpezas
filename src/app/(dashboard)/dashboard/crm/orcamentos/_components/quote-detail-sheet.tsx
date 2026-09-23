@@ -509,7 +509,7 @@ export function QuoteDetailSheet({
                    prometia uma coisa e fazia outra — e é a morada que a
                    equipa vai seguir no mapa.
               */
-              description="Vai criar um cliente com os dados da lead e um local com a morada da visita, quando existe — caso contrário com a morada da lead. A lead fica marcada como ganha e o orçamento mantém-se aceite. Não cria contrato nem agenda serviços: isso faz-se depois na ficha do cliente."
+              description="Vai criar um cliente com os dados da lead e um local com a morada da visita quando essa morada estiver preenchida; caso contrário, com a morada da lead. A lead fica marcada como ganha e o orçamento mantém-se aceite. Não cria contrato nem agenda serviços: isso faz-se depois na ficha do cliente."
               confirmLabel="Converter em cliente"
               variant="default"
               onConfirm={converter}

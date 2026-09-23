@@ -239,15 +239,22 @@ describe("🔴 a UI espera a conversão de verdade", () => {
     expect(UI).not.toContain("ContratoSheet");
   });
 
-  it("🔴 a copy diz de onde vem a morada do local", () => {
-    // A RPC usa a morada da VISITA quando existe uma visita desta lead com
-    // morada; só na falta dela cai na lead. Uma versão anterior prometia
-    // «um cliente e um local com os dados da lead» — e é a morada que a
-    // equipa vai seguir no mapa.
+  it("🔴 a copy diz de onde vem a morada do local — e sob que condição", () => {
+    // A RPC usa a morada da VISITA só quando essa morada está preenchida; uma
+    // visita sem morada cai na morada da LEAD, tal como a ausência de visita.
+    //
+    // 🔴 Não basta a copy mencionar «visita» e «lead»: a versão anterior dizia
+    //    «a morada da visita, quando existe», que se lê como «quando existe
+    //    visita» — e prometia a morada da lead só na falta de visita. Uma
+    //    visita sem morada desmentia o ecrã. Estas asserções prendem a
+    //    condição, não o vocabulário.
     const desc = UI.slice(UI.indexOf("description="), UI.indexOf("confirmLabel="));
-    expect(desc).toContain("visita");
-    expect(desc).toContain("lead");
+    expect(desc).toMatch(/morada da visita[^.]*estiver preenchida/);
+    expect(desc).toMatch(/caso contrário[^.]*morada da lead/);
     expect(desc).not.toMatch(/um cliente e um local com os dados da lead/);
+    // A formulação ambígua não pode voltar.
+    expect(desc).not.toMatch(/quando existe/);
+    expect(desc).not.toMatch(/se não houver visita/);
   });
 
   it("🔴 a copy não promete contrato nem serviços", () => {
@@ -256,10 +263,18 @@ describe("🔴 a UI espera a conversão de verdade", () => {
     expect(desc).toContain("ganha");
   });
 
-  it("a release note descreve a mesma regra da morada", () => {
-    const nota = ler("src/release-notes/2026-09-23-crm-conversao-cliente.ts");
-    expect(nota).toContain("visita");
+  it("a release note descreve a mesma regra da morada, com a mesma condição", () => {
+    // 🔴 O texto vive em literais concatenados: reconstituí-lo antes de medir,
+    //    senão uma quebra de linha no meio da frase escondia a regra e o
+    //    ensaio ficava verde por acidente de formatação.
+    const fonte = ler("src/release-notes/2026-09-23-crm-conversao-cliente.ts");
+    const nota = fonte.replace(/"\s*\+\s*"/g, "");
+
+    expect(nota).toMatch(/morada da visita[^.]*estiver preenchida/);
+    expect(nota).toMatch(/caso contrário[^.]*morada da lead/);
     expect(nota).not.toMatch(/o local com os dados da lead/);
+    expect(nota).not.toMatch(/se não houver visita/);
+
     // Sem jargão interno: quem lê a nota não sabe o que é uma RPC.
     for (const proibido of ["RPC", "migration", "Postgres", "constraint", "convert_crm_lead_atomic"]) {
       expect(nota, `a nota menciona ${proibido}`).not.toContain(proibido);
