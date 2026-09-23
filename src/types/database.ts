@@ -23,9 +23,9 @@ export type Database = {
         Relationships: [];
       };
       company_settings: {
-        Row: { id: string; company_id: string; hourly_rate: number; default_base_salary_monthly: number | null; default_overtime_hour_rate: number | null; default_extra_day_rate: number | null; meal_allowance_day: number; overtime_rate_pct: number; vacation_days_year: number; vat_rate: number; invoice_prefix: string; gps_radius_meters: number; timezone: string; primary_color: string; currency: string; checkin_before_minutes: number; checkout_after_minutes: number; kanban_columns: Array<{ id: string; name: string; color: string }> | null; created_at: string; updated_at: string };
-        Insert: { company_id: string; hourly_rate?: number; default_base_salary_monthly?: number | null; default_overtime_hour_rate?: number | null; default_extra_day_rate?: number | null; meal_allowance_day?: number; overtime_rate_pct?: number; vacation_days_year?: number; vat_rate?: number; invoice_prefix?: string; gps_radius_meters?: number; timezone?: string; primary_color?: string; currency?: string; checkin_before_minutes?: number; checkout_after_minutes?: number; kanban_columns?: Array<{ id: string; name: string; color: string }> | null };
-        Update: { hourly_rate?: number; default_base_salary_monthly?: number | null; default_overtime_hour_rate?: number | null; default_extra_day_rate?: number | null; meal_allowance_day?: number; overtime_rate_pct?: number; vacation_days_year?: number; vat_rate?: number; invoice_prefix?: string; gps_radius_meters?: number; timezone?: string; primary_color?: string; currency?: string; checkin_before_minutes?: number; checkout_after_minutes?: number; kanban_columns?: Array<{ id: string; name: string; color: string }> | null };
+        Row: { id: string; company_id: string; hourly_rate: number; default_base_salary_monthly: number | null; default_overtime_hour_rate: number | null; default_extra_day_rate: number | null; meal_allowance_day: number; overtime_rate_pct: number; vacation_days_year: number; vat_rate: number; invoice_prefix: string; quote_prefix: string; gps_radius_meters: number; timezone: string; primary_color: string; currency: string; checkin_before_minutes: number; checkout_after_minutes: number; kanban_columns: Array<{ id: string; name: string; color: string }> | null; created_at: string; updated_at: string };
+        Insert: { company_id: string; hourly_rate?: number; default_base_salary_monthly?: number | null; default_overtime_hour_rate?: number | null; default_extra_day_rate?: number | null; meal_allowance_day?: number; overtime_rate_pct?: number; vacation_days_year?: number; vat_rate?: number; invoice_prefix?: string; quote_prefix?: string; gps_radius_meters?: number; timezone?: string; primary_color?: string; currency?: string; checkin_before_minutes?: number; checkout_after_minutes?: number; kanban_columns?: Array<{ id: string; name: string; color: string }> | null };
+        Update: { hourly_rate?: number; default_base_salary_monthly?: number | null; default_overtime_hour_rate?: number | null; default_extra_day_rate?: number | null; meal_allowance_day?: number; overtime_rate_pct?: number; vacation_days_year?: number; vat_rate?: number; invoice_prefix?: string; quote_prefix?: string; gps_radius_meters?: number; timezone?: string; primary_color?: string; currency?: string; checkin_before_minutes?: number; checkout_after_minutes?: number; kanban_columns?: Array<{ id: string; name: string; color: string }> | null };
         Relationships: [];
       };
       profiles: {
@@ -348,6 +348,40 @@ export type Database = {
         Row: { id: string; company_id: string; lead_id: string | null; client_id: string | null; scheduled_start: string; scheduled_end: string; assigned_to: string | null; address: string | null; lat: number | null; lng: number | null; status: string; completed_at: string | null; cancelled_at: string | null; cancel_reason: string | null; outcome_notes: string | null; area_sqm: number | null; estimated_hours: number | null; frequency_hint: string | null; created_by: string | null; created_at: string; updated_at: string };
         Insert: { company_id: string; lead_id?: string | null; client_id?: string | null; scheduled_start: string; scheduled_end: string; assigned_to?: string | null; address?: string | null; lat?: number | null; lng?: number | null; status?: string; created_by?: string | null };
         Update: { lead_id?: string | null; client_id?: string | null; scheduled_start?: string; scheduled_end?: string; assigned_to?: string | null; address?: string | null; lat?: number | null; lng?: number | null; status?: string; completed_at?: string | null; cancelled_at?: string | null; cancel_reason?: string | null; outcome_notes?: string | null; area_sqm?: number | null; estimated_hours?: number | null; frequency_hint?: string | null; updated_at?: string };
+        Relationships: [];
+      };
+      // ----------------------------------------------------------------------
+      // 103 — orcamentos
+      // ----------------------------------------------------------------------
+      //
+      // 🔴 `Insert` e `Update` sao `never`, de proposito.
+      //
+      //    Estas duas tabelas escrevem-se EXCLUSIVAMENTE pelas tres RPC da 103
+      //    (`create_crm_quote_with_items`, `revise_crm_quote`,
+      //    `set_crm_quote_status`). Um `Insert` normal aqui daria tipo — e
+      //    portanto aparencia de legitimidade — a um `.insert()` directo, que
+      //    escolheria o numero fora do `pg_advisory_xact_lock` e podia gravar
+      //    um cabecalho sem linhas. Com `never`, esse caminho nao compila.
+      //
+      //    🔴 As chaves NAO se podem simplesmente omitir: `GenericTable` do
+      //       supabase-js exige as tres, e uma tabela incompleta faz o
+      //       `Database` inteiro deixar de satisfazer a constraint — o cliente
+      //       degrada para `never` em TODAS as tabelas e o typecheck rebenta
+      //       na aplicacao toda (1599 erros, medido). `never` satisfaz a
+      //       forma e fecha a escrita; a ausencia fecha a aplicacao.
+      //
+      //    `source_lead_id` e proveniencia IMUTAVEL (trigger na 103), distinta
+      //    de `lead_id`, que e o destinatario actual e muda na conversao.
+      crm_quotes: {
+        Row: { id: string; company_id: string; lead_id: string | null; client_id: string | null; source_lead_id: string | null; visit_id: string | null; quote_number: string; quote_year: number; quote_seq: number; revision: number; root_quote_id: string; superseded_by_id: string | null; issue_date: string; valid_until: string; status: string; sent_at: string | null; accepted_at: string | null; rejected_at: string | null; rejection_reason: string | null; pricing_kind: string; subtotal: number; discount_pct: number; apply_vat: boolean; vat_rate: number; vat_amount: number; total: number; proposed_frequency: string | null; proposed_weekdays: ScheduleDay[] | null; payment_terms: string | null; notes: string | null; internal_notes: string | null; converted_contract_id: string | null; converted_service_id: string | null; created_by: string | null; created_at: string; updated_at: string };
+        Insert: never;
+        Update: never;
+        Relationships: [];
+      };
+      crm_quote_items: {
+        Row: { id: string; company_id: string; quote_id: string; position: number; description: string; quantity: number; unit: string; unit_price: number; line_total: number; created_at: string };
+        Insert: never;
+        Update: never;
         Relationships: [];
       };
     };

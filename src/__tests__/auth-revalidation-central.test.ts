@@ -342,14 +342,17 @@ describe("nenhuma outra action foi migrada nesta PR", () => {
     //
     // `crm-visitas.ts` entrou com a 102 aplicada, pela mesma razão.
     //
-    // As que faltam — orçamentos (103) e conversão (104) — entram nesta lista
-    // quando entrarem no repositório, cada uma com a migration de que depende.
-    // Não são acrescentadas aqui antes de existirem.
+    // `crm-orcamentos.ts` entrou com a 103 (e a 103a) aplicadas e verificadas
+    // em produção, em 103-B1. Também é módulo novo: nasceu no formato.
+    //
+    // A que falta — conversão lead → cliente (104) — entra nesta lista quando
+    // entrar no repositório, com a migration de que depende. Não é
+    // acrescentada aqui antes de existir.
     //
     // Acrescentar uma entrada é uma decisão que se lê no diff. É esse o
     // objectivo deste teste: as outras actions não podem ser migradas por
     // arrasto, escondidas numa PR que muda comportamento.
-    const NASCIDAS_NO_FORMATO = ["crm-leads.ts", "crm-visitas.ts"];
+    const NASCIDAS_NO_FORMATO = ["crm-leads.ts", "crm-visitas.ts", "crm-orcamentos.ts"];
     const PILOTO = ["settings.ts"];
 
     const actionsDir = path.join(ROOT, "src/app/actions");

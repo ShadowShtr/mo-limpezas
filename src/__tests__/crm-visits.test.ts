@@ -242,26 +242,50 @@ describe("CRM visitas — o que NÃO entra nesta unidade", () => {
     }
   });
 
-  it("os tipos trazem crm_visits e não os da 103", () => {
+  // 🔴 Este ensaio mudou de sentido em 103-B1, e a mudança é deliberada.
+  //
+  //    Enquanto a 103 não estava aplicada em produção, o travão era «os tipos
+  //    NÃO trazem crm_quotes» — trazê-los cedo daria tipo a escritas contra
+  //    tabelas que não existiam. A 103 e a 103a estão aplicadas e verificadas,
+  //    e o runtime de orçamentos entrou. O travão passa a ser outro: as
+  //    tabelas de orçamento existem nos tipos, mas fechadas à escrita.
+  it("os tipos trazem crm_visits e as tabelas da 103 fechadas à escrita", () => {
     const tipos = ler("src/types/database.ts");
     expect(tipos).toContain("crm_visits: {");
-    expect(tipos).not.toContain("crm_quotes: {");
-    expect(tipos).not.toContain("crm_quote_items: {");
+    expect(tipos).toContain("crm_quotes: {");
+    expect(tipos).toContain("crm_quote_items: {");
+
+    // 🔴 `Insert`/`Update` a `never`: a escrita é só pelas três RPC da 103.
+    //    Um `Insert` normal daria tipo — e aparência de legitimidade — a um
+    //    `.insert()` directo, que escolheria o número fora do lock.
+    const bloco = tipos.slice(tipos.indexOf("crm_quotes: {"));
+    const quotes = bloco.slice(0, bloco.indexOf("Views:"));
+    expect(quotes).toContain("Insert: never;");
+    expect(quotes).toContain("Update: never;");
   });
 });
 
 describe("CRM visitas — a navegação", () => {
   const CODIGO = semComentarios(ACTIONS);
 
-  it("o CRM mostra Pipeline e Visitas", () => {
+  it("o CRM mostra Pipeline, Visitas e Orçamentos", () => {
+    // Orçamentos entrou em 103-B1, e não antes: a regra continua a ser a
+    // mesma — uma vista só entra quando a migration de que depende está
+    // aplicada em produção e a rota existe no repositório.
     expect(CRM_VIEWS.map((v) => v.href)).toEqual([
       "/dashboard/crm",
       "/dashboard/crm/visitas",
+      "/dashboard/crm/orcamentos",
     ]);
   });
 
-  it("🔴 Orçamentos ainda não aparece — crm_quotes não existe em produção", () => {
-    expect(CRM_VIEWS.map((v) => v.href)).not.toContain("/dashboard/crm/orcamentos");
+  it("🔴 a conversão lead → cliente continua fora: nenhuma vista para ela", () => {
+    // É a 104-A, e a direcção pô-la em espera. Uma aba para um ecrã cuja
+    // migration não existe leva a uma página que rebenta na primeira consulta.
+    for (const v of CRM_VIEWS) {
+      expect(v.href).not.toContain("conversao");
+      expect(v.href).not.toContain("clientes-novos");
+    }
   });
 
   it("🔴 cada vista tem página no repositório", () => {
