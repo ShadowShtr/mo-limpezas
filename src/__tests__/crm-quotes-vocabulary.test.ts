@@ -28,7 +28,9 @@ import {
   QUOTE_ARITHMETIC_DECIMAL_PLACES,
   QUOTE_DISCOUNT_MAX_DECIMAL_PLACES,
   QUOTE_ITEM_MAX_DECIMAL_PLACES,
+  canConvertQuote,
   canReviseQuote,
+  isConvertedLeadQuote,
   canTransitionQuote,
   isQuoteFinal,
   isQuoteStatus,
@@ -338,6 +340,68 @@ describe("🔴 o domínio decimal", () => {
     );
     expect(fora.subtotal).toBe(1.01);  // a coluna guardaria 0,34 → 1,02
     expect(hasMaxDecimalPlaces(0.335, QUOTE_ITEM_MAX_DECIMAL_PLACES)).toBe(false);
+  });
+});
+
+describe("🔴 conversão — os dois estados são mutuamente exclusivos", () => {
+  /** Um orçamento aceite, vivo, ainda endereçado à lead. */
+  const convertivel = {
+    status: "aceite",
+    superseded_by_id: null,
+    source_lead_id: "lead-1",
+    lead_id: "lead-1",
+    client_id: null,
+  };
+
+  it("aceite, vivo, de lead e por converter", () => {
+    expect(canConvertQuote(convertivel)).toBe(true);
+    expect(isConvertedLeadQuote(convertivel)).toBe(false);
+  });
+
+  it("🔴 nenhum outro estado converte", () => {
+    for (const status of ["rascunho", "enviado", "recusado", "expirado", "anulado"]) {
+      expect(canConvertQuote({ ...convertivel, status }), status).toBe(false);
+    }
+  });
+
+  it("🔴 uma revisão histórica não converte", () => {
+    expect(canConvertQuote({ ...convertivel, superseded_by_id: "outro" })).toBe(false);
+  });
+
+  it("🔴 um orçamento nascido de cliente não converte", () => {
+    // Sem `source_lead_id` não há lead nenhuma a ganhar.
+    expect(canConvertQuote({
+      ...convertivel, source_lead_id: null, lead_id: null, client_id: "cli-1",
+    })).toBe(false);
+  });
+
+  it("🔴 já convertido: deixa de ser convertível e passa a «abrir cliente»", () => {
+    const convertido = { ...convertivel, lead_id: null, client_id: "cli-1" };
+    expect(canConvertQuote(convertido)).toBe(false);
+    expect(isConvertedLeadQuote(convertido)).toBe(true);
+  });
+
+  it("🔴 os dois NUNCA são verdadeiros ao mesmo tempo", () => {
+    // É o que justifica duas funções em vez de uma expressão repetida pela UI.
+    const estados = [
+      convertivel,
+      { ...convertivel, lead_id: null, client_id: "cli-1" },
+      { ...convertivel, status: "enviado" },
+      { ...convertivel, superseded_by_id: "outro" },
+      { ...convertivel, source_lead_id: null },
+      { ...convertivel, source_lead_id: null, lead_id: null, client_id: "cli-1" },
+    ];
+    for (const e of estados) {
+      expect(canConvertQuote(e) && isConvertedLeadQuote(e), JSON.stringify(e)).toBe(false);
+    }
+  });
+
+  it("um orçamento de cliente já endereçado não é «lead convertida»", () => {
+    // `source_lead_id` nulo: nunca houve lead, logo não há conversão nenhuma
+    // para mostrar.
+    expect(isConvertedLeadQuote({
+      ...convertivel, source_lead_id: null, lead_id: null, client_id: "cli-1",
+    })).toBe(false);
   });
 });
 

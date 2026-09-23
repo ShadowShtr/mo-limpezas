@@ -111,6 +111,67 @@ export function canReviseQuote(quote: {
   );
 }
 
+/**
+ * O que a UI precisa de saber de um orçamento para decidir o que mostrar
+ * sobre a conversão.
+ *
+ * 🔴 Shape ESTRUTURAL mínimo, e não `QuoteRow`. `QuoteRow` vive em
+ *    `crm-orcamentos.ts`, que é um ficheiro `"use server"` — importar o tipo
+ *    de lá para aqui arrastaria um módulo de Server Actions para dentro de um
+ *    módulo de constantes, e é assim que se parte um ficheiro que hoje é puro.
+ */
+export interface QuoteConversionShape {
+  status: string;
+  superseded_by_id: string | null;
+  source_lead_id: string | null;
+  lead_id: string | null;
+  client_id: string | null;
+}
+
+/**
+ * Este orçamento pode dar origem a um cliente?
+ *
+ * 🔴 ESPELHO DE UX, não autorização. Quem decide é `convert_crm_lead_atomic`,
+ *    sob `FOR UPDATE`: entre o que o ecrã mostrou e o clique cabe uma revisão
+ *    feita por outra pessoa. Isto serve para não oferecer um botão que a base
+ *    vai recusar — não para substituir a recusa.
+ *
+ * As cinco condições, e o que cada uma impede:
+ *
+ *   · `aceite`              — sem aceitação não há ganho a representar
+ *   · sem `superseded_by_id` — uma revisão histórica não converte ninguém
+ *   · com `source_lead_id`  — nasceu de uma lead (senão não há lead a ganhar)
+ *   · com `lead_id`         — ainda está endereçado à lead
+ *   · sem `client_id`       — ainda não foi convertido
+ */
+export function canConvertQuote(quote: QuoteConversionShape): boolean {
+  return (
+    quote.status === "aceite"
+    && quote.superseded_by_id === null
+    && quote.source_lead_id !== null
+    && quote.lead_id !== null
+    && quote.client_id === null
+  );
+}
+
+/**
+ * Este orçamento JÁ deu origem a um cliente?
+ *
+ * 🔴 Estado mutuamente exclusivo do anterior, e por isso tem função própria.
+ *    Espalhar duas expressões parecidas pela UI é como elas divergem: uma é
+ *    corrigida, a outra fica.
+ *
+ * A assinatura da conversão é `lead_id` a NULL com `client_id` preenchido —
+ * e `source_lead_id` intacto, que é o que mantém a origem respondível.
+ */
+export function isConvertedLeadQuote(quote: QuoteConversionShape): boolean {
+  return (
+    quote.source_lead_id !== null
+    && quote.client_id !== null
+    && quote.lead_id === null
+  );
+}
+
 export const QUOTE_UNITS = ["hora", "m2", "unidade", "mes", "servico"] as const;
 
 export type QuoteUnit = (typeof QUOTE_UNITS)[number];

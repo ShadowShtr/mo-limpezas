@@ -511,11 +511,26 @@ describe("🔴 fora de escopo em 103-B1: email e conversão", () => {
     }
   });
 
-  it("zero referências à conversão lead → cliente (104)", () => {
+  // 🔴 Este ensaio mudou de alvo com a 104-B, e a mudança é deliberada.
+  //
+  //    Enquanto a conversão não existia, o travão era «nenhum ficheiro de
+  //    orçamentos refere a conversão» — servia para impedir que a 104
+  //    entrasse por arrasto numa PR que não era dela. A 104-A foi aplicada em
+  //    produção e a 104-B entrou pela sua própria porta, com o detalhe do
+  //    orçamento aceite como ponto de entrada aprovado.
+  //
+  //    A fronteira que continua a interessar é outra, e é permanente: a
+  //    ACTION de orçamentos não converte ninguém. `crm-orcamentos.ts` trata
+  //    do documento; quem cria clientes é `crm-conversao.ts`, pela RPC. E
+  //    nenhum dos dois toca em `converted_contract_id`/`converted_service_id`
+  //    — esses são da conversão de contrato, que não existe.
+  it("🔴 a action de orçamentos não converte, e ninguém finge contrato", () => {
+    expect(semComentarios(CODIGO_ACTIONS), "crm-orcamentos.ts refere a conversão")
+      .not.toContain("crm-conversao");
+
     for (const f of ficheiros) {
       const src = semComentarios(ler(f));
       for (const proibido of [
-        "crm-conversao",
         "converterLeadEmCliente",
         "convertLeadToClient",
         "converted_contract_id",
@@ -524,6 +539,14 @@ describe("🔴 fora de escopo em 103-B1: email e conversão", () => {
         expect(src, `${f} refere ${proibido}`).not.toContain(proibido);
       }
     }
+  });
+
+  it("a conversão entra SÓ pelo detalhe do orçamento", () => {
+    // O ponto de entrada aprovado é um: o detalhe do orçamento aceite. Se
+    // aparecer noutro ficheiro de orçamentos, foi por arrasto.
+    const comConversao = ficheirosUi()
+      .filter((f) => semComentarios(ler(f)).includes("crm-conversao"));
+    expect(comConversao).toEqual([`${UI}/_components/quote-detail-sheet.tsx`]);
   });
 
   // 🔴 Este ensaio mudou de alvo quando a 104-A chegou, e a mudança é

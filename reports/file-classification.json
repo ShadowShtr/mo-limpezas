@@ -1,20 +1,20 @@
 {
   "generatedBy": "scripts/audit-file-inventory.mjs",
-  "totalFiles": 965,
+  "totalFiles": 970,
   "byStatus": {
-    "MANTER": 941,
+    "MANTER": 946,
     "STANDBY": 24
   },
   "byCategory": {
-    "test": 232,
+    "test": 235,
     "route-ui": 155,
     "migration": 142,
     "lib": 79,
     "script": 62,
     "domain": 52,
+    "server-action": 48,
     "doc": 47,
-    "server-action": 47,
-    "src-other": 46,
+    "src-other": 47,
     "component": 33,
     "doc-historico": 16,
     "api-route": 16,
@@ -29,7 +29,7 @@
     "supabase-other": 2
   },
   "byConfidence": {
-    "alta": 943,
+    "alta": 948,
     "média": 16,
     "baixa": 6
   },
@@ -1925,7 +1925,7 @@
       ],
       "sideEffects": [
         "supabase",
-        "revalidatePath(41)"
+        "revalidatePath(42)"
       ],
       "risks": [
         "debugger"
@@ -1934,7 +1934,7 @@
         "supabase": 1,
         "sqlWrite": 28,
         "debugger": 6,
-        "revalidatePath": 41
+        "revalidatePath": 42
       },
       "action": "nenhuma",
       "reason": "configuração/infra",
@@ -5190,6 +5190,85 @@
         "write": 3,
         "sqlWrite": 13,
         "revalidatePath": 1
+      },
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/__tests__/crm-conversao-actions.test.ts",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "dynamicImport": 1
+      },
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/__tests__/crm-conversao-guard.test.ts",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [
+        "revalidatePath(1)"
+      ],
+      "risks": [],
+      "signals": {
+        "sqlWrite": 9,
+        "revalidatePath": 1
+      },
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/__tests__/crm-convert-button.test.tsx",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [
+        "any(1)"
+      ],
+      "signals": {
+        "eslintDisable": 1,
+        "anyType": 1,
+        "dynamicImport": 1
       },
       "action": "nenhuma",
       "reason": "suite de testes — corre por convenção do vitest",
@@ -12770,8 +12849,9 @@
       "category": "route-ui",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 1,
+      "consumers": 2,
       "consumerSample": [
+        "src/__tests__/crm-convert-button.test.tsx",
         "src/app/(dashboard)/dashboard/crm/orcamentos/_components/quotes-client.tsx"
       ],
       "autoLoaded": false,
@@ -12785,7 +12865,7 @@
         "fallbackArray": 1
       },
       "action": "nenhuma",
-      "reason": "em uso: 1 consumidor(es)",
+      "reason": "em uso: 2 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -14955,6 +15035,38 @@
       },
       "action": "auditar atomicidade (T12/T13)",
       "reason": "em uso: 5 consumidor(es)",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/app/actions/crm-conversao.ts",
+      "category": "server-action",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 2,
+      "consumerSample": [
+        "src/__tests__/crm-conversao-actions.test.ts",
+        "src/app/(dashboard)/dashboard/crm/orcamentos/_components/quote-detail-sheet.tsx"
+      ],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [
+        "any(1)"
+      ],
+      "signals": {
+        "serverAction": 1,
+        "sqlWrite": 1,
+        "eslintDisable": 1,
+        "anyType": 1
+      },
+      "action": "nenhuma",
+      "reason": "em uso: 2 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -17681,7 +17793,7 @@
       "category": "component",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 3,
+      "consumers": 4,
       "consumerSample": [
         "src/app/(dashboard)/dashboard/calendario/_components/buildings-column.tsx",
         "src/app/(dashboard)/dashboard/clientes/_components/predios-table.tsx",
@@ -17697,7 +17809,7 @@
         "clientComponent": 1
       },
       "action": "nenhuma",
-      "reason": "em uso: 3 consumidor(es)",
+      "reason": "em uso: 4 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -19279,7 +19391,7 @@
       "category": "domain",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 52,
+      "consumers": 53,
       "consumerSample": [
         "src/__tests__/update-notice-modal.test.tsx",
         "src/__tests__/update-notices-eligibility.test.ts",
@@ -19294,7 +19406,7 @@
       "risks": [],
       "signals": {},
       "action": "nenhuma",
-      "reason": "em uso: 52 consumidor(es), configuração",
+      "reason": "em uso: 53 consumidor(es), configuração",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -19338,11 +19450,11 @@
       "category": "lib",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 6,
+      "consumers": 7,
       "consumerSample": [
         "src/__tests__/action-result.test.ts",
         "src/app/(dashboard)/dashboard/crm/[leadId]/page.tsx",
-        "src/app/actions/crm-leads.ts"
+        "src/app/actions/crm-conversao.ts"
       ],
       "autoLoaded": false,
       "referencedBy": [
@@ -19354,7 +19466,7 @@
         "consoleErr": 1
       },
       "action": "nenhuma",
-      "reason": "em uso: 6 consumidor(es)",
+      "reason": "em uso: 7 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -19422,7 +19534,7 @@
       "category": "lib",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 22,
+      "consumers": 23,
       "consumerSample": [
         "src/__tests__/audit.test.ts",
         "src/app/(dashboard)/dashboard/calendario/_actions/reschedule.ts",
@@ -19450,7 +19562,7 @@
         "consoleErr": 2
       },
       "action": "nenhuma",
-      "reason": "em uso: 22 consumidor(es), script npm, CI, configuração",
+      "reason": "em uso: 23 consumidor(es), script npm, CI, configuração",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -19464,7 +19576,7 @@
       "category": "lib",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 29,
+      "consumers": 30,
       "consumerSample": [
         "src/__tests__/auth-revalidation-central.test.ts",
         "src/app/actions/absences.ts",
@@ -19485,7 +19597,7 @@
         "ignoredError": 1
       },
       "action": "nenhuma",
-      "reason": "em uso: 29 consumidor(es)",
+      "reason": "em uso: 30 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -20171,7 +20283,7 @@
       "sideEffects": [],
       "risks": [],
       "signals": {
-        "sqlWrite": 1,
+        "sqlWrite": 2,
         "fallbackZero": 2,
         "fallbackArray": 1
       },
@@ -21194,7 +21306,7 @@
       "category": "lib",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 30,
+      "consumers": 31,
       "consumerSample": [
         "src/__tests__/query-error.test.ts",
         "src/app/(dashboard)/dashboard/calendario/_actions/create-service.ts",
@@ -21210,7 +21322,7 @@
         "consoleErr": 1
       },
       "action": "nenhuma",
-      "reason": "em uso: 30 consumidor(es)",
+      "reason": "em uso: 31 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -21258,7 +21370,7 @@
       "category": "lib",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 9,
+      "consumers": 10,
       "consumerSample": [
         "src/__tests__/auth-revalidation-central.test.ts",
         "src/__tests__/invalidate-business-state.test.ts",
@@ -21277,7 +21389,7 @@
         "revalidatePath": 11
       },
       "action": "nenhuma",
-      "reason": "em uso: 9 consumidor(es)",
+      "reason": "em uso: 10 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -22801,6 +22913,32 @@
     },
     {
       "path": "src/release-notes/2026-09-22-crm-orcamentos.ts",
+      "category": "src-other",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 1,
+      "consumerSample": [
+        "src/release-notes/index.ts"
+      ],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "sqlWrite": 1
+      },
+      "action": "nenhuma",
+      "reason": "em uso: 1 consumidor(es)",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/release-notes/2026-09-23-crm-conversao-cliente.ts",
       "category": "src-other",
       "status": "MANTER",
       "confidence": "alta",
