@@ -231,6 +231,89 @@ describe("a RPC é a autoridade — uma chamada, quatro argumentos", () => {
 });
 
 // ───────────────────────────────────────────────────────────────────────────
+describe("🔴 o contrato da resposta falha FECHADO", () => {
+  /**
+   * 🔴 Porque é que `ja_convertida` malformado é o caso perigoso.
+   *
+   *    `linha.ja_convertida === true` lê bem e falha aberto: com `undefined`,
+   *    `null` ou uma string, dá `false` em silêncio — e `false` é justamente
+   *    o ramo que AUDITA a conversão como real. Uma resposta que não se
+   *    percebe passaria a valer como «conversão confirmada» e ficava
+   *    registada como tal.
+   */
+  const FORA_DO_CONTRATO: Array<[string, Record<string, unknown>]> = [
+    ["A. client_id ausente", { location_id: LOCAL, ja_convertida: false }],
+    ["B. location_id ausente", { client_id: CLIENTE, ja_convertida: false }],
+    ["C. ja_convertida ausente", { client_id: CLIENTE, location_id: LOCAL }],
+    ["D. ja_convertida null", { client_id: CLIENTE, location_id: LOCAL, ja_convertida: null }],
+    ["E. ja_convertida «false» (string)",
+      { client_id: CLIENTE, location_id: LOCAL, ja_convertida: "false" }],
+    ["F. ja_convertida 0", { client_id: CLIENTE, location_id: LOCAL, ja_convertida: 0 }],
+    ["G. client_id não é uuid",
+      { client_id: "nao-e-uuid", location_id: LOCAL, ja_convertida: false }],
+    ["H. resposta vazia", {}],
+  ];
+
+  for (const [nome, linha] of FORA_DO_CONTRATO) {
+    it(`${nome} → PERSISTENCE, sem auditoria nem invalidação`, async () => {
+      duplo({ rpc: () => ({ data: [linha], error: null }) });
+
+      const res = await convertAcceptedQuote(QUOTE);
+
+      expect(res.ok, "não pode haver sucesso").toBe(false);
+      if (!res.ok) expect(res.error.code).toBe("PERSISTENCE");
+
+      // 🔴 Nenhum efeito: nem auditoria de uma conversão que ninguém
+      //    confirmou, nem invalidação de caches por causa dela.
+      expect(auditoriasDeConversao()).toBe(0);
+      expect(invalidateBusinessState).not.toHaveBeenCalled();
+    });
+  }
+
+  it("resposta nula da RPC → PERSISTENCE", async () => {
+    duplo({ rpc: () => ({ data: null, error: null }) });
+    const res = await convertAcceptedQuote(QUOTE);
+    expect(res.ok).toBe(false);
+    if (!res.ok) expect(res.error.code).toBe("PERSISTENCE");
+    expect(auditoriasDeConversao()).toBe(0);
+  });
+
+  it("🔴 o contrato CUMPRIDO continua a passar — false audita", async () => {
+    duplo({
+      rpc: () => ({ data: [{ client_id: CLIENTE, location_id: LOCAL, ja_convertida: false }], error: null }),
+    });
+    const res = await convertAcceptedQuote(QUOTE);
+
+    expect(res.ok).toBe(true);
+    if (res.ok) expect(res.data.alreadyConverted).toBe(false);
+    expect(auditoriasDeConversao()).toBe(1);
+    expect(invalidateBusinessState).toHaveBeenCalledTimes(1);
+  });
+
+  it("🔴 o contrato CUMPRIDO continua a passar — true não audita", async () => {
+    duplo({
+      rpc: () => ({ data: [{ client_id: CLIENTE, location_id: LOCAL, ja_convertida: true }], error: null }),
+    });
+    const res = await convertAcceptedQuote(QUOTE);
+
+    expect(res.ok).toBe(true);
+    if (res.ok) expect(res.data.alreadyConverted).toBe(true);
+    expect(auditoriasDeConversao()).toBe(0);
+    expect(invalidateBusinessState).toHaveBeenCalledTimes(1);
+  });
+
+  it("a mensagem de erro não expõe o interior da resposta", async () => {
+    duplo({ rpc: () => ({ data: [{ client_id: CLIENTE }], error: null }) });
+    const res = await convertAcceptedQuote(QUOTE);
+    expect(res.ok).toBe(false);
+    if (!res.ok) {
+      expect(res.error.message).not.toContain("ja_convertida");
+      expect(res.error.message).not.toContain("client_id");
+    }
+  });
+});
+
+// ───────────────────────────────────────────────────────────────────────────
 describe("sentinelas — mensagem que se entende, nunca SQL cru", () => {
   const casos: Array<[string, string, RegExp]> = [
     ["LEAD_NOT_FOUND", "NOT_FOUND", /Lead não encontrada/],

@@ -239,6 +239,33 @@ describe("🔴 a UI espera a conversão de verdade", () => {
     expect(UI).not.toContain("ContratoSheet");
   });
 
+  it("🔴 a copy diz de onde vem a morada do local", () => {
+    // A RPC usa a morada da VISITA quando existe uma visita desta lead com
+    // morada; só na falta dela cai na lead. Uma versão anterior prometia
+    // «um cliente e um local com os dados da lead» — e é a morada que a
+    // equipa vai seguir no mapa.
+    const desc = UI.slice(UI.indexOf("description="), UI.indexOf("confirmLabel="));
+    expect(desc).toContain("visita");
+    expect(desc).toContain("lead");
+    expect(desc).not.toMatch(/um cliente e um local com os dados da lead/);
+  });
+
+  it("🔴 a copy não promete contrato nem serviços", () => {
+    const desc = UI.slice(UI.indexOf("description="), UI.indexOf("confirmLabel="));
+    expect(desc).toContain("Não cria contrato");
+    expect(desc).toContain("ganha");
+  });
+
+  it("a release note descreve a mesma regra da morada", () => {
+    const nota = ler("src/release-notes/2026-09-23-crm-conversao-cliente.ts");
+    expect(nota).toContain("visita");
+    expect(nota).not.toMatch(/o local com os dados da lead/);
+    // Sem jargão interno: quem lê a nota não sabe o que é uma RPC.
+    for (const proibido of ["RPC", "migration", "Postgres", "constraint", "convert_crm_lead_atomic"]) {
+      expect(nota, `a nota menciona ${proibido}`).not.toContain(proibido);
+    }
+  });
+
   it("o ConfirmDialog global não foi alterado", () => {
     const dialog = ler("src/components/ui/confirm-dialog.tsx");
     expect(dialog).toContain("interface ConfirmDialogProps");

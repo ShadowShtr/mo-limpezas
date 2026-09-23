@@ -190,20 +190,39 @@ export async function convertAcceptedQuote(
 
     const linha = Array.isArray(data) ? data[0] : data;
 
-    // 🔴 Não inventar ids. Sem `client_id`/`location_id` não há para onde
-    //    navegar, e devolver sucesso com um id vazio mandaria o utilizador
-    //    para uma ficha que não existe.
-    if (!linha?.client_id || !linha?.location_id) {
+    // 🔴 A resposta da RPC é validada POR INTEIRO antes de qualquer efeito.
+    //
+    //    A versão anterior verificava os dois ids e depois fazia
+    //    `linha.ja_convertida === true`. Isso lê bem e falha aberto: com
+    //    `undefined`, `null` ou um tipo inesperado — drift de contrato, uma
+    //    RPC substituída, um overload novo — a expressão dá `false` em
+    //    silêncio, e `false` é precisamente o ramo que AUDITA a conversão.
+    //
+    //    Ou seja: uma resposta que não se percebe passaria a valer como
+    //    «conversão real confirmada», e ficava registada como tal. Uma
+    //    coerção de boolean não é uma leitura; é um palpite com aspecto de
+    //    leitura.
+    //
+    //    UNKNOWN_STATE = FAIL_CLOSED: ou a resposta cumpre o contrato
+    //    inteiro, ou não há sucesso, auditoria nem invalidação.
+    const resposta = z
+      .object({
+        client_id: z.uuid(),
+        location_id: z.uuid(),
+        ja_convertida: z.boolean(),
+      })
+      .safeParse(linha);
+
+    if (!resposta.success) {
       return internalFailure(
         "convertAcceptedQuote",
-        new Error("a RPC não devolveu client_id/location_id"),
+        new Error(`resposta da RPC fora do contrato: ${resposta.error.message}`),
         ACTION_ERROR_CODES.PERSISTENCE,
       );
     }
 
-    const clientId = String(linha.client_id);
-    const locationId = String(linha.location_id);
-    const alreadyConverted = linha.ja_convertida === true;
+    const { client_id: clientId, location_id: locationId } = resposta.data;
+    const alreadyConverted = resposta.data.ja_convertida;
 
     // 🔴 Auditar SÓ a conversão real.
     //

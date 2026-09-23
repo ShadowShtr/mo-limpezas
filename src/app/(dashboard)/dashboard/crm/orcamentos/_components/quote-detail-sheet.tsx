@@ -501,7 +501,15 @@ export function QuoteDetailSheet({
                 </button>
               }
               title="Converter esta lead em cliente?"
-              description="Vai criar um cliente e um local com os dados da lead e marcar a lead como ganha. O orçamento mantém-se aceite. Não cria contrato nem agenda serviços — isso faz-se depois na ficha do cliente."
+              /*
+                🔴 A morada do LOCAL nem sempre é a da lead.
+                   A RPC usa a morada da visita quando o orçamento tem uma
+                   visita desta lead com morada preenchida; só na falta dela
+                   é que cai na morada da lead. Dizer «com os dados da lead»
+                   prometia uma coisa e fazia outra — e é a morada que a
+                   equipa vai seguir no mapa.
+              */
+              description="Vai criar um cliente com os dados da lead e um local com a morada da visita, quando existe — caso contrário com a morada da lead. A lead fica marcada como ganha e o orçamento mantém-se aceite. Não cria contrato nem agenda serviços: isso faz-se depois na ficha do cliente."
               confirmLabel="Converter em cliente"
               variant="default"
               onConfirm={converter}

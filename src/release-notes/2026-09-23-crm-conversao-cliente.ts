@@ -10,7 +10,7 @@ export const nota: ReleaseNote = {
   title: "CRM: converter um orçamento aceite em cliente",
   message:
     "Quando uma lead aceita o orçamento, pode agora convertê-la em cliente directamente no CRM. "
-    + "Abra o orçamento aceite e carregue em «Converter em cliente»: fica criado o cliente e o "
-    + "local com os dados da lead, a lead passa a ganha e abre-se logo a ficha do cliente. "
-    + "O contrato continua a ser decisão sua — faça-o na ficha do cliente, em Intervenções.",
+    + "Abra o orçamento aceite e carregue em «Converter em cliente»: fica criado o cliente com os "
+    + "dados da lead e o local com a morada da visita, ou a da lead se não houver visita. A lead "
+    + "passa a ganha e abre-se a ficha do cliente. O contrato continua a ser decisão sua.",
 };
