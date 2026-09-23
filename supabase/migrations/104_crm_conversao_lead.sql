@@ -140,14 +140,107 @@ BEGIN
       'CRM_CONV_104_PRECONDITION_FAILED: crm_quotes_tem_destinatario ausente (103)';
   END IF;
 
-  -- As três RPC da 103, com a assinatura exacta: é sobre elas que o
-  -- orçamento aceite existe.
-  IF to_regprocedure('public.set_crm_quote_status(uuid, uuid, uuid, text, text)') IS NULL THEN
+  -- 🔴 AS TRÊS RPC da 103, com a assinatura EXACTA — e são mesmo as três.
+  --
+  --    Uma versão anterior deste bloco dizia «as três» em comentário e
+  --    verificava uma. Uma 103 a que faltasse `revise_crm_quote` passava o
+  --    portão, e a 104 instalava-se sobre uma fundação incompleta.
+  --
+  --    `to_regprocedure` com a assinatura completa, e não `to_regproc`: um
+  --    overload com outros tipos é outra função, e seria aceite por um teste
+  --    que só olhasse para o nome.
+  SELECT array_agg(esperada.nome ORDER BY esperada.nome) INTO v_faltam
+    FROM (VALUES
+      ('create_crm_quote_with_items',
+       'public.create_crm_quote_with_items(uuid, uuid, uuid, uuid, text, integer, date, date, text, numeric, boolean, numeric, text, jsonb, text, text, text, uuid, jsonb)'),
+      ('revise_crm_quote',
+       'public.revise_crm_quote(uuid, uuid, uuid, date, date, numeric, boolean, numeric, text, jsonb)'),
+      ('set_crm_quote_status',
+       'public.set_crm_quote_status(uuid, uuid, uuid, text, text)')
+    ) AS esperada(nome, assinatura)
+   WHERE to_regprocedure(esperada.assinatura) IS NULL;
+
+  IF v_faltam IS NOT NULL THEN
     RAISE EXCEPTION
-      'CRM_CONV_104_PRECONDITION_FAILED: set_crm_quote_status ausente (103)';
+      'CRM_CONV_104_PRECONDITION_FAILED: RPC da 103 em falta ou com outra assinatura %', v_faltam;
   END IF;
 END;
 $precondicoes$;
+
+-- ---------------------------------------------------------------------------
+-- 0a. Proveniência das DEPENDÊNCIAS — o ledger, não só os objectos
+-- ---------------------------------------------------------------------------
+--
+-- 🔴 Porque é que verificar os objectos não chega.
+--
+--    O bloco acima prova que as tabelas, restrições e RPC existem. Não prova
+--    COMO lá chegaram. E o runner deste projecto aceita `--only`:
+--
+--        node scripts/run-migrations.mjs --apply --only 104_crm_conversao_lead.sql
+--
+--    Com `--only`, ele corre exactamente esse ficheiro. Não olha para trás,
+--    não verifica a cadeia, não exige que a 103a tenha linha no ledger. Se
+--    alguém tiver criado os objectos da 103 pelo SQL Editor — que é como
+--    dezenas de migrations deste projecto foram aplicadas, e nenhuma delas
+--    escreveu no ledger — a 104 instalar-se-ia sobre uma fundação cuja
+--    proveniência ninguém consegue reconstruir.
+--
+--    SCHEMA_EFFECT != MIGRATION_PROVENANCE. A 103 aprendeu isto para si
+--    própria; a 104 tem de o aprender para aquilo de que depende.
+--
+-- 🔴 Os checksums estão FIXOS aqui, e são os de produção (lidos a 23/09).
+--
+--    Um ledger com a linha certa e conteúdo diferente é pior do que uma linha
+--    em falta: diz que a 103 correu, quando o que correu foi outra coisa com
+--    o mesmo nome. Fixar o checksum é a única forma de a 104 saber que a
+--    fundação sobre a qual assenta é a que ela leu.
+--
+--    São os checksums LF-normalizados que `checksumForNewMigration()` calcula
+--    — o mesmo valor para quem tem o repositório em CRLF.
+--
+-- 🔴 Este bloco corre ANTES de qualquer CREATE. Nada é criado e depois
+--    desfeito: se a cadeia não estiver certa, nada chega a existir.
+
+DO $dependencias$
+DECLARE
+  v_faltam  text[];
+  v_erradas text[];
+BEGIN
+  IF to_regclass('public._migrations') IS NULL THEN
+    RAISE EXCEPTION
+      'CRM_CONV_104_LEDGER_AUSENTE: public._migrations não existe — a 104 só corre pelo runner canónico';
+  END IF;
+
+  WITH esperado(nome, checksum) AS (
+    VALUES
+      ('101_crm_leads.sql',              '92fb13678187609c7951faaae6dcf3a3688f04694efb4b34c6f04e23aee46942'),
+      ('101a_crm_rpc_acl_hardening.sql', '51aca907d2e9310f36d01901f5bb4911f8a951a536bcb9886071b0ef1d0528fb'),
+      ('101b_identity_reconciliation.sql','33614ef362300bca1a4a9bff8928172b45f2418b9409bb8eaaaa2e1805f4e136'),
+      ('102_crm_visitas_comerciais.sql', '236cfdb6fc18ec8ac52496abb2226e2fe998a5ea4f0187597b9f249d301f4c8e'),
+      ('103_crm_orcamentos.sql',         '6893946882e2df1af16c79158f3bcbe0324b7cae92845e39d8cb389f8e0260d0'),
+      ('103a_crm_rpc_acl_hardening.sql', 'bcd107aa0ab837968856150d7ebfa02704cb97f9b4ace10d35ea7dde714ac738')
+  )
+  SELECT
+    array_agg(e.nome ORDER BY e.nome) FILTER (WHERE m.name IS NULL),
+    array_agg(e.nome || ' (ledger ' || coalesce(m.checksum, 'NULL') || ')' ORDER BY e.nome)
+      FILTER (WHERE m.name IS NOT NULL AND m.checksum IS DISTINCT FROM e.checksum)
+    INTO v_faltam, v_erradas
+    FROM esperado e
+    LEFT JOIN public._migrations m ON m.name = e.nome;
+
+  IF v_faltam IS NOT NULL THEN
+    RAISE EXCEPTION
+      'CRM_CONV_104_DEPENDENCY_LEDGER_MISSING: fundações sem linha de ledger % — os objectos podem existir, mas a proveniência não; nada foi criado',
+      array_to_string(v_faltam, ', ');
+  END IF;
+
+  IF v_erradas IS NOT NULL THEN
+    RAISE EXCEPTION
+      'CRM_CONV_104_DEPENDENCY_CHECKSUM_DIVERGED: o ledger diz aplicada mas o conteúdo não é o esperado % — nada foi criado',
+      array_to_string(v_erradas, ', ');
+  END IF;
+END;
+$dependencias$;
 
 -- ---------------------------------------------------------------------------
 -- 0b. Proveniência — efeito presente não é migration aplicada
@@ -351,9 +444,16 @@ BEGIN
         USING ERRCODE = 'check_violation';
     END IF;
 
+    -- 🔴 `FOR UPDATE`, e na MESMA ORDEM do caminho normal: lead → quote.
+    --
+    --    Duas ordens de lock diferentes no mesmo par de linhas é a receita de
+    --    um deadlock — e aqui as duas chamadas concorrentes tocam exactamente
+    --    nestas duas linhas. Prender também garante que o documento não muda
+    --    entre a verificação e a resposta.
     SELECT * INTO v_quote
       FROM public.crm_quotes
-     WHERE id = p_quote_id AND company_id = p_company_id;
+     WHERE id = p_quote_id AND company_id = p_company_id
+     FOR UPDATE;
 
     IF NOT FOUND THEN
       RAISE EXCEPTION 'QUOTE_NOT_FOUND' USING ERRCODE = 'no_data_found';
@@ -369,6 +469,29 @@ BEGIN
       RAISE EXCEPTION
         'CONVERSION_STATE_DIVERGED: o orçamento não está endereçado ao cliente convertido'
         USING ERRCODE = 'check_violation';
+    END IF;
+
+    -- 🔴 O documento tem de continuar a ser o que justificou a conversão.
+    --
+    --    Verificar só os vínculos (lead ↔ cliente ↔ local ↔ orçamento) não
+    --    chega: um orçamento pode ter sido anulado ou substituído por uma
+    --    revisão DEPOIS de a conversão ter acontecido. Responder
+    --    `ja_convertida = true` nesse caso seria carimbar como bom um estado
+    --    que já não é o que foi aceite — e o chamador ficaria convencido de
+    --    que está tudo coerente.
+    --
+    --    Idempotente é «o mesmo resultado para a mesma pergunta», não «não
+    --    olhes para o que mudou».
+    IF v_quote.status <> 'aceite' THEN
+      RAISE EXCEPTION
+        'CONVERSION_STATE_DIVERGED: o orçamento convertido já não está aceite (estado %)',
+        v_quote.status USING ERRCODE = 'check_violation';
+    END IF;
+
+    IF v_quote.superseded_by_id IS NOT NULL THEN
+      RAISE EXCEPTION
+        'CONVERSION_STATE_DIVERGED: o orçamento convertido foi substituído por %',
+        v_quote.superseded_by_id USING ERRCODE = 'check_violation';
     END IF;
 
     client_id := v_lead.converted_client_id;
@@ -456,14 +579,34 @@ BEGIN
   -- ── O cliente ────────────────────────────────────────────────────────────
   --
   -- Tudo derivado da lead. Sem procura por «parecidos»: ver o cabeçalho.
-  INSERT INTO public.clients (company_id, name, nif, email, phone, address, type, status)
+  --
+  -- 🔴 SEM `address`, e a ausência é deliberada.
+  --
+  --    Uma versão anterior gravava aqui `v_address` — que pode ser a morada
+  --    da VISITA. São dois conceitos diferentes:
+  --
+  --      clients.address    identidade e contacto do cliente
+  --      locations.address  onde o serviço acontece
+  --
+  --    Com `lead.address = A` e `visit.address = B`, o local fica com B (é lá
+  --    que se trabalha) e o cliente ficava também com B — uma morada de
+  --    trabalho carimbada como morada da empresa, que ninguém escolheu e que
+  --    ninguém sabe que está errada.
+  --
+  --    É também o que `createClienteComLocal()` já faz: cria o cliente sem
+  --    `address` e grava a morada no local. Duas formas de criar cliente com
+  --    regras diferentes seriam duas verdades.
+  --
+  --    NO_DATA_LOSS: `crm_leads.address` continua a guardar a morada original
+  --    da lead, e `locations.address` recebe a operacional. Nada se perde —
+  --    deixa apenas de ser copiado para onde não pertence.
+  INSERT INTO public.clients (company_id, name, nif, email, phone, type, status)
   VALUES (
     p_company_id,
     v_lead.name,
     v_lead.nif,
     v_lead.email,
     v_lead.phone,
-    v_address,
     v_lead.lead_type,      -- o CHECK de lead_type espelha o de clients.type
     'ativo'
   )

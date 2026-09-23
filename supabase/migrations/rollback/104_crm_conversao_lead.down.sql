@@ -43,14 +43,52 @@
 --
 --     ledger  efeitos
 --       0        0     → no-op idempotente
---       0        1     → ALIENADO: os objectos não são desta migration → RAISE
+--       0       >0     → ALIENADO: os objectos não são desta migration → RAISE
 --       1        0     → LEDGER_WITHOUT_EFFECT → RAISE (decisão humana)
---       1        1     → remove os três efeitos + DELETE da linha de ledger
+--       1      1 ou 2  → PARTIAL_EFFECT → RAISE (decisão humana)
+--       1        3     → checksum confere? → remove tudo + DELETE do ledger
+--                        checksum diverge?  → RAISE
+--
+-- ---------------------------------------------------------------------------
+-- 🔴 ESTADO PARCIAL FALHA FECHADO
+-- ---------------------------------------------------------------------------
+--
+-- A versão anterior deste ficheiro só bloqueava `ledger=1, efeitos=0`. Com
+-- um ou dois efeitos presentes, continuava: removia o que restasse e apagava
+-- a linha de ledger.
+--
+-- Isso é pior do que não fazer nada. Um estado parcial é a prova de que algo
+-- correu mal — uma aplicação interrompida, um DROP manual, um runner morto a
+-- meio. Normalizá-lo em silêncio apaga essa prova e deixa a base num estado
+-- limpo que ninguém pode explicar. UNKNOWN_STATE = FAIL_CLOSED: quem
+-- encontrar isto tem de decidir o que é verdade antes de mexer.
+--
+-- ---------------------------------------------------------------------------
+-- 🔴 O CHECKSUM É VERIFICADO ANTES DE QUALQUER DROP
+-- ---------------------------------------------------------------------------
+--
+-- A linha de ledger diz o nome e o conteúdo. Se o conteúdo não for o desta
+-- 104, o que está aplicado é outra coisa com o mesmo nome — e este ficheiro
+-- não sabe desfazer o que essa outra coisa fez. Remover a RPC e as
+-- restrições nesse caso seria desfazer às cegas.
+--
+-- O valor é o `checksumForNewMigration()` do runner: SHA-256 do conteúdo
+-- normalizado a LF. Como a 104 é migration NOVA, o runner grava sempre a
+-- forma normalizada — não há aqui a ambiguidade CRLF/LF que a história deste
+-- repositório tem noutras linhas.
+--
+-- 🔴 A leitura é `FOR UPDATE`: entre ler o checksum e largar os objectos não
+--    pode haver quem reescreva a linha.
 --
 -- ---------------------------------------------------------------------------
 
 DO $rollback_104$
 DECLARE
+  -- 🔴 O checksum canónico desta 104, tal como o runner o grava.
+  --    Se o SQL da 104 mudar, este valor TEM de mudar com ele — há um ensaio
+  --    que os compara e fica vermelho se divergirem.
+  CHECKSUM_104 CONSTANT text := '601d6479a4e71d0e9aa8d701cdde995d534d9b01758174fdf6d57b6577401e6e';
+  v_checksum  text;
   v_ledger    boolean;
   v_rpc       oid;
   v_indice    oid;
@@ -91,6 +129,27 @@ BEGIN
   IF v_ledger AND v_efeitos = 0 THEN
     RAISE EXCEPTION
       'CRM_CONV_104_ROLLBACK_LEDGER_WITHOUT_EFFECT: há linha de ledger e nenhum efeito — decida primeiro o que é verdade';
+  END IF;
+
+  IF v_ledger AND v_efeitos < 3 THEN
+    RAISE EXCEPTION
+      'CRM_CONV_104_ROLLBACK_PARTIAL_EFFECT: linha de ledger com só % de 3 efeitos (RPC=%, índice=%, FK=%) — estado parcial não se normaliza em silêncio; nada foi removido',
+      v_efeitos,
+      (CASE WHEN v_rpc IS NULL THEN 'ausente' ELSE 'presente' END),
+      (CASE WHEN v_indice IS NULL THEN 'ausente' ELSE 'presente' END),
+      (CASE WHEN v_fk THEN 'presente' ELSE 'ausente' END);
+  END IF;
+
+  -- 🔴 O checksum, antes de tocar em alguma coisa.
+  SELECT m.checksum INTO v_checksum
+    FROM public._migrations m
+   WHERE m.name = '104_crm_conversao_lead.sql'
+   FOR UPDATE;
+
+  IF v_checksum IS DISTINCT FROM CHECKSUM_104 THEN
+    RAISE EXCEPTION
+      'CRM_CONV_104_ROLLBACK_CHECKSUM_DIVERGENTE: o ledger tem % e esta 104 é % — o que está aplicado não é esta migration; nada foi removido',
+      coalesce(v_checksum, 'NULL'), CHECKSUM_104;
   END IF;
 
   -- 🔴 Avisar, não bloquear.

@@ -5160,7 +5160,7 @@
       "signals": {
         "serviceRole": 8,
         "write": 1,
-        "sqlWrite": 35
+        "sqlWrite": 53
       },
       "action": "nenhuma",
       "reason": "suite de testes — corre por convenção do vitest",
@@ -25106,13 +25106,16 @@
       "consumerSample": [],
       "autoLoaded": false,
       "referencedBy": [],
-      "sideEffects": [],
+      "sideEffects": [
+        "supabase"
+      ],
       "risks": [
         "service-role"
       ],
       "signals": {
+        "supabase": 1,
         "serviceRole": 8,
-        "sqlWrite": 15
+        "sqlWrite": 17
       },
       "action": "nenhuma",
       "reason": "migration versionada — histórico do schema, nunca se apaga",
@@ -25811,7 +25814,7 @@
       "sideEffects": [],
       "risks": [],
       "signals": {
-        "sqlWrite": 6
+        "sqlWrite": 10
       },
       "action": "nenhuma",
       "reason": "migration versionada — histórico do schema, nunca se apaga",

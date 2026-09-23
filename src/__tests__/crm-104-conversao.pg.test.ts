@@ -248,6 +248,15 @@ async function fotografia(leadId: string, quoteId: string) {
   return { clients: c[0].n, locations: l[0].n, interactions: i[0].n, lead: lead[0], quote: q[0] };
 }
 
+/** Contagens que uma recusa não pode mexer. */
+async function contagens() {
+  const { rows } = await pool.query(`
+    SELECT (SELECT count(*)::int FROM public.clients) AS clients,
+           (SELECT count(*)::int FROM public.locations) AS locations,
+           (SELECT count(*)::int FROM public.crm_lead_interactions) AS interactions`);
+  return rows[0];
+}
+
 async function ligacao(): Promise<pg.Client> {
   const c = new pg.Client({ ...container.connection });
   await c.connect();
@@ -310,6 +319,8 @@ describe("1-3. conversão nominal", () => {
       status: "ativo",
       company_id: EMPRESA,
     });
+    // 🔴 A morada NÃO entra no cliente: é do LOCAL. Ver o bloco dedicado.
+    expect(cliente[0].address).toBeNull();
 
     const { rows: local } = await pool.query(
       "SELECT name, address, lat, lng, service_type, active, client_id, company_id, hourly_rate FROM public.locations WHERE id = $1",
@@ -428,6 +439,62 @@ describe("4-6. de onde vem a morada", () => {
     await expect(converter(lead, q.id)).rejects.toThrow(/CONVERSION_ADDRESS_REQUIRED/);
 
     expect(await fotografia(lead, q.id)).toEqual(antes);
+  });
+});
+
+// ───────────────────────────────────────────────────────────────────────────
+describe("🔴 a morada do cliente não é a morada do local", () => {
+  it("🔴 com visita: o local fica com a morada da visita e o cliente com NENHUMA", LENTO, async () => {
+    // São dois conceitos: `clients.address` é identidade/contacto,
+    // `locations.address` é onde o serviço acontece. Uma versão anterior
+    // copiava a morada da visita para os dois — uma morada de trabalho
+    // carimbada como morada da empresa, que ninguém escolheu.
+    const lead = await novaLead({ address: "Morada Lead" });
+    const visita = await novaVisita(lead, "Morada Visita");
+    const q = await novoOrcamento(lead, { visitId: visita });
+
+    const r = await converter(lead, q.id);
+
+    const { rows: cliente } = await pool.query(
+      "SELECT address FROM public.clients WHERE id = $1", [r.client_id]);
+    const { rows: local } = await pool.query(
+      "SELECT address FROM public.locations WHERE id = $1", [r.location_id]);
+
+    expect(cliente[0].address).toBeNull();
+    expect(local[0].address).toBe("Morada Visita");
+  });
+
+  it("sem visita: o local fica com a morada da lead e o cliente continua sem nenhuma", LENTO, async () => {
+    const lead = await novaLead({ address: "Morada Lead" });
+    const q = await novoOrcamento(lead);
+
+    const r = await converter(lead, q.id);
+
+    const { rows: cliente } = await pool.query(
+      "SELECT address FROM public.clients WHERE id = $1", [r.client_id]);
+    const { rows: local } = await pool.query(
+      "SELECT address FROM public.locations WHERE id = $1", [r.location_id]);
+
+    expect(cliente[0].address).toBeNull();
+    expect(local[0].address).toBe("Morada Lead");
+  });
+
+  it("NO_DATA_LOSS: a morada original da lead continua na lead", LENTO, async () => {
+    const lead = await novaLead({ address: "Morada Lead" });
+    const visita = await novaVisita(lead, "Morada Visita");
+    const q = await novoOrcamento(lead, { visitId: visita });
+    await converter(lead, q.id);
+
+    const { rows } = await pool.query(
+      "SELECT address FROM public.crm_leads WHERE id = $1", [lead]);
+    expect(rows[0].address).toBe("Morada Lead");
+  });
+
+  it("a RPC não menciona `address` no INSERT de clients", LENTO, async () => {
+    const sql = lerSql(M_104);
+    const insert = sql.slice(sql.indexOf("INSERT INTO public.clients"));
+    const colunas = insert.slice(0, insert.indexOf(")"));
+    expect(colunas).not.toContain("address");
   });
 });
 
@@ -562,18 +629,23 @@ describe("13. concorrência", () => {
       const r1 = await p1;
       await c1.query("COMMIT");
 
-      const r2 = await p2.catch((err: Error) => err);
-      await c2.query("COMMIT").catch(() => c2.query("ROLLBACK"));
+      const r2 = await p2;
+      await c2.query("COMMIT");
 
-      // 🔴 A segunda ou espera e vê a lead já convertida (idempotente), ou
-      //    falha — o que NÃO pode é criar um segundo par.
-      if (r2 instanceof Error) {
-        expect(r2.message).toMatch(/QUOTE_RECIPIENT_MISMATCH|CONVERSION_STATE_DIVERGED|QUOTE_LEAD_MISMATCH/);
-      } else {
-        expect(r2.rows[0].ja_convertida).toBe(true);
-        expect(r2.rows[0].client_id).toBe(r1.rows[0].client_id);
-        expect(r2.rows[0].location_id).toBe(r1.rows[0].location_id);
-      }
+      // 🔴 O resultado é DETERMINÍSTICO, e exigi-lo é o ponto.
+      //
+      //    Pelo desenho da RPC: c1 prende a lead, c2 espera, c1 faz commit,
+      //    c2 relê a lead já convertida, valida os vínculos e devolve os
+      //    mesmos ids. Não há aqui um ramo de erro legítimo.
+      //
+      //    Uma versão anterior deste ensaio aceitava «ou sucesso idempotente
+      //    ou um destes três erros». Isso torna o teste incapaz de falhar:
+      //    se a serialização se partisse, ele passava na mesma a dizer que
+      //    estava tudo bem. Se isto ficar instável, há um problema real de
+      //    concorrência para resolver — não um teste para afrouxar.
+      expect(r2.rows[0].ja_convertida).toBe(true);
+      expect(r2.rows[0].client_id).toBe(r1.rows[0].client_id);
+      expect(r2.rows[0].location_id).toBe(r1.rows[0].location_id);
 
       const { rows: clientes } = await pool.query(
         "SELECT count(*)::int AS n FROM public.clients WHERE name = 'Condomínio Alfa'");
@@ -628,6 +700,43 @@ describe("14. idempotência", () => {
       "SELECT client_id FROM public.crm_quotes WHERE id = $1", [q.id]);
     expect(rows[0].client_id).toBe(CLIENTE_A);
     expect(r.client_id).not.toBe(CLIENTE_A);
+  });
+
+  it("🔴 drift A: o orçamento deixou de estar aceite → DIVERGED", LENTO, async () => {
+    // Verificar só os vínculos não chega: um orçamento pode ser anulado
+    // DEPOIS da conversão. Responder `ja_convertida = true` aí seria carimbar
+    // como bom um estado que já não é o que foi aceite.
+    const q = await novoOrcamento(leadA);
+    await converter(leadA, q.id);
+
+    await pool.query("UPDATE public.crm_quotes SET status = 'anulado' WHERE id = $1", [q.id]);
+
+    const antes = await contagens();
+    await expect(converter(leadA, q.id)).rejects.toThrow(/CONVERSION_STATE_DIVERGED/);
+    expect(await contagens()).toEqual(antes);
+
+    // 🔴 Nada foi «corrigido» pelo caminho.
+    const { rows } = await pool.query(
+      "SELECT status FROM public.crm_quotes WHERE id = $1", [q.id]);
+    expect(rows[0].status).toBe("anulado");
+  });
+
+  it("🔴 drift B: o orçamento foi substituído → DIVERGED", LENTO, async () => {
+    const q = await novoOrcamento(leadA);
+    await converter(leadA, q.id);
+
+    const { rows: outro } = await pool.query(
+      "SELECT id FROM public.crm_quotes WHERE id = $1", [q.id]);
+    // Forja-se a substituição apontando para si próprio não é possível (FK),
+    // por isso cria-se um documento novo e marca-se o convertido como
+    // substituído por ele.
+    const q2 = await novoOrcamento(await novaLead({ name: "Eta" }));
+    await pool.query(
+      "UPDATE public.crm_quotes SET superseded_by_id = $1 WHERE id = $2", [q2.id, outro[0].id]);
+
+    const antes = await contagens();
+    await expect(converter(leadA, q.id)).rejects.toThrow(/CONVERSION_STATE_DIVERGED/);
+    expect(await contagens()).toEqual(antes);
   });
 
   it("repetir com um orçamento que não é desta lead é recusado", LENTO, async () => {
@@ -912,6 +1021,160 @@ describe("26-27. proveniência, sequência e rollback", () => {
     const q = await novoOrcamento(leadA);
     const r = await converter(leadA, q.id);
     expect(r.ja_convertida).toBe(false);
+  });
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // BLOCKER 2 — a 104 não se instala sobre uma fundação sem proveniência
+  // ─────────────────────────────────────────────────────────────────────────
+  //
+  // 🔴 O runner aceita `--only 104_crm_conversao_lead.sql`, e com `--only`
+  //    corre exactamente esse ficheiro: não olha para trás nem exige que a
+  //    cadeia esteja no ledger. Se os objectos da 103 tiverem sido criados
+  //    pelo SQL Editor — como dezenas de migrations deste projecto foram —,
+  //    a 104 assentaria numa fundação cuja proveniência ninguém reconstrói.
+
+  /** O que nenhuma aplicação falhada pode ter deixado para trás. */
+  async function efeitos104() {
+    const { rows } = await pool.query(`
+      SELECT to_regprocedure('public.convert_crm_lead_atomic(uuid, uuid, uuid, uuid)') IS NOT NULL AS rpc,
+             to_regclass('public.locations_id_client_company_unique') IS NOT NULL AS idx,
+             EXISTS (SELECT 1 FROM pg_constraint
+                      WHERE conrelid = 'public.crm_leads'::regclass
+                        AND conname = 'crm_leads_conversao_par_coerente') AS fk,
+             EXISTS (SELECT 1 FROM public._migrations
+                      WHERE name = '104_crm_conversao_lead.sql') AS ledger`);
+    return rows[0];
+  }
+
+  const SEM_EFEITOS = { rpc: false, idx: false, fk: false, ledger: false };
+
+  it("🔴 B: falta a linha de ledger da 103a → DEPENDENCY_LEDGER_MISSING", LENTO, async () => {
+    await palco(false);
+    // Os objectos da 103a continuam todos lá — só a proveniência desaparece.
+    await pool.query("DELETE FROM public._migrations WHERE name = $1", [NOME_103A]);
+
+    await expect(pool.query(lerSql(M_104)))
+      .rejects.toThrow(/CRM_CONV_104_DEPENDENCY_LEDGER_MISSING/);
+
+    expect(await efeitos104()).toEqual(SEM_EFEITOS);
+    await palco();
+    leadA = await novaLead();
+  });
+
+  it("🔴 C: checksum da 103 divergente → DEPENDENCY_CHECKSUM_DIVERGED", LENTO, async () => {
+    await palco(false);
+    // A linha existe e diz «aplicada», mas o conteúdo não é o que a 104 leu.
+    await pool.query(
+      "UPDATE public._migrations SET checksum = $1 WHERE name = $2",
+      ["0".repeat(64), NOME_103]);
+
+    await expect(pool.query(lerSql(M_104)))
+      .rejects.toThrow(/CRM_CONV_104_DEPENDENCY_CHECKSUM_DIVERGED/);
+
+    expect(await efeitos104()).toEqual(SEM_EFEITOS);
+    await palco();
+    leadA = await novaLead();
+  });
+
+  it("🔴 D: uma das três RPC da 103 em falta → PRECONDITION_FAILED", LENTO, async () => {
+    // O comentário antigo dizia «as três RPC» e o SQL verificava uma. Uma 103
+    // sem `revise_crm_quote` passava o portão.
+    await palco(false);
+    await pool.query(`
+      DROP FUNCTION public.revise_crm_quote(uuid, uuid, uuid, date, date, numeric, boolean, numeric, text, jsonb)`);
+
+    await expect(pool.query(lerSql(M_104)))
+      // 🔴 `[\s\S]*` e não `.*` com a flag `s`: dotAll exige target es2018 e
+      //    o `tsconfig.json` deste projecto tem ES2017.
+      .rejects.toThrow(/CRM_CONV_104_PRECONDITION_FAILED[\s\S]*revise_crm_quote/);
+
+    expect(await efeitos104()).toEqual(SEM_EFEITOS);
+    await palco();
+    leadA = await novaLead();
+  });
+
+  it("os checksums fixados na 104 são os dos ficheiros do repositório", LENTO, async () => {
+    // Se uma fundação for editada sem que o valor aqui mude, a 104 deixaria
+    // de aplicar — e é melhor descobri-lo neste ensaio do que no `--apply`.
+    const sql = lerSql(M_104);
+    for (const nome of [
+      "101_crm_leads.sql", "101a_crm_rpc_acl_hardening.sql",
+      "101b_identity_reconciliation.sql", "102_crm_visitas_comerciais.sql",
+      "103_crm_orcamentos.sql", "103a_crm_rpc_acl_hardening.sql",
+    ]) {
+      expect(sql, `${nome} sem checksum fixado`).toContain(checksumLf(nome));
+    }
+  });
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // BLOCKER 3 — o rollback falha fechado
+  // ─────────────────────────────────────────────────────────────────────────
+
+  /** Remove um efeito da 104 sem tocar no ledger, para forjar estado parcial. */
+  async function removerEfeito(qual: "rpc" | "idx" | "fk"): Promise<void> {
+    if (qual === "rpc") {
+      await pool.query("DROP FUNCTION public.convert_crm_lead_atomic(uuid, uuid, uuid, uuid)");
+    } else if (qual === "fk") {
+      await pool.query("ALTER TABLE public.crm_leads DROP CONSTRAINT crm_leads_conversao_par_coerente");
+    } else {
+      await pool.query("ALTER TABLE public.crm_leads DROP CONSTRAINT crm_leads_conversao_par_coerente");
+      await pool.query("DROP INDEX public.locations_id_client_company_unique");
+    }
+  }
+
+  const parciais: Array<{ nome: string; remover: Array<"rpc" | "idx" | "fk">; restam: number }> = [
+    { nome: "só a RPC em falta (2 efeitos)", remover: ["rpc"], restam: 2 },
+    { nome: "só a FK em falta (2 efeitos)", remover: ["fk"], restam: 2 },
+    { nome: "FK e índice em falta (1 efeito)", remover: ["idx"], restam: 1 },
+  ];
+
+  for (const caso of parciais) {
+    it(`🔴 rollback com ${caso.nome}: PARTIAL_EFFECT, e nada é removido`, LENTO, async () => {
+      for (const r of caso.remover) await removerEfeito(r);
+
+      await expect(pool.query(lerSql(ROLLBACK_104)))
+        .rejects.toThrow(/CRM_CONV_104_ROLLBACK_PARTIAL_EFFECT/);
+
+      // 🔴 A linha de ledger FICA. É ela a prova de que o estado é parcial —
+      //    apagá-la deixaria a base limpa e inexplicável.
+      const e = await efeitos104();
+      expect(e.ledger).toBe(true);
+      expect([e.rpc, e.idx, e.fk].filter(Boolean)).toHaveLength(caso.restam);
+
+      await palco();
+      leadA = await novaLead();
+    });
+  }
+
+  it("🔴 rollback com checksum divergente: nada é removido", LENTO, async () => {
+    await pool.query(
+      "UPDATE public._migrations SET checksum = $1 WHERE name = $2", ["f".repeat(64), NOME_104]);
+
+    await expect(pool.query(lerSql(ROLLBACK_104)))
+      .rejects.toThrow(/CRM_CONV_104_ROLLBACK_CHECKSUM_DIVERGENTE/);
+
+    expect(await efeitos104()).toEqual({ rpc: true, idx: true, fk: true, ledger: true });
+
+    await palco();
+    leadA = await novaLead();
+  });
+
+  it("🔴 rollback com efeitos e SEM ledger: ALIENADO", LENTO, async () => {
+    await pool.query("DELETE FROM public._migrations WHERE name = $1", [NOME_104]);
+
+    await expect(pool.query(lerSql(ROLLBACK_104)))
+      .rejects.toThrow(/CRM_CONV_104_ROLLBACK_ALIENADO/);
+
+    const e = await efeitos104();
+    expect(e.rpc && e.idx && e.fk).toBe(true);
+
+    await registarNoLedger(NOME_104);
+  });
+
+  it("o checksum fixado no rollback é o da 104 deste repositório", LENTO, async () => {
+    // Se o SQL da 104 mudar e este valor não, o rollback recusa-se a correr
+    // sobre a própria migration — e é aqui que isso se descobre.
+    expect(lerSql(ROLLBACK_104)).toContain(checksumLf(NOME_104));
   });
 
   it("🔴 rollback estrutural: remove os três efeitos e NÃO apaga dados", LENTO, async () => {
