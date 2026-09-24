@@ -51,15 +51,37 @@ async function esperarPronto() {
 }
 
 beforeAll(async () => {
-  port = 55600 + (process.pid % 300);
   docker(["rm", "-f", CONTAINER]);
   const r = docker(["run", "-d", "--name", CONTAINER,
     // Autenticacao `trust` num contentor local e descartavel, como nos outros
     // ensaios. Uma credencial literal aqui ficaria versionada, e o scanner de
     // segredos recusa — com razao.
     "-e", "POSTGRES_HOST_AUTH_METHOD=trust", "-e", "POSTGRES_DB=colab",
-    "-p", `${port}:5432`, "postgres:16-alpine"]);
+    // 🔴 Porta EFÉMERA, escolhida pelo Docker, como no helper partilhado.
+    //
+    //    Aqui estava `55600 + (process.pid % 300)`. Como o vitest corre os
+    //    ficheiros em workers do MESMO processo, esse valor é igual para toda
+    //    a suite — e, pior, 55600–55899 cai dentro do intervalo efémero do
+    //    Windows. As outras suites de Postgres pedem porta efémera ao Docker;
+    //    quando calha uma delas receber exactamente esta, o `docker run`
+    //    falha com «port is already allocated», o `beforeAll` rebenta e o
+    //    ficheiro INTEIRO fica vermelho — intermitente, e verde quando corre
+    //    sozinho. Observado duas vezes em quatro corridas completas depois de
+    //    a suite da 105 se juntar às outras.
+    //
+    //    Deixar o Docker escolher e perguntar-lhe depois elimina a corrida:
+    //    não há valor a adivinhar.
+    "-p", "127.0.0.1::5432", "postgres:16-alpine"]);
   if (r.status !== 0) throw new Error(`contentor: ${r.stderr || r.stdout}`);
+
+  const mapeamento = docker(["port", CONTAINER, "5432/tcp"]).stdout.trim();
+  // Um mapeamento pode trazer várias linhas (IPv4 e IPv6). A primeira basta.
+  const primeira = mapeamento.split(/\r?\n/)[0]?.trim() ?? "";
+  const mapeada = Number(primeira.slice(primeira.lastIndexOf(":") + 1));
+  if (!Number.isInteger(mapeada) || mapeada <= 0 || mapeada > 65535) {
+    throw new Error(`contentor ${CONTAINER}: porta publicada inválida em "${mapeamento}".`);
+  }
+  port = mapeada;
   await esperarPronto();
 
   pool = new pg.Pool({ host: "127.0.0.1", port, user: "postgres", database: "colab", max: 4 });

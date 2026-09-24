@@ -90,6 +90,54 @@
 -- é emitir outro documento: anula-se e cria-se, com número do ano certo.
 --
 -- ---------------------------------------------------------------------------
+-- 🔴 `FOR UPDATE` NÃO CHEGA: O LOST UPDATE ENTRE DUAS PESSOAS
+-- ---------------------------------------------------------------------------
+--
+-- O lock serializa TRANSAÇÕES. Não protege um utilizador de outro utilizador
+-- que abriu o mesmo rascunho antes.
+--
+--       T0   A e B abrem o rascunho. Ambos vêem updated_at = U0.
+--       T1   A corrige o preço e grava. A base passa a U1.
+--       T2   B grava — com o formulário que carregou em T0.
+--
+-- Só com o lock, em T2 o B espera pela transação do A, acorda, e escreve por
+-- cima. A correcção do A desaparece sem aviso, sem erro e sem rasto: as duas
+-- escritas foram perfeitamente serializadas, e o resultado é errado de
+-- qualquer forma. Serialização não é detecção de conflito.
+--
+-- Daí `p_expected_updated_at`: o `updated_at` que o formulário LEU. Debaixo do
+-- lock, compara-se com o valor real. Se divergir, `QUOTE_DRAFT_STALE` e nada
+-- se escreve — quem gravou em segundo lugar recarrega, vê a correcção do
+-- primeiro, e decide com a informação certa.
+--
+-- 🔴 A comparação acontece DEPOIS do lock, e a ordem é o mecanismo. Comparar
+--    antes deixaria a janela de sempre: compara-se, outra sessão grava, e a
+--    nossa escrita passa por cima do que já não é o que se comparou.
+--
+-- 🔴 O token é o `updated_at` que o trigger `crm_quotes_updated_at` da 001/103
+--    mantém. Não se cria coluna de versão nova: já existe um valor que muda a
+--    cada escrita, e um segundo contador seria uma segunda verdade para
+--    manter sincronizada com a primeira.
+--
+-- 🔴 A comparação é EXACTA (`IS DISTINCT FROM`), e quem chamar tem de devolver
+--    o valor tal como o leu. `timestamptz` guarda microssegundos; um valor que
+--    passe por um `Date` de JavaScript perde-os e chega truncado ao
+--    milissegundo — e um token truncado é recusado como STALE, o que é o
+--    comportamento certo mas desnorteia quem o vê. O runtime da 105-B tem de
+--    encaminhar a string ISO que leu, sem a reconstruir. Há um ensaio que fixa
+--    isto de propósito.
+--
+-- 🔴 Um token AUSENTE não desliga a protecção: `NULL` é
+--    `QUOTE_DRAFT_EXPECTED_UPDATED_AT_REQUIRED`. Se o NULL fosse aceite como
+--    «não verificar», bastaria um caminho de escrita novo escrito sem ler este
+--    ficheiro para a protecção deixar de existir.
+--
+-- 🔴 As validações de ESTADO vêm primeiro. Se o documento já foi enviado ou
+--    substituído, `QUOTE_NOT_DRAFT`/`QUOTE_ALREADY_SUPERSEDED` dizem mais a
+--    quem está do outro lado do que «o seu formulário está velho» — mesmo que
+--    as duas coisas sejam verdade ao mesmo tempo.
+--
+-- ---------------------------------------------------------------------------
 -- 🔴 UNKNOWN_STATE = FAIL_CLOSED
 -- ---------------------------------------------------------------------------
 --
@@ -188,6 +236,37 @@ BEGIN
   ) THEN
     RAISE EXCEPTION
       'CRM_EDIT_105_PRECONDITION_FAILED: trigger crm_quotes_proveniencia_imutavel ausente (103)';
+  END IF;
+
+  -- 🔴 O mecanismo de que o token de concorrência depende.
+  --
+  --    `updated_at` não é aqui um campo informativo: é o token que distingue
+  --    uma edição consciente de um overwrite silencioso. Se a coluna não
+  --    existir, ou se o trigger que a mantém estiver DESACTIVADO, o token
+  --    deixa de mudar a cada escrita — e a comparação passaria a dar sempre
+  --    igual, aceitando precisamente as escritas que existe para recusar.
+  --
+  --    Um guard que falha aberto é pior do que nenhum, por isso isto é
+  --    precondição da migration e não uma verificação em runtime.
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+     WHERE table_schema = 'public' AND table_name = 'crm_quotes'
+       AND column_name = 'updated_at'
+  ) THEN
+    RAISE EXCEPTION
+      'CRM_EDIT_105_PRECONDITION_FAILED: crm_quotes.updated_at ausente — sem ela não há token de concorrência';
+  END IF;
+
+  -- `tgenabled = 'D'` é desactivado; O/R/A são as formas activas.
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_trigger
+     WHERE tgrelid = 'public.crm_quotes'::regclass
+       AND tgname = 'crm_quotes_updated_at'
+       AND NOT tgisinternal
+       AND tgenabled <> 'D'
+  ) THEN
+    RAISE EXCEPTION
+      'CRM_EDIT_105_PRECONDITION_FAILED: trigger crm_quotes_updated_at ausente ou desactivado — o token de concorrência não mudaria a cada escrita';
   END IF;
 
   -- O índice de posição, que é o que torna a substituição de linhas ordenada.
@@ -325,7 +404,7 @@ BEGIN
   SELECT array_agg(efeito.nome ORDER BY efeito.nome) INTO v_efeitos
     FROM (VALUES
       ('RPC edit_crm_quote_draft',
-       to_regprocedure('public.edit_crm_quote_draft(uuid, uuid, uuid, uuid, date, date, text, numeric, boolean, numeric, text, text, text, text, jsonb)')::text)
+       to_regprocedure('public.edit_crm_quote_draft(uuid, uuid, uuid, timestamptz, uuid, date, date, text, numeric, boolean, numeric, text, text, text, text, jsonb)')::text)
     ) AS efeito(nome, presente)
    WHERE efeito.presente IS NOT NULL;
 
@@ -360,6 +439,8 @@ CREATE OR REPLACE FUNCTION public.edit_crm_quote_draft(
   p_company_id         uuid,
   p_quote_id           uuid,
   p_actor              uuid,
+  -- 🔴 O token de concorrência optimista. Ver o cabeçalho.
+  p_expected_updated_at timestamptz,
   p_visit_id           uuid,
   p_issue_date         date,
   p_valid_until        date,
@@ -452,7 +533,34 @@ BEGIN
       USING ERRCODE = 'check_violation';
   END IF;
 
-  -- ── 3. O actor ──────────────────────────────────────────────────────────
+  -- ── 3. O token de concorrência ──────────────────────────────────────────
+  --
+  -- 🔴 AQUI, e não antes do lock. Ver o cabeçalho: comparar o token antes de
+  --    adquirir o lock deixaria a janela clássica — compara-se, outra sessão
+  --    grava, e a nossa escrita passa por cima de um documento que já não é o
+  --    que se comparou. Debaixo do lock, `v_quote` é o estado real e actual.
+  --
+  --    Depois das validações estruturais, de propósito: se o documento já foi
+  --    enviado ou substituído, isso é mais específico e mais útil de dizer do
+  --    que «o seu formulário está velho».
+  IF p_expected_updated_at IS NULL THEN
+    -- 🔴 Ausência de token NÃO é permissão para escrever sem verificação. Se
+    --    fosse, qualquer chamador desligava a protecção por omissão — e a
+    --    omissão é exactamente o que acontece quando alguém acrescenta um
+    --    caminho de escrita novo sem ler este ficheiro.
+    RAISE EXCEPTION
+      'QUOTE_DRAFT_EXPECTED_UPDATED_AT_REQUIRED: a edição exige o updated_at que foi lido'
+      USING ERRCODE = 'check_violation';
+  END IF;
+
+  IF v_quote.updated_at IS DISTINCT FROM p_expected_updated_at THEN
+    RAISE EXCEPTION
+      'QUOTE_DRAFT_STALE: o documento foi alterado (agora %, o formulário trazia %) — recarregue antes de gravar',
+      v_quote.updated_at, p_expected_updated_at
+      USING ERRCODE = 'check_violation';
+  END IF;
+
+  -- ── 4. O actor ──────────────────────────────────────────────────────────
   --
   -- 🔴 O actor não é decorativo nem vem do browser: as Server Actions escrevem
   --    com `service_role`, que é BYPASSRLS. Sem esta verificação, um actor de
@@ -464,7 +572,7 @@ BEGIN
     RAISE EXCEPTION 'ACTOR_NOT_IN_COMPANY' USING ERRCODE = 'check_violation';
   END IF;
 
-  -- ── 4. A visita ─────────────────────────────────────────────────────────
+  -- ── 5. A visita ─────────────────────────────────────────────────────────
   --
   -- A visita PODE ser corrigida enquanto o documento é rascunho — trocar a
   -- visita errada é justamente uma das correcções que faltavam. O que não pode
@@ -489,7 +597,7 @@ BEGIN
     END IF;
   END IF;
 
-  -- ── 5. As datas ─────────────────────────────────────────────────────────
+  -- ── 6. As datas ─────────────────────────────────────────────────────────
   --
   -- 🔴 O ano do número não se move. Ver o cabeçalho.
   --
@@ -512,7 +620,7 @@ BEGIN
       USING ERRCODE = 'check_violation';
   END IF;
 
-  -- ── 6. O cabeçalho de preço ─────────────────────────────────────────────
+  -- ── 7. O cabeçalho de preço ─────────────────────────────────────────────
   --
   -- 🔴 Sem `COALESCE` a valores por omissão. Uma edição é uma SUBSTITUIÇÃO do
   --    documento, e não um patch: aceitar `p_vat_rate` NULL e assumir 0
@@ -524,7 +632,18 @@ BEGIN
       USING ERRCODE = 'check_violation';
   END IF;
 
-  IF p_discount_pct IS NULL OR p_discount_pct < 0 OR p_discount_pct > 100 THEN
+  -- 🔴 `round(x, 2) IS DISTINCT FROM x` — a escala, e não só o intervalo.
+  --
+  --    `discount_pct` e `vat_rate` são `numeric(5,2)`. Um `3.141` passa nos
+  --    limites, é usado NO CÁLCULO com três casas, e depois a coluna guarda
+  --    `3.14`. O documento fica a mostrar 3,14% com um total que 3,14% não
+  --    produz — deixa de fechar consigo próprio. É o mesmo defeito que as
+  --    linhas já tinham fechado; aqui faltava no cabeçalho.
+  --
+  --    Recusa, e não arredondamento silencioso: quem escreveu 3,141 tem de
+  --    saber que o sistema não guarda isso.
+  IF p_discount_pct IS NULL OR p_discount_pct < 0 OR p_discount_pct > 100
+     OR round(p_discount_pct, 2) IS DISTINCT FROM p_discount_pct THEN
     RAISE EXCEPTION 'QUOTE_DISCOUNT_INVALID: %', coalesce(p_discount_pct::text, 'NULL')
       USING ERRCODE = 'check_violation';
   END IF;
@@ -533,12 +652,16 @@ BEGIN
     RAISE EXCEPTION 'QUOTE_APPLY_VAT_REQUIRED' USING ERRCODE = 'check_violation';
   END IF;
 
-  IF p_vat_rate IS NULL OR p_vat_rate < 0 OR p_vat_rate > 100 THEN
+  -- 🔴 Verificado mesmo com `apply_vat = false`: a taxa é PERSISTIDA na coluna
+  --    de qualquer modo, e um orçamento que volte a ligar o IVA passaria a
+  --    calcular sobre um valor que ninguém escreveu.
+  IF p_vat_rate IS NULL OR p_vat_rate < 0 OR p_vat_rate > 100
+     OR round(p_vat_rate, 2) IS DISTINCT FROM p_vat_rate THEN
     RAISE EXCEPTION 'QUOTE_VAT_RATE_INVALID: %', coalesce(p_vat_rate::text, 'NULL')
       USING ERRCODE = 'check_violation';
   END IF;
 
-  -- ── 7. As linhas ────────────────────────────────────────────────────────
+  -- ── 8. As linhas ────────────────────────────────────────────────────────
   IF p_items IS NULL OR jsonb_typeof(p_items) IS DISTINCT FROM 'array' OR jsonb_array_length(p_items) = 0 THEN
     RAISE EXCEPTION 'QUOTE_ITEMS_REQUIRED: um orçamento sem linhas é um documento a zero que parece emitido'
       USING ERRCODE = 'check_violation';
@@ -624,7 +747,7 @@ BEGIN
     v_subtotal := v_subtotal + v_linha;
   END LOOP;
 
-  -- ── 8. Os totais ────────────────────────────────────────────────────────
+  -- ── 9. Os totais ────────────────────────────────────────────────────────
   --
   -- A MESMA aritmética de `create_crm_quote_with_items` e `revise_crm_quote`.
   -- Ver o cabeçalho para a razão de estar duplicada.
@@ -643,7 +766,7 @@ BEGIN
       USING ERRCODE = 'check_violation';
   END IF;
 
-  -- ── 9. O cabeçalho ──────────────────────────────────────────────────────
+  -- ── 10. O cabeçalho ──────────────────────────────────────────────────────
   --
   -- 🔴 A LISTA DE COLUNAS É O MECANISMO DA IMUTABILIDADE.
   --
@@ -675,7 +798,7 @@ BEGIN
    WHERE id = p_quote_id
    RETURNING crm_quotes.updated_at INTO v_updated;
 
-  -- ── 10. As linhas, substituídas por inteiro ─────────────────────────────
+  -- ── 11. As linhas, substituídas por inteiro ─────────────────────────────
   --
   -- 🔴 DELETE seguido de INSERT, e não um merge linha a linha.
   --
@@ -690,7 +813,7 @@ BEGIN
   --    ROLLBACK devolve as linhas ANTIGAS, intactas. Essa é a prova central
   --    desta unidade, e tem um ensaio dedicado.
   --
-  -- 🔴 O alias `it.` também aqui, e pela mesma razão do passo 11: `quote_id` é
+  -- 🔴 O alias `it.` também aqui, e pela mesma razão do passo 12: `quote_id` é
   --    parâmetro de SAÍDA desta função. Sem alias, `WHERE quote_id = ...` é uma
   --    referência ambígua — e num DELETE isso apagaria as linhas erradas ou
   --    nenhuma, conforme a resolução.
@@ -710,7 +833,7 @@ BEGIN
     round((i->>'quantity')::numeric * (i->>'unit_price')::numeric, 2)
   FROM jsonb_array_elements(p_items) WITH ORDINALITY AS t(i, ordinalidade);
 
-  -- ── 11. A prova de que as linhas todas entraram ─────────────────────────
+  -- ── 12. A prova de que as linhas todas entraram ─────────────────────────
   --
   -- 🔴 O alias `it.` é obrigatório. `quote_id` é ao mesmo tempo coluna de
   --    `crm_quote_items` e parâmetro de SAÍDA desta função, e o plpgsql
@@ -733,9 +856,16 @@ BEGIN
 END;
 $$;
 
-COMMENT ON FUNCTION public.edit_crm_quote_draft(uuid, uuid, uuid, uuid, date, date, text, numeric, boolean, numeric, text, text, text, text, jsonb) IS
+COMMENT ON FUNCTION public.edit_crm_quote_draft(uuid, uuid, uuid, timestamptz, uuid, date, date, text, numeric, boolean, numeric, text, text, text, text, jsonb) IS
   'Edita IN PLACE um orcamento vivo em rascunho, numa so transacao: cabecalho, '
-  'totais recalculados no servidor e substituicao integral das linhas. NAO cria '
+  'totais recalculados no servidor e substituicao integral das linhas. '
+  'Concorrencia optimista OBRIGATORIA: p_expected_updated_at e o updated_at que '
+  'o formulario leu, comparado DEBAIXO do lock — divergencia e QUOTE_DRAFT_STALE '
+  'e NULL e QUOTE_DRAFT_EXPECTED_UPDATED_AT_REQUIRED, porque FOR UPDATE serializa '
+  'mas nao impede uma sessao de escrever por cima da correcao de outra. O valor '
+  'tem de ser devolvido tal como foi lido: a comparacao e exacta ao microssegundo. '
+  'discount_pct e vat_rate aceitam no maximo 2 casas decimais, a escala das '
+  'colunas — mais casas sao recusadas, nunca arredondadas. NAO cria '
   'revisao, NAO atribui numero novo e NAO muda identidade, proveniencia nem '
   'destinatario — quote_number, quote_year, quote_seq, revision, root_quote_id, '
   'source_lead_id, lead_id/client_id, created_by e created_at ficam como estavam. '
@@ -759,10 +889,10 @@ COMMENT ON FUNCTION public.edit_crm_quote_draft(uuid, uuid, uuid, uuid, date, da
 --    `service_role` também entra no REVOKE para que o GRANT seguinte seja a
 --    única origem do seu privilégio — sem `WITH GRANT OPTION` herdado.
 
-REVOKE ALL ON FUNCTION public.edit_crm_quote_draft(uuid, uuid, uuid, uuid, date, date, text, numeric, boolean, numeric, text, text, text, text, jsonb)
+REVOKE ALL ON FUNCTION public.edit_crm_quote_draft(uuid, uuid, uuid, timestamptz, uuid, date, date, text, numeric, boolean, numeric, text, text, text, text, jsonb)
   FROM PUBLIC, anon, authenticated, service_role;
 
-GRANT EXECUTE ON FUNCTION public.edit_crm_quote_draft(uuid, uuid, uuid, uuid, date, date, text, numeric, boolean, numeric, text, text, text, text, jsonb)
+GRANT EXECUTE ON FUNCTION public.edit_crm_quote_draft(uuid, uuid, uuid, timestamptz, uuid, date, date, text, numeric, boolean, numeric, text, text, text, text, jsonb)
   TO service_role;
 
 -- ---------------------------------------------------------------------------
@@ -782,7 +912,7 @@ DECLARE
   v_grantable boolean;
 BEGIN
   v_oid := to_regprocedure(
-    'public.edit_crm_quote_draft(uuid, uuid, uuid, uuid, date, date, text, numeric, boolean, numeric, text, text, text, text, jsonb)');
+    'public.edit_crm_quote_draft(uuid, uuid, uuid, timestamptz, uuid, date, date, text, numeric, boolean, numeric, text, text, text, text, jsonb)');
 
   IF v_oid IS NULL THEN
     RAISE EXCEPTION

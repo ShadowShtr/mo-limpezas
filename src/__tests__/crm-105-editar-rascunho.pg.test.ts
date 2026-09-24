@@ -62,7 +62,7 @@ const NOME_105 = "105_crm_orcamento_editar_rascunho.sql";
 
 /** A assinatura exacta — a mesma string que a migration, o rollback e a ACL usam. */
 const ASSINATURA =
-  "public.edit_crm_quote_draft(uuid, uuid, uuid, uuid, date, date, text, numeric, boolean, numeric, text, text, text, text, jsonb)";
+  "public.edit_crm_quote_draft(uuid, uuid, uuid, timestamptz, uuid, date, date, text, numeric, boolean, numeric, text, text, text, text, jsonb)";
 
 /** A cadeia que já vive no ledger antes da 102. */
 const CADEIA = [
@@ -216,6 +216,8 @@ async function novoOrcamento(opts: {
 interface Edicao {
   empresa?: string;
   actor?: string;
+  /** O token; por omissão, o valor actual do documento. `null` fica `null`. */
+  esperado?: string | null;
   visita?: string | null;
   issueDate?: string;
   validUntil?: string;
@@ -234,13 +236,21 @@ interface Edicao {
 /** Uma edição nominal; cada campo pode ser substituído. */
 async function editar(quoteId: string | null, over: Edicao = {}) {
   const exec = over.cliente ?? pool;
+  // 🔴 Por omissão, o token ACTUAL. Os ensaios que não são sobre concorrência
+  //    não têm de o gerir — mas nenhum deles corre sem token, porque a RPC não
+  //    aceita chamadas sem ele.
+  const esperado = over.esperado === undefined
+    ? (quoteId ? await token(quoteId) : null)
+    : over.esperado;
+
   const { rows } = await exec.query(
     `SELECT * FROM public.edit_crm_quote_draft(
-       $1,$2,$3,$4,$5::date,$6::date,$7,$8::numeric,$9::boolean,$10::numeric,$11,$12,$13,$14,$15::jsonb)`,
+       $1,$2,$3,$4::timestamptz,$5,$6::date,$7::date,$8,$9::numeric,$10::boolean,$11::numeric,$12,$13,$14,$15,$16::jsonb)`,
     [
       over.empresa ?? EMPRESA,
       quoteId,
       over.actor === undefined ? GESTORA : over.actor,
+      esperado,
       over.visita ?? null,
       // 🔴 `=== undefined`, e não `??`. Com `??`, um `null` explícito caía no
       //    valor por omissão e os ensaios de data a NULL mediam uma data
@@ -272,13 +282,34 @@ async function ler(quoteId: string) {
   //    Lisboa está à frente de UTC (hora de verão). Pedir o texto ao Postgres
   //    é a única leitura que não depende do fuso do processo.
   const { rows } = await pool.query(
-    `SELECT *, issue_date::text AS issue_date_txt, valid_until::text AS valid_until_txt
+    `SELECT *, issue_date::text AS issue_date_txt, valid_until::text AS valid_until_txt,
+            updated_at::text AS updated_at_txt
        FROM public.crm_quotes WHERE id = $1`, [quoteId]);
   const { rows: itens } = await pool.query(
     "SELECT position, description, quantity, unit, unit_price, line_total FROM public.crm_quote_items WHERE quote_id = $1 ORDER BY position",
     [quoteId],
   );
   return { quote: rows[0], itens };
+}
+
+/**
+ * O token de concorrência, lido como TEXTO.
+ *
+ * 🔴 `::text`, e nunca o `Date` que o driver devolve. `timestamptz` guarda
+ *    microssegundos; um `Date` de JavaScript só tem milissegundos, e o valor
+ *    voltaria truncado — a RPC recusava-o como STALE e o ensaio acusaria um
+ *    defeito que não existe. É a mesma armadilha que o runtime da 105-B vai
+ *    ter de evitar, e há um ensaio que a fixa.
+ */
+async function token(quoteId: string): Promise<string> {
+  const { rows } = await pool.query(
+    "SELECT updated_at::text AS t FROM public.crm_quotes WHERE id = $1", [quoteId]);
+  // 🔴 Um id que não existe não tem token. Devolver um valor qualquer NÃO
+  //    afrouxa nada: a RPC levanta QUOTE_NOT_FOUND debaixo do lock, muito
+  //    antes de olhar para o token. Sem isto, o helper rebentava com
+  //    «Cannot read properties of undefined» e o ensaio do orçamento
+  //    inexistente falhava por defeito do palco, não da RPC.
+  return (rows[0]?.t as string) ?? "2000-01-01T00:00:00+00";
 }
 
 async function ligacao(): Promise<pg.Client> {
@@ -854,15 +885,27 @@ describe("24-25. empresa e actor", () => {
 
 // ───────────────────────────────────────────────────────────────────────────
 describe("26-27. concorrência — o FOR UPDATE serializa", () => {
-  it("🔴 26. edit vs edit: a segunda espera e a última escrita vence", LENTO, async () => {
-    const { id } = await novoOrcamento({ lead: leadA });
+  it("🔴 26. edit vs edit: a segunda ESPERA, vê o token gasto e é RECUSADA", LENTO, async () => {
+    // 🔴 Este ensaio já fixava o comportamento ERRADO: dizia «a última escrita
+    //    vence» e dava isso por correcto. Serializar duas escritas não as torna
+    //    certas — o B continuava a apagar a correcção do A sem aviso nenhum.
+    //
+    //    O contrato agora é: o B espera pelo lock, acorda, relê o documento,
+    //    vê que o `updated_at` já não é o que o seu formulário trazia, e
+    //    recusa. A edição do A fica INTEIRA.
+    const { id } = await novoOrcamento({
+      lead: leadA,
+      itens: [{ description: "Original", quantity: 1, unit: "servico", unit_price: 1 }],
+    });
+    const u0 = await token(id);
+
     const a = await ligacao();
     const b = await ligacao();
 
     try {
       await a.query("BEGIN");
       await editar(id, {
-        cliente: a, notas: "A",
+        cliente: a, esperado: u0, notas: "A",
         itens: [
           { description: "A1", quantity: 1, unit: "servico", unit_price: 10 },
           { description: "A2", quantity: 1, unit: "servico", unit_price: 20 },
@@ -870,31 +913,91 @@ describe("26-27. concorrência — o FOR UPDATE serializa", () => {
         ],
       });
 
-      // B pede a mesma linha enquanto A ainda não fez commit: fica à espera.
+      // O B parte do MESMO token que leu em T0, e fica à espera do lock.
       const pedidoB = editar(id, {
-        cliente: b, notas: "B",
+        cliente: b, esperado: u0, notas: "B",
         itens: [{ description: "B1", quantity: 1, unit: "servico", unit_price: 99 }],
       });
+      const resultadoB = pedidoB.then(() => "passou").catch((e: Error) => e.message);
 
       let bTerminou = false;
-      void pedidoB.then(() => { bTerminou = true; });
+      void resultadoB.then(() => { bTerminou = true; });
       await new Promise((r) => setTimeout(r, 400));
-      expect(bTerminou, "B não pode ter passado por cima do lock de A").toBe(false);
+      expect(bTerminou, "B não pode resolver antes de A libertar o lock").toBe(false);
 
       await a.query("COMMIT");
-      await pedidoB;
 
+      expect(await resultadoB).toMatch(/QUOTE_DRAFT_STALE/);
+
+      // 🔴 O estado final é o do A, por inteiro: cabeçalho e linhas.
       const { quote, itens } = await ler(id);
-      expect(quote.notes).toBe("B");
-      expect(itens.map((i) => i.description)).toEqual(["B1"]);
-      // 🔴 As três linhas de A não sobreviveram ao conjunto de B: a substituição
-      //    é integral mesmo quando a edição anterior deixou mais linhas.
-      expect(itens).toHaveLength(1);
+      expect(quote.notes).toBe("A");
+      expect(itens.map((i) => i.description)).toEqual(["A1", "A2", "A3"]);
+      expect(quote.total).toBe("73.80"); // 60 + 23% IVA
+      // Do B não sobrou nada: nem uma linha, nem o cabeçalho.
+      expect(itens.some((i) => i.description === "B1")).toBe(false);
     } finally {
       await a.query("ROLLBACK").catch(() => { /* já fechada */ });
       await a.end();
       await b.end();
     }
+  });
+
+  it("🔴 stale sequencial: o mesmo token não serve duas vezes", LENTO, async () => {
+    // A mesma prova sem depender de timing nenhum — e a que mostra que um
+    // retry CONSCIENTE, depois de recarregar, funciona.
+    const { id } = await novoOrcamento({ lead: leadA });
+
+    const u0 = await token(id);
+    const primeira = await editar(id, { esperado: u0, notas: "primeira" });
+    const u1 = await token(id);
+
+    expect(u1).not.toBe(u0);
+    expect(String(primeira.updated_at)).not.toBe(String(u0));
+
+    // Repetir com o token já gasto: recusado.
+    await expect(editar(id, { esperado: u0, notas: "segunda" }))
+      .rejects.toThrow(/QUOTE_DRAFT_STALE/);
+    expect((await ler(id)).quote.notes).toBe("primeira");
+
+    // Recarregar e tentar outra vez: passa.
+    await editar(id, { esperado: u1, notas: "segunda, depois de recarregar" });
+    expect((await ler(id)).quote.notes).toBe("segunda, depois de recarregar");
+  });
+
+  it("🔴 token a NULL não desliga a protecção", LENTO, async () => {
+    const { id } = await novoOrcamento({ lead: leadA });
+    const antes = await ler(id);
+
+    await expect(editar(id, { esperado: null, notas: "sem token" }))
+      .rejects.toThrow(/QUOTE_DRAFT_EXPECTED_UPDATED_AT_REQUIRED/);
+
+    const depois = await ler(id);
+    expect(depois.quote).toEqual(antes.quote);
+    expect(depois.itens).toEqual(antes.itens);
+  });
+
+  it("🔴 um token truncado ao milissegundo é recusado", LENTO, async () => {
+    // 🔴 A armadilha que o runtime da 105-B tem de evitar, fixada aqui.
+    //
+    //    `timestamptz` guarda microssegundos. Um valor que passe por um `Date`
+    //    de JavaScript volta truncado ao milissegundo, e a comparação exacta
+    //    recusa-o. Está certo que recuse — mas quem escrever a Server Action
+    //    tem de encaminhar a string que leu, e não reconstruí-la a partir de
+    //    um `Date`. Se este ensaio ficar vermelho, foi a comparação que se
+    //    tornou tolerante, e aí o token deixa de valer para o que existe.
+    const { id } = await novoOrcamento({ lead: leadA });
+    const exacto = await token(id);
+    const truncado = new Date(exacto).toISOString();
+
+    // O palco só é relevante se os dois valores forem mesmo diferentes; com um
+    // updated_at redondo aos milissegundos, não há nada a medir.
+    const { rows } = await pool.query(
+      "SELECT ($1::timestamptz = $2::timestamptz) AS iguais", [exacto, truncado]);
+    if (rows[0].iguais) return;
+
+    await expect(editar(id, { esperado: truncado, notas: "truncado" }))
+      .rejects.toThrow(/QUOTE_DRAFT_STALE/);
   });
 
   it("🔴 27. um envio concorrente ESPERA pela edição, e leva-a consigo", LENTO, async () => {
@@ -1117,6 +1220,42 @@ describe("28-29. atomicidade — a prova central desta unidade", () => {
     expect(quote.total).toBe("99999999.99");
   });
 
+  it("🔴 desconto e IVA com 2 casas passam; com 3 são RECUSADOS", LENTO, async () => {
+    // 🔴 `discount_pct` e `vat_rate` são `numeric(5,2)`. Um `3.141` passava nos
+    //    limites, entrava NO CÁLCULO com três casas, e a coluna guardava 3,14 —
+    //    o documento ficava a mostrar 3,14% com um total que 3,14% não produz.
+    const { id } = await novoOrcamento({ lead: leadA });
+
+    // Duas casas: passa, e o total fecha com o que a coluna guarda.
+    await editar(id, {
+      desconto: 3.14, taxaIva: 23.46,
+      itens: [{ description: "Base", quantity: 1, unit: "servico", unit_price: 10000 }],
+    });
+    const { quote } = await ler(id);
+    expect(quote.discount_pct).toBe("3.14");
+    expect(quote.vat_rate).toBe("23.46");
+    // 10000 × (1 - 0,0314) = 9686,00 ; IVA 23,46% = 2272,34 ; total 11958,34
+    expect(quote.subtotal).toBe("10000.00");
+    expect(quote.total).toBe("11958.34");
+
+    const antes = await ler(id);
+
+    await expect(editar(id, { desconto: 3.141 }))
+      .rejects.toThrow(/QUOTE_DISCOUNT_INVALID/);
+    await expect(editar(id, { taxaIva: 23.456 }))
+      .rejects.toThrow(/QUOTE_VAT_RATE_INVALID/);
+
+    // 🔴 Mesmo com o IVA desligado: a taxa é persistida na coluna de qualquer
+    //    modo, e voltar a ligar o IVA calcularia sobre um valor que ninguém
+    //    escreveu.
+    await expect(editar(id, { aplicaIva: false, taxaIva: 23.456 }))
+      .rejects.toThrow(/QUOTE_VAT_RATE_INVALID/);
+
+    const depois = await ler(id);
+    expect(depois.quote).toEqual(antes.quote);
+    expect(depois.itens).toEqual(antes.itens);
+  });
+
   it("🔴 o cabeçalho de preço inválido é recusado antes de qualquer escrita", LENTO, async () => {
     const { id } = await novoOrcamento({ lead: leadA });
     const antes = await ler(id);
@@ -1171,7 +1310,7 @@ describe("30-32. segurança da RPC — canónica desde o primeiro dia", () => {
         await c.query(`SET ROLE ${papel}`);
         await expect(
           c.query(`SELECT public.edit_crm_quote_draft(
-            $1,$2,$3,NULL,$4::date,$5::date,'pontual',0,true,23,NULL,NULL,NULL,NULL,'[]'::jsonb)`,
+            $1,$2,$3,now(),NULL,$4::date,$5::date,'pontual',0,true,23,NULL,NULL,NULL,NULL,'[]'::jsonb)`,
           [EMPRESA, "99999999-9999-4999-8999-999999999999", GESTORA,
             `${ANO}-03-01`, `${ANO}-04-01`]),
         ).rejects.toThrow(/permission denied/i);

@@ -69,9 +69,9 @@ DECLARE
   -- 🔴 O checksum canónico desta 105, tal como o runner o grava.
   --    Se o SQL da 105 mudar, este valor TEM de mudar com ele — há um ensaio
   --    que os compara e fica vermelho se divergirem.
-  CHECKSUM_105 CONSTANT text := 'e702a6e41e8751c861627cf247c5024ea0ba6543b1d5dfbc6cd972c1499bea3f';
+  CHECKSUM_105 CONSTANT text := 'bbb9c628fa07d76c8834b0908ddf7798a7a01180db93ce464256ca13b54153bf';
   ASSINATURA CONSTANT text :=
-    'public.edit_crm_quote_draft(uuid, uuid, uuid, uuid, date, date, text, numeric, boolean, numeric, text, text, text, text, jsonb)';
+    'public.edit_crm_quote_draft(uuid, uuid, uuid, timestamptz, uuid, date, date, text, numeric, boolean, numeric, text, text, text, text, jsonb)';
 
   v_checksum  text;
   v_ledger    boolean;
