@@ -182,14 +182,36 @@ describe("o erro cru nunca chega ao ecrã", () => {
 });
 
 describe("🔴 esta unidade não traz schema", () => {
-  it("nenhuma migration nova além da 104", () => {
+  it("🔴 a action não usa nenhuma RPC criada depois da 104", () => {
+    // 🔴 Este ensaio já mediu outra coisa: exigia que NÃO existisse nenhum
+    //    ficheiro de migration numerado acima de 104. Era verdade enquanto a
+    //    104 era a última, e deixou de o ser quando a 105 chegou — a cadeia
+    //    cresce, e um guard que proíbe o futuro não é um guard, é um travão.
+    //
+    //    O que esta unidade promete, e continua a ter de provar, é mais
+    //    estreito e mais útil: `crm-conversao.ts` não pode passar a depender de
+    //    um objecto criado por uma migration POSTERIOR à 104. Se isso
+    //    acontecesse, o runtime desta unidade deixaria de funcionar em
+    //    qualquer base onde só a 104 esteja aplicada — que é exactamente o
+    //    estado que a produção pode ter entre dois applies.
+    //
     // 🔴 Só as numeradas com TRÊS dígitos. As datadas legadas (`20260608_*`)
-    //    começam por oito dígitos e `slice(0, 3)` daria 202 — o ensaio
-    //    acusaria migrations históricas como se fossem desta unidade.
-    const migrations = readdirSync(join(ROOT, "supabase/migrations"))
-      .filter((m) => /^\d{3}[a-z]?_/.test(m))
+    //    começam por oito dígitos e `slice(0, 3)` daria 202.
+    const posteriores = readdirSync(join(ROOT, "supabase/migrations"))
+      .filter((m) => /^\d{3}[a-z]?_.*\.sql$/.test(m))
       .filter((m) => Number(m.slice(0, 3)) > 104);
-    expect(migrations).toEqual([]);
+
+    const funcoesNovas = new Set<string>();
+    for (const ficheiro of posteriores) {
+      const sql = ler(`supabase/migrations/${ficheiro}`);
+      for (const m of sql.matchAll(/CREATE\s+(?:OR\s+REPLACE\s+)?FUNCTION\s+public\.(\w+)/g)) {
+        funcoesNovas.add(m[1]);
+      }
+    }
+
+    for (const f of funcoesNovas) {
+      expect(CODIGO, `a action usa ${f}, criada depois da 104`).not.toContain(f);
+    }
   });
 
   it("a 104 no repositório é a que está aplicada", () => {
