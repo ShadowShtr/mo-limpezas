@@ -1,20 +1,20 @@
 {
   "generatedBy": "scripts/audit-file-inventory.mjs",
-  "totalFiles": 973,
+  "totalFiles": 976,
   "byStatus": {
-    "MANTER": 949,
+    "MANTER": 952,
     "STANDBY": 24
   },
   "byCategory": {
-    "test": 236,
+    "test": 238,
     "route-ui": 155,
     "migration": 144,
     "lib": 79,
     "script": 62,
     "domain": 52,
     "server-action": 48,
+    "src-other": 48,
     "doc": 47,
-    "src-other": 47,
     "component": 33,
     "doc-historico": 16,
     "api-route": 16,
@@ -29,7 +29,7 @@
     "supabase-other": 2
   },
   "byConfidence": {
-    "alta": 951,
+    "alta": 954,
     "média": 16,
     "baixa": 6
   },
@@ -5313,6 +5313,59 @@
       }
     },
     {
+      "path": "src/__tests__/crm-edit-draft-actions.test.ts",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "sqlWrite": 2,
+        "dynamicImport": 1
+      },
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/__tests__/crm-edit-draft-sheet.test.tsx",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [
+        "any(10)"
+      ],
+      "signals": {
+        "eslintDisable": 3,
+        "anyType": 10,
+        "dynamicImport": 2
+      },
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
       "path": "src/__tests__/crm-orcamentos-guard.test.ts",
       "category": "test",
       "status": "MANTER",
@@ -5328,7 +5381,7 @@
       "risks": [],
       "signals": {
         "network": 1,
-        "sqlWrite": 16,
+        "sqlWrite": 20,
         "revalidatePath": 1,
         "dynamicImport": 2
       },
@@ -12881,9 +12934,10 @@
       "category": "route-ui",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 2,
+      "consumers": 3,
       "consumerSample": [
         "src/__tests__/crm-convert-button.test.tsx",
+        "src/__tests__/crm-edit-draft-sheet.test.tsx",
         "src/app/(dashboard)/dashboard/crm/orcamentos/_components/quotes-client.tsx"
       ],
       "autoLoaded": false,
@@ -12897,7 +12951,7 @@
         "fallbackArray": 1
       },
       "action": "nenhuma",
-      "reason": "em uso: 2 consumidor(es)",
+      "reason": "em uso: 3 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -12942,8 +12996,9 @@
       "category": "route-ui",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 2,
+      "consumers": 3,
       "consumerSample": [
+        "src/__tests__/crm-edit-draft-sheet.test.tsx",
         "src/__tests__/crm-quote-sheet.test.tsx",
         "src/app/(dashboard)/dashboard/crm/orcamentos/_components/quotes-client.tsx"
       ],
@@ -12956,7 +13011,7 @@
         "fallbackZero": 1
       },
       "action": "nenhuma",
-      "reason": "em uso: 2 consumidor(es)",
+      "reason": "em uso: 3 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -15152,11 +15207,11 @@
       "category": "server-action",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 7,
+      "consumers": 8,
       "consumerSample": [
+        "src/__tests__/crm-edit-draft-actions.test.ts",
         "src/__tests__/crm-quote-actions.test.ts",
-        "src/__tests__/crm-quote-pdf.test.ts",
-        "src/app/(dashboard)/dashboard/crm/orcamentos/_components/quote-detail-sheet.tsx"
+        "src/__tests__/crm-quote-pdf.test.ts"
       ],
       "autoLoaded": false,
       "referencedBy": [],
@@ -15165,22 +15220,22 @@
       ],
       "risks": [
         "erro-de-query-ignorado(2)",
-        "any(3)"
+        "any(4)"
       ],
       "signals": {
         "serverAction": 1,
         "write": 1,
-        "sqlWrite": 9,
-        "eslintDisable": 3,
-        "anyType": 3,
+        "sqlWrite": 10,
+        "eslintDisable": 4,
+        "anyType": 4,
         "unknownCast": 3,
         "consoleErr": 2,
         "ignoredError": 2,
-        "fallbackZero": 4,
+        "fallbackZero": 6,
         "fallbackArray": 4
       },
       "action": "auditar atomicidade (T12/T13)",
-      "reason": "em uso: 7 consumidor(es)",
+      "reason": "em uso: 8 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -19423,7 +19478,7 @@
       "category": "domain",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 53,
+      "consumers": 54,
       "consumerSample": [
         "src/__tests__/update-notice-modal.test.tsx",
         "src/__tests__/update-notices-eligibility.test.ts",
@@ -19438,7 +19493,7 @@
       "risks": [],
       "signals": {},
       "action": "nenhuma",
-      "reason": "em uso: 53 consumidor(es), configuração",
+      "reason": "em uso: 54 consumidor(es), configuração",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -20315,7 +20370,7 @@
       "sideEffects": [],
       "risks": [],
       "signals": {
-        "sqlWrite": 2,
+        "sqlWrite": 3,
         "fallbackZero": 2,
         "fallbackArray": 1
       },
@@ -22971,6 +23026,32 @@
     },
     {
       "path": "src/release-notes/2026-09-23-crm-conversao-cliente.ts",
+      "category": "src-other",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 1,
+      "consumerSample": [
+        "src/release-notes/index.ts"
+      ],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "sqlWrite": 1
+      },
+      "action": "nenhuma",
+      "reason": "em uso: 1 consumidor(es)",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/release-notes/2026-09-24-corrigir-orcamento-em-rascunho.ts",
       "category": "src-other",
       "status": "MANTER",
       "confidence": "alta",

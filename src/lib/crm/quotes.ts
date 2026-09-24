@@ -112,6 +112,32 @@ export function canReviseQuote(quote: {
 }
 
 /**
+ * Um rascunho vivo pode ser corrigido no próprio documento.
+ *
+ * 🔴 `rascunho` NÃO entra em `QUOTE_REVISABLE_STATUSES`, e isso é o desenho.
+ *
+ *    Rever e editar são duas operações com significados opostos: rever cria um
+ *    DOCUMENTO NOVO porque o anterior já saiu para o cliente; editar corrige o
+ *    MESMO documento, que nunca saiu. Se `rascunho` entrasse na lista das
+ *    revisáveis, o botão «Criar revisão» passaria a produzir uma «R1» de algo
+ *    que ninguém viu — e a `revise_crm_quote` recusa isso de propósito, com
+ *    `QUOTE_DRAFT_EDIT_IN_PLACE`.
+ *
+ *    Duas listas separadas é o que impede um botão de ganhar dois
+ *    significados.
+ *
+ * 🔴 Isto decide o que se MOSTRA, não o que se autoriza. A autorização vive na
+ *    `edit_crm_quote_draft`, debaixo de `FOR UPDATE`: entre o ecrã desenhar o
+ *    botão e alguém carregar nele, o documento pode ter sido enviado.
+ */
+export function canEditDraftQuote(quote: {
+  status: string;
+  superseded_by_id: string | null;
+}): boolean {
+  return quote.status === "rascunho" && quote.superseded_by_id === null;
+}
+
+/**
  * O que a UI precisa de saber de um orçamento para decidir o que mostrar
  * sobre a conversão.
  *

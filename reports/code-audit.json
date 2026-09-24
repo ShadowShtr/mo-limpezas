@@ -1,10 +1,10 @@
 {
   "inventorySource": "git ls-files",
   "summary": {
-    "repositoryFiles": 969,
-    "textFiles": 956,
-    "sourceFiles": 680,
-    "textLines": 246981,
+    "repositoryFiles": 972,
+    "textFiles": 959,
+    "sourceFiles": 683,
+    "textLines": 248674,
     "typescriptDiagnostics": 0,
     "productionEntries": 75,
     "unreachableProductionModules": 40,
@@ -140,6 +140,7 @@
     ],
     "dateRiskCandidates": [
       "src/__tests__/civil-date.test.ts",
+      "src/__tests__/crm-edit-draft-sheet.test.tsx",
       "src/__tests__/finance-categoria-identidade-e-resumo.test.tsx",
       "src/__tests__/invoices-period-atomic.pg.test.ts",
       "src/__tests__/migration-schema-ledger-atomicity.pg.test.ts",

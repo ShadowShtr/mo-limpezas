@@ -59,6 +59,9 @@ const QUOTE: QuoteRow = {
   notes: "Inclui produtos e material.",
   internal_notes: SEGREDO,
   created_at: "2026-09-22T10:00:00.000Z",
+  // 🔴 Com microssegundos, como o Postgres o entrega. O PDF não usa este
+  //    campo, mas o fixture não pode mentir sobre a forma do que existe.
+  updated_at: "2026-09-22T10:00:00.123456+00:00",
 };
 
 const ITEMS: QuoteItemRow[] = [

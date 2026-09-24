@@ -22,7 +22,7 @@
 import { useEffect, useState, useTransition } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
-import { Download, FileClock, TriangleAlert, UserPlus, X } from "lucide-react";
+import { Download, FileClock, Pencil, TriangleAlert, UserPlus, X } from "lucide-react";
 
 import { useToast } from "@/components/ui/toast";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
@@ -30,6 +30,7 @@ import { fmtLisbon } from "@/lib/lisbon-time";
 import {
   allowedQuoteTransitions,
   canConvertQuote,
+  canEditDraftQuote,
   canReviseQuote,
   isConvertedLeadQuote,
   isQuoteStatus,
@@ -57,6 +58,13 @@ interface Props {
   /** Mudou o estado ou nasceu uma revisão: a lista tem de recarregar. */
   onChanged: () => void;
   onRevise: (base: QuoteWithItems) => void;
+  /**
+   * 🔴 Recebe o `QuoteWithItems` da leitura FRESCA, e não a linha da lista.
+   *    É de lá que sai o `updated_at` que serve de token de concorrência: um
+   *    token vindo de uma listagem construída há minutos descreveria um
+   *    documento que já pode ter mudado.
+   */
+  onEditDraft: (base: QuoteWithItems) => void;
 }
 
 const fmtEur = (v: number): string =>
@@ -82,6 +90,7 @@ export function QuoteDetailSheet({
   onClose,
   onChanged,
   onRevise,
+  onEditDraft,
 }: Props) {
   const { toast } = useToast();
   const router = useRouter();
@@ -465,6 +474,30 @@ export function QuoteDetailSheet({
             <Download className="h-4 w-4" />
             PDF
           </button>
+
+          {/*
+            🔴 «Editar rascunho» e «Criar revisão» NUNCA aparecem ao mesmo
+               tempo: `canEditDraftQuote` exige `rascunho`, e `rascunho` não
+               está em `QUOTE_REVISABLE_STATUSES`. São operações com
+               significados opostos — corrigir o mesmo documento, ou emitir um
+               novo — e um botão com dois significados é como se perde a
+               distinção.
+
+            🔴 `disabled={!dados}`: a edição precisa do documento carregado por
+               `getQuote`, porque é de lá que vem o token. Com a linha da lista
+               apenas, não há `updated_at` fresco para enviar.
+          */}
+          {canEditDraftQuote(q) && (
+            <button
+              onClick={() => dados && onEditDraft(dados)}
+              disabled={!dados || busy}
+              className="flex items-center gap-1.5 rounded-lg border px-3 py-2 text-[13px] font-medium disabled:opacity-50"
+              style={{ borderColor: "var(--color-border)" }}
+            >
+              <Pencil className="h-4 w-4" />
+              Editar rascunho
+            </button>
+          )}
 
           {canReviseQuote(q) && (
             <button

@@ -91,6 +91,18 @@ export function QuotesClient({
   const [aVer, setAVer] = useState<QuoteRow | null>(null);
   /** A versão a partir da qual se está a criar uma revisão. */
   const [aRevir, setARevir] = useState<QuoteWithItems | null>(null);
+  /**
+   * O rascunho que está a ser corrigido IN PLACE.
+   *
+   * 🔴 Estado PRÓPRIO, e não `aRevir` reaproveitado. As duas operações têm
+   *    significados opostos — rever cria um documento novo, editar corrige o
+   *    mesmo — e uma variável partilhada obrigaria cada leitura a adivinhar
+   *    qual delas está em curso.
+   *
+   * 🔴 Guarda o `QuoteWithItems` da leitura FRESCA do detalhe, e é de lá que
+   *    sai o `updated_at` que serve de token de concorrência.
+   */
+  const [aEditar, setAEditar] = useState<QuoteWithItems | null>(null);
 
   // 🔴 `orcamentos ?? []` DENTRO do `useMemo`, e não numa const acima: um
   //    literal novo a cada render invalidaria a memoização em todos eles.
@@ -252,6 +264,7 @@ export function QuotesClient({
           clientes={clientes}
           visitas={visitas}
           vatRate={vatRate}
+          mode="create"
           onClose={() => setACriar(false)}
           onDone={(numero) => {
             setACriar(false);
@@ -267,12 +280,35 @@ export function QuotesClient({
           clientes={clientes}
           visitas={visitas}
           vatRate={vatRate}
+          mode="revise"
           base={aRevir}
           onClose={() => setARevir(null)}
           onDone={(numero) => {
             setARevir(null);
             setAVer(null);
             toast(`Revisão ${numero} criada, em rascunho.`, "success");
+            router.refresh();
+          }}
+        />
+      )}
+
+      {aEditar && (
+        <QuoteSheet
+          leads={leads}
+          clientes={clientes}
+          visitas={visitas}
+          vatRate={vatRate}
+          mode="edit-draft"
+          base={aEditar}
+          onClose={() => setAEditar(null)}
+          onDone={(numero) => {
+            // 🔴 Só aqui. `onDone` NÃO é chamado quando a action falha — e é
+            //    isso que mantém o formulário aberto num `QUOTE_DRAFT_STALE`,
+            //    com o trabalho da pessoa à frente dela, para decidir depois
+            //    de recarregar. Fechar e perder o que escreveu seria castigá-la
+            //    por outra pessoa ter gravado primeiro.
+            setAEditar(null);
+            toast(`Orçamento ${numero} actualizado.`, "success");
             router.refresh();
           }}
         />
@@ -292,6 +328,14 @@ export function QuotesClient({
             // da versão que se está a substituir.
             setAVer(null);
             setARevir(base);
+          }}
+          onEditDraft={(base) => {
+            // 🔴 `base` vem da leitura FRESCA que o detalhe fez com `getQuote`,
+            //    e não da linha da lista. É de lá que sai o `updated_at`: o
+            //    token tem de descrever o documento como ele está agora, não
+            //    como estava quando a listagem foi construída.
+            setAVer(null);
+            setAEditar(base);
           }}
         />
       )}
