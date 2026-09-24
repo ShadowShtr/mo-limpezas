@@ -15231,7 +15231,7 @@
         "unknownCast": 3,
         "consoleErr": 2,
         "ignoredError": 2,
-        "fallbackZero": 6,
+        "fallbackZero": 5,
         "fallbackArray": 4
       },
       "action": "auditar atomicidade (T12/T13)",

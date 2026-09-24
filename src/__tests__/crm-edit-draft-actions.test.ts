@@ -376,6 +376,62 @@ describe("🔴 o domínio é fechado no servidor", () => {
     });
   }
 
+  // ─────────────────────────────────────────────────────────────────────────
+  // 🔴 FAIL CLOSED: ausência não é valor por omissão
+  //
+  //    Uma edição SUBSTITUI o documento; não é um patch. Se `discountPct` e
+  //    `applyVat` fossem opcionais com default, uma chamada que os omitisse
+  //    gravava 0 % e IVA ligado sobre um rascunho que tinha 15 % e IVA
+  //    desligado — sem ninguém ter pedido, e sem forma de distinguir «não
+  //    enviei» de «quero zero». NO_DATA_LOSS, UNKNOWN_STATE = FAIL_CLOSED.
+  // ─────────────────────────────────────────────────────────────────────────
+  const OBRIGATORIOS: Array<[string, Record<string, unknown>]> = [
+    ["discountPct ausente", { discountPct: undefined }],
+    ["discountPct a null", { discountPct: null }],
+    ["applyVat ausente", { applyVat: undefined }],
+    ["applyVat a null", { applyVat: null }],
+  ];
+
+  for (const [nome, over] of OBRIGATORIOS) {
+    it(`🔴 ${nome}: VALIDATION — zero leituras, zero RPC, zero auditoria`, async () => {
+      const chamadas = duplo();
+      const res = await editDraftQuote(QUOTE, entrada(over) as never);
+
+      expect(res.ok).toBe(false);
+      if (!res.ok) expect(res.error.code).toBe("VALIDATION");
+      expect(chamadas.selects, "nem sequer lê a base").toHaveLength(0);
+      expect(chamadas.rpc).toHaveLength(0);
+      expect(auditoriasDeEdicao()).toBe(0);
+      expect(invalidateBusinessState).not.toHaveBeenCalled();
+    });
+  }
+
+  it("🔴 ZERO é uma escolha, não uma ausência", async () => {
+    const chamadas = duplo();
+    const res = await editDraftQuote(QUOTE, entrada({ discountPct: 0 }));
+
+    expect(res.ok).toBe(true);
+    expect(chamadas.rpc[0].args.p_discount_pct).toBe(0);
+  });
+
+  it("🔴 FALSE é uma escolha, não uma ausência", async () => {
+    const chamadas = duplo();
+    const res = await editDraftQuote(QUOTE, entrada({ applyVat: false }));
+
+    expect(res.ok).toBe(true);
+    expect(chamadas.rpc[0].args.p_apply_vat).toBe(false);
+  });
+
+  it("🔴 um desconto real sobrevive intacto à edição", async () => {
+    // O caso concreto que o fail-closed protege: 15 % não pode virar 0 % por
+    // um campo ter faltado no caminho.
+    const chamadas = duplo();
+    await editDraftQuote(QUOTE, entrada({ discountPct: 15, applyVat: false }));
+
+    expect(chamadas.rpc[0].args.p_discount_pct).toBe(15);
+    expect(chamadas.rpc[0].args.p_apply_vat).toBe(false);
+  });
+
   it("101 linhas é recusado", async () => {
     const chamadas = duplo();
     const res = await editDraftQuote(QUOTE, entrada({

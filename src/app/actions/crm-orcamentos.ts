@@ -869,8 +869,24 @@ const edicaoRascunhoSchema = z
     issueDate: z.iso.date(),
     validUntil: z.iso.date(),
     pricingKind: z.enum(QUOTE_PRICING_KINDS),
-    discountPct: descontoAceite().min(0).max(100).optional().nullable(),
-    applyVat: z.boolean().optional().nullable(),
+    /**
+     * 🔴 OBRIGATÓRIOS, ao contrário da criação e da revisão.
+     *
+     *    Uma edição é a SUBSTITUIÇÃO do documento, não um patch. Se estes dois
+     *    fossem opcionais com valor por omissão, uma chamada que os omitisse
+     *    gravava `discount_pct = 0` e `apply_vat = true` sobre um rascunho que
+     *    tinha 15 % e IVA desligado — sem ninguém ter pedido, e sem forma de
+     *    distinguir «não enviei» de «quero zero».
+     *
+     *    `NO_DATA_LOSS` e `UNKNOWN_STATE = FAIL_CLOSED`: um campo em falta é
+     *    defeito de quem chama, e diz-se. Reparar por omissão é adivinhar.
+     *
+     * 🔴 `false` NÃO é ausência e `0` NÃO é ausência. Sem `.optional()` nem
+     *    `.nullable()`, o Zod distingue as três coisas — e há ensaios para
+     *    cada uma.
+     */
+    discountPct: descontoAceite().min(0).max(100),
+    applyVat: z.boolean(),
     proposedFrequency: z.string().trim().max(50).optional().nullable(),
     paymentTerms: z.string().trim().max(500).optional().nullable(),
     notes: z.string().trim().max(5000).optional().nullable(),
@@ -981,9 +997,14 @@ export async function editDraftQuote(
 
   // 🔴 CABE EM `numeric(10,2)`? A mesma conta que a RPC vai fazer, com a taxa
   //    PERSISTIDA — não com a das definições de hoje.
+  //
+  // 🔴 Sem `?? 0` nem `?? true`: o schema já os exigiu. Um default aqui
+  //    reintroduziria, pela porta do lado, a reparação por omissão que o
+  //    schema acabou de proibir — e a previsão passaria a medir um documento
+  //    diferente do que a RPC ia gravar.
   const previsao = totaisDoOrcamento(
     d.items.map((i) => ({ quantity: i.quantity, unit_price: i.unitPrice })),
-    { discountPct: d.discountPct ?? 0, applyVat: d.applyVat ?? true, vatRate: base.vat_rate },
+    { discountPct: d.discountPct, applyVat: d.applyVat, vatRate: base.vat_rate },
   );
   if (excedeMontanteMaximo(previsao)) {
     return actionFailure(ACTION_ERROR_CODES.BUSINESS_RULE, QUOTE_AMOUNT_MESSAGE);
@@ -1001,8 +1022,10 @@ export async function editDraftQuote(
       p_issue_date: d.issueDate,
       p_valid_until: d.validUntil,
       p_pricing_kind: d.pricingKind,
-      p_discount_pct: d.discountPct ?? 0,
-      p_apply_vat: d.applyVat ?? true,
+      // 🔴 O valor que chegou, e não um default: `0` e `false` são escolhas
+      //    explícitas, e ausência é erro de quem chama.
+      p_discount_pct: d.discountPct,
+      p_apply_vat: d.applyVat,
       // 🔴 A taxa do próprio rascunho, nunca a das definições nem a do browser.
       p_vat_rate: base.vat_rate,
       p_proposed_frequency: d.proposedFrequency ?? null,
