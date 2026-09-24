@@ -116,6 +116,7 @@ function montarRevisao() {
         clientes={[]}
         visitas={[] as any}
         vatRate={23}
+        mode="revise"
         base={BASE as any}
         onClose={() => {}}
         onDone={() => {}}

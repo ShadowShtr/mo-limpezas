@@ -1330,9 +1330,15 @@ describe("30-32. segurança da RPC — canónica desde o primeiro dia", () => {
   const SABOTAGENS = [
     {
       nome: "SECURITY DEFINER",
+      // 🔴 `\r?\n`, e não `\n`. O ficheiro chega do disco com a terminação de
+      //    linha que o git lhe deu: LF no CI (Linux), CRLF num checkout
+      //    Windows com `autocrlf`. Com `\n` fixo, a sabotagem não casava aqui
+      //    e o ensaio falhava a dizer «a sabotagem não alterou o SQL» — verde
+      //    no CI, vermelho na máquina de quem escreve. Um ensaio que depende
+      //    do sistema de ficheiros não mede o que diz medir.
       patch: (sql: string) => sql.replace(
-        /SECURITY INVOKER\nSET search_path/,
-        "SECURITY DEFINER\nSET search_path"),
+        /SECURITY INVOKER(\r?\n)SET search_path/,
+        "SECURITY DEFINER$1SET search_path"),
       erro: /SECURITY DEFINER/,
     },
     {

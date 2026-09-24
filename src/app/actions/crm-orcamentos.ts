@@ -144,6 +144,20 @@ export interface QuoteRow {
    */
   internal_notes: string | null;
   created_at: string;
+  /**
+   * 🔴 O TOKEN DE CONCORRÊNCIA, e não um carimbo informativo.
+   *
+   *    `edit_crm_quote_draft` compara este valor, debaixo do lock, com o
+   *    estado real do documento. É assim que uma correcção deixa de poder ser
+   *    apagada em silêncio por quem abriu o mesmo rascunho antes.
+   *
+   * 🔴 VIAJA COMO STRING, exactamente como o Postgres a entregou. `timestamptz`
+   *    guarda MICROSSEGUNDOS; um `new Date(...)` trunca ao milissegundo e o
+   *    token deixa de coincidir — a RPC recusa com `QUOTE_DRAFT_STALE` e o
+   *    utilizador vê um conflito que não existe. Não converter, não
+   *    normalizar, não reconstruir.
+   */
+  updated_at: string;
 }
 
 export interface QuoteItemRow {
@@ -169,7 +183,8 @@ const QUOTE_SELECT = `
   lead_id, client_id, source_lead_id, visit_id,
   issue_date, valid_until, status, sent_at, accepted_at, rejected_at, rejection_reason,
   pricing_kind, subtotal, discount_pct, apply_vat, vat_rate, vat_amount, total,
-  proposed_frequency, proposed_weekdays, payment_terms, notes, internal_notes, created_at
+  proposed_frequency, proposed_weekdays, payment_terms, notes, internal_notes, created_at,
+  updated_at
 `;
 
 const ITEM_SELECT = "id, position, description, quantity, unit, unit_price, line_total";
@@ -215,6 +230,52 @@ const SENTINELAS: ReadonlyArray<readonly [string, ActionErrorCode, string]> = [
     "As linhas do orçamento não ficaram gravadas. Nada foi guardado."],
   ["QUOTE_SOURCE_LEAD_IMMUTABLE", ACTION_ERROR_CODES.CONFLICT,
     "A lead de origem de um orçamento não se altera."],
+
+  // ── 105: editar um rascunho in place ──────────────────────────────────────
+  //
+  // 🔴 `QUOTE_DRAFT_STALE` antes de `QUOTE_DRAFT_STATE_DIVERGED`: a procura é
+  //    por `includes`, e um prefixo comum faria a primeira entrada apanhar a
+  //    outra. Aqui as duas são distintas, mas a ordem fica escrita porque o
+  //    próximo a acrescentar uma sentinela `QUOTE_DRAFT_*` precisa de saber.
+  ["QUOTE_DRAFT_STALE", ACTION_ERROR_CODES.CONFLICT,
+    "Este rascunho foi alterado entretanto. Recarregue-o antes de guardar as suas alterações."],
+  ["QUOTE_NOT_DRAFT", ACTION_ERROR_CODES.CONFLICT,
+    "Este orçamento já não está em rascunho. Recarregue para ver o estado actual."],
+  ["QUOTE_DRAFT_STATE_DIVERGED", ACTION_ERROR_CODES.CONFLICT,
+    "O estado deste rascunho está inconsistente. Nada foi alterado; verifique o documento antes de tentar outra vez."],
+  ["QUOTE_DRAFT_YEAR_IMMUTABLE", ACTION_ERROR_CODES.BUSINESS_RULE,
+    "A data de emissão tem de ficar no ano do número já atribuído. Para mudar de ano, anule este orçamento e emita outro."],
+  ["QUOTE_VALIDITY_INVALID", ACTION_ERROR_CODES.BUSINESS_RULE,
+    "A validade não pode ser anterior à data de emissão."],
+  ["QUOTE_ITEMS_REQUIRED", ACTION_ERROR_CODES.BUSINESS_RULE,
+    "Um orçamento tem de ter pelo menos uma linha."],
+  ["QUOTE_ITEMS_TOO_MANY", ACTION_ERROR_CODES.BUSINESS_RULE,
+    "Um orçamento não pode ter mais de 100 linhas."],
+  ["QUOTE_ITEM_DESCRIPTION_REQUIRED", ACTION_ERROR_CODES.BUSINESS_RULE,
+    "Há uma linha sem descrição. Escreva o que está a orçamentar."],
+  ["QUOTE_ITEM_QUANTITY_INVALID", ACTION_ERROR_CODES.BUSINESS_RULE,
+    "Há uma linha com quantidade inválida: tem de ser maior do que zero e com um máximo de duas casas decimais."],
+  ["QUOTE_ITEM_PRICE_INVALID", ACTION_ERROR_CODES.BUSINESS_RULE,
+    "Há uma linha com preço inválido: não pode ser negativo e tem um máximo de duas casas decimais."],
+  ["QUOTE_ITEM_UNIT_INVALID", ACTION_ERROR_CODES.BUSINESS_RULE,
+    "Há uma linha com uma unidade que não é reconhecida."],
+  ["QUOTE_ITEM_SHAPE_INVALID", ACTION_ERROR_CODES.BUSINESS_RULE,
+    "As linhas do orçamento chegaram num formato que não se reconhece."],
+  ["QUOTE_PRICING_KIND_INVALID", ACTION_ERROR_CODES.BUSINESS_RULE,
+    "O tipo de preço não é reconhecido."],
+  ["QUOTE_DISCOUNT_INVALID", ACTION_ERROR_CODES.BUSINESS_RULE,
+    "O desconto tem de estar entre 0 e 100, com um máximo de duas casas decimais."],
+  ["QUOTE_VAT_RATE_INVALID", ACTION_ERROR_CODES.BUSINESS_RULE,
+    "A taxa de IVA guardada neste orçamento não é válida. Nada foi alterado."],
+  ["QUOTE_AMOUNT_OVERFLOW", ACTION_ERROR_CODES.BUSINESS_RULE, QUOTE_AMOUNT_MESSAGE],
+
+  // 🔴 `QUOTE_DRAFT_EXPECTED_UPDATED_AT_REQUIRED` fica DE FORA, de propósito.
+  //
+  //    A RPC levanta-a quando o token chega a NULL — e esta action só a chama
+  //    com um token que o Zod já exigiu. Numa chamada vinda do ecrã é
+  //    impossível; se aparecer, é defeito do nosso lado, não de quem está a
+  //    usar o produto. Dizer-lhe «falta o updated_at» seria culpá-lo por um
+  //    erro que não cometeu e não sabe corrigir. Cai no genérico.
 ];
 
 function erroDaRpc(onde: string, message: string | undefined): ActionResult<never> {
@@ -766,6 +827,266 @@ export async function reviseQuote(
     return actionSuccess({ id: String(linha.quote_id), quoteNumber: String(linha.quote_number) });
   } catch (err) {
     return internalFailure("reviseQuote", err, ACTION_ERROR_CODES.PERSISTENCE);
+  }
+}
+
+// ── 105: editar um rascunho in place ────────────────────────────────────────
+
+/**
+ * O token de concorrência, validado mas NUNCA transformado.
+ *
+ * 🔴 Sem `.trim()`, sem `.transform()`, sem coerção, e sobretudo sem
+ *    `new Date(...)`. O Zod aqui serve para RECUSAR lixo, não para normalizar:
+ *    `timestamptz` guarda microssegundos e qualquer passagem por `Date` trunca
+ *    ao milissegundo. O valor que sai daqui tem de ser, carácter a carácter, o
+ *    que veio da base — senão a RPC recusa-o como `QUOTE_DRAFT_STALE` e a
+ *    pessoa vê um conflito que não existe.
+ *
+ *    A expressão aceita a forma que o PostgREST entrega
+ *    (`2026-09-24T13:05:54.123456+00:00`) e as variantes com `Z`, com espaço
+ *    em vez de `T` e sem fracção — o que não faz é reescrever nenhuma delas.
+ */
+/**
+ * 🔴 Com INTERVALOS, e não só com a forma.
+ *
+ *    A primeira versão era `\d{2}` em cada campo, e aceitava
+ *    `2026-13-45T99:99:99` — estruturalmente parecido com um timestamp,
+ *    semanticamente impossível. Isso passava a validação, chegava à RPC e o
+ *    Postgres respondia um erro de cast cru (22007) em vez de uma mensagem que
+ *    se entende. Apanhado por ensaio.
+ *
+ *    Continua a ser só VALIDAÇÃO: limita o que passa, não reescreve nada.
+ */
+const TOKEN_TIMESTAMPTZ =
+  /^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])[T ]([01]\d|2[0-3]):[0-5]\d:[0-5]\d(\.\d{1,6})?(Z|[+-]([01]\d|2[0-3])(:?[0-5]\d)?)?$/;
+
+const edicaoRascunhoSchema = z
+  .object({
+    expectedUpdatedAt: z.string().refine((v) => TOKEN_TIMESTAMPTZ.test(v), {
+      message: "O documento tem de ser recarregado antes de ser guardado.",
+    }),
+    visitId: z.uuid().optional().nullable(),
+    issueDate: z.iso.date(),
+    validUntil: z.iso.date(),
+    pricingKind: z.enum(QUOTE_PRICING_KINDS),
+    /**
+     * 🔴 OBRIGATÓRIOS, ao contrário da criação e da revisão.
+     *
+     *    Uma edição é a SUBSTITUIÇÃO do documento, não um patch. Se estes dois
+     *    fossem opcionais com valor por omissão, uma chamada que os omitisse
+     *    gravava `discount_pct = 0` e `apply_vat = true` sobre um rascunho que
+     *    tinha 15 % e IVA desligado — sem ninguém ter pedido, e sem forma de
+     *    distinguir «não enviei» de «quero zero».
+     *
+     *    `NO_DATA_LOSS` e `UNKNOWN_STATE = FAIL_CLOSED`: um campo em falta é
+     *    defeito de quem chama, e diz-se. Reparar por omissão é adivinhar.
+     *
+     * 🔴 `false` NÃO é ausência e `0` NÃO é ausência. Sem `.optional()` nem
+     *    `.nullable()`, o Zod distingue as três coisas — e há ensaios para
+     *    cada uma.
+     */
+    discountPct: descontoAceite().min(0).max(100),
+    applyVat: z.boolean(),
+    proposedFrequency: z.string().trim().max(50).optional().nullable(),
+    paymentTerms: z.string().trim().max(500).optional().nullable(),
+    notes: z.string().trim().max(5000).optional().nullable(),
+    internalNotes: z.string().trim().max(5000).optional().nullable(),
+    items: z.array(itemSchema).min(1, "Um orçamento tem de ter pelo menos uma linha.").max(100),
+  })
+  .refine((v) => v.validUntil >= v.issueDate, {
+    message: "A validade não pode ser anterior à data de emissão.",
+    path: ["validUntil"],
+  });
+
+/**
+ * 🔴 O que esta entrada NÃO aceita, e é o essencial.
+ *
+ *    Nem `companyId`, nem `actorId` — vêm da sessão. O admin client faz bypass
+ *    de RLS, por isso uma empresa vinda do browser seria a porta para editar
+ *    orçamentos de outra. Nem `leadId`/`clientId`/`sourceLeadId`: o
+ *    destinatário e a proveniência não são campos de formulário. Nem
+ *    `quoteNumber`, `revision`, `rootQuoteId`: identidade não se edita. Nem
+ *    `vatRate`: ver `editDraftQuote`.
+ */
+export type EdicaoRascunhoInput = z.input<typeof edicaoRascunhoSchema>;
+
+/**
+ * Corrige um orçamento que ainda está em RASCUNHO, no mesmo documento.
+ *
+ * ---------------------------------------------------------------------------
+ * 🔴 EDIÇÃO NÃO É REVISÃO
+ * ---------------------------------------------------------------------------
+ *
+ * `reviseQuote` cria um DOCUMENTO NOVO, com número novo, porque o anterior já
+ * saiu para o cliente e mudar-lhe os números por baixo seria falsificar o que
+ * essa pessoa tem à frente.
+ *
+ * Um rascunho nunca saiu. Corrigi-lo em cima não falsifica nada, e criar uma
+ * «R1» de algo que ninguém viu enche a sequência de documentos fantasma. São
+ * duas operações diferentes e têm duas actions diferentes — reutilizar uma
+ * para a outra é como se perde a distinção.
+ *
+ * ---------------------------------------------------------------------------
+ * 🔴 O IVA É O DO RASCUNHO, NÃO O DAS DEFINIÇÕES DE HOJE
+ * ---------------------------------------------------------------------------
+ *
+ * `reviseQuote` lê `company_settings.vat_rate` porque a revisão é um documento
+ * novo, com data nova, e é essa a taxa que lhe corresponde.
+ *
+ * Aqui é o MESMO documento. Se alguém corrigir uma gralha numa descrição e o
+ * IVA da empresa tiver mudado entretanto, o total mudava sem ninguém ter
+ * decidido mexer no IVA — uma correcção de texto a alterar o preço. Por isso a
+ * taxa usada é a PERSISTIDA na própria linha, lida aqui e devolvida à RPC.
+ *
+ * ---------------------------------------------------------------------------
+ * 🔴 O QUE ESTA ACTION NÃO DECIDE
+ * ---------------------------------------------------------------------------
+ *
+ * Não lê `status`, `superseded_by_id`, `sent_at` nem `updated_at` para
+ * autorizar. Essas decisões pertencem à RPC, DEBAIXO DO `FOR UPDATE`: uma
+ * leitura feita aqui acontece antes do lock e nem sequer é verdadeira no
+ * instante da escrita.
+ *
+ * A leitura mínima traz `quote_year` e `vat_rate`, e a diferença entre estas
+ * duas colunas e as outras é o ponto todo: são IMUTÁVEIS depois de o documento
+ * nascer. Uma verificação sobre um valor que nunca muda não pode ficar
+ * desactualizada entre a leitura e a escrita; uma sobre o `status` pode, e por
+ * isso não se faz aqui.
+ */
+export async function editDraftQuote(
+  quoteId: string,
+  input: EdicaoRascunhoInput,
+): Promise<ActionResult<{ id: string; quoteNumber: string; updatedAt: string }>> {
+  const parsed = edicaoRascunhoSchema.safeParse(input);
+  if (!parsed.success) return validationFailure(parsed.error);
+
+  if (!z.uuid().safeParse(quoteId).success) {
+    return actionFailure(ACTION_ERROR_CODES.NOT_FOUND, "Orçamento não encontrado.");
+  }
+
+  const guard = await requireProfile({ roles: ["admin", "gestor"] });
+  if (!guard.ok) return recusa(guard.code);
+
+  const { admin, profile } = guard;
+  const d = parsed.data;
+
+  // 🔴 SELECT MÍNIMO, e company-scoped. Só o que é imutável e necessário.
+  const { data: base, error: erroBase } = await admin
+    .from("crm_quotes")
+    .select("quote_year, vat_rate")
+    .eq("company_id", profile.company_id)
+    .eq("id", quoteId)
+    .maybeSingle();
+
+  if (erroBase) {
+    logQueryFailure("editDraftQuote:base", erroBase);
+    return internalFailure("editDraftQuote", erroBase, ACTION_ERROR_CODES.PERSISTENCE);
+  }
+  if (!base) return actionFailure(ACTION_ERROR_CODES.NOT_FOUND, "Orçamento não encontrado.");
+
+  // 🔴 O ano do número. A RPC continua a ser a autoridade — isto só antecipa a
+  //    mensagem, e pode fazê-lo em segurança porque `quote_year` é atribuído na
+  //    criação e nunca mais muda. Antecipar o `status` seria outra coisa.
+  if (Number(d.issueDate.slice(0, 4)) !== Number(base.quote_year)) {
+    return actionFailure(
+      ACTION_ERROR_CODES.BUSINESS_RULE,
+      `A data de emissão tem de ficar em ${base.quote_year}, o ano do número já atribuído. `
+      + "Para mudar de ano, anule este orçamento e emita outro.",
+    );
+  }
+
+  // 🔴 CABE EM `numeric(10,2)`? A mesma conta que a RPC vai fazer, com a taxa
+  //    PERSISTIDA — não com a das definições de hoje.
+  //
+  // 🔴 Sem `?? 0` nem `?? true`: o schema já os exigiu. Um default aqui
+  //    reintroduziria, pela porta do lado, a reparação por omissão que o
+  //    schema acabou de proibir — e a previsão passaria a medir um documento
+  //    diferente do que a RPC ia gravar.
+  const previsao = totaisDoOrcamento(
+    d.items.map((i) => ({ quantity: i.quantity, unit_price: i.unitPrice })),
+    { discountPct: d.discountPct, applyVat: d.applyVat, vatRate: base.vat_rate },
+  );
+  if (excedeMontanteMaximo(previsao)) {
+    return actionFailure(ACTION_ERROR_CODES.BUSINESS_RULE, QUOTE_AMOUNT_MESSAGE);
+  }
+
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data, error } = await (admin as any).rpc("edit_crm_quote_draft", {
+      p_company_id: profile.company_id,
+      p_quote_id: quoteId,
+      p_actor: profile.id,
+      // 🔴 A string COMO CHEGOU. Ver `TOKEN_TIMESTAMPTZ`.
+      p_expected_updated_at: d.expectedUpdatedAt,
+      p_visit_id: d.visitId ?? null,
+      p_issue_date: d.issueDate,
+      p_valid_until: d.validUntil,
+      p_pricing_kind: d.pricingKind,
+      // 🔴 O valor que chegou, e não um default: `0` e `false` são escolhas
+      //    explícitas, e ausência é erro de quem chama.
+      p_discount_pct: d.discountPct,
+      p_apply_vat: d.applyVat,
+      // 🔴 A taxa do próprio rascunho, nunca a das definições nem a do browser.
+      p_vat_rate: base.vat_rate,
+      p_proposed_frequency: d.proposedFrequency ?? null,
+      p_payment_terms: d.paymentTerms ?? null,
+      p_notes: d.notes ?? null,
+      p_internal_notes: d.internalNotes ?? null,
+      p_items: d.items.map((i) => ({
+        description: i.description,
+        quantity: i.quantity,
+        unit: i.unit,
+        unit_price: i.unitPrice,
+      })),
+    });
+
+    if (error) return erroDaRpc("editDraftQuote", error.message);
+
+    const linha = Array.isArray(data) ? data[0] : data;
+
+    // 🔴 A resposta é validada POR INTEIRO antes de qualquer efeito.
+    //    UNKNOWN_STATE = FAIL_CLOSED: uma resposta que não se percebe não vale
+    //    como sucesso, não audita e não invalida.
+    const resposta = z
+      .object({
+        quote_id: z.uuid(),
+        quote_number: z.string().min(1),
+        updated_at: z.string().min(1),
+      })
+      .safeParse(linha);
+
+    if (!resposta.success) {
+      return internalFailure(
+        "editDraftQuote",
+        new Error(`resposta da RPC fora do contrato: ${resposta.error.message}`),
+        ACTION_ERROR_CODES.PERSISTENCE,
+      );
+    }
+
+    // 🔴 Auditoria administrativa, e SÓ ela.
+    //
+    //    Não se escreve na timeline da lead: corrigir um rascunho é autoria de
+    //    um documento que ainda não saiu, não é um evento comercial. Uma linha
+    //    por cada correcção de gralha encheria a história do cliente de ruído e
+    //    afogava os eventos que importam — enviado, aceite, convertido.
+    await auditLog({
+      companyId: profile.company_id,
+      actorId: profile.id,
+      action: "crm_quote_draft_edited",
+      entityType: "crm_quote",
+      entityId: quoteId,
+      after: { quote_number: resposta.data.quote_number, itens: d.items.length },
+    }, admin);
+
+    invalidateBusinessState({ domains: ["leads"] });
+
+    return actionSuccess({
+      id: resposta.data.quote_id,
+      quoteNumber: resposta.data.quote_number,
+      updatedAt: resposta.data.updated_at,
+    });
+  } catch (err) {
+    return internalFailure("editDraftQuote", err, ACTION_ERROR_CODES.PERSISTENCE);
   }
 }
 

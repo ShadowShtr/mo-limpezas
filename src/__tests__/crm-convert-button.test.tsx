@@ -100,6 +100,7 @@ function montar(q: Record<string, unknown> = {}) {
         onClose={() => {}}
         onChanged={() => {}}
         onRevise={() => {}}
+        onEditDraft={() => {}}
       />,
     );
   });

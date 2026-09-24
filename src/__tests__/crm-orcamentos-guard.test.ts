@@ -24,6 +24,7 @@ const UI = "src/app/(dashboard)/dashboard/crm/orcamentos";
 const PDF = `${UI}/_components/quote-pdf.ts`;
 
 const CODIGO_ACTIONS = ler(ACTIONS);
+const CODIGO_LIB = ler("src/lib/crm/quotes.ts");
 
 /** Tira comentários, para medir o código e não a documentação. */
 function semComentarios(src: string): string {
@@ -63,14 +64,17 @@ function ficheirosUi(dir = UI, acc: string[] = []): string[] {
   return acc;
 }
 
-const ESCRITAS = ["createQuote", "reviseQuote", "setQuoteStatus"];
+// 🔴 QUATRO writers desde a 105, e não três. `editDraftQuote` corrige um
+//    rascunho no mesmo documento — ver `DRAFT_EDIT_ONLY_THROUGH_105_RPC`.
+const ESCRITAS = ["createQuote", "reviseQuote", "setQuoteStatus", "editDraftQuote"];
 const LEITURAS = ["getQuotes", "getQuote"];
 
-/** As três RPC da 103, e as únicas por onde a escrita pode passar. */
+/** As três RPC da 103 e a da 105 — as únicas por onde a escrita pode passar. */
 const RPCS = {
   createQuote: "create_crm_quote_with_items",
   reviseQuote: "revise_crm_quote",
   setQuoteStatus: "set_crm_quote_status",
+  editDraftQuote: "edit_crm_quote_draft",
 } as const;
 
 describe("o ficheiro de actions só exporta funções", () => {
@@ -114,7 +118,7 @@ describe("🔴 escrita SÓ por RPC — zero escritas directas nas tabelas", () =
     }
   });
 
-  it("🔴 nenhuma escrita chama uma RPC que não seja uma das três da 103", () => {
+  it("🔴 nenhuma escrita chama uma RPC fora das quatro autorizadas", () => {
     const chamadas = [...CODIGO.matchAll(/\.rpc\("(\w+)"/g)].map((m) => m[1]);
     expect([...new Set(chamadas)].sort()).toEqual([...Object.values(RPCS)].sort());
   });
@@ -329,8 +333,9 @@ describe("🔴 o domínio decimal é fechado no SERVIDOR", () => {
     //    `discount_pct` é numeric(5,2). O bloco «o desconto tem escala
     //    própria» mais abaixo é que o verifica; aqui basta que nenhum dos dois
     //    tenha ficado sem validação nenhuma.
+    // Três schemas com desconto desde a 105: criar, rever e editar.
     const descontos = [...CODIGO.matchAll(/discountPct:\s*\w+\(/g)];
-    expect(descontos.length, "os dois discountPct têm de ser validados").toBe(2);
+    expect(descontos.length, "os três discountPct têm de ser validados").toBe(3);
   });
 
   it("🔴 nenhum campo numérico do orçamento escapa ao limite", () => {
@@ -382,13 +387,13 @@ describe("🔴 o domínio decimal é fechado no SERVIDOR", () => {
 });
 
 describe("🔴 o desconto tem escala própria (numeric(5,2))", () => {
-  it("os dois discountPct usam o limite do desconto, não o das linhas", () => {
+  it("os três discountPct usam o limite do desconto, não o das linhas", () => {
     // `decimalAceite` traz 6 casas por omissão — é o domínio das LINHAS. O
     // desconto é `numeric(5,2)` e a RPC calcula com o valor bruto antes de a
     // coluna arredondar: seis casas fariam o documento dizer 3,14 % e os
     // totais valerem 3,141592 %.
     const descontos = [...CODIGO.matchAll(/discountPct:\s*(\w+)\(/g)].map((m) => m[1]);
-    expect(descontos).toEqual(["descontoAceite", "descontoAceite"]);
+    expect(descontos).toEqual(["descontoAceite", "descontoAceite", "descontoAceite"]);
     expect(CODIGO).toContain("QUOTE_DISCOUNT_MAX_DECIMAL_PLACES");
   });
 
@@ -645,25 +650,89 @@ describe("o fluxo que a direcção exige ver", () => {
     expect(detalhe).toContain("canReviseQuote");
   });
 
-  it("🔴 a UI não tenta editar um rascunho in-place", () => {
-    // `revise_crm_quote` recusa um rascunho (`QUOTE_DRAFT_EDIT_IN_PLACE`) e
-    // não existe RPC atómica para o corrigir. Um UPDATE + DELETE + INSERT em
-    // chamadas separadas deixaria o rascunho sem linhas nenhumas se falhasse a
-    // meio. Até haver essa RPC, corrige-se anulando e fazendo outro.
-    expect(CODIGO_ACTIONS).toContain("DRAFT_EDIT_REQUIRES_ATOMIC_RPC");
-    for (const f of ficheirosUi()) {
-      const src = semComentarios(ler(f));
-      expect(src, `${f} tem uma action de edição de rascunho`).not.toMatch(/updateQuote|editQuote/);
+  it("🔴 DRAFT_EDIT_ONLY_THROUGH_105_RPC: a edição passa pela RPC, e só por ela", () => {
+    // 🔴 Este ensaio já exigiu o CONTRÁRIO: que não existisse edição nenhuma
+    //    de rascunho — `DRAFT_EDIT = INTENTIONALLY_NOT_EXPOSED`. Estava certo
+    //    enquanto não havia RPC atómica: um UPDATE + DELETE + INSERT em
+    //    chamadas separadas deixaria o rascunho sem linhas nenhumas se
+    //    falhasse a meio.
+    //
+    //    A 105 trouxe essa RPC e a proibição ficou historicamente superada.
+    //    Não se apaga o ensaio — substitui-se por uma garantia MAIS FORTE: a
+    //    edição existe, e não há caminho nenhum para a fazer fora da RPC.
+    expect(exportacoes(CODIGO_ACTIONS)).toContain("editDraftQuote");
+    expect(CODIGO_ACTIONS).toContain("edit_crm_quote_draft");
+
+    // 🔴 QUATRO writers de orçamento, e nenhum quinto. Se alguém acrescentar
+    //    uma via paralela, este ensaio fica vermelho antes de ela chegar a
+    //    produção.
+    const rpcs = [...CODIGO_ACTIONS.matchAll(/\.rpc\("(\w+)"/g)].map((m) => m[1]);
+    expect([...new Set(rpcs)].sort()).toEqual([
+      "create_crm_quote_with_items",
+      "edit_crm_quote_draft",
+      "revise_crm_quote",
+      "set_crm_quote_status",
+    ]);
+
+    // Zero escrita directa nas duas tabelas do documento.
+    for (const t of ["crm_quotes", "crm_quote_items"]) {
+      expect(
+        CODIGO_ACTIONS,
+        `${t} escrita directamente`,
+      ).not.toMatch(new RegExp(`\.from\("${t}"\)\s*\.\s*(insert|update|upsert|delete)`));
     }
-    expect(exportacoes(CODIGO_ACTIONS)).not.toContain("updateQuote");
+    expect(CODIGO_ACTIONS).not.toMatch(/\.from\("crm_quotes"\)\s*\.\s*update\(/);
+
+    // 🔴 Um rascunho NUNCA passa por `revise_crm_quote`: rever cria um
+    //    documento novo, e uma «R1» de algo que ninguém viu é lixo na cadeia.
+    expect(CODIGO_LIB).toContain("canEditDraftQuote");
+    expect(CODIGO_LIB).toMatch(/QUOTE_REVISABLE_STATUSES = \["enviado", "recusado", "expirado"\]/);
+
+    // E a identidade continua fora da entrada pública da edição.
+    const corpoEdicao = CODIGO_ACTIONS.slice(
+      CODIGO_ACTIONS.indexOf("const edicaoRascunhoSchema"),
+      CODIGO_ACTIONS.indexOf("export async function editDraftQuote"),
+    );
+    for (const proibido of [
+      "companyId", "actorId", "leadId", "clientId", "sourceLeadId",
+      "quoteNumber", "revision", "rootQuoteId", "vatRate",
+    ]) {
+      expect(corpoEdicao, `a edição aceita ${proibido}`).not.toContain(`${proibido}:`);
+    }
   });
 
-  it("o formulário não oferece campos que a RPC de revisão ignora", () => {
+  it("🔴 o token de concorrência nunca passa por um Date", () => {
+    // `timestamptz` guarda microssegundos; `new Date(...)` trunca ao
+    // milissegundo e a RPC recusaria o token como STALE. O valor tem de
+    // viajar como a string que veio da base.
+    const corpo = CODIGO_ACTIONS.slice(CODIGO_ACTIONS.indexOf("export async function editDraftQuote"));
+    const fim = corpo.indexOf("\nexport ");
+    const edicao = fim === -1 ? corpo : corpo.slice(0, fim);
+    expect(edicao).toContain("p_expected_updated_at: d.expectedUpdatedAt");
+    expect(edicao).not.toMatch(/new Date|toISOString|Date\.parse|getTime\(\)/);
+
+    const submitUi = formulario.slice(formulario.indexOf("editDraftQuote("));
+    expect(submitUi.slice(0, 600)).toContain("expectedUpdatedAt: base!.quote.updated_at");
+    expect(submitUi.slice(0, 600)).not.toMatch(/new Date|toISOString/);
+  });
+
+  it("🔴 editar e rever são botões distintos, com guards distintos", () => {
+    expect(detalhe).toContain("canEditDraftQuote");
+    expect(detalhe).toContain("onEditDraft");
+    expect(detalhe).toContain("Editar rascunho");
+    expect(detalhe).toContain("canReviseQuote");
+    expect(detalhe).toContain("Criar revisão");
+  });
+
+  it("o formulário tem modos explícitos, e não um `base` ambíguo", () => {
     // `revise_crm_quote` herda destinatário, tipo, condições e notas internas
-    // da versão anterior. Um campo editável cujo conteúdo é descartado em
-    // silêncio é pior do que a ausência do campo.
+    // da versão anterior; a 105 aceita-os todos. Um único `base` presente
+    // deixaria de conseguir distinguir os dois casos.
     expect(formulario).toContain("eRevisao");
-    expect(formulario).toContain("{!eRevisao && (");
+    expect(formulario).toContain("eEdicao");
+    expect(formulario).toMatch(/mode: "create"/);
+    expect(formulario).toMatch(/mode: "revise"/);
+    expect(formulario).toMatch(/mode: "edit-draft"/);
   });
 });
 

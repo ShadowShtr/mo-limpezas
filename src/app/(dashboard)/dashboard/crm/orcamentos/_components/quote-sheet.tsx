@@ -10,7 +10,27 @@
 //    dentro. Dois formulários separados divergiriam no primeiro campo novo, e
 //    a divergência apareceria num documento que vai para um cliente.
 //
-//    `base` presente = revisão. Ausente = criação.
+//    O modo é EXPLÍCITO, num prop discriminado: `create`, `revise` ou
+//    `edit-draft`.
+//
+// 🔴 Antes o modo era inferido de `base` estar presente, e isso deixou de
+//    chegar quando apareceu o terceiro fluxo. `base` presente passaria a
+//    querer dizer «revisão OU edição» — uma variável com dois significados, e
+//    cada `if (base)` do ficheiro teria de adivinhar qual deles. Um prop
+//    discriminado obriga o TypeScript a exigir a decisão em quem chama, e
+//    cada modo fica com as suas invariantes.
+//
+// ---------------------------------------------------------------------------
+// 🔴 EDITAR UM RASCUNHO NÃO É REVER
+// ---------------------------------------------------------------------------
+//
+//   · rever cria um DOCUMENTO NOVO (R1), porque o anterior já saiu para o
+//     cliente. Datas de hoje, número novo, o anterior fica no histórico;
+//
+//   · editar corrige o MESMO documento, que nunca saiu. Datas PERSISTIDAS,
+//     mesmo número, mesma revisão, mesmo destinatário. O que muda é só o
+//     conteúdo — e quem já tinha o formulário aberto com uma versão velha é
+//     recusado com `QUOTE_DRAFT_STALE` em vez de apagar o trabalho de outro.
 //
 // ---------------------------------------------------------------------------
 // 🔴 O que muda entre os dois, e porquê
@@ -58,7 +78,12 @@ import {
   type QuotePricingKind,
   type QuoteUnit,
 } from "@/lib/crm/quotes";
-import { createQuote, reviseQuote, type QuoteWithItems } from "@/app/actions/crm-orcamentos";
+import {
+  createQuote,
+  editDraftQuote,
+  reviseQuote,
+  type QuoteWithItems,
+} from "@/app/actions/crm-orcamentos";
 import type { VisitRow } from "@/app/actions/crm-visitas";
 import type { LeadRow } from "@/app/actions/crm-leads";
 
@@ -70,17 +95,34 @@ export interface ClienteOpcao {
   name: string;
 }
 
-interface Props {
+interface PropsComuns {
   leads: LeadRow[];
   clientes: ClienteOpcao[];
   visitas: VisitRow[];
-  /** Só para a pré-visualização. Nulo quando as definições não carregaram. */
+  /**
+   * A taxa das DEFINIÇÕES, só para a pré-visualização de um documento novo.
+   * Nula quando as definições não carregaram.
+   *
+   * 🔴 No modo `edit-draft` esta taxa NÃO é usada: ver `taxaDaPrevisao`.
+   */
   vatRate: number | null;
-  /** Presente = revisão de um orçamento que já saiu. */
-  base?: QuoteWithItems;
   onClose: () => void;
   onDone: (numero: string) => void;
 }
+
+/**
+ * 🔴 Props DISCRIMINADAS por `mode`.
+ *
+ *    `revise` e `edit-draft` exigem `base`; `create` não o aceita. É o
+ *    compilador a impedir que alguém abra o formulário de edição sem o
+ *    documento que vai ser editado — e é o que torna `base.quote.updated_at`
+ *    seguro de usar como token de concorrência.
+ */
+type Props = PropsComuns & (
+  | { mode: "create"; base?: undefined }
+  | { mode: "revise"; base: QuoteWithItems }
+  | { mode: "edit-draft"; base: QuoteWithItems }
+);
 
 /** O orçamento é para uma lead ou para um cliente. Nunca os dois, nunca nenhum. */
 type AlvoTipo = "lead" | "cliente";
@@ -102,6 +144,7 @@ export function QuoteSheet({
   clientes,
   visitas,
   vatRate,
+  mode,
   base,
   onClose,
   onDone,
@@ -110,13 +153,20 @@ export function QuoteSheet({
   const [pending, startTransition] = useTransition();
   const [erros, setErros] = useState<Record<string, string[]>>({});
 
-  const eRevisao = Boolean(base);
+  const eRevisao = mode === "revise";
+  const eEdicao = mode === "edit-draft";
   const hoje = todayInLisbon();
 
-  const [alvoTipo, setAlvoTipo] = useState<AlvoTipo>("lead");
-  const [leadId, setLeadId] = useState("");
-  const [clientId, setClientId] = useState("");
-  const [visitId, setVisitId] = useState("");
+  // 🔴 Na edição o destinatário vem do documento e NÃO se escolhe. Fica em
+  //    estado na mesma porque é ele que filtra as visitas compatíveis — o
+  //    selector de visita continua a ser editável, e uma visita de outro
+  //    destinatário é recusada pela RPC com `QUOTE_VISIT_MISMATCH`.
+  const [alvoTipo, setAlvoTipo] = useState<AlvoTipo>(
+    eEdicao && base?.quote.client_id ? "cliente" : "lead",
+  );
+  const [leadId, setLeadId] = useState(eEdicao ? (base?.quote.lead_id ?? "") : "");
+  const [clientId, setClientId] = useState(eEdicao ? (base?.quote.client_id ?? "") : "");
+  const [visitId, setVisitId] = useState(eEdicao ? (base?.quote.visit_id ?? "") : "");
 
   // 🔴 As datas de uma revisão são de HOJE, e não as herdadas da versão
   //    anterior.
@@ -138,19 +188,33 @@ export function QuoteSheet({
   //
   //    Herdam-se os valores que descrevem o NEGÓCIO (linhas, desconto, IVA).
   //    Não se herda o que descreve o documento no tempo.
-  const [issueDate, setIssueDate] = useState(hoje);
+  // 🔴 Na EDIÇÃO as datas são as PERSISTIDAS, e o raciocínio acima não se
+  //    aplica: não nasce documento nenhum, é o mesmo que está a ser corrigido.
+  //    Abrir com «hoje» faria uma correcção de gralha mudar a data de emissão
+  //    do orçamento sem ninguém pedir.
+  const [issueDate, setIssueDate] = useState(eEdicao ? base!.quote.issue_date : hoje);
   const [validUntil, setValidUntil] = useState(
-    addDaysToDateString(hoje, QUOTE_DEFAULT_VALIDITY_DAYS),
+    eEdicao ? base!.quote.valid_until : addDaysToDateString(hoje, QUOTE_DEFAULT_VALIDITY_DAYS),
   );
-  const [pricingKind, setPricingKind] = useState<QuotePricingKind>("pontual");
+  const [pricingKind, setPricingKind] = useState<QuotePricingKind>(
+    eEdicao && (QUOTE_PRICING_KINDS as readonly string[]).includes(base!.quote.pricing_kind)
+      ? (base!.quote.pricing_kind as QuotePricingKind)
+      : "pontual",
+  );
   const [discountPct, setDiscountPct] = useState(
     base ? String(base.quote.discount_pct) : "0",
   );
   const [applyVat, setApplyVat] = useState(base?.quote.apply_vat ?? true);
-  const [proposedFrequency, setProposedFrequency] = useState("");
-  const [paymentTerms, setPaymentTerms] = useState("");
+  const [proposedFrequency, setProposedFrequency] = useState(
+    eEdicao ? (base!.quote.proposed_frequency ?? "") : "",
+  );
+  const [paymentTerms, setPaymentTerms] = useState(
+    eEdicao ? (base!.quote.payment_terms ?? "") : "",
+  );
   const [notes, setNotes] = useState(base?.quote.notes ?? "");
-  const [internalNotes, setInternalNotes] = useState("");
+  const [internalNotes, setInternalNotes] = useState(
+    eEdicao ? (base!.quote.internal_notes ?? "") : "",
+  );
 
   const [linhas, setLinhas] = useState<LinhaForm[]>(() =>
     base
@@ -242,14 +306,30 @@ export function QuoteSheet({
     [descontoNumerico],
   );
 
+  /**
+   * 🔴 A taxa que a PRÉ-VISUALIZAÇÃO usa depende do modo, e a diferença é de
+   *    produto, não de implementação.
+   *
+   *    Um documento NOVO (criação, revisão) leva a taxa das definições de
+   *    hoje. Um rascunho EDITADO leva a que está gravada nele: a
+   *    `editDraftQuote` devolve à RPC o `vat_rate` persistido, porque corrigir
+   *    uma descrição não pode mudar o IVA de um orçamento por a empresa ter
+   *    alterado a taxa entretanto.
+   *
+   *    Se o ecrã previsse com a taxa de hoje e a base gravasse a do documento,
+   *    o total mostrado e o total gravado divergiam — e quem estivesse a
+   *    editar veria um número que nunca chegaria a existir.
+   */
+  const taxaDaPrevisao = eEdicao ? base!.quote.vat_rate : vatRate;
+
   const previsao = useMemo(
     () =>
       totaisDoOrcamento(itensNumericos, {
         discountPct: descontoNumerico,
         applyVat,
-        vatRate,
+        vatRate: taxaDaPrevisao,
       }),
-    [itensNumericos, descontoNumerico, applyVat, vatRate],
+    [itensNumericos, descontoNumerico, applyVat, taxaDaPrevisao],
   );
 
   /**
@@ -294,8 +374,33 @@ export function QuoteSheet({
     }));
 
     startTransition(async () => {
-      const res = base
-        ? await reviseQuote(base.quote.id, {
+      const res = eEdicao
+        ? await editDraftQuote(base!.quote.id, {
+            // 🔴 O TOKEN, exactamente como veio da leitura fresca do detalhe.
+            //
+            //    Nunca `new Date(...)`, nunca `.toISOString()`: `timestamptz`
+            //    guarda microssegundos e qualquer reconstrução trunca ao
+            //    milissegundo — a RPC recusava com `QUOTE_DRAFT_STALE` e a
+            //    pessoa via um conflito inventado. Há um ensaio que fica
+            //    vermelho se alguém puser um `Date` neste caminho.
+            expectedUpdatedAt: base!.quote.updated_at,
+            visitId: visitId || null,
+            issueDate,
+            validUntil,
+            pricingKind,
+            discountPct: Number(discountPct.replace(",", ".")) || 0,
+            applyVat,
+            proposedFrequency: proposedFrequency || null,
+            paymentTerms: paymentTerms || null,
+            // 🔴 String vazia, e não `null`: na edição um campo esvaziado quer
+            //    dizer «tira isto». A 105 substitui o documento inteiro, não
+            //    faz COALESCE com o que lá estava.
+            notes,
+            internalNotes,
+            items,
+          })
+        : eRevisao
+        ? await reviseQuote(base!.quote.id, {
             issueDate,
             validUntil,
             discountPct: Number(discountPct.replace(",", ".")) || 0,
@@ -342,6 +447,8 @@ export function QuoteSheet({
 
   const titulo = eRevisao
     ? `Revisão de ${base?.quote.quote_number}`
+    : eEdicao
+    ? `Editar ${base?.quote.quote_number}`
     : "Novo orçamento";
 
   return createPortal(
@@ -384,6 +491,50 @@ export function QuoteSheet({
             </p>
           ) : (
             <>
+              {eEdicao ? (
+                <>
+                  <p
+                    className="rounded-lg border px-3 py-2 text-[12.5px]"
+                    style={{ borderColor: "var(--color-border)", color: "var(--color-text-muted)" }}
+                  >
+                    Está a corrigir o <strong>{base?.quote.quote_number}</strong>, que ainda está em
+                    rascunho. Fica o <strong>mesmo</strong> documento: mesmo número, mesmo
+                    destinatário, sem criar revisão. Se alguém o tiver alterado entretanto, nada é
+                    guardado e terá de recarregar.
+                  </p>
+
+                  {/*
+                    🔴 O destinatário VÊ-SE, mas não se troca.
+
+                       Mudar o orçamento da lead A para a lead B por «edição»
+                       faria a conversão apontar para quem nunca pediu aquele
+                       preço, e a proveniência (`source_lead_id`) é imutável por
+                       trigger desde a 103. Se o destinatário está errado, o
+                       caminho é anular e emitir outro — não é esconder a
+                       verdade num campo editável que a base vai ignorar.
+                  */}
+                  <div>
+                    <span className="text-[12.5px] font-medium">Para quem</span>
+                    <p
+                      className="mt-1 rounded-lg border px-3 py-2 text-[13px]"
+                      style={{
+                        borderColor: "var(--color-border)",
+                        background: "var(--color-background)",
+                      }}
+                    >
+                      {base?.quote.target_name}
+                    </p>
+                    <span
+                      className="mt-0.5 block text-[11.5px] font-normal"
+                      style={{ color: "var(--color-text-muted)" }}
+                    >
+                      O destinatário de um orçamento não se altera. Para o mudar, anule este e
+                      emita outro.
+                    </span>
+                  </div>
+                </>
+              ) : (
+                <>
               <fieldset>
                 <legend className="text-[12.5px] font-medium">Para quem</legend>
                 <div className="mt-2 flex gap-4">
@@ -452,7 +603,14 @@ export function QuoteSheet({
                   )}
                 </label>
               )}
+                </>
+              )}
 
+              {/*
+                A visita É editável na correcção de um rascunho: trocar a visita
+                errada é justamente uma das coisas que faltavam poder corrigir.
+                Uma visita de outro destinatário é recusada pela RPC.
+              */}
               <label className="block text-[12.5px] font-medium">
                 Visita de onde saíram as medidas
                 <select
@@ -714,6 +872,8 @@ export function QuoteSheet({
           </label>
 
           {!eRevisao && (
+            /* Condições de pagamento e notas internas: na revisão a RPC herda-as
+               e ignoraria o que aqui fosse escrito; na edição são editáveis. */
             <>
               <label className="block text-[12.5px] font-medium">
                 Condições de pagamento
@@ -766,11 +926,17 @@ export function QuoteSheet({
           </button>
           <button
             type="submit"
-            disabled={pending || invalido || (!eRevisao && !alvoEscolhido)}
+            disabled={pending || invalido || (!eRevisao && !eEdicao && !alvoEscolhido)}
             className="rounded-lg px-4 py-2 text-[13px] font-semibold text-white disabled:opacity-50"
             style={{ background: "#16A34A" }}
           >
-            {pending ? "A guardar…" : eRevisao ? "Criar revisão" : "Criar orçamento"}
+            {pending
+              ? "A guardar…"
+              : eRevisao
+              ? "Criar revisão"
+              : eEdicao
+              ? "Guardar alterações"
+              : "Criar orçamento"}
           </button>
         </div>
       </form>
