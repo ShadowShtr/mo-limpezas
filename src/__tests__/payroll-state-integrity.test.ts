@@ -138,7 +138,23 @@ type Terminal = "await" | "single" | "maybeSingle";
 let respostas: Record<string, { data?: unknown; error?: unknown }> = {};
 let rpcRespostas: Record<string, { data?: unknown; error?: unknown }> = {};
 
-function resposta(table: string, terminal: Terminal) {
+
+/**
+ * 🔴 A chave de resposta pode incluir a COLUNA do `eq`.
+ *
+ *    Desde a 106-B, `requireProfile` resolve identidade em duas consultas a
+ *    `profiles` — primeiro `auth_user_id`, e so depois, se nao houver ligacao,
+ *    `id`. Sem distinguir a coluna, essa consulta colidia com a outra consulta
+ *    a `profiles` que este ficheiro ja fazia.
+ *
+ *    Procura-se `tabela:coluna:terminal` e, nao havendo, `tabela:terminal`.
+ *    Os cenarios antigos continuam a funcionar sem mudar uma linha.
+ */
+function resposta(table: string, terminal: Terminal, colunas: string[] = []) {
+  for (const c of colunas) {
+    const chave = `${table}:${c}:${terminal}`;
+    if (chave in respostas) return respostas[chave];
+  }
   const chave = `${table}:${terminal}`;
   if (chave in respostas) return respostas[chave];
   if (table in respostas) return respostas[table];
@@ -174,11 +190,11 @@ function makeBuilder(table: string) {
     builder[nome] = encadeia(nome);
   }
 
-  builder.single      = async () => { registar(); return resposta(table, "single"); };
-  builder.maybeSingle = async () => { registar(); return resposta(table, "maybeSingle"); };
+  builder.single      = async () => { registar(); return resposta(table, "single", filtros.map((f) => f[0])); };
+  builder.maybeSingle = async () => { registar(); return resposta(table, "maybeSingle", filtros.map((f) => f[0])); };
   builder.then = (resolve: (v: unknown) => unknown) => {
     registar();
-    return Promise.resolve(resposta(table, "await")).then(resolve);
+    return Promise.resolve(resposta(table, "await", filtros.map((f) => f[0]))).then(resolve);
   };
 
   return builder;
@@ -240,7 +256,8 @@ const ACTOR = { id: "actor-1", company_id: "empresa-1", role: "admin", status: "
 /** Estado base: ator válido, um colaborador, nada configurado, mês vazio. */
 function cenarioBase(over: Record<string, { data?: unknown; error?: unknown }> = {}) {
   respostas = {
-    "profiles:single": { data: ACTOR, error: null },
+    "profiles:auth_user_id:maybeSingle": { data: ACTOR, error: null },
+      "profiles:single": { data: ACTOR, error: null },
     "profiles:await": {
       data: [{ id: "colab-1", full_name: "Maria", avatar_url: null,
                contracted_hours_month: 160, hourly_rate: 10 }],
@@ -407,6 +424,7 @@ describe("recálculo respeita o estado", () => {
 
   it("J. um lote misto só escreve as linhas de rascunho", async () => {
     respostas = {
+      "profiles:auth_user_id:maybeSingle": { data: ACTOR, error: null },
       "profiles:single": { data: ACTOR, error: null },
       "profiles:await": { data: [
         { id: "c1", full_name: "A", avatar_url: null, contracted_hours_month: 160, hourly_rate: 10 },

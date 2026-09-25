@@ -44,6 +44,15 @@ const settingsAction = semComentarios(
 // ---------------------------------------------------------------------------
 
 const getUser = vi.fn();
+/**
+ * 🔴 Duas consultas a `profiles`, nao uma.
+ *
+ *    Desde a 106-B, `requireProfile` resolve identidade como a base: primeiro
+ *    `auth_user_id`, e so se nao houver ligacao e que tenta o `id` legado.
+ *    Ambas terminam em `maybeSingle`, nao em `single` — `single` trata
+ *    «nenhuma linha» como erro, e aqui a ausencia e uma resposta valida que
+ *    decide qual o ramo a seguir.
+ */
 const single = vi.fn();
 
 vi.mock("@/lib/supabase/server", () => ({
@@ -54,7 +63,7 @@ vi.mock("@/lib/supabase/admin", () => ({
   createAdminClient: () => ({
     from: () => ({
       select: () => ({
-        eq: () => ({ single }),
+        eq: () => ({ maybeSingle: single }),
       }),
     }),
   }),

@@ -5,7 +5,9 @@ import { DashboardShell } from "@/components/layout/dashboard-shell";
 import { SwUpdatePrompt } from "@/components/pwa/sw-update-prompt";
 import { UpdateNoticeModal } from "@/components/update-notices/update-notice-modal";
 import { getPendingNotices } from "@/app/actions/update-notices";
-import { estadoAutoriza } from "@/domain/collaborators/status";
+import {
+  resolverPerfilAutenticado, MOTIVO_SEM_PERFIL,
+} from "@/lib/auth/resolve-profile";
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient();
@@ -13,37 +15,31 @@ export default async function DashboardLayout({ children }: { children: React.Re
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const admin = createAdminClient();
-  const { data: profile, error: profileError } = await admin
-    .from("profiles")
-    .select("full_name, role, avatar_url, status")
-    .eq("id", user.id)
-    .maybeSingle();
+  // 🔴 Sem quarta consulta de identidade.
+  //
+  //    Este layout tinha a sua propria: `.eq("id", user.id)`, com service_role
+  //    e sem olhar para o estado. Passa pelo mesmo resolvedor que as server
+  //    actions — a identidade do dashboard nao pode ser resolvida por regras
+  //    diferentes das que decidem o que ele pode fazer.
+  const r = await resolverPerfilAutenticado<{
+    full_name: string; role: string; avatar_url: string | null;
+  }>(createAdminClient(), user.id, "full_name, role, avatar_url");
 
-  if (profileError || !profile) {
-    // Nunca silenciar isto: sem log, um profile em falta (ou uma chave
-    // administrativa inválida a montante) fica indistinguível de um erro
-    // transitório, e sem signOut() o proxy via loop com /login (ver
-    // src/proxy.ts) — o utilizador autenticado nunca sai daqui.
-    console.error("[dashboard] perfil indisponível", {
-      userId: user.id,
-      error: profileError?.message,
-    });
+  if (!r.ok) {
+    // Nunca silenciar isto: sem log, um perfil em falta (ou uma chave
+    // administrativa invalida a montante) fica indistinguivel de um erro
+    // transitorio, e sem signOut() o proxy via loop com /login.
+    console.error("[dashboard] perfil indisponivel", { userId: user.id, motivo: r.motivo });
     await supabase.auth.signOut();
-    redirect("/login?error=profile");
+
+    // 🔴 Sessao valida e acesso retirado le-se diferente de perfil em falta:
+    //    a primeira e uma decisao de quem administra, a segunda e uma avaria.
+    redirect(r.motivo === MOTIVO_SEM_PERFIL.INATIVO
+      ? "/login?error=sem-acesso"
+      : "/login?error=profile");
   }
-  // 🔴 Sessão válida, acesso retirado.
-  //
-  //    Esta consulta corre com service_role (BYPASSRLS): a 106 não a alcança.
-  //    Sem isto, uma admin ou gestora suspensa continuava a ver o dashboard
-  //    inteiro enquanto o token durasse.
-  //
-  //    `signOut()` antes do redirect, e por isso não há ciclo: sem sessão, o
-  //    proxy deixa /login servir a página em vez de a reencaminhar para cá.
-  if (!estadoAutoriza(profile.status)) {
-    await supabase.auth.signOut();
-    redirect("/login?error=sem-acesso");
-  }
+
+  const profile = r.perfil;
 
   if (profile.role === "colaborador") redirect("/app");
 

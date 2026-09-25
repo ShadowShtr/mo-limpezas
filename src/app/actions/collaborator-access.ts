@@ -14,7 +14,7 @@
  */
 
 import { createAdminClient } from "@/lib/supabase/admin";
-import { createClient } from "@/lib/supabase/server";
+import { requireProfile } from "@/lib/auth-guard";
 import { revalidatePath } from "next/cache";
 import { auditLog } from "@/lib/audit";
 import {
@@ -22,24 +22,42 @@ import {
   validarSenhaTemporaria, compensacaoNecessaria,
   type Actor, type Pessoa,
 } from "@/domain/collaborators/access-lifecycle";
-import { ESTADO_AUTORIZADO } from "@/domain/collaborators/status";
+import {
+  ESTADO_AUTORIZADO, estadoAutoriza, isEstadoColaborador,
+  type EstadoColaborador,
+} from "@/domain/collaborators/status";
 
 type Resultado = { ok: true } | { ok: false; error: string };
 
-/** Quem está a pedir, e de que empresa — lido da base, não do pedido. */
+/**
+ * Quem está a pedir, e de que empresa — lido da base, não do pedido.
+ *
+ * 🔴 ISTO ERA UMA TERCEIRA REGRA DE ACTOR, E ESCAPAVA A TUDO.
+ *
+ *    Fazia a sua própria consulta com `service_role` — que tem BYPASSRLS, e
+ *    por isso ignora a migration 106 — por `profiles.id = user.id`, e não
+ *    olhava para `status`. Uma admin ou gestora suspensa, com a sessão ainda
+ *    válida, podia invocar directamente as quatro actions deste ficheiro:
+ *    criar acesso a terceiros, definir senhas, desactivar e reactivar.
+ *
+ *    Escapava à 106 **e** ao `requireProfile()` corrigido, porque não passava
+ *    por nenhum dos dois.
+ *
+ *    Agora passa pelo guard central. A verificação de estado acontece lá
+ *    dentro, ANTES da de papel — quem não tem acesso nenhum não recebe «Sem
+ *    permissão», que sugeriria que outro papel resolveria o problema.
+ *
+ *    O papel exigido está aqui e não no guard porque é desta operação: gerir
+ *    o acesso de terceiros é de quem administra, e só.
+ */
 async function resolverActor(): Promise<Actor | null> {
-  const supabase = await createClient();
-  const admin = createAdminClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return null;
-
-  const { data } = await admin
-    .from("profiles")
-    .select("id, company_id, role")
-    .eq("id", user.id)
-    .maybeSingle();
-  if (!data) return null;
-  return { profile_id: data.id, company_id: data.company_id, role: data.role };
+  const guard = await requireProfile({ roles: ["admin", "gestor"] });
+  if (!guard.ok) return null;
+  return {
+    profile_id: guard.profile.id,
+    company_id: guard.profile.company_id,
+    role: guard.profile.role,
+  };
 }
 
 /** A pessoa sobre quem se está a operar. */
@@ -198,8 +216,34 @@ export async function definirSenhaTemporaria(
  */
 export async function desativarAcesso(
   profileId: string,
-  novoEstado: "inativo" | "suspenso" = "inativo",
+  novoEstado: EstadoColaborador = "inativo",
 ): Promise<Resultado> {
+  // 🔴 O TIPO NAO E UMA PROMESSA. ISTO E UMA SERVER ACTION.
+  //
+  //    `EstadoColaborador` desaparece na compilacao. O que chega aqui vem do
+  //    lado de la da rede e pode ser qualquer coisa — o browser nao e
+  //    autoridade sobre nada.
+  //
+  //    O caso perigoso nao e um valor absurdo: e `"ativo"`. Sem esta guarda,
+  //    `desativarAcesso(id, "ativo")` gravava `status = 'ativo'` e a seguir
+  //    banava a conta no Auth. Resultado: a pessoa fica impedida de entrar de
+  //    novo E a sessao que ja tem continua AUTORIZADA, porque desde a 106 e o
+  //    estado que autoriza. Uma operacao chamada «desactivar» deixava o acesso
+  //    aberto — e com ar de ter corrido bem.
+  //
+  //    Duas condicoes, e nao uma lista nova: o estado tem de ser reconhecido
+  //    pela fonte unica, e tem de NAO autorizar. Escrito assim, um estado que
+  //    a base venha a aceitar amanha so serve para desactivar se de facto
+  //    tirar acesso.
+  //
+  //    Antes de qualquer escrita, das duas.
+  if (!isEstadoColaborador(novoEstado) || estadoAutoriza(novoEstado)) {
+    return {
+      ok: false,
+      error: "Estado inválido para retirar acesso.",
+    };
+  }
+
   const actor = await resolverActor();
   if (!actor) return { ok: false, error: "Não autenticado." };
 

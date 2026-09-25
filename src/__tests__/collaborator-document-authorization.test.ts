@@ -92,7 +92,23 @@ type Terminal = "await" | "single" | "maybeSingle";
 let respostas: Record<string, { data?: unknown; error?: unknown }> = {};
 let storageFalhas: Record<string, unknown> = {};
 
-function resposta(table: string, terminal: Terminal) {
+
+/**
+ * 🔴 A chave de resposta pode incluir a COLUNA do `eq`.
+ *
+ *    Desde a 106-B, `requireProfile` resolve identidade em duas consultas a
+ *    `profiles` — primeiro `auth_user_id`, e so depois, se nao houver ligacao,
+ *    `id`. Sem distinguir a coluna, essa consulta colidia com a outra consulta
+ *    a `profiles` que este ficheiro ja fazia.
+ *
+ *    Procura-se `tabela:coluna:terminal` e, nao havendo, `tabela:terminal`.
+ *    Os cenarios antigos continuam a funcionar sem mudar uma linha.
+ */
+function resposta(table: string, terminal: Terminal, colunas: string[] = []) {
+  for (const c of colunas) {
+    const chave = `${table}:${c}:${terminal}`;
+    if (chave in respostas) return respostas[chave];
+  }
   const chave = `${table}:${terminal}`;
   if (chave in respostas) return respostas[chave];
   if (table in respostas) return respostas[table];
@@ -104,7 +120,9 @@ function makeBuilder(table: string) {
   let op: string | null = null;
   let payload: unknown = null;
 
+  const colunas: string[] = [];
   const encadeia = (nome: string) => (...args: unknown[]) => {
+    if (nome === "eq" && typeof args[0] === "string") colunas.push(args[0]);
     if (["insert", "update", "upsert", "delete"].includes(nome)) {
       op = nome; payload = args[0] ?? null;
     }
@@ -117,11 +135,11 @@ function makeBuilder(table: string) {
 
   const registar = () => { if (op) dbOps.push({ table, op, payload }); };
 
-  builder.single      = async () => { registar(); return resposta(table, "single"); };
-  builder.maybeSingle = async () => { registar(); return resposta(table, "maybeSingle"); };
+  builder.single      = async () => { registar(); return resposta(table, "single", colunas); };
+  builder.maybeSingle = async () => { registar(); return resposta(table, "maybeSingle", colunas); };
   builder.then = (r: (v: unknown) => unknown) => {
     registar();
-    return Promise.resolve(resposta(table, "await")).then(r);
+    return Promise.resolve(resposta(table, "await", colunas)).then(r);
   };
   return builder;
 }
@@ -169,6 +187,8 @@ function ficheiro(): FormData {
 
 function cenario(over: Record<string, { data?: unknown; error?: unknown }> = {}) {
   respostas = {
+    // 🔴 A 106-B resolve o actor por `auth_user_id` primeiro.
+    "profiles:auth_user_id:maybeSingle": { data: ACTOR, error: null },
     "profiles:single":      { data: ACTOR, error: null },
     "profiles:maybeSingle": { data: { id: "colab-1" }, error: null },
     "collaborator_documents:single":      { data: { id: "doc-novo" }, error: null },
@@ -253,7 +273,12 @@ describe("upload de documento", () => {
   });
 
   it("6. papel sem permissão → zero escritas", async () => {
-    cenario({ "profiles:single": { data: { ...ACTOR, role: "colaborador" }, error: null } });
+    cenario({
+      // 🔴 As duas chaves: a 106-B pergunta primeiro por `auth_user_id`,
+      //    e so essa decide. Sobrepor apenas a antiga deixava o actor admin.
+      "profiles:auth_user_id:maybeSingle": { data: { ...ACTOR, role: "colaborador" }, error: null },
+      "profiles:single": { data: { ...ACTOR, role: "colaborador" }, error: null },
+    });
     const res = await upload();
     expect(res.ok).toBe(false);
     expect(storageOps).toHaveLength(0);

@@ -1,8 +1,9 @@
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { MENSAGEM_SEM_ACESSO } from "@/domain/collaborators/status";
 import {
-  estadoAutoriza, MENSAGEM_SEM_ACESSO,
-} from "@/domain/collaborators/status";
+  resolverPerfilAutenticado, MOTIVO_SEM_PERFIL,
+} from "@/lib/auth/resolve-profile";
 
 export interface AuthedProfile {
   id: string;
@@ -66,13 +67,27 @@ export async function requireProfile(
   }
 
   const admin = createAdminClient();
-  const { data: profile } = await admin
-    .from("profiles")
-    .select("id, company_id, role, status")
-    .eq("id", user.id)
-    .single();
 
-  if (!profile) {
+  // 🔴 A resolucao de identidade e a MESMA da base, e vive num sitio so.
+  //
+  //    Isto era `.eq("id", user.id)`. `criarAcesso()` grava a conta nova em
+  //    `auth_user_id` e NAO mexe em `profiles.id`: para quem receba acesso a
+  //    partir de agora, procurar pelo `id` nao encontra ninguem — enquanto a
+  //    base, que resolve pelas duas convencoes desde a 101b, encontra.
+  const r = await resolverPerfilAutenticado<AuthedProfile>(
+    admin, user.id, "id, company_id, role");
+
+  if (!r.ok) {
+    // 🔴 Um erro de leitura nao e um perfil inexistente, e nao e um perfil
+    //    inactivo. Sao tres conclusoes diferentes e ficam com codigos
+    //    diferentes — quem ramifica por `guard.code` precisa da distincao.
+    if (r.motivo === MOTIVO_SEM_PERFIL.INATIVO) {
+      return {
+        ok: false,
+        code: AUTH_GUARD_CODES.INACTIVE,
+        error: MENSAGEM_SEM_ACESSO,
+      };
+    }
     return {
       ok: false,
       code: AUTH_GUARD_CODES.PROFILE_NOT_FOUND,
@@ -80,28 +95,7 @@ export async function requireProfile(
     };
   }
 
-  // 🔴 O ESTADO, ANTES DO PAPEL.
-  //
-  //    `createAdminClient()` é service_role, e service_role tem BYPASSRLS: as
-  //    políticas que a migration 106 fechou NÃO se aplicam a nada do que passa
-  //    por aqui. Sem esta verificação, uma pessoa suspensa com o token ainda
-  //    válido continuava a executar todas as server actions do produto — a
-  //    base dizia-lhe que não e o runtime passava-lhe por cima.
-  //
-  //    Não é uma segunda regra: é a MESMA regra, do lado que a RLS não alcança.
-  //    A base continua a ser a fonte; `ESTADO_AUTORIZADO` e o filtro do
-  //    resolver são o mesmo valor, e há um ensaio que o prova contra o CHECK
-  //    vivo.
-  //
-  //    Vem antes do papel de propósito: quem não tem acesso nenhum não deve
-  //    receber «Sem permissão», que sugere que outro papel resolveria.
-  if (!estadoAutoriza(profile.status)) {
-    return {
-      ok: false,
-      code: AUTH_GUARD_CODES.INACTIVE,
-      error: MENSAGEM_SEM_ACESSO,
-    };
-  }
+  const profile = r.perfil;
 
   if (opts?.roles && !opts.roles.includes(profile.role)) {
     return {
