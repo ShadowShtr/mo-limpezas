@@ -44,6 +44,15 @@ const settingsAction = semComentarios(
 // ---------------------------------------------------------------------------
 
 const getUser = vi.fn();
+/**
+ * 🔴 Duas consultas a `profiles`, nao uma.
+ *
+ *    Desde a 106-B, `requireProfile` resolve identidade como a base: primeiro
+ *    `auth_user_id`, e so se nao houver ligacao e que tenta o `id` legado.
+ *    Ambas terminam em `maybeSingle`, nao em `single` — `single` trata
+ *    «nenhuma linha» como erro, e aqui a ausencia e uma resposta valida que
+ *    decide qual o ramo a seguir.
+ */
 const single = vi.fn();
 
 vi.mock("@/lib/supabase/server", () => ({
@@ -54,7 +63,7 @@ vi.mock("@/lib/supabase/admin", () => ({
   createAdminClient: () => ({
     from: () => ({
       select: () => ({
-        eq: () => ({ single }),
+        eq: () => ({ maybeSingle: single }),
       }),
     }),
   }),
@@ -104,7 +113,7 @@ describe("requireProfile — códigos estáveis", () => {
 
     getUser.mockResolvedValue({ data: { user: { id: "u1" } } });
     single.mockResolvedValue({
-      data: { id: "u1", company_id: "empresa-a", role: "colaborador" },
+      data: { id: "u1", company_id: "empresa-a", role: "colaborador", status: "ativo" },
     });
 
     const guard = await requireProfile({ roles: ["admin", "gestor"] });
@@ -121,7 +130,7 @@ describe("requireProfile — códigos estáveis", () => {
 
     getUser.mockResolvedValue({ data: { user: { id: "u1" } } });
     single.mockResolvedValue({
-      data: { id: "u1", company_id: "empresa-a", role: "admin" },
+      data: { id: "u1", company_id: "empresa-a", role: "admin", status: "ativo" },
     });
 
     const guard = await requireProfile({ roles: ["admin", "gestor"] });

@@ -2,6 +2,7 @@ import { cache } from "react";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { User } from "@supabase/supabase-js";
+import { resolverPerfilAutenticado } from "@/lib/auth/resolve-profile";
 
 export interface CurrentProfile {
   id: string;
@@ -30,11 +31,14 @@ export const getCurrentProfile = cache(async (): Promise<CurrentProfile | null> 
   if (!user) return null;
 
   const admin = createAdminClient();
-  const { data } = await admin
-    .from("profiles")
-    .select("id, company_id, full_name, role, avatar_url")
-    .eq("id", user.id)
-    .single();
 
-  return (data as CurrentProfile) ?? null;
+  // 🔴 O mesmo resolvedor que o `requireProfile` usa — e que a base usa.
+  //
+  //    Devolve-se `null` para qualquer motivo: todos os consumidores ja tratam
+  //    `null` como «nao entra», e um terceiro estado de retorno obrigaria a
+  //    mexer em cada um deles. Cada um esquecido seria um buraco.
+  const r = await resolverPerfilAutenticado<CurrentProfile>(
+    admin, user.id, "id, company_id, full_name, role, avatar_url");
+
+  return r.ok ? r.perfil : null;
 });

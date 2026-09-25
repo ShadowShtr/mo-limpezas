@@ -1,3 +1,6 @@
+import {
+  ESTADOS_COLABORADOR, type EstadoColaborador,
+} from "@/domain/collaborators/status";
 /**
  * O que é preciso para criar uma pessoa — e o que não é.
  *
@@ -49,7 +52,7 @@ export interface CollaboratorRow {
   contract_end: string | null;
   contracted_hours_month: number | null;
   role: "colaborador" | "gestor" | "admin";
-  status: "ativo" | "inativo" | "arquivado";
+  status: EstadoColaborador;
   skills: string[];
 }
 
@@ -58,7 +61,9 @@ export type CreateCollaboratorResult =
   | { ok: false; error: string };
 
 const PAPEIS = ["colaborador", "gestor", "admin"] as const;
-const ESTADOS = ["ativo", "inativo", "arquivado"] as const;
+// 🔴 A lista vive em `status.ts`, e só lá.
+//    Esta era a segunda cópia da lista errada.
+const ESTADOS = ESTADOS_COLABORADOR;
 
 /** Texto vazio, só espaços, ou ausente → `NULL`. */
 function texto(v: unknown): string | null {

@@ -1,5 +1,9 @@
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { MENSAGEM_SEM_ACESSO } from "@/domain/collaborators/status";
+import {
+  resolverPerfilAutenticado, MOTIVO_SEM_PERFIL,
+} from "@/lib/auth/resolve-profile";
 
 export interface AuthedProfile {
   id: string;
@@ -22,6 +26,7 @@ export const AUTH_GUARD_CODES = {
   UNAUTHENTICATED: "UNAUTHENTICATED",
   PROFILE_NOT_FOUND: "PROFILE_NOT_FOUND",
   FORBIDDEN: "FORBIDDEN",
+  INACTIVE: "INACTIVE",
 } as const;
 
 export type AuthGuardCode =
@@ -62,19 +67,35 @@ export async function requireProfile(
   }
 
   const admin = createAdminClient();
-  const { data: profile } = await admin
-    .from("profiles")
-    .select("id, company_id, role")
-    .eq("id", user.id)
-    .single();
 
-  if (!profile) {
+  // 🔴 A resolucao de identidade e a MESMA da base, e vive num sitio so.
+  //
+  //    Isto era `.eq("id", user.id)`. `criarAcesso()` grava a conta nova em
+  //    `auth_user_id` e NAO mexe em `profiles.id`: para quem receba acesso a
+  //    partir de agora, procurar pelo `id` nao encontra ninguem — enquanto a
+  //    base, que resolve pelas duas convencoes desde a 101b, encontra.
+  const r = await resolverPerfilAutenticado<AuthedProfile>(
+    admin, user.id, "id, company_id, role");
+
+  if (!r.ok) {
+    // 🔴 Um erro de leitura nao e um perfil inexistente, e nao e um perfil
+    //    inactivo. Sao tres conclusoes diferentes e ficam com codigos
+    //    diferentes — quem ramifica por `guard.code` precisa da distincao.
+    if (r.motivo === MOTIVO_SEM_PERFIL.INATIVO) {
+      return {
+        ok: false,
+        code: AUTH_GUARD_CODES.INACTIVE,
+        error: MENSAGEM_SEM_ACESSO,
+      };
+    }
     return {
       ok: false,
       code: AUTH_GUARD_CODES.PROFILE_NOT_FOUND,
       error: "Perfil não encontrado.",
     };
   }
+
+  const profile = r.perfil;
 
   if (opts?.roles && !opts.roles.includes(profile.role)) {
     return {

@@ -1,14 +1,46 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { login, resetPassword } from "@/app/actions/auth";
 import { Button } from "@/components/ui/button";
 import { Loader2 } from "lucide-react";
+import { MENSAGEM_SEM_ACESSO } from "@/domain/collaborators/status";
+
+/**
+ * Porque é que a pessoa foi mandada para aqui.
+ *
+ * 🔴 Componente próprio, e não um `setState` dentro de um `useEffect`.
+ *
+ *    A primeira versão lia o parâmetro num efeito e escrevia no estado da
+ *    mensagem. Funcionava, e o `react-hooks/set-state-in-effect` recusou-a com
+ *    razão: forçava um segundo render a seguir ao primeiro, e misturava um
+ *    aviso que vem da URL com o estado que vem da submissão do formulário —
+ *    duas coisas com tempos de vida diferentes no mesmo sítio.
+ *
+ *    Aqui não há estado nenhum: lê-se e desenha-se.
+ */
+const MOTIVOS: Record<string, string> = {
+  "sem-acesso": MENSAGEM_SEM_ACESSO,
+  profile: "Não foi possível carregar o seu perfil. Tente entrar outra vez.",
+};
+
+function AvisoDeEntrada() {
+  const motivo = useSearchParams().get("error");
+  const texto = motivo ? MOTIVOS[motivo] : null;
+  if (!texto) return null;
+  return (
+    <div className="text-sm px-3 py-2 rounded-lg bg-red-50 text-red-600 border border-red-100">
+      {texto}
+    </div>
+  );
+}
 
 export default function LoginPage() {
   const [mode, setMode] = useState<"login" | "recover">("login");
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<{ type: "error" | "success"; text: string } | null>(null);
+
   async function handleSubmit(e: React.SyntheticEvent<HTMLFormElement>) {
     e.preventDefault();
     setLoading(true);
@@ -96,6 +128,10 @@ export default function LoginPage() {
                 />
               </div>
             )}
+
+            {/* 🔴 `useSearchParams` obriga a um limite de Suspense, senão a
+                pré-renderização do build falha. */}
+            <Suspense fallback={null}><AvisoDeEntrada /></Suspense>
 
             {message && (
               <div className={`text-sm px-3 py-2 rounded-lg ${

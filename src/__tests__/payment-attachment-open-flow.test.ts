@@ -136,8 +136,14 @@ let assinaturaFalha: unknown = null;
 function makeBuilder(table: string) {
   const b: Record<string, unknown> = {};
   let op: string | null = null;
+  // 🔴 A coluna do `eq` entra na chave de resposta.
+  //
+  //    Desde a 106-B, `requireProfile` faz duas consultas a `profiles` —
+  //    `auth_user_id` primeiro, `id` so se nao houver ligacao. Sem a coluna na
+  //    chave, colidiam com a consulta que este ficheiro ja fazia.
+  const cols: string[] = [];
   const enc = (n: string) => (...a: unknown[]) => {
-    void a;
+    if (n === "eq" && typeof a[0] === "string") cols.push(a[0]);
     if (["insert", "update", "upsert", "delete"].includes(n)) { op = n; }
     return b;
   };
@@ -145,11 +151,18 @@ function makeBuilder(table: string) {
     b[n] = enc(n);
   }
   const reg = () => { if (op) dbOps.push({ table, op }); };
-  b.single = async () => { reg(); return respostas[`${table}:single`] ?? { data: null, error: null }; };
-  b.maybeSingle = async () => { reg(); return respostas[`${table}:maybeSingle`] ?? { data: null, error: null }; };
+  const resp = (t: string, vazio: unknown) => {
+    for (const c of cols) {
+      const k = `${table}:${c}:${t}`;
+      if (k in respostas) return respostas[k];
+    }
+    return respostas[`${table}:${t}`] ?? vazio;
+  };
+  b.single = async () => { reg(); return resp("single", { data: null, error: null }); };
+  b.maybeSingle = async () => { reg(); return resp("maybeSingle", { data: null, error: null }); };
   b.then = (r: (v: unknown) => unknown) => {
     reg();
-    return Promise.resolve(respostas[`${table}:await`] ?? { data: [], error: null }).then(r);
+    return Promise.resolve(resp("await", { data: [], error: null })).then(r);
   };
   return b;
 }
@@ -174,12 +187,17 @@ vi.mock("@/lib/supabase/admin", () => ({
 }));
 vi.mock("next/cache", () => ({ revalidatePath: () => {} }));
 
-const ACTOR = { id: "gestor-1", company_id: "empresa-1", role: "admin" };
+// 🔴 `status` faz parte do perfil desde a 106-B: `requireProfile`
+//    verifica-o, e a coluna e NOT NULL com CHECK em producao. Um fixture
+//    sem ele descrevia um perfil que nao existe.
+const ACTOR = { id: "gestor-1", company_id: "empresa-1", role: "admin", status: "ativo" };
 const FALHA = { data: null, error: { code: "57014", message: "canceling statement" } };
 const URL_LEGADO = `${PROJETO}/storage/v1/object/public/${BUCKET}/empresa-1/pag-1/1-fatura.pdf`;
 
 function cenario(over: Record<string, { data?: unknown; error?: unknown }> = {}) {
   respostas = {
+    // 🔴 A 106-B resolve o actor por `auth_user_id` primeiro.
+    "profiles:auth_user_id:maybeSingle": { data: ACTOR, error: null },
     "profiles:single": { data: ACTOR, error: null },
     "fixed_variable_payments:maybeSingle": {
       data: { id: "pag-1", attachment_url: URL_LEGADO, attachment_name: "fatura.pdf",

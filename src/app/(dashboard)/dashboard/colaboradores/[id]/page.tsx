@@ -16,6 +16,14 @@ import {
   ArrowLeft, Mail, Phone, Calendar, Award, Edit2,
 } from "lucide-react";
 import Link from "next/link";
+import {
+  isEstadoColaborador, ROTULO_ESTADO,
+} from "@/domain/collaborators/status";
+
+/** O estado por extenso; o que não se reconhece diz-se como é. */
+function rotuloEstado(status: string): string {
+  return isEstadoColaborador(status) ? ROTULO_ESTADO[status] : status;
+}
 
 interface Props {
   params: Promise<{ id: string }>;
@@ -141,7 +149,9 @@ export default async function ColaboradorDetailPage({ params }: Props) {
                   ? "bg-[var(--color-primary-light)] text-[var(--color-primary)]"
                   : "bg-[var(--color-background)] text-[var(--color-text-muted)]"
               }`}>
-                {profile.status === "ativo" ? "Ativo" : profile.status === "inativo" ? "Inativo" : "Suspenso"}
+                {/* 🔴 Um ternário encadeado com o último ramo a adivinhar: qualquer
+                    estado desconhecido aparecia como "Suspenso". */}
+                {rotuloEstado(profile.status)}
               </span>
             </div>
 
