@@ -5220,10 +5220,10 @@
         "service-role"
       ],
       "signals": {
-        "serviceRole": 6,
+        "serviceRole": 8,
         "write": 1,
-        "sqlWrite": 53,
-        "fallbackArray": 1,
+        "sqlWrite": 56,
+        "fallbackArray": 2,
         "dynamicImport": 1
       },
       "action": "nenhuma",
@@ -25439,7 +25439,7 @@
         "service-role"
       ],
       "signals": {
-        "serviceRole": 3,
+        "serviceRole": 5,
         "sqlWrite": 3
       },
       "action": "nenhuma",
@@ -26177,7 +26177,7 @@
         "service-role"
       ],
       "signals": {
-        "serviceRole": 1,
+        "serviceRole": 2,
         "sqlWrite": 4
       },
       "action": "nenhuma",

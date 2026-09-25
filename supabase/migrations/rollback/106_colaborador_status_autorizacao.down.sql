@@ -67,7 +67,7 @@ DO $rollback_106$
 DECLARE
   -- 🔴 O checksum canónico desta 106. Se o SQL mudar, este valor TEM de mudar
   --    com ele — há um ensaio que os compara.
-  CHECKSUM_106 CONSTANT text := '5774bff64a5f28c25f049907b1c3f69a95f9b470d8732d7170999ecca64e5d02';
+  CHECKSUM_106 CONSTANT text := '7d3b594075b042570403aaf1ce276b291649897a736cbb8fbf0ae36da2abb6c7';
 
   v_checksum text;
   v_ledger   boolean;
@@ -134,6 +134,109 @@ BEGIN
       'COLAB_106_ROLLBACK_CHECKSUM_DIVERGENTE: o ledger tem % e esta 106 é % — o que está aplicado não é esta migration; nada foi alterado',
       coalesce(v_checksum, 'NULL'), CHECKSUM_106;
   END IF;
+
+  -- ─────────────────────────────────────────────────────────────────────
+  -- 🔴 O ESTADO ACTUAL TEM DE SER, AINDA, O QUE A 106 DEIXOU
+  -- ─────────────────────────────────────────────────────────────────────
+  --
+  -- O checksum do ledger prova que a migration aplicada FOI a 106. Não prova
+  -- que as funções continuam como ela as deixou.
+  --
+  -- O cenário que isto fecha, e que a versão anterior deste ficheiro não
+  -- fechava:
+  --
+  --     1. a 106 é aplicada;
+  --     2. uma migration posterior melhora `can_access_service`;
+  --     3. a lógica nova continua a usar `get_my_profile_id` e continua a ter
+  --        `search_path` — portanto a detecção de efeitos vê 2 de 2;
+  --     4. alguém corre este rollback;
+  --     5. a função é substituída pela forma de 2026 da 034, e o trabalho do
+  --        passo 2 desaparece.
+  --
+  -- Um rollback que apaga trabalho posterior não está a desfazer a sua
+  -- migration: está a desfazer a de outra pessoa. Por isso compara-se o corpo
+  -- inteiro, normalizado no espaço em branco, mais a volatilidade, a
+  -- linguagem, o `search_path` e a ACL.
+  --
+  -- Se houver qualquer desvio: ZERO ESCRITAS, ledger preservado, funções
+  -- preservadas. Quem encontrar isto tem de decidir o que é verdade.
+  DECLARE
+    RESOLVER_POS CONSTANT text :=
+      'SELECT id FROM profiles WHERE auth_user_id = auth.uid() AND status = ''ativo'' UNION ALL SELECT id FROM profiles p WHERE p.id = auth.uid() AND p.status = ''ativo'' AND EXISTS (SELECT 1 FROM auth.users u WHERE u.id = p.id) AND NOT EXISTS (SELECT 1 FROM profiles x WHERE x.auth_user_id = auth.uid()) LIMIT 1;';
+
+    SERVICO_POS CONSTANT text :=
+      'SELECT EXISTS ( SELECT 1 FROM public.services s JOIN public.profiles p ON p.id = public.get_my_profile_id() AND p.company_id = s.company_id WHERE s.id = p_service_id AND ( EXISTS ( SELECT 1 FROM public.team_members tm WHERE tm.team_id = s.team_id AND tm.collaborator_id = p.id AND (tm.left_at IS NULL OR tm.left_at > now()) ) OR EXISTS ( SELECT 1 FROM public.service_reinforcements sr WHERE sr.service_id = s.id AND sr.collaborator_id = p.id ) ) );';
+
+    v_corpo    text;
+    v_definer  boolean;
+    v_volatil  "char";
+    v_lang     text;
+    v_config   text;
+    v_grantees text[];
+    v_esperados text[];
+    v_grantable boolean;
+    v_oid      oid;
+    v_esperado text;
+    v_search   text;
+    v_nome     text;
+  BEGIN
+    FOREACH v_nome IN ARRAY ARRAY['get_my_profile_id', 'can_access_service'] LOOP
+      IF v_nome = 'get_my_profile_id' THEN
+        v_oid := to_regprocedure('public.get_my_profile_id()');
+        v_esperado := RESOLVER_POS;
+        v_search := 'search_path=public';
+      ELSE
+        v_oid := to_regprocedure('public.can_access_service(uuid)');
+        v_esperado := SERVICO_POS;
+        v_search := 'search_path=pg_catalog, public';
+      END IF;
+
+      SELECT btrim(regexp_replace(p.prosrc, '[[:space:]]+', ' ', 'g')),
+             p.prosecdef, p.provolatile, l.lanname,
+             coalesce(array_to_string(p.proconfig, ', '), '')
+        INTO v_corpo, v_definer, v_volatil, v_lang, v_config
+        FROM pg_proc p JOIN pg_language l ON l.oid = p.prolang
+       WHERE p.oid = v_oid;
+
+      IF v_corpo IS DISTINCT FROM v_esperado THEN
+        RAISE EXCEPTION
+          'COLAB_106_ROLLBACK_CURRENT_STATE_DIVERGED: % já não tem o corpo que a 106 instalou — alguém a alterou depois, e repor a forma anterior apagaria esse trabalho. Nada foi alterado. Encontrado: %',
+          v_nome, left(coalesce(v_corpo, '(ausente)'), 400);
+      END IF;
+
+      IF NOT v_definer OR v_volatil <> 's' OR v_lang <> 'sql' THEN
+        RAISE EXCEPTION
+          'COLAB_106_ROLLBACK_CURRENT_STATE_DIVERGED: % com definição diferente da que a 106 deixou (definer=%, volatilidade=%, linguagem=%). Nada foi alterado.',
+          v_nome, v_definer, v_volatil, v_lang;
+      END IF;
+
+      IF v_config <> v_search THEN
+        RAISE EXCEPTION
+          'COLAB_106_ROLLBACK_CURRENT_STATE_DIVERGED: % com search_path % — a 106 deixou %. Nada foi alterado.',
+          v_nome, coalesce(nullif(v_config, ''), '(nenhum)'), v_search;
+      END IF;
+
+      SELECT array_agg(DISTINCT a.grantee::regrole::text ORDER BY a.grantee::regrole::text),
+             bool_or(a.is_grantable)
+        INTO v_grantees, v_grantable
+        FROM pg_proc p, LATERAL aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) a
+       WHERE p.oid = v_oid AND a.privilege_type = 'EXECUTE';
+
+      SELECT array_agg(g ORDER BY g) INTO v_esperados
+        FROM (
+          SELECT p.proowner::regrole::text AS g FROM pg_proc p WHERE p.oid = v_oid
+          UNION
+          SELECT rolname FROM pg_roles WHERE rolname IN ('anon', 'authenticated', 'service_role')
+        ) AS e;
+
+      IF v_grantees IS DISTINCT FROM v_esperados OR coalesce(v_grantable, false) THEN
+        RAISE EXCEPTION
+          'COLAB_106_ROLLBACK_CURRENT_STATE_DIVERGED: ACL de % é % (grant option %) — a 106 deixou %. Alguém a mudou depois; nada foi alterado.',
+          v_nome, coalesce(array_to_string(v_grantees, ', '), 'NENHUMA'),
+          coalesce(v_grantable, false), array_to_string(v_esperados, ', ');
+      END IF;
+    END LOOP;
+  END;
 
   -- 🔴 O aviso que importa, com o número real.
   SELECT count(*) INTO v_naoativos

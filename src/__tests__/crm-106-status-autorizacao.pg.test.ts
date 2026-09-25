@@ -169,6 +169,15 @@ async function palco(aplicar106 = true): Promise<void> {
       )
     $can$;
     GRANT EXECUTE ON FUNCTION public.can_access_service(uuid) TO PUBLIC;
+    -- 🔴 E os três papéis do Supabase, EXPLICITAMENTE.
+    --
+    --    O baseline cria a função ANTES de o \`ALTER DEFAULT PRIVILEGES\` estar
+    --    em vigor, e \`CREATE OR REPLACE\` preserva a ACL existente — por isso o
+    --    palco ficava com \`{PUBLIC, postgres}\` enquanto produção tem
+    --    \`{PUBLIC, anon, authenticated, postgres, service_role}\`, lido no
+    --    catálogo vivo. Sem isto, o pré-estado da 106 recusava-se a instalar
+    --    aqui por uma diferença que produção não tem.
+    GRANT EXECUTE ON FUNCTION public.can_access_service(uuid) TO anon, authenticated, service_role;
   `);
 
   for (const m of MIGRATIONS_CRM) await pool.query(migrationCrm(m));
@@ -693,6 +702,107 @@ describe("16-20. proveniência e aplicação", () => {
     await palco();
   });
 
+  // ─────────────────────────────────────────────────────────────────────────
+  // 🔴 A/B/C — o PRÉ-ESTADO não se deixa enganar por uma palavra
+  //
+  //    A versão anterior deste guard aceitava o resolver se o corpo contivesse
+  //    `auth_user_id`, e `can_access_service` se contivesse `auth.uid()` OU
+  //    `get_my_profile_id`. Uma função alterada depois da 101b, com regra nova
+  //    e a palavra lá dentro, passava — e a 106 pisava-a com CREATE OR
+  //    REPLACE, apagando trabalho de outra pessoa.
+  // ─────────────────────────────────────────────────────────────────────────
+
+  it("🔴 A. resolver alterado, MAS com auth_user_id: a 106 RECUSA", LENTO, async () => {
+    await palco(false);
+    // Alteração material: passa a exigir também que o perfil tenha email.
+    // Continua a mencionar `auth_user_id` — era isto que enganava o guard.
+    await pool.query(`
+      CREATE OR REPLACE FUNCTION public.get_my_profile_id() RETURNS uuid
+      LANGUAGE sql SECURITY DEFINER STABLE SET search_path = public
+      AS $f$
+        SELECT id FROM profiles
+         WHERE auth_user_id = auth.uid() AND email IS NOT NULL
+         LIMIT 1;
+      $f$;`);
+    const antes = await pool.query(
+      "SELECT prosrc FROM pg_proc WHERE oid = to_regprocedure($1)", [SIG_RESOLVER]);
+
+    await expect(pool.query(lerSql(M_106)))
+      .rejects.toThrow(/COLAB_106_PREESTADO_INESPERADO/);
+
+    // 🔴 A alteração de quem lá mexeu CONTINUA INTACTA.
+    const depois = await pool.query(
+      "SELECT prosrc FROM pg_proc WHERE oid = to_regprocedure($1)", [SIG_RESOLVER]);
+    expect(depois.rows[0].prosrc).toBe(antes.rows[0].prosrc);
+    expect(String(depois.rows[0].prosrc)).toContain("email IS NOT NULL");
+
+    await palco();
+  });
+
+  it("🔴 B. can_access_service alterada, MAS com auth.uid(): a 106 RECUSA", LENTO, async () => {
+    await palco(false);
+    // Alteração material: deixa de aceitar reforços pontuais.
+    await pool.query(`
+      CREATE OR REPLACE FUNCTION public.can_access_service(p_service_id uuid)
+      RETURNS boolean LANGUAGE sql SECURITY DEFINER STABLE
+      AS $f$
+        SELECT EXISTS (
+          SELECT 1 FROM services s
+          INNER JOIN profiles p ON p.id = auth.uid() AND p.company_id = s.company_id
+          WHERE s.id = p_service_id
+            AND EXISTS (SELECT 1 FROM team_members tm
+                         WHERE tm.team_id = s.team_id AND tm.collaborator_id = auth.uid())
+        )
+      $f$;`);
+    const antes = await pool.query(
+      "SELECT prosrc FROM pg_proc WHERE oid = to_regprocedure($1)", [SIG_SERVICO]);
+
+    await expect(pool.query(lerSql(M_106)))
+      .rejects.toThrow(/COLAB_106_PREESTADO_INESPERADO/);
+
+    const depois = await pool.query(
+      "SELECT prosrc FROM pg_proc WHERE oid = to_regprocedure($1)", [SIG_SERVICO]);
+    expect(depois.rows[0].prosrc).toBe(antes.rows[0].prosrc);
+    // E o resolver também não foi tocado.
+    const res = await pool.query(
+      "SELECT prosrc FROM pg_proc WHERE oid = to_regprocedure($1)", [SIG_RESOLVER]);
+    expect(String(res.rows[0].prosrc)).not.toMatch(/status/);
+
+    await palco();
+  });
+
+  it("🔴 C. só a ACL do predecessor mudou: a 106 RECUSA", LENTO, async () => {
+    // 🔴 O caso mais subtil dos três. Os corpos estão certos; alguém deu
+    //    EXECUTE a um papel a mais. Sem este guard, a 106 revogava-o em
+    //    silêncio no bloco da ACL — uma decisão de outra pessoa desfeita sem
+    //    ninguém dar por ela.
+    await palco(false);
+    await pool.query("CREATE ROLE papel_extra_106 NOLOGIN");
+    await pool.query(
+      "GRANT EXECUTE ON FUNCTION public.get_my_profile_id() TO papel_extra_106");
+
+    try {
+      await expect(pool.query(lerSql(M_106)))
+        // 🔴 `[\s\S]*` e não a flag `/s`: `dotAll` exige ES2018 e o tsconfig
+        //    deste projecto é ES2017.
+        .rejects.toThrow(/COLAB_106_PREESTADO_INESPERADO[\s\S]*ACL/);
+
+      // O grant continua lá.
+      const { rows } = await pool.query(`
+        SELECT count(*)::int AS n
+          FROM pg_proc p, LATERAL aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) a
+         WHERE p.oid = to_regprocedure($1) AND a.privilege_type='EXECUTE'
+           AND a.grantee::regrole::text = 'papel_extra_106'`, [SIG_RESOLVER]);
+      expect(rows[0].n).toBe(1);
+    } finally {
+      await pool.query(
+        "REVOKE ALL ON FUNCTION public.get_my_profile_id() FROM papel_extra_106")
+        .catch(() => { /* já não existe */ });
+      await pool.query("DROP ROLE IF EXISTS papel_extra_106");
+      await palco();
+    }
+  });
+
   it("os checksums fixados na 106 são os dos ficheiros do repositório", LENTO, async () => {
     const sql = lerSql(M_106);
     const fixados = [...sql.matchAll(/\('(\d{3}[a-z]?_[a-z_]+\.sql)',\s*'([0-9a-f]{64})'\)/g)];
@@ -702,12 +812,50 @@ describe("16-20. proveniência e aplicação", () => {
     }
   });
 
-  it("🔴 a 106 é a última migration numerada", LENTO, async () => {
+  it("🔴 a 106 é ÚNICA, e a 107 é permitida", LENTO, async () => {
+    // 🔴 Este ensaio já exigiu que nada viesse depois da 106 — o mesmo padrão
+    //    que teve de sair da suite da 105, e pela mesma razão: a chegada
+    //    legítima de uma 107 não é regressão da 106. Um guard que proíbe o
+    //    futuro não é um guard, é um travão.
+    //
+    //    O que se prova é UNICIDADE e ausência de COLISÃO.
     const { readdirSync } = await import("node:fs");
-    const maiores = readdirSync(join(process.cwd(), "supabase/migrations"))
-      .filter((m) => /^\d{3}[a-z]?_/.test(m))
-      .filter((m) => Number(m.slice(0, 3)) > 106);
-    expect(maiores).toEqual([]);
+    const numeradas = readdirSync(join(process.cwd(), "supabase/migrations"))
+      .filter((m) => /^\d{3}[a-z]?_.*\.sql$/.test(m));
+
+    // Exactamente uma migration com o número 106, e é esta.
+    const cento6 = numeradas.filter((m) => m.slice(0, 3) === "106");
+    expect(cento6).toEqual([NOME_106]);
+
+    // E o rollback corresponde-lhe.
+    const rollbacks = readdirSync(join(process.cwd(), "supabase/migrations/rollback"))
+      .filter((m) => m.slice(0, 3) === "106");
+    expect(rollbacks).toEqual(["106_colaborador_status_autorizacao.down.sql"]);
+
+    // 🔴 Nenhum número duplicado em TODA a cadeia numerada — se alguém criar
+    //    outra 106 com sufixo diferente, é aqui que aparece.
+    const porNumero = new Map<string, string[]>();
+    for (const m of numeradas) {
+      const chave = m.slice(0, 4).replace(/_$/, "");
+      porNumero.set(chave, [...(porNumero.get(chave) ?? []), m]);
+    }
+    const colisoes = [...porNumero.entries()].filter(([, fs]) => fs.length > 1);
+    expect(colisoes, `números de migration duplicados: ${JSON.stringify(colisoes)}`).toEqual([]);
+  });
+
+  it("uma futura 107 não quebra o contrato da 106", LENTO, async () => {
+    // 🔴 A prova de regressão do guard acima: simula-se a lista de ficheiros
+    //    com uma 107 e verifica-se que a unicidade da 106 continua verdadeira.
+    //    Sem isto, alguém poderia reintroduzir «nada depois da 106» e o ensaio
+    //    continuaria verde até ao dia em que a 107 nascesse.
+    const comFutura = [
+      "105_crm_orcamento_editar_rascunho.sql",
+      NOME_106,
+      "107_qualquer_coisa_futura.sql",
+    ];
+    const cento6 = comFutura.filter((m) => m.slice(0, 3) === "106");
+    expect(cento6).toEqual([NOME_106]);
+    expect(comFutura.some((m) => Number(m.slice(0, 3)) > 106)).toBe(true);
   });
 });
 
@@ -759,6 +907,102 @@ describe("21. rollback e recuperação para a frente", () => {
     expect(rows[0].n, "a linha de ledger não se apaga num estado que não se percebe").toBe(1);
 
     await palco();
+  });
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // 🔴 D/E/F — ROLLBACK_DOES_NOT_ERASE_LATER_WORK
+  //
+  //    O checksum do ledger prova que a migration aplicada FOI a 106. Não
+  //    prova que as funções continuam como ela as deixou. Sem os guards
+  //    abaixo, este rollback substituía trabalho posterior pela forma de 2026
+  //    da 034 — desfazendo a migration de outra pessoa, não a sua.
+  // ─────────────────────────────────────────────────────────────────────────
+
+  it("🔴 D. resolver alterado DEPOIS da 106: o rollback RECUSA", LENTO, async () => {
+    // A alteração posterior mantém `status = 'ativo'` — era isso que fazia a
+    // detecção de efeitos ver 2 de 2 e seguir em frente.
+    await pool.query(`
+      CREATE OR REPLACE FUNCTION public.get_my_profile_id() RETURNS uuid
+      LANGUAGE sql SECURITY DEFINER STABLE SET search_path = public
+      AS $f$
+        SELECT id FROM profiles
+         WHERE auth_user_id = auth.uid() AND status = 'ativo' AND email IS NOT NULL
+         LIMIT 1;
+      $f$;`);
+
+    await expect(pool.query(lerSql(ROLLBACK_106)))
+      .rejects.toThrow(/COLAB_106_ROLLBACK_CURRENT_STATE_DIVERGED/);
+
+    // 🔴 O trabalho posterior PERMANECE.
+    const { rows } = await pool.query(
+      "SELECT prosrc FROM pg_proc WHERE oid = to_regprocedure($1)", [SIG_RESOLVER]);
+    expect(String(rows[0].prosrc)).toContain("email IS NOT NULL");
+
+    // E o ledger não foi tocado.
+    const { rows: led } = await pool.query(
+      "SELECT count(*)::int AS n FROM public._migrations WHERE name = $1", [NOME_106]);
+    expect(led[0].n).toBe(1);
+
+    await palco();
+  });
+
+  it("🔴 E. can_access_service alterada DEPOIS da 106: o rollback RECUSA", LENTO, async () => {
+    // Mantém `get_my_profile_id()` e mantém `search_path` — passa pela
+    // detecção de efeitos antiga, e muda uma regra material: deixa de aceitar
+    // reforços pontuais.
+    await pool.query(`
+      CREATE OR REPLACE FUNCTION public.can_access_service(p_service_id uuid)
+      RETURNS boolean LANGUAGE sql SECURITY DEFINER STABLE
+      SET search_path = pg_catalog, public
+      AS $f$
+        SELECT EXISTS (
+          SELECT 1 FROM public.services s
+          JOIN public.profiles p ON p.id = public.get_my_profile_id()
+           AND p.company_id = s.company_id
+          WHERE s.id = p_service_id
+            AND EXISTS (SELECT 1 FROM public.team_members tm
+                         WHERE tm.team_id = s.team_id AND tm.collaborator_id = p.id)
+        )
+      $f$;`);
+
+    await expect(pool.query(lerSql(ROLLBACK_106)))
+      .rejects.toThrow(/COLAB_106_ROLLBACK_CURRENT_STATE_DIVERGED/);
+
+    const { rows } = await pool.query(
+      "SELECT prosrc FROM pg_proc WHERE oid = to_regprocedure($1)", [SIG_SERVICO]);
+    expect(String(rows[0].prosrc)).not.toContain("service_reinforcements");
+    // O resolver também não foi reposto.
+    const res = await pool.query(
+      "SELECT prosrc FROM pg_proc WHERE oid = to_regprocedure($1)", [SIG_RESOLVER]);
+    expect(String(res.rows[0].prosrc)).toMatch(/status = 'ativo'/);
+
+    await palco();
+  });
+
+  it("🔴 F. só a ACL mudou depois da 106: o rollback RECUSA antes de repor", LENTO, async () => {
+    await pool.query("CREATE ROLE papel_extra_rb106 NOLOGIN");
+    await pool.query(
+      "GRANT EXECUTE ON FUNCTION public.can_access_service(uuid) TO papel_extra_rb106");
+
+    try {
+      await expect(pool.query(lerSql(ROLLBACK_106)))
+        .rejects.toThrow(/COLAB_106_ROLLBACK_CURRENT_STATE_DIVERGED/);
+
+      // Os corpos continuam os da 106 — nada foi reposto.
+      const { rows } = await pool.query(
+        "SELECT prosrc FROM pg_proc WHERE oid = to_regprocedure($1)", [SIG_RESOLVER]);
+      expect(String(rows[0].prosrc)).toMatch(/status = 'ativo'/);
+
+      const { rows: led } = await pool.query(
+        "SELECT count(*)::int AS n FROM public._migrations WHERE name = $1", [NOME_106]);
+      expect(led[0].n).toBe(1);
+    } finally {
+      await pool.query(
+        "REVOKE ALL ON FUNCTION public.can_access_service(uuid) FROM papel_extra_rb106")
+        .catch(() => { /* já não existe */ });
+      await pool.query("DROP ROLE IF EXISTS papel_extra_rb106");
+      await palco();
+    }
   });
 
   it("🔴 rollback com checksum divergente: nada é alterado", LENTO, async () => {

@@ -283,44 +283,7 @@ END;
 $dependencias$;
 
 -- ---------------------------------------------------------------------------
--- 0b. Pré-estado — o resolver que vai ser substituído é o que este ficheiro leu
--- ---------------------------------------------------------------------------
---
--- 🔴 Substituir às cegas uma função que 69 políticas usam é o caminho mais
---    curto para partir a leitura de toda a gente. Antes de reescrever, prova-se
---    que o que lá está tem a forma conhecida.
-
-DO $preestado$
-DECLARE
-  v_resolver text;
-  v_servico  text;
-BEGIN
-  SELECT p.prosrc INTO v_resolver
-    FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
-   WHERE n.nspname = 'public' AND p.proname = 'get_my_profile_id';
-
-  -- Tem de conhecer a coluna da 101b. Se não conhecer, não é o resolver
-  -- canónico e substituí-lo seria adoptar um estado que não se percebe.
-  IF position('auth_user_id' in v_resolver) = 0 THEN
-    RAISE EXCEPTION
-      'COLAB_106_PREESTADO_INESPERADO: get_my_profile_id não menciona auth_user_id — não é o resolver da 101b';
-  END IF;
-
-  SELECT p.prosrc INTO v_servico
-    FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
-   WHERE n.nspname = 'public' AND p.proname = 'can_access_service';
-
-  -- A forma antiga que esta migration existe para corrigir.
-  IF position('auth.uid()' in v_servico) = 0
-     AND position('get_my_profile_id' in v_servico) = 0 THEN
-    RAISE EXCEPTION
-      'COLAB_106_PREESTADO_INESPERADO: can_access_service não usa auth.uid() nem o resolver — forma desconhecida';
-  END IF;
-END;
-$preestado$;
-
--- ---------------------------------------------------------------------------
--- 0c. Proveniência da própria 106 — efeito presente não é migration aplicada
+-- 0b. Proveniência da própria 106 — efeito presente não é migration aplicada
 -- ---------------------------------------------------------------------------
 --
 -- 🔴 Os efeitos desta migration são REDEFINIÇÕES, não criações. Não há um
@@ -377,6 +340,179 @@ BEGIN
   END IF;
 END;
 $proveniencia$;
+
+-- ---------------------------------------------------------------------------
+-- 0c. Pré-estado — o resolver que vai ser substituído é o que este ficheiro leu
+-- ---------------------------------------------------------------------------
+--
+-- 🔴 Substituir às cegas uma função que 69 políticas usam é o caminho mais
+--    curto para partir a leitura de toda a gente. Antes de reescrever, prova-se
+--    que o que lá está tem a forma conhecida.
+
+-- 🔴 ESTE BLOCO VEM DEPOIS DA PROVENIÊNCIA, e a ordem não é estética.
+--
+--    Enquanto estava antes, uma 106 já aplicada era diagnosticada como
+--    «alguém alterou o resolver» — porque o pré-estado encontrava o corpo NOVO
+--    e não o predecessor. A pergunta «vou sequer aplicar?» tem de ser
+--    respondida antes de «o predecessor é o esperado?», senão a mensagem
+--    manda investigar um problema que não existe.
+--
+-- 🔴 A COMPARAÇÃO É DO CORPO INTEIRO, e não de uma palavra.
+--
+--    A primeira versão deste bloco aceitava o resolver se `prosrc` contivesse
+--    a palavra `auth_user_id`, e `can_access_service` se contivesse
+--    `auth.uid()` OU `get_my_profile_id`. Isso não prova forma nenhuma: uma
+--    função alterada depois da 101b, com regra nova e a palavra lá dentro,
+--    passava — e a 106 pisava-a com `CREATE OR REPLACE`, apagando trabalho de
+--    outra pessoa sem aviso.
+--
+--    Pior: este ficheiro AFIRMA, no bloco 0a, que a forma viva é prova mais
+--    forte do que o checksum histórico da 034. Uma afirmação dessas não se
+--    sustenta medindo uma palavra.
+--
+-- 🔴 O espaço em branco é normalizado; o resto é EXACTO.
+--
+--    `[[:space:]]+ → ' '` tira da comparação a indentação e o CRLF/LF, que
+--    variam com quem aplicou e com o sistema de ficheiros. O que sobra —
+--    tabelas, colunas, operadores, ordem — tem de bater carácter a carácter.
+--
+--    A classe POSIX é deliberada: `\s` obrigaria a escapar a barra invertida,
+--    e este ficheiro atravessa camadas onde isso se perde em silêncio.
+--
+-- 🔴 As formas esperadas foram lidas do CATÁLOGO VIVO de produção a
+--    2026-09-24, não copiadas dos ficheiros de migration. Não é a mesma coisa:
+--    o corpo da `can_access_service` em produção NÃO tem os comentários que a
+--    034 tem no repositório. Comparar com o ficheiro faria a migration
+--    recusar-se a instalar precisamente na base que ela existe para corrigir.
+
+DO $preestado$
+DECLARE
+  RESOLVER_ESPERADO CONSTANT text :=
+    'SELECT id FROM profiles WHERE auth_user_id = auth.uid() UNION ALL SELECT id FROM profiles p WHERE p.id = auth.uid() AND EXISTS (SELECT 1 FROM auth.users u WHERE u.id = p.id) AND NOT EXISTS (SELECT 1 FROM profiles x WHERE x.auth_user_id = auth.uid()) LIMIT 1;';
+
+  SERVICO_ESPERADO CONSTANT text :=
+    'SELECT EXISTS ( SELECT 1 FROM services s INNER JOIN profiles p ON p.id = auth.uid() AND p.company_id = s.company_id WHERE s.id = p_service_id AND ( EXISTS ( SELECT 1 FROM team_members tm WHERE tm.team_id = s.team_id AND tm.collaborator_id = auth.uid() AND (tm.left_at IS NULL OR tm.left_at > NOW()) ) OR EXISTS ( SELECT 1 FROM service_reinforcements sr WHERE sr.service_id = s.id AND sr.collaborator_id = auth.uid() ) ) )';
+
+  v_corpo    text;
+  v_definer  boolean;
+  v_volatil  "char";
+  v_lang     text;
+  v_config   text;
+  v_grantees text[];
+  v_esperados text[];
+  v_oid      oid;
+  r          text;
+BEGIN
+  -- ── O resolver, tal como a 101b o deixou ────────────────────────────────
+  v_oid := to_regprocedure('public.get_my_profile_id()');
+
+  SELECT btrim(regexp_replace(p.prosrc, '[[:space:]]+', ' ', 'g')),
+         p.prosecdef, p.provolatile, l.lanname,
+         coalesce(array_to_string(p.proconfig, ', '), '')
+    INTO v_corpo, v_definer, v_volatil, v_lang, v_config
+    FROM pg_proc p JOIN pg_language l ON l.oid = p.prolang
+   WHERE p.oid = v_oid;
+
+  IF v_corpo IS DISTINCT FROM RESOLVER_ESPERADO THEN
+    RAISE EXCEPTION
+      'COLAB_106_PREESTADO_INESPERADO: get_my_profile_id não tem o corpo canónico da 101b. Alguém o alterou depois, e substituí-lo apagaria essa alteração. Encontrado: %',
+      left(v_corpo, 400);
+  END IF;
+
+  IF NOT v_definer OR v_volatil <> 's' OR v_lang <> 'sql' THEN
+    RAISE EXCEPTION
+      'COLAB_106_PREESTADO_INESPERADO: get_my_profile_id com definição inesperada (definer=%, volatilidade=%, linguagem=%)',
+      v_definer, v_volatil, v_lang;
+  END IF;
+
+  IF v_config <> 'search_path=public' THEN
+    RAISE EXCEPTION
+      'COLAB_106_PREESTADO_INESPERADO: get_my_profile_id com search_path inesperado (%)',
+      coalesce(nullif(v_config, ''), '(nenhum)');
+  END IF;
+
+  -- 🔴 A ACL também. Se alguém tiver dado EXECUTE a mais um papel, a 106
+  --    revogava-o silenciosamente no bloco 3 — e isso é uma decisão de outra
+  --    pessoa a ser desfeita sem ninguém dar por ela.
+  SELECT array_agg(DISTINCT a.grantee::regrole::text ORDER BY a.grantee::regrole::text)
+    INTO v_grantees
+    FROM pg_proc p, LATERAL aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) a
+   WHERE p.oid = v_oid AND a.privilege_type = 'EXECUTE';
+
+  -- O esperado: o owner e os papéis do Supabase QUE EXISTEM. Sem PUBLIC.
+  SELECT array_agg(g ORDER BY g) INTO v_esperados
+    FROM (
+      SELECT p.proowner::regrole::text AS g FROM pg_proc p WHERE p.oid = v_oid
+      UNION
+      SELECT rolname FROM pg_roles WHERE rolname IN ('anon', 'authenticated', 'service_role')
+    ) AS e;
+
+  IF v_grantees IS DISTINCT FROM v_esperados THEN
+    RAISE EXCEPTION
+      'COLAB_106_PREESTADO_INESPERADO: ACL de get_my_profile_id é % — esperado %',
+      coalesce(array_to_string(v_grantees, ', '), 'NENHUMA'),
+      array_to_string(v_esperados, ', ');
+  END IF;
+
+  -- ── can_access_service, tal como a 034 a deixou ─────────────────────────
+  v_oid := to_regprocedure('public.can_access_service(uuid)');
+
+  SELECT btrim(regexp_replace(p.prosrc, '[[:space:]]+', ' ', 'g')),
+         p.prosecdef, p.provolatile, l.lanname,
+         coalesce(array_to_string(p.proconfig, ', '), '')
+    INTO v_corpo, v_definer, v_volatil, v_lang, v_config
+    FROM pg_proc p JOIN pg_language l ON l.oid = p.prolang
+   WHERE p.oid = v_oid;
+
+  IF v_corpo IS DISTINCT FROM SERVICO_ESPERADO THEN
+    RAISE EXCEPTION
+      'COLAB_106_PREESTADO_INESPERADO: can_access_service não tem o corpo vivo da 034. Encontrado: %',
+      left(v_corpo, 400);
+  END IF;
+
+  IF NOT v_definer OR v_volatil <> 's' OR v_lang <> 'sql' THEN
+    RAISE EXCEPTION
+      'COLAB_106_PREESTADO_INESPERADO: can_access_service com definição inesperada (definer=%, volatilidade=%, linguagem=%)',
+      v_definer, v_volatil, v_lang;
+  END IF;
+
+  -- 🔴 A AUSÊNCIA de search_path é parte da forma esperada. Se já lá estiver
+  --    um, alguém corrigiu isto antes desta migration — e o que a 106 ia
+  --    fazer já está feito, por outra mão e talvez de outra maneira.
+  IF v_config <> '' THEN
+    RAISE EXCEPTION
+      'COLAB_106_PREESTADO_INESPERADO: can_access_service já tem search_path (%) — alguém a endureceu antes desta migration',
+      v_config;
+  END IF;
+
+  SELECT array_agg(DISTINCT a.grantee::regrole::text ORDER BY a.grantee::regrole::text)
+    INTO v_grantees
+    FROM pg_proc p, LATERAL aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) a
+   WHERE p.oid = v_oid AND a.privilege_type = 'EXECUTE';
+
+  -- 🔴 Aqui o esperado INCLUI PUBLIC (`-`): é o que produção tem, e é
+  --    precisamente o que a 106 vai retirar. Esperar a forma já corrigida
+  --    seria aceitar como predecessor aquilo que é o resultado.
+  SELECT array_agg(g ORDER BY g) INTO v_esperados
+    FROM (
+      SELECT '-' AS g
+      UNION
+      SELECT p.proowner::regrole::text FROM pg_proc p WHERE p.oid = v_oid
+      UNION
+      SELECT rolname FROM pg_roles WHERE rolname IN ('anon', 'authenticated', 'service_role')
+    ) AS e;
+
+  IF v_grantees IS DISTINCT FROM v_esperados THEN
+    RAISE EXCEPTION
+      'COLAB_106_PREESTADO_INESPERADO: ACL de can_access_service é % — esperado %',
+      coalesce(array_to_string(v_grantees, ', '), 'NENHUMA'),
+      array_to_string(v_esperados, ', ');
+  END IF;
+
+  -- Silencia o aviso de variável não usada sem esconder nada.
+  r := NULL;
+END;
+$preestado$;
 
 -- ---------------------------------------------------------------------------
 -- 1. O resolver passa a exigir estado activo
