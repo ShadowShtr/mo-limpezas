@@ -67,7 +67,7 @@ DO $rollback_106$
 DECLARE
   -- 🔴 O checksum canónico desta 106. Se o SQL mudar, este valor TEM de mudar
   --    com ele — há um ensaio que os compara.
-  CHECKSUM_106 CONSTANT text := '7d3b594075b042570403aaf1ce276b291649897a736cbb8fbf0ae36da2abb6c7';
+  CHECKSUM_106 CONSTANT text := '6356a504bde6d4f4f76cfc538d8822e525c8277f487aa22932541557fa47beb1';
 
   v_checksum text;
   v_ledger   boolean;

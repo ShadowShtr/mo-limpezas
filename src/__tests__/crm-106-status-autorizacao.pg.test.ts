@@ -803,6 +803,71 @@ describe("16-20. proveniência e aplicação", () => {
     }
   });
 
+  // 🔴 O caso que a lista de grantees NÃO distingue.
+  //
+  //    `authenticated` com EXECUTE e `authenticated` com EXECUTE WITH GRANT
+  //    OPTION dão exactamente os mesmos nomes em `array_agg(grantee)`. Sem ler
+  //    `is_grantable`, o pré-estado dava-os por iguais — e o bloco da ACL da
+  //    106 (`REVOKE ALL` + `GRANT EXECUTE`) retirava a capacidade de delegar
+  //    sem o dizer a ninguém.
+  const COM_GRANT_OPTION: Array<[string, string, string]> = [
+    ["get_my_profile_id", "public.get_my_profile_id()", SIG_RESOLVER],
+    ["can_access_service", "public.can_access_service(uuid)", SIG_SERVICO],
+  ];
+
+  for (const [nome, alvoGrant, assinatura] of COM_GRANT_OPTION) {
+    it(`🔴 ${nome} com WITH GRANT OPTION no predecessor: a 106 RECUSA`, LENTO, async () => {
+      await palco(false);
+
+      const antesGrantees = await pool.query(`
+        SELECT array_agg(DISTINCT a.grantee::regrole::text ORDER BY a.grantee::regrole::text) AS g
+          FROM pg_proc p, LATERAL aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) a
+         WHERE p.oid = to_regprocedure($1) AND a.privilege_type='EXECUTE'`, [assinatura]);
+
+      await pool.query(
+        `GRANT EXECUTE ON FUNCTION ${alvoGrant} TO authenticated WITH GRANT OPTION`);
+
+      // 🔴 A LISTA NÃO MUDOU — é isso que torna o caso perigoso.
+      const depoisGrantees = await pool.query(`
+        SELECT array_agg(DISTINCT a.grantee::regrole::text ORDER BY a.grantee::regrole::text) AS g,
+               bool_or(a.is_grantable) AS grantable
+          FROM pg_proc p, LATERAL aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) a
+         WHERE p.oid = to_regprocedure($1) AND a.privilege_type='EXECUTE'`, [assinatura]);
+      expect(depoisGrantees.rows[0].g).toEqual(antesGrantees.rows[0].g);
+      expect(depoisGrantees.rows[0].grantable).toBe(true);
+
+      const corpoResolverAntes = await pool.query(
+        "SELECT prosrc FROM pg_proc WHERE oid = to_regprocedure($1)", [SIG_RESOLVER]);
+      const corpoServicoAntes = await pool.query(
+        "SELECT prosrc FROM pg_proc WHERE oid = to_regprocedure($1)", [SIG_SERVICO]);
+
+      await expect(pool.query(lerSql(M_106)))
+        .rejects.toThrow(/COLAB_106_PREESTADO_INESPERADO/);
+
+      // 🔴 ZERO escritas: corpos intactos, grant option intacto, ledger sem 106.
+      const resolverDepois = await pool.query(
+        "SELECT prosrc FROM pg_proc WHERE oid = to_regprocedure($1)", [SIG_RESOLVER]);
+      expect(resolverDepois.rows[0].prosrc).toBe(corpoResolverAntes.rows[0].prosrc);
+      expect(String(resolverDepois.rows[0].prosrc)).not.toMatch(/status/);
+
+      const servicoDepois = await pool.query(
+        "SELECT prosrc FROM pg_proc WHERE oid = to_regprocedure($1)", [SIG_SERVICO]);
+      expect(servicoDepois.rows[0].prosrc).toBe(corpoServicoAntes.rows[0].prosrc);
+
+      const aclDepois = await pool.query(`
+        SELECT bool_or(a.is_grantable) AS grantable
+          FROM pg_proc p, LATERAL aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) a
+         WHERE p.oid = to_regprocedure($1) AND a.privilege_type='EXECUTE'`, [assinatura]);
+      expect(aclDepois.rows[0].grantable, "o grant option de outra pessoa foi retirado").toBe(true);
+
+      const { rows: led } = await pool.query(
+        "SELECT count(*)::int AS n FROM public._migrations WHERE name = $1", [NOME_106]);
+      expect(led[0].n).toBe(0);
+
+      await palco();
+    });
+  }
+
   it("os checksums fixados na 106 são os dos ficheiros do repositório", LENTO, async () => {
     const sql = lerSql(M_106);
     const fixados = [...sql.matchAll(/\('(\d{3}[a-z]?_[a-z_]+\.sql)',\s*'([0-9a-f]{64})'\)/g)];

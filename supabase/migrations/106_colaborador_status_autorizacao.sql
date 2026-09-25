@@ -399,6 +399,7 @@ DECLARE
   v_lang     text;
   v_config   text;
   v_grantees text[];
+  v_grantable boolean;
   v_esperados text[];
   v_oid      oid;
   r          text;
@@ -434,8 +435,9 @@ BEGIN
   -- 🔴 A ACL também. Se alguém tiver dado EXECUTE a mais um papel, a 106
   --    revogava-o silenciosamente no bloco 3 — e isso é uma decisão de outra
   --    pessoa a ser desfeita sem ninguém dar por ela.
-  SELECT array_agg(DISTINCT a.grantee::regrole::text ORDER BY a.grantee::regrole::text)
-    INTO v_grantees
+  SELECT array_agg(DISTINCT a.grantee::regrole::text ORDER BY a.grantee::regrole::text),
+         bool_or(a.is_grantable)
+    INTO v_grantees, v_grantable
     FROM pg_proc p, LATERAL aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) a
    WHERE p.oid = v_oid AND a.privilege_type = 'EXECUTE';
 
@@ -453,6 +455,19 @@ BEGIN
       coalesce(array_to_string(v_grantees, ', '), 'NENHUMA'),
       array_to_string(v_esperados, ', ');
   END IF;
+  -- 🔴 E o GRANT OPTION, que a lista de grantees NÃO mostra.
+  --
+  --    `authenticated` com EXECUTE e `authenticated` com EXECUTE WITH GRANT
+  --    OPTION produzem exactamente a MESMA lista de nomes. A diferença é que o
+  --    segundo pode passar o privilégio adiante — e o bloco da ACL desta
+  --    migration faz `REVOKE ALL` seguido de `GRANT EXECUTE`, que o retira em
+  --    silêncio. Alguém decidiu dar essa capacidade; não é esta migration que
+  --    a desfaz sem dizer nada.
+  IF coalesce(v_grantable, false) THEN
+    RAISE EXCEPTION
+      'COLAB_106_PREESTADO_INESPERADO: get_my_profile_id tem EXECUTE com WITH GRANT OPTION — a 106 iria retirá-lo sem o dizer. Nada foi alterado.';
+  END IF;
+
 
   -- ── can_access_service, tal como a 034 a deixou ─────────────────────────
   v_oid := to_regprocedure('public.can_access_service(uuid)');
@@ -485,8 +500,9 @@ BEGIN
       v_config;
   END IF;
 
-  SELECT array_agg(DISTINCT a.grantee::regrole::text ORDER BY a.grantee::regrole::text)
-    INTO v_grantees
+  SELECT array_agg(DISTINCT a.grantee::regrole::text ORDER BY a.grantee::regrole::text),
+         bool_or(a.is_grantable)
+    INTO v_grantees, v_grantable
     FROM pg_proc p, LATERAL aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) a
    WHERE p.oid = v_oid AND a.privilege_type = 'EXECUTE';
 
@@ -508,6 +524,19 @@ BEGIN
       coalesce(array_to_string(v_grantees, ', '), 'NENHUMA'),
       array_to_string(v_esperados, ', ');
   END IF;
+  -- 🔴 E o GRANT OPTION, que a lista de grantees NÃO mostra.
+  --
+  --    `authenticated` com EXECUTE e `authenticated` com EXECUTE WITH GRANT
+  --    OPTION produzem exactamente a MESMA lista de nomes. A diferença é que o
+  --    segundo pode passar o privilégio adiante — e o bloco da ACL desta
+  --    migration faz `REVOKE ALL` seguido de `GRANT EXECUTE`, que o retira em
+  --    silêncio. Alguém decidiu dar essa capacidade; não é esta migration que
+  --    a desfaz sem dizer nada.
+  IF coalesce(v_grantable, false) THEN
+    RAISE EXCEPTION
+      'COLAB_106_PREESTADO_INESPERADO: can_access_service tem EXECUTE com WITH GRANT OPTION — a 106 iria retirá-lo sem o dizer. Nada foi alterado.';
+  END IF;
+
 
   -- Silencia o aviso de variável não usada sem esconder nada.
   r := NULL;
