@@ -1480,12 +1480,26 @@ describe("33. proveniência e efeito exclusivo", () => {
     }
   });
 
-  it("🔴 a 105 é a última migration numerada desta unidade", LENTO, async () => {
+  it("🔴 nenhuma migration posterior redefine o que a 105 criou", LENTO, async () => {
+    // 🔴 Este ensaio já exigiu que NÃO existisse migration acima da 105. Era
+    //    verdade só enquanto a 105 era a última — a cadeia cresce, e um guard
+    //    que proíbe o futuro não é um guard, é um travão.
+    //
+    //    O que esta unidade promete, e continua a ter de provar, é mais
+    //    estreito: nenhuma migration posterior pode mexer em
+    //    `edit_crm_quote_draft`. Se mexesse, o checksum fixado no rollback da
+    //    105 deixaria de descrever o que está aplicado, e o rollback passaria
+    //    a desfazer às cegas.
     const { readdirSync } = await import("node:fs");
-    const maiores = readdirSync(join(process.cwd(), "supabase/migrations"))
-      .filter((m) => /^\d{3}[a-z]?_/.test(m))
+    const posteriores = readdirSync(join(process.cwd(), "supabase/migrations"))
+      .filter((m) => /^\d{3}[a-z]?_.*\.sql$/.test(m))
       .filter((m) => Number(m.slice(0, 3)) > 105);
-    expect(maiores).toEqual([]);
+
+    for (const ficheiro of posteriores) {
+      const sql = lerSql(`supabase/migrations/${ficheiro}`);
+      expect(sql, `${ficheiro} mexe em edit_crm_quote_draft`)
+        .not.toContain("edit_crm_quote_draft");
+    }
   });
 });
 
