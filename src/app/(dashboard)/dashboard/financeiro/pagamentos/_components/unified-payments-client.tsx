@@ -41,6 +41,7 @@ import { createCashFlowEntry, deleteCashFlowEntry, updateCashFlowEntry } from "@
 import { AttachmentsField } from "@/components/attachments/attachments-field";
 import { RowMenu } from "@/components/financeiro/v2/primitives";
 import { todayInLisbon } from "@/lib/lisbon-time";
+import { isValidIsoDateString } from "@/lib/utils";
 import { buildPaymentUpdatePatch } from "@/domain/finance/payment-edit-patch";
 
 export interface LedgerCategoryOption { id: string; name: string }
@@ -206,6 +207,25 @@ export function UnifiedPaymentsClient({ rows, error: initialError, categories, c
     const notes = form.notes.trim() || null;
 
     if (form.type === "payment") {
+      // 🔴 O vencimento é validado ANTES de qualquer chamada ao servidor.
+      //
+      //    `<input type="date">` parece garantir o formato e não garante: com
+      //    o campo preenchido à mão, ou num browser que o degrade para texto,
+      //    chega aqui o que a pessoa escreveu. Sem esta guarda, uma data
+      //    impossível — 2026-02-30 — seguia para a Server Action, e o que
+      //    voltava era o erro de conversão do PostgreSQL.
+      //
+      //    Vazio continua a ser permitido: um pagamento sem vencimento é um
+      //    caso real (IVA, Segurança Social) e tem o seu próprio caminho.
+      //
+      //    `isValidIsoDateString` é o contrato de data civil que o resto do
+      //    produto já usa — ausências, contratos, calendário. Uma segunda
+      //    expressão regular aqui seria uma segunda definição de «data válida»,
+      //    e é assim que duas superfícies passam a discordar.
+      if (form.dueDate !== "" && !isValidIsoDateString(form.dueDate)) {
+        setFormError("Indique um vencimento válido.");
+        return;
+      }
       const directDebit = form.directDebit === "" ? null : form.directDebit === "sim";
       if (form.row?.payment_id) {
         const patch = buildPaymentUpdatePatch(form.row, {
