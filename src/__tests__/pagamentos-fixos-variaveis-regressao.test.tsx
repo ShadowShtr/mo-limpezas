@@ -498,6 +498,7 @@ describe("4. provas DOM/runtime do P0 fixos/variáveis", () => {
 
 describe("5. Cobranças > Diário tem CTA de adicionar", () => {
   const DIARIO = ler("src/app/(dashboard)/dashboard/cobrancas/_components/daily-billing-client.tsx");
+  const PAGAMENTOS = ler("src/app/(dashboard)/dashboard/cobrancas/_components/use-daily-billing-payments.ts");
 
   it("🔴 o botão «Adicionar cobrança» existe", () => {
     expect(DIARIO).toContain("Adicionar cobrança");
@@ -535,7 +536,7 @@ describe("5. Cobranças > Diário tem CTA de adicionar", () => {
     // Navegação de dia, atualizar e registo de pagamento continuam.
     expect(DIARIO).toContain("Dia anterior");
     expect(DIARIO).toContain("Dia seguinte");
-    expect(DIARIO).toContain("setServicePayment");
+    expect(PAGAMENTOS).toContain("setServicePayment");
   });
 });
 

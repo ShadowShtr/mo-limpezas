@@ -53,6 +53,8 @@ import { nota as locaisPontoNoMapa } from "./2026-09-10-locais-ponto-no-mapa";
 import { nota as locaisMapaAVista } from "./2026-09-10-locais-mapa-a-vista";
 import { nota as pagamentosOrdemVencimento } from "./2026-09-11-pagamentos-ordem-vencimento";
 import { nota as pagamentosOrdemTodasAsAbas } from "./2026-09-11-pagamentos-ordem-todas-as-abas";
+import { nota as cobrancasDiaCerto } from "./2026-09-12-cobrancas-dia-certo";
+import { nota as cobrancasGravacoesSeguras } from "./2026-09-12-cobrancas-gravacoes-seguras";
 import { nota as colaboradoresSemEliminar } from "./2026-09-18-colaboradores-sem-eliminar";
 import { nota as crmFunilDeLeads } from "./2026-09-19-crm-funil-de-leads";
 import { nota as crmVisitas } from "./2026-09-19-crm-visitas";
@@ -100,6 +102,8 @@ export const RELEASE_NOTES: ReleaseNote[] = [
   locaisMapaAVista,
   pagamentosOrdemVencimento,
   pagamentosOrdemTodasAsAbas,
+  cobrancasDiaCerto,
+  cobrancasGravacoesSeguras,
   colaboradoresSemEliminar,
   crmFunilDeLeads,
   crmVisitas,

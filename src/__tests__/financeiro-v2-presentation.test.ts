@@ -32,7 +32,8 @@ const V = {
   contas: "src/app/(dashboard)/dashboard/financeiro/contas/_components/contas-client.tsx",
   fluxo: "src/app/(dashboard)/dashboard/financeiro/fluxo-caixa/_components/cash-flow-client.tsx",
   cobrancas: "src/app/(dashboard)/dashboard/cobrancas/_components/invoices-client.tsx",
-  diaria: "src/app/(dashboard)/dashboard/cobrancas/_components/daily-billing-client.tsx",
+  // A extração EST-04 deixou o comando no hook; o cliente continua a montá-lo.
+  diaria: "src/app/(dashboard)/dashboard/cobrancas/_components/use-daily-billing-payments.ts",
   folha: "src/app/(dashboard)/dashboard/folha-pagamento/_components/payroll-client.tsx",
   folhaSheet: "src/app/(dashboard)/dashboard/folha-pagamento/_components/payroll-edit-sheet.tsx",
   conciliacao: "src/app/(dashboard)/dashboard/financeiro/conciliacao/_components/reconciliation-client.tsx",

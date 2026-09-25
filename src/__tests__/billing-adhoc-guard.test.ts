@@ -82,7 +82,8 @@ const RULES: Rule[] = [
     pattern: /1\s*\+\s*(?:vat[A-Za-z]*\s*\/\s*100|vatFactor)/g,
     allow: {
       "src/app/(dashboard)/dashboard/calendario/_components/service-create-sheet.tsx": 1,
-      "src/app/(dashboard)/dashboard/cobrancas/_components/daily-billing-client.tsx": 3,
+      "src/app/(dashboard)/dashboard/cobrancas/_components/daily-billing-client.tsx": 2,
+      "src/app/(dashboard)/dashboard/cobrancas/_components/payment-row.tsx": 1,
       "src/app/(dashboard)/dashboard/relatorios/_components/reports-tabs.tsx": 4,
       "src/app/actions/financial-dashboard.ts": 2,
       "src/lib/service-value.ts": 1,
@@ -96,7 +97,8 @@ const RULES: Rule[] = [
     pattern: /vat(?:Rate|RatePct)\s*\/\s*100/g,
     allow: {
       "src/app/(dashboard)/dashboard/calendario/_components/service-create-sheet.tsx": 2,
-      "src/app/(dashboard)/dashboard/cobrancas/_components/daily-billing-client.tsx": 3,
+      "src/app/(dashboard)/dashboard/cobrancas/_components/daily-billing-client.tsx": 2,
+      "src/app/(dashboard)/dashboard/cobrancas/_components/payment-row.tsx": 1,
       "src/app/(dashboard)/dashboard/contratos/_components/sheet.tsx": 1,
       "src/app/(dashboard)/dashboard/relatorios/_components/reports-tabs.tsx": 2,
       "src/app/actions/financial-dashboard.ts": 1,

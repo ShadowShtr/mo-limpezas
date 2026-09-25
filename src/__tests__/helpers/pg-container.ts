@@ -25,13 +25,45 @@
 // ============================================================================
 
 import { spawnSync } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import pg from "pg";
 
 /** Imagem única para todas as suites: uma versão, um comportamento. */
-export const POSTGRES_IMAGE = "postgres:17-alpine";
+export const POSTGRES_IMAGE = "postgres:17.11-alpine";
+
+const OWNER_LABEL = "com.mol.test-owner";
+let containerSequence = 0;
+
+function uniqueContainerName(prefix: string): string {
+  const safePrefix = prefix
+    .toLowerCase()
+    .replace(/[^a-z0-9_.-]+/g, "-")
+    .replace(/^[^a-z0-9]+/, "")
+    .slice(0, 40) || "postgres-test";
+  containerSequence += 1;
+  return `${safePrefix}-${process.pid}-${containerSequence}-${randomUUID().slice(0, 8)}`;
+}
+
+/** Barreira de utilização única para ordenar duas ou mais sessões sem sleeps. */
+export function createBarrier(participants: number): { wait: () => Promise<void> } {
+  if (!Number.isInteger(participants) || participants < 1) {
+    throw new Error("A barreira exige pelo menos um participante inteiro.");
+  }
+  let arrived = 0;
+  let release!: () => void;
+  const opened = new Promise<void>((resolve) => { release = resolve; });
+  return {
+    async wait() {
+      arrived += 1;
+      if (arrived === participants) release();
+      if (arrived > participants) throw new Error("A barreira já foi preenchida.");
+      await opened;
+    },
+  };
+}
 
 export interface PostgresContainerOptions {
-  /** Nome do contentor. Inclua o PID para que suites em paralelo não colidam. */
+  /** Prefixo legível; o helper acrescenta identidade exclusiva por execução. */
   name: string;
   /** Base criada pelo entrypoint (`POSTGRES_DB`). */
   database: string;
@@ -174,13 +206,13 @@ export async function startPostgresContainer(
     pollIntervalMs = 250,
   } = options;
 
-  // Um contentor com o mesmo nome de uma execução interrompida impediria o
-  // arranque. Remover antes é mais fiável do que confiar no `--rm`.
-  docker(["rm", "-f", name]);
+  const requestedName = name;
+  const actualName = uniqueContainerName(requestedName);
+  const owner = randomUUID();
 
   const flags = serverFlags.flatMap((flag) => ["-c", flag]);
   const started = docker([
-    "run", "--rm", "-d", "--name", name,
+    "run", "--rm", "-d", "--name", actualName, "--label", `${OWNER_LABEL}=${owner}`,
     `--memory=${memory}`, `--memory-swap=${memory}`, `--cpus=${cpus}`, `--shm-size=${shmSize}`,
     "-e", "POSTGRES_HOST_AUTH_METHOD=trust", "-e", `POSTGRES_DB=${database}`,
     "-p", "127.0.0.1::5432", POSTGRES_IMAGE,
@@ -188,14 +220,31 @@ export async function startPostgresContainer(
   ]);
   if (started.status !== 0) throw new Error(started.stderr || started.stdout);
 
+  let stopped = false;
   const stop = () => {
-    try { docker(["rm", "-f", name]); } catch { /* já não existe */ }
+    if (stopped) return;
+    try {
+      const foundOwner = docker([
+        "inspect", "-f", `{{ index .Config.Labels "${OWNER_LABEL}" }}`, actualName,
+      ]);
+      if (foundOwner.status !== 0) return;
+      if (foundOwner.stdout.trim() !== owner) {
+        stopped = true;
+        return;
+      }
+      if (docker(["rm", "-f", actualName]).status === 0) stopped = true;
+    } catch { /* já não existe ou deixou de pertencer a esta execução */ }
   };
 
   try {
-    const port = readPublishedPort(name);
-    await waitForExternalReadiness({ name, port, database, readyTimeoutMs, pollIntervalMs });
-    return { name, port, connection: { host: "127.0.0.1", port, user: "postgres", database }, stop };
+    const port = readPublishedPort(actualName);
+    await waitForExternalReadiness({ name: actualName, port, database, readyTimeoutMs, pollIntervalMs });
+    return {
+      name: actualName,
+      port,
+      connection: { host: "127.0.0.1", port, user: "postgres", database },
+      stop,
+    };
   } catch (error) {
     stop();
     throw error;
