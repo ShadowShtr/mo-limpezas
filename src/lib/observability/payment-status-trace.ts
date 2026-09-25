@@ -130,6 +130,11 @@ export const CODIGOS_CONHECIDOS = [
   "UNAUTHENTICATED",
   "PROFILE_NOT_FOUND",
   "FORBIDDEN",
+  // 🔴 Desde a 106-B: sessão válida, perfil que já não autoriza. É distinto de
+  //    FORBIDDEN (papel errado) e de PROFILE_NOT_FOUND (não existe) — nos logs
+  //    de pagamentos a diferença diz se foi uma saída de colaborador ou uma
+  //    tentativa de acesso a algo acima do papel.
+  "INACTIVE",
   // src/lib/finance-period-guard.ts — assertFinancialPeriodOpen
   "INVALID_DATE",
   "FINANCIAL_PERIOD_STATE_UNKNOWN",

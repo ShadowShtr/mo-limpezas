@@ -55,6 +55,13 @@ import { nota as pagamentosOrdemVencimento } from "./2026-09-11-pagamentos-ordem
 import { nota as pagamentosOrdemTodasAsAbas } from "./2026-09-11-pagamentos-ordem-todas-as-abas";
 import { nota as cobrancasDiaCerto } from "./2026-09-12-cobrancas-dia-certo";
 import { nota as cobrancasGravacoesSeguras } from "./2026-09-12-cobrancas-gravacoes-seguras";
+import { nota as colaboradoresSemEliminar } from "./2026-09-18-colaboradores-sem-eliminar";
+import { nota as crmFunilDeLeads } from "./2026-09-19-crm-funil-de-leads";
+import { nota as crmVisitas } from "./2026-09-19-crm-visitas";
+import { nota as crmOrcamentos } from "./2026-09-22-crm-orcamentos";
+import { nota as crmConversaoCliente } from "./2026-09-23-crm-conversao-cliente";
+import { nota as crmEditarRascunho } from "./2026-09-24-corrigir-orcamento-em-rascunho";
+import { nota as saidaColaborador } from "./2026-09-25-saida-de-colaborador";
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   financeiroEAnexos,
@@ -97,6 +104,13 @@ export const RELEASE_NOTES: ReleaseNote[] = [
   pagamentosOrdemTodasAsAbas,
   cobrancasDiaCerto,
   cobrancasGravacoesSeguras,
+  colaboradoresSemEliminar,
+  crmFunilDeLeads,
+  crmVisitas,
+  crmOrcamentos,
+  crmConversaoCliente,
+  crmEditarRascunho,
+  saidaColaborador,
 ];
 
 /** As chaves têm de ser únicas — duas notas com a mesma key partilhariam a leitura. */

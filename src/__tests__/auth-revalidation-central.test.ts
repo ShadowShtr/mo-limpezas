@@ -44,6 +44,15 @@ const settingsAction = semComentarios(
 // ---------------------------------------------------------------------------
 
 const getUser = vi.fn();
+/**
+ * 🔴 Duas consultas a `profiles`, nao uma.
+ *
+ *    Desde a 106-B, `requireProfile` resolve identidade como a base: primeiro
+ *    `auth_user_id`, e so se nao houver ligacao e que tenta o `id` legado.
+ *    Ambas terminam em `maybeSingle`, nao em `single` — `single` trata
+ *    «nenhuma linha» como erro, e aqui a ausencia e uma resposta valida que
+ *    decide qual o ramo a seguir.
+ */
 const single = vi.fn();
 
 vi.mock("@/lib/supabase/server", () => ({
@@ -54,7 +63,7 @@ vi.mock("@/lib/supabase/admin", () => ({
   createAdminClient: () => ({
     from: () => ({
       select: () => ({
-        eq: () => ({ single }),
+        eq: () => ({ maybeSingle: single }),
       }),
     }),
   }),
@@ -104,7 +113,7 @@ describe("requireProfile — códigos estáveis", () => {
 
     getUser.mockResolvedValue({ data: { user: { id: "u1" } } });
     single.mockResolvedValue({
-      data: { id: "u1", company_id: "empresa-a", role: "colaborador" },
+      data: { id: "u1", company_id: "empresa-a", role: "colaborador", status: "ativo" },
     });
 
     const guard = await requireProfile({ roles: ["admin", "gestor"] });
@@ -121,7 +130,7 @@ describe("requireProfile — códigos estáveis", () => {
 
     getUser.mockResolvedValue({ data: { user: { id: "u1" } } });
     single.mockResolvedValue({
-      data: { id: "u1", company_id: "empresa-a", role: "admin" },
+      data: { id: "u1", company_id: "empresa-a", role: "admin", status: "ativo" },
     });
 
     const guard = await requireProfile({ roles: ["admin", "gestor"] });
@@ -329,7 +338,33 @@ describe("nenhuma outra action foi migrada nesta PR", () => {
     expect(comRevalidateDireto.length).toBeGreaterThan(0);
   });
 
-  it("settings.ts é a única action a usar ActionResult", () => {
+  it("só o piloto e os módulos nascidos no formato usam ActionResult", () => {
+    // O inventário da adopção gradual (padrão de engenharia, secção 3).
+    //
+    // `settings.ts` é o piloto da T05 — uma **migração** de área existente, e
+    // essas continuam a fazer-se uma de cada vez.
+    //
+    // `crm-leads.ts` está aqui por outra razão: é um módulo **novo**, e o
+    // padrão manda que um módulo novo nasça já no formato em vez de nascer no
+    // antigo para depois ser migrado. Não migrou consumidor nenhum — não
+    // tinha nenhum.
+    //
+    // `crm-visitas.ts` entrou com a 102 aplicada, pela mesma razão.
+    //
+    // `crm-orcamentos.ts` entrou com a 103 (e a 103a) aplicadas e verificadas
+    // em produção, em 103-B1. Também é módulo novo: nasceu no formato.
+    //
+    // `crm-conversao.ts` entrou com a 104-A aplicada e verificada em
+    // produção, em 104-B. Também é módulo novo: nasceu no formato.
+    //
+    // Acrescentar uma entrada é uma decisão que se lê no diff. É esse o
+    // objectivo deste teste: as outras actions não podem ser migradas por
+    // arrasto, escondidas numa PR que muda comportamento.
+    const NASCIDAS_NO_FORMATO = [
+      "crm-leads.ts", "crm-visitas.ts", "crm-orcamentos.ts", "crm-conversao.ts",
+    ];
+    const PILOTO = ["settings.ts"];
+
     const actionsDir = path.join(ROOT, "src/app/actions");
 
     const comActionResult = fs
@@ -341,6 +376,6 @@ describe("nenhuma outra action foi migrada nesta PR", () => {
         ),
       );
 
-    expect(comActionResult).toEqual(["settings.ts"]);
+    expect(comActionResult.sort()).toEqual([...PILOTO, ...NASCIDAS_NO_FORMATO].sort());
   });
 });

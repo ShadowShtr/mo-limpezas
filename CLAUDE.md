@@ -80,6 +80,72 @@ não instrução a repetir.
 
 ## ⚡ PRÓXIMA TASK A EXECUTAR
 
+## 📍 ATUALIZAÇÃO — 2026-09-19 (a fazer — avisos de vencimento e competência em Pagamentos)
+
+> Registo do trabalho pedido pelo dono nesta data. **Sem numeração de propósito**:
+> não são tasks do `PLANO-MESTRE.md` nem entram na sequência T00–T19. É uma lista
+> de coisas a fazer, a executar por PRs pequenas e independentes.
+>
+> Nada disto está feito. Este bloco descreve o que falta, não o que aconteceu.
+
+**Porquê.** Duas queixas reais do uso diário: ninguém se lembra dos vencimentos
+(financeiro, tarefas e CRM), e há pagamentos a aparecer no mês errado — criar hoje
+uma conta com vencimento no mês seguinte e vê-la listada neste mês.
+
+**A regra que fica.** O mês a que um pagamento pertence é **o mês do vencimento**.
+Não é o mês em que foi criado, nem o mês em que foi pago, nem o mês que está no ecrã.
+
+**Decisões já tomadas com o dono (2026-09-19):**
+- Os avisos são só para `admin`/`gestor`, no `/dashboard`. Não se mexe no `/app`
+  das colaboradoras, nem em RLS, nem em roles.
+- Formato: modal que abre sozinho ao entrar, uma vez por sessão de aba (fechar a
+  aba e reabrir volta a mostrar), **mais** notificações no sino já existente.
+- Nos separadores de Pagamentos: competência do mês escolhido; "Por pagar"
+  acrescenta sempre os atrasados de meses anteriores.
+- A coluna "Data" passa a mostrar o vencimento (e a data do movimento quando a
+  conta já está paga).
+
+**A fazer — avisos de vencimento:**
+- Domínio puro novo em `src/domain/avisos/` que classifica cada item em atrasado /
+  hoje / amanhã por comparação de strings `YYYY-MM-DD`, sem `new Date`.
+- Action de leitura nova em `src/app/actions/avisos.ts`, no molde de
+  `getPendingNotices`: guard `admin`/`gestor`, nunca lança, erro devolve lista
+  vazia. Janela por `todayInLisbon()` + `addDaysToDateString()`.
+- Fontes: `fixed_variable_payments` por pagar com `due_date` até amanhã (inclui
+  atrasados), `management_tasks` com `due_date` até amanhã e por concluir,
+  `crm_leads` com `next_action_at` até amanhã fora de ganho/perdido, e
+  `crm_visits` agendadas dentro da janela.
+- Modal client novo, montado no `(dashboard)/layout.tsx` ao lado do
+  `UpdateNoticeModal`. Uma vez por sessão de aba via `sessionStorage`, todos os
+  acessos em `try/catch`, e reavaliação ao voltar à aba pelo padrão já provado do
+  `connection-banner.tsx`. O modal só lê — um lembrete não cria aquilo que lembra.
+- Cron diário novo que gera as notificações do sino via `notifyUser`, com dedupe
+  por dia e por item lido das próprias `notifications` (sem tabela nova, sem
+  migration). Registar os tipos novos no `TYPE_LABELS` do `notifications-bell.tsx`.
+
+**A fazer — competência pelo vencimento em Pagamentos:**
+- `filterFinanceLedger` e `financeLedgerCounts` passam a aplicar o período a
+  **todos** os separadores. Hoje só `fixos` e `variaveis` o fazem; `todos`,
+  `por pagar`, `pagos` e `manuais` não filtram nada, e por isso uma conta de
+  Outubro paga em Setembro aparece em Setembro.
+- "Por pagar" ganha a excepção deliberada dos atrasados: uma conta por pagar nunca
+  desaparece do ecrã só porque o mês virou.
+- `paymentDate` em `src/domain/finance/ledger.ts` deixa de devolver `created_at`
+  para as contas pendentes. Passa a vencimento; paga, a data do movimento.
+- Repor a guarda `isValidIsoDateString` no `<input type="date">` do vencimento em
+  `unified-payments-client.tsx` — é o único input de data da aplicação sem ela, e
+  é por aí que a competência errada nasce (vencimento inválido → `resolveCompetence`
+  cai no fallback, que é o mês do ecrã).
+- Do lado do servidor, uma `due_date` não vazia mas inválida passa a devolver erro
+  legível em vez de cair em silêncio no fallback. Fallback só com o campo vazio.
+- Script de diagnóstico novo, **dry-run por omissão**, que lista as linhas
+  históricas com competência ≠ mês do vencimento. Corrigir dados de produção fica
+  fora: é decisão do dono, em conversa própria, com autorização própria.
+
+**Fora de escopo:** migrations (nada disto precisa de schema novo), qualquer
+alteração a RLS ou ao acesso das colaboradoras, e a correcção das linhas
+históricas. `payments-month-materialization.ts` continua em quarentena.
+
 ## 📍 ATUALIZAÇÃO — 2026-08-25 (estado atual do ledger de migrations)
 
 > 🔴 **O bloco de 2026-08-17, mais abaixo, é uma fotografia histórica daquele

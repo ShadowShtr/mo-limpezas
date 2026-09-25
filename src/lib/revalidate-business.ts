@@ -17,7 +17,8 @@ export type BusinessScope =
   | "financeiro"
   | "locais"
   | "configuracoes"
-  | "relatorios";
+  | "relatorios"
+  | "crm";
 
 export function revalidateBusinessPaths(opts: {
   clientId?: string | null;
@@ -38,6 +39,13 @@ export function revalidateBusinessPaths(opts: {
   // relatórios — guardá-las sem revalidar esta rota deixava números antigos
   // no ecrã de quem já a tivesse aberta.
   if (scopes.includes("relatorios")) revalidatePath("/dashboard/relatorios");
+  // O funil e a ficha da lead. A ficha entra aqui pelo mesmo motivo que a do
+  // cliente: mudar o estado no quadro e voltar à ficha não pode mostrar o
+  // estado antigo.
+  if (scopes.includes("crm")) {
+    revalidatePath("/dashboard/crm");
+    revalidatePath("/dashboard/crm/[leadId]", "page");
+  }
 }
 
 // ─── matriz por domínio (Task T10) ──────────────────────────────────────────
@@ -61,7 +69,8 @@ export type BusinessDomain =
   | "collaborators"
   | "invoices"
   | "payments"
-  | "settings";
+  | "settings"
+  | "leads";
 
 /**
  * Que ecrãs dependem de cada domínio.
@@ -86,6 +95,11 @@ export const DOMAIN_SCOPES: Record<BusinessDomain, BusinessScope[]> = {
   payments: ["financeiro", "cobrancas", "relatorios"],
   // IVA, taxa horária e subsídio entram em todos os cálculos.
   settings: ["configuracoes", "relatorios", "financeiro", "cobrancas", "calendario"],
+  // Uma lead só toca no funil — não entra em faturação, calendário nem mapa.
+  // Quando é convertida, quem revalida `clientes`/`locais` é a action de
+  // conversão, declarando também esses domínios: é a conversão que os muda,
+  // não a lead.
+  leads: ["crm"],
 };
 
 /** Ecrãs afetados por um conjunto de domínios, sem repetições. */

@@ -3,6 +3,9 @@
 import { randomUUID } from "node:crypto";
 
 import { z } from "zod";
+import {
+  ESTADOS_COLABORADOR, ESTADO_AUTORIZADO, isEstadoColaborador,
+} from "@/domain/collaborators/status";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
@@ -60,7 +63,13 @@ const colaboradorSchema = z.object({
   email: z.email("Email inválido.").optional().or(z.literal("")),
   phone: z.string().max(20).optional(),
   role: z.enum(["colaborador", "gestor", "admin"]).default("colaborador"),
-  status: z.enum(["ativo", "inativo", "arquivado"]).default("ativo"),
+  // 🔴 `suspenso`, não `arquivado`.
+  //
+  //    A base aceita ativo/inativo/suspenso. Esta lista dizia
+  //    ativo/inativo/arquivado: recusava um estado REAL que o formulário
+  //    oferece (e em que estão sete pessoas hoje) e deixava passar um que a
+  //    base recusa — fazendo o erro do Postgres chegar cru a quem preenche.
+  status: z.enum(ESTADOS_COLABORADOR).default(ESTADO_AUTORIZADO),
   contracted_hours_month: z.number().min(0).max(744).nullable().optional(),
   skills: z.array(z.string().max(60)).default([]),
 
@@ -189,6 +198,21 @@ export async function updateColaborador(
     .single();
   // Auxiliar: alimenta a auditoria do que mudou, não decide o update.
   if (!isNoRowsError(beforeError)) logQueryFailure("updateColaborador:before", beforeError);
+
+  // 🔴 O update NÃO passava por validação nenhuma.
+  //
+  //    `createColaborador` faz `safeParse`; este não fazia, e `input.status`
+  //    seguia em linha recta para a base. Um estado fora do CHECK chegava ao
+  //    Postgres e voltava como erro cru; um estado que autoriza chegava sem
+  //    ninguém confirmar que era um dos três.
+  //
+  //    Valida-se SO o estado, e não o objecto inteiro: pôr aqui o schema da
+  //    criação mudaria o contrato desta action (campos obrigatórios que o
+  //    formulário de edição não envia) e partiria a edição para corrigir um
+  //    problema de estado.
+  if (!isEstadoColaborador(input.status)) {
+    return { ok: false as const, error: "Estado inválido." };
+  }
 
   const { error } = await admin
     .from("profiles")
@@ -391,25 +415,53 @@ export async function deleteColaborador(id: string, companyId: string) {
     return { ok: false as const, error: "Colaboradora inválida." };
   }
 
-  // Anula referências RESTRICT a este perfil (senão o cascade do auth bloqueia).
-  // Preserva os registos (serviços, contratos, faturas, etc.), só remove a autoria.
-  await admin.from("services").update({ created_by: null }).eq("company_id", companyId).eq("created_by", id);
-  await admin.from("services").update({ cancelled_by: null }).eq("company_id", companyId).eq("cancelled_by", id);
-  await admin.from("contracts").update({ created_by: null }).eq("company_id", companyId).eq("created_by", id);
-  await admin.from("absences").update({ created_by: null }).eq("company_id", companyId).eq("created_by", id);
-  await admin.from("absences").update({ approved_by: null }).eq("company_id", companyId).eq("approved_by", id);
-  await admin.from("absences").update({ replaced_by: null }).eq("company_id", companyId).eq("replaced_by", id);
-  await admin.from("vacation_requests").update({ reviewed_by: null }).eq("company_id", companyId).eq("reviewed_by", id);
-  await admin.from("invoices").update({ created_by: null }).eq("company_id", companyId).eq("created_by", id);
-  await admin.from("payroll_records").update({ approved_by: null }).eq("company_id", companyId).eq("approved_by", id);
-
-  // Apaga o utilizador auth → cascade do profile (team_members, timesheets,
-  // ausências, férias, folha, reforços, notificações).
-  const { error } = await admin.auth.admin.deleteUser(id);
-  if (error) return { ok: false as const, error: error.message };
-
-  revalidatePath("/dashboard/colaboradores");
-  revalidatePath("/dashboard/equipas");
-  revalidatePath("/dashboard/calendario");
-  return { ok: true as const };
+  // ==========================================================================
+  // 🔴 A ELIMINAÇÃO FÍSICA ESTÁ BLOQUEADA. Esta função recusa sempre.
+  // ==========================================================================
+  //
+  // O que estava aqui:
+  //
+  //     nove UPDATEs a pôr a autoria a NULL — serviços, contratos, faltas,
+  //     férias, faturas, folha — e depois `deleteUser`.
+  //
+  // O catálogo tem QUARENTA E OITO colunas a apontar para `profiles`. As
+  // outras trinta e nove não eram anuladas, e são elas que fazem o `deleteUser`
+  // falhar: fluxo de caixa, pagamentos fixos, períodos financeiros, conciliação
+  // bancária, tarefas de gestão, documentos, e o funil de leads.
+  //
+  // Quando falhava, os nove primeiros UPDATEs já tinham sido gravados. Cada um
+  // confirma-se sozinho — a chave administrativa fala por HTTP e não há
+  // transação a envolvê-los. Resultado:
+  //
+  //     PROFILE_EXISTS = YES   e   HISTORY_PARTIALLY_CLEARED = YES
+  //
+  // O perfil continuava lá, e uma fatura fechada ficava sem saber quem a tinha
+  // emitido. Não era um caso extremo: era o caminho normal.
+  //
+  // --------------------------------------------------------------------------
+  // Porque é uma recusa, e não uma correcção
+  // --------------------------------------------------------------------------
+  //
+  // Corrigir a sério — apagar só quando não existe UMA única relação — exige
+  // que a verificação e o apagar aconteçam no mesmo instante, dentro da base.
+  // Fora dela, entre sondar e apagar pode nascer uma linha, e nas catorze FKs
+  // em `ON DELETE CASCADE` ela desapareceria sem erro nenhum.
+  //
+  // Essa garantia é trabalho de schema, e vive noutra frente. Até lá, o que
+  // aqui fica é uma porta fechada em vez de uma porta quase segura.
+  //
+  // 🔴 NENHUM `UPDATE` corre antes desta recusa. É esse o ponto: o estado
+  //    proibido deixa de ser possível por não haver caminho que o produza, e
+  //    não por ser tratado depois de acontecer.
+  //
+  // A saída de uma pessoa faz-se desativando o acesso na ficha dela — o perfil,
+  // o histórico e a autoria ficam todos.
+  return {
+    ok: false as const,
+    error: `${target.full_name} não pode ser eliminada definitivamente. `
+      + "Apagar um perfil apagaria também, ou deixaria sem autor, o que essa "
+      + "pessoa fez — serviços, faturas, folha, pontos. Para dar saída, retire "
+      + "o acesso na ficha dela: deixa de entrar e tudo o que fez continua no "
+      + "sistema.",
+  };
 }

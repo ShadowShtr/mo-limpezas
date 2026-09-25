@@ -162,6 +162,37 @@ describe("as notas versionadas", () => {
     }
   });
 
+  it("🔴 nenhuma nota está datada no FUTURO", () => {
+    // 🔴 `releaseElegivel()` usa `publishedAt` só como limite INFERIOR, face à
+    //    criação do perfil e à activação. Não há nada que o compare com o
+    //    presente — uma nota datada de «logo à tarde» aparece já, e o aviso
+    //    diz a quem o lê que algo mudou quando ainda não mudou.
+    //
+    //    Aconteceu a 2026-09-24: uma nota entrou com `16:00:00Z` quando o
+    //    relógio marcava `14:16Z`, e o CI ficou verde porque o guard só
+    //    verificava que a data era parseável. O comentário no ficheiro da nota
+    //    já proibia o futuro; faltava alguém a medir.
+    //
+    // 🔴 Comparação em EPOCH (UTC), nunca em texto nem com o fuso da máquina:
+    //    um ensaio de datas que depende do `TZ` de quem o corre mede outra
+    //    coisa em cada máquina.
+    //
+    //    A tolerância de um minuto cobre apenas desvio de relógio entre o
+    //    runner e quem escreveu a nota. Não é margem para datar no futuro:
+    //    com duas horas à frente, isto fica vermelho.
+    const TOLERANCIA_MS = 60_000;
+    const agora = Date.now();
+
+    for (const n of RELEASE_NOTES) {
+      const quando = Date.parse(n.publishedAt);
+      expect(Number.isNaN(quando), `${n.key}: data inválida`).toBe(false);
+      expect(
+        quando - agora,
+        `${n.key}: publishedAt ${n.publishedAt} está no futuro — o runtime não sabe esperar por essa hora`,
+      ).toBeLessThanOrEqual(TOLERANCIA_MS);
+    }
+  });
+
   it("🔴 nenhuma nota expõe detalhe técnico a quem usa o sistema", () => {
     // «Corrigimos a marcação de pagamentos» é útil. «ALTER TABLE
     // cash_flow_entries DROP CONSTRAINT» não é, e assusta sem informar.

@@ -1,12 +1,12 @@
 {
   "inventorySource": "git ls-files",
   "summary": {
-    "repositoryFiles": 898,
-    "textFiles": 885,
-    "sourceFiles": 626,
-    "textLines": 218785,
+    "repositoryFiles": 982,
+    "textFiles": 969,
+    "sourceFiles": 691,
+    "textLines": 252635,
     "typescriptDiagnostics": 0,
-    "productionEntries": 71,
+    "productionEntries": 75,
     "unreachableProductionModules": 40,
     "exactDuplicateFileGroups": 0
   },
@@ -100,6 +100,10 @@
     ],
     "exactDuplicateFiles": [],
     "directRevalidatePath": [
+      "src/__tests__/crm-actions-guard.test.ts",
+      "src/__tests__/crm-conversao-guard.test.ts",
+      "src/__tests__/crm-orcamentos-guard.test.ts",
+      "src/__tests__/crm-visits.test.ts",
       "src/__tests__/expense-categories-runtime.test.ts",
       "src/__tests__/finance-v2-money.test.ts",
       "src/__tests__/finance-v2-period-scope.test.ts",
@@ -136,6 +140,7 @@
     ],
     "dateRiskCandidates": [
       "src/__tests__/civil-date.test.ts",
+      "src/__tests__/crm-edit-draft-sheet.test.tsx",
       "src/__tests__/finance-categoria-identidade-e-resumo.test.tsx",
       "src/__tests__/invoices-period-atomic.pg.test.ts",
       "src/__tests__/migration-schema-ledger-atomicity.pg.test.ts",

@@ -90,7 +90,14 @@ END $papeis$;
 CREATE FUNCTION public.get_my_company_id() RETURNS uuid LANGUAGE sql STABLE AS $f$ SELECT NULL::uuid $f$;
 CREATE FUNCTION public.get_my_role() RETURNS text LANGUAGE sql STABLE AS $f$ SELECT NULL::text $f$;
 CREATE FUNCTION public.get_service_company_id(p uuid) RETURNS uuid LANGUAGE sql STABLE AS $f$ SELECT NULL::uuid $f$;
-CREATE FUNCTION public.can_access_service(p uuid) RETURNS boolean LANGUAGE sql STABLE AS $f$ SELECT true $f$;
+-- 🔴 O parametro chama-se p_service_id, como em producao e na 034.
+--
+--    Estava "p". Um coto pode simplificar o CORPO — e para isso que existe —
+--    mas nao pode inventar a ASSINATURA: CREATE OR REPLACE recusa-se a mudar o
+--    nome de um parametro, por isso qualquer suite que queira instalar a forma
+--    real por cima do coto bate em «cannot change name of input parameter».
+--    Uma fixture que diz copiar producao tem de copiar tambem isto.
+CREATE FUNCTION public.can_access_service(p_service_id uuid) RETURNS boolean LANGUAGE sql STABLE AS $f$ SELECT true $f$;
 `;
 
 /**
