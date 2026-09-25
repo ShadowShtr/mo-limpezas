@@ -67,7 +67,7 @@ DO $rollback_106$
 DECLARE
   -- 🔴 O checksum canónico desta 106. Se o SQL mudar, este valor TEM de mudar
   --    com ele — há um ensaio que os compara.
-  CHECKSUM_106 CONSTANT text := '43bc72bf500ea9a43986982cf6bc24ce126fb0d89f7a2c57bf922597099b4774';
+  CHECKSUM_106 CONSTANT text := 'b5302126663f36a50e1f52d4627076f388b56689d9bf0e9f06c1824137596bb8';
 
   v_checksum text;
   v_ledger   boolean;
@@ -178,8 +178,18 @@ BEGIN
 
     OWNER_ESPERADO CONSTANT text := 'postgres';
 
+    -- 🔴 Os comentarios que a 106 instalou. `pg_get_functiondef()` nao os
+    --    imprime, por isso sem isto uma alteracao posterior SO ao comentario
+    --    passava, e este rollback reescrevia-o por cima.
+    COM_RESOLVER_106 CONSTANT text :=
+      'O id da pessoa autenticada, ou NULL. Desde a 106 so resolve quando profiles.status = ''ativo'': inativo, suspenso ou qualquer estado futuro nao resolvem identidade nenhuma, e as 69 politicas que dependem desta funcao deixam de devolver linhas. get_my_company_id e get_my_role delegam aqui e herdam a regra. Responde pela coluna auth_user_id e, enquanto a transicao da 101b durar, tambem pela convencao antiga — com o mesmo filtro de estado nos dois ramos.';
+    COM_SERVICO_106 CONSTANT text :=
+      'Se a pessoa autenticada pode ver este servico. Desde a 106 resolve a identidade por get_my_profile_id() em vez de assumir profiles.id = auth.uid(), o que a faz herdar a exigencia de status = ''ativo'' e deixar de depender da convencao anterior a 101b. Mantem o isolamento por empresa e passa a ter search_path fixado — era a unica funcao SECURITY DEFINER do schema sem ele.';
+
     v_def      text;
     v_owner    text;
+    v_comentario text;
+    v_com_esperado text;
     v_grantees text[];
     v_esperados text[];
     v_grantable boolean;
@@ -191,9 +201,11 @@ BEGIN
       IF v_nome = 'get_my_profile_id' THEN
         v_oid := to_regprocedure('public.get_my_profile_id()');
         v_esperada := DEF_RESOLVER;
+        v_com_esperado := COM_RESOLVER_106;
       ELSE
         v_oid := to_regprocedure('public.can_access_service(uuid)');
         v_esperada := DEF_SERVICO;
+        v_com_esperado := COM_SERVICO_106;
       END IF;
 
       SELECT btrim(regexp_replace(pg_get_functiondef(p.oid), '[[:space:]]+', ' ', 'g')),
@@ -211,6 +223,14 @@ BEGIN
         RAISE EXCEPTION
           'COLAB_106_ROLLBACK_CURRENT_STATE_DIVERGED: % pertence agora a % e a 106 deixou-a em %. Nada foi alterado.',
           v_nome, v_owner, OWNER_ESPERADO;
+      END IF;
+
+      SELECT obj_description(v_oid, 'pg_proc') INTO v_comentario;
+
+      IF v_comentario IS DISTINCT FROM v_com_esperado THEN
+        RAISE EXCEPTION
+          'COLAB_106_ROLLBACK_CURRENT_STATE_DIVERGED: o comentario de % ja nao e o que a 106 escreveu — alguem o alterou depois. Nada foi alterado. Encontrado: %',
+          v_nome, coalesce(left(v_comentario, 300), '(NULL)');
       END IF;
 
       SELECT array_agg(DISTINCT a.grantee::regrole::text ORDER BY a.grantee::regrole::text),
@@ -262,11 +282,21 @@ BEGIN
     LIMIT 1;
   $fn$;
 
+  -- 🔴 O comentario que PRODUCAO tem, lido do catalogo vivo a 2026-09-25.
+  --
+  --    Estava aqui um texto ACENTUADO e mais longo, copiado do ficheiro da
+  --    101b. O que existe na base tem 97 caracteres e nao tem acentos — este
+  --    rollback nunca restaurou o estado anterior, inventou um.
   COMMENT ON FUNCTION public.get_my_profile_id() IS
-    'O id da pessoa autenticada, ou NULL se não houver sessão ou a conta não '
-    'estiver ligada a ninguém. Responde pela coluna auth_user_id e, enquanto '
-    'a transição durar, também pela convenção antiga em que profiles.id era '
-    'o id do Auth.';
+    'O id da pessoa autenticada, ou NULL se nao houver sessao ou a conta nao estiver ligada a ninguem.';
+
+  -- 🔴 E `can_access_service` volta a NAO TER comentario.
+  --
+  --    Sem isto, depois de aplicar e reverter, a funcao ficava com o corpo de
+  --    2026 da 034 e um comentario da 106 a dizer que passa pelo resolver e
+  --    herda o filtro de estado. Comentario e implementacao a contradizerem-se
+  --    e pior do que nao haver comentario nenhum.
+  COMMENT ON FUNCTION public.can_access_service(uuid) IS NULL;
 
   -- ── Repor can_access_service da 034 ─────────────────────────────────────
   --

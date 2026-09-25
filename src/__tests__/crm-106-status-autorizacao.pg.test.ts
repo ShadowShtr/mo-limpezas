@@ -70,6 +70,16 @@ const CADEIA = [
 const SIG_SERVICO = "public.can_access_service(uuid)";
 const SIG_RESOLVER = "public.get_my_profile_id()";
 
+/**
+ * 🔴 O comentario VIVO do predecessor, lido do catalogo de producao.
+ *
+ *    97 caracteres e SEM acentos. O ficheiro da 101b tem um texto acentuado e
+ *    mais longo — confiar nele foi exactamente o erro que o rollback desta
+ *    migration cometia.
+ */
+const COMENTARIO_PREDECESSOR =
+  "O id da pessoa autenticada, ou NULL se nao houver sessao ou a conta nao estiver ligada a ninguem.";
+
 let container: PostgresContainer;
 let pool: pg.Pool;
 
@@ -182,6 +192,18 @@ async function palco(aplicar106 = true): Promise<void> {
 
   for (const m of MIGRATIONS_CRM) await pool.query(migrationCrm(m));
   await pool.query(lerSql(M_101B));
+
+  // 🔴 O comentario vivo do resolver. A 101b cria-o com um texto ACENTUADO;
+  //    producao tem um SEM acentos, mais curto. O palco copia o que la esta,
+  //    senao o pre-estado da 106 recusava-se a instalar aqui por uma diferenca
+  //    que producao nao tem.
+  //
+  //    `can_access_service` fica SEM comentario, como em producao.
+  //    `COMMENT ON` e DDL: nao aceita $1. Dai a interpolacao — a constante nao
+  //    tem plicas nem vem de fora.
+  await pool.query(
+    "COMMENT ON FUNCTION public.get_my_profile_id() IS '" + COMENTARIO_PREDECESSOR + "'");
+  await pool.query("COMMENT ON FUNCTION public.can_access_service(uuid) IS NULL");
 
   await pool.query(`
     CREATE TABLE IF NOT EXISTS public._migrations (
@@ -949,6 +971,61 @@ describe("16-20. proveniência e aplicação", () => {
     }
   });
 
+  // 🔴 M/N - drift de COMENTARIO no predecessor
+  //
+  //    `pg_get_functiondef()` NAO imprime comentarios. A 106 escreve
+  //    `COMMENT ON FUNCTION` nas duas, por isso o comentario faz parte do
+  //    estado que ela altera — e do que tem de proteger.
+  it("🔴 M. comentario do resolver alterado: a 106 RECUSA", LENTO, async () => {
+    await palco(false);
+    await pool.query(
+      "COMMENT ON FUNCTION public.get_my_profile_id() IS 'alterado por outra pessoa'");
+
+    const defAntes = await pool.query(
+      "SELECT pg_get_functiondef(to_regprocedure($1)) AS d", [SIG_RESOLVER]);
+
+    await expect(pool.query(lerSql(M_106)))
+      .rejects.toThrow(/COLAB_106_PREESTADO_INESPERADO/);
+
+    // 🔴 O comentario de quem la mexeu PERMANECE.
+    const { rows } = await pool.query(
+      "SELECT obj_description(to_regprocedure($1), 'pg_proc') AS c", [SIG_RESOLVER]);
+    expect(rows[0].c).toBe("alterado por outra pessoa");
+
+    // E a definicao nao foi tocada.
+    const defDepois = await pool.query(
+      "SELECT pg_get_functiondef(to_regprocedure($1)) AS d", [SIG_RESOLVER]);
+    expect(defDepois.rows[0].d).toBe(defAntes.rows[0].d);
+
+    const { rows: led } = await pool.query(
+      "SELECT count(*)::int AS n FROM public._migrations WHERE name = $1", [NOME_106]);
+    expect(led[0].n).toBe(0);
+
+    await palco();
+  });
+
+  it("🔴 N. can_access_service com comentario onde se espera NULL: a 106 RECUSA", LENTO, async () => {
+    // 🔴 `IS DISTINCT FROM` e nao `<>`: com `NULL <> 'texto'` o resultado e
+    //    NULL, o IF nao dispara, e a verificacao passava ao lado precisamente
+    //    no caso em que ha um comentario a mais.
+    await palco(false);
+    await pool.query(
+      "COMMENT ON FUNCTION public.can_access_service(uuid) IS 'nota de alguem'");
+
+    await expect(pool.query(lerSql(M_106)))
+      .rejects.toThrow(/COLAB_106_PREESTADO_INESPERADO/);
+
+    const { rows } = await pool.query(
+      "SELECT obj_description(to_regprocedure($1), 'pg_proc') AS c", [SIG_SERVICO]);
+    expect(rows[0].c).toBe("nota de alguem");
+
+    const res = await pool.query(
+      "SELECT prosrc FROM pg_proc WHERE oid = to_regprocedure($1)", [SIG_RESOLVER]);
+    expect(String(res.rows[0].prosrc)).not.toMatch(/status/);
+
+    await palco();
+  });
+
   it("os checksums fixados na 106 são os dos ficheiros do repositório", LENTO, async () => {
     const sql = lerSql(M_106);
     const fixados = [...sql.matchAll(/\('(\d{3}[a-z]?_[a-z_]+\.sql)',\s*'([0-9a-f]{64})'\)/g)];
@@ -1194,6 +1271,51 @@ describe("21. rollback e recuperação para a frente", () => {
       await pool.query("DROP ROLE IF EXISTS dono_teste_rb106");
       await palco();
     }
+  });
+
+  it("🔴 O. comentario alterado DEPOIS da 106: o rollback RECUSA", LENTO, async () => {
+    await pool.query(
+      "COMMENT ON FUNCTION public.can_access_service(uuid) IS 'nota posterior'");
+
+    await expect(pool.query(lerSql(ROLLBACK_106)))
+      .rejects.toThrow(/COLAB_106_ROLLBACK_CURRENT_STATE_DIVERGED/);
+
+    const { rows } = await pool.query(
+      "SELECT obj_description(to_regprocedure($1), 'pg_proc') AS c", [SIG_SERVICO]);
+    expect(rows[0].c).toBe("nota posterior");
+
+    // E nada foi reposto.
+    const res = await pool.query(
+      "SELECT prosrc FROM pg_proc WHERE oid = to_regprocedure($1)", [SIG_RESOLVER]);
+    expect(String(res.rows[0].prosrc)).toMatch(/status = 'ativo'/);
+
+    await palco();
+  });
+
+  it("🔴 P. rollback restaura os comentarios do PREDECESSOR VIVO", LENTO, async () => {
+    // 🔴 O defeito que isto fecha: o rollback escrevia um comentario
+    //    ACENTUADO, copiado do ficheiro da 101b, e nem sequer tocava no de
+    //    `can_access_service` — que ficava a dizer que passa pelo resolver
+    //    enquanto o corpo voltava a ser o de 2026 da 034. Comentario e
+    //    implementacao a contradizerem-se.
+    const antes106 = await pool.query(`
+      SELECT obj_description(to_regprocedure($1), 'pg_proc') AS resolver,
+             obj_description(to_regprocedure($2), 'pg_proc') AS servico`,
+      [SIG_RESOLVER, SIG_SERVICO]);
+    expect(antes106.rows[0].resolver).toContain("Desde a 106");
+    expect(antes106.rows[0].servico).not.toBeNull();
+
+    await pool.query(lerSql(ROLLBACK_106));
+
+    const { rows } = await pool.query(`
+      SELECT obj_description(to_regprocedure($1), 'pg_proc') AS resolver,
+             obj_description(to_regprocedure($2), 'pg_proc') AS servico`,
+      [SIG_RESOLVER, SIG_SERVICO]);
+
+    expect(rows[0].resolver).toBe(COMENTARIO_PREDECESSOR);
+    expect(rows[0].servico).toBeNull();
+
+    await palco();
   });
 
   it("🔴 rollback com checksum divergente: nada é alterado", LENTO, async () => {

@@ -385,6 +385,29 @@ $proveniencia$;
 --    034 tem no repositório. Comparar com o ficheiro faria a migration
 --    recusar-se a instalar precisamente na base que ela existe para corrigir.
 
+-- 🔴 A IMPRESSAO DIGITAL DE UMA FUNCAO, NESTE FICHEIRO, SAO QUATRO COISAS:
+--
+--        1. `pg_get_functiondef()` inteiro  -- corpo e todo o DDL
+--        2. o OWNER                         -- a identidade de quem corre
+--        3. a ACL: quem tem EXECUTE, e se pode passar a diante
+--        4. o COMMENT
+--
+--    Sao quatro porque sao exactamente as quatro coisas que esta migration
+--    ALTERA. Nem uma a menos: o que se altera sem se medir e trabalho de outra
+--    pessoa apagado em silencio. Nem uma a mais.
+--
+--    O 4. so entrou depois de se notar que `pg_get_functiondef()` NAO imprime
+--    comentarios. Os blocos 2b e 3 escrevem `COMMENT ON FUNCTION` nas duas
+--    funcoes; sem o medir, um comentario escrito por outra pessoa entre a
+--    leitura e a aplicacao era substituido sem ninguem dar por isso — e o
+--    rollback repunha por cima um texto que nunca esteve em producao.
+--
+--    E ha coisas de propriedade que esta migration NAO altera e que por isso
+--    NAO estao aqui: as dependencias registadas em `pg_depend`, os triggers e
+--    politicas que chamam estas funcoes, as estatisticas do planeador.
+--    Medi-las seria confundir «a base mudou» com «esta migration mudou-a», e
+--    uma precondicao que falha por coisas alheias deixa de ser lida.
+
 DO $preestado$
 DECLARE
   -- 🔴 A DEFINIÇÃO CANÓNICA INTEIRA, e não uma lista de atributos escolhidos.
@@ -418,8 +441,23 @@ DECLARE
   --    outra pessoa.
   OWNER_ESPERADO CONSTANT text := 'postgres';
 
+  -- 🔴 O COMENTARIO tambem faz parte do estado que esta migration altera.
+  --
+  --    A 106 escreve `COMMENT ON FUNCTION` nas duas. `pg_get_functiondef()`
+  --    NAO imprime comentarios, por isso sem esta verificacao um comentario
+  --    escrito por outra pessoa era substituido em silencio.
+  --
+  --    O valor abaixo foi lido do catalogo vivo — 97 caracteres, SEM acentos.
+  --    O ficheiro da 101b tem um texto ACENTUADO e mais longo: quem confiasse
+  --    no ficheiro escreveria a coisa errada, que foi exactamente o que o
+  --    rollback desta migration fazia antes desta correccao.
+  COMENTARIO_RESOLVER CONSTANT text :=
+    'O id da pessoa autenticada, ou NULL se nao houver sessao ou a conta nao estiver ligada a ninguem.';
+
   v_def      text;
   v_owner    text;
+  v_comentario text;
+  v_com_esperado text;
   v_grantees text[];
   v_grantable boolean;
   v_esperados text[];
@@ -432,10 +470,13 @@ BEGIN
     IF v_nome = 'get_my_profile_id' THEN
       v_oid := to_regprocedure('public.get_my_profile_id()');
       v_esperada := DEF_RESOLVER;
+      v_com_esperado := COMENTARIO_RESOLVER;
       v_com_public := false;   -- a 101b já tinha retirado o EXECUTE de PUBLIC
     ELSE
       v_oid := to_regprocedure('public.can_access_service(uuid)');
       v_esperada := DEF_SERVICO;
+      -- 🔴 Sem comentario nenhum: `obj_description` devolve NULL em producao.
+      v_com_esperado := NULL;
       -- 🔴 PUBLIC faz parte do predecessor: é o que produção tem, e é
       --    precisamente o que a 106 vai retirar. Esperar a forma já corrigida
       --    seria aceitar como predecessor aquilo que é o resultado.
@@ -462,6 +503,19 @@ BEGIN
       RAISE EXCEPTION
         'COLAB_106_PREESTADO_INESPERADO: % pertence a % e esperava-se % — numa função SECURITY DEFINER o owner é a identidade com que o corpo corre. Nada foi alterado.',
         v_nome, v_owner, OWNER_ESPERADO;
+    END IF;
+
+    -- 🔴 O comentario, que `pg_get_functiondef` nao imprime.
+    --
+    --    `IS DISTINCT FROM` e nao `<>`: para `can_access_service` o esperado e
+    --    NULL, e `NULL <> NULL` nunca e verdadeiro — a verificacao passaria ao
+    --    lado precisamente no caso em que ha um comentario a mais.
+    SELECT obj_description(v_oid, 'pg_proc') INTO v_comentario;
+
+    IF v_comentario IS DISTINCT FROM v_com_esperado THEN
+      RAISE EXCEPTION
+        'COLAB_106_PREESTADO_INESPERADO: o comentario de % nao e o esperado — alguem o escreveu depois, e a 106 substitui-lo-ia. Nada foi alterado. Encontrado: %',
+        v_nome, coalesce(left(v_comentario, 300), '(NULL)');
     END IF;
 
     -- ── A ACL, que `pg_get_functiondef` não imprime ────────────────────────
@@ -540,14 +594,7 @@ AS $fn$
   LIMIT 1;
 $fn$;
 
-COMMENT ON FUNCTION public.get_my_profile_id() IS
-  'O id da pessoa autenticada, ou NULL. Desde a 106 so resolve quando '
-  'profiles.status = ''ativo'': inativo, suspenso ou qualquer estado futuro nao '
-  'resolvem identidade nenhuma, e as 69 politicas que dependem desta funcao '
-  'deixam de devolver linhas. get_my_company_id e get_my_role delegam aqui e '
-  'herdam a regra. Responde pela coluna auth_user_id e, enquanto a transicao da '
-  '101b durar, tambem pela convencao antiga — com o mesmo filtro de estado nos '
-  'dois ramos.';
+
 
 -- ---------------------------------------------------------------------------
 -- 2. can_access_service passa pelo resolver canónico
@@ -599,12 +646,34 @@ AS $fn$
   );
 $fn$;
 
-COMMENT ON FUNCTION public.can_access_service(uuid) IS
-  'Se a pessoa autenticada pode ver este servico. Desde a 106 resolve a '
-  'identidade por get_my_profile_id() em vez de assumir profiles.id = auth.uid(), '
-  'o que a faz herdar a exigencia de status = ''ativo'' e deixar de depender da '
-  'convencao anterior a 101b. Mantem o isolamento por empresa e passa a ter '
-  'search_path fixado — era a unica funcao SECURITY DEFINER do schema sem ele.';
+
+
+-- ---------------------------------------------------------------------------
+-- 2b. Os comentarios — fonte UNICA
+-- ---------------------------------------------------------------------------
+--
+-- 🔴 Os textos vivem aqui e em mais lado nenhum.
+--
+--    O pos-estado tem de os verificar, e ter o mesmo paragrafo escrito em dois
+--    sitios do ficheiro e a forma de eles divergirem ao primeiro ajuste. A
+--    tabela temporaria guarda-os para o bloco seguinte os ler, e e largada la.
+
+DO $comentarios$
+DECLARE
+  COMENTARIO_RESOLVER CONSTANT text :=
+    'O id da pessoa autenticada, ou NULL. Desde a 106 so resolve quando profiles.status = ''ativo'': inativo, suspenso ou qualquer estado futuro nao resolvem identidade nenhuma, e as 69 politicas que dependem desta funcao deixam de devolver linhas. get_my_company_id e get_my_role delegam aqui e herdam a regra. Responde pela coluna auth_user_id e, enquanto a transicao da 101b durar, tambem pela convencao antiga — com o mesmo filtro de estado nos dois ramos.';
+  COMENTARIO_SERVICO CONSTANT text :=
+    'Se a pessoa autenticada pode ver este servico. Desde a 106 resolve a identidade por get_my_profile_id() em vez de assumir profiles.id = auth.uid(), o que a faz herdar a exigencia de status = ''ativo'' e deixar de depender da convencao anterior a 101b. Mantem o isolamento por empresa e passa a ter search_path fixado — era a unica funcao SECURITY DEFINER do schema sem ele.';
+BEGIN
+  CREATE TEMP TABLE _colab_106_comentarios (funcao text PRIMARY KEY, texto text);
+  INSERT INTO _colab_106_comentarios VALUES
+    ('get_my_profile_id', COMENTARIO_RESOLVER),
+    ('can_access_service', COMENTARIO_SERVICO);
+
+  EXECUTE format('COMMENT ON FUNCTION public.get_my_profile_id() IS %L', COMENTARIO_RESOLVER);
+  EXECUTE format('COMMENT ON FUNCTION public.can_access_service(uuid) IS %L', COMENTARIO_SERVICO);
+END;
+$comentarios$;
 
 -- ---------------------------------------------------------------------------
 -- 3. ACL — menor privilégio, sem partir as políticas
@@ -684,6 +753,8 @@ DECLARE
   v_oid      oid;
   v_esperada text;
   v_nome     text;
+  v_comentario text;
+  v_com_esperado text;
 BEGIN
   FOREACH v_nome IN ARRAY ARRAY['get_my_profile_id', 'can_access_service'] LOOP
     IF v_nome = 'get_my_profile_id' THEN
@@ -741,6 +812,25 @@ BEGIN
       RAISE EXCEPTION 'COLAB_106_POSTSTATE_FAILED: % ficou com EXECUTE WITH GRANT OPTION', v_nome;
     END IF;
   END LOOP;
+
+  -- 🔴 Os comentarios, lidos da FONTE UNICA do bloco 2b.
+  FOREACH v_nome IN ARRAY ARRAY['get_my_profile_id', 'can_access_service'] LOOP
+    IF v_nome = 'get_my_profile_id' THEN
+      v_oid := to_regprocedure('public.get_my_profile_id()');
+    ELSE
+      v_oid := to_regprocedure('public.can_access_service(uuid)');
+    END IF;
+
+    SELECT obj_description(v_oid, 'pg_proc') INTO v_comentario;
+    SELECT texto INTO v_com_esperado FROM _colab_106_comentarios WHERE funcao = v_nome;
+
+    IF v_comentario IS DISTINCT FROM v_com_esperado THEN
+      RAISE EXCEPTION
+        'COLAB_106_POSTSTATE_FAILED: o comentario de % nao ficou como esta migration promete', v_nome;
+    END IF;
+  END LOOP;
+
+  DROP TABLE _colab_106_comentarios;
 
   -- 🔴 NO_DATA_LOSS. Esta migration nao escreve em profiles. A verificacao
   --    existe porque uma versao futura pode ser tentada a arrumar os estados,
