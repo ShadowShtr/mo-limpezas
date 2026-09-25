@@ -93,9 +93,15 @@ describe("MASTER_REGEX_SANITIZER_SUPERSEDED", () => {
     expect(SINK_SEM_COMENTARIOS).not.toMatch(/slice\(\s*0?\s*,?\s*60\s*\)/);
   });
 
-  it("o conjunto fechado tem os treze códigos do domínio, sem repetições", () => {
+  it("o conjunto fechado tem os catorze códigos do domínio, sem repetições", () => {
     expect(new Set(CODIGOS_CONHECIDOS).size).toBe(CODIGOS_CONHECIDOS.length);
-    expect(CODIGOS_CONHECIDOS.length).toBe(13);
+    // 🔴 Catorze desde a 106-B: `INACTIVE` juntou-se aos códigos do
+    //    `auth-guard`. O número está aqui à mão de propósito — obriga a passar
+    //    por este ensaio quem acrescentar um código, e a guarda de compilação
+    //    em `payment-status-trace.ts` já obriga a registar o código novo na
+    //    lista. Um conta o outro.
+    expect(CODIGOS_CONHECIDOS.length).toBe(14);
+    expect(CODIGOS_CONHECIDOS).toContain("INACTIVE");
   });
 });
 

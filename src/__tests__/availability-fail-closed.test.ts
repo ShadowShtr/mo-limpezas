@@ -158,7 +158,10 @@ vi.mock("@/lib/supabase/admin", () => ({
 }));
 vi.mock("next/cache", () => ({ revalidatePath: () => {} }));
 
-const ACTOR = { id: "actor-1", company_id: "empresa-1", role: "admin" };
+// 🔴 `status` faz parte do perfil desde a 106-B: `requireProfile`
+//    verifica-o, e a coluna e NOT NULL com CHECK em producao. Um fixture
+//    sem ele descrevia um perfil que nao existe.
+const ACTOR = { id: "actor-1", company_id: "empresa-1", role: "admin", status: "ativo" };
 const FALHA = { data: null, error: { code: "57014", message: "canceling statement" } };
 
 const CANDIDATOS = [

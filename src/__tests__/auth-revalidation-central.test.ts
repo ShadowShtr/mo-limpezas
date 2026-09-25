@@ -104,7 +104,7 @@ describe("requireProfile — códigos estáveis", () => {
 
     getUser.mockResolvedValue({ data: { user: { id: "u1" } } });
     single.mockResolvedValue({
-      data: { id: "u1", company_id: "empresa-a", role: "colaborador" },
+      data: { id: "u1", company_id: "empresa-a", role: "colaborador", status: "ativo" },
     });
 
     const guard = await requireProfile({ roles: ["admin", "gestor"] });
@@ -121,7 +121,7 @@ describe("requireProfile — códigos estáveis", () => {
 
     getUser.mockResolvedValue({ data: { user: { id: "u1" } } });
     single.mockResolvedValue({
-      data: { id: "u1", company_id: "empresa-a", role: "admin" },
+      data: { id: "u1", company_id: "empresa-a", role: "admin", status: "ativo" },
     });
 
     const guard = await requireProfile({ roles: ["admin", "gestor"] });

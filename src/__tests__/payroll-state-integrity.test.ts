@@ -232,7 +232,10 @@ vi.mock("@/lib/finance-period-guard", () => ({
   }),
 }));
 
-const ACTOR = { id: "actor-1", company_id: "empresa-1", role: "admin" };
+// 🔴 `status` faz parte do perfil desde a 106-B: `requireProfile`
+//    verifica-o, e a coluna e NOT NULL com CHECK em producao. Um fixture
+//    sem ele descrevia um perfil que nao existe.
+const ACTOR = { id: "actor-1", company_id: "empresa-1", role: "admin", status: "ativo" };
 
 /** Estado base: ator válido, um colaborador, nada configurado, mês vazio. */
 function cenarioBase(over: Record<string, { data?: unknown; error?: unknown }> = {}) {

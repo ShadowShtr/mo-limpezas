@@ -5,6 +5,7 @@ import { DashboardShell } from "@/components/layout/dashboard-shell";
 import { SwUpdatePrompt } from "@/components/pwa/sw-update-prompt";
 import { UpdateNoticeModal } from "@/components/update-notices/update-notice-modal";
 import { getPendingNotices } from "@/app/actions/update-notices";
+import { estadoAutoriza } from "@/domain/collaborators/status";
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient();
@@ -15,7 +16,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
   const admin = createAdminClient();
   const { data: profile, error: profileError } = await admin
     .from("profiles")
-    .select("full_name, role, avatar_url")
+    .select("full_name, role, avatar_url, status")
     .eq("id", user.id)
     .maybeSingle();
 
@@ -31,6 +32,19 @@ export default async function DashboardLayout({ children }: { children: React.Re
     await supabase.auth.signOut();
     redirect("/login?error=profile");
   }
+  // 🔴 Sessão válida, acesso retirado.
+  //
+  //    Esta consulta corre com service_role (BYPASSRLS): a 106 não a alcança.
+  //    Sem isto, uma admin ou gestora suspensa continuava a ver o dashboard
+  //    inteiro enquanto o token durasse.
+  //
+  //    `signOut()` antes do redirect, e por isso não há ciclo: sem sessão, o
+  //    proxy deixa /login servir a página em vez de a reencaminhar para cá.
+  if (!estadoAutoriza(profile.status)) {
+    await supabase.auth.signOut();
+    redirect("/login?error=sem-acesso");
+  }
+
   if (profile.role === "colaborador") redirect("/app");
 
   // Avisos por ler. `getPendingNotices` nunca lança: um erro devolve lista

@@ -7,6 +7,9 @@ import { X, Loader2, Plus, Trash2 } from "lucide-react";
 import { createColaborador, updateColaborador } from "@/app/actions/colaboradores";
 import { inviteCollaborator } from "@/app/actions/auth";
 import { isValidIsoDateString } from "@/lib/utils";
+import {
+  ESTADOS_COLABORADOR, ROTULO_ESTADO,
+} from "@/domain/collaborators/status";
 
 type Colaborador = {
   id: string;
@@ -234,9 +237,12 @@ export function ColaboradorSheet({ trigger, companyId, colaborador }: Props) {
                 <div>
                   <label className="block text-sm font-medium text-[var(--color-text-main)] mb-1.5">Estado</label>
                   <select value={status} onChange={(e) => setStatus(e.target.value)} className={selectCls}>
-                    <option value="ativo">Ativo</option>
-                    <option value="inativo">Inativo</option>
-                    <option value="suspenso">Suspenso</option>
+                    {/* 🔴 As opções vinham escritas à mão. Batiam com a base por
+                        acaso, e não batiam com o `z.enum` do servidor, que
+                        recusava `suspenso` e aceitava `arquivado`. */}
+                    {ESTADOS_COLABORADOR.map((e) => (
+                      <option key={e} value={e}>{ROTULO_ESTADO[e]}</option>
+                    ))}
                   </select>
                 </div>
               </div>
