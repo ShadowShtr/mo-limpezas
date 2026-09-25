@@ -13,6 +13,7 @@ remeter para ele.
 | [`ARCHITECTURE.md`](ARCHITECTURE.md) | Onde vive cada coisa e como uma alteração atravessa o sistema. |
 | [`architecture/INDEX.md`](architecture/INDEX.md) | Mapa curto para localizar cobranças, folha, migrations e testes sem carregar o histórico. |
 | [`ENGINEERING-STANDARD.md`](ENGINEERING-STANDARD.md) | Como implementar, testar e fechar uma alteração. |
+| [`testing/POSTGRES-HARNESS.md`](testing/POSTGRES-HARNESS.md) | Como testar migrations, concorrência e RLS em PostgreSQL descartável sem tocar na base da empresa. |
 
 ## 2. Trabalho planeado
 
