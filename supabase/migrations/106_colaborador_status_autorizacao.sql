@@ -387,159 +387,119 @@ $proveniencia$;
 
 DO $preestado$
 DECLARE
-  RESOLVER_ESPERADO CONSTANT text :=
-    'SELECT id FROM profiles WHERE auth_user_id = auth.uid() UNION ALL SELECT id FROM profiles p WHERE p.id = auth.uid() AND EXISTS (SELECT 1 FROM auth.users u WHERE u.id = p.id) AND NOT EXISTS (SELECT 1 FROM profiles x WHERE x.auth_user_id = auth.uid()) LIMIT 1;';
+  -- 🔴 A DEFINIÇÃO CANÓNICA INTEIRA, e não uma lista de atributos escolhidos.
+  --
+  --    `pg_get_functiondef()` imprime tudo o que o DDL determina: assinatura,
+  --    nomes dos argumentos, tipo de retorno, linguagem, volatilidade,
+  --    SECURITY DEFINER, STRICT, LEAKPROOF, PARALLEL, COST, `search_path` e o
+  --    corpo. Comparar essa string cobre numa só prova todas as propriedades
+  --    que o `CREATE OR REPLACE` lá em baixo vai redefinir.
+  --
+  --    Atributos no valor por omissão NÃO aparecem na saída. É isso que faz
+  --    esta comparação apanhar o caso perigoso: quem correr
+  --    `ALTER FUNCTION ... PARALLEL SAFE` passa a ver `PARALLEL SAFE` na
+  --    definição, a comparação falha, e a 106 recusa-se a repor o default em
+  --    silêncio.
+  --
+  -- 🔴 As duas strings foram lidas do CATÁLOGO VIVO de produção (PG 17.6) a
+  --    2026-09-25, não construídas a partir dos ficheiros de migration.
+  DEF_RESOLVER CONSTANT text :=
+    'CREATE OR REPLACE FUNCTION public.get_my_profile_id() RETURNS uuid LANGUAGE sql STABLE SECURITY DEFINER SET search_path TO ''public'' AS $function$ SELECT id FROM profiles WHERE auth_user_id = auth.uid() UNION ALL SELECT id FROM profiles p WHERE p.id = auth.uid() AND EXISTS (SELECT 1 FROM auth.users u WHERE u.id = p.id) AND NOT EXISTS (SELECT 1 FROM profiles x WHERE x.auth_user_id = auth.uid()) LIMIT 1; $function$';
 
-  SERVICO_ESPERADO CONSTANT text :=
-    'SELECT EXISTS ( SELECT 1 FROM services s INNER JOIN profiles p ON p.id = auth.uid() AND p.company_id = s.company_id WHERE s.id = p_service_id AND ( EXISTS ( SELECT 1 FROM team_members tm WHERE tm.team_id = s.team_id AND tm.collaborator_id = auth.uid() AND (tm.left_at IS NULL OR tm.left_at > NOW()) ) OR EXISTS ( SELECT 1 FROM service_reinforcements sr WHERE sr.service_id = s.id AND sr.collaborator_id = auth.uid() ) ) )';
+  DEF_SERVICO CONSTANT text :=
+    'CREATE OR REPLACE FUNCTION public.can_access_service(p_service_id uuid) RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER AS $function$ SELECT EXISTS ( SELECT 1 FROM services s INNER JOIN profiles p ON p.id = auth.uid() AND p.company_id = s.company_id WHERE s.id = p_service_id AND ( EXISTS ( SELECT 1 FROM team_members tm WHERE tm.team_id = s.team_id AND tm.collaborator_id = auth.uid() AND (tm.left_at IS NULL OR tm.left_at > NOW()) ) OR EXISTS ( SELECT 1 FROM service_reinforcements sr WHERE sr.service_id = s.id AND sr.collaborator_id = auth.uid() ) ) ) $function$';
 
-  v_corpo    text;
-  v_definer  boolean;
-  v_volatil  "char";
-  v_lang     text;
-  v_config   text;
+  -- 🔴 O owner é exigido pelo NOME, e não «seja qual for o que existir hoje».
+  --
+  --    `CREATE OR REPLACE` PRESERVA o owner — é uma das duas únicas coisas que
+  --    preserva. Numa função `SECURITY DEFINER` isso não é detalhe: o owner é
+  --    a identidade com que o corpo corre. Instalar a 106 sobre uma função que
+  --    entretanto mudou de dono seria instalá-la a correr com privilégios de
+  --    outra pessoa.
+  OWNER_ESPERADO CONSTANT text := 'postgres';
+
+  v_def      text;
+  v_owner    text;
   v_grantees text[];
   v_grantable boolean;
   v_esperados text[];
   v_oid      oid;
-  r          text;
+  v_esperada text;
+  v_nome     text;
+  v_com_public boolean;
 BEGIN
-  -- ── O resolver, tal como a 101b o deixou ────────────────────────────────
-  v_oid := to_regprocedure('public.get_my_profile_id()');
+  FOREACH v_nome IN ARRAY ARRAY['get_my_profile_id', 'can_access_service'] LOOP
+    IF v_nome = 'get_my_profile_id' THEN
+      v_oid := to_regprocedure('public.get_my_profile_id()');
+      v_esperada := DEF_RESOLVER;
+      v_com_public := false;   -- a 101b já tinha retirado o EXECUTE de PUBLIC
+    ELSE
+      v_oid := to_regprocedure('public.can_access_service(uuid)');
+      v_esperada := DEF_SERVICO;
+      -- 🔴 PUBLIC faz parte do predecessor: é o que produção tem, e é
+      --    precisamente o que a 106 vai retirar. Esperar a forma já corrigida
+      --    seria aceitar como predecessor aquilo que é o resultado.
+      v_com_public := true;
+    END IF;
 
-  SELECT btrim(regexp_replace(p.prosrc, '[[:space:]]+', ' ', 'g')),
-         p.prosecdef, p.provolatile, l.lanname,
-         coalesce(array_to_string(p.proconfig, ', '), '')
-    INTO v_corpo, v_definer, v_volatil, v_lang, v_config
-    FROM pg_proc p JOIN pg_language l ON l.oid = p.prolang
-   WHERE p.oid = v_oid;
+    IF v_oid IS NULL THEN
+      RAISE EXCEPTION
+        'COLAB_106_PREESTADO_INESPERADO: % ausente ou com outra assinatura', v_nome;
+    END IF;
 
-  IF v_corpo IS DISTINCT FROM RESOLVER_ESPERADO THEN
-    RAISE EXCEPTION
-      'COLAB_106_PREESTADO_INESPERADO: get_my_profile_id não tem o corpo canónico da 101b. Alguém o alterou depois, e substituí-lo apagaria essa alteração. Encontrado: %',
-      left(v_corpo, 400);
-  END IF;
+    SELECT btrim(regexp_replace(pg_get_functiondef(p.oid), '[[:space:]]+', ' ', 'g')),
+           p.proowner::regrole::text
+      INTO v_def, v_owner
+      FROM pg_proc p WHERE p.oid = v_oid;
 
-  IF NOT v_definer OR v_volatil <> 's' OR v_lang <> 'sql' THEN
-    RAISE EXCEPTION
-      'COLAB_106_PREESTADO_INESPERADO: get_my_profile_id com definição inesperada (definer=%, volatilidade=%, linguagem=%)',
-      v_definer, v_volatil, v_lang;
-  END IF;
+    IF v_def IS DISTINCT FROM v_esperada THEN
+      RAISE EXCEPTION
+        'COLAB_106_PREESTADO_INESPERADO: a definição de % não é a esperada — alguém a alterou depois, e CREATE OR REPLACE apagaria essa alteração. Nada foi alterado. Encontrado: %',
+        v_nome, left(v_def, 500);
+    END IF;
 
-  IF v_config <> 'search_path=public' THEN
-    RAISE EXCEPTION
-      'COLAB_106_PREESTADO_INESPERADO: get_my_profile_id com search_path inesperado (%)',
-      coalesce(nullif(v_config, ''), '(nenhum)');
-  END IF;
+    IF v_owner IS DISTINCT FROM OWNER_ESPERADO THEN
+      RAISE EXCEPTION
+        'COLAB_106_PREESTADO_INESPERADO: % pertence a % e esperava-se % — numa função SECURITY DEFINER o owner é a identidade com que o corpo corre. Nada foi alterado.',
+        v_nome, v_owner, OWNER_ESPERADO;
+    END IF;
 
-  -- 🔴 A ACL também. Se alguém tiver dado EXECUTE a mais um papel, a 106
-  --    revogava-o silenciosamente no bloco 3 — e isso é uma decisão de outra
-  --    pessoa a ser desfeita sem ninguém dar por ela.
-  SELECT array_agg(DISTINCT a.grantee::regrole::text ORDER BY a.grantee::regrole::text),
-         bool_or(a.is_grantable)
-    INTO v_grantees, v_grantable
-    FROM pg_proc p, LATERAL aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) a
-   WHERE p.oid = v_oid AND a.privilege_type = 'EXECUTE';
+    -- ── A ACL, que `pg_get_functiondef` não imprime ────────────────────────
+    SELECT array_agg(DISTINCT a.grantee::regrole::text ORDER BY a.grantee::regrole::text),
+           bool_or(a.is_grantable)
+      INTO v_grantees, v_grantable
+      FROM pg_proc p, LATERAL aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) a
+     WHERE p.oid = v_oid AND a.privilege_type = 'EXECUTE';
 
-  -- O esperado: o owner e os papéis do Supabase QUE EXISTEM. Sem PUBLIC.
-  SELECT array_agg(g ORDER BY g) INTO v_esperados
-    FROM (
-      SELECT p.proowner::regrole::text AS g FROM pg_proc p WHERE p.oid = v_oid
-      UNION
-      SELECT rolname FROM pg_roles WHERE rolname IN ('anon', 'authenticated', 'service_role')
-    ) AS e;
+    SELECT array_agg(g ORDER BY g) INTO v_esperados
+      FROM (
+        SELECT OWNER_ESPERADO AS g
+        UNION
+        SELECT rolname FROM pg_roles WHERE rolname IN ('anon', 'authenticated', 'service_role')
+        UNION ALL
+        SELECT '-' WHERE v_com_public
+      ) AS e;
 
-  IF v_grantees IS DISTINCT FROM v_esperados THEN
-    RAISE EXCEPTION
-      'COLAB_106_PREESTADO_INESPERADO: ACL de get_my_profile_id é % — esperado %',
-      coalesce(array_to_string(v_grantees, ', '), 'NENHUMA'),
-      array_to_string(v_esperados, ', ');
-  END IF;
-  -- 🔴 E o GRANT OPTION, que a lista de grantees NÃO mostra.
-  --
-  --    `authenticated` com EXECUTE e `authenticated` com EXECUTE WITH GRANT
-  --    OPTION produzem exactamente a MESMA lista de nomes. A diferença é que o
-  --    segundo pode passar o privilégio adiante — e o bloco da ACL desta
-  --    migration faz `REVOKE ALL` seguido de `GRANT EXECUTE`, que o retira em
-  --    silêncio. Alguém decidiu dar essa capacidade; não é esta migration que
-  --    a desfaz sem dizer nada.
-  IF coalesce(v_grantable, false) THEN
-    RAISE EXCEPTION
-      'COLAB_106_PREESTADO_INESPERADO: get_my_profile_id tem EXECUTE com WITH GRANT OPTION — a 106 iria retirá-lo sem o dizer. Nada foi alterado.';
-  END IF;
+    IF v_grantees IS DISTINCT FROM v_esperados THEN
+      RAISE EXCEPTION
+        'COLAB_106_PREESTADO_INESPERADO: ACL de % é % — esperado %. Nada foi alterado.',
+        v_nome,
+        coalesce(array_to_string(v_grantees, ', '), 'NENHUMA'),
+        array_to_string(v_esperados, ', ');
+    END IF;
 
-
-  -- ── can_access_service, tal como a 034 a deixou ─────────────────────────
-  v_oid := to_regprocedure('public.can_access_service(uuid)');
-
-  SELECT btrim(regexp_replace(p.prosrc, '[[:space:]]+', ' ', 'g')),
-         p.prosecdef, p.provolatile, l.lanname,
-         coalesce(array_to_string(p.proconfig, ', '), '')
-    INTO v_corpo, v_definer, v_volatil, v_lang, v_config
-    FROM pg_proc p JOIN pg_language l ON l.oid = p.prolang
-   WHERE p.oid = v_oid;
-
-  IF v_corpo IS DISTINCT FROM SERVICO_ESPERADO THEN
-    RAISE EXCEPTION
-      'COLAB_106_PREESTADO_INESPERADO: can_access_service não tem o corpo vivo da 034. Encontrado: %',
-      left(v_corpo, 400);
-  END IF;
-
-  IF NOT v_definer OR v_volatil <> 's' OR v_lang <> 'sql' THEN
-    RAISE EXCEPTION
-      'COLAB_106_PREESTADO_INESPERADO: can_access_service com definição inesperada (definer=%, volatilidade=%, linguagem=%)',
-      v_definer, v_volatil, v_lang;
-  END IF;
-
-  -- 🔴 A AUSÊNCIA de search_path é parte da forma esperada. Se já lá estiver
-  --    um, alguém corrigiu isto antes desta migration — e o que a 106 ia
-  --    fazer já está feito, por outra mão e talvez de outra maneira.
-  IF v_config <> '' THEN
-    RAISE EXCEPTION
-      'COLAB_106_PREESTADO_INESPERADO: can_access_service já tem search_path (%) — alguém a endureceu antes desta migration',
-      v_config;
-  END IF;
-
-  SELECT array_agg(DISTINCT a.grantee::regrole::text ORDER BY a.grantee::regrole::text),
-         bool_or(a.is_grantable)
-    INTO v_grantees, v_grantable
-    FROM pg_proc p, LATERAL aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) a
-   WHERE p.oid = v_oid AND a.privilege_type = 'EXECUTE';
-
-  -- 🔴 Aqui o esperado INCLUI PUBLIC (`-`): é o que produção tem, e é
-  --    precisamente o que a 106 vai retirar. Esperar a forma já corrigida
-  --    seria aceitar como predecessor aquilo que é o resultado.
-  SELECT array_agg(g ORDER BY g) INTO v_esperados
-    FROM (
-      SELECT '-' AS g
-      UNION
-      SELECT p.proowner::regrole::text FROM pg_proc p WHERE p.oid = v_oid
-      UNION
-      SELECT rolname FROM pg_roles WHERE rolname IN ('anon', 'authenticated', 'service_role')
-    ) AS e;
-
-  IF v_grantees IS DISTINCT FROM v_esperados THEN
-    RAISE EXCEPTION
-      'COLAB_106_PREESTADO_INESPERADO: ACL de can_access_service é % — esperado %',
-      coalesce(array_to_string(v_grantees, ', '), 'NENHUMA'),
-      array_to_string(v_esperados, ', ');
-  END IF;
-  -- 🔴 E o GRANT OPTION, que a lista de grantees NÃO mostra.
-  --
-  --    `authenticated` com EXECUTE e `authenticated` com EXECUTE WITH GRANT
-  --    OPTION produzem exactamente a MESMA lista de nomes. A diferença é que o
-  --    segundo pode passar o privilégio adiante — e o bloco da ACL desta
-  --    migration faz `REVOKE ALL` seguido de `GRANT EXECUTE`, que o retira em
-  --    silêncio. Alguém decidiu dar essa capacidade; não é esta migration que
-  --    a desfaz sem dizer nada.
-  IF coalesce(v_grantable, false) THEN
-    RAISE EXCEPTION
-      'COLAB_106_PREESTADO_INESPERADO: can_access_service tem EXECUTE com WITH GRANT OPTION — a 106 iria retirá-lo sem o dizer. Nada foi alterado.';
-  END IF;
-
-
-  -- Silencia o aviso de variável não usada sem esconder nada.
-  r := NULL;
+    -- 🔴 O GRANT OPTION, que a lista de grantees não mostra.
+    --
+    --    `authenticated` com EXECUTE e com EXECUTE WITH GRANT OPTION produzem
+    --    exactamente a MESMA lista de nomes. A diferença é poder passar o
+    --    privilégio adiante — e o bloco da ACL desta migration faz
+    --    `REVOKE ALL` + `GRANT EXECUTE`, que o retira em silêncio.
+    IF coalesce(v_grantable, false) THEN
+      RAISE EXCEPTION
+        'COLAB_106_PREESTADO_INESPERADO: % tem EXECUTE com WITH GRANT OPTION — a 106 iria retirá-lo sem o dizer. Nada foi alterado.',
+        v_nome;
+    END IF;
+  END LOOP;
 END;
 $preestado$;
 
@@ -701,115 +661,94 @@ $acl$;
 
 DO $poststate$
 DECLARE
-  v_oid oid;
-  v_src text;
-  v_config text[];
+  -- 🔴 A definicao INTEIRA que esta migration promete ter deixado, lida de um
+  --    PostgreSQL 17 limpo onde os dois CREATE OR REPLACE acima correram.
+  --
+  --    Verificar a funcao completa, em vez de palavras no corpo, fecha de uma
+  --    vez tudo o que o DDL determina: volatilidade, STRICT, LEAKPROOF,
+  --    PARALLEL, COST, search_path e o corpo. Se qualquer um sair diferente do
+  --    prometido, a migration falha e nada fica aplicado.
+  DEF_RESOLVER CONSTANT text :=
+    'CREATE OR REPLACE FUNCTION public.get_my_profile_id() RETURNS uuid LANGUAGE sql STABLE SECURITY DEFINER SET search_path TO ''public'' AS $function$ SELECT id FROM profiles WHERE auth_user_id = auth.uid() AND status = ''ativo'' UNION ALL SELECT id FROM profiles p WHERE p.id = auth.uid() AND p.status = ''ativo'' AND EXISTS (SELECT 1 FROM auth.users u WHERE u.id = p.id) AND NOT EXISTS (SELECT 1 FROM profiles x WHERE x.auth_user_id = auth.uid()) LIMIT 1; $function$';
+
+  DEF_SERVICO CONSTANT text :=
+    'CREATE OR REPLACE FUNCTION public.can_access_service(p_service_id uuid) RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER SET search_path TO ''pg_catalog'', ''public'' AS $function$ SELECT EXISTS ( SELECT 1 FROM public.services s JOIN public.profiles p ON p.id = public.get_my_profile_id() AND p.company_id = s.company_id WHERE s.id = p_service_id AND ( EXISTS ( SELECT 1 FROM public.team_members tm WHERE tm.team_id = s.team_id AND tm.collaborator_id = p.id AND (tm.left_at IS NULL OR tm.left_at > now()) ) OR EXISTS ( SELECT 1 FROM public.service_reinforcements sr WHERE sr.service_id = s.id AND sr.collaborator_id = p.id ) ) ); $function$';
+
+  OWNER_ESPERADO CONSTANT text := 'postgres';
+
+  v_def      text;
+  v_owner    text;
   v_grantees text[];
   v_grantable boolean;
-  f text;
-  r text;
+  v_esperados text[];
+  v_oid      oid;
+  v_esperada text;
+  v_nome     text;
 BEGIN
-  -- ── O resolver ──────────────────────────────────────────────────────────
-  v_oid := to_regprocedure('public.get_my_profile_id()');
-  IF v_oid IS NULL THEN
-    RAISE EXCEPTION 'COLAB_106_POSTSTATE_FAILED: get_my_profile_id desapareceu';
-  END IF;
+  FOREACH v_nome IN ARRAY ARRAY['get_my_profile_id', 'can_access_service'] LOOP
+    IF v_nome = 'get_my_profile_id' THEN
+      v_oid := to_regprocedure('public.get_my_profile_id()');
+      v_esperada := DEF_RESOLVER;
+    ELSE
+      v_oid := to_regprocedure('public.can_access_service(uuid)');
+      v_esperada := DEF_SERVICO;
+    END IF;
 
-  SELECT p.prosrc, p.proconfig INTO v_src, v_config FROM pg_proc p WHERE p.oid = v_oid;
+    IF v_oid IS NULL THEN
+      RAISE EXCEPTION 'COLAB_106_POSTSTATE_FAILED: % desapareceu', v_nome;
+    END IF;
 
-  IF position('status' in v_src) = 0 OR position('ativo' in v_src) = 0 THEN
-    RAISE EXCEPTION
-      'COLAB_106_POSTSTATE_FAILED: get_my_profile_id não filtra por estado activo';
-  END IF;
+    SELECT btrim(regexp_replace(pg_get_functiondef(p.oid), '[[:space:]]+', ' ', 'g')),
+           p.proowner::regrole::text
+      INTO v_def, v_owner
+      FROM pg_proc p WHERE p.oid = v_oid;
 
-  -- 🔴 Os DOIS ramos. Um `UNION ALL` com o filtro só no primeiro deixaria a
-  --    convenção antiga a resolver identidades não activas.
-  IF (length(v_src) - length(replace(v_src, 'ativo', ''))) / length('ativo') < 2 THEN
-    RAISE EXCEPTION
-      'COLAB_106_POSTSTATE_FAILED: só um dos ramos de get_my_profile_id filtra por estado';
-  END IF;
-
-  IF NOT EXISTS (SELECT 1 FROM pg_proc WHERE oid = v_oid AND prosecdef) THEN
-    RAISE EXCEPTION 'COLAB_106_POSTSTATE_FAILED: get_my_profile_id deixou de ser SECURITY DEFINER';
-  END IF;
-
-  IF v_config IS NULL THEN
-    RAISE EXCEPTION 'COLAB_106_POSTSTATE_FAILED: get_my_profile_id sem search_path';
-  END IF;
-
-  -- ── can_access_service ──────────────────────────────────────────────────
-  v_oid := to_regprocedure('public.can_access_service(uuid)');
-  IF v_oid IS NULL THEN
-    RAISE EXCEPTION 'COLAB_106_POSTSTATE_FAILED: can_access_service desapareceu';
-  END IF;
-
-  SELECT p.prosrc, p.proconfig INTO v_src, v_config FROM pg_proc p WHERE p.oid = v_oid;
-
-  IF position('get_my_profile_id' in v_src) = 0 THEN
-    RAISE EXCEPTION
-      'COLAB_106_POSTSTATE_FAILED: can_access_service não passa pelo resolver canónico';
-  END IF;
-
-  -- 🔴 A comparação directa com `auth.uid()` tem de ter DESAPARECIDO. Enquanto
-  --    lá estiver, a função continua a assumir profiles.id = id do Auth.
-  IF position('auth.uid()' in v_src) > 0 THEN
-    RAISE EXCEPTION
-      'COLAB_106_POSTSTATE_FAILED: can_access_service ainda usa auth.uid() directamente';
-  END IF;
-
-  IF NOT ('search_path=pg_catalog, public' = ANY(coalesce(v_config, '{}'))) THEN
-    RAISE EXCEPTION
-      'COLAB_106_POSTSTATE_FAILED: can_access_service sem o search_path exacto (%)',
-      coalesce(array_to_string(v_config, ', '), 'NULL');
-  END IF;
-
-  IF NOT EXISTS (SELECT 1 FROM pg_proc WHERE oid = v_oid AND prosecdef) THEN
-    RAISE EXCEPTION
-      'COLAB_106_POSTSTATE_FAILED: can_access_service deixou de ser SECURITY DEFINER — as políticas de services entrariam em recursão';
-  END IF;
-
-  -- ── ACL das duas ────────────────────────────────────────────────────────
-  FOREACH f IN ARRAY ARRAY['public.get_my_profile_id()', 'public.can_access_service(uuid)'] LOOP
-    v_oid := to_regprocedure(f);
-
-    SELECT array_agg(DISTINCT acl.grantee::regrole::text ORDER BY acl.grantee::regrole::text),
-           bool_or(acl.is_grantable)
-      INTO v_grantees, v_grantable
-      FROM pg_proc p,
-           LATERAL aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) AS acl
-     WHERE p.oid = v_oid AND acl.privilege_type = 'EXECUTE';
-
-    -- 🔴 PUBLIC aparece em `aclexplode` como o papel de oid 0, que
-    --    `::regrole::text` mostra como `-`. É essa a forma que não pode estar
-    --    cá: EXECUTE implícito para toda a gente.
-    IF '-' = ANY(coalesce(v_grantees, '{}')) THEN
+    IF v_def IS DISTINCT FROM v_esperada THEN
       RAISE EXCEPTION
-        'COLAB_106_POSTSTATE_FAILED: % ainda tem EXECUTE para PUBLIC', f;
+        'COLAB_106_POSTSTATE_FAILED: a definicao de % nao e a que esta migration promete. Obtido: %',
+        v_nome, left(v_def, 500);
+    END IF;
+
+    -- 🔴 CREATE OR REPLACE preserva o owner; isto confirma que continua a ser
+    --    quem era, e nao que a migration o mudou.
+    IF v_owner IS DISTINCT FROM OWNER_ESPERADO THEN
+      RAISE EXCEPTION
+        'COLAB_106_POSTSTATE_FAILED: % ficou com owner % em vez de %', v_nome, v_owner, OWNER_ESPERADO;
+    END IF;
+
+    SELECT array_agg(DISTINCT a.grantee::regrole::text ORDER BY a.grantee::regrole::text),
+           bool_or(a.is_grantable)
+      INTO v_grantees, v_grantable
+      FROM pg_proc p, LATERAL aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) a
+     WHERE p.oid = v_oid AND a.privilege_type = 'EXECUTE';
+
+    -- 🔴 SEM PUBLIC: e isto que a 106 acrescenta a forma anterior.
+    SELECT array_agg(g ORDER BY g) INTO v_esperados
+      FROM (
+        SELECT OWNER_ESPERADO AS g
+        UNION
+        SELECT rolname FROM pg_roles WHERE rolname IN ('anon', 'authenticated', 'service_role')
+      ) AS e;
+
+    IF v_grantees IS DISTINCT FROM v_esperados THEN
+      RAISE EXCEPTION
+        'COLAB_106_POSTSTATE_FAILED: ACL de % ficou % - esperado %',
+        v_nome, coalesce(array_to_string(v_grantees, ', '), 'NENHUMA'),
+        array_to_string(v_esperados, ', ');
     END IF;
 
     IF coalesce(v_grantable, false) THEN
-      RAISE EXCEPTION 'COLAB_106_POSTSTATE_FAILED: % tem EXECUTE com WITH GRANT OPTION', f;
+      RAISE EXCEPTION 'COLAB_106_POSTSTATE_FAILED: % ficou com EXECUTE WITH GRANT OPTION', v_nome;
     END IF;
-
-    -- Os papéis que as políticas precisam continuam lá.
-    FOREACH r IN ARRAY ARRAY['authenticated', 'anon', 'service_role'] LOOP
-      IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = r)
-         AND NOT (r = ANY(coalesce(v_grantees, '{}'))) THEN
-        RAISE EXCEPTION
-          'COLAB_106_POSTSTATE_FAILED: % perdeu EXECUTE para % — as políticas de RLS deixariam de poder avaliá-la', f, r;
-      END IF;
-    END LOOP;
   END LOOP;
 
-  -- ── NO_DATA_LOSS ────────────────────────────────────────────────────────
-  --
-  -- 🔴 Esta migration não escreve em `profiles`. A verificação existe porque
-  --    uma versão futura pode ser tentada a «arrumar» os estados, e isso seria
-  --    decidir por outra pessoa o que fazer com a saída dela.
+  -- 🔴 NO_DATA_LOSS. Esta migration nao escreve em profiles. A verificacao
+  --    existe porque uma versao futura pode ser tentada a arrumar os estados,
+  --    e isso seria decidir por outra pessoa o que fazer com a saida dela.
   IF NOT EXISTS (SELECT 1 FROM public.profiles WHERE status <> 'ativo')
      AND EXISTS (SELECT 1 FROM public.profiles) THEN
     RAISE NOTICE
-      'COLAB_106: nenhum perfil não activo nesta base — nada a revogar, a regra fica instalada na mesma.';
+      'COLAB_106: nenhum perfil nao activo nesta base - nada a revogar, a regra fica instalada na mesma.';
   END IF;
 END;
 $poststate$;

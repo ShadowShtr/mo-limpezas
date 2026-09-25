@@ -67,7 +67,7 @@ DO $rollback_106$
 DECLARE
   -- 🔴 O checksum canónico desta 106. Se o SQL mudar, este valor TEM de mudar
   --    com ele — há um ensaio que os compara.
-  CHECKSUM_106 CONSTANT text := '6356a504bde6d4f4f76cfc538d8822e525c8277f487aa22932541557fa47beb1';
+  CHECKSUM_106 CONSTANT text := '43bc72bf500ea9a43986982cf6bc24ce126fb0d89f7a2c57bf922597099b4774';
 
   v_checksum text;
   v_ledger   boolean;
@@ -161,59 +161,56 @@ BEGIN
   -- Se houver qualquer desvio: ZERO ESCRITAS, ledger preservado, funções
   -- preservadas. Quem encontrar isto tem de decidir o que é verdade.
   DECLARE
-    RESOLVER_POS CONSTANT text :=
-      'SELECT id FROM profiles WHERE auth_user_id = auth.uid() AND status = ''ativo'' UNION ALL SELECT id FROM profiles p WHERE p.id = auth.uid() AND p.status = ''ativo'' AND EXISTS (SELECT 1 FROM auth.users u WHERE u.id = p.id) AND NOT EXISTS (SELECT 1 FROM profiles x WHERE x.auth_user_id = auth.uid()) LIMIT 1;';
+    -- 🔴 A definicao INTEIRA que a 106 instalou, e o owner.
+    --
+    --    A versao anterior comparava corpo, definer, volatilidade, linguagem,
+    --    search_path e ACL - um atributo de cada vez. Ficava de fora tudo o que
+    --    um ALTER FUNCTION posterior pode mudar sem tocar no corpo: STRICT,
+    --    LEAKPROOF, PARALLEL, COST, o proprio owner. E o CREATE OR REPLACE
+    --    deste rollback repunha os defaults, apagando essas decisoes.
+    --
+    --    Comparar pg_get_functiondef() cobre todas de uma vez.
+    DEF_RESOLVER CONSTANT text :=
+      'CREATE OR REPLACE FUNCTION public.get_my_profile_id() RETURNS uuid LANGUAGE sql STABLE SECURITY DEFINER SET search_path TO ''public'' AS $function$ SELECT id FROM profiles WHERE auth_user_id = auth.uid() AND status = ''ativo'' UNION ALL SELECT id FROM profiles p WHERE p.id = auth.uid() AND p.status = ''ativo'' AND EXISTS (SELECT 1 FROM auth.users u WHERE u.id = p.id) AND NOT EXISTS (SELECT 1 FROM profiles x WHERE x.auth_user_id = auth.uid()) LIMIT 1; $function$';
 
-    SERVICO_POS CONSTANT text :=
-      'SELECT EXISTS ( SELECT 1 FROM public.services s JOIN public.profiles p ON p.id = public.get_my_profile_id() AND p.company_id = s.company_id WHERE s.id = p_service_id AND ( EXISTS ( SELECT 1 FROM public.team_members tm WHERE tm.team_id = s.team_id AND tm.collaborator_id = p.id AND (tm.left_at IS NULL OR tm.left_at > now()) ) OR EXISTS ( SELECT 1 FROM public.service_reinforcements sr WHERE sr.service_id = s.id AND sr.collaborator_id = p.id ) ) );';
+    DEF_SERVICO CONSTANT text :=
+      'CREATE OR REPLACE FUNCTION public.can_access_service(p_service_id uuid) RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER SET search_path TO ''pg_catalog'', ''public'' AS $function$ SELECT EXISTS ( SELECT 1 FROM public.services s JOIN public.profiles p ON p.id = public.get_my_profile_id() AND p.company_id = s.company_id WHERE s.id = p_service_id AND ( EXISTS ( SELECT 1 FROM public.team_members tm WHERE tm.team_id = s.team_id AND tm.collaborator_id = p.id AND (tm.left_at IS NULL OR tm.left_at > now()) ) OR EXISTS ( SELECT 1 FROM public.service_reinforcements sr WHERE sr.service_id = s.id AND sr.collaborator_id = p.id ) ) ); $function$';
 
-    v_corpo    text;
-    v_definer  boolean;
-    v_volatil  "char";
-    v_lang     text;
-    v_config   text;
+    OWNER_ESPERADO CONSTANT text := 'postgres';
+
+    v_def      text;
+    v_owner    text;
     v_grantees text[];
     v_esperados text[];
     v_grantable boolean;
     v_oid      oid;
-    v_esperado text;
-    v_search   text;
+    v_esperada text;
     v_nome     text;
   BEGIN
     FOREACH v_nome IN ARRAY ARRAY['get_my_profile_id', 'can_access_service'] LOOP
       IF v_nome = 'get_my_profile_id' THEN
         v_oid := to_regprocedure('public.get_my_profile_id()');
-        v_esperado := RESOLVER_POS;
-        v_search := 'search_path=public';
+        v_esperada := DEF_RESOLVER;
       ELSE
         v_oid := to_regprocedure('public.can_access_service(uuid)');
-        v_esperado := SERVICO_POS;
-        v_search := 'search_path=pg_catalog, public';
+        v_esperada := DEF_SERVICO;
       END IF;
 
-      SELECT btrim(regexp_replace(p.prosrc, '[[:space:]]+', ' ', 'g')),
-             p.prosecdef, p.provolatile, l.lanname,
-             coalesce(array_to_string(p.proconfig, ', '), '')
-        INTO v_corpo, v_definer, v_volatil, v_lang, v_config
-        FROM pg_proc p JOIN pg_language l ON l.oid = p.prolang
-       WHERE p.oid = v_oid;
+      SELECT btrim(regexp_replace(pg_get_functiondef(p.oid), '[[:space:]]+', ' ', 'g')),
+             p.proowner::regrole::text
+        INTO v_def, v_owner
+        FROM pg_proc p WHERE p.oid = v_oid;
 
-      IF v_corpo IS DISTINCT FROM v_esperado THEN
+      IF v_def IS DISTINCT FROM v_esperada THEN
         RAISE EXCEPTION
-          'COLAB_106_ROLLBACK_CURRENT_STATE_DIVERGED: % já não tem o corpo que a 106 instalou — alguém a alterou depois, e repor a forma anterior apagaria esse trabalho. Nada foi alterado. Encontrado: %',
-          v_nome, left(coalesce(v_corpo, '(ausente)'), 400);
+          'COLAB_106_ROLLBACK_CURRENT_STATE_DIVERGED: a definicao de % ja nao e a que a 106 instalou - alguem a alterou depois, e repor a forma anterior apagaria esse trabalho. Nada foi alterado. Encontrado: %',
+          v_nome, left(coalesce(v_def, '(ausente)'), 500);
       END IF;
 
-      IF NOT v_definer OR v_volatil <> 's' OR v_lang <> 'sql' THEN
+      IF v_owner IS DISTINCT FROM OWNER_ESPERADO THEN
         RAISE EXCEPTION
-          'COLAB_106_ROLLBACK_CURRENT_STATE_DIVERGED: % com definição diferente da que a 106 deixou (definer=%, volatilidade=%, linguagem=%). Nada foi alterado.',
-          v_nome, v_definer, v_volatil, v_lang;
-      END IF;
-
-      IF v_config <> v_search THEN
-        RAISE EXCEPTION
-          'COLAB_106_ROLLBACK_CURRENT_STATE_DIVERGED: % com search_path % — a 106 deixou %. Nada foi alterado.',
-          v_nome, coalesce(nullif(v_config, ''), '(nenhum)'), v_search;
+          'COLAB_106_ROLLBACK_CURRENT_STATE_DIVERGED: % pertence agora a % e a 106 deixou-a em %. Nada foi alterado.',
+          v_nome, v_owner, OWNER_ESPERADO;
       END IF;
 
       SELECT array_agg(DISTINCT a.grantee::regrole::text ORDER BY a.grantee::regrole::text),
@@ -224,14 +221,14 @@ BEGIN
 
       SELECT array_agg(g ORDER BY g) INTO v_esperados
         FROM (
-          SELECT p.proowner::regrole::text AS g FROM pg_proc p WHERE p.oid = v_oid
+          SELECT OWNER_ESPERADO AS g
           UNION
           SELECT rolname FROM pg_roles WHERE rolname IN ('anon', 'authenticated', 'service_role')
         ) AS e;
 
       IF v_grantees IS DISTINCT FROM v_esperados OR coalesce(v_grantable, false) THEN
         RAISE EXCEPTION
-          'COLAB_106_ROLLBACK_CURRENT_STATE_DIVERGED: ACL de % é % (grant option %) — a 106 deixou %. Alguém a mudou depois; nada foi alterado.',
+          'COLAB_106_ROLLBACK_CURRENT_STATE_DIVERGED: ACL de % e % (grant option %) - a 106 deixou %. Nada foi alterado.',
           v_nome, coalesce(array_to_string(v_grantees, ', '), 'NENHUMA'),
           coalesce(v_grantable, false), array_to_string(v_esperados, ', ');
       END IF;

@@ -868,6 +868,87 @@ describe("16-20. proveniência e aplicação", () => {
     });
   }
 
+  // 🔴 G/H/I/J - drift de METADADOS do predecessor
+  //
+  //    `CREATE OR REPLACE FUNCTION` preserva apenas o OWNER e as PERMISSOES.
+  //    Todas as outras propriedades recebem os valores explicitos ou por
+  //    omissao do comando novo. Um `ALTER FUNCTION ... PARALLEL SAFE` feito
+  //    antes da 106 seria silenciosamente reposto a `PARALLEL UNSAFE`, sem o
+  //    corpo mudar uma letra.
+  //
+  //    E por isso que a comparacao e de `pg_get_functiondef()` inteiro, e nao
+  //    de atributos escolhidos a mao: cobre os que ainda nao imaginamos.
+  const DRIFT_DDL: Array<[string, string]> = [
+    ["PARALLEL SAFE", "ALTER FUNCTION public.can_access_service(uuid) PARALLEL SAFE"],
+    ["STRICT", "ALTER FUNCTION public.can_access_service(uuid) STRICT"],
+    ["COST 17", "ALTER FUNCTION public.can_access_service(uuid) COST 17"],
+  ];
+
+  for (const [nome, alter] of DRIFT_DDL) {
+    it(`🔴 ${nome} no predecessor: a 106 RECUSA, e zero escritas`, LENTO, async () => {
+      await palco(false);
+
+      const corpoAntes = await pool.query(
+        "SELECT prosrc FROM pg_proc WHERE oid = to_regprocedure($1)", [SIG_SERVICO]);
+      await pool.query(alter);
+      const defAntes = await pool.query(
+        "SELECT pg_get_functiondef(to_regprocedure($1)) AS d", [SIG_SERVICO]);
+
+      // 🔴 O CORPO nao mudou - e isso que torna o caso perigoso.
+      const corpoDepoisAlter = await pool.query(
+        "SELECT prosrc FROM pg_proc WHERE oid = to_regprocedure($1)", [SIG_SERVICO]);
+      expect(corpoDepoisAlter.rows[0].prosrc).toBe(corpoAntes.rows[0].prosrc);
+
+      await expect(pool.query(lerSql(M_106)))
+        .rejects.toThrow(/COLAB_106_PREESTADO_INESPERADO/);
+
+      // 🔴 ZERO escritas: a alteracao de quem la mexeu PERMANECE.
+      const defDepois = await pool.query(
+        "SELECT pg_get_functiondef(to_regprocedure($1)) AS d", [SIG_SERVICO]);
+      expect(defDepois.rows[0].d).toBe(defAntes.rows[0].d);
+
+      const resolver = await pool.query(
+        "SELECT prosrc FROM pg_proc WHERE oid = to_regprocedure($1)", [SIG_RESOLVER]);
+      expect(String(resolver.rows[0].prosrc)).not.toMatch(/status/);
+
+      const { rows: led } = await pool.query(
+        "SELECT count(*)::int AS n FROM public._migrations WHERE name = $1", [NOME_106]);
+      expect(led[0].n).toBe(0);
+
+      await palco();
+    });
+  }
+
+  it("🔴 J. owner diferente no predecessor: a 106 RECUSA", LENTO, async () => {
+    // 🔴 O owner e a UNICA propriedade, com as permissoes, que o
+    //    `CREATE OR REPLACE` preserva. Numa funcao SECURITY DEFINER e a
+    //    identidade com que o corpo corre: instalar a 106 sobre uma funcao que
+    //    mudou de dono seria instala-la a correr como outra pessoa.
+    await palco(false);
+    await pool.query("CREATE ROLE dono_teste_106 NOLOGIN");
+    await pool.query("ALTER FUNCTION public.can_access_service(uuid) OWNER TO dono_teste_106");
+
+    try {
+      await expect(pool.query(lerSql(M_106)))
+        .rejects.toThrow(/COLAB_106_PREESTADO_INESPERADO/);
+
+      // O owner alterado PERMANECE.
+      const { rows } = await pool.query(
+        "SELECT proowner::regrole::text AS o FROM pg_proc WHERE oid = to_regprocedure($1)",
+        [SIG_SERVICO]);
+      expect(rows[0].o).toBe("dono_teste_106");
+
+      const { rows: led } = await pool.query(
+        "SELECT count(*)::int AS n FROM public._migrations WHERE name = $1", [NOME_106]);
+      expect(led[0].n).toBe(0);
+    } finally {
+      await pool.query("ALTER FUNCTION public.can_access_service(uuid) OWNER TO postgres")
+        .catch(() => { /* o palco vai recriar */ });
+      await pool.query("DROP ROLE IF EXISTS dono_teste_106");
+      await palco();
+    }
+  });
+
   it("os checksums fixados na 106 são os dos ficheiros do repositório", LENTO, async () => {
     const sql = lerSql(M_106);
     const fixados = [...sql.matchAll(/\('(\d{3}[a-z]?_[a-z_]+\.sql)',\s*'([0-9a-f]{64})'\)/g)];
@@ -1066,6 +1147,51 @@ describe("21. rollback e recuperação para a frente", () => {
         "REVOKE ALL ON FUNCTION public.can_access_service(uuid) FROM papel_extra_rb106")
         .catch(() => { /* já não existe */ });
       await pool.query("DROP ROLE IF EXISTS papel_extra_rb106");
+      await palco();
+    }
+  });
+
+  it("🔴 K. metadado auxiliar alterado DEPOIS da 106: o rollback RECUSA", LENTO, async () => {
+    // Corpo, search_path e ACL intactos. So mudou `COST`. A versao anterior do
+    // guard nao media isto, e o `CREATE OR REPLACE` do rollback repunha o
+    // default - apagando uma decisao de outra pessoa.
+    await pool.query("ALTER FUNCTION public.can_access_service(uuid) COST 17");
+
+    await expect(pool.query(lerSql(ROLLBACK_106)))
+      .rejects.toThrow(/COLAB_106_ROLLBACK_CURRENT_STATE_DIVERGED/);
+
+    const { rows } = await pool.query(
+      "SELECT procost FROM pg_proc WHERE oid = to_regprocedure($1)", [SIG_SERVICO]);
+    expect(Number(rows[0].procost)).toBe(17);
+
+    // E o resolver continua endurecido: nada foi reposto.
+    const res = await pool.query(
+      "SELECT prosrc FROM pg_proc WHERE oid = to_regprocedure($1)", [SIG_RESOLVER]);
+    expect(String(res.rows[0].prosrc)).toMatch(/status = 'ativo'/);
+
+    await palco();
+  });
+
+  it("🔴 L. owner alterado DEPOIS da 106: o rollback RECUSA", LENTO, async () => {
+    await pool.query("CREATE ROLE dono_teste_rb106 NOLOGIN");
+    await pool.query("ALTER FUNCTION public.get_my_profile_id() OWNER TO dono_teste_rb106");
+
+    try {
+      await expect(pool.query(lerSql(ROLLBACK_106)))
+        .rejects.toThrow(/COLAB_106_ROLLBACK_CURRENT_STATE_DIVERGED/);
+
+      const { rows } = await pool.query(
+        "SELECT proowner::regrole::text AS o FROM pg_proc WHERE oid = to_regprocedure($1)",
+        [SIG_RESOLVER]);
+      expect(rows[0].o).toBe("dono_teste_rb106");
+
+      const { rows: led } = await pool.query(
+        "SELECT count(*)::int AS n FROM public._migrations WHERE name = $1", [NOME_106]);
+      expect(led[0].n).toBe(1);
+    } finally {
+      await pool.query("ALTER FUNCTION public.get_my_profile_id() OWNER TO postgres")
+        .catch(() => { /* o palco vai recriar */ });
+      await pool.query("DROP ROLE IF EXISTS dono_teste_rb106");
       await palco();
     }
   });

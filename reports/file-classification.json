@@ -5222,7 +5222,7 @@
       "signals": {
         "serviceRole": 8,
         "write": 1,
-        "sqlWrite": 56,
+        "sqlWrite": 69,
         "fallbackArray": 2,
         "dynamicImport": 1
       },
@@ -25439,8 +25439,8 @@
         "service-role"
       ],
       "signals": {
-        "serviceRole": 5,
-        "sqlWrite": 3
+        "serviceRole": 4,
+        "sqlWrite": 4
       },
       "action": "nenhuma",
       "reason": "migration versionada — histórico do schema, nunca se apaga",
@@ -26178,7 +26178,7 @@
       ],
       "signals": {
         "serviceRole": 2,
-        "sqlWrite": 4
+        "sqlWrite": 5
       },
       "action": "nenhuma",
       "reason": "migration versionada — histórico do schema, nunca se apaga",
