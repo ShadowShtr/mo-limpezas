@@ -1,23 +1,23 @@
 {
   "generatedBy": "scripts/audit-file-inventory.mjs",
-  "totalFiles": 989,
+  "totalFiles": 1001,
   "byStatus": {
-    "MANTER": 965,
+    "MANTER": 977,
     "STANDBY": 24
   },
   "byCategory": {
-    "test": 244,
+    "test": 249,
     "route-ui": 155,
     "migration": 146,
-    "lib": 80,
+    "lib": 81,
     "script": 63,
-    "domain": 53,
-    "src-other": 50,
-    "server-action": 48,
+    "domain": 55,
+    "src-other": 51,
+    "server-action": 49,
     "doc": 47,
-    "component": 33,
+    "component": 34,
+    "api-route": 17,
     "doc-historico": 16,
-    "api-route": 16,
     "config": 12,
     "asset": 8,
     "report": 4,
@@ -29,7 +29,7 @@
     "supabase-other": 2
   },
   "byConfidence": {
-    "alta": 966,
+    "alta": 978,
     "média": 17,
     "baixa": 6
   },
@@ -2634,7 +2634,9 @@
       "consumers": 0,
       "consumerSample": [],
       "autoLoaded": false,
-      "referencedBy": [],
+      "referencedBy": [
+        "docs"
+      ],
       "sideEffects": [
         "supabase",
         "env"
@@ -4385,6 +4387,111 @@
         "sqlWrite": 9,
         "fallbackArray": 4,
         "dynamicImport": 1
+      },
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/__tests__/avisos-classify.test.ts",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {},
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/__tests__/avisos-cron.test.ts",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [
+        "supabase",
+        "env"
+      ],
+      "risks": [],
+      "signals": {
+        "supabase": 1,
+        "env": 2,
+        "sqlWrite": 2,
+        "fallbackArray": 1,
+        "dynamicImport": 1
+      },
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/__tests__/avisos-fontes.test.ts",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [
+        "supabase"
+      ],
+      "risks": [],
+      "signals": {
+        "supabase": 1,
+        "fallbackArray": 1,
+        "dynamicImport": 1
+      },
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/__tests__/avisos-vencimento-modal.test.tsx",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "dynamicImport": 2
       },
       "action": "nenhuma",
       "reason": "suite de testes — corre por convenção do vitest",
@@ -8255,6 +8362,31 @@
       "sideEffects": [],
       "risks": [],
       "signals": {},
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/__tests__/notify-user-stored.test.ts",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "sqlWrite": 4,
+        "dynamicImport": 1
+      },
       "action": "nenhuma",
       "reason": "suite de testes — corre por convenção do vitest",
       "manualDecision": false,
@@ -14936,6 +15068,41 @@
       }
     },
     {
+      "path": "src/app/actions/avisos.ts",
+      "category": "server-action",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 3,
+      "consumerSample": [
+        "src/__tests__/avisos-fontes.test.ts",
+        "src/app/(dashboard)/layout.tsx",
+        "src/components/avisos/avisos-vencimento-modal.tsx"
+      ],
+      "autoLoaded": false,
+      "referencedBy": [
+        "vercel",
+        "docs"
+      ],
+      "sideEffects": [
+        "supabase"
+      ],
+      "risks": [],
+      "signals": {
+        "supabase": 2,
+        "serverAction": 1,
+        "consoleErr": 1
+      },
+      "action": "nenhuma",
+      "reason": "em uso: 3 consumidor(es), vercel.json",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": true,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
       "path": "src/app/actions/bank-reconciliation.ts",
       "category": "server-action",
       "status": "MANTER",
@@ -16824,6 +16991,37 @@
       }
     },
     {
+      "path": "src/app/api/cron/avisos-vencimento/route.ts",
+      "category": "api-route",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 1,
+      "consumerSample": [
+        "src/__tests__/avisos-cron.test.ts"
+      ],
+      "autoLoaded": true,
+      "referencedBy": [
+        "docs"
+      ],
+      "sideEffects": [
+        "supabase"
+      ],
+      "risks": [],
+      "signals": {
+        "supabase": 3,
+        "fallbackArray": 3
+      },
+      "action": "nenhuma",
+      "reason": "em uso: convenção do Next, 1 consumidor(es)",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": true,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
       "path": "src/app/api/cron/generate-services/route.ts",
       "category": "api-route",
       "status": "MANTER",
@@ -17334,6 +17532,34 @@
       },
       "action": "nenhuma",
       "reason": "em uso: 5 consumidor(es)",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/components/avisos/avisos-vencimento-modal.tsx",
+      "category": "component",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 2,
+      "consumerSample": [
+        "src/__tests__/avisos-vencimento-modal.test.tsx",
+        "src/app/(dashboard)/layout.tsx"
+      ],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "clientComponent": 1,
+        "eslintDisable": 1
+      },
+      "action": "nenhuma",
+      "reason": "em uso: 2 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -18274,6 +18500,61 @@
       }
     },
     {
+      "path": "src/domain/avisos/classify.ts",
+      "category": "domain",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 3,
+      "consumerSample": [
+        "src/__tests__/avisos-classify.test.ts",
+        "src/components/avisos/avisos-vencimento-modal.tsx",
+        "src/lib/avisos/load-avisos.ts"
+      ],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {},
+      "action": "nenhuma",
+      "reason": "em uso: 3 consumidor(es)",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/domain/avisos/types.ts",
+      "category": "domain",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 7,
+      "consumerSample": [
+        "src/__tests__/avisos-classify.test.ts",
+        "src/__tests__/avisos-vencimento-modal.test.tsx",
+        "src/app/actions/avisos.ts"
+      ],
+      "autoLoaded": false,
+      "referencedBy": [
+        "config",
+        "docs"
+      ],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {},
+      "action": "nenhuma",
+      "reason": "em uso: 7 consumidor(es), configuração",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": true,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
       "path": "src/domain/billing/billing-compat.ts",
       "category": "domain",
       "status": "MANTER",
@@ -18527,7 +18808,7 @@
       "category": "domain",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 9,
+      "consumers": 10,
       "consumerSample": [
         "src/__tests__/colaborador-status-runtime.pg.test.ts",
         "src/app/(auth)/login/page.tsx",
@@ -18541,7 +18822,7 @@
       "risks": [],
       "signals": {},
       "action": "nenhuma",
-      "reason": "em uso: 9 consumidor(es)",
+      "reason": "em uso: 10 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -19071,7 +19352,9 @@
         "src/app/actions/payments.ts"
       ],
       "autoLoaded": false,
-      "referencedBy": [],
+      "referencedBy": [
+        "docs"
+      ],
       "sideEffects": [],
       "risks": [],
       "signals": {},
@@ -19729,7 +20012,7 @@
       "category": "domain",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 56,
+      "consumers": 57,
       "consumerSample": [
         "src/__tests__/update-notice-modal.test.tsx",
         "src/__tests__/update-notices-eligibility.test.ts",
@@ -19744,7 +20027,7 @@
       "risks": [],
       "signals": {},
       "action": "nenhuma",
-      "reason": "em uso: 56 consumidor(es), configuração",
+      "reason": "em uso: 57 consumidor(es), configuração",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -19914,7 +20197,7 @@
       "category": "lib",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 32,
+      "consumers": 33,
       "consumerSample": [
         "src/__tests__/auth-revalidation-central.test.ts",
         "src/__tests__/colaborador-saida-runtime.test.ts",
@@ -19932,7 +20215,7 @@
         "supabase": 7
       },
       "action": "nenhuma",
-      "reason": "em uso: 32 consumidor(es)",
+      "reason": "em uso: 33 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -20026,6 +20309,41 @@
       },
       "action": "nenhuma",
       "reason": "em uso: 4 consumidor(es)",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/lib/avisos/load-avisos.ts",
+      "category": "lib",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 3,
+      "consumerSample": [
+        "src/__tests__/avisos-fontes.test.ts",
+        "src/app/actions/avisos.ts",
+        "src/app/api/cron/avisos-vencimento/route.ts"
+      ],
+      "autoLoaded": false,
+      "referencedBy": [
+        "docs"
+      ],
+      "sideEffects": [
+        "supabase",
+        "env"
+      ],
+      "risks": [],
+      "signals": {
+        "supabase": 2,
+        "env": 1,
+        "fallbackArray": 4
+      },
+      "action": "nenhuma",
+      "reason": "em uso: 3 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -20696,7 +21014,7 @@
       "category": "lib",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 5,
+      "consumers": 6,
       "consumerSample": [
         "src/__tests__/crm-stage-reorder.pg.test.ts",
         "src/__tests__/crm-stages.test.ts",
@@ -20704,34 +21022,6 @@
       ],
       "autoLoaded": false,
       "referencedBy": [],
-      "sideEffects": [],
-      "risks": [],
-      "signals": {},
-      "action": "nenhuma",
-      "reason": "em uso: 5 consumidor(es)",
-      "manualDecision": false,
-      "deadCodeDoors": {
-        "frameworkConvention": false,
-        "cliEntrypoint": false,
-        "dynamicImport": true,
-        "allClosed": false
-      }
-    },
-    {
-      "path": "src/lib/crm/visits.ts",
-      "category": "lib",
-      "status": "MANTER",
-      "confidence": "alta",
-      "consumers": 6,
-      "consumerSample": [
-        "src/__tests__/crm-visitas-runtime.pg.test.ts",
-        "src/__tests__/crm-visits.test.ts",
-        "src/app/(dashboard)/dashboard/crm/visitas/_components/visit-outcome-sheet.tsx"
-      ],
-      "autoLoaded": false,
-      "referencedBy": [
-        "docs"
-      ],
       "sideEffects": [],
       "risks": [],
       "signals": {},
@@ -20746,15 +21036,43 @@
       }
     },
     {
+      "path": "src/lib/crm/visits.ts",
+      "category": "lib",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 7,
+      "consumerSample": [
+        "src/__tests__/crm-visitas-runtime.pg.test.ts",
+        "src/__tests__/crm-visits.test.ts",
+        "src/app/(dashboard)/dashboard/crm/visitas/_components/visit-outcome-sheet.tsx"
+      ],
+      "autoLoaded": false,
+      "referencedBy": [
+        "docs"
+      ],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {},
+      "action": "nenhuma",
+      "reason": "em uso: 7 consumidor(es)",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
       "path": "src/lib/cron-auth.ts",
       "category": "lib",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 5,
+      "consumers": 6,
       "consumerSample": [
         "src/app/api/cron/archive-documents/route.ts",
         "src/app/api/cron/auto-checkout/route.ts",
-        "src/app/api/cron/generate-services/route.ts"
+        "src/app/api/cron/avisos-vencimento/route.ts"
       ],
       "autoLoaded": false,
       "referencedBy": [],
@@ -20766,7 +21084,7 @@
         "env": 2
       },
       "action": "nenhuma",
-      "reason": "em uso: 5 consumidor(es)",
+      "reason": "em uso: 6 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -21245,7 +21563,7 @@
       "category": "lib",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 42,
+      "consumers": 45,
       "consumerSample": [
         "src/__tests__/crm-quote-sheet.test.tsx",
         "src/__tests__/lisbon-time.test.ts",
@@ -21259,7 +21577,7 @@
       "risks": [],
       "signals": {},
       "action": "nenhuma",
-      "reason": "em uso: 42 consumidor(es)",
+      "reason": "em uso: 45 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -21629,8 +21947,9 @@
       "category": "lib",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 2,
+      "consumers": 4,
       "consumerSample": [
+        "src/__tests__/notify-user-stored.test.ts",
         "src/app/actions/colaboradores.ts",
         "src/app/actions/management-tasks.ts"
       ],
@@ -21651,15 +21970,15 @@
         "supabase": 2,
         "env": 4,
         "write": 1,
-        "sqlWrite": 1,
+        "sqlWrite": 2,
         "eslintDisable": 2,
         "anyType": 2,
-        "consoleErr": 2,
+        "consoleErr": 4,
         "ignoredError": 2,
         "dynamicImport": 4
       },
       "action": "nenhuma",
-      "reason": "em uso: 2 consumidor(es)",
+      "reason": "em uso: 4 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -21886,7 +22205,7 @@
       "category": "lib",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 83,
+      "consumers": 86,
       "consumerSample": [
         "src/app/(app)/app/perfil/page.tsx",
         "src/app/(app)/app/servico/[id]/page.tsx",
@@ -21909,7 +22228,7 @@
         "serviceRole": 1
       },
       "action": "nenhuma",
-      "reason": "em uso: 83 consumidor(es)",
+      "reason": "em uso: 86 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -23384,6 +23703,32 @@
     },
     {
       "path": "src/release-notes/2026-09-25-saida-de-colaborador.ts",
+      "category": "src-other",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 1,
+      "consumerSample": [
+        "src/release-notes/index.ts"
+      ],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "sqlWrite": 1
+      },
+      "action": "nenhuma",
+      "reason": "em uso: 1 consumidor(es)",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/release-notes/2026-09-26-avisos-de-vencimento.ts",
       "category": "src-other",
       "status": "MANTER",
       "confidence": "alta",

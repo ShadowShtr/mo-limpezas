@@ -80,6 +80,40 @@ não instrução a repetir.
 
 ## ⚡ PRÓXIMA TASK A EXECUTAR
 
+## 📍 ATUALIZAÇÃO — 2026-09-26 (avisos de vencimento e competência em Pagamentos)
+
+> Estado novo. O bloco de 2026-09-19 abaixo fica como está: descrevia o que
+> faltava naquela data e continua a ser o registo fiel desse momento. Ler os
+> dois pela ordem em que aparecem.
+
+**Competência por vencimento em Pagamentos — FECHADO.**
+PR #201, merged a 2026-09-26 (master `4a6f6fe`). O mês seleccionado passou a
+valer em todos os separadores; uma conta pertence ao mês da sua competência,
+mesmo que tenha sido paga noutro. «Por pagar» mostra também o que ficou por
+pagar antes. A coluna «Data» mostra o vencimento enquanto está por pagar e a
+data de caixa depois de pago. Uma data de vencimento impossível deixa de ser
+aceite — barrada no boundary, sem tocar nas migrations 088/092.
+
+**Avisos de vencimento — nesta PR.**
+Modal no painel, uma vez por sessão da aba, com quatro fontes (pagamentos,
+tarefas, próximas acções CRM, visitas) classificadas em atrasado/hoje/amanhã.
+Cron diário que gera as mesmas notificações no sino. Um só loader
+(`src/lib/avisos/load-avisos.ts`) serve as duas superfícies, para não existirem
+duas versões da mesma regra. Sem migration: `notifications` já suporta tudo o
+que isto precisa, e a identidade resolve-se pelo caminho canónico da 101b.
+
+> ⚠️ **Consequência de produção.** Depois de publicado, o cron
+> `/api/cron/avisos-vencimento` escreve diariamente em `notifications`. Não é
+> efeito secundário, é a função — e a activação é uma decisão à parte da
+> aprovação do código.
+
+**Diagnóstico histórico de competência — ainda em aberto.**
+`scripts/diagnose-payment-competence.ts` existe, é só-SELECT e nunca foi
+executado contra produção. `HISTORICAL_MISMATCH_COUNT` continua desconhecido.
+É uma etapa separada, com autorização própria.
+
+---
+
 ## 📍 ATUALIZAÇÃO — 2026-09-19 (a fazer — avisos de vencimento e competência em Pagamentos)
 
 > Registo do trabalho pedido pelo dono nesta data. **Sem numeração de propósito**:
