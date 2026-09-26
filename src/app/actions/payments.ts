@@ -250,6 +250,29 @@ export async function createPayment(input: PaymentInput): Promise<{ ok: boolean;
     return { ok: false, error: "Vencimento inválido." };
   }
 
+  // ── «Sem vencimento» tem DUAS grafias à entrada, e uma só à saída ─────────
+  //
+  // 🔴 A validação acima aceita `""` como ausência — e está certa, porque é
+  //    isso que o contrato diz: vencimento vazio é vencimento ausente, e o
+  //    fallback é permitido. Mas aceitar não é o mesmo que traduzir, e a
+  //    string vazia seguia INTACTA para a RPC.
+  //
+  //    `create_payment_atomic` declara `p_due_date date` (092). O PostgreSQL
+  //    não lê `""` como «sem data»: tenta convertê-la e falha. O resultado
+  //    era o pior dos dois mundos — a competência caía no fallback como devia,
+  //    e depois a escrita rebentava de qualquer maneira, com um erro de
+  //    conversão em vez da linha que a pessoa pediu.
+  //
+  //    A normalização é UMA, aqui, e serve os dois consumidores a seguir:
+  //    `resolveCompetence` e a própria RPC. Fazê-la em dois sítios seria
+  //    voltar a ter duas versões da mesma decisão — foi assim que este ecrã
+  //    chegou onde chegou.
+  //
+  //    `resolveCompetence` fica como está: ela já trata `null` correctamente,
+  //    e a sua regra não é «que formas de vazio existem», é «o vencimento
+  //    ganha ao mês do ecrã».
+  const dueDate = input.due_date === "" ? null : input.due_date;
+
   // 🔴 A competência vem do vencimento, não do mês que está aberto no ecrã.
   //
   //    Era aqui que nascia o defeito: criar um pagamento com vencimento a
@@ -260,7 +283,7 @@ export async function createPayment(input: PaymentInput): Promise<{ ok: boolean;
   //    Sem vencimento, o mês do ecrã é a única informação temporal que existe e
   //    passa a ser a competência. Ver `payment-competence.ts`.
   const competencia = resolveCompetence({
-    dueDate: input.due_date,
+    dueDate,
     fallback: { year: input.year, month: input.month },
   });
 
@@ -269,7 +292,7 @@ export async function createPayment(input: PaymentInput): Promise<{ ok: boolean;
     p_kind: input.kind,
     p_description: input.description.trim(),
     p_amount: input.amount,
-    p_due_date: input.due_date,
+    p_due_date: dueDate,
     p_period_year: competencia.year,
     p_period_month: competencia.month,
     p_expense_category_id: input.expense_category_id,

@@ -349,3 +349,60 @@ describe("H/I/J — um vencimento impossível não chega à base de dados", () =
     expect(rpc.mock.calls[0][1]).toMatchObject({ p_period_year: 2026, p_period_month: 11 });
   });
 });
+
+// ── A fronteira que só existe à entrada ─────────────────────────────────────
+//
+// 🔴 `due_date: ""` e `due_date: null` significam a mesma coisa para quem usa
+//    o produto — «esta conta não tem vencimento» — e significavam coisas
+//    diferentes para o PostgreSQL. O ensaio com `null` não cobria isto: passava
+//    sem nunca exercer a string vazia, que é a forma que um formulário produz.
+//
+//    Por isso este bloco não verifica só que a criação corre bem. Verifica o
+//    VALOR que chega à RPC, porque era exactamente aí que a tradução faltava.
+
+describe("due_date vazia é ausência, até à RPC", () => {
+  beforeEach(() => { rpc.mockReset(); rpc.mockResolvedValue({ error: null }); });
+
+  const base = {
+    kind: "variavel" as const,
+    description: "IVA",
+    amount: 100,
+    expense_category_id: null,
+    direct_debit: null,
+    notes: null,
+    year: 2026,
+    month: 9,
+  };
+
+  it("string vazia grava, chama a RPC uma vez e manda null como vencimento", async () => {
+    const { createPayment } = await import("@/app/actions/payments");
+    const r = await createPayment({ ...base, due_date: "" });
+    expect(r.ok).toBe(true);
+    expect(rpc).toHaveBeenCalledTimes(1);
+    expect(rpc.mock.calls[0][1]).toMatchObject({
+      p_due_date: null,
+      p_period_year: 2026,
+      p_period_month: 9,
+    });
+  });
+
+  it("string vazia e null produzem a MESMA chamada à RPC", async () => {
+    const { createPayment } = await import("@/app/actions/payments");
+    await createPayment({ ...base, due_date: "" });
+    const comVazia = rpc.mock.calls[0][1];
+    rpc.mockReset();
+    rpc.mockResolvedValue({ error: null });
+    await createPayment({ ...base, due_date: null });
+    expect(rpc.mock.calls[0][1]).toEqual(comVazia);
+  });
+
+  it("só o vazio é traduzido: uma data válida chega inteira à RPC", async () => {
+    const { createPayment } = await import("@/app/actions/payments");
+    await createPayment({ ...base, due_date: "2026-11-03" });
+    expect(rpc.mock.calls[0][1]).toMatchObject({
+      p_due_date: "2026-11-03",
+      p_period_year: 2026,
+      p_period_month: 11,
+    });
+  });
+});

@@ -1925,7 +1925,7 @@
       ],
       "sideEffects": [
         "supabase",
-        "revalidatePath(42)"
+        "revalidatePath(43)"
       ],
       "risks": [
         "debugger"
@@ -1934,7 +1934,7 @@
         "supabase": 1,
         "sqlWrite": 28,
         "debugger": 6,
-        "revalidatePath": 42
+        "revalidatePath": 43
       },
       "action": "nenhuma",
       "reason": "configuração/infra",
@@ -8625,7 +8625,7 @@
       "risks": [],
       "signals": {
         "revalidatePath": 1,
-        "dynamicImport": 7
+        "dynamicImport": 10
       },
       "action": "nenhuma",
       "reason": "suite de testes — corre por convenção do vitest",
