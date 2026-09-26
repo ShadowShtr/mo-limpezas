@@ -1,10 +1,10 @@
 {
   "inventorySource": "git ls-files",
   "summary": {
-    "repositoryFiles": 982,
-    "textFiles": 969,
-    "sourceFiles": 691,
-    "textLines": 252635,
+    "repositoryFiles": 985,
+    "textFiles": 972,
+    "sourceFiles": 694,
+    "textLines": 253507,
     "typescriptDiagnostics": 0,
     "productionEntries": 75,
     "unreachableProductionModules": 40,
@@ -108,6 +108,7 @@
       "src/__tests__/finance-v2-money.test.ts",
       "src/__tests__/finance-v2-period-scope.test.ts",
       "src/__tests__/payment-cashflow-rpc.test.ts",
+      "src/__tests__/payment-due-date-competence.test.ts",
       "src/__tests__/predios-edicao-por-link.test.ts",
       "src/app/(dashboard)/dashboard/calendario/_actions/create-service.ts",
       "src/app/actions/absences.ts",

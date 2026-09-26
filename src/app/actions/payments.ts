@@ -6,6 +6,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 // dentro de `update_payment_atomic`, no mesmo UPDATE que grava o vencimento.
 // Mantê-la importada era deixar duas fontes para a mesma regra.
 import { resolveCompetence } from "@/domain/finance/payment-competence";
+import { isValidIsoDateString } from "@/lib/utils";
 import { revalidatePath } from "next/cache";
 import { todayInLisbon } from "@/lib/lisbon-time";
 import {
@@ -227,6 +228,51 @@ export async function createPayment(input: PaymentInput): Promise<{ ok: boolean;
   if (!input.description.trim()) return { ok: false, error: "Descrição obrigatória." };
   if (input.amount !== null && (!Number.isFinite(input.amount) || input.amount < 0)) return { ok: false, error: "Valor inválido." };
 
+  // ── O vencimento é validado AQUI, não só no formulário ─────────────────────
+  //
+  // 🔴 A UI não é fronteira de confiança, e neste caso a falta da guarda tinha
+  //    uma consequência silenciosa e específica.
+  //
+  //    `resolveCompetence` cai no `fallback` — o mês aberto no ecrã — sempre
+  //    que `competenceFromDueDate` devolve `null`. E ela devolve `null` para
+  //    DOIS casos que não têm nada a ver um com o outro: «não há vencimento»
+  //    e «o vencimento é inválido». O primeiro merece o fallback; o segundo é
+  //    precisamente o comportamento que `payment-competence.ts` existe para
+  //    proibir — o ecrã a decidir a que mês o pagamento pertence.
+  //
+  //    Sem isto, gravar `due_date: "2026-02-30"` a ver Setembro escrevia uma
+  //    linha com competência de Setembro e uma data impossível na coluna do
+  //    vencimento: nem a pessoa era avisada, nem o dado ficava correcto.
+  //
+  //    Separar os dois casos tem de acontecer antes de `resolveCompetence`,
+  //    porque depois dela já não há como distingui-los.
+  if (input.due_date !== null && input.due_date !== "" && !isValidIsoDateString(input.due_date)) {
+    return { ok: false, error: "Vencimento inválido." };
+  }
+
+  // ── «Sem vencimento» tem DUAS grafias à entrada, e uma só à saída ─────────
+  //
+  // 🔴 A validação acima aceita `""` como ausência — e está certa, porque é
+  //    isso que o contrato diz: vencimento vazio é vencimento ausente, e o
+  //    fallback é permitido. Mas aceitar não é o mesmo que traduzir, e a
+  //    string vazia seguia INTACTA para a RPC.
+  //
+  //    `create_payment_atomic` declara `p_due_date date` (092). O PostgreSQL
+  //    não lê `""` como «sem data»: tenta convertê-la e falha. O resultado
+  //    era o pior dos dois mundos — a competência caía no fallback como devia,
+  //    e depois a escrita rebentava de qualquer maneira, com um erro de
+  //    conversão em vez da linha que a pessoa pediu.
+  //
+  //    A normalização é UMA, aqui, e serve os dois consumidores a seguir:
+  //    `resolveCompetence` e a própria RPC. Fazê-la em dois sítios seria
+  //    voltar a ter duas versões da mesma decisão — foi assim que este ecrã
+  //    chegou onde chegou.
+  //
+  //    `resolveCompetence` fica como está: ela já trata `null` correctamente,
+  //    e a sua regra não é «que formas de vazio existem», é «o vencimento
+  //    ganha ao mês do ecrã».
+  const dueDate = input.due_date === "" ? null : input.due_date;
+
   // 🔴 A competência vem do vencimento, não do mês que está aberto no ecrã.
   //
   //    Era aqui que nascia o defeito: criar um pagamento com vencimento a
@@ -237,7 +283,7 @@ export async function createPayment(input: PaymentInput): Promise<{ ok: boolean;
   //    Sem vencimento, o mês do ecrã é a única informação temporal que existe e
   //    passa a ser a competência. Ver `payment-competence.ts`.
   const competencia = resolveCompetence({
-    dueDate: input.due_date,
+    dueDate,
     fallback: { year: input.year, month: input.month },
   });
 
@@ -246,7 +292,7 @@ export async function createPayment(input: PaymentInput): Promise<{ ok: boolean;
     p_kind: input.kind,
     p_description: input.description.trim(),
     p_amount: input.amount,
-    p_due_date: input.due_date,
+    p_due_date: dueDate,
     p_period_year: competencia.year,
     p_period_month: competencia.month,
     p_expense_category_id: input.expense_category_id,
@@ -268,6 +314,29 @@ export async function updatePayment(
   const { admin, profile } = guard;
   if (patch.description !== undefined && !patch.description.trim()) return { ok: false, error: "Descrição inválida." };
   if (patch.amount !== undefined && patch.amount !== null && (!Number.isFinite(patch.amount) || patch.amount < 0)) return { ok: false, error: "Valor inválido." };
+
+  // ── O vencimento, nos três estados que o patch sabe exprimir ───────────────
+  //
+  // 🔴 `buildPaymentUpdatePatch` distingue três coisas, e a guarda tem de as
+  //    respeitar todas:
+  //
+  //      · AUSENTE (`undefined`) — o campo não foi tocado. Nada a validar: a
+  //        RPC deixa `due_date` como está e a competência não se move.
+  //      · `null` — limpar o vencimento. É legítimo e está no contrato da 088:
+  //        sem vencimento não há de onde derivar competência, e ela fica.
+  //      · string — tem de ser uma data civil real.
+  //
+  //    Sem este bloco, `update_payment_atomic` recebia a string tal e qual e
+  //    fazia `(p_patch->>'due_date')::date`. Uma data impossível rebentava em
+  //    cast dentro do PostgreSQL, e o que chegava ao ecrã era a mensagem do
+  //    motor — com o nome da função e o ERRCODE lá dentro.
+  //
+  //    O sítio para barrar isto é aqui, no boundary da aplicação, e não na
+  //    migration: a 088 já garante a atomicidade e a derivação da competência,
+  //    que é o que lhe compete. Validar formato de input não é trabalho dela.
+  if (patch.due_date !== undefined && patch.due_date !== null && !isValidIsoDateString(patch.due_date)) {
+    return { ok: false, error: "Vencimento inválido." };
+  }
 
   // ── Uma edição, uma escrita ─────────────────────────────────────────────────
   //

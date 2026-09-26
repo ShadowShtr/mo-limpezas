@@ -106,6 +106,32 @@ export async function getFinanceLedger(
         .lte("date", range.end);
       return error ? { ok: false, error: error.message } : { ok: true, data: cashflows(data) };
     },
+    /**
+     * O que continua por pagar de meses anteriores.
+     *
+     * 🔴 O recorte é por COMPETÊNCIA, não por vencimento nem por data civil:
+     *    é a competência que decide a que mês um pagamento pertence, e é dela
+     *    que «anterior» tem de falar para o separador ser coerente com o resto
+     *    do ecrã.
+     *
+     *    `period_year < ano` OU (`period_year = ano` E `period_month < mês`).
+     *    Escrito assim — e não como um par de `lt` independentes — porque
+     *    `period_month < 9` sozinho apanharia Janeiro de 2027 ao ver Setembro
+     *    de 2026.
+     *
+     *    `status = pendente` está na consulta, não no filtro do cliente: o que
+     *    já foi pago em meses anteriores não tem de atravessar a rede para
+     *    depois ser descartado no browser.
+     */
+    async pendingPaymentsBeforeCompetence(period) {
+      const { data, error } = await admin
+        .from("fixed_variable_payments")
+        .select(PAYMENT_COLUMNS)
+        .eq("company_id", companyId)
+        .eq("status", "pendente")
+        .or(`period_year.lt.${period.year},and(period_year.eq.${period.year},period_month.lt.${period.month})`);
+      return error ? { ok: false, error: error.message } : { ok: true, data: payments(data) };
+    },
     async paymentsByIds(ids) {
       const { data, error } = await admin
         .from("fixed_variable_payments")

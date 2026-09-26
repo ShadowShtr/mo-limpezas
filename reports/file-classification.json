@@ -1,18 +1,18 @@
 {
   "generatedBy": "scripts/audit-file-inventory.mjs",
-  "totalFiles": 986,
+  "totalFiles": 989,
   "byStatus": {
-    "MANTER": 962,
+    "MANTER": 965,
     "STANDBY": 24
   },
   "byCategory": {
-    "test": 243,
+    "test": 244,
     "route-ui": 155,
     "migration": 146,
     "lib": 80,
-    "script": 62,
+    "script": 63,
     "domain": 53,
-    "src-other": 49,
+    "src-other": 50,
     "server-action": 48,
     "doc": 47,
     "component": 33,
@@ -29,15 +29,15 @@
     "supabase-other": 2
   },
   "byConfidence": {
-    "alta": 964,
-    "média": 16,
+    "alta": 966,
+    "média": 17,
     "baixa": 6
   },
   "scriptRisk": {
     "SAFE_OFFLINE": 33,
     "ADMIN_GUARDED_WRITE": 11,
     "WRITE_CAPABLE": 10,
-    "ADMIN_READ": 6,
+    "ADMIN_READ": 7,
     "READ_ONLY": 2
   },
   "files": [
@@ -1925,7 +1925,7 @@
       ],
       "sideEffects": [
         "supabase",
-        "revalidatePath(42)"
+        "revalidatePath(43)"
       ],
       "risks": [
         "debugger"
@@ -1934,7 +1934,7 @@
         "supabase": 1,
         "sqlWrite": 28,
         "debugger": 6,
-        "revalidatePath": 42
+        "revalidatePath": 43
       },
       "action": "nenhuma",
       "reason": "configuração/infra",
@@ -2625,6 +2625,42 @@
         "allClosed": false
       },
       "scriptRisk": "SAFE_OFFLINE"
+    },
+    {
+      "path": "scripts/diagnose-payment-competence.ts",
+      "category": "script",
+      "status": "MANTER",
+      "confidence": "média",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [
+        "supabase",
+        "env"
+      ],
+      "risks": [
+        "service-role"
+      ],
+      "signals": {
+        "supabase": 3,
+        "env": 4,
+        "serviceRole": 2,
+        "consoleLog": 8,
+        "consoleErr": 4,
+        "fallbackZero": 1,
+        "fallbackArray": 1
+      },
+      "action": "manter fora de qualquer execução automática",
+      "reason": "usa a chave administrativa, mas só para ler",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": true,
+        "dynamicImport": true,
+        "allClosed": false
+      },
+      "scriptRisk": "ADMIN_READ"
     },
     {
       "path": "scripts/dump-production-rls-baseline.mjs",
@@ -8563,6 +8599,33 @@
       "risks": [],
       "signals": {
         "sqlWrite": 5
+      },
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/__tests__/payment-due-date-competence.test.ts",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [
+        "revalidatePath(1)"
+      ],
+      "risks": [],
+      "signals": {
+        "revalidatePath": 1,
+        "dynamicImport": 10
       },
       "action": "nenhuma",
       "reason": "suite de testes — corre por convenção do vitest",
@@ -16097,7 +16160,7 @@
       "category": "server-action",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 7,
+      "consumers": 8,
       "consumerSample": [
         "src/__tests__/finance-actions-rpc-routing.test.ts",
         "src/__tests__/finance-period-view-identity.test.tsx",
@@ -16127,7 +16190,7 @@
         "revalidatePath": 5
       },
       "action": "auditar atomicidade (T12/T13)",
-      "reason": "em uso: 7 consumidor(es)",
+      "reason": "em uso: 8 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -18943,7 +19006,7 @@
       "category": "domain",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 6,
+      "consumers": 7,
       "consumerSample": [
         "src/__tests__/finance-categoria-identidade-e-resumo.test.tsx",
         "src/__tests__/finance-ledger-unified-ui.test.ts",
@@ -18957,7 +19020,7 @@
         "fallbackZero": 2
       },
       "action": "nenhuma",
-      "reason": "em uso: 6 consumidor(es)",
+      "reason": "em uso: 7 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -18971,7 +19034,7 @@
       "category": "domain",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 11,
+      "consumers": 12,
       "consumerSample": [
         "src/__tests__/finance-categoria-identidade-e-resumo.test.tsx",
         "src/__tests__/finance-ledger-read-model.test.ts",
@@ -18987,7 +19050,7 @@
         "fallbackArray": 2
       },
       "action": "nenhuma",
-      "reason": "em uso: 11 consumidor(es)",
+      "reason": "em uso: 12 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -19001,8 +19064,9 @@
       "category": "domain",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 2,
+      "consumers": 3,
       "consumerSample": [
+        "scripts/diagnose-payment-competence.ts",
         "src/__tests__/payment-competence.test.ts",
         "src/app/actions/payments.ts"
       ],
@@ -19012,7 +19076,7 @@
       "risks": [],
       "signals": {},
       "action": "nenhuma",
-      "reason": "em uso: 2 consumidor(es)",
+      "reason": "em uso: 3 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -19665,7 +19729,7 @@
       "category": "domain",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 55,
+      "consumers": 56,
       "consumerSample": [
         "src/__tests__/update-notice-modal.test.tsx",
         "src/__tests__/update-notices-eligibility.test.ts",
@@ -19680,7 +19744,7 @@
       "risks": [],
       "signals": {},
       "action": "nenhuma",
-      "reason": "em uso: 55 consumidor(es), configuração",
+      "reason": "em uso: 56 consumidor(es), configuração",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -20909,9 +20973,10 @@
       "category": "lib",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 2,
+      "consumers": 3,
       "consumerSample": [
         "src/__tests__/finance-ledger-read-model.test.ts",
+        "src/__tests__/payment-due-date-competence.test.ts",
         "src/app/actions/finance-ledger.ts"
       ],
       "autoLoaded": false,
@@ -20920,7 +20985,7 @@
       "risks": [],
       "signals": {},
       "action": "nenhuma",
-      "reason": "em uso: 2 consumidor(es)",
+      "reason": "em uso: 3 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -22017,7 +22082,7 @@
       "category": "lib",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 32,
+      "consumers": 34,
       "consumerSample": [
         "src/__tests__/utils.test.ts",
         "src/app/(app)/app/ausencias/_components/ausencias-client.tsx",
@@ -22032,7 +22097,7 @@
       "risks": [],
       "signals": {},
       "action": "nenhuma",
-      "reason": "em uso: 32 consumidor(es), configuração",
+      "reason": "em uso: 34 consumidor(es), configuração",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -23267,6 +23332,32 @@
     },
     {
       "path": "src/release-notes/2026-09-24-corrigir-orcamento-em-rascunho.ts",
+      "category": "src-other",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 1,
+      "consumerSample": [
+        "src/release-notes/index.ts"
+      ],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "sqlWrite": 1
+      },
+      "action": "nenhuma",
+      "reason": "em uso: 1 consumidor(es)",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/release-notes/2026-09-25-pagamentos-mes-e-vencimento.ts",
       "category": "src-other",
       "status": "MANTER",
       "confidence": "alta",
