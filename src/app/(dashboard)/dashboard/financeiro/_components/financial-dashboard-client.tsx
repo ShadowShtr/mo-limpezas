@@ -602,6 +602,7 @@ export function FinancialDashboardClient({
                     valor: f.valor,
                     cor: f.cor,
                     chave: f.chave,
+                    identidade: f.identidade,
                   })),
                 }
               : { estado: "indisponivel", porque: snapshot?.expensesByCategory.nota ?? "Sem despesas neste período." }
@@ -614,12 +615,11 @@ export function FinancialDashboardClient({
           //    um sítio com âmbito mais estreito do que o número em que se
           //    tinha carregado. O Fluxo de Caixa mostra as duas.
           /*
-            🔴 O que o gráfico NÃO mostra, dito em voz alta.
-
-            O donut conta só movimentos `confirmado`, como os Custos. Uma
-            despesa acabada de registar em Contas nasce `pendente` — e quem a
-            registou vem procurá-la aqui, não a encontra, e conclui que a
-            categoria não funcionou. Aconteceu mesmo.
+            🔴 O donut conta confirmadas E pendentes — decisão do dono, e a
+            mesma regra do gráfico «Caixa» de Pagamentos
+            (`agruparDespesasDeCaixa`). Os Custos contam só confirmadas. O
+            rodapé diz quanto do total ainda está por confirmar, para que os
+            dois números não discordem sem explicação.
           */
           rodape={
             snapshot && snapshot.expensesByCategory.pendentes.contagem > 0 ? (
@@ -632,9 +632,13 @@ export function FinancialDashboardClient({
               </p>
             ) : null
           }
+          // 🔴 Drilldown pela IDENTIDADE canónica (`categoriaKey`), a mesma com
+          //    que a fatia foi agrupada. Pelo nome, a estruturada «Fornecedor»
+          //    e o legado «fornecedor» abriam a mesma lista. «Outros» não é
+          //    uma categoria — não tem filtro, e por isso não tem ligação.
           hrefDe={(f) =>
-            f.chave && snapshot
-              ? `/dashboard/financeiro/fluxo-caixa?mes=${snapshot.period.year}-${String(snapshot.period.month).padStart(2, "0")}&categoria=${encodeURIComponent(f.chave)}`
+            f.identidade && f.identidade !== "__outros__" && snapshot
+              ? `/dashboard/financeiro/fluxo-caixa?mes=${snapshot.period.year}-${String(snapshot.period.month).padStart(2, "0")}&categoriaKey=${encodeURIComponent(f.identidade)}`
               : null
           }
         />

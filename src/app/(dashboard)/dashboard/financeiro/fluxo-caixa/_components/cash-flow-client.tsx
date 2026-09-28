@@ -57,13 +57,18 @@ interface Props {
   year: number;
   month: number;
   expenseCatalog: ExpenseCategoryCatalog;
-  /** Categoria por que filtrar à chegada, vinda do donut do Resumo. */
+  /**
+   * Identidade canónica da categoria (`effective_expense_category_key`), vinda
+   * do donut do Resumo. Filtro por igualdade EXACTA — nunca pelo nome.
+   */
+  categoriaKeyInicial?: string | null;
+  /** Compatibilidade: links antigos que ainda chegam com o NOME da categoria. */
   categoriaInicial?: string | null;
 }
 
 export function CashFlowClient({
   initialData, error: initErr, companyId, year, month,
-  expenseCatalog, categoriaInicial = null,
+  expenseCatalog, categoriaKeyInicial = null, categoriaInicial = null,
 }: Props) {
   const [data, setData] = useState<DataShape | null>(initialData);
   const [error, setError] = useState(initErr);
@@ -234,12 +239,27 @@ export function CashFlowClient({
   //    vazia — o link mandava para um sítio com âmbito mais estreito do que o
   //    número em que se tinha carregado.
   // ───────────────────────────────────────────────────────────────────────────
+  //
+  // 🔴 Pela IDENTIDADE, não pelo nome. A estruturada «Fornecedor» e o texto
+  //    legado «fornecedor» são duas fatias no Resumo; filtrar pelo nome
+  //    normalizado abria a mesma lista para as duas. A chave vem do servidor,
+  //    calculada pela mesma função que agrupa o donut.
   const chaveDa = (e: CashFlowEntry) =>
     normalizarNomeCategoria(e.expense_category_name ?? e.category ?? "");
 
-  const visiveis = categoriaInicial
-    ? filtered.filter((e) => chaveDa(e) === normalizarNomeCategoria(categoriaInicial))
-    : filtered;
+  const visiveis = categoriaKeyInicial
+    ? filtered.filter((e) => e.effective_expense_category_key === categoriaKeyInicial)
+    : categoriaInicial
+      ? filtered.filter((e) => chaveDa(e) === normalizarNomeCategoria(categoriaInicial))
+      : filtered;
+
+  // O nome a mostrar para a identidade pedida — tirado das próprias linhas.
+  const categoriaFiltrada = categoriaKeyInicial
+    ? (categoriaKeyInicial === "uncategorized"
+        ? "Sem categoria"
+        : (data?.entries.find((e) => e.effective_expense_category_key === categoriaKeyInicial)?.expense_category_name
+          ?? "selecionada"))
+    : categoriaInicial;
 
   const pag = usePagination(visiveis, 10);
 
@@ -312,12 +332,12 @@ export function CashFlowClient({
             <Loader2 className="w-4 h-4 animate-spin mr-2" /> A carregar…
           </div>
         )}
-        {!isPending && visiveis.length === 0 && categoriaInicial ? (
+        {!isPending && visiveis.length === 0 && categoriaFiltrada ? (
           // Vazio por filtro é diferente de vazio por não haver nada, e a
           // saída tem de estar à mão.
           <div className="py-14 text-center">
             <p className="text-sm text-[var(--color-text-muted)]">
-              Nenhum movimento na categoria <strong>{categoriaInicial}</strong> neste mês.
+              Nenhum movimento na categoria <strong>{categoriaFiltrada}</strong> neste mês.
             </p>
             <Link
               href="/dashboard/financeiro/fluxo-caixa"

@@ -276,19 +276,47 @@ describe("excluir", () => {
     expect(deleteCalendarService).toHaveBeenCalledWith("s1", "single");
   });
 
-  it("🔴 com recebimento: não se oferece excluir, nos dois tipos", async () => {
+  it("🔴 com recebimento: a LINHA não oferece «Excluir», nos dois tipos", async () => {
     await mount(data([
       svc("s1", "Cliente Serviço", { payment_status: "pago_total" }),
       man("m1", "Cliente Avulsa", { paid_amount: 10, payment_status: "sinal_50" }),
     ]));
     for (const k of ["service:s1", "manual_charge:m1"]) {
-      await click(button(rowOf(k), "Excluir"));
-      expect(button(dialog(), "Excluir")).toBeNull();
-      expect(dialog().textContent).toContain("Retire primeiro o recebimento");
-      await click(button(dialog(), "Cancelar"));
+      expect(button(rowOf(k), "Excluir")).toBeNull();
+      // Editar continua lá: é por ele que se retira o recebimento.
+      expect(button(rowOf(k), "Editar")).not.toBeNull();
     }
-    expect(voidManualCharge).not.toHaveBeenCalled();
-    expect(deleteCalendarService).not.toHaveBeenCalled();
+    expect(dialog()).toBeNull();
+    expect(voidManualCharge).toHaveBeenCalledTimes(0);
+    expect(deleteCalendarService).toHaveBeenCalledTimes(0);
+  });
+
+  it("sem recebimento: «Excluir» continua na linha e segue o writer do tipo", async () => {
+    vi.mocked(voidManualCharge).mockResolvedValue({ ok: true });
+    vi.mocked(deleteCalendarService).mockResolvedValue({ ok: true, deleted: 1, recurring: false });
+    await mount();
+    expect(button(rowOf("service:s1"), "Excluir")).not.toBeNull();
+    expect(button(rowOf("manual_charge:m1"), "Excluir")).not.toBeNull();
+    await click(button(rowOf("manual_charge:m1"), "Excluir"));
+    await click(button(dialog(), "Excluir"));
+    await click(button(rowOf("service:s1"), "Excluir"));
+    await click(button(dialog(), "Excluir"));
+    expect(voidManualCharge).toHaveBeenCalledWith("m1");
+    expect(deleteCalendarService).toHaveBeenCalledWith("s1", "single");
+  });
+
+  it("🔴 defesa em profundidade: recebimento que chega com o diálogo ABERTO tira a confirmação", async () => {
+    vi.mocked(getDailyBilling).mockResolvedValue({
+      ok: true, data: data([man("m1", "Cliente Avulsa", { payment_status: "pago_total" })]),
+    });
+    await mount();
+    await click(button(rowOf("manual_charge:m1"), "Excluir"));
+    expect(button(dialog(), "Excluir")).not.toBeNull();
+    // Outra sessão regista o recebimento; o Realtime traz o snapshot novo.
+    await act(async () => { rt.subs.find((s) => s.table === "manual_charges")!.cb(); });
+    expect(button(dialog(), "Excluir")).toBeNull();
+    expect(dialog().textContent).toContain("Retire primeiro o recebimento");
+    expect(voidManualCharge).toHaveBeenCalledTimes(0);
   });
 
   it("recusa da base ao excluir serviço chega traduzida", async () => {

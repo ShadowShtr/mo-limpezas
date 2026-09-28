@@ -25,6 +25,7 @@ import {
 import {
   SEM_CATEGORIA,
   agruparDespesasDeCaixa,
+  camposDaCategoriaEfetiva,
   chaveCategoriaDespesa,
   type GrupoDespesa,
   type SaidaDeCaixa,
@@ -538,20 +539,27 @@ export function calcularDespesasPorCategoria(
   // adivinhar a partir de texto livre é como se erra em silêncio.
   // ───────────────────────────────────────────────────────────────────────────
   const saidas: SaidaDeCaixa[] = caixa.factos.map((c) => {
-    const origem = c.categoriaOrigem;
-    // Na origem «legada» o nome efectivo É o texto legado: não é estruturada.
-    const estruturada = origem === "legada" ? null : (c.categoriaEstruturada?.trim() || null);
+    const base = { data: c.date, tipo: c.tipo, status: c.status, valorCentimos: Math.round(c.amount * 100) };
+    // Com a origem conhecida (o adaptador real), a identidade sai da MESMA
+    // função que o Fluxo de Caixa usa para o drilldown.
+    if (c.categoriaOrigem) {
+      return {
+        ...base,
+        ...camposDaCategoriaEfetiva({
+          origem: c.categoriaOrigem,
+          nome: c.categoriaOrigem === "legada" ? c.categoria : (c.categoriaEstruturada?.trim() || null),
+          id: c.categoriaEstruturadaId,
+        }),
+      };
+    }
+    // Factos sem origem (antigos/de teste): estruturada, senão legada.
+    const estruturada = c.categoriaEstruturada?.trim() || null;
     const temEstruturada = !!estruturada || !!c.categoriaEstruturadaId;
-    // A legada só conta quando ninguém com mais autoridade decidiu antes.
-    const legadaPermitida = origem === undefined || origem === "legada";
     return {
-      data: c.date,
-      tipo: c.tipo,
-      status: c.status,
-      valorCentimos: Math.round(c.amount * 100),
-      categoriaId: origem === "legada" ? null : (c.categoriaEstruturadaId ?? null),
+      ...base,
+      categoriaId: c.categoriaEstruturadaId ?? null,
       categoriaNome: estruturada,
-      categoriaLegada: !temEstruturada && legadaPermitida ? c.categoria : null,
+      categoriaLegada: temEstruturada ? null : c.categoria,
     };
   });
   const grupos = agruparDespesasDeCaixa(saidas, { year: ctx.year, month: ctx.month });
@@ -573,8 +581,9 @@ export function calcularDespesasPorCategoria(
     contagem: todos.reduce((a, g) => a + g.pendentesContagem, 0),
   };
 
-  // A chave de APRESENTAÇÃO (cor, ligação ao Fluxo de Caixa) continua a ser o
-  // nome em minúsculas — é o que o Fluxo de Caixa filtra. A identidade é outra.
+  // A chave de APRESENTAÇÃO (cor) continua a ser o nome em minúsculas. O
+  // drilldown para o Fluxo de Caixa usa a `identidade`, nunca esta chave: pelo
+  // nome, «Fornecedor» e «fornecedor» voltariam a abrir a mesma lista.
   const chaveVisivel = (g: GrupoDespesa) => (g.nome ?? "").toLowerCase();
 
   const ordenadas = todos

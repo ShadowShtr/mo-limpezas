@@ -251,6 +251,12 @@ export interface FatiaServico {
    * despesa tem de a ir procurar à mão.
    */
   chave?: string | null;
+  /**
+   * Identidade canónica da fatia (`<uuid>` | `named:` | `legacy:` |
+   * `uncategorized`). É por ela — e não pela `chave` de apresentação — que o
+   * drilldown filtra: duas fatias com o mesmo nome continuam a ser duas.
+   */
+  identidade?: string | null;
 }
 
 export function FinanceRevenueByService({

@@ -73,7 +73,7 @@ export function DailyBillingClient({ initialDate, initialData, initialError, com
 
   const [adding, setAdding] = useState<Adding>(null);
   const [editingKey, setEditingKey] = useState<string | null>(null);
-  const [deleting, setDeleting] = useState<DailyBillingRow | null>(null);
+  const [deletingKey, setDeletingKey] = useState<string | null>(null);
 
   // Tempo real: as duas tabelas desta lista, filtradas pela empresa. Fallback:
   // recarga a cada 60s e ao voltar à janela, caso o Realtime falhe.
@@ -106,7 +106,7 @@ export function DailyBillingClient({ initialDate, initialData, initialError, com
 
   function goTo(newDate: string) {
     setEditingKey(null);
-    setDeleting(null);
+    setDeletingKey(null);
     clearMutationError();
     changeDay(newDate);
   }
@@ -121,6 +121,12 @@ export function DailyBillingClient({ initialDate, initialData, initialError, com
   // (anulada, apagada, mudou de dia), o editor fecha-se sozinho.
   const editingRow = editingKey
     ? [...day, ...pending].find((r) => billingRowKey(r) === editingKey) ?? null
+    : null;
+  // O mesmo para a confirmação de exclusão: se entretanto chegar um
+  // recebimento (Realtime, outra sessão), o diálogo vê-o e deixa de oferecer
+  // a exclusão — em vez de decidir sobre a fotografia de quando abriu.
+  const deletingRow = deletingKey
+    ? [...day, ...pending].find((r) => billingRowKey(r) === deletingKey) ?? null
     : null;
 
   const isToday = date === todayInLisbon();
@@ -146,7 +152,7 @@ export function DailyBillingClient({ initialDate, initialData, initialError, com
       if (res.ok) return { ok: true as const };
       return { ok: false as const, error: interpretBillingRefusal(res.error)?.message ?? res.error };
     });
-    if (r.ok) setDeleting(null);
+    if (r.ok) setDeletingKey(null);
   }
 
   const renderRows = (rows: DailyBillingRow[], showDate: boolean) => (
@@ -159,7 +165,7 @@ export function DailyBillingClient({ initialDate, initialData, initialError, com
           showDate={showDate}
           busy={isBusy(billingRowKey(r))}
           onEdit={() => { clearMutationError(); setEditingKey(billingRowKey(r)); }}
-          onDelete={() => { clearMutationError(); setDeleting(r); }}
+          onDelete={() => { clearMutationError(); setDeletingKey(billingRowKey(r)); }}
         />
       ))}
     </div>
@@ -339,13 +345,13 @@ export function DailyBillingClient({ initialDate, initialData, initialError, com
         />
       )}
 
-      {deleting && (
+      {deletingRow && (
         <DeleteConfirm
-          row={deleting}
-          busy={isBusy(billingRowKey(deleting))}
+          row={deletingRow}
+          busy={isBusy(billingRowKey(deletingRow))}
           error={mutationError}
-          onCancel={() => { setDeleting(null); clearMutationError(); }}
-          onConfirm={() => void confirmDelete(deleting)}
+          onCancel={() => { setDeletingKey(null); clearMutationError(); }}
+          onConfirm={() => void confirmDelete(deletingRow)}
         />
       )}
     </div>

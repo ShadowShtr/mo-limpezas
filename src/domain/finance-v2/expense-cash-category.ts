@@ -63,6 +63,32 @@ export function chaveCategoriaDespesa(c: {
   return legada ? LEGADA + legada : SEM_CATEGORIA;
 }
 
+/**
+ * Os campos de identidade a partir da categoria EFECTIVA de um movimento
+ * (`resolverCategoriaEfetiva`). É a ponte única entre «quem decidiu a
+ * categoria» e a chave — usada pelo Resumo (agrupamento) e pelo Fluxo de
+ * Caixa (drilldown), para que a fatia e a lista falem da mesma coisa.
+ *
+ *   · origem «legada»   → o nome é o texto legado: `legacy:<texto>`;
+ *   · origem «nenhuma»  → `uncategorized` — em particular quando o PAGAMENTO
+ *     ligado não tem categoria: o texto legado do movimento não volta a entrar;
+ *   · pagamento/movimento → o `id` estruturado, ou `named:<nome>` sem ele.
+ */
+export function camposDaCategoriaEfetiva(efetiva: {
+  origem: "pagamento" | "movimento" | "legada" | "nenhuma";
+  nome: string | null;
+  id?: string | null;
+}): { categoriaId: string | null; categoriaNome: string | null; categoriaLegada: string | null } {
+  if (efetiva.origem === "legada") return { categoriaId: null, categoriaNome: null, categoriaLegada: efetiva.nome };
+  if (efetiva.origem === "nenhuma") return { categoriaId: null, categoriaNome: null, categoriaLegada: null };
+  return { categoriaId: efetiva.id ?? null, categoriaNome: efetiva.nome, categoriaLegada: null };
+}
+
+/** A chave canónica de uma categoria efectiva. */
+export function chaveDaCategoriaEfetiva(efetiva: Parameters<typeof camposDaCategoriaEfetiva>[0]): string {
+  return chaveCategoriaDespesa(camposDaCategoriaEfetiva(efetiva));
+}
+
 /** Estados que contam neste gráfico. Ver o ponto 1 do cabeçalho. */
 export const ESTADOS_DESPESA_CAIXA = ["confirmado", "pendente"] as const;
 

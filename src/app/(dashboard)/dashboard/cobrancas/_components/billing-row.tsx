@@ -10,6 +10,12 @@
 //    dentro do editor, onde se vê o que se está a alterar antes de confirmar.
 //
 // A linha mostra o estado e oferece duas acções, claras: Editar e Excluir.
+//
+// 🔴 Com recebimento registado, «Excluir» NÃO aparece. A exclusão é
+//    impossível até o recebimento sair (as RPCs recusam), e oferecer um botão
+//    que vai falhar ensina a ignorar erros. O `DeleteConfirm` mantém a mesma
+//    guarda como defesa em profundidade, e a base continua a ser a autoridade
+//    contra corridas e chamadas directas.
 // ============================================================================
 
 import { Loader2, Pencil, Trash2 } from "lucide-react";
@@ -19,6 +25,7 @@ import {
   billingOutstanding,
   billingReceived,
   billingTotal,
+  hasRegisteredPayment,
   type DailyBillingRow,
 } from "@/domain/billing/daily-billing";
 import { fmtEur } from "./billing-format";
@@ -56,6 +63,7 @@ export function BillingRow({
   const total = billingTotal(row, vatRate);
   const outstanding = billingOutstanding(row, vatRate);
   const estado = paymentLabel(row, vatRate);
+  const podeExcluir = !hasRegisteredPayment(row);
 
   return (
     <div className="px-4 py-3" data-billing-row={`${row.type}:${row.id}`}>
@@ -118,13 +126,15 @@ export function BillingRow({
               >
                 <Pencil className="w-3.5 h-3.5" /> Editar
               </button>
-              <button
-                type="button"
-                onClick={onDelete}
-                className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold border border-red-200 text-red-700 hover:bg-red-50 transition-colors"
-              >
-                <Trash2 className="w-3.5 h-3.5" /> Excluir
-              </button>
+              {podeExcluir && (
+                <button
+                  type="button"
+                  onClick={onDelete}
+                  className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold border border-red-200 text-red-700 hover:bg-red-50 transition-colors"
+                >
+                  <Trash2 className="w-3.5 h-3.5" /> Excluir
+                </button>
+              )}
             </>
           )}
         </div>
