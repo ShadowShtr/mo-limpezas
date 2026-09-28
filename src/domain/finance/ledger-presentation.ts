@@ -1,4 +1,10 @@
 import type { FinanceLedgerRow } from "@/domain/finance/ledger";
+import {
+  SEM_CATEGORIA,
+  agruparDespesasDeCaixa,
+  chaveCategoriaDespesa,
+  type SaidaDeCaixa,
+} from "@/domain/finance-v2/expense-cash-category";
 
 // 🔴 `fixos` e `variaveis` voltaram a ser filtros de primeira classe.
 //
@@ -284,21 +290,22 @@ export function financeLedgerCounts(
 //    superfícies usam-na. Uma categoria estruturada é identificada pelo seu
 //    `id`; uma legada, pelo seu texto normalizado; ausência é ausência.
 
-/** Prefixo que separa o espaço de nomes legado do dos ids estruturados. */
-const LEGADA = "legacy:";
-
-export const SEM_CATEGORIA = "uncategorized";
+export { SEM_CATEGORIA };
 
 /**
  * A chave estável de uma linha para efeitos de categoria.
  *
  * Estruturada → o `id`. Legada → `legacy:<texto normalizado>`. Sem nenhuma →
  * `uncategorized`. Nunca colide entre os três espaços.
+ *
+ * 🔴 A regra vive em `chaveCategoriaDespesa`, partilhada com o Resumo. Aqui
+ *    só se diz o que, numa linha do ledger, é id e o que é texto legado.
  */
 export function categoryKey(row: FinanceLedgerRow): string {
-  if (row.expense_category_id) return row.expense_category_id;
-  const legada = row.category_name?.trim().toLocaleLowerCase("pt-PT");
-  return legada ? LEGADA + legada : SEM_CATEGORIA;
+  return chaveCategoriaDespesa({
+    categoriaId: row.expense_category_id,
+    categoriaLegada: row.expense_category_id ? null : row.category_name,
+  });
 }
 
 /** O nome a mostrar para essa identidade. */
@@ -485,17 +492,11 @@ export function categorySlices(
   period: { year: number; month: number },
   mode: FinanceGraphMode,
 ): FinanceCategorySlice[] {
+  if (mode === "caixa") return cashCategorySlices(rows, period);
   const totals = new Map<string, FinanceCategorySlice>();
   for (const row of rows) {
-    const eligible = mode === "competencia"
-      ? inCompetence(row, period.year, period.month)
-      : inCashPeriod(row, period.year, period.month)
-        && row.direction === "saida"
-        && row.cashflow_status === "confirmado";
-    if (!eligible) continue;
-    const amount = mode === "competencia"
-      ? row.payment_amount_cents
-      : row.cashflow_amount_cents;
+    if (!inCompetence(row, period.year, period.month)) continue;
+    const amount = row.payment_amount_cents;
     if (amount === null || amount <= 0) continue;
     // 🔴 A MESMA identidade do filtro e da tabela. Antes a chave era
     //    `expense_category_id ?? "uncategorized"`, o que metia todas as
@@ -525,4 +526,68 @@ export function paginateFinanceLedger(
   const safeSize = Math.max(1, Math.trunc(pageSize));
   const start = (safePage - 1) * safeSize;
   return rows.slice(start, start + safeSize);
+}
+
+/**
+ * As linhas do ledger vistas como saídas de caixa — a forma que o agrupador
+ * partilhado com o Resumo entende.
+ *
+ * Só linhas com movimento de caixa. O valor é o do MOVIMENTO, não o da
+ * obrigação: no eixo «Caixa» conta o dinheiro que saiu (ou que está registado
+ * para sair), e é precisamente quando os dois divergem que existe
+ * `linked_amount_mismatch`.
+ */
+export function ledgerCashOutputs(rows: FinanceLedgerRow[]): SaidaDeCaixa[] {
+  const out: SaidaDeCaixa[] = [];
+  for (const row of rows) {
+    if (!row.cashflow_id || !row.cash_date || row.cashflow_amount_cents === null) continue;
+    out.push({
+      data: row.cash_date,
+      tipo: row.direction,
+      status: row.cashflow_status,
+      valorCentimos: row.cashflow_amount_cents,
+      categoriaId: row.expense_category_id,
+      categoriaLegada: row.expense_category_id ? null : row.category_name,
+    });
+  }
+  return out;
+}
+
+/**
+ * «Caixa»: a MESMA regra do Resumo — `agruparDespesasDeCaixa`. Até aqui este
+ * modo contava só confirmadas e o Resumo confirmadas e pendentes; a mesma
+ * seleção dava dois números. Ver o cabeçalho de `expense-cash-category.ts`.
+ */
+function cashCategorySlices(
+  rows: FinanceLedgerRow[],
+  period: { year: number; month: number },
+): FinanceCategorySlice[] {
+  const nomePorChave = new Map<string, string>();
+  for (const row of rows) {
+    const key = categoryKey(row);
+    if (!nomePorChave.has(key)) nomePorChave.set(key, categoryLabel(row));
+  }
+  return [...agruparDespesasDeCaixa(ledgerCashOutputs(rows), period).values()]
+    .filter((g) => g.valorCentimos > 0)
+    .map((g) => ({
+      category_key: g.chave,
+      category_id: g.categoriaId,
+      name: nomePorChave.get(g.chave) ?? "Sem categoria",
+      amount_cents: g.valorCentimos,
+    }))
+    .sort((a, b) => b.amount_cents - a.amount_cents || a.name.localeCompare(b.name));
+}
+
+/** Quanto do gráfico «Caixa» ainda está por confirmar — o mesmo aviso do Resumo. */
+export function cashCategoryPending(
+  rows: FinanceLedgerRow[],
+  period: { year: number; month: number },
+): { cents: number; count: number } {
+  let cents = 0;
+  let count = 0;
+  for (const g of agruparDespesasDeCaixa(ledgerCashOutputs(rows), period).values()) {
+    cents += g.pendentesCentimos;
+    count += g.pendentesContagem;
+  }
+  return { cents, count };
 }

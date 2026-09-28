@@ -46,6 +46,8 @@ export interface MovimentoParaClassificar {
   /** Categoria estruturada do próprio movimento (o «snapshot»). */
   categoriaEstruturada: string | null | undefined;
   categoriaEstruturadaCor?: string | null | undefined;
+  /** `id` da categoria estruturada do próprio movimento, quando se conhece. */
+  categoriaEstruturadaId?: string | null | undefined;
   /** Texto legado, anterior ao catálogo. */
   categoriaLegada: string | null | undefined;
 }
@@ -54,11 +56,15 @@ export interface MovimentoParaClassificar {
 export interface CategoriaDoPagamento {
   nome: string | null;
   cor: string | null;
+  /** `id` da categoria do pagamento — a identidade que Pagamentos usa. */
+  id?: string | null;
 }
 
 export interface CategoriaEfetiva {
   nome: string | null;
   cor: string | null;
+  /** `id` da categoria estruturada efectiva; `null` na legada e na ausência. */
+  id: string | null;
   /** De onde veio a decisão — serve para explicar, e para os testes. */
   origem: "pagamento" | "movimento" | "legada" | "nenhuma";
 }
@@ -93,20 +99,27 @@ export function resolverCategoriaEfetiva(
     //    respondeu «nenhuma».
     const nome = limpo(categoriaDoPagamento.nome);
     return nome
-      ? { nome, cor: categoriaDoPagamento.cor ?? null, origem: "pagamento" }
-      : { nome: null, cor: null, origem: "nenhuma" };
+      ? { nome, cor: categoriaDoPagamento.cor ?? null, id: categoriaDoPagamento.id ?? null, origem: "pagamento" }
+      : { nome: null, cor: null, id: null, origem: "nenhuma" };
   }
 
   // Movimento manual — ou originado num pagamento que não se conseguiu
   // resolver, caso em que se usa o que o próprio movimento diz, em vez de
   // inventar. Ver `PAGAMENTO_NAO_ENCONTRADO`.
   const propria = limpo(movimento.categoriaEstruturada);
-  if (propria) return { nome: propria, cor: movimento.categoriaEstruturadaCor ?? null, origem: "movimento" };
+  if (propria) {
+    return {
+      nome: propria,
+      cor: movimento.categoriaEstruturadaCor ?? null,
+      id: movimento.categoriaEstruturadaId ?? null,
+      origem: "movimento",
+    };
+  }
 
   const legada = limpo(movimento.categoriaLegada);
-  if (legada) return { nome: legada, cor: null, origem: "legada" };
+  if (legada) return { nome: legada, cor: null, id: null, origem: "legada" };
 
-  return { nome: null, cor: null, origem: "nenhuma" };
+  return { nome: null, cor: null, id: null, origem: "nenhuma" };
 }
 
 /**

@@ -19,6 +19,7 @@ import {
 import type { FinanceLedgerRow } from "@/domain/finance/ledger";
 import {
   categorySlices,
+  cashCategoryPending,
   filterFinanceLedger,
   financeLedgerMetrics,
   originLabel,
@@ -167,6 +168,9 @@ export function UnifiedPaymentsClient({ rows, error: initialError, categories, c
   const metrics = financeLedgerMetrics(rows, { year, month }, today);
   const slices = categorySlices(rows, { year, month }, graphMode);
   const graphTotal = slices.reduce((sum, slice) => sum + slice.amount_cents, 0);
+  // Só no modo «Caixa»: a mesma regra do Resumo conta as saídas por confirmar,
+  // e o ecrã diz quanto delas está no total — como o cartão do Resumo.
+  const cashPending = graphMode === "caixa" ? cashCategoryPending(rows, { year, month }) : { cents: 0, count: 0 };
   const origins = [...new Set(rows.map((row) => row.origin))].sort();
   const counts = financeLedgerCounts(rows, { year, month });
   const porPreparar = mesPorPreparar(rows, { year, month });
@@ -366,7 +370,7 @@ export function UnifiedPaymentsClient({ rows, error: initialError, categories, c
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
           <div>
             <h2 className="text-sm font-semibold text-[var(--color-text-main)]">Gastos por categoria</h2>
-            <p className="text-xs text-[var(--color-text-muted)]">{graphMode === "competencia" ? "Obrigações do mês de competência" : "Saídas pela data efetiva de caixa"}</p>
+            <p className="text-xs text-[var(--color-text-muted)]">{graphMode === "competencia" ? "Obrigações do mês de competência" : "Saídas confirmadas e pendentes, pela data do movimento — o mesmo critério do Resumo"}</p>
           </div>
           <div className="flex rounded-lg border border-[var(--color-border)] p-0.5">
             {(["competencia", "caixa"] as const).map((mode) => (
@@ -377,6 +381,11 @@ export function UnifiedPaymentsClient({ rows, error: initialError, categories, c
           </div>
         </div>
         <CategoryChart slices={slices} total={graphTotal} />
+        {cashPending.count > 0 && (
+          <p className="mt-3 text-xs text-amber-700">
+            Inclui {euro(cashPending.cents)} em {cashPending.count} {cashPending.count === 1 ? "saída registada" : "saídas registadas"} ainda por confirmar.
+          </p>
+        )}
       </section>
 
       <section className="overflow-hidden rounded-lg border border-[var(--color-border)] bg-white">

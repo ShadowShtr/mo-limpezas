@@ -75,10 +75,18 @@ describe("UNI15–UNI30 — métricas e apresentação unificadas", () => {
     expect(categorySlices(rows, { year: 2026, month: 8 }, "competencia")[0].name).toBe("Sem categoria");
   });
 
-  it("cash pendente não é dinheiro já saído", () => {
+  // 🔴 Dois números, duas perguntas — e agora a mesma regra do Resumo.
+  //
+  //    «Saídas do período» é dinheiro que saiu: só confirmadas, como os Custos
+  //    do Resumo. O GRÁFICO por categoria responde «em que se está a gastar» e
+  //    conta também as pendentes — a decisão do dono já registada em
+  //    `calcularDespesasPorCategoria`. Antes, Pagamentos › Caixa excluía-as e o
+  //    Resumo incluía-as: a mesma seleção dava dois valores.
+  it("cash pendente não é dinheiro já saído — mas é gasto registado no gráfico", () => {
     const rows = buildFinanceLedger({ payments: [], cashflows: [cashflow({ status: "pendente" })] });
-    expect(categorySlices(rows, { year: 2026, month: 8 }, "caixa")).toEqual([]);
     expect(financeLedgerMetrics(rows, { year: 2026, month: 8 }, "2026-08-30").cash_output_cents).toBe(0);
+    const fatias = categorySlices(rows, { year: 2026, month: 8 }, "caixa");
+    expect(fatias.reduce((s, f) => s + f.amount_cents, 0)).toBe(rows[0].cashflow_amount_cents);
   });
 
   it("UNI22: entrada manual permanece na tabela, mas não entra em gastos", () => {
