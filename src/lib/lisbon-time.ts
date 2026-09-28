@@ -63,3 +63,33 @@ export function addDaysToDateString(dateStr: string, days: number): string {
   const dt = new Date(Date.UTC(y, m - 1, d + days));
   return dt.toISOString().slice(0, 10);
 }
+
+/**
+ * A data CIVIL de Lisboa (`YYYY-MM-DD`) de um instante.
+ *
+ * 🔴 Existe para não haver `iso.slice(0, 10)` sobre um `timestamptz`.
+ *
+ *    Esse atalho lê a data em UTC, não em Lisboa, e engana-se exactamente nas
+ *    bordas que interessam a quem avisa sobre prazos: uma visita marcada para
+ *    as 00h30 de dia 8 em Lisboa é, em hora de verão, `2026-07-07T23:30:00Z` —
+ *    e o `slice` diz «dia 7». O aviso de hoje falava de ontem.
+ *
+ *    Mesma família de erro que `todayInLisbon()` resolve para o dia corrente.
+ *    `en-CA` porque formata como `YYYY-MM-DD`, que é a forma que o resto do
+ *    sistema compara como texto.
+ */
+export function lisbonDateOf(instant: string | Date): string {
+  const d = instant instanceof Date ? instant : new Date(instant);
+  return new Intl.DateTimeFormat("en-CA", { timeZone: LISBON_TZ }).format(d);
+}
+
+/**
+ * O instante do início de um dia civil de Lisboa, com o offset correcto.
+ *
+ * Serve para recortar janelas sobre colunas `timestamptz` sem fazer aritmética
+ * de fuso à mão: o limite inferior de «hoje» é `inicioDoDiaEmLisboa(hoje)` e o
+ * superior, exclusivo, é o início do dia seguinte ao último que se quer.
+ */
+export function inicioDoDiaEmLisboa(dateStr: string): string {
+  return toLisbonTimestamp(dateStr, "00:00");
+}

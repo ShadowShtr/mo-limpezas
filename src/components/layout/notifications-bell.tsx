@@ -28,6 +28,19 @@ const TYPE_LABELS: Record<string, string> = {
   damage_report_submitted:   "Relatório de avaria",
   absence_requested:         "Pedido de falta",
   vacation_requested:        "Pedido de férias",
+  // 🔴 Um tipo por FONTE, nunca por urgência.
+  //
+  //    Seria tentador ter `deadline_payment_overdue` e `deadline_payment_today`. Mas o
+  //    tipo é a identidade da notificação — o que ela É —, e «atrasado» é o
+  //    estado em que estava no dia em que foi criada. Misturar os dois faria a
+  //    lista de tipos crescer com o calendário, e obrigaria quem lê o sino a
+  //    aprender doze etiquetas para quatro assuntos.
+  //
+  //    A urgência vive no conteúdo (título e corpo) e em `data.urgencia`.
+  deadline_payment:          "Vencimento de pagamento",
+  deadline_task:             "Prazo de tarefa",
+  deadline_lead:             "Próxima ação comercial",
+  deadline_visit:            "Visita comercial",
 };
 
 export function NotificationsBell() {

@@ -171,9 +171,14 @@ describe("finance unified read model", () => {
     expect(second).toEqual(first);
   });
 
-  it("usa a data civil de Lisboa para o registo da obrigação", () => {
+  // 🔴 O fallback para `created_at` deixou de ser o caso comum e passou a ser
+  //    o último recurso: só uma obrigação SEM vencimento lá chega. O
+  //    `due_date: null` aqui é a condição do ensaio, não um detalhe — sem ele
+  //    o que se estaria a medir era o vencimento, e a conversão para data
+  //    civil de Lisboa ficaria por cobrir.
+  it("sem vencimento, usa a data civil de Lisboa para o registo da obrigação", () => {
     const rows = buildFinanceLedger({
-      payments: [payment({ created_at: "2026-08-01T23:30:00Z" })],
+      payments: [payment({ due_date: null, created_at: "2026-08-01T23:30:00Z" })],
       cashflows: [],
     });
     expect(rows[0].date).toBe("2026-08-02");
@@ -188,6 +193,7 @@ function source(overrides: Partial<FinanceLedgerSource> = {}): FinanceLedgerSour
     cashflowsByCashPeriod: async () => ok([]),
     paymentsByIds: async () => ok([]),
     cashflowsByPaymentIds: async () => ok([]),
+    pendingPaymentsBeforeCompetence: async () => ok([]),
     ...overrides,
   };
 }

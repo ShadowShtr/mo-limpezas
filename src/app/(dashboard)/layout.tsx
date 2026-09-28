@@ -5,6 +5,8 @@ import { DashboardShell } from "@/components/layout/dashboard-shell";
 import { SwUpdatePrompt } from "@/components/pwa/sw-update-prompt";
 import { UpdateNoticeModal } from "@/components/update-notices/update-notice-modal";
 import { getPendingNotices } from "@/app/actions/update-notices";
+import { AvisosVencimentoModal } from "@/components/avisos/avisos-vencimento-modal";
+import { getAvisosVencimento } from "@/app/actions/avisos";
 import {
   resolverPerfilAutenticado, MOTIVO_SEM_PERFIL,
 } from "@/lib/auth/resolve-profile";
@@ -45,7 +47,18 @@ export default async function DashboardLayout({ children }: { children: React.Re
 
   // Avisos por ler. `getPendingNotices` nunca lança: um erro devolve lista
   // vazia e regista em log — a camada de avisos não pode derrubar o dashboard.
-  const notices = await getPendingNotices();
+  //
+  // 🔴 As duas leituras correm em paralelo e valem a mesma promessa: nenhuma
+  //    lança. São camadas de aviso, não de dados — se falharem, o dashboard
+  //    abre na mesma e o assunto volta na próxima sessão.
+  //
+  //    Só admin e gestor chegam a esta linha: a colaboradora foi redireccionada
+  //    para /app acima, e `getAvisosVencimento` revalida o papel do seu lado.
+  //    Esconder não é autorizar, por isso são os dois.
+  const [notices, avisos] = await Promise.all([
+    getPendingNotices(),
+    getAvisosVencimento(),
+  ]);
 
   return (
     <DashboardShell
@@ -56,6 +69,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
       {children}
       <SwUpdatePrompt />
       {notices.length > 0 && <UpdateNoticeModal notices={notices} />}
+      <AvisosVencimentoModal inicial={avisos} />
     </DashboardShell>
   );
 }

@@ -136,26 +136,87 @@ const inCompetence = (row: FinanceLedgerRow, year: number, month: number): boole
   && row.competence_year === year
   && row.competence_month === month;
 
-const isSelectedPeriodPayment = (
+// ── UMA regra de pertença ao período ────────────────────────────────────────
+//
+// 🔴 Havia duas, e só uma delas existia de facto.
+//
+//    `fixos` e `variaveis` filtravam por competência; `todos`, `por_pagar`,
+//    `pagos` e `manuais` **não filtravam período nenhum**. O mês escolhido no
+//    topo do ecrã não tinha efeito em quatro dos seis separadores.
+//
+//    Isso não era só ruído visual. O `loadFinanceLedger` traz de propósito
+//    pagamentos de OUTRAS competências — os que estão ligados a movimentos de
+//    caixa deste mês. Um pagamento com competência de Outubro, pago em
+//    Setembro, é carregado ao ver Setembro para que o par pagamento/caixa
+//    continue a ser um só facto económico. Sem filtro de período, aparecia em
+//    «Todos» e «Pagos» de Setembro — um mês a mostrar a despesa de outro.
+//
+//    A partir daqui há uma regra, e os dois eixos estão separados:
+//
+//      · PAGAMENTO — pertence ao mês da sua COMPETÊNCIA. O dia em que o
+//        dinheiro saiu não o move: no ecrã de Pagamentos vê-se a obrigação,
+//        não a tesouraria. O Fluxo de Caixa é que responde pelo outro eixo.
+//      · MOVIMENTO DE CAIXA — não tem competência (`competence_*` é `null`);
+//        pertence ao mês da sua própria data civil, que é a única que tem.
+
+const chaveDoMes = (year: number, month: number): string =>
+  `${year}-${String(month).padStart(2, "0")}-`;
+
+/**
+ * A linha pertence ao período seleccionado?
+ *
+ * `period` a `null` significa «sem recorte temporal» e devolve tudo — é o que
+ * mantém os chamadores que ainda não escolhem mês a funcionar como antes.
+ */
+export function belongsToPeriod(
   row: FinanceLedgerRow,
   period: { year: number; month: number } | null,
-): boolean => !period || (
-  row.row_kind === "payment"
-  && row.competence_year === period.year
-  && row.competence_month === period.month
-);
+): boolean {
+  if (!period) return true;
+  if (row.row_kind === "payment") {
+    return row.competence_year === period.year && row.competence_month === period.month;
+  }
+  return row.date.startsWith(chaveDoMes(period.year, period.month));
+}
+
+/** Meses desde o ano 0 — para comparar competências com um só número. */
+const ordinalDoMes = (year: number, month: number): number => year * 12 + month;
+
+/**
+ * Um pendente que TRANSITA para o mês seleccionado.
+ *
+ * 🔴 A excepção deliberada, e a única: «Por pagar» mostra também o que ficou
+ *    por pagar em meses ANTERIORES. Uma conta de Agosto que ninguém pagou não
+ *    desaparece por Setembro ter chegado — desaparecer é exactamente como se
+ *    deixa de pagar uma conta.
+ *
+ *    Competências FUTURAS ficam de fora: uma obrigação de Novembro ainda não
+ *    é dívida em Setembro, e misturá-la com o que está em atraso tornaria o
+ *    separador inútil para a pergunta que ele existe para responder.
+ */
+const pendenteTransitado = (
+  row: FinanceLedgerRow,
+  period: { year: number; month: number } | null,
+): boolean => {
+  if (row.row_kind !== "payment" || row.payment_status !== "pendente") return false;
+  if (!period) return true;
+  if (row.competence_year === null || row.competence_month === null) return false;
+  return ordinalDoMes(row.competence_year, row.competence_month)
+    <= ordinalDoMes(period.year, period.month);
+};
 
 export function filterFinanceLedger(
   rows: FinanceLedgerRow[],
   filter: FinanceLedgerFilter,
   period: { year: number; month: number } | null = null,
 ): FinanceLedgerRow[] {
-  if (filter === "fixos") return rows.filter((row) => isFixo(row) && isSelectedPeriodPayment(row, period));
-  if (filter === "variaveis") return rows.filter((row) => isVariavel(row) && isSelectedPeriodPayment(row, period));
-  if (filter === "por_pagar") return rows.filter((row) => row.payment_status === "pendente");
-  if (filter === "pagos") return rows.filter((row) => row.payment_status === "pago");
-  if (filter === "manuais") return rows.filter((row) => row.is_manual);
-  return rows;
+  if (filter === "fixos") return rows.filter((row) => isFixo(row) && belongsToPeriod(row, period));
+  if (filter === "variaveis") return rows.filter((row) => isVariavel(row) && belongsToPeriod(row, period));
+  // A ÚNICA excepção à regra do período: ver a nota em `pendenteTransitado`.
+  if (filter === "por_pagar") return rows.filter((row) => pendenteTransitado(row, period));
+  if (filter === "pagos") return rows.filter((row) => row.payment_status === "pago" && belongsToPeriod(row, period));
+  if (filter === "manuais") return rows.filter((row) => row.is_manual && belongsToPeriod(row, period));
+  return rows.filter((row) => belongsToPeriod(row, period));
 }
 
 export interface FinanceLedgerCounts {
@@ -178,13 +239,24 @@ export function financeLedgerCounts(
   rows: FinanceLedgerRow[],
   period: { year: number; month: number } | null = null,
 ): FinanceLedgerCounts {
+  // 🔴 Os números DERIVAM do filtro, não de uma segunda cópia da regra.
+  //
+  //    Antes havia duas escritas da mesma semântica, e discordavam: o
+  //    separador dizia «Por pagar (7)» e abri-lo mostrava 3 linhas, porque a
+  //    contagem ignorava o período e a lista também — mas cada uma à sua
+  //    maneira, e «Todos» contava `rows.length`, que incluía linhas de outras
+  //    competências carregadas para resolver ligações.
+  //
+  //    Com o filtro como única fonte, divergir passa a ser impossível por
+  //    construção. Percorrer as linhas seis vezes é irrelevante à escala de um
+  //    mês, e é barato ao pé de um número que mente.
   return {
-    todos: rows.length,
-    fixos: rows.filter((row) => isFixo(row) && isSelectedPeriodPayment(row, period)).length,
-    variaveis: rows.filter((row) => isVariavel(row) && isSelectedPeriodPayment(row, period)).length,
-    por_pagar: rows.filter((row) => row.payment_status === "pendente").length,
-    pagos: rows.filter((row) => row.payment_status === "pago").length,
-    manuais: rows.filter((row) => row.is_manual).length,
+    todos: filterFinanceLedger(rows, "todos", period).length,
+    fixos: filterFinanceLedger(rows, "fixos", period).length,
+    variaveis: filterFinanceLedger(rows, "variaveis", period).length,
+    por_pagar: filterFinanceLedger(rows, "por_pagar", period).length,
+    pagos: filterFinanceLedger(rows, "pagos", period).length,
+    manuais: filterFinanceLedger(rows, "manuais", period).length,
   };
 }
 

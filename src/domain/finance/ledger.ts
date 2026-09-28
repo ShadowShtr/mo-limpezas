@@ -116,12 +116,43 @@ const civilDate = (value: string): string => {
     .format(new Date(value));
 };
 
+/**
+ * A data que a coluna «Data» mostra para um pagamento.
+ *
+ * 🔴 Esta função respondia à pergunta errada. Devolvia `created_at` para
+ *    qualquer pagamento pendente — o dia em que alguém o **registou** — mesmo
+ *    havendo vencimento. Uma conta com vencimento a 20/10 lançada a 02/10
+ *    aparecia com «02/10» em Data e «20/10» em Vencimento, e a tabela
+ *    ordenava-se por uma data administrativa que não interessa a ninguém.
+ *
+ *    A pergunta não é a mesma nos dois estados, e é por isso que há dois ramos:
+ *
+ *      · PENDENTE — a data relevante é quando **tem de** ser pago: o
+ *        vencimento. É o eixo por que se planeia o mês.
+ *      · PAGO — a data relevante é quando o dinheiro **saiu**: a data do
+ *        movimento de caixa ligado. Sem movimento, `paid_at` é a única marca
+ *        do pagamento que existe.
+ *
+ *    O vencimento continua na sua própria coluna, intacto. O que muda é que
+ *    «Data» passa a ser o eixo económico da linha em vez de um carimbo de
+ *    inserção.
+ *
+ *    `created_at` sobrevive como último recurso DELIBERADO: `row.date` é
+ *    `string` e tem de ser total. Um pagamento sem vencimento e sem caixa —
+ *    IVA, Segurança Social — só tem o dia em que foi registado, e isso é
+ *    melhor do que uma data inventada ou um vazio a meio de uma tabela
+ *    ordenada por data.
+ */
 function paymentDate(
   payment: FinanceLedgerPaymentSource,
   linked: FinanceLedgerCashflowSource | null,
 ): string {
-  if (linked) return linked.date;
-  if (payment.status === "pago" && payment.paid_at) return civilDate(payment.paid_at);
+  if (payment.status === "pago") {
+    if (linked) return linked.date;
+    if (payment.paid_at) return civilDate(payment.paid_at);
+    return civilDate(payment.created_at);
+  }
+  if (payment.due_date) return payment.due_date;
   return civilDate(payment.created_at);
 }
 

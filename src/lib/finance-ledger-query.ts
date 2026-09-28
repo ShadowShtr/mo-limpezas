@@ -18,6 +18,26 @@ export interface FinanceLedgerSource {
   cashflowsByCashPeriod(period: FinanceLedgerPeriod): Promise<SourceResult<FinanceLedgerCashflowSource[]>>;
   paymentsByIds(ids: string[]): Promise<SourceResult<FinanceLedgerPaymentSource[]>>;
   cashflowsByPaymentIds(ids: string[]): Promise<SourceResult<FinanceLedgerCashflowSource[]>>;
+  /**
+   * Pagamentos AINDA pendentes de competências anteriores ao período.
+   *
+   * 🔴 Existe como fonte própria, com nome próprio, de propósito.
+   *
+   *    A alternativa era alargar `paymentsByCompetence` para trazer «o mês e
+   *    também o que ficou para trás». Isso deixaria a função a mentir no nome
+   *    e passaria a decidir política dentro de uma consulta que só devia
+   *    responder por um mês — e todos os separadores herdariam a carga extra
+   *    sem ninguém ter decidido isso.
+   *
+   *    Aqui a excepção está declarada: só «Por pagar» a usa, o filtro é que a
+   *    aplica (`pendenteTransitado`), e quem lê a interface vê exactamente o
+   *    que entra no razão e porquê.
+   *
+   *    Não é «todo o histórico»: é o conjunto do que continua por pagar, que
+   *    numa empresa a funcionar é pequeno e, por definição, é o que ainda
+   *    interessa. O que já foi pago não volta.
+   */
+  pendingPaymentsBeforeCompetence(period: FinanceLedgerPeriod): Promise<SourceResult<FinanceLedgerPaymentSource[]>>;
 }
 
 export type FinanceLedgerResult =
@@ -33,14 +53,22 @@ export async function loadFinanceLedger(
   source: FinanceLedgerSource,
   period: FinanceLedgerPeriod,
 ): Promise<FinanceLedgerResult> {
-  const [paymentsResult, cashflowsResult] = await Promise.all([
+  const [paymentsResult, cashflowsResult, overdueResult] = await Promise.all([
     source.paymentsByCompetence(period),
     source.cashflowsByCashPeriod(period),
+    source.pendingPaymentsBeforeCompetence(period),
   ]);
   if (!paymentsResult.ok) return paymentsResult;
   if (!cashflowsResult.ok) return cashflowsResult;
+  if (!overdueResult.ok) return overdueResult;
 
-  const payments = paymentsResult.data;
+  // 🔴 A deduplicação é por `id` e acontece ANTES de construir o razão.
+  //
+  //    Um pendente transitado pode chegar por duas portas ao mesmo tempo — a
+  //    fonte de atrasados e a resolução de referências de caixa — e duas
+  //    linhas com o mesmo `payment_id` contariam o dinheiro duas vezes nos
+  //    totais e no número do separador.
+  const payments = uniqueById([...paymentsResult.data, ...overdueResult.data]);
   const cashflows = cashflowsResult.data;
   const paymentIds = payments.map((row) => row.id);
   const referencedPaymentIds = [...new Set(cashflows

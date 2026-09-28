@@ -114,7 +114,19 @@ describe("categoria nos pagamentos", () => {
     const a = ler(ACTIONS);
     const i = a.indexOf("export async function createPayment");
     const corpo = a.slice(i, a.indexOf("\n}\n", i));
-    expect(corpo).toMatch(/resolveCompetence\(\{[\s\S]*?dueDate: input\.due_date/);
+    // 🔴 O que esta linha protege é a PROVENIÊNCIA, não a grafia.
+    //
+    //    Chegou a exigir `dueDate: input.due_date` à letra. Quando o boundary
+    //    passou a normalizar a string vazia para `null` antes de decidir — uma
+    //    tradução, não uma regra nova — a chamada ficou na forma abreviada e o
+    //    ensaio acusou uma regressão que não existia.
+    //
+    //    Passa a exigir o que sempre esteve em causa: a competência é decidida
+    //    a partir do VENCIMENTO, seja ele entregue directamente ou pela
+    //    variável que só traduz vazio em ausência. A asserção seguinte continua
+    //    a fechar a porta à categoria.
+    expect(corpo).toMatch(/resolveCompetence\(\{[\s\S]*?dueDate(,|: input\.due_date)/);
+    expect(corpo).toMatch(/dueDate: input\.due_date|const dueDate = input\.due_date/);
     // A competência nunca é derivada da categoria.
     expect(corpo).toMatch(/p_period_year:\s*competencia\.year/);
     expect(corpo).toMatch(/p_period_month:\s*competencia\.month/);
