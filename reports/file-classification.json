@@ -1,19 +1,19 @@
 {
   "generatedBy": "scripts/audit-file-inventory.mjs",
-  "totalFiles": 1031,
+  "totalFiles": 1035,
   "byStatus": {
-    "MANTER": 1007,
+    "MANTER": 1011,
     "STANDBY": 24
   },
   "byCategory": {
-    "test": 257,
+    "test": 258,
     "route-ui": 162,
-    "migration": 146,
+    "migration": 148,
     "lib": 81,
     "script": 65,
     "domain": 58,
     "src-other": 55,
-    "doc": 51,
+    "doc": 52,
     "server-action": 50,
     "component": 34,
     "api-route": 17,
@@ -29,7 +29,7 @@
     "supabase-other": 2
   },
   "byConfidence": {
-    "alta": 1008,
+    "alta": 1012,
     "média": 17,
     "baixa": 6
   },
@@ -1350,6 +1350,27 @@
         "supabase": 1,
         "serviceRole": 4,
         "sqlWrite": 15
+      },
+      "action": "nenhuma",
+      "reason": "documentação",
+      "manualDecision": false
+    },
+    {
+      "path": "docs/security/SEC-01B-building-cards-authorization.md",
+      "category": "doc",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [
+        "service-role"
+      ],
+      "signals": {
+        "serviceRole": 3,
+        "sqlWrite": 3
       },
       "action": "nenhuma",
       "reason": "documentação",
@@ -4793,6 +4814,34 @@
       }
     },
     {
+      "path": "src/__tests__/building-cards-authorization.test.ts",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [
+        "revalidatePath(1)"
+      ],
+      "risks": [],
+      "signals": {
+        "sqlWrite": 2,
+        "revalidatePath": 1,
+        "dynamicImport": 1
+      },
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
       "path": "src/__tests__/calculations.test.ts",
       "category": "test",
       "status": "MANTER",
@@ -5671,9 +5720,9 @@
         "service-role"
       ],
       "signals": {
-        "serviceRole": 10,
+        "serviceRole": 11,
         "write": 1,
-        "sqlWrite": 94,
+        "sqlWrite": 95,
         "fallbackArray": 2,
         "dynamicImport": 1
       },
@@ -15738,37 +15787,32 @@
       "category": "server-action",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 6,
+      "consumers": 7,
       "consumerSample": [
+        "src/__tests__/building-cards-authorization.test.ts",
         "src/app/(dashboard)/dashboard/calendario/_components/buildings-column.tsx",
-        "src/app/(dashboard)/dashboard/calendario/_components/calendar-view.tsx",
-        "src/app/(dashboard)/dashboard/calendario/page.tsx"
+        "src/app/(dashboard)/dashboard/calendario/_components/calendar-view.tsx"
       ],
       "autoLoaded": false,
       "referencedBy": [
         "docs"
       ],
       "sideEffects": [
-        "supabase",
         "write",
         "revalidatePath(10)"
       ],
-      "risks": [
-        "erro-de-query-ignorado(2)"
-      ],
+      "risks": [],
       "signals": {
-        "supabase": 13,
         "serverAction": 1,
         "write": 4,
         "sqlWrite": 4,
         "consoleErr": 4,
-        "ignoredError": 2,
         "fallbackZero": 1,
         "fallbackArray": 2,
         "revalidatePath": 10
       },
       "action": "auditar atomicidade (T12/T13)",
-      "reason": "em uso: 6 consumidor(es)",
+      "reason": "em uso: 7 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -20913,7 +20957,7 @@
       "category": "lib",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 34,
+      "consumers": 35,
       "consumerSample": [
         "src/__tests__/auth-revalidation-central.test.ts",
         "src/__tests__/colaborador-saida-runtime.test.ts",
@@ -20931,7 +20975,7 @@
         "supabase": 7
       },
       "action": "nenhuma",
-      "reason": "em uso: 34 consumidor(es)",
+      "reason": "em uso: 35 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -22923,7 +22967,7 @@
       "category": "lib",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 86,
+      "consumers": 85,
       "consumerSample": [
         "src/app/(app)/app/perfil/page.tsx",
         "src/app/(app)/app/servico/[id]/page.tsx",
@@ -22946,7 +22990,7 @@
         "serviceRole": 1
       },
       "action": "nenhuma",
-      "reason": "em uso: 86 consumidor(es)",
+      "reason": "em uso: 85 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -23031,7 +23075,7 @@
       "category": "lib",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 72,
+      "consumers": 71,
       "consumerSample": [
         "src/app/(app)/app/escala/page.tsx",
         "src/app/(app)/app/layout.tsx",
@@ -23053,7 +23097,7 @@
         "env": 2
       },
       "action": "nenhuma",
-      "reason": "em uso: 72 consumidor(es), CI, configuração",
+      "reason": "em uso: 71 consumidor(es), CI, configuração",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -26924,6 +26968,29 @@
       "manualDecision": false
     },
     {
+      "path": "supabase/migrations/107_building_cards_authorization.sql",
+      "category": "migration",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [
+        "docs"
+      ],
+      "sideEffects": [],
+      "risks": [
+        "service-role"
+      ],
+      "signals": {
+        "serviceRole": 6,
+        "sqlWrite": 18
+      },
+      "action": "nenhuma",
+      "reason": "migration versionada — histórico do schema, nunca se apaga",
+      "manualDecision": false
+    },
+    {
       "path": "supabase/migrations/20260608_new_features.sql",
       "category": "migration",
       "status": "MANTER",
@@ -27657,6 +27724,22 @@
         "serviceRole": 2,
         "sqlWrite": 5
       },
+      "action": "nenhuma",
+      "reason": "migration versionada — histórico do schema, nunca se apaga",
+      "manualDecision": false
+    },
+    {
+      "path": "supabase/migrations/rollback/107_building_cards_authorization.down.sql",
+      "category": "migration",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {},
       "action": "nenhuma",
       "reason": "migration versionada — histórico do schema, nunca se apaga",
       "manualDecision": false
