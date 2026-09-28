@@ -307,6 +307,15 @@ describe("3. Diário: «Adicionar cobrança» abre o sheet canónico", () => {
         setServicePayment: async () => { escritas.push("setServicePayment"); return { ok: true }; },
       };
     });
+    vi.doMock("@/app/actions/manual-charges", () => ({
+      createManualCharge: async () => { escritas.push("createManualCharge"); return { ok: true, id: "x" }; },
+      updateManualCharge: async () => { escritas.push("updateManualCharge"); return { ok: true }; },
+      setManualChargePayment: async () => { escritas.push("setManualChargePayment"); return { ok: true, cashAmount: 0 }; },
+      voidManualCharge: async () => { escritas.push("voidManualCharge"); return { ok: true }; },
+    }));
+    vi.doMock("@/app/actions/cancellations", () => ({
+      deleteCalendarService: async () => { escritas.push("deleteCalendarService"); return { ok: true, deleted: 1, recurring: false }; },
+    }));
 
     const { DailyBillingClient } = await import(
       "@/app/(dashboard)/dashboard/cobrancas/_components/daily-billing-client"
@@ -338,6 +347,10 @@ describe("3. Diário: «Adicionar cobrança» abre o sheet canónico", () => {
     expect(container.querySelector("[data-testid=sheet]")).toBeNull();
 
     await clicar("Adicionar cobrança");
+    // 🔴 Primeiro a escolha: serviço ou cobrança avulsa. Só «Novo serviço»
+    //    abre o sheet canónico.
+    expect(container.querySelector("[data-testid=sheet]")).toBeNull();
+    await clicar("Novo serviço");
     expect(container.querySelector("[data-testid=sheet]")).not.toBeNull();
 
     await clicar("fechar-sheet");
@@ -347,6 +360,7 @@ describe("3. Diário: «Adicionar cobrança» abre o sheet canónico", () => {
   it("🔴 o sheet recebe o DIA EM VISTA, não «hoje»", async () => {
     await mostrarDiario("2026-08-12");
     await clicar("Adicionar cobrança");
+    await clicar("Novo serviço");
     const sheet = container.querySelector("[data-testid=sheet]");
     expect(sheet?.getAttribute("data-date")).toBe("2026-08-12");
   });
@@ -354,6 +368,7 @@ describe("3. Diário: «Adicionar cobrança» abre o sheet canónico", () => {
   it("🔴 abrir e fechar não escreve nada", async () => {
     await mostrarDiario("2026-08-12");
     await clicar("Adicionar cobrança");
+    await clicar("Novo serviço");
     await clicar("fechar-sheet");
     expect(escritas).toEqual([]);
   });

@@ -213,10 +213,11 @@ export interface FinanceDashboardSnapshot {
    */
   expensesByCategory: {
     estado: EstadoFonte;
-    fatias: { categoria: string; chave: string | null; valor: number; share: number; cor: string }[];
+    /** `identidade` é a chave canónica, a mesma de Pagamentos (`chaveCategoriaDespesa`). */
+    fatias: { categoria: string; identidade: string; chave: string | null; valor: number; share: number; cor: string }[];
     total: number;
     semCategoria: number;
-    /** Registadas no período mas ainda por confirmar — não entram no gráfico. */
+    /** Registadas no período mas ainda por confirmar — ENTRAM no gráfico (decisão do dono); o cartão diz quanto. */
     pendentes: { total: number; contagem: number };
     nota?: string;
   };

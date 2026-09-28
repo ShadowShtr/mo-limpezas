@@ -201,8 +201,14 @@ const CAPABILITY_CEILING: Record<string, string[]> = {
   "src/app/(dashboard)/dashboard/cobrancas/_components/invoices-client.tsx": [
     "deleteInvoice", "generateInvoices", "updateInvoiceStatus",
   ],
+  // Cobranças avulsas: criar, editar, receber e excluir (= anular) passam
+  // pelas RPCs da 091, com o período trancado na mesma transação. Excluir um
+  // serviço reutiliza o caminho seguro do calendário (`delete_calendar_service_safe`,
+  // que recusa com recebimento). Todas CLICK_TRIGGER: a linha já não tem
+  // botões de pagamento — o recebimento vive dentro do editor.
   "src/app/(dashboard)/dashboard/cobrancas/_components/daily-billing-client.tsx": [
-    "setServicePayment",
+    "createManualCharge", "deleteCalendarService", "setManualChargePayment",
+    "setServicePayment", "updateManualCharge", "voidManualCharge",
   ],
 
   // ── Folha ─────────────────────────────────────────────────────────────────

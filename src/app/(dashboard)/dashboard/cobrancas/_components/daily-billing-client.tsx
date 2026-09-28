@@ -1,11 +1,26 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+// ============================================================================
+// Cobranças › Diário
+// ============================================================================
+//
+// Duas origens na mesma lista — serviços agendados e cobranças avulsas — com
+// uma regra de valor por tipo, vinda do domínio. Os KPIs são calculados UMA vez
+// sobre a união (`dailyBillingKpis`), e por isso não há dois totais a discordar.
+//
+// Concorrência: a leitura e as gravações vivem em dois hooks. A leitura só
+// aplica a resposta mais recente do dia em vista; as gravações nunca escrevem
+// estado — confirmadas, pedem uma recarga. Ver os cabeçalhos desses ficheiros.
+//
+// Realtime: `services` e `manual_charges`, ambas filtradas pela empresa. É
+// convergência, não confirmação: a gravação própria já recarrega por si.
+// ============================================================================
+
+import { useEffect, useState } from "react";
 import {
   ChevronLeft, ChevronRight, Loader2, AlertCircle, CalendarDays,
-  CheckCircle2, Euro, Clock, RefreshCw, Plus,
+  CheckCircle2, Clock, RefreshCw, Plus,
 } from "lucide-react";
-import { format, parseISO } from "date-fns";
 import { pt } from "date-fns/locale";
 import { createClient } from "@/lib/supabase/client";
 import {
@@ -15,44 +30,29 @@ import {
   type Team,
 } from "../../calendario/_components/service-create-sheet";
 import { safeFormat, isValidIsoDateString } from "@/lib/utils";
+import { addDaysToDateString, todayInLisbon } from "@/lib/lisbon-time";
+import { setServicePayment, type DailyBillingData } from "@/app/actions/daily-billing";
 import {
-  getDailyBilling,
-  setServicePayment,
-  type DailyBillingData,
+  createManualCharge,
+  setManualChargePayment,
+  updateManualCharge,
+  voidManualCharge,
+} from "@/app/actions/manual-charges";
+import { deleteCalendarService } from "@/app/actions/cancellations";
+import {
+  billingRowKey,
+  dailyBillingKpis,
+  hasRegisteredPayment,
+  isPendingReceivable,
   type DailyBillingRow,
-} from "@/app/actions/daily-billing";
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-function fmtEur(v: number) {
-  return v.toLocaleString("pt-PT", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " €";
-}
-
-function todayStr() {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}
-
-function shiftDay(dateStr: string, delta: number): string {
-  const d = new Date(`${dateStr}T12:00:00`);
-  d.setDate(d.getDate() + delta);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}
-
-/**
- * Quanto já foi recebido de um serviço, em €: valor livre > estado 50/100.
- * Usa o total COM IVA (quando aplicável) — nunca o valor base — para bater
- * certo com o que a linha e o Fluxo de Caixa mostram.
- */
-function receivedOf(r: DailyBillingRow, vatRate: number): number {
-  if (r.paid_amount != null) return r.paid_amount;
-  const total = r.value * (r.apply_vat ? 1 + vatRate / 100 : 1);
-  if (r.payment_status === "pago_total") return total;
-  if (r.payment_status === "sinal_50") return total / 2;
-  return 0;
-}
-
-// ─── Componente ───────────────────────────────────────────────────────────────
+} from "@/domain/billing/daily-billing";
+import { interpretBillingRefusal } from "@/domain/billing/billing-errors";
+import { useDailyBillingQuery } from "./use-daily-billing-query";
+import { useBillingMutations } from "./use-billing-mutations";
+import { BillingRow } from "./billing-row";
+import { BillingEditorSheet } from "./billing-editor-sheet";
+import { AddChargeChooser, ManualChargeCreateSheet } from "./add-charge-dialogs";
+import { fmtEur } from "./billing-format";
 
 interface Props {
   initialDate: string;
@@ -64,43 +64,19 @@ interface Props {
   teams: Team[];
 }
 
+type Adding = null | "choose" | "service" | "manual";
+
 export function DailyBillingClient({ initialDate, initialData, initialError, companyId, clients, locations, teams }: Props) {
-  const [date, setDate] = useState(initialDate);
-  const [data, setData] = useState<DailyBillingData | null>(initialData);
-  const [error, setError] = useState<string | null>(initialError);
-  const [loading, setLoading] = useState(false);
-  // Serviço com o editor de valor recebido aberto
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [amountInput, setAmountInput] = useState("");
-  const [savingId, setSavingId] = useState<string | null>(null);
-  const [creating, setCreating] = useState(false);
-  const dateRef = useRef(date);
-  useEffect(() => {
-    dateRef.current = date;
-  }, [date]);
+  const { date, data, error, loading, refresh, changeDay, isCurrentDate } =
+    useDailyBillingQuery(initialDate, initialData, initialError);
+  const { run, isBusy, mutationError, clearMutationError } = useBillingMutations({ date, refresh, isCurrentDate });
 
-  const refresh = useCallback(async (d?: string) => {
-    const target = d ?? dateRef.current;
-    const res = await getDailyBilling(target);
-    // Ignora respostas de dias que já não estão selecionados (navegação rápida)
-    if (target !== dateRef.current) return;
-    if (res.ok) { setData(res.data); setError(null); }
-    else setError(res.error);
-    setLoading(false);
-  }, []);
+  const [adding, setAdding] = useState<Adding>(null);
+  const [editingKey, setEditingKey] = useState<string | null>(null);
+  const [deletingKey, setDeletingKey] = useState<string | null>(null);
 
-  function changeDay(newDate: string) {
-    setDate(newDate);
-    dateRef.current = newDate;
-    setLoading(true);
-    setEditingId(null);
-    void refresh(newDate);
-  }
-
-  // Tempo real: qualquer alteração em `services` da empresa recarrega o dia
-  // (criação/edição/apagamento no calendário reflete-se aqui de imediato).
-  // Fallback: refetch a cada 60s e ao voltar à janela, caso o Realtime não
-  // esteja ativo para a tabela.
+  // Tempo real: as duas tabelas desta lista, filtradas pela empresa. Fallback:
+  // recarga a cada 60s e ao voltar à janela, caso o Realtime falhe.
   useEffect(() => {
     const supabase = createClient();
     const channel = supabase
@@ -108,6 +84,11 @@ export function DailyBillingClient({ initialDate, initialData, initialError, com
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "services", filter: `company_id=eq.${companyId}` },
+        () => void refresh(),
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "manual_charges", filter: `company_id=eq.${companyId}` },
         () => void refresh(),
       )
       .subscribe();
@@ -123,38 +104,74 @@ export function DailyBillingClient({ initialDate, initialData, initialError, com
     };
   }, [companyId, refresh]);
 
-  async function applyPayment(row: DailyBillingRow, status: "nao_informado" | "sinal_50" | "pago_total", amount?: number | null) {
-    setSavingId(row.id);
-    const res = await setServicePayment(row.id, status, amount);
-    setSavingId(null);
-    setEditingId(null);
-    if (!res.ok) { setError(res.error); return; }
-    setError(null);
-    // Atualização otimista local + refetch para consistência
-    setData((prev) => {
-      if (!prev) return prev;
-      const patch = (r: DailyBillingRow) =>
-        r.id === row.id
-          ? { ...r, payment_status: status, paid_amount: amount ?? null, paid_at: new Date().toISOString() }
-          : r;
-      return { ...prev, day: prev.day.map(patch), pending: prev.pending.map(patch) };
-    });
-    void refresh();
+  function goTo(newDate: string) {
+    setEditingKey(null);
+    setDeletingKey(null);
+    clearMutationError();
+    changeDay(newDate);
   }
 
-  const day = data?.day ?? [];
-  const pending = (data?.pending ?? []).filter((r) => !r.is_avenca);
   const vatRate = data?.vatRate ?? 23;
+  const day = data?.day ?? [];
+  const pending = (data?.pending ?? []).filter((r) => isPendingReceivable(r, vatRate));
+  const kpis = dailyBillingKpis(day, pending, vatRate);
 
-  // Totais do dia (com IVA quando aplicável)
-  const withVat = (r: DailyBillingRow) => r.value * (r.apply_vat ? 1 + vatRate / 100 : 1);
-  const totalDay = day.reduce((s, r) => s + withVat(r), 0);
-  const receivedDay = day.reduce((s, r) => s + Math.min(receivedOf(r, vatRate), withVat(r)), 0);
-  const outstandingDay = Math.max(0, totalDay - receivedDay);
-  const pendingTotal = pending.reduce((s, r) => s + Math.max(0, withVat(r) - receivedOf(r, vatRate)), 0);
+  // O editor segue a linha pela chave, no snapshot mais recente: depois de uma
+  // gravação mostra o estado que a base confirmou. Se a linha sair da lista
+  // (anulada, apagada, mudou de dia), o editor fecha-se sozinho.
+  const editingRow = editingKey
+    ? [...day, ...pending].find((r) => billingRowKey(r) === editingKey) ?? null
+    : null;
+  // O mesmo para a confirmação de exclusão: se entretanto chegar um
+  // recebimento (Realtime, outra sessão), o diálogo vê-o e deixa de oferecer
+  // a exclusão — em vez de decidir sobre a fotografia de quando abriu.
+  const deletingRow = deletingKey
+    ? [...day, ...pending].find((r) => billingRowKey(r) === deletingKey) ?? null
+    : null;
 
-  const isToday = date === todayStr();
+  const isToday = date === todayInLisbon();
   const dayLabel = safeFormat(new Date(`${date}T12:00:00`), "EEEE, d 'de' MMMM", { locale: pt });
+  const clientOptions = clients.map((c) => ({ id: c.id, name: c.name }));
+
+  async function applyPayment(row: DailyBillingRow, status: "nao_informado" | "sinal_50" | "pago_total", amount: number | null) {
+    return run(billingRowKey(row), async () => {
+      const r = row.type === "service"
+        ? await setServicePayment(row.id, status, amount)
+        : await setManualChargePayment(row.id, status, amount);
+      return r.ok ? { ok: true as const } : r;
+    });
+  }
+
+  async function confirmDelete(row: DailyBillingRow) {
+    const r = await run(billingRowKey(row), async () => {
+      if (row.type === "manual_charge") {
+        const res = await voidManualCharge(row.id);
+        return res.ok ? { ok: true as const } : res;
+      }
+      const res = await deleteCalendarService(row.id, "single");
+      if (res.ok) return { ok: true as const };
+      return { ok: false as const, error: interpretBillingRefusal(res.error)?.message ?? res.error };
+    });
+    if (r.ok) setDeletingKey(null);
+  }
+
+  const renderRows = (rows: DailyBillingRow[], showDate: boolean) => (
+    <div className="divide-y divide-[var(--color-border)]">
+      {rows.map((r) => (
+        <BillingRow
+          key={billingRowKey(r)}
+          row={r}
+          vatRate={vatRate}
+          showDate={showDate}
+          busy={isBusy(billingRowKey(r))}
+          onEdit={() => { clearMutationError(); setEditingKey(billingRowKey(r)); }}
+          onDelete={() => { clearMutationError(); setDeletingKey(billingRowKey(r)); }}
+        />
+      ))}
+    </div>
+  );
+
+  const aCarregarDia = data === null && loading;
 
   return (
     <div className="space-y-5">
@@ -162,7 +179,7 @@ export function DailyBillingClient({ initialDate, initialData, initialError, com
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2">
           <button
-            onClick={() => changeDay(shiftDay(date, -1))}
+            onClick={() => goTo(addDaysToDateString(date, -1))}
             className="p-2 rounded-lg border border-[var(--color-border)] text-[var(--color-text-sub)] hover:bg-[var(--color-background)] transition-colors"
             aria-label="Dia anterior"
           >
@@ -171,11 +188,11 @@ export function DailyBillingClient({ initialDate, initialData, initialError, com
           <input
             type="date"
             value={date}
-            onChange={(e) => { if (isValidIsoDateString(e.target.value)) changeDay(e.target.value); }}
+            onChange={(e) => { if (isValidIsoDateString(e.target.value)) goTo(e.target.value); }}
             className="px-3 py-2 rounded-lg border border-[var(--color-border)] text-sm text-[var(--color-text-main)] focus:outline-none focus:ring-2 focus:ring-[var(--finance-primary)]"
           />
           <button
-            onClick={() => changeDay(shiftDay(date, 1))}
+            onClick={() => goTo(addDaysToDateString(date, 1))}
             className="p-2 rounded-lg border border-[var(--color-border)] text-[var(--color-text-sub)] hover:bg-[var(--color-background)] transition-colors"
             aria-label="Dia seguinte"
           >
@@ -183,7 +200,7 @@ export function DailyBillingClient({ initialDate, initialData, initialError, com
           </button>
           {!isToday && (
             <button
-              onClick={() => changeDay(todayStr())}
+              onClick={() => goTo(todayInLisbon())}
               className="px-3 py-2 rounded-lg border border-[var(--color-border)] text-xs font-medium text-[var(--finance-primary)] hover:bg-[var(--finance-primary-soft)] transition-colors"
             >
               Hoje
@@ -192,31 +209,14 @@ export function DailyBillingClient({ initialDate, initialData, initialError, com
         </div>
         <div className="flex items-center gap-3">
           <p className="text-sm font-medium text-[var(--color-text-main)] capitalize">{dayLabel}</p>
-          {/*
-            🔴 Adicionar uma cobrança ao dia = agendar o serviço desse dia,
-               AQUI — sem sair do ecrã.
-
-               Esta lista não tem linhas próprias: cada linha É um serviço
-               agendado, e a coluna de cobrança é o estado de pagamento dele.
-               Criar aqui um registo solto produziria cobrança sem serviço por
-               trás — dinheiro num sítio e o trabalho noutro, que é a
-               dessincronização que o Financeiro inteiro evita.
-
-               A primeira versão deste botão navegava para o calendário no dia
-               certo. Chegava lá, mas transformava «adicionar» numa viagem, e
-               quem está a fechar o dia perdia o contexto. O formulário passa a
-               vir ter com a pessoa — e é o MESMO `ServiceCreateSheet` que o
-               calendário e a ficha de cliente já usam. Um caminho de criação,
-               não três cópias dele.
-          */}
           <button
-            onClick={() => setCreating(true)}
+            onClick={() => setAdding("choose")}
             className="inline-flex items-center gap-2 rounded-lg bg-[var(--finance-primary)] px-3.5 py-2 text-sm font-semibold text-white transition-colors hover:opacity-90"
           >
             <Plus className="w-4 h-4" /> Adicionar cobrança
           </button>
           <button
-            onClick={() => { setLoading(true); void refresh(); }}
+            onClick={() => void refresh()}
             disabled={loading}
             title="Atualizar"
             className="p-2 rounded-lg border border-[var(--color-border)] text-[var(--color-text-sub)] hover:bg-[var(--color-background)] transition-colors disabled:opacity-50"
@@ -226,58 +226,48 @@ export function DailyBillingClient({ initialDate, initialData, initialError, com
         </div>
       </div>
 
-      {/* KPIs do dia */}
+      {/* KPIs do dia — uma regra por tipo, calculada uma vez sobre a união */}
       <div className="grid grid-cols-3 gap-3">
         <div className="bg-white rounded-xl border border-[var(--color-border)] p-4">
           <p className="text-xs text-[var(--color-text-muted)] mb-1">Total do dia (c/ IVA)</p>
-          <p className="text-xl font-bold text-[var(--color-text-main)]">{fmtEur(totalDay)}</p>
-          <p className="text-xs text-[var(--color-text-muted)] mt-0.5">{day.length} serviço{day.length !== 1 ? "s" : ""}</p>
+          <p className="text-xl font-bold text-[var(--color-text-main)]">{fmtEur(kpis.total)}</p>
+          <p className="text-xs text-[var(--color-text-muted)] mt-0.5">
+            {kpis.counts.services} serviço{kpis.counts.services !== 1 ? "s" : ""}
+            {kpis.counts.manualCharges > 0 && <> · {kpis.counts.manualCharges} avulsa{kpis.counts.manualCharges !== 1 ? "s" : ""}</>}
+          </p>
         </div>
         <div className="bg-white rounded-xl border border-[var(--color-border)] p-4">
           <p className="text-xs text-[var(--color-text-muted)] mb-1">Recebido</p>
-          <p className="text-xl font-bold text-green-600">{fmtEur(receivedDay)}</p>
+          <p className="text-xl font-bold text-green-600">{fmtEur(kpis.received)}</p>
           <p className="text-xs text-[var(--color-text-muted)] mt-0.5">50% conta metade · valor livre conta o registado</p>
         </div>
         <div className="bg-white rounded-xl border border-[var(--color-border)] p-4">
           <p className="text-xs text-[var(--color-text-muted)] mb-1">Por receber</p>
-          <p className={`text-xl font-bold ${outstandingDay > 0 ? "text-amber-600" : "text-green-600"}`}>{fmtEur(outstandingDay)}</p>
-          <p className="text-xs text-[var(--color-text-muted)] mt-0.5">{outstandingDay > 0 ? "há cobranças em aberto" : "dia fechado"}</p>
+          <p className={`text-xl font-bold ${kpis.outstanding > 0 ? "text-amber-600" : "text-green-600"}`}>{fmtEur(kpis.outstanding)}</p>
+          <p className="text-xs text-[var(--color-text-muted)] mt-0.5">{kpis.outstanding > 0 ? "há cobranças em aberto" : "dia fechado"}</p>
         </div>
       </div>
 
-      {error && (
-        <div className="flex items-center gap-3 p-4 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700">
+      {(error || mutationError) && (
+        <div role="alert" className="flex items-center gap-3 p-4 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700">
           <AlertCircle className="w-4 h-4 shrink-0" />
-          {error}
+          {mutationError ?? error}
         </div>
       )}
 
-      {/* Serviços do dia */}
+      {/* Cobranças do dia */}
       <div className="bg-white rounded-xl border border-[var(--color-border)] overflow-hidden">
         <div className="px-4 py-3 border-b border-[var(--color-border)] flex items-center gap-2">
           <CalendarDays className="w-4 h-4 text-[var(--finance-primary)]" />
-          <p className="text-sm font-semibold text-[var(--color-text-main)]">Serviços do dia</p>
+          <p className="text-sm font-semibold text-[var(--color-text-main)]">Cobranças do dia</p>
         </div>
-        {day.length === 0 ? (
-          <p className="text-sm text-[var(--color-text-muted)] px-4 py-8 text-center">Sem serviços neste dia.</p>
-        ) : (
-          <div className="divide-y divide-[var(--color-border)]">
-            {day.map((r) => (
-              <PaymentRow
-                key={r.id}
-                row={r}
-                vatRate={vatRate}
-                saving={savingId === r.id}
-                editing={editingId === r.id}
-                amountInput={amountInput}
-                onAmountInput={setAmountInput}
-                onStartEdit={() => { setEditingId(r.id); setAmountInput(r.paid_amount != null ? String(r.paid_amount) : ""); }}
-                onCancelEdit={() => setEditingId(null)}
-                onApply={(status, amount) => void applyPayment(r, status, amount)}
-              />
-            ))}
-          </div>
-        )}
+        {aCarregarDia ? (
+          <p className="text-sm text-[var(--color-text-muted)] px-4 py-8 text-center flex items-center justify-center gap-2">
+            <Loader2 className="w-4 h-4 animate-spin" /> A carregar cobranças…
+          </p>
+        ) : day.length === 0 ? (
+          <p className="text-sm text-[var(--color-text-muted)] px-4 py-8 text-center">Sem cobranças neste dia.</p>
+        ) : renderRows(day, false)}
       </div>
 
       {/* Pendentes de dias anteriores */}
@@ -286,46 +276,50 @@ export function DailyBillingClient({ initialDate, initialData, initialError, com
           <div className="flex items-center gap-2">
             <Clock className="w-4 h-4 text-amber-600" />
             <p className="text-sm font-semibold text-amber-800">
-              Por cobrar de dias anteriores ({pending.length})
+              Por cobrar de dias anteriores ({kpis.counts.pending})
             </p>
           </div>
-          <p className="text-sm font-semibold text-amber-700">{fmtEur(pendingTotal)}</p>
+          <p className="text-sm font-semibold text-amber-700">{fmtEur(kpis.pendingTotal)}</p>
         </div>
-        {pending.length === 0 ? (
+        {aCarregarDia ? null : pending.length === 0 ? (
           <p className="text-sm text-[var(--color-text-muted)] px-4 py-6 text-center flex items-center justify-center gap-2">
             <CheckCircle2 className="w-4 h-4 text-green-600" /> Nada pendente dos últimos 60 dias.
           </p>
-        ) : (
-          <div className="divide-y divide-[var(--color-border)]">
-            {pending.map((r) => (
-              <PaymentRow
-                key={r.id}
-                row={r}
-                vatRate={vatRate}
-                showDate
-                saving={savingId === r.id}
-                editing={editingId === r.id}
-                amountInput={amountInput}
-                onAmountInput={setAmountInput}
-                onStartEdit={() => { setEditingId(r.id); setAmountInput(r.paid_amount != null ? String(r.paid_amount) : ""); }}
-                onCancelEdit={() => setEditingId(null)}
-                onApply={(status, amount) => void applyPayment(r, status, amount)}
-              />
-            ))}
-          </div>
-        )}
+        ) : renderRows(pending, true)}
       </div>
+
+      {adding === "choose" && (
+        <AddChargeChooser
+          onClose={() => setAdding(null)}
+          onNewService={() => setAdding("service")}
+          onManualCharge={() => setAdding("manual")}
+        />
+      )}
+
+      {adding === "manual" && (
+        <ManualChargeCreateSheet
+          date={date}
+          clients={clientOptions}
+          onClose={() => setAdding(null)}
+          onCreate={async (input) => {
+            const r = await createManualCharge(input);
+            if (!r.ok) return r;
+            setAdding(null);
+            void refresh();
+            return { ok: true };
+          }}
+        />
+      )}
 
       {/*
         O MESMO componente que o calendário e a ficha de cliente usam. A data
         é a do dia em vista, não «hoje»: quem está a fechar o dia 12 cria para
-        o dia 12. Depois de criar, recarrega-se a lista — o serviço novo entra
-        já com o seu estado de cobrança por preencher.
+        o dia 12.
       */}
       <ServiceCreateSheet
-        open={creating}
-        onClose={() => setCreating(false)}
-        onCreated={() => { setCreating(false); setLoading(true); void refresh(); }}
+        open={adding === "service"}
+        onClose={() => setAdding(null)}
+        onCreated={() => { setAdding(null); void refresh(); }}
         companyId={companyId}
         date={new Date(`${date}T12:00:00`)}
         initialStartTime="09:00"
@@ -334,151 +328,86 @@ export function DailyBillingClient({ initialDate, initialData, initialError, com
         locations={locations}
         teams={teams}
       />
+
+      {editingRow && (
+        <BillingEditorSheet
+          key={editingKey ?? undefined}
+          row={editingRow}
+          vatRate={vatRate}
+          busy={isBusy(billingRowKey(editingRow))}
+          clients={clientOptions}
+          onClose={() => setEditingKey(null)}
+          onPayment={(status, amount) => applyPayment(editingRow, status, amount)}
+          onSaveManual={(patch) => run(billingRowKey(editingRow), async () => {
+            const r = await updateManualCharge(editingRow.id, patch);
+            return r.ok ? { ok: true as const } : r;
+          })}
+        />
+      )}
+
+      {deletingRow && (
+        <DeleteConfirm
+          row={deletingRow}
+          busy={isBusy(billingRowKey(deletingRow))}
+          error={mutationError}
+          onCancel={() => { setDeletingKey(null); clearMutationError(); }}
+          onConfirm={() => void confirmDelete(deletingRow)}
+        />
+      )}
     </div>
   );
 }
 
-// ─── Linha de serviço com controlo de pagamento ───────────────────────────────
-
-function PaymentRow({
-  row, vatRate, showDate = false, saving, editing, amountInput,
-  onAmountInput, onStartEdit, onCancelEdit, onApply,
+function DeleteConfirm({
+  row, busy, error, onCancel, onConfirm,
 }: {
   row: DailyBillingRow;
-  vatRate: number;
-  showDate?: boolean;
-  saving: boolean;
-  editing: boolean;
-  amountInput: string;
-  onAmountInput: (v: string) => void;
-  onStartEdit: () => void;
-  onCancelEdit: () => void;
-  onApply: (status: "nao_informado" | "sinal_50" | "pago_total", amount?: number | null) => void;
+  busy: boolean;
+  error: string | null;
+  onCancel: () => void;
+  onConfirm: () => void;
 }) {
-  const total = row.value * (row.apply_vat ? 1 + vatRate / 100 : 1);
-  const received = row.paid_amount != null
-    ? row.paid_amount
-    : row.payment_status === "pago_total" ? total
-    : row.payment_status === "sinal_50" ? total / 2
-    : 0;
-
-  const parsedAmount = amountInput.trim() === "" ? null : Number(amountInput.replace(",", "."));
-
-  const stateBtn = (active: boolean, cls: string) =>
-    `px-2.5 py-1.5 rounded-lg text-xs font-semibold border transition-colors disabled:opacity-50 ${
-      active ? cls : "bg-white text-[var(--color-text-sub)] border-[var(--color-border)] hover:bg-[var(--color-background)]"
-    }`;
+  // 🔴 Com dinheiro registado não se oferece a exclusão: a base recusaria na
+  //    mesma, e oferecer um botão que vai falhar ensina a ignorar erros. O
+  //    caminho é retirar o recebimento no editor primeiro.
+  const comRecebimento = hasRegisteredPayment(row);
+  const titulo = row.type === "service" ? "Excluir serviço" : "Excluir cobrança avulsa";
+  const texto = row.type === "service"
+    ? "O serviço sai do calendário e da app das equipas. Esta ação não se desfaz."
+    : "A cobrança deixa de contar nos totais. Fica registada como anulada no histórico.";
 
   return (
-    <div className="px-4 py-3">
-      <div className="flex flex-wrap items-center gap-3">
-        {/* Cliente + local */}
-        <div className="flex-1 min-w-[180px]">
-          <p className="text-sm font-semibold text-[var(--color-text-main)] truncate">
-            {row.client_name}
-            {row.is_avenca && (
-              <span className="ml-2 text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200 align-middle">
-                Avença
-              </span>
-            )}
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+      onClick={(e) => { if (e.target === e.currentTarget && !busy) onCancel(); }}
+      role="dialog"
+      aria-modal="true"
+      aria-label={titulo}
+    >
+      <div className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-xl space-y-3">
+        <p className="text-base font-semibold text-[var(--color-text-main)]">{titulo}</p>
+        <p className="text-sm text-[var(--color-text-sub)]">{row.client_name}</p>
+        {comRecebimento ? (
+          <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
+            Tem um recebimento registado. Retire primeiro o recebimento em «Editar» e depois exclua.
           </p>
-          <p className="text-xs text-[var(--color-text-muted)] truncate">
-            {row.location_name}
-            {showDate && <> · {format(parseISO(row.scheduled_start), "d MMM", { locale: pt })}</>}
-            {row.reference_number && <> · #{row.reference_number}</>}
-          </p>
-        </div>
-
-        {/* Valor */}
-        <div className="text-right shrink-0 w-28">
-          <p className="text-sm font-bold text-[var(--color-text-main)]">{fmtEur(total)}</p>
-          <p className="text-[11px] text-[var(--color-text-muted)]">
-            {row.apply_vat ? `c/ IVA · base ${fmtEur(row.value)}` : "sem IVA"}
-          </p>
-        </div>
-
-        {/* Estado de pagamento */}
-        <div className="flex items-center gap-1.5 shrink-0">
-          {saving ? (
-            <Loader2 className="w-4 h-4 animate-spin text-[var(--finance-primary)] mx-6" />
-          ) : (
-            <>
-              <button
-                disabled={saving}
-                onClick={() => onApply("nao_informado", null)}
-                className={stateBtn(row.payment_status === "nao_informado" && row.paid_amount == null, "bg-gray-600 text-white border-gray-600")}
-              >
-                Por pagar
-              </button>
-              <button
-                disabled={saving}
-                onClick={() => onApply("sinal_50", null)}
-                className={stateBtn(row.payment_status === "sinal_50" && row.paid_amount == null, "bg-amber-500 text-white border-amber-500")}
-              >
-                50%
-              </button>
-              <button
-                disabled={saving}
-                onClick={() => onApply("pago_total", null)}
-                className={stateBtn(row.payment_status === "pago_total" && row.paid_amount == null, "bg-green-600 text-white border-green-600")}
-              >
-                100%
-              </button>
-              <button
-                disabled={saving}
-                onClick={editing ? onCancelEdit : onStartEdit}
-                title="Registar valor recebido (€)"
-                className={stateBtn(row.paid_amount != null, "bg-[var(--finance-primary)] text-white border-[var(--finance-primary)]")}
-              >
-                <Euro className="w-3.5 h-3.5" />
-              </button>
-            </>
+        ) : (
+          <p className="text-xs text-[var(--color-text-muted)]">{texto}</p>
+        )}
+        {error && <p role="alert" className="text-xs text-red-700">{error}</p>}
+        <div className="flex justify-end gap-2 pt-1">
+          <button type="button" onClick={onCancel} disabled={busy}
+            className="rounded-lg border border-[var(--color-border)] px-3 py-2 text-sm hover:bg-[var(--color-background)]">
+            Cancelar
+          </button>
+          {!comRecebimento && (
+            <button type="button" onClick={onConfirm} disabled={busy}
+              className="inline-flex items-center gap-2 rounded-lg bg-red-600 px-3 py-2 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-50">
+              {busy && <Loader2 className="h-4 w-4 animate-spin" />} Excluir
+            </button>
           )}
         </div>
       </div>
-
-      {/* Info de pagamento registado */}
-      {(received > 0 || row.paid_at) && !editing && (
-        <p className="text-[11px] text-[var(--color-text-muted)] mt-1.5">
-          Recebido: <span className="font-semibold text-green-700">{fmtEur(received)}</span>
-          {received < total && <> · falta <span className="font-semibold text-amber-700">{fmtEur(total - received)}</span></>}
-          {row.paid_at && <> · registado {format(parseISO(row.paid_at), "d MMM 'às' HH:mm", { locale: pt })}</>}
-        </p>
-      )}
-
-      {/* Editor de valor livre */}
-      {editing && (
-        <div className="mt-2 flex items-center gap-2">
-          <input
-            type="number"
-            min="0"
-            step="0.01"
-            autoFocus
-            value={amountInput}
-            onChange={(e) => onAmountInput(e.target.value)}
-            placeholder={`Valor recebido (total: ${total.toFixed(2)})`}
-            className="w-56 px-3 py-1.5 rounded-lg border border-[var(--color-border)] text-sm focus:outline-none focus:ring-2 focus:ring-[var(--finance-primary)]"
-          />
-          <button
-            disabled={saving || parsedAmount == null || !Number.isFinite(parsedAmount) || parsedAmount < 0}
-            onClick={() => {
-              if (parsedAmount == null) return;
-              // Estado coerente com o valor: >= total → pago_total; >0 → sinal; 0 → por pagar
-              const status = parsedAmount >= total - 0.005 ? "pago_total" : parsedAmount > 0 ? "sinal_50" : "nao_informado";
-              onApply(status, parsedAmount);
-            }}
-            className="px-3 py-1.5 rounded-lg bg-[var(--finance-primary)] text-white text-xs font-semibold hover:bg-[var(--finance-primary-hover)] transition-colors disabled:opacity-50"
-          >
-            Guardar
-          </button>
-          <button
-            onClick={onCancelEdit}
-            className="px-3 py-1.5 rounded-lg border border-[var(--color-border)] text-xs text-[var(--color-text-sub)] hover:bg-[var(--color-background)] transition-colors"
-          >
-            Cancelar
-          </button>
-        </div>
-      )}
     </div>
   );
 }

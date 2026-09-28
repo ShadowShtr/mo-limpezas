@@ -127,6 +127,16 @@ export function ClientHistoryClient({ clienteInicial }: { clienteInicial?: strin
         />
       </FinanceKpiGrid>
 
+      {/* Cobranças avulsas: contam em Recebido e Em aberto, nunca em Faturado —
+          não são faturas, e o cartão não finge que são. */}
+      {!pendente && hist && hist.manualChargeCount > 0 && (
+        <p className="text-[12px] text-[var(--finance-text-secondary)]">
+          Inclui {hist.manualChargeCount} {hist.manualChargeCount === 1 ? "cobrança avulsa" : "cobranças avulsas"} no ano:{" "}
+          {fmtEur(hist.yearManualCharged)} cobrados, {fmtEur(hist.yearManualReceived)} recebidos
+          {hist.yearManualOutstanding > 0 && <>, {fmtEur(hist.yearManualOutstanding)} em aberto</>}. Não entram em «Faturado».
+        </p>
+      )}
+
       {/* Gráfico dos doze meses */}
       <FinanceCard>
         <SectionHeader

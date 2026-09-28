@@ -320,6 +320,17 @@ export type Database = {
         Update: { title?: string; body?: string | null; status?: "pendente" | "em_curso" | "concluido"; priority?: "normal" | "urgente"; category?: string | null; client_id?: string | null; assigned_to?: string | null; due_date?: string | null; completed_at?: string | null; attachment_url?: string | null; attachment_name?: string | null; attachment_size?: number | null; attachment_mime?: string | null; updated_at?: string };
         Relationships: [];
       };
+      // ── Cobranças avulsas (migrations 086 + 091) ─────────────────────────────
+      // `Insert`/`Update` a `never` pela mesma razão das tabelas da 103: esta
+      // tabela escreve-se SÓ pelas RPCs da 091 (criar, editar, receber,
+      // anular), que trancam o período financeiro na mesma transação. Um
+      // `.insert()` directo compilaria e passaria ao lado desse lock.
+      manual_charges: {
+        Row: { id: string; company_id: string; client_id: string; charge_date: string; description: string; amount: number; apply_vat: boolean; payment_status: "nao_informado" | "sinal_50" | "pago_total"; paid_amount: number | null; paid_at: string | null; notes: string | null; voided_at: string | null; voided_by: string | null; created_by: string | null; created_at: string; updated_at: string };
+        Insert: never;
+        Update: never;
+        Relationships: [];
+      };
       service_price_audit: {
         Row: { id: string; service_id: string; old_value: number | null; new_value: number | null; changed_by: string | null; reason: string | null; created_at: string };
         Insert: { service_id: string; old_value?: number | null; new_value?: number | null; changed_by?: string | null; reason?: string | null };

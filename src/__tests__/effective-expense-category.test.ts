@@ -40,14 +40,14 @@ describe("quem manda na categoria", () => {
   it("CAT01. um movimento manual usa a sua própria categoria", () => {
     const r = resolverCategoriaEfetiva(
       manual({ categoriaEstruturada: "Combustível", categoriaEstruturadaCor: "amber" }), null);
-    expect(r).toEqual({ nome: "Combustível", cor: "amber", origem: "movimento" });
+    expect(r).toEqual({ nome: "Combustível", cor: "amber", id: null, origem: "movimento" });
   });
 
   it("CAT02. 🔴 um movimento nascido de pagamento usa a categoria do pagamento", () => {
     // O caso do «Vitor»: o movimento não tem categoria, o pagamento tem.
     const r = resolverCategoriaEfetiva(
       dePagamento("p-1"), { nome: "Subcontratação", cor: "violet" });
-    expect(r).toEqual({ nome: "Subcontratação", cor: "violet", origem: "pagamento" });
+    expect(r).toEqual({ nome: "Subcontratação", cor: "violet", id: null, origem: "pagamento" });
   });
 
   it("CAT03. 🔴 o pagamento ganha a um snapshot divergente no movimento", () => {
@@ -76,7 +76,7 @@ describe("quem manda na categoria", () => {
     // classificação velha presa no gráfico.
     const r = resolverCategoriaEfetiva(
       dePagamento("p-1", { categoriaLegada: "despesa" }), { nome: null, cor: null });
-    expect(r).toEqual({ nome: null, cor: null, origem: "nenhuma" });
+    expect(r).toEqual({ nome: null, cor: null, id: null, origem: "nenhuma" });
   });
 
   it("CAT07. pagamento sem categoria nunca inventa uma", () => {
@@ -94,7 +94,7 @@ describe("quem manda na categoria", () => {
 
   it("CAT09. um salário manual não é tratado como pagamento", () => {
     const r = resolverCategoriaEfetiva(manual({ categoriaLegada: "salario" }), null);
-    expect(r).toEqual({ nome: "salario", cor: null, origem: "legada" });
+    expect(r).toEqual({ nome: "salario", cor: null, id: null, origem: "legada" });
   });
 
   it("CAT10. 🔴 vínculo partido degrada para o movimento, e é assinalado", () => {
@@ -122,7 +122,7 @@ describe("quem manda na categoria", () => {
 
   it("texto em branco não é categoria", () => {
     expect(resolverCategoriaEfetiva(manual({ categoriaEstruturada: "  ", categoriaLegada: "  " }), null))
-      .toEqual({ nome: null, cor: null, origem: "nenhuma" });
+      .toEqual({ nome: null, cor: null, id: null, origem: "nenhuma" });
   });
 });
 

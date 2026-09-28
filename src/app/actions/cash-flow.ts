@@ -5,6 +5,7 @@ import {
   resolverCategoriaEfetiva, idsDePagamentoAResolver,
   type CategoriaDoPagamento,
 } from "@/domain/finance-v2/effective-expense-category";
+import { chaveDaCategoriaEfetiva } from "@/domain/finance-v2/expense-cash-category";
 import { createClient } from "@/lib/supabase/server";
 import { requireProfile } from "@/lib/auth-guard";
 import { isValidCashFlowAmount } from "@/lib/cash-flow-integrity";
@@ -38,6 +39,17 @@ export interface CashFlowEntry {
   expense_category_id?: string | null;
   expense_category_name?: string | null;
   expense_category_color?: string | null;
+  /**
+   * Identidade canónica da categoria EFECTIVA — só leitura, para filtrar.
+   *
+   * A mesma chave que o Resumo usa para agrupar (`chaveDaCategoriaEfetiva`):
+   * `<uuid>` | `named:<nome>` | `legacy:<texto>` | `uncategorized`. Existe à
+   * parte de `expense_category_id` de propósito: esse é o valor CRU do
+   * movimento, que a edição da linha lê e grava; num movimento nascido de um
+   * pagamento a categoria efectiva é a do pagamento, e reescrever o campo cru
+   * para filtrar faria a edição gravar a categoria errada.
+   */
+  effective_expense_category_key?: string;
 }
 
 export interface CashFlowFilters {
@@ -106,6 +118,10 @@ export async function getCashFlowEntries(
     categoriaEstruturadaCor:
       (Array.isArray(r.expense_categories) ? r.expense_categories[0] : r.expense_categories)?.color_token ?? null,
     categoriaLegada: r.category,
+    categoriaEstruturadaId:
+      (Array.isArray(r.expense_categories) ? r.expense_categories[0] : r.expense_categories)?.name
+        ? (r.expense_category_id ?? null)
+        : null,
   }));
 
   const idsPagamento = idsDePagamentoAResolver(paraClassificar);
@@ -114,7 +130,7 @@ export async function getCashFlowEntries(
   if (idsPagamento.length > 0) {
     const { data: pgs, error: erroPg } = await admin
       .from("fixed_variable_payments")
-      .select("id, expense_categories(name, color_token)")
+      .select("id, expense_category_id, expense_categories(name, color_token)")
       .eq("company_id", companyId)
       .in("id", idsPagamento);
 
@@ -124,11 +140,16 @@ export async function getCashFlowEntries(
 
     for (const pg of (pgs ?? []) as unknown as {
       id: string;
+      expense_category_id: string | null;
       expense_categories?: { name: string; color_token: string | null }
         | { name: string; color_token: string | null }[] | null;
     }[]) {
       const c = Array.isArray(pg.expense_categories) ? pg.expense_categories[0] : pg.expense_categories;
-      categoriaPorPagamento.set(pg.id, { nome: c?.name ?? null, cor: c?.color_token ?? null });
+      categoriaPorPagamento.set(pg.id, {
+        nome: c?.name ?? null,
+        cor: c?.color_token ?? null,
+        id: c?.name ? pg.expense_category_id : null,
+      });
     }
   }
 
@@ -139,6 +160,7 @@ export async function getCashFlowEntries(
       ...r,
       expense_category_name: efetiva.nome,
       expense_category_color: efetiva.cor,
+      effective_expense_category_key: chaveDaCategoriaEfetiva(efetiva),
     };
   });
   const confirmed = entries.filter((e) => e.status === "confirmado");
