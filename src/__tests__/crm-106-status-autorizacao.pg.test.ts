@@ -62,6 +62,7 @@ const PREDIO_B = "b2000000-0000-4000-8000-000000000001";
 
 const M_101B = "supabase/migrations/101b_identity_reconciliation.sql";
 const M_106 = "supabase/migrations/106_colaborador_status_autorizacao.sql";
+const M_107 = "supabase/migrations/107_building_cards_authorization.sql";
 const ROLLBACK_106 = "supabase/migrations/rollback/106_colaborador_status_autorizacao.down.sql";
 const NOME_106 = "106_colaborador_status_autorizacao.sql";
 
@@ -414,33 +415,56 @@ describe("SEC-01A — matriz efectiva de building_cards", () => {
     expect(policies[0].with_check).toBeNull();
   });
 
-  it("🔴 distingue o esperado do exploit reproduzido com papel e claim reais", LENTO, async () => {
+  it("🔴 107 fecha o exploit e preserva a leitura móvel", LENTO, async () => {
     expect(await resolver(COLAB_AUTH)).toBe(COLAB_PERFIL);
 
     const tudo = { select: true, insert: true, update: true, delete: true };
     const nada = { select: false, insert: false, update: false, delete: false };
     const soLeitura = { select: true, insert: false, update: false, delete: false };
 
-    const matriz = [
-      { perfil: "gestor ativo da empresa", esperado: tudo,
-        observado: await observarBuildingCards(GESTORA, "authenticated", EMPRESA, PREDIO_A) },
-      { perfil: "colaborador ativo ligado por auth_user_id", esperado: soLeitura,
-        observado: await observarBuildingCards(COLAB_AUTH, "authenticated", EMPRESA, PREDIO_A) },
-      { perfil: "colaborador inativo da empresa", esperado: nada,
-        observado: await observarBuildingCards(INATIVA, "authenticated", EMPRESA, PREDIO_A) },
-      { perfil: "gestor ativo de outra empresa", esperado: nada,
-        observado: await observarBuildingCards(ALHEIA, "authenticated", EMPRESA, PREDIO_A) },
-      { perfil: "anon sem claim", esperado: nada,
-        observado: await observarBuildingCards(null, "anon", EMPRESA, PREDIO_A) },
-    ];
+    // Pré-estado: prova que o palco ainda reproduz exactamente a falha.
+    expect(await observarBuildingCards(COLAB_AUTH, "authenticated", EMPRESA, PREDIO_A))
+      .toEqual(tudo);
 
-    expect(matriz).toEqual([
-      { perfil: "gestor ativo da empresa", esperado: tudo, observado: tudo },
-      { perfil: "colaborador ativo ligado por auth_user_id", esperado: soLeitura, observado: tudo },
-      { perfil: "colaborador inativo da empresa", esperado: nada, observado: nada },
-      { perfil: "gestor ativo de outra empresa", esperado: nada, observado: nada },
-      { perfil: "anon sem claim", esperado: nada, observado: nada },
-    ]);
+    try {
+      await pool.query(lerSql(M_107));
+
+      const matriz = [
+        { perfil: "gestor ativo da empresa", esperado: soLeitura,
+          observado: await observarBuildingCards(GESTORA, "authenticated", EMPRESA, PREDIO_A) },
+        { perfil: "colaborador ativo ligado por auth_user_id", esperado: soLeitura,
+          observado: await observarBuildingCards(COLAB_AUTH, "authenticated", EMPRESA, PREDIO_A) },
+        { perfil: "colaborador inativo da empresa", esperado: nada,
+          observado: await observarBuildingCards(INATIVA, "authenticated", EMPRESA, PREDIO_A) },
+        { perfil: "gestor ativo de outra empresa", esperado: nada,
+          observado: await observarBuildingCards(ALHEIA, "authenticated", EMPRESA, PREDIO_A) },
+        { perfil: "anon sem claim", esperado: nada,
+          observado: await observarBuildingCards(null, "anon", EMPRESA, PREDIO_A) },
+      ];
+
+      expect(matriz).toEqual(matriz.map((linha) => ({ ...linha, observado: linha.esperado })));
+
+      const { rows: policies } = await pool.query(`
+        SELECT policyname, permissive, cmd, roles
+          FROM pg_policies
+         WHERE schemaname='public' AND tablename='building_cards'
+         ORDER BY policyname`);
+      expect(policies).toEqual([{
+        policyname: "building_cards_company_select",
+        permissive: "PERMISSIVE",
+        cmd: "SELECT",
+        roles: "{authenticated}",
+      }]);
+
+      const serviceRows = await comoUtilizador<{ id: string }>(null,
+        `INSERT INTO public.building_cards (id,company_id,weekday,name)
+         VALUES ('b4000000-0000-4000-8000-000000000001',$1,'thu','Action path') RETURNING id`,
+        [EMPRESA], "service_role");
+      expect(serviceRows).toEqual([{ id: "b4000000-0000-4000-8000-000000000001" }]);
+    } finally {
+      // As restantes provas desta suite medem a 106 isoladamente.
+      await palco();
+    }
   });
 });
 
