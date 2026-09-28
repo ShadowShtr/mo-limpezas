@@ -1,26 +1,26 @@
 {
   "generatedBy": "scripts/audit-file-inventory.mjs",
-  "totalFiles": 1009,
+  "totalFiles": 1014,
   "byStatus": {
-    "MANTER": 985,
+    "MANTER": 990,
     "STANDBY": 24
   },
   "byCategory": {
-    "test": 250,
+    "test": 251,
     "route-ui": 158,
     "migration": 146,
     "lib": 81,
-    "script": 63,
+    "script": 65,
     "domain": 55,
     "src-other": 53,
-    "doc": 49,
+    "doc": 50,
     "server-action": 49,
     "component": 34,
     "api-route": 17,
     "doc-historico": 16,
     "config": 12,
     "asset": 8,
-    "report": 4,
+    "report": 5,
     "script-historico": 4,
     "other": 2,
     "ci": 2,
@@ -29,12 +29,12 @@
     "supabase-other": 2
   },
   "byConfidence": {
-    "alta": 986,
+    "alta": 991,
     "média": 17,
     "baixa": 6
   },
   "scriptRisk": {
-    "SAFE_OFFLINE": 33,
+    "SAFE_OFFLINE": 35,
     "ADMIN_GUARDED_WRITE": 11,
     "WRITE_CAPABLE": 10,
     "ADMIN_READ": 7,
@@ -384,6 +384,24 @@
       "risks": [],
       "signals": {
         "sqlWrite": 8
+      },
+      "action": "nenhuma",
+      "reason": "documentação",
+      "manualDecision": false
+    },
+    {
+      "path": "docs/atomicidade-audit/MIG-01A-transaction-owner-decision.md",
+      "category": "doc",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "sqlWrite": 4
       },
       "action": "nenhuma",
       "reason": "documentação",
@@ -1965,7 +1983,7 @@
       ],
       "sideEffects": [
         "supabase",
-        "revalidatePath(42)"
+        "revalidatePath(43)"
       ],
       "risks": [
         "debugger"
@@ -1974,7 +1992,7 @@
         "supabase": 1,
         "sqlWrite": 28,
         "debugger": 6,
-        "revalidatePath": 42
+        "revalidatePath": 43
       },
       "action": "nenhuma",
       "reason": "configuração/infra",
@@ -2001,6 +2019,25 @@
         "fallbackZero": 2,
         "fallbackArray": 34
       },
+      "action": "nenhuma",
+      "reason": "configuração/infra",
+      "manualDecision": false
+    },
+    {
+      "path": "reports/migration-transaction-control.json",
+      "category": "report",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [
+        "npm",
+        "docs"
+      ],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {},
       "action": "nenhuma",
       "reason": "configuração/infra",
       "manualDecision": false
@@ -2182,6 +2219,31 @@
         "fallbackZero": 6,
         "fallbackArray": 2
       },
+      "action": "nenhuma",
+      "reason": "ferramenta offline, sem acesso à base",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": true,
+        "dynamicImport": true,
+        "allClosed": false
+      },
+      "scriptRisk": "SAFE_OFFLINE"
+    },
+    {
+      "path": "scripts/audit-migration-transaction-control.mjs",
+      "category": "script",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [
+        "npm"
+      ],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {},
       "action": "nenhuma",
       "reason": "ferramenta offline, sem acesso à base",
       "manualDecision": false,
@@ -3527,6 +3589,35 @@
       "signals": {
         "supabase": 10
       },
+      "action": "nenhuma",
+      "reason": "ferramenta offline, sem acesso à base",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": true,
+        "dynamicImport": true,
+        "allClosed": false
+      },
+      "scriptRisk": "SAFE_OFFLINE"
+    },
+    {
+      "path": "scripts/lib/migration-transaction-control.mjs",
+      "category": "script",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 2,
+      "consumerSample": [
+        "scripts/audit-migration-transaction-control.mjs",
+        "src/__tests__/migration-transaction-control.test.ts"
+      ],
+      "autoLoaded": false,
+      "referencedBy": [
+        "npm",
+        "docs"
+      ],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {},
       "action": "nenhuma",
       "reason": "ferramenta offline, sem acesso à base",
       "manualDecision": false,
@@ -8377,6 +8468,28 @@
         "sqlWrite": 13,
         "unknownCast": 4
       },
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/__tests__/migration-transaction-control.test.ts",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {},
       "action": "nenhuma",
       "reason": "suite de testes — corre por convenção do vitest",
       "manualDecision": false,
@@ -21146,7 +21259,9 @@
         "src/__tests__/crm-quotes-vocabulary.test.ts"
       ],
       "autoLoaded": false,
-      "referencedBy": [],
+      "referencedBy": [
+        "docs"
+      ],
       "sideEffects": [],
       "risks": [],
       "signals": {
