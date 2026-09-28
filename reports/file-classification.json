@@ -1,8 +1,8 @@
 {
   "generatedBy": "scripts/audit-file-inventory.mjs",
-  "totalFiles": 1030,
+  "totalFiles": 1031,
   "byStatus": {
-    "MANTER": 1006,
+    "MANTER": 1007,
     "STANDBY": 24
   },
   "byCategory": {
@@ -13,7 +13,7 @@
     "script": 65,
     "domain": 58,
     "src-other": 55,
-    "doc": 50,
+    "doc": 51,
     "server-action": 50,
     "component": 34,
     "api-route": 17,
@@ -29,7 +29,7 @@
     "supabase-other": 2
   },
   "byConfidence": {
-    "alta": 1007,
+    "alta": 1008,
     "média": 17,
     "baixa": 6
   },
@@ -1326,6 +1326,30 @@
       "risks": [],
       "signals": {
         "sqlWrite": 3
+      },
+      "action": "nenhuma",
+      "reason": "documentação",
+      "manualDecision": false
+    },
+    {
+      "path": "docs/security/SEC-01A-building-cards-authorization.md",
+      "category": "doc",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [
+        "supabase"
+      ],
+      "risks": [
+        "service-role"
+      ],
+      "signals": {
+        "supabase": 1,
+        "serviceRole": 4,
+        "sqlWrite": 15
       },
       "action": "nenhuma",
       "reason": "documentação",
@@ -5637,7 +5661,9 @@
       "consumers": 0,
       "consumerSample": [],
       "autoLoaded": false,
-      "referencedBy": [],
+      "referencedBy": [
+        "docs"
+      ],
       "sideEffects": [
         "write"
       ],
@@ -5645,9 +5671,9 @@
         "service-role"
       ],
       "signals": {
-        "serviceRole": 8,
+        "serviceRole": 10,
         "write": 1,
-        "sqlWrite": 69,
+        "sqlWrite": 94,
         "fallbackArray": 2,
         "dynamicImport": 1
       },

@@ -48,6 +48,8 @@ const SUSPENSA = "dddddddd-dddd-4ddd-8ddd-dddddddddddd";
 const INATIVA = "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee";
 /** Da OUTRA empresa, activa — para o isolamento continuar a ser medido. */
 const ALHEIA = "ffffffff-ffff-4fff-8fff-ffffffffffff";
+const COLAB_AUTH = "a1000000-0000-4000-8000-000000000001";
+const COLAB_PERFIL = "a2000000-0000-4000-8000-000000000001";
 
 const EQUIPA = "10ea0000-0000-4000-8000-000000000001";
 const CLIENTE = "c1111111-1111-4111-8111-111111111111";
@@ -55,6 +57,8 @@ const LOCAL = "10cac111-1111-4111-8111-111111111111";
 const SERVICO = "5e401c00-0000-4000-8000-000000000001";
 /** Um serviço da outra empresa. */
 const SERVICO_ALHEIO = "5e401c00-0000-4000-8000-000000000002";
+const PREDIO_A = "b1000000-0000-4000-8000-000000000001";
+const PREDIO_B = "b2000000-0000-4000-8000-000000000001";
 
 const M_101B = "supabase/migrations/101b_identity_reconciliation.sql";
 const M_106 = "supabase/migrations/106_colaborador_status_autorizacao.sql";
@@ -225,8 +229,9 @@ async function semear(): Promise<void> {
     [EMPRESA, OUTRA]);
   await pool.query(
     `INSERT INTO auth.users (id,email) VALUES
-      ($1,'g@a.pt'),($2,'a@a.pt'),($3,'s@a.pt'),($4,'i@a.pt'),($5,'x@b.pt')`,
-    [GESTORA, ATIVA, SUSPENSA, INATIVA, ALHEIA],
+      ($1,'g@a.pt'),($2,'a@a.pt'),($3,'s@a.pt'),($4,'i@a.pt'),($5,'x@b.pt'),
+      ($6,'ligada@a.pt')`,
+    [GESTORA, ATIVA, SUSPENSA, INATIVA, ALHEIA, COLAB_AUTH],
   );
   // 🔴 `auth_user_id` preenchido: é a forma canónica da 101b, e é a que
   //    produção tem nas 29 contas ligadas.
@@ -236,8 +241,9 @@ async function semear(): Promise<void> {
       ($3,$2,'Activa','colaborador','ativo',$3),
       ($4,$2,'Suspensa','colaborador','suspenso',$4),
       ($5,$2,'Inactiva','colaborador','inativo',$5),
-      ($6,$7,'Alheia','gestor','ativo',$6)`,
-    [GESTORA, EMPRESA, ATIVA, SUSPENSA, INATIVA, ALHEIA, OUTRA],
+      ($6,$7,'Alheia','gestor','ativo',$6),
+      ($8,$2,'Ligada','colaborador','ativo',$9)`,
+    [GESTORA, EMPRESA, ATIVA, SUSPENSA, INATIVA, ALHEIA, OUTRA, COLAB_PERFIL, COLAB_AUTH],
   );
   await pool.query(
     "INSERT INTO public.clients (id,company_id,name) VALUES ($1,$2,'Cliente A')",
@@ -248,6 +254,10 @@ async function semear(): Promise<void> {
   await pool.query(
     "INSERT INTO public.teams (id,company_id,name) VALUES ($1,$2,'Equipa 1')",
     [EQUIPA, EMPRESA]);
+  await pool.query(
+    `INSERT INTO public.building_cards (id,company_id,weekday,name,created_by) VALUES
+      ($1,$2,'mon','Prédio A',$3),($4,$5,'tue','Prédio B',$6)`,
+    [PREDIO_A, EMPRESA, GESTORA, PREDIO_B, OUTRA, ALHEIA]);
 
   // As três na mesma equipa — a diferença entre elas é só o estado.
   for (const p of [ATIVA, SUSPENSA, INATIVA]) {
@@ -339,6 +349,99 @@ beforeAll(async () => {
 afterAll(async () => {
   await pool?.end().catch(() => { /* já fechada */ });
   container?.stop();
+});
+
+type MatrizCrud = { select: boolean; insert: boolean; update: boolean; delete: boolean };
+
+async function observarBuildingCards(
+  authUid: string | null,
+  papel: "anon" | "authenticated",
+  empresaAlvo: string,
+  predioAlvo: string,
+): Promise<MatrizCrud> {
+  const tenta = async (sql: string, params: unknown[]): Promise<boolean> => {
+    try {
+      const rows = await comoUtilizador<{ id: string }>(authUid, sql, params, papel);
+      return rows.length === 1;
+    } catch {
+      return false;
+    }
+  };
+
+  return {
+    select: await tenta("SELECT id FROM public.building_cards WHERE id=$1", [predioAlvo]),
+    insert: await tenta(
+      `INSERT INTO public.building_cards (id,company_id,weekday,name)
+       VALUES ('b3000000-0000-4000-8000-000000000001',$1,'wed','Ensaio') RETURNING id`,
+      [empresaAlvo],
+    ),
+    update: await tenta(
+      "UPDATE public.building_cards SET notes='ensaio' WHERE id=$1 RETURNING id",
+      [predioAlvo],
+    ),
+    delete: await tenta("DELETE FROM public.building_cards WHERE id=$1 RETURNING id", [predioAlvo]),
+  };
+}
+
+describe("SEC-01A — matriz efectiva de building_cards", () => {
+  it("🔴 inventaria grants e a policy geral que também governa escrita", LENTO, async () => {
+    const { rows: grants } = await pool.query(`
+      SELECT role_name,
+             has_table_privilege(role_name, 'public.building_cards', 'SELECT') AS sel,
+             has_table_privilege(role_name, 'public.building_cards', 'INSERT') AS ins,
+             has_table_privilege(role_name, 'public.building_cards', 'UPDATE') AS upd,
+             has_table_privilege(role_name, 'public.building_cards', 'DELETE') AS del
+        FROM unnest(ARRAY['anon','authenticated','service_role']) role_name
+       ORDER BY role_name`);
+    expect(grants).toEqual([
+      { role_name: "anon", sel: true, ins: true, upd: true, del: true },
+      { role_name: "authenticated", sel: true, ins: true, upd: true, del: true },
+      { role_name: "service_role", sel: true, ins: true, upd: true, del: true },
+    ]);
+
+    const { rows: policies } = await pool.query(`
+      SELECT policyname, permissive, cmd, roles, qual, with_check
+        FROM pg_policies
+       WHERE schemaname='public' AND tablename='building_cards'
+       ORDER BY policyname`);
+    expect(policies.map((p) => [p.policyname, p.permissive, p.cmd])).toEqual([
+      ["building_cards_company_isolation", "PERMISSIVE", "ALL"],
+      ["building_cards_delete", "PERMISSIVE", "DELETE"],
+      ["building_cards_insert", "PERMISSIVE", "INSERT"],
+      ["building_cards_update", "PERMISSIVE", "UPDATE"],
+    ]);
+    expect(String(policies[0].qual)).toContain("get_my_profile_id");
+    expect(policies[0].with_check).toBeNull();
+  });
+
+  it("🔴 distingue o esperado do exploit reproduzido com papel e claim reais", LENTO, async () => {
+    expect(await resolver(COLAB_AUTH)).toBe(COLAB_PERFIL);
+
+    const tudo = { select: true, insert: true, update: true, delete: true };
+    const nada = { select: false, insert: false, update: false, delete: false };
+    const soLeitura = { select: true, insert: false, update: false, delete: false };
+
+    const matriz = [
+      { perfil: "gestor ativo da empresa", esperado: tudo,
+        observado: await observarBuildingCards(GESTORA, "authenticated", EMPRESA, PREDIO_A) },
+      { perfil: "colaborador ativo ligado por auth_user_id", esperado: soLeitura,
+        observado: await observarBuildingCards(COLAB_AUTH, "authenticated", EMPRESA, PREDIO_A) },
+      { perfil: "colaborador inativo da empresa", esperado: nada,
+        observado: await observarBuildingCards(INATIVA, "authenticated", EMPRESA, PREDIO_A) },
+      { perfil: "gestor ativo de outra empresa", esperado: nada,
+        observado: await observarBuildingCards(ALHEIA, "authenticated", EMPRESA, PREDIO_A) },
+      { perfil: "anon sem claim", esperado: nada,
+        observado: await observarBuildingCards(null, "anon", EMPRESA, PREDIO_A) },
+    ];
+
+    expect(matriz).toEqual([
+      { perfil: "gestor ativo da empresa", esperado: tudo, observado: tudo },
+      { perfil: "colaborador ativo ligado por auth_user_id", esperado: soLeitura, observado: tudo },
+      { perfil: "colaborador inativo da empresa", esperado: nada, observado: nada },
+      { perfil: "gestor ativo de outra empresa", esperado: nada, observado: nada },
+      { perfil: "anon sem claim", esperado: nada, observado: nada },
+    ]);
+  });
 });
 
 beforeEach(async () => {
