@@ -80,7 +80,7 @@ const RULES: Rule[] = [
     allow: {
       "src/app/(dashboard)/dashboard/clientes/[id]/page.tsx": 1,
       "src/app/(dashboard)/dashboard/contratos/page.tsx": 1,
-      "src/app/actions/daily-billing.ts": 2,
+      "src/app/actions/daily-billing.ts": 1,
       "src/app/actions/financial-dashboard.ts": 1,
       "src/app/actions/invoices.ts": 1,
       "src/app/actions/reports.ts": 1,
@@ -113,7 +113,6 @@ const IGNORED_ERROR_CEILING: Record<string, number> = {
   "src/app/(dashboard)/dashboard/financeiro/page.tsx": 1,
   "src/app/(dashboard)/dashboard/relatorios/page.tsx": 1,
   "src/app/actions/cash-flow.ts": 3,
-  "src/app/actions/daily-billing.ts": 3,
   "src/app/actions/financial-dashboard.ts": 2,
   // 13 → 6 → 3. O roteamento atómico removeu as restantes consultas
   // ignoradas do caminho de alteração de pagamento diário.

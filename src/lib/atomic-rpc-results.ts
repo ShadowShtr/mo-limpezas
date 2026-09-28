@@ -94,4 +94,47 @@ export function readBankCashflowResult(
   return { ok: true, entryId, matchId: uuid(linha.match_id) };
 }
 
+/**
+ * `create/update/void_manual_charge_atomic` (091) → `TABLE (charge_id uuid)`.
+ *
+ * Na criação o id é o que a transação gerou — é ele que a auditoria refere.
+ * Na edição e na anulação tem de ser o pedido: uma resposta sobre outra
+ * cobrança não confirma esta.
+ */
+export function readManualChargeResult(
+  linhas: unknown,
+  chargeIdEsperado?: string,
+): RpcRead<{ chargeId: string }> {
+  const linha = unicaLinha(linhas);
+  if (!linha) return { ok: false, error: FORMATO_INESPERADO };
+  const chargeId = uuid(linha.charge_id);
+  if (chargeId === null) return { ok: false, error: FORMATO_INESPERADO };
+  if (chargeIdEsperado && chargeId.toLowerCase() !== chargeIdEsperado.toLowerCase()) {
+    return { ok: false, error: FORMATO_INESPERADO };
+  }
+  return { ok: true, chargeId };
+}
+
+/**
+ * `set_manual_charge_payment_atomic` (091) →
+ * `TABLE (charge_id uuid, cash_amount numeric)`.
+ *
+ * `cash_amount` é a autoridade sobre quanto entrou em caixa, como em
+ * `readServicePaymentResult`.
+ */
+export function readManualChargePaymentResult(
+  linhas: unknown,
+  chargeIdEsperado: string,
+): RpcRead<{ chargeId: string; cashAmount: number }> {
+  const linha = unicaLinha(linhas);
+  if (!linha) return { ok: false, error: FORMATO_INESPERADO };
+  const chargeId = uuid(linha.charge_id);
+  const cashAmount = numero(linha.cash_amount);
+  if (chargeId === null || cashAmount === null) return { ok: false, error: FORMATO_INESPERADO };
+  if (chargeId.toLowerCase() !== chargeIdEsperado.toLowerCase()) {
+    return { ok: false, error: FORMATO_INESPERADO };
+  }
+  return { ok: true, chargeId, cashAmount };
+}
+
 export const RPC_UNEXPECTED_SHAPE_MESSAGE = FORMATO_INESPERADO;

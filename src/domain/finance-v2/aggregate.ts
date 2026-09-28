@@ -22,6 +22,14 @@ import {
   type FinanceReadContext,
   type Medida,
 } from "./types";
+import {
+  SEM_CATEGORIA,
+  agruparDespesasDeCaixa,
+  camposDaCategoriaEfetiva,
+  chaveCategoriaDespesa,
+  type GrupoDespesa,
+  type SaidaDeCaixa,
+} from "./expense-cash-category";
 
 // ─── Factos ──────────────────────────────────────────────────────────────────
 
@@ -53,6 +61,19 @@ export interface FactoCaixa {
   categoriaEstruturada?: string | null;
   /** `color_token` da categoria. A cor que a empresa escolheu manda. */
   categoriaEstruturadaCor?: string | null;
+  /**
+   * `id` da categoria estruturada efectiva. É a IDENTIDADE da fatia — a mesma
+   * que Pagamentos usa. Sem ele, cai-se no nome (ver `chaveCategoriaDespesa`).
+   */
+  categoriaEstruturadaId?: string | null;
+  /**
+   * Quem decidiu a categoria (`resolverCategoriaEfetiva`). Quando a
+   * autoridade foi o PAGAMENTO — e disse «nenhuma» — o texto legado do
+   * movimento não pode voltar a entrar pela porta das traseiras: dava
+   * «despesa» a um movimento cuja categoria é, por decisão, nenhuma.
+   * Ausente = factos antigos/de teste: vale a regra «estruturada, senão legada».
+   */
+  categoriaOrigem?: "pagamento" | "movimento" | "legada" | "nenhuma";
 }
 
 export interface FactoFolha {
@@ -428,6 +449,12 @@ export function calcularTopClientes(
 
 export interface FatiaCategoria {
   categoria: string;
+  /**
+   * A identidade canónica da fatia — `chaveCategoriaDespesa`, a mesma de
+   * Pagamentos. É por ela que se prova a paridade entre os dois ecrãs.
+   * `"__outros__"` para o agregado de cauda.
+   */
+  identidade: string;
   /** `null` quando a despesa não tem categoria — nunca inventada. */
   chave: string | null;
   valor: number;
@@ -495,69 +522,95 @@ export function calcularDespesasPorCategoria(
   // explicação são utilizáveis; sem explicação, são um erro à espera de ser
   // reportado.
   // ───────────────────────────────────────────────────────────────────────────
-  const noPeriodo = caixa.factos.filter(
-    (c) => c.tipo === "saida" && dentroDoPeriodo(c.date, ctx)
-      && (c.status === "confirmado" || c.status === "pendente"),
-  );
-  const saidas = noPeriodo;
-
-  const porConfirmar = noPeriodo.filter((c) => c.status === "pendente");
-  const pendentes = {
-    total: soma(porConfirmar.map((c) => c.amount)),
-    contagem: porConfirmar.length,
-  };
-
+  //
+  // 🔴 Estado, período e identidade vêm de `agruparDespesasDeCaixa` — o MESMO
+  //    agrupador do gráfico «Caixa» de Pagamentos. Esta função só decide o que
+  //    é de apresentação: rótulo, cor, corte em «Outros».
   // ───────────────────────────────────────────────────────────────────────────
   // 🔴 A categoria estruturada manda; a legada é o que resta
   //
-  // Uma despesa com `expense_category_id` conta pelo nome real («Combustível»)
-  // e **não** pela legada («fornecedor»). Somar as duas dimensões na mesma
-  // volta partiria o mesmo euro por duas fatias, e o total do donut deixava de
-  // bater com os Custos.
+  // Uma despesa com categoria estruturada conta por ela («Combustível») e
+  // **não** pela legada («fornecedor»). Somar as duas dimensões na mesma volta
+  // partiria o mesmo euro por duas fatias, e o total do donut deixava de bater
+  // com os Custos.
   //
   // O que não tem nenhuma das duas fica em «Sem categoria» — e fica lá. Nada
   // aqui olha para a descrição: «Galp» não vira Combustível sozinho, porque
   // adivinhar a partir de texto livre é como se erra em silêncio.
   // ───────────────────────────────────────────────────────────────────────────
-  const porCat = new Map<string | null, number>();
-  const rotulos = new Map<string, string>();
-  const cores = new Map<string, string>();
-  for (const s of saidas) {
-    const estruturada = s.categoriaEstruturada?.trim();
-    const legada = s.categoria?.trim();
-    const bruto = estruturada && estruturada !== "" ? estruturada : (legada && legada !== "" ? legada : null);
-    const k = bruto === null ? null : bruto.toLowerCase();
-    // Guarda-se o nome tal como foi escrito: «Materiais e produtos» não deve
-    // chegar ao ecrã em minúsculas por causa de uma chave de agrupamento.
-    if (k !== null && estruturada) {
-      rotulos.set(k, estruturada);
-      if (s.categoriaEstruturadaCor) cores.set(k, s.categoriaEstruturadaCor);
+  const saidas: SaidaDeCaixa[] = caixa.factos.map((c) => {
+    const base = { data: c.date, tipo: c.tipo, status: c.status, valorCentimos: Math.round(c.amount * 100) };
+    // Com a origem conhecida (o adaptador real), a identidade sai da MESMA
+    // função que o Fluxo de Caixa usa para o drilldown.
+    if (c.categoriaOrigem) {
+      return {
+        ...base,
+        ...camposDaCategoriaEfetiva({
+          origem: c.categoriaOrigem,
+          nome: c.categoriaOrigem === "legada" ? c.categoria : (c.categoriaEstruturada?.trim() || null),
+          id: c.categoriaEstruturadaId,
+        }),
+      };
     }
-    porCat.set(k, Math.round(((porCat.get(k) ?? 0) + s.amount) * 100) / 100);
+    // Factos sem origem (antigos/de teste): estruturada, senão legada.
+    const estruturada = c.categoriaEstruturada?.trim() || null;
+    const temEstruturada = !!estruturada || !!c.categoriaEstruturadaId;
+    return {
+      ...base,
+      categoriaId: c.categoriaEstruturadaId ?? null,
+      categoriaNome: estruturada,
+      categoriaLegada: temEstruturada ? null : c.categoria,
+    };
+  });
+  const grupos = agruparDespesasDeCaixa(saidas, { year: ctx.year, month: ctx.month });
+
+  // A cor guardada na categoria, pela identidade.
+  const cores = new Map<string, string>();
+  for (let i = 0; i < caixa.factos.length; i++) {
+    const cor = caixa.factos[i].categoriaEstruturadaCor;
+    const k = chaveCategoriaDespesa(saidas[i]);
+    if (cor && !cores.has(k)) cores.set(k, cor);
   }
 
-  const total = soma([...porCat.values()]);
-  const semCategoria = porCat.get(null) ?? 0;
+  const todos = [...grupos.values()];
+  const cents = (v: number) => Math.round(v) / 100;
+  const total = cents(todos.reduce((a, g) => a + g.valorCentimos, 0));
+  const semCategoria = cents(grupos.get(SEM_CATEGORIA)?.valorCentimos ?? 0);
+  const pendentes = {
+    total: cents(todos.reduce((a, g) => a + g.pendentesCentimos, 0)),
+    contagem: todos.reduce((a, g) => a + g.pendentesContagem, 0),
+  };
 
-  const ordenadas = [...porCat.entries()]
-    .filter(([k]) => k !== null)
-    .sort((a, z) => z[1] - a[1] || String(a[0]).localeCompare(String(z[0]), "pt"));
+  // A chave de APRESENTAÇÃO (cor) continua a ser o nome em minúsculas. O
+  // drilldown para o Fluxo de Caixa usa a `identidade`, nunca esta chave: pelo
+  // nome, «Fornecedor» e «fornecedor» voltariam a abrir a mesma lista.
+  const chaveVisivel = (g: GrupoDespesa) => (g.nome ?? "").toLowerCase();
+
+  const ordenadas = todos
+    .filter((g) => g.chave !== SEM_CATEGORIA && g.valorCentimos !== 0)
+    .sort((a, z) => z.valorCentimos - a.valorCentimos || chaveVisivel(a).localeCompare(chaveVisivel(z), "pt"));
 
   const principais = ordenadas.slice(0, topN);
-  const resto = soma(ordenadas.slice(topN).map(([, v]) => v));
+  const resto = cents(ordenadas.slice(topN).reduce((a, g) => a + g.valorCentimos, 0));
 
-  const fatias: FatiaCategoria[] = principais.map(([k, v]) => ({
-    categoria: rotulos.get(k as string) ?? rotularCategoria(k as string),
-    chave: k as string,
-    valor: v,
-    share: total > 0 ? Math.round((v / total) * 1000) / 1000 : 0,
-    cor: corDaCategoria(k as string, cores.get(k as string)),
-  }));
+  const fatias: FatiaCategoria[] = principais.map((g) => {
+    const k = chaveVisivel(g);
+    const valor = cents(g.valorCentimos);
+    return {
+      categoria: g.legada ? rotularCategoria(k) : (g.nome ?? rotularCategoria(k)),
+      identidade: g.chave,
+      chave: k,
+      valor,
+      share: total > 0 ? Math.round((valor / total) * 1000) / 1000 : 0,
+      cor: corDaCategoria(k, cores.get(g.chave)),
+    };
+  });
 
   // «Outros» só existe se houver mesmo mais categorias por baixo do corte.
   if (resto > 0) {
     fatias.push({
       categoria: "Outros",
+      identidade: "__outros__",
       chave: "__outros__",
       valor: resto,
       share: total > 0 ? Math.round((resto / total) * 1000) / 1000 : 0,
@@ -567,6 +620,7 @@ export function calcularDespesasPorCategoria(
   if (semCategoria > 0) {
     fatias.push({
       categoria: "Sem categoria",
+      identidade: SEM_CATEGORIA,
       chave: null,
       valor: semCategoria,
       share: total > 0 ? Math.round((semCategoria / total) * 1000) / 1000 : 0,

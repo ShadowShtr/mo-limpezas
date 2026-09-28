@@ -110,7 +110,8 @@ async function loadCashFacts(admin: AdminClient, ctx: FinanceReadContext): Promi
       .gte("date", ctx.periodStart)
       .lte("date", ctx.periodEnd);
 
-  let { data, error } = await consulta(`${COLUNAS}, expense_categories(name, color_token)`);
+  // `expense_category_id` também é da 071: vai só na consulta com a categoria.
+  let { data, error } = await consulta(`${COLUNAS}, expense_category_id, expense_categories(name, color_token)`);
   if (error && categoriaEstruturadaEmFalta(error)) {
     // Dito nos logs: sem isto, o donut agrupa tudo pelas categorias legadas e
     // ninguém sabe que a estruturada não chegou.
@@ -126,6 +127,7 @@ async function loadCashFacts(admin: AdminClient, ctx: FinanceReadContext): Promi
   type Linha = {
     date: string; type: string; status: string; amount: number | null; category: string | null;
     reference_type: string | null; reference_id: string | null;
+    expense_category_id?: string | null;
     expense_categories?: { name: string; color_token: string | null }
       | { name: string; color_token: string | null }[] | null;
   };
@@ -143,6 +145,7 @@ async function loadCashFacts(admin: AdminClient, ctx: FinanceReadContext): Promi
       categoriaLegada: r.category,
       categoriaEstruturada: cat?.name ?? null,
       categoriaEstruturadaCor: cat?.color_token ?? null,
+      categoriaEstruturadaId: cat?.name ? (r.expense_category_id ?? null) : null,
     };
   });
 
@@ -159,7 +162,7 @@ async function loadCashFacts(admin: AdminClient, ctx: FinanceReadContext): Promi
   if (idsPagamento.length > 0) {
     const { data: pgs, error: erroPg } = await admin
       .from("fixed_variable_payments")
-      .select("id, expense_categories(name, color_token)")
+      .select("id, expense_category_id, expense_categories(name, color_token)")
       .eq("company_id", ctx.companyId)
       .in("id", idsPagamento);
 
@@ -172,11 +175,16 @@ async function loadCashFacts(admin: AdminClient, ctx: FinanceReadContext): Promi
 
     for (const p of (pgs ?? []) as unknown as {
       id: string;
+      expense_category_id: string | null;
       expense_categories?: { name: string; color_token: string | null }
         | { name: string; color_token: string | null }[] | null;
     }[]) {
       const c = Array.isArray(p.expense_categories) ? p.expense_categories[0] : p.expense_categories;
-      categoriaPorPagamento.set(p.id, { nome: c?.name ?? null, cor: c?.color_token ?? null });
+      categoriaPorPagamento.set(p.id, {
+        nome: c?.name ?? null,
+        cor: c?.color_token ?? null,
+        id: c?.name ? p.expense_category_id : null,
+      });
     }
 
     const partidos = vinculosPartidos(cruas, new Set(categoriaPorPagamento.keys()));
@@ -201,6 +209,8 @@ async function loadCashFacts(admin: AdminClient, ctx: FinanceReadContext): Promi
         categoria: r.categoriaLegada,
         categoriaEstruturada: efetiva.nome,
         categoriaEstruturadaCor: efetiva.cor,
+        categoriaEstruturadaId: efetiva.id,
+        categoriaOrigem: efetiva.origem,
       };
     }),
   };

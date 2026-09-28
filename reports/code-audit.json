@@ -1,10 +1,10 @@
 {
   "inventorySource": "git ls-files",
   "summary": {
-    "repositoryFiles": 1010,
-    "textFiles": 997,
-    "sourceFiles": 715,
-    "textLines": 257109,
+    "repositoryFiles": 1025,
+    "textFiles": 1012,
+    "sourceFiles": 730,
+    "textLines": 260404,
     "typescriptDiagnostics": 0,
     "productionEntries": 76,
     "unreachableProductionModules": 40,
@@ -131,6 +131,7 @@
       "src/app/actions/invoices.ts",
       "src/app/actions/locations.ts",
       "src/app/actions/management-tasks.ts",
+      "src/app/actions/manual-charges.ts",
       "src/app/actions/notifications.ts",
       "src/app/actions/payments.ts",
       "src/app/actions/payroll.ts",

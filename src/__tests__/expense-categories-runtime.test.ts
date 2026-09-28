@@ -384,7 +384,9 @@ describe("🔴 o donut leva às despesas, e as despesas editam-se", () => {
 
   it("cada fatia leva às despesas dessa categoria", () => {
     expect(ler(DONUT)).toMatch(/hrefDe\?\.\(a\) \?\? null/);
-    expect(ler(PAINEL)).toMatch(/dashboard\/financeiro\/fluxo-caixa\?mes=.*categoria=/);
+    // Pela IDENTIDADE canónica, não pelo nome — o percurso completo, com as
+    // listas que cada link abre, está em `finance-drilldown-identidade.test.tsx`.
+    expect(ler(PAINEL)).toMatch(/dashboard\/financeiro\/fluxo-caixa\?mes=.*categoriaKey=\$\{encodeURIComponent\(f\.identidade\)\}/);
   });
 
   it("e o mês vai com o link — a categoria de Agosto abre Agosto", () => {
@@ -635,8 +637,9 @@ describe("🔴 o desempate, sozinho", () => {
 // ─── 12. O que o donut não mostra, e diz que não mostra ──────────────────────
 //
 // Achado real: registou-se uma despesa de Combustível e ela não apareceu no
-// gráfico. Não era das cores nem das categorias — o donut conta só movimentos
-// `confirmado`, e as despesas registadas em Contas nascem `pendente`.
+// gráfico. Não era das cores nem das categorias — o donut contava só movimentos
+// `confirmado`, e as despesas registadas em Contas nascem `pendente`. Desde a
+// decisão do dono conta confirmadas E pendentes; é isso que estes testes fixam.
 
 describe("🔴 despesas por confirmar não desaparecem em silêncio", () => {
   const desp = (amount: number, status: string, cat: string | null = "Combustível"): FactoCaixa => ({

@@ -36,9 +36,14 @@ procura de `.from("<tabela>")` seguido de escrita, e falha se um deles reaparece
 | `src/app/actions/daily-billing.ts` | `set_service_payment_atomic` | 097 |
 | `src/app/actions/financial-periods.ts` | `close_financial_period_atomic`, `reopen_financial_period_atomic` | 090 |
 | `src/app/actions/payroll.ts` | `upsert_payroll_records_atomic`, `adjust_payroll_record_atomic`, `approve_payroll_records_atomic`, `mark_payroll_paid_atomic` | 096 |
+| `src/app/actions/manual-charges.ts` | `create_manual_charge_atomic`, `update_manual_charge_atomic`, `set_manual_charge_payment_atomic`, `void_manual_charge_atomic` | 091 |
 
-Cobranças avulsas (091) estão em `manual-charges`, já encaminhadas antes desta
-frente.
+Cobranças avulsas (091): as RPCs estavam em produção desde a 091, mas o runtime
+só chegou ao `master` com `feat/cobrancas-avulsas-current-master` (a PR #127,
+que o trazia, ficou 146 commits atrás e foi usada só como fonte). A frase que
+aqui estava — «já encaminhadas antes desta frente» — descrevia essa PR, não o
+`master`. `manual_charges` não tem `Insert`/`Update` em `src/types/database.ts`:
+um `.insert()` directo não compila.
 
 `src/app/actions/clientes.ts` deixou de ter caminho de destruição: o
 arquivamento é `archive-only`, e a tabela de clientes não expõe `deleteCliente`.

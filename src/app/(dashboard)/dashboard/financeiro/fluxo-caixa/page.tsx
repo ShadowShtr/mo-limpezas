@@ -12,7 +12,7 @@ export const metadata = { title: "Fluxo de Caixa — Escala" };
 export default async function FluxoCaixaPage({
   searchParams,
 }: {
-  searchParams: Promise<{ mes?: string; categoria?: string }>;
+  searchParams: Promise<{ mes?: string; categoria?: string; categoriaKey?: string }>;
 }) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -51,8 +51,10 @@ export default async function FluxoCaixaPage({
         year={period.year}
         month={period.month}
         expenseCatalog={categoriesRes.ok ? categoriesRes.catalog : catalogoIndisponivel}
-        // Chega assim do donut do Resumo — o mesmo âmbito, a mesma lista.
-        categoriaInicial={params.categoria ?? null}
+        // Chega assim do donut do Resumo: a IDENTIDADE canónica da fatia,
+        // não o nome. `categoria` (nome) fica só para links antigos.
+        categoriaKeyInicial={params.categoriaKey ?? null}
+        categoriaInicial={params.categoriaKey ? null : (params.categoria ?? null)}
       />
     </FinanceShell>
   );
