@@ -1962,7 +1962,7 @@
         "supabase": 2,
         "sqlWrite": 1,
         "fallbackZero": 2,
-        "fallbackArray": 30
+        "fallbackArray": 34
       },
       "action": "nenhuma",
       "reason": "configuração/infra",
