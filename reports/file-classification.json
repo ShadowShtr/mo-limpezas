@@ -1,12 +1,12 @@
 {
   "generatedBy": "scripts/audit-file-inventory.mjs",
-  "totalFiles": 1014,
+  "totalFiles": 1015,
   "byStatus": {
-    "MANTER": 990,
+    "MANTER": 991,
     "STANDBY": 24
   },
   "byCategory": {
-    "test": 251,
+    "test": 252,
     "route-ui": 158,
     "migration": 146,
     "lib": 81,
@@ -29,7 +29,7 @@
     "supabase-other": 2
   },
   "byConfidence": {
-    "alta": 991,
+    "alta": 992,
     "média": 17,
     "baixa": 6
   },
@@ -401,7 +401,7 @@
       "sideEffects": [],
       "risks": [],
       "signals": {
-        "sqlWrite": 4
+        "sqlWrite": 2
       },
       "action": "nenhuma",
       "reason": "documentação",
@@ -3438,7 +3438,7 @@
       "category": "script",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 11,
+      "consumers": 12,
       "consumerSample": [
         "scripts/lib/migration-reconciliation.mjs",
         "scripts/lib/migration-runner-core.mjs",
@@ -3541,7 +3541,7 @@
       "category": "script",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 12,
+      "consumers": 13,
       "consumerSample": [
         "scripts/lib/migration-drift-guard.mjs",
         "scripts/run-migrations.mjs",
@@ -3552,9 +3552,12 @@
         "docs"
       ],
       "sideEffects": [],
-      "risks": [],
+      "risks": [
+        "todo(1)"
+      ],
       "signals": {
-        "sqlWrite": 11
+        "sqlWrite": 9,
+        "todo": 1
       },
       "action": "nenhuma",
       "reason": "ferramenta offline, sem acesso à base",
@@ -3605,9 +3608,10 @@
       "category": "script",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 2,
+      "consumers": 3,
       "consumerSample": [
         "scripts/audit-migration-transaction-control.mjs",
+        "scripts/lib/migration-runner-core.mjs",
         "src/__tests__/migration-transaction-control.test.ts"
       ],
       "autoLoaded": false,
@@ -7704,7 +7708,7 @@
       "category": "test",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 25,
+      "consumers": 26,
       "consumerSample": [
         "scripts/audit-identity-drift-manifest.ts",
         "src/__tests__/bank-reconciliation-period-atomic.pg.test.ts",
@@ -8145,6 +8149,30 @@
       }
     },
     {
+      "path": "src/__tests__/migration-075-runner-atomicity.pg.test.ts",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "sqlWrite": 2
+      },
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
       "path": "src/__tests__/migration-082-order-and-atomicity.test.ts",
       "category": "test",
       "status": "MANTER",
@@ -8356,7 +8384,7 @@
       "sideEffects": [],
       "risks": [],
       "signals": {
-        "sqlWrite": 26
+        "sqlWrite": 28
       },
       "action": "nenhuma",
       "reason": "suite de testes — corre por convenção do vitest",

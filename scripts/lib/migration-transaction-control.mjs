@@ -148,3 +148,26 @@ export function analyzeMigrationTransactionControl(sql) {
     classification: controls.length === 0 ? "runner-owned" : wrapper ? "legacy-outer-wrapper" : "unsupported-control",
   };
 }
+
+/**
+ * Prepara uma cópia executável sem alterar o ficheiro nem o seu checksum.
+ * Apenas o wrapper histórico exterior é removido. Qualquer outro comando de
+ * transação de topo é recusado antes de o runner escrever na base.
+ */
+export function prepareMigrationSql(sql) {
+  const analysis = analyzeMigrationTransactionControl(sql);
+  if (analysis.classification === "unsupported-control") {
+    const detail = analysis.controls
+      .map(({ command, line }) => `${command} (linha ${line})`)
+      .join(", ");
+    throw new Error(`MIGRATION_TRANSACTION_CONTROL_UNSUPPORTED: ${detail || "controlo desconhecido"}`);
+  }
+  if (analysis.classification === "runner-owned") {
+    return { ...analysis, executableSql: sql };
+  }
+  const statements = splitTopLevelSqlStatements(sql);
+  return {
+    ...analysis,
+    executableSql: sql.slice(statements[0].end, statements.at(-1).start),
+  };
+}

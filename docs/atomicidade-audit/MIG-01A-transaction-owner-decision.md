@@ -1,6 +1,6 @@
 # MIG-01A — dono da transação do runner
 
-Estado: decisão pronta para implementação. Esta etapa não muda o comportamento do runner.
+Estado: implementada localmente pela MIG-01B. Nenhuma migration histórica foi editada.
 
 ## Decisão
 
@@ -19,12 +19,12 @@ O inventário `reports/migration-transaction-control.json` cobre todos os fichei
 Regenerar com `npm run audit:migration-transactions -- --output reports/migration-transaction-control.json`.
 
 - `runner-owned`: nenhum comando transacional de topo; executar sem transformação.
-- `legacy-outer-wrapper`: exatamente um `BEGIN` inicial e um `COMMIT` final; MIG-01B deve remover somente esses dois statements da cópia em memória, com o analisador léxico testado, antes de enviar ao PostgreSQL.
+- `legacy-outer-wrapper`: exatamente um `BEGIN` inicial e um `COMMIT` final; o runner remove somente esses dois statements da cópia em memória, com o analisador léxico testado, antes de enviar ao PostgreSQL.
 - `unsupported-control`: qualquer outro `BEGIN`, `START TRANSACTION`, `COMMIT`, `ROLLBACK`, `SAVEPOINT` ou `RELEASE` de topo; recusar antes da primeira escrita.
 
 Não usar regex: corpos PL/pgSQL, strings e comentários contêm palavras iguais. O analisador distingue delimitadores SQL e preserva o conteúdo entre eles.
 
-## Preflight obrigatório de MIG-01B
+## Preflight implementado
 
 Antes de `ensureTracking`, backfill ou qualquer migration:
 
@@ -45,14 +45,16 @@ Antes de `ensureTracking`, backfill ou qualquer migration:
 - Schema materializado sem ledger: continuar bloqueado pelo mecanismo de drift/baseline; não inserir proveniência automaticamente.
 - Base nova ou migration histórica pendente com wrapper exterior: usar a cópia normalizada em memória, mantendo o checksum do original.
 
-## Provas exigidas em MIG-01B
+## Provas executadas
 
-1. unidade: strings, comentários, identificadores e dollar quotes não geram falsos positivos;
-2. unidade: wrappers 071, 072, 073, 075 e 076 são reconhecidos sem editar esses ficheiros;
-3. PostgreSQL descartável: forçar falha exclusiva do `INSERT public._migrations` após executar a 075; schema e ledger permanecem no estado anterior;
-4. PostgreSQL descartável: caminho feliz da 075 grava schema e checksum juntos;
-5. preflight: controlo transacional intermédio recusa sem `CREATE`, `ALTER`, `UPDATE`, `BEGIN` ou ledger;
-6. resultado incerto: cliente simulado perde a ligação no `COMMIT` e o runner não anuncia rollback confirmado.
+1. strings, comentários, identificadores e dollar quotes não geram falsos positivos;
+2. wrappers 071, 072, 073, 075 e 076 são reconhecidos sem editar esses ficheiros;
+3. PostgreSQL 17.11 descartável: falha exclusiva do `INSERT public._migrations` na 075 preserva schema e ledger anteriores;
+4. caminho feliz da 075 grava schema e checksum original juntos;
+5. retry da 075 já aplicada consulta o ledger e não duplica;
+6. controlo transacional intermédio é recusado antes de `ensureTracking`, backfill ou `BEGIN`;
+7. cliente simulado que falha no `COMMIT` recebe `transactionState: UNKNOWN`, sem anúncio de rollback confirmado;
+8. migration moderna 088 continua atómica no PostgreSQL real.
 
 Usar `src/__tests__/helpers/pg-container.ts`, PostgreSQL fixo e contentor descartável. Nunca carregar `.env` nem ligar à base da empresa.
 

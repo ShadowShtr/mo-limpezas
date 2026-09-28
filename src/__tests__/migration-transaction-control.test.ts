@@ -1,7 +1,10 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { analyzeMigrationTransactionControl } from "../../scripts/lib/migration-transaction-control.mjs";
+import {
+  analyzeMigrationTransactionControl,
+  prepareMigrationSql,
+} from "../../scripts/lib/migration-transaction-control.mjs";
 
 describe("inventário de controlo transacional das migrations", () => {
   it("ignora BEGIN/COMMIT em PL/pgSQL, comentários e strings", () => {
@@ -30,6 +33,17 @@ describe("inventário de controlo transacional das migrations", () => {
     });
   });
 
+  it("remove apenas o wrapper exterior da cópia executável", () => {
+    const original = "-- histórico\nBEGIN;\nDO $fn$ BEGIN NULL; END $fn$;\nCOMMIT;\n-- fim\n";
+    const prepared = prepareMigrationSql(original);
+    expect(prepared.classification).toBe("legacy-outer-wrapper");
+    expect(prepared.executableSql).toContain("DO $fn$ BEGIN NULL; END $fn$;");
+    expect(prepared.executableSql).not.toMatch(/^\s*BEGIN\s*;/);
+    expect(prepared.executableSql).not.toMatch(/COMMIT\s*;\s*$/);
+    expect(original).toContain("BEGIN;");
+    expect(original).toContain("COMMIT;");
+  });
+
   it("recusa controlos intermédios ou destrutivos", () => {
     expect(analyzeMigrationTransactionControl("SELECT 1; COMMIT; SELECT 2;").classification)
       .toBe("unsupported-control");
@@ -46,6 +60,11 @@ describe("inventário de controlo transacional das migrations", () => {
     "/* comentário sem fim",
   ])("falha fechado quando o SQL não pode ser classificado: %s", (sql) => {
     expect(() => analyzeMigrationTransactionControl(sql)).toThrow(/termina dentro/);
+  });
+
+  it("recusa controlo intermédio antes de devolver SQL executável", () => {
+    expect(() => prepareMigrationSql("SELECT 1; COMMIT; SELECT 2;"))
+      .toThrow(/MIGRATION_TRANSACTION_CONTROL_UNSUPPORTED.*COMMIT/);
   });
 
   it.each([
