@@ -40,6 +40,10 @@ const servico = (status: string) => ({
   canSeeFinancials: true,
 });
 
+/** O elemento mais interior com exactamente este texto (não o contentor). */
+const folha = (raiz: HTMLElement, texto: string) =>
+  [...raiz.querySelectorAll<HTMLElement>("span")].filter((e) => e.textContent === texto && e.children.length === 0)[0]!;
+
 async function mostrar(status: string) {
   await act(async () => {
     root.render(
@@ -58,6 +62,23 @@ describe("calendário — cartões com fundo branco", () => {
       expect(cartao.style.backgroundColor).toBe("rgb(255, 255, 255)");
     });
   }
+
+  it("🔴 texto como nos cartões de Prédios: cores do design system, sem transparência", async () => {
+    const cartao = await mostrar("agendado");
+    const nome = folha(cartao, "Cliente agendado");
+    // jsdom descarta `var(...)` em `style.color`; o atributo guarda-o tal e qual.
+    expect(nome.getAttribute("style")).toContain("color: var(--color-text-main)");
+    for (const el of cartao.querySelectorAll<HTMLElement>("span")) expect(el.style.opacity).toBe("");
+    expect(cartao.className).not.toContain("brightness");
+  });
+
+  it("🔴 equipa em etiqueta com a cor da equipa e texto branco, como nos Prédios", async () => {
+    const cartao = await mostrar("agendado");
+    const etiqueta = folha(cartao, "Equipa A");
+    expect(etiqueta.style.backgroundColor).toBe("rgb(14, 159, 110)");
+    expect(etiqueta.className).toContain("text-white");
+    expect(cartao.getAttribute("style")).toContain("var(--color-border)");
+  });
 
   it("agendado não leva ponto de estado", async () => {
     await mostrar("agendado");
