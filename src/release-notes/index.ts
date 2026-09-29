@@ -66,7 +66,7 @@ import { nota as cobrancasAvulsas } from "./2026-09-28-cobrancas-avulsas";
 import { nota as gastosPorCategoriaIguais } from "./2026-09-28-gastos-por-categoria-iguais";
 import { nota as calendarioTodosOsCartoesBrancos } from "./2026-09-29-calendario-todos-os-cartoes-brancos";
 import { nota as calendarioCartoesComoOsPredios } from "./2026-09-29-calendario-cartoes-como-os-predios";
-import { nota as calendarioFundoCinzaClaro } from "./2026-09-29-calendario-fundo-cinza-claro";
+import { nota as calendarioContornoCorDaEquipa } from "./2026-09-29-calendario-contorno-cor-da-equipa";
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   financeiroEAnexos,
@@ -120,7 +120,7 @@ export const RELEASE_NOTES: ReleaseNote[] = [
   gastosPorCategoriaIguais,
   calendarioTodosOsCartoesBrancos,
   calendarioCartoesComoOsPredios,
-  calendarioFundoCinzaClaro,
+  calendarioContornoCorDaEquipa,
 ];
 
 /** As chaves têm de ser únicas — duas notas com a mesma key partilhariam a leitura. */

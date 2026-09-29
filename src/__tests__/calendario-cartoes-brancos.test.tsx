@@ -79,7 +79,8 @@ describe("calendário — cartões com fundo branco", () => {
     const etiqueta = folha(cartao, "Equipa A");
     expect(etiqueta.style.backgroundColor).toBe("rgb(14, 159, 110)");
     expect(etiqueta.className).toContain("text-white");
-    expect(cartao.getAttribute("style")).toContain("var(--color-border)");
+    // Contorno à volta do cartão na cor da equipa.
+    expect(cartao.style.border).toBe("1.5px solid rgb(14, 159, 110)");
   });
 
   it("agendado não leva ponto de estado", async () => {
@@ -103,21 +104,21 @@ describe("calendário — cartões com fundo branco", () => {
   }
 });
 
-// A grelha por trás dos cartões é cinzento muito claro (#F8FAFC) e os cartões
-// são brancos por cima — pedido do dono, 2026-09-29: branco em tudo tirava a
-// diferença entre cartão e fundo. As colunas das equipas não tinham fundo e
-// mostravam o cinzento da página; a de Prédios tinha um cinzento translúcido. Guarda estática — o render do calendário inteiro exige
+// A grelha por trás dos cartões é branca (o dono recusou o cinzento claro); o
+// que distingue o cartão do fundo é o contorno na cor da equipa. As colunas das
+// equipas não tinham fundo e mostravam o cinzento da página; a de Prédios
+// tinha um cinzento translúcido próprio. Guarda estática — o render do calendário inteiro exige
 // dados e contexto que este teste não precisa de montar.
-describe("calendário — fundo da grelha cinzento claro", () => {
+describe("calendário — fundo da grelha branco", () => {
   const ler = (f: string) => readFileSync(join(process.cwd(), "src/app/(dashboard)/dashboard/calendario/_components", f), "utf8");
-  it("contentor da grelha e colunas das equipas com o cinzento claro", () => {
+  it("contentor da grelha e colunas das equipas com bg-white", () => {
     const v = ler("calendar-view.tsx");
-    expect(v).toMatch(/className="flex-1 overflow-auto calendar-scroll bg-\[#F8FAFC\]"/);
-    expect(v).toMatch(/className="flex-1 relative border-l border-\[var\(--color-border\)\] cursor-crosshair bg-\[#F8FAFC\]"/);
+    expect(v).toMatch(/className="flex-1 overflow-auto calendar-scroll bg-white"/);
+    expect(v).toMatch(/className="flex-1 relative border-l border-\[var\(--color-border\)\] cursor-crosshair bg-white"/);
   });
   it("coluna de Prédios sem o cinzento translúcido", () => {
     const b = ler("buildings-column.tsx");
     expect(b).not.toContain("bg-[var(--color-background)]/40");
-    expect(b).toContain("bg-[#F8FAFC]");
+    expect(b).not.toContain("bg-[#F8FAFC]");
   });
 });
