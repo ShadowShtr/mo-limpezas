@@ -347,7 +347,7 @@ export function BuildingsColumn({ weekday, cards, teams, onChanged, minWidth }: 
   }
 
   return (
-    <div className="flex-1 flex flex-col h-full border-l border-[var(--color-border)] bg-[var(--color-background)]/40" style={{ minWidth: `${minWidth}px` }}>
+    <div className="flex-1 flex flex-col h-full border-l border-[var(--color-border)] bg-white" style={{ minWidth: `${minWidth}px` }}>
       <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden p-2">
         {localCards.length === 0 && (
           <div className="flex flex-col items-center justify-center gap-2 py-8 text-center">

@@ -7,6 +7,8 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { DndContext } from "@dnd-kit/core";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { ServiceBlock } from "@/app/(dashboard)/dashboard/calendario/_components/service-block";
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -99,4 +101,21 @@ describe("calendário — cartões com fundo branco", () => {
       expect(ponto!.getAttribute("title")).toBe(rotulo);
     });
   }
+});
+
+// A grelha por trás dos cartões também é branca: as colunas das equipas não
+// tinham fundo e mostravam o cinzento da página; a de Prédios tinha um cinzento
+// translúcido próprio. Guarda estática — o render do calendário inteiro exige
+// dados e contexto que este teste não precisa de montar.
+describe("calendário — fundo da grelha branco", () => {
+  const ler = (f: string) => readFileSync(join(process.cwd(), "src/app/(dashboard)/dashboard/calendario/_components", f), "utf8");
+  it("contentor da grelha e colunas das equipas com bg-white", () => {
+    const v = ler("calendar-view.tsx");
+    expect(v).toMatch(/className="flex-1 overflow-auto calendar-scroll bg-white"/);
+    expect(v).toMatch(/className="flex-1 relative border-l border-\[var\(--color-border\)\] cursor-crosshair bg-white"/);
+  });
+  it("coluna de Prédios sem o cinzento translúcido", () => {
+    const b = ler("buildings-column.tsx");
+    expect(b).not.toContain("bg-[var(--color-background)]/40");
+  });
 });
