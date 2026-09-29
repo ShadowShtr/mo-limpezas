@@ -61,15 +61,18 @@ function extractCity(address: string): string {
 //
 //    Usar o mesmo valor nos dois sítios foi o que amarrou uma coisa à outra:
 //    pôr o cartão a branco arrastava a pastilha para branco-sobre-branco e
-//    fazia-a desaparecer. Os estados que continuam com cor no cartão mantêm-na
-//    de propósito — o âmbar diz «em curso» e o vermelho diz «cancelado» de
-//    relance, e isso é informação, não decoração.
-const STATUS_BG: Record<string, { bg: string; cardBg: string; text: string; fallbackBorder: string }> = {
-  agendado:  { bg: "#F0FDF4", cardBg: "#FFFFFF", text: "#15803D", fallbackBorder: "#16A34A" },
-  em_curso:  { bg: "#FFFBEB", cardBg: "#FFFBEB", text: "#92400E", fallbackBorder: "#F59E0B" },
-  concluido: { bg: "#F8FAFC", cardBg: "#F8FAFC", text: "#475569", fallbackBorder: "#94A3B8" },
-  cancelado: { bg: "#FEF2F2", cardBg: "#FEF2F2", text: "#B91C1C", fallbackBorder: "#DC2626" },
-  falta:     { bg: "#FEF2F2", cardBg: "#FEF2F2", text: "#B91C1C", fallbackBorder: "#DC2626" },
+//    fazia-a desaparecer.
+//
+//    Todos os cartões têm agora fundo branco (pedido do dono, 2026-09-29). O
+//    estado não se perde: em curso, concluído, cancelado e falta levam um
+//    ponto de cor (`dot`) ao lado do nome do cliente — o âmbar continua a
+//    dizer «em curso» e o vermelho «cancelado» de relance.
+const STATUS_BG: Record<string, { bg: string; cardBg: string; text: string; fallbackBorder: string; dot: string | null }> = {
+  agendado:  { bg: "#F0FDF4", cardBg: "#FFFFFF", text: "#15803D", fallbackBorder: "#16A34A", dot: null },
+  em_curso:  { bg: "#FFFBEB", cardBg: "#FFFFFF", text: "#92400E", fallbackBorder: "#F59E0B", dot: "#F59E0B" },
+  concluido: { bg: "#F8FAFC", cardBg: "#FFFFFF", text: "#475569", fallbackBorder: "#94A3B8", dot: "#94A3B8" },
+  cancelado: { bg: "#FEF2F2", cardBg: "#FFFFFF", text: "#B91C1C", fallbackBorder: "#DC2626", dot: "#DC2626" },
+  falta:     { bg: "#FEF2F2", cardBg: "#FFFFFF", text: "#B91C1C", fallbackBorder: "#DC2626", dot: "#DC2626" },
 };
 
 // Cor de texto fixa dos cards do calendário (todos os status) — verde bem
@@ -350,6 +353,15 @@ export function ServiceBlock({ service, slotHeight, startHour, teamId, onClick, 
           )}
           {/* 1.º Nome do cliente — sempre visível; selo de pagamento só se 50%/100% */}
           <span className="flex items-center gap-1 pr-4 min-w-0">
+            {s.dot && (
+              <span
+                className="w-2 h-2 rounded-full shrink-0"
+                style={{ backgroundColor: s.dot }}
+                title={STATUS_LABEL[service.status] ?? service.status}
+                aria-label={STATUS_LABEL[service.status] ?? service.status}
+                data-status-dot={service.status}
+              />
+            )}
             {PAYMENT_BADGE[service.payment_status ?? ""] && (
               <span
                 className="text-[8px] font-bold leading-none px-1 py-[1px] rounded shrink-0"
