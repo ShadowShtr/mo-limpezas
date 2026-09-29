@@ -1,19 +1,19 @@
 {
   "generatedBy": "scripts/audit-file-inventory.mjs",
-  "totalFiles": 1035,
+  "totalFiles": 1037,
   "byStatus": {
-    "MANTER": 1011,
+    "MANTER": 1013,
     "STANDBY": 24
   },
   "byCategory": {
     "test": 258,
     "route-ui": 162,
-    "migration": 148,
+    "migration": 149,
     "lib": 81,
     "script": 65,
     "domain": 58,
     "src-other": 55,
-    "doc": 52,
+    "doc": 53,
     "server-action": 50,
     "component": 34,
     "api-route": 17,
@@ -29,7 +29,7 @@
     "supabase-other": 2
   },
   "byConfidence": {
-    "alta": 1012,
+    "alta": 1014,
     "média": 17,
     "baixa": 6
   },
@@ -384,6 +384,24 @@
       "risks": [],
       "signals": {
         "sqlWrite": 8
+      },
+      "action": "nenhuma",
+      "reason": "documentação",
+      "manualDecision": false
+    },
+    {
+      "path": "docs/atomicidade-audit/LOCK-01A-global-lock-order.md",
+      "category": "doc",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "sqlWrite": 4
       },
       "action": "nenhuma",
       "reason": "documentação",
@@ -2031,7 +2049,7 @@
       ],
       "sideEffects": [
         "supabase",
-        "revalidatePath(44)"
+        "revalidatePath(45)"
       ],
       "risks": [
         "debugger"
@@ -2040,7 +2058,7 @@
         "supabase": 1,
         "sqlWrite": 28,
         "debugger": 6,
-        "revalidatePath": 44
+        "revalidatePath": 45
       },
       "action": "nenhuma",
       "reason": "configuração/infra",
@@ -9582,7 +9600,7 @@
       "sideEffects": [],
       "risks": [],
       "signals": {
-        "sqlWrite": 32
+        "sqlWrite": 42
       },
       "action": "nenhuma",
       "reason": "suite de testes — corre por convenção do vitest",
@@ -26985,6 +27003,29 @@
       "signals": {
         "serviceRole": 6,
         "sqlWrite": 18
+      },
+      "action": "nenhuma",
+      "reason": "migration versionada — histórico do schema, nunca se apaga",
+      "manualDecision": false
+    },
+    {
+      "path": "supabase/migrations/108_financial_global_lock_order.sql",
+      "category": "migration",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [
+        "docs"
+      ],
+      "sideEffects": [],
+      "risks": [
+        "service-role"
+      ],
+      "signals": {
+        "serviceRole": 5,
+        "sqlWrite": 27
       },
       "action": "nenhuma",
       "reason": "migration versionada — histórico do schema, nunca se apaga",

@@ -2,17 +2,16 @@
 
 ## Decisão
 
-Todos os escritores financeiros devem adquirir recursos nesta ordem:
+Escritores que alteram linhas existentes devem adquirir recursos nesta ordem:
 
-1. ler, sem bloqueio, uma fotografia dos IDs e de **todos** os períodos potencialmente afetados;
-2. adquirir todos os advisory locks de período, únicos e ordenados por `AAAAMM`;
-3. adquirir locks de linha na ordem de tabelas abaixo e por UUID crescente dentro de cada tabela;
-4. reler e validar que IDs, datas, estado e conjunto de filhos continuam iguais à fotografia;
-5. se a fotografia mudou, abortar com SQLSTATE `40001`; nunca acrescentar outro período depois do primeiro lock de linha;
-6. confirmar que todos os períodos estão abertos;
-7. escrever e auditar na mesma transação.
+1. validar argumentos que não dependem de estado mutável;
+2. adquirir locks de linha na ordem de tabelas abaixo e por UUID crescente dentro de cada tabela;
+3. descobrir nessas linhas estabilizadas **todos** os períodos afetados;
+4. adquirir os advisory locks de período, únicos e ordenados por `AAAAMM`;
+5. confirmar que todos os períodos estão abertos;
+6. escrever e auditar na mesma transação.
 
-Ordem de tabelas depois dos períodos:
+Ordem de tabelas antes dos períodos:
 
 1. `bank_statement_imports`;
 2. `bank_transactions`;
@@ -21,7 +20,7 @@ Ordem de tabelas depois dos períodos:
 5. `cash_flow_entries`;
 6. linhas dependentes/proveniência e auditoria.
 
-O lock de período vem primeiro porque é o único recurso comum a criações e `upsert`: uma linha ainda inexistente não admite `FOR UPDATE`. A fotografia e a revalidação resolvem o motivo pelo qual a migration 090 escolheu linha primeiro: a data pode mudar entre a leitura e o lock. Se mudar, a operação repete desde o início com o conjunto correto.
+Criações sem linha preexistente são a exceção explícita: o período conhecido pelos parâmetros vem primeiro e a constraint única arbitra inserções concorrentes. Um `upsert` bloqueia primeiro, por UUID, as linhas que já existem; se nenhuma existir, bloqueia o período antes do `INSERT`. Isso mantém o contrato original da migration 090 e evita redefinir writers que já o cumprem.
 
 ## Contradição observada no HEAD 113caa2
 
@@ -40,7 +39,7 @@ A migration 090 declara `linha → período → escrita`. As migrations efetivas
 | Pagamento de serviço | serviço; caixa; período | linha primeiro |
 | Folha efetiva (096/100) | período; folha; caixa | período primeiro |
 
-Assim, nenhuma escolha que altere apenas 095 ou 096 fecha o sistema. As funções que partilham linha de caixa e os caminhos de cascata precisam mudar no mesmo protocolo.
+O menor conjunto seguro é alinhar as quatro funções efetivas da folha ao contrato da 090 e fazer a exclusão da importação bloquear as filhas antes do período. Os demais writers de linhas existentes já seguem linha → período.
 
 ## Escritores e cobertura
 
@@ -49,30 +48,29 @@ RPCs versionadas: 090–100 cobrem fecho, caixa manual, cobranças manuais, paga
 Escritores runtime ainda fora do protocolo:
 
 - `src/lib/bank-import/reconcile-db.ts`: cria e atualiza `bank_statement_imports`, insere `bank_transactions`, cria sugestões em `bank_reconciliation_matches` e altera o estado das transações em várias viagens;
-- a mesma função permite inserção de filha concorrente com `delete_bank_import_atomic`; a LOCK-01B deve mover a confirmação do import para uma RPC transacional que bloqueie períodos antes do pai e das filhas;
-- `generateSuggestions`/`recalcSuggestions` escreve matches e estado bancário diretamente; deve entrar numa RPC ou ser explicitamente serializado pelo mesmo contrato;
+- `generateSuggestions`/`recalcSuggestions` também escreve matches e estado bancário diretamente;
 - `src/lib/payments-month-materialization.ts` contém insert direto, mas está em quarentena e sem consumidor, protegido por teste. Não deve ser reativado;
 - atualizações de anexos em `fixed_variable_payments` são metadata e não mudam período/valor/estado. Continuam fora do protocolo económico e apenas podem esperar pela linha, sem adquirir período.
 
-O guard `fin-period-writer-guard.test.ts` procura `.from("tabela").write()` na mesma linha. As cadeias multilinha da importação não são detectadas. A LOCK-01B deve corrigir o detector e inventariar exceções por operação, não apenas por ficheiro.
+O guard `fin-period-writer-guard.test.ts` procura `.from("tabela").write()` na mesma linha. As cadeias multilinha da importação não são detectadas. Isso fica inventariado para FIN-04A/IMP-01B: não participa dos dois ciclos corrigidos aqui porque essas escritas diretas não adquirem advisory locks.
 
 ## Casos especiais obrigatórios
 
 ### Linhas inexistentes
 
-Criação e `upsert` bloqueiam primeiro os períodos conhecidos pelos parâmetros. A unicidade arbitra a linha concorrente. Depois do conflito, a função relê o estado e aplica as mesmas regras; não tenta bloquear uma linha inexistente antes do período.
+Criação bloqueia primeiro os períodos conhecidos pelos parâmetros. `Upsert` bloqueia por UUID as linhas existentes e depois o período; quando a linha não existe, o período e a unicidade arbitram a criação.
 
 ### Mudança de período
 
-A fotografia inclui origem e destino. Depois dos locks de período, a linha é bloqueada e a data original é comparada. Divergência gera `40001`. É proibido descobrir e adquirir um terceiro mês nessa fase.
+A linha é bloqueada antes de ler a origem. Origem e destino formam o conjunto completo, adquirido em ordem canónica. Nenhum período é descoberto depois disso.
 
 ### Importação e cascata
 
-Confirmação: períodos do lote completos → importação pai → transações por UUID → matches. Exclusão: fotografia das datas/filhas → períodos → pai `FOR UPDATE` → filhas por UUID → matches por UUID → revalidação → delete. A inserção de filha deve participar da RPC do import e bloquear o pai depois dos períodos; sem isso, o conjunto de filhas não é fechável.
+Exclusão: importação pai → transações filhas por UUID → períodos das filhas → delete. O lock do pai impede novas filhas pela FK, e o lock das transações impede que ignore/rejeite/confirme atravesse a cascata. Matches não precisam de um lock preliminar separado: qualquer função que os altera bloqueia primeiro a transação bancária.
 
 ### Fecho concorrente
 
-Fecho e writers disputam primeiro o mesmo período. Se o fecho vencer, o writer valida `closed` e recusa. Se o writer vencer, o fecho só calcula bloqueadores após o commit. O fecho não precisa de `FOR UPDATE` nas tabelas económicas.
+O writer estabiliza linhas e depois disputa o período; o fecho disputa apenas o período e faz leituras simples. Se o fecho vencer, o writer valida `closed` e recusa. Se o writer vencer, o fecho só calcula bloqueadores após o commit. Como o fecho nunca espera por linha, não fecha ciclo.
 
 ### Lotes
 
@@ -96,12 +94,11 @@ Os testes devem usar duas conexões PostgreSQL reais, barreiras por `pg_stat_act
 ## Implementação delimitada para LOCK-01B
 
 1. criar `108_financial_global_lock_order.sql`;
-2. corrigir o comentário/contrato da 090 por `COMMENT ON FUNCTION` e redefinir somente helpers necessários, sem editar migration histórica;
-3. redefinir em conjunto as funções efetivas que misturam linha e período: caixa, cobranças, pagamentos, faturas, conciliação, serviço e folha;
-4. criar RPC atómica de confirmação do import e RPC/lote de sugestões, preservando respostas do runtime;
-5. manter assinaturas existentes; funções novas entram antes da alteração do runtime;
-6. adicionar regressão cruzada PostgreSQL e fortalecer o inventário de writers multilinha;
-7. executar diff check, typecheck, lint estrito, testes, ensaios aplicáveis e build.
+2. redefinir `adjust`, `upsert`, `approve` e `mark paid` efetivos da folha;
+3. redefinir `delete_bank_import_atomic` para bloquear filhas por UUID antes dos períodos;
+4. manter todas as assinaturas e ACL existentes;
+5. adicionar regressões cruzadas PostgreSQL;
+6. executar diff check, typecheck, lint estrito, testes, ensaios aplicáveis e build.
 
 Rollout: migration expansiva primeiro, runtime compatível depois. Reversão de código é possível enquanto as assinaturas antigas permanecerem. Migration aplicada não deve ser apagada; qualquer correção de schema exige migration posterior. Nenhuma alteração foi aplicada à base da empresa nesta preparação.
 

@@ -9,9 +9,12 @@ const ROOT = process.cwd();
 const migration = readFileSync(join(ROOT, "supabase/migrations/096_payroll_period_atomic.sql"), "utf8");
 const migration024 = readFileSync(join(ROOT, "supabase/migrations/024_cash_flow_reference_integrity.sql"), "utf8");
 const migration090 = readFileSync(join(ROOT, "supabase/migrations/090_financial_period_lock_protocol.sql"), "utf8");
+const preMigration095 = readFileSync(join(ROOT, "src/__tests__/fixtures/pre-095-bank-rpc.sql"), "utf8");
+const migration095 = readFileSync(join(ROOT, "supabase/migrations/095_bank_reconciliation_period_atomic.sql"), "utf8");
 const migration098 = readFileSync(join(ROOT, "supabase/migrations/098_payroll_base_salary_and_net_override.sql"), "utf8");
 const migration099 = readFileSync(join(ROOT, "supabase/migrations/099_payroll_extra_days_and_advances.sql"), "utf8");
 const migration100 = readFileSync(join(ROOT, "supabase/migrations/100_payroll_clock_vs_manual.sql"), "utf8");
+const migration108 = readFileSync(join(ROOT, "supabase/migrations/108_financial_global_lock_order.sql"), "utf8");
 
 const COMPANY = "00000000-0000-0000-0000-000000000001";
 const OTHER_COMPANY = "00000000-0000-0000-0000-000000000002";
@@ -48,10 +51,13 @@ CREATE OR REPLACE FUNCTION public.is_financial_period_open(
   )
 $fn$;
 ${migration090}
+${preMigration095}
+${migration095}
 ${migration}
 ${migration098}
 ${migration099}
 ${migration100}
+${migration108}
 `;
 
 describe("PAYROLL-SAFETY-01 contra o schema de produção e 090 real", () => {
@@ -79,6 +85,20 @@ describe("PAYROLL-SAFETY-01 contra o schema de produção e 090 real", () => {
 
   async function count(client: pg.Client, table: string, where = "true", params: unknown[] = []) {
     return Number((await client.query(`SELECT count(*)::int AS n FROM public.${table} WHERE ${where}`, params)).rows[0].n);
+  }
+
+  async function waitForDatabaseLock(client: pg.Client, applicationName: string) {
+    const deadline = Date.now() + 10_000;
+    while (Date.now() < deadline) {
+      const waiting = await client.query(
+        `SELECT 1 FROM pg_stat_activity
+          WHERE application_name=$1 AND wait_event_type='Lock'`,
+        [applicationName],
+      );
+      if (waiting.rowCount) return;
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    }
+    throw new Error(`${applicationName} não chegou à barreira de lock`);
   }
 
   beforeAll(async () => {
@@ -273,6 +293,84 @@ describe("PAYROLL-SAFETY-01 contra o schema de produção e 090 real", () => {
     ]);
     expect(results.map((r) => r.rows[0].paid_count).sort()).toEqual([0, 1]);
     expect(await count(first, "cash_flow_entries")).toBe(1);
+  });
+
+  it("108: folha × conciliação serializa pela linha de caixa sem 40P01", async () => {
+    const setup = clients[0];
+    const reconciliation = await connect();
+    const id = await payroll(setup);
+    await call(setup, "mark_payroll_paid_atomic", "$1::uuid, ARRAY[$2::uuid], $3::date, $4::uuid", COMPANY, id, "2026-09-04", ACTOR);
+    const cashId = (await setup.query(
+      "SELECT id FROM public.cash_flow_entries WHERE reference_type='payroll' AND reference_id=$1",
+      [id],
+    )).rows[0].id as string;
+    const bankId = (await setup.query(
+      `INSERT INTO public.bank_transactions(company_id,transaction_date,description,amount,direction,fingerprint)
+       VALUES($1,'2026-09-04','LOCK-01B',1200,'debit','lock-01b-cross') RETURNING id`,
+      [COMPANY],
+    )).rows[0].id as string;
+    const matchId = (await setup.query(
+      `INSERT INTO public.bank_reconciliation_matches(company_id,bank_transaction_id,cash_flow_entry_id)
+       VALUES($1,$2,$3) RETURNING id`,
+      [COMPANY, bankId, cashId],
+    )).rows[0].id as string;
+
+    await setup.query("BEGIN");
+    await setup.query("SELECT 1 FROM public.payroll_records WHERE id=$1 FOR UPDATE", [id]);
+    await setup.query("SELECT 1 FROM public.cash_flow_entries WHERE id=$1 FOR UPDATE", [cashId]);
+    await reconciliation.query("BEGIN");
+    await reconciliation.query("SET application_name='lock-01b-reconciliation'");
+    const confirming = reconciliation
+      .query("SELECT * FROM public.confirm_bank_match_atomic($1,$2,$3)", [COMPANY, matchId, ACTOR])
+      .then((result) => ({ result, error: undefined as Error | undefined }))
+      .catch((error: Error) => ({ result: undefined, error }));
+    await waitForDatabaseLock(setup, "lock-01b-reconciliation");
+
+    const retry = await call(setup, "mark_payroll_paid_atomic", "$1::uuid, ARRAY[$2::uuid], $3::date, $4::uuid", COMPANY, id, "2026-09-04", ACTOR);
+    expect(retry.rows[0]).toMatchObject({ paid_count: 0, already_paid_count: 1, cash_entry_count: 0 });
+    await setup.query("COMMIT");
+    const confirmed = await confirming;
+    expect(confirmed.error?.message ?? "").not.toMatch(/deadlock/i);
+    expect(confirmed.result?.rows).toHaveLength(1);
+    await reconciliation.query("COMMIT");
+    expect(await count(setup, "cash_flow_entries", "reference_type='payroll' AND reference_id=$1", [id])).toBe(1);
+    expect((await setup.query("SELECT status FROM public.bank_reconciliation_matches WHERE id=$1", [matchId])).rows[0].status).toBe("confirmed");
+  });
+
+  it("108: delete-import × ignore serializa pai e filha sem 40P01", async () => {
+    const deleting = clients[0];
+    const ignoring = await connect();
+    const importId = (await deleting.query(
+      `INSERT INTO public.bank_statement_imports(company_id,file_name,file_type,file_hash)
+       VALUES($1,'lock-01b.csv','csv','lock-01b-delete') RETURNING id`,
+      [COMPANY],
+    )).rows[0].id as string;
+    const childId = (await deleting.query(
+      `INSERT INTO public.bank_transactions(company_id,statement_import_id,transaction_date,amount,direction,fingerprint)
+       VALUES($1,$2,'2026-09-04',10,'debit','lock-01b-child') RETURNING id`,
+      [COMPANY, importId],
+    )).rows[0].id as string;
+
+    await deleting.query("BEGIN");
+    await deleting.query("SELECT 1 FROM public.bank_statement_imports WHERE id=$1 FOR UPDATE", [importId]);
+    await deleting.query("SELECT 1 FROM public.bank_transactions WHERE id=$1 FOR UPDATE", [childId]);
+    await ignoring.query("BEGIN");
+    await ignoring.query("SET application_name='lock-01b-ignore'");
+    const ignored = ignoring
+      .query("SELECT * FROM public.set_bank_transaction_ignored_atomic($1,$2,true,$3)", [COMPANY, childId, ACTOR])
+      .then((result) => ({ result, error: undefined as Error | undefined }))
+      .catch((error: Error & { code?: string }) => ({ result: undefined, error }));
+    await waitForDatabaseLock(deleting, "lock-01b-ignore");
+
+    const removed = await deleting.query("SELECT * FROM public.delete_bank_import_atomic($1,$2,$3)", [COMPANY, importId, ACTOR]);
+    expect(removed.rows[0].apagados).toBe(1);
+    await deleting.query("COMMIT");
+    const ignoreResult = await ignored;
+    expect((ignoreResult.error as (Error & { code?: string }) | undefined)?.code).not.toBe("40P01");
+    expect(ignoreResult.error?.message).toMatch(/BANK_TRANSACTION_NOT_FOUND/);
+    await ignoring.query("ROLLBACK");
+    expect(await count(deleting, "bank_statement_imports", "id=$1", [importId])).toBe(0);
+    expect(await count(deleting, "bank_transactions", "id=$1", [childId])).toBe(0);
   });
 
   it("writer começa primeiro e close espera o commit", async () => {
