@@ -34,6 +34,7 @@ import {
   findBlockedEntry,
   resolveOnlyTarget,
 } from "./migration-blocklist.mjs";
+import { prepareMigrationSql } from "./migration-transaction-control.mjs";
 
 /** SELECT puro — nunca CREATE. */
 export async function tableExists(client, schemaDotTable) {
@@ -148,35 +149,31 @@ export async function runMigrations({
   const hasTable = await tableExists(client, "public._migrations");
   const hasChecksumCol = hasTable ? await columnExists(client, "public", "_migrations", "checksum") : false;
 
-  // ── Única secção que pode CREATE/ALTER — gated por apply, não por uma
-  //    flag "dry-run" calculada fora deste módulo. ──────────────────────
-  if (apply) {
-    await ensureTracking(client);
-  } else if (!hasTable) {
+  if (!apply && !hasTable) {
     log("(dry-run) tabela public._migrations não existe — seria criada por --apply");
-  } else if (!hasChecksumCol) {
+  } else if (!apply && !hasChecksumCol) {
     log("(dry-run) coluna checksum não existe em public._migrations — seria adicionada por --apply");
   }
 
   const files = readdirSync(migrationsDir).filter((f) => f.endsWith(".sql")).sort();
-  // Depois de `apply`, a tabela/coluna passaram a existir (ensureTracking);
-  // em dry-run, lê exatamente o que já lá está.
-  const effectiveHasTable = apply || hasTable;
-  const effectiveHasChecksumCol = apply || hasChecksumCol;
-  const applied = await readAppliedMap(client, effectiveHasTable, effectiveHasChecksumCol);
+  const applied = await readAppliedMap(client, hasTable, hasChecksumCol);
 
-  // ── Backfill de checksum — só UPDATE quando apply === true. ────────────
+  // O backfill é calculado agora, mas só escreve depois de TODO o preflight.
   const toBackfill = [...applied.entries()].filter(([name, sum]) => sum == null && files.includes(name));
-  if (apply) {
+  if (!apply && toBackfill.length > 0) {
+    log(`(would-backfill) ${toBackfill.length} registo(s) sem checksum: ${toBackfill.map(([n]) => n).join(", ")}`);
+  }
+
+  const applyTrackingMaintenance = async () => {
+    if (!apply) return;
+    if (!hasTable || !hasChecksumCol) await ensureTracking(client);
     for (const [name] of toBackfill) {
       const cs = checksumForNewMigration(readFileSync(join(migrationsDir, name), "utf8"));
       await client.query("UPDATE public._migrations SET checksum = $1 WHERE name = $2 AND checksum IS NULL", [cs, name]);
       applied.set(name, cs);
       log(`🔏 checksum backfill: ${name}`);
     }
-  } else if (toBackfill.length > 0) {
-    log(`(would-backfill) ${toBackfill.length} registo(s) sem checksum: ${toBackfill.map(([n]) => n).join(", ")}`);
-  }
+  };
 
   // Migração já aplicada cujo ficheiro mudou → parar SEMPRE (nada de silêncio).
   const { divergent, accepted } = verifyChecksums(applied, files, migrationsDir, knownChecksumExceptions);
@@ -239,6 +236,7 @@ export async function runMigrations({
     }
 
     if (apply) {
+      await applyTrackingMaintenance();
       log(`📋 ${toBaseline.length} migração(ões) a marcar como aplicada(s) (baseline, sem executar): ${toBaseline.join(", ") || "(nenhuma)"}`);
       // Percorre a lista já filtrada — nunca `files` outra vez. Reintroduzir
       // aqui um `for (const f of files)` reabria o caminho para o ledger
@@ -294,16 +292,13 @@ export async function runMigrations({
     return { exitCode: 1 };
   }
 
-  if (alvo.kind === "already-applied") {
-    // Zero escritas, e um código de saída de sucesso: repetir o comando depois
-    // de ele ter corrido não é um erro, é a definição de idempotente.
-    log(`✅ ${alvo.file} já está aplicada (ledger). Nada a fazer.`);
-    return { exitCode: 0, targetState: "ALREADY_APPLIED" };
-  }
-
   // A partir daqui, `pending` é o que este run considera para execução.
   // Com `--only`, é exatamente um ficheiro — nunca "a partir de".
-  const selecionadas = alvo.kind === "target" ? [alvo.file] : pending;
+  const selecionadas = alvo.kind === "target" ? [alvo.file] : alvo.kind === "already-applied" ? [] : pending;
+
+  if (alvo.kind === "already-applied") {
+    log(`✅ ${alvo.file} já está aplicada (ledger). A migration não será executada.`);
+  }
 
   if (alvo.kind === "target") {
     log(`🎯 --only ${alvo.file} — exatamente uma migration será considerada.`);
@@ -350,21 +345,59 @@ export async function runMigrations({
     }
   }
 
+  // Último preflight: ler e classificar todo o SQL selecionado antes de
+  // ensureTracking/backfill/BEGIN. Nenhuma entrada incompatível pode deixar
+  // mutações de preparação para trás.
+  const prepared = new Map();
+  try {
+    for (const file of selecionadas) {
+      const originalSql = readFileSync(join(migrationsDir, file), "utf8");
+      prepared.set(file, { originalSql, ...prepareMigrationSql(originalSql) });
+    }
+  } catch (error) {
+    logError(`❌ Preflight transacional recusou a execução: ${error.message}`);
+    return { exitCode: 1, transactionState: "NOT_STARTED" };
+  }
+
+  await applyTrackingMaintenance();
+
+  if (alvo.kind === "already-applied") {
+    return { exitCode: 0, targetState: "ALREADY_APPLIED" };
+  }
+
   for (const file of selecionadas) {
     if (!apply) { log(`(dry-run) aplicaria: ${file}`); continue; }
-    const sql = readFileSync(join(migrationsDir, file), "utf8");
+    const { originalSql, executableSql, classification } = prepared.get(file);
     log(`📦 ${file}...`);
+    if (classification === "legacy-outer-wrapper") {
+      log("   ↳ wrapper BEGIN/COMMIT histórico removido apenas da cópia executável");
+    }
+    let phase = "BEGIN";
     try {
       await client.query("BEGIN");
-      await client.query(sql);
-      await client.query("INSERT INTO public._migrations (name, checksum) VALUES ($1, $2)", [file, checksumForNewMigration(sql)]);
+      phase = "MIGRATION";
+      await client.query(executableSql);
+      phase = "LEDGER";
+      await client.query("INSERT INTO public._migrations (name, checksum) VALUES ($1, $2)", [file, checksumForNewMigration(originalSql)]);
+      phase = "COMMIT";
       await client.query("COMMIT");
       log("   ✅ OK");
     } catch (err) {
-      await client.query("ROLLBACK").catch(() => {});
       logError(`   ❌ ERRO em ${file}: ${err.message}`);
-      logError("   Migração revertida (transação). Corrige o .sql e volta a correr — nada ficou a meio.");
-      return { exitCode: 1 };
+      if (phase === "COMMIT") {
+        await client.query("ROLLBACK").catch(() => {});
+        logError("   Estado incerto: a ligação falhou durante COMMIT. Não repetir automaticamente.");
+        logError("   Reconecta e consulta o ledger; schema e ledger foram enviados na mesma transação.");
+        return { exitCode: 1, transactionState: "UNKNOWN", failedMigration: file };
+      }
+      try {
+        await client.query("ROLLBACK");
+        logError("   Rollback confirmado: schema e ledger desta migration não foram gravados.");
+        return { exitCode: 1, transactionState: "ROLLED_BACK", failedMigration: file };
+      } catch {
+        logError("   Rollback não confirmado. Reconecta e consulta o ledger antes de repetir.");
+        return { exitCode: 1, transactionState: "UNKNOWN", failedMigration: file };
+      }
     }
   }
 

@@ -1,8 +1,7 @@
 "use server";
 
-import { createAdminClient } from "@/lib/supabase/admin";
 import { validarValorMonetario } from "@/domain/finance-v2/money";
-import { createClient } from "@/lib/supabase/server";
+import { requireProfile } from "@/lib/auth-guard";
 import { revalidatePath } from "next/cache";
 import type { BuildingCardWeekday } from "@/types/database";
 import { queryFailure } from "@/lib/query-error";
@@ -38,48 +37,21 @@ function validarAvenca(valor: number | null | undefined) {
   return validarValorMonetario(valor, { nome: "A avença mensal" });
 }
 
-async function getCompanyId(): Promise<string> {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) throw new Error("Não autenticado");
-
-  const admin = createAdminClient();
-  const { data: profile } = await admin
-    .from("profiles")
-    .select("company_id")
-    .eq("id", user.id)
-    .single();
-
-  if (!profile) throw new Error("Perfil não encontrado");
-  return profile.company_id;
-}
-
-async function requireManager(): Promise<{ companyId: string; userId: string }> {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) throw new Error("Não autenticado");
-
-  const admin = createAdminClient();
-  const { data: profile } = await admin
-    .from("profiles")
-    .select("company_id, role")
-    .eq("id", user.id)
-    .single();
-
-  if (!profile || !["admin", "gestor"].includes(profile.role)) {
-    throw new Error("Sem permissão");
-  }
-  return { companyId: profile.company_id, userId: user.id };
+async function requireManager() {
+  const guard = await requireProfile({ roles: ["admin", "gestor"] });
+  if (!guard.ok) throw new Error(guard.error);
+  return guard;
 }
 
 export async function getBuildingCards(): Promise<BuildingCard[]> {
-  const companyId = await getCompanyId();
-  const admin = createAdminClient();
+  const guard = await requireProfile();
+  if (!guard.ok) throw new Error(guard.error);
+  const { admin, profile } = guard;
 
   const { data, error } = await admin
     .from("building_cards")
     .select("id, company_id, weekday, name, address, team_id, sort_order, monthly_value, notes")
-    .eq("company_id", companyId)
+    .eq("company_id", profile.company_id)
     .order("weekday")
     .order("sort_order");
 
@@ -107,8 +79,8 @@ export async function createBuildingCard(input: {
   monthlyValue?: number | null;
 }): Promise<{ ok: boolean; error?: string; id?: string }> {
   try {
-    const { companyId, userId } = await requireManager();
-    const admin = createAdminClient();
+    const { admin, profile } = await requireManager();
+    const companyId = profile.company_id;
 
     const avenca = validarAvenca(input.monthlyValue);
     if (!avenca.ok) return { ok: false, error: avenca.error };
@@ -137,7 +109,7 @@ export async function createBuildingCard(input: {
         team_id: input.teamId || null,
         sort_order: sortOrder,
         notes: input.notes?.trim() || null,
-        created_by: userId,
+        created_by: profile.id,
       })
       .select("id")
       .single();
@@ -164,8 +136,8 @@ export async function updateBuildingCard(id: string, input: {
   monthlyValue?: number | null;
 }): Promise<{ ok: boolean; error?: string }> {
   try {
-    const { companyId } = await requireManager();
-    const admin = createAdminClient();
+    const { admin, profile } = await requireManager();
+    const companyId = profile.company_id;
 
     // 🔴 O valor gravado é o **normalizado**, não o que veio no pedido.
     //
@@ -211,8 +183,8 @@ export async function updateBuildingCard(id: string, input: {
 
 export async function deleteBuildingCard(id: string): Promise<{ ok: boolean; error?: string }> {
   try {
-    const { companyId } = await requireManager();
-    const admin = createAdminClient();
+    const { admin, profile } = await requireManager();
+    const companyId = profile.company_id;
 
     const { error } = await admin
       .from("building_cards")
@@ -239,8 +211,8 @@ export async function reorderBuildingCards(
   orderedIds: string[],
 ): Promise<{ ok: boolean; error?: string }> {
   try {
-    const { companyId } = await requireManager();
-    const admin = createAdminClient();
+    const { admin, profile } = await requireManager();
+    const companyId = profile.company_id;
 
     const { data: existing, error: fetchError } = await admin
       .from("building_cards")

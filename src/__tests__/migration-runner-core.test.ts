@@ -43,7 +43,7 @@ interface FakeClientOptions {
   hasChecksumCol?: boolean;
   appliedRows?: AppliedRow[];
   companiesCount?: number;
-  failOnSqlContaining?: string | null;
+  failOnSqlContaining?: string | string[] | null;
   /** Se definido, a query a public.companies lança este erro em vez de devolver rows. */
   companiesQueryError?: { code?: string; message?: string } | null;
 }
@@ -59,7 +59,7 @@ class FakeClient {
   private _hasChecksumCol: boolean;
   private _appliedRows: AppliedRow[];
   private _companiesCount: number;
-  private _failOnSqlContaining: string | null;
+  private _failOnSqlContaining: string[];
   private _companiesQueryError: { code?: string; message?: string } | null;
 
   constructor({ tableExists = false, hasChecksumCol = false, appliedRows = [], companiesCount = 0, failOnSqlContaining = null, companiesQueryError = null }: FakeClientOptions = {}) {
@@ -67,7 +67,9 @@ class FakeClient {
     this._hasChecksumCol = hasChecksumCol;
     this._appliedRows = appliedRows;
     this._companiesCount = companiesCount;
-    this._failOnSqlContaining = failOnSqlContaining;
+    this._failOnSqlContaining = failOnSqlContaining == null
+      ? []
+      : Array.isArray(failOnSqlContaining) ? failOnSqlContaining : [failOnSqlContaining];
     this._companiesQueryError = companiesQueryError;
   }
 
@@ -95,7 +97,7 @@ class FakeClient {
       }
       return { rows: [{ n: this._companiesCount }] };
     }
-    if (this._failOnSqlContaining && trimmed.includes(this._failOnSqlContaining)) {
+    if (this._failOnSqlContaining.some((part) => trimmed.includes(part))) {
       throw new Error("erro simulado de migração");
     }
     // CREATE/ALTER/INSERT/UPDATE/BEGIN/COMMIT/ROLLBACK/qualquer SQL de
@@ -244,11 +246,77 @@ describe("runMigrations — --apply válido (cliente simulado): fluxo de escrita
     const client = new FakeClient({ tableExists: true, hasChecksumCol: true, appliedRows: [], failOnSqlContaining: "NAO E SQL" });
     const logger = makeCapturingLogger();
 
-    const { exitCode } = await runMigrations({ client, migrationsDir, rootDir: migrationsDir, apply: true, ...logger });
+    const result = await runMigrations({ client, migrationsDir, rootDir: migrationsDir, apply: true, ...logger });
 
-    expect(exitCode).toBe(1);
+    expect(result).toMatchObject({ exitCode: 1, transactionState: "ROLLED_BACK", failedMigration: "001_bad.sql" });
     expect(client.queries.some((q) => q.sql === "ROLLBACK")).toBe(true);
     expect(client.queries.some((q) => q.sql.toUpperCase().startsWith("INSERT"))).toBe(false); // não regista o que falhou
+    expect(logger.lines.some((line) => line.includes("Rollback confirmado"))).toBe(true);
+  });
+
+  it("wrapper histórico é removido apenas em memória e checksum continua sendo do original", async () => {
+    const original = "BEGIN;\nCREATE TABLE algo (id int);\nCOMMIT;\n";
+    const migrationsDir = fixtureDir({ "075_legacy.sql": original });
+    const client = new FakeClient({ tableExists: true, hasChecksumCol: true, appliedRows: [] });
+    const logger = makeCapturingLogger();
+
+    const result = await runMigrations({ client, migrationsDir, rootDir: migrationsDir, apply: true, ...logger });
+
+    expect(result.exitCode).toBe(0);
+    expect(client.queries.filter((q) => q.sql === "BEGIN")).toHaveLength(1);
+    expect(client.queries.filter((q) => q.sql === "COMMIT")).toHaveLength(1);
+    expect(client.queries.some((q) => q.sql.includes("CREATE TABLE algo") && !q.sql.includes("COMMIT"))).toBe(true);
+    const ledger = client.queries.find((q) => q.sql.startsWith("INSERT INTO public._migrations"));
+    expect(ledger?.params).toEqual(["075_legacy.sql", checksumForNewMigration(original)]);
+  });
+
+  it("controlo transacional incompatível falha no preflight antes de qualquer escrita", async () => {
+    const migrationsDir = fixtureDir({ "001_bad_control.sql": "SELECT 1; COMMIT; SELECT 2;" });
+    const client = new FakeClient({ tableExists: true, hasChecksumCol: true, appliedRows: [] });
+    const logger = makeCapturingLogger();
+
+    const result = await runMigrations({ client, migrationsDir, rootDir: migrationsDir, apply: true, ...logger });
+
+    expect(result).toMatchObject({ exitCode: 1, transactionState: "NOT_STARTED" });
+    expect(client.queries.some((q) => isMutatingQuery(q.sql))).toBe(false);
+    expect(logger.lines.some((line) => line.includes("Preflight transacional recusou"))).toBe(true);
+  });
+
+  it("preflight falhado acontece antes de ensureTracking e backfill", async () => {
+    const existing = "SELECT 1;\n";
+    const migrationsDir = fixtureDir({
+      "001_existing.sql": existing,
+      "002_bad_control.sql": "BEGIN; SELECT 2; ROLLBACK;",
+    });
+    const client = new FakeClient({
+      tableExists: true,
+      hasChecksumCol: true,
+      appliedRows: [{ name: "001_existing.sql", checksum: null }],
+    });
+    const logger = makeCapturingLogger();
+
+    const result = await runMigrations({ client, migrationsDir, rootDir: migrationsDir, apply: true, ...logger });
+
+    expect(result).toMatchObject({ exitCode: 1, transactionState: "NOT_STARTED" });
+    expect(client.queries.some((q) => q.sql.startsWith("UPDATE public._migrations"))).toBe(false);
+    expect(client.queries.some((q) => isMutatingQuery(q.sql))).toBe(false);
+  });
+
+  it("falha durante COMMIT devolve estado incerto e não anuncia rollback", async () => {
+    const migrationsDir = fixtureDir({ "001_pending.sql": "CREATE TABLE algo (id int);" });
+    const client = new FakeClient({
+      tableExists: true,
+      hasChecksumCol: true,
+      appliedRows: [],
+      failOnSqlContaining: "COMMIT",
+    });
+    const logger = makeCapturingLogger();
+
+    const result = await runMigrations({ client, migrationsDir, rootDir: migrationsDir, apply: true, ...logger });
+
+    expect(result).toMatchObject({ exitCode: 1, transactionState: "UNKNOWN", failedMigration: "001_pending.sql" });
+    expect(logger.lines.some((line) => line.includes("Estado incerto"))).toBe(true);
+    expect(logger.lines.some((line) => line.includes("Rollback confirmado"))).toBe(false);
   });
 
   it("checksum divergente de uma migração já aplicada: bloqueia ANTES de tocar em mais nada, exitCode 1", async () => {

@@ -1,0 +1,202 @@
+{
+  "schemaVersion": 1,
+  "scope": "supabase/migrations/*.sql (somente ficheiros diretos; draft/ e rollback/ excluídos)",
+  "generatedFrom": "scripts/audit-migration-transaction-control.mjs",
+  "totals": {
+    "files": 111,
+    "runnerOwned": 106,
+    "legacyOuterWrapper": 5,
+    "unsupportedControl": 0
+  },
+  "runnerOwned": [
+    "001_companies.sql",
+    "002_profiles.sql",
+    "003_clients_locations.sql",
+    "004_teams.sql",
+    "005_contracts.sql",
+    "006_services.sql",
+    "007_timesheets_absences.sql",
+    "008_financial.sql",
+    "009_notifications.sql",
+    "010_views.sql",
+    "011_conflict_detection.sql",
+    "012_teams_vehicle.sql",
+    "013_client_notifications.sql",
+    "014_fix_rls_recursion.sql",
+    "015_fix_trigger_resilient.sql",
+    "016_vehicles.sql",
+    "017_fix_contracts_rls.sql",
+    "018_fix_services_rls_recursion.sql",
+    "019_cancellation_fields.sql",
+    "020_services_full_client_phone.sql",
+    "021_documents_enhanced.sql",
+    "022_storage_bucket_collaborator_documents.sql",
+    "023_fix_collaborator_documents_upload.sql",
+    "024_cash_flow_reference_integrity.sql",
+    "025_timesheet_hardening.sql",
+    "026_location_key_fields.sql",
+    "027_service_photos.sql",
+    "028_growth_indexes.sql",
+    "029_background_jobs.sql",
+    "030_rls_tighten.sql",
+    "031_reference_number_unique.sql",
+    "032_manual_checkout_fields.sql",
+    "033_rls_blindagem.sql",
+    "034_rls_servicos_clientes_locais.sql",
+    "035_split_views.sql",
+    "036_background_jobs_lock.sql",
+    "037_fixed_variable_payments.sql",
+    "038_service_contract_fields.sql",
+    "039_upholstery_units.sql",
+    "040_collaborator_day_team.sql",
+    "041_num_people.sql",
+    "042_daily_clocks.sql",
+    "043_bank_reconciliation.sql",
+    "044_contract_fixed_price.sql",
+    "045_service_apply_vat.sql",
+    "046_contract_vat_monthly.sql",
+    "047_contract_excluded_dates.sql",
+    "048_service_payment_tracking.sql",
+    "049_cash_flow_service_payment_reference.sql",
+    "050_bank_tx_source_order_and_dedup.sql",
+    "051_building_cards.sql",
+    "052_payment_attachments.sql",
+    "053_enable_realtime_notifications.sql",
+    "054_harden_service_only_policies.sql",
+    "055_triweekly_frequency.sql",
+    "056_services_full_payment_status.sql",
+    "057_task_category_client.sql",
+    "058_task_attachment.sql",
+    "059_rede_seguranca.sql",
+    "060_guardas_adicionais.sql",
+    "061_guardas_campos_criticos.sql",
+    "062_delete_atomico_e_actor.sql",
+    "063_services_full_apply_vat.sql",
+    "064_revoke_public_grants_atomic_functions.sql",
+    "065_revoke_public_grants_outbox_tables.sql",
+    "068_disable_untrusted_profile_bootstrap.sql",
+    "069_guard_profile_tenant_role.sql",
+    "070_guard_profile_managed_fields.sql",
+    "074_attachments.sql",
+    "077_secure_migrations_ledger.sql",
+    "078_domain_mutation_change_event_foundation.sql",
+    "079_reuse_pending_cashflow_on_payment.sql",
+    "080_payment_cashflow_provenance.sql",
+    "081_safe_unmark_payment_paid.sql",
+    "082_atomic_finance_mutations.sql",
+    "083_payment_authorization_hardening.sql",
+    "084_payment_table_acl_closure.sql",
+    "085_public_db_surface_closure.sql",
+    "086_manual_charges_and_atomic_billing.sql",
+    "087_equipas_r4.sql",
+    "088_payment_competence_idempotent_edit.sql",
+    "089_realtime_manual_charges.sql",
+    "090_financial_period_lock_protocol.sql",
+    "091_manual_charges_period_atomic.sql",
+    "092_payments_period_atomic.sql",
+    "093_cashflow_period_atomic.sql",
+    "094_invoices_period_atomic.sql",
+    "095_bank_reconciliation_period_atomic.sql",
+    "096_payroll_period_atomic.sql",
+    "097_service_payment_period_atomic.sql",
+    "098_payroll_base_salary_and_net_override.sql",
+    "099_payroll_extra_days_and_advances.sql",
+    "100_payroll_clock_vs_manual.sql",
+    "101_crm_leads.sql",
+    "101a_crm_rpc_acl_hardening.sql",
+    "101b_identity_reconciliation.sql",
+    "102_crm_visitas_comerciais.sql",
+    "103_crm_orcamentos.sql",
+    "103a_crm_rpc_acl_hardening.sql",
+    "104_crm_conversao_lead.sql",
+    "105_crm_orcamento_editar_rascunho.sql",
+    "106_colaborador_status_autorizacao.sql",
+    "20260608_new_features.sql",
+    "20260609_kanban_columns.sql",
+    "20260609_profiles_hourly_rate.sql",
+    "20260609_timesheet_limits.sql"
+  ],
+  "legacyOuterWrappers": [
+    {
+      "name": "071_finance_periods_and_expense_categories.sql",
+      "statementCount": 15,
+      "controls": [
+        {
+          "command": "BEGIN",
+          "statement": 1,
+          "line": 38
+        },
+        {
+          "command": "COMMIT",
+          "statement": 15,
+          "line": 168
+        }
+      ]
+    },
+    {
+      "name": "072_invoice_atomic_creation.sql",
+      "statementCount": 6,
+      "controls": [
+        {
+          "command": "BEGIN",
+          "statement": 1,
+          "line": 30
+        },
+        {
+          "command": "COMMIT",
+          "statement": 6,
+          "line": 175
+        }
+      ]
+    },
+    {
+      "name": "073_payment_to_cashflow.sql",
+      "statementCount": 6,
+      "controls": [
+        {
+          "command": "BEGIN",
+          "statement": 1,
+          "line": 35
+        },
+        {
+          "command": "COMMIT",
+          "statement": 6,
+          "line": 195
+        }
+      ]
+    },
+    {
+      "name": "075_cash_flow_fixed_variable_payment_reference.sql",
+      "statementCount": 4,
+      "controls": [
+        {
+          "command": "BEGIN",
+          "statement": 1,
+          "line": 48
+        },
+        {
+          "command": "COMMIT",
+          "statement": 4,
+          "line": 65
+        }
+      ]
+    },
+    {
+      "name": "076_update_notices.sql",
+      "statementCount": 23,
+      "controls": [
+        {
+          "command": "BEGIN",
+          "statement": 1,
+          "line": 20
+        },
+        {
+          "command": "COMMIT",
+          "statement": 23,
+          "line": 191
+        }
+      ]
+    }
+  ],
+  "unsupportedControls": []
+}

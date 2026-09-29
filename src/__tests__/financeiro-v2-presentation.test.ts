@@ -32,6 +32,7 @@ const V = {
   contas: "src/app/(dashboard)/dashboard/financeiro/contas/_components/contas-client.tsx",
   fluxo: "src/app/(dashboard)/dashboard/financeiro/fluxo-caixa/_components/cash-flow-client.tsx",
   cobrancas: "src/app/(dashboard)/dashboard/cobrancas/_components/invoices-client.tsx",
+  // O cliente une serviços e cobranças avulsas e encaminha os comandos.
   diaria: "src/app/(dashboard)/dashboard/cobrancas/_components/daily-billing-client.tsx",
   folha: "src/app/(dashboard)/dashboard/folha-pagamento/_components/payroll-client.tsx",
   folhaSheet: "src/app/(dashboard)/dashboard/folha-pagamento/_components/payroll-edit-sheet.tsx",
