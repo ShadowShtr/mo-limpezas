@@ -281,7 +281,9 @@ export function ServiceBlock({ service, slotHeight, startHour, teamId, onClick, 
     width: "100%",
     height: `${height - 2}px`,
     backgroundColor: s.cardBg,
-    border: "1px solid var(--color-border)",
+    // Contorno na cor da equipa, à volta de todo o cartão — destaca-o no
+    // fundo branco (pedido do dono, 2026-09-29).
+    border: `1.5px solid ${borderColor}`,
     borderRadius: "8px",
     boxShadow: "0 8px 24px rgba(0,0,0,0.18)",
     cursor: "grabbing",
@@ -300,7 +302,9 @@ export function ServiceBlock({ service, slotHeight, startHour, teamId, onClick, 
     left: expandW ? "2px" : `calc(${(lane * 100) / lanes}% + 2px)`,
     width: expandW ? "calc(100% - 4px)" : `calc(${100 / lanes}% - 4px)`,
     backgroundColor: s.cardBg,
-    border: "1px solid var(--color-border)",
+    // Contorno na cor da equipa, à volta de todo o cartão — destaca-o no
+    // fundo branco (pedido do dono, 2026-09-29).
+    border: `1.5px solid ${borderColor}`,
     zIndex: isDragging ? 50 : hov ? 40 : 1,
     opacity: isDragging ? 0.35 : 1,
     transform: CSS.Translate.toString(transform),

@@ -1,8 +1,8 @@
 {
   "generatedBy": "scripts/audit-file-inventory.mjs",
-  "totalFiles": 1023,
+  "totalFiles": 1024,
   "byStatus": {
-    "MANTER": 999,
+    "MANTER": 1000,
     "STANDBY": 24
   },
   "byCategory": {
@@ -12,7 +12,7 @@
     "lib": 81,
     "script": 63,
     "domain": 58,
-    "src-other": 55,
+    "src-other": 56,
     "server-action": 50,
     "doc": 47,
     "component": 34,
@@ -29,7 +29,7 @@
     "supabase-other": 2
   },
   "byConfidence": {
-    "alta": 1000,
+    "alta": 1001,
     "média": 17,
     "baixa": 6
   },
@@ -20504,7 +20504,7 @@
       "category": "domain",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 61,
+      "consumers": 62,
       "consumerSample": [
         "src/__tests__/update-notice-modal.test.tsx",
         "src/__tests__/update-notices-eligibility.test.ts",
@@ -20519,7 +20519,7 @@
       "risks": [],
       "signals": {},
       "action": "nenhuma",
-      "reason": "em uso: 61 consumidor(es), configuração",
+      "reason": "em uso: 62 consumidor(es), configuração",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -24301,6 +24301,32 @@
     },
     {
       "path": "src/release-notes/2026-09-29-calendario-cartoes-como-os-predios.ts",
+      "category": "src-other",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 1,
+      "consumerSample": [
+        "src/release-notes/index.ts"
+      ],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "sqlWrite": 1
+      },
+      "action": "nenhuma",
+      "reason": "em uso: 1 consumidor(es)",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/release-notes/2026-09-29-calendario-contorno-cor-da-equipa.ts",
       "category": "src-other",
       "status": "MANTER",
       "confidence": "alta",

@@ -79,7 +79,8 @@ describe("calendário — cartões com fundo branco", () => {
     const etiqueta = folha(cartao, "Equipa A");
     expect(etiqueta.style.backgroundColor).toBe("rgb(14, 159, 110)");
     expect(etiqueta.className).toContain("text-white");
-    expect(cartao.getAttribute("style")).toContain("var(--color-border)");
+    // Contorno à volta do cartão na cor da equipa.
+    expect(cartao.style.border).toBe("1.5px solid rgb(14, 159, 110)");
   });
 
   it("agendado não leva ponto de estado", async () => {
@@ -103,9 +104,10 @@ describe("calendário — cartões com fundo branco", () => {
   }
 });
 
-// A grelha por trás dos cartões também é branca: as colunas das equipas não
-// tinham fundo e mostravam o cinzento da página; a de Prédios tinha um cinzento
-// translúcido próprio. Guarda estática — o render do calendário inteiro exige
+// A grelha por trás dos cartões é branca (o dono recusou o cinzento claro); o
+// que distingue o cartão do fundo é o contorno na cor da equipa. As colunas das
+// equipas não tinham fundo e mostravam o cinzento da página; a de Prédios
+// tinha um cinzento translúcido próprio. Guarda estática — o render do calendário inteiro exige
 // dados e contexto que este teste não precisa de montar.
 describe("calendário — fundo da grelha branco", () => {
   const ler = (f: string) => readFileSync(join(process.cwd(), "src/app/(dashboard)/dashboard/calendario/_components", f), "utf8");
@@ -117,5 +119,6 @@ describe("calendário — fundo da grelha branco", () => {
   it("coluna de Prédios sem o cinzento translúcido", () => {
     const b = ler("buildings-column.tsx");
     expect(b).not.toContain("bg-[var(--color-background)]/40");
+    expect(b).not.toContain("bg-[#F8FAFC]");
   });
 });
