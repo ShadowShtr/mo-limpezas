@@ -763,7 +763,7 @@ export function CalendarView({
         {viewMode === "calendar" && (
           <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
             {/* Colunas esticam/encolhem para caber sem scroll; scroll horizontal só como reserva (COLUMN_MIN_W) */}
-            <div ref={scrollRef} className="flex-1 overflow-auto calendar-scroll bg-white" data-calendar-grid>
+            <div ref={scrollRef} className="flex-1 overflow-auto calendar-scroll bg-[#F8FAFC]" data-calendar-grid>
               <div style={{ minHeight: `${HEADER_H + TOTAL_SLOTS * slotH}px` }}>
 
                 {/* ── Cabeçalho das equipas — sticky no topo ─────────────────── */}
@@ -847,7 +847,7 @@ export function CalendarView({
                     <DroppableColumn
                       key={col.key}
                       id={col.key}
-                      className="flex-1 relative border-l border-[var(--color-border)] cursor-crosshair bg-white"
+                      className="flex-1 relative border-l border-[var(--color-border)] cursor-crosshair bg-[#F8FAFC]"
                       style={{ height: `${TOTAL_SLOTS * slotH}px`, minWidth: `${COLUMN_MIN_W}px` }}
                       onClick={(e) => handleColumnClick(col.key, e)}
                     >
