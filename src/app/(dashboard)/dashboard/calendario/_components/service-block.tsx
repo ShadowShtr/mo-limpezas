@@ -75,9 +75,12 @@ const STATUS_BG: Record<string, { bg: string; cardBg: string; text: string; fall
   falta:     { bg: "#FEF2F2", cardBg: "#FFFFFF", text: "#B91C1C", fallbackBorder: "#DC2626", dot: "#DC2626" },
 };
 
-// Cor de texto fixa dos cards do calendário (todos os status) — verde bem
-// escuro para bom contraste, independente da cor de fundo por status.
-const CARD_TEXT_COLOR = "#14532D";
+// Tipografia dos cartões = a dos cartões de Prédios (pedido do dono,
+// 2026-09-29: «como este»). Cores do design system, sem transparência: o
+// nome a escuro, a hora em cinzento-escuro, o resto em cinzento.
+const CARD_TEXT_MAIN = "var(--color-text-main)";
+const CARD_TEXT_SUB = "var(--color-text-sub)";
+const CARD_TEXT_MUTED = "var(--color-text-muted)";
 
 export const STATUS_LABEL: Record<string, string> = {
   agendado:  "Agendado",
@@ -278,10 +281,8 @@ export function ServiceBlock({ service, slotHeight, startHour, teamId, onClick, 
     width: "100%",
     height: `${height - 2}px`,
     backgroundColor: s.cardBg,
-    borderLeft: `3px solid ${borderColor}`,
-    border: `1px solid ${borderColor}30`,
-    borderLeftWidth: "3px",
-    borderRadius: "4px",
+    border: "1px solid var(--color-border)",
+    borderRadius: "8px",
     boxShadow: "0 8px 24px rgba(0,0,0,0.18)",
     cursor: "grabbing",
     } : (() => {
@@ -299,14 +300,12 @@ export function ServiceBlock({ service, slotHeight, startHour, teamId, onClick, 
     left: expandW ? "2px" : `calc(${(lane * 100) / lanes}% + 2px)`,
     width: expandW ? "calc(100% - 4px)" : `calc(${100 / lanes}% - 4px)`,
     backgroundColor: s.cardBg,
-    borderLeft: `3px solid ${borderColor}`,
-    border: `1px solid ${borderColor}30`,
-    borderLeftWidth: "3px",
+    border: "1px solid var(--color-border)",
     zIndex: isDragging ? 50 : hov ? 40 : 1,
     opacity: isDragging ? 0.35 : 1,
     transform: CSS.Translate.toString(transform),
     cursor: isDraggable ? (isDragging ? "grabbing" : "grab") : "pointer",
-    boxShadow: hov ? "0 6px 20px rgba(0,0,0,0.16)" : undefined,
+    boxShadow: hov ? "0 6px 20px rgba(0,0,0,0.16)" : "0 1px 2px rgba(0,0,0,0.05)",
     transition: isDragging ? undefined : "left 0.12s ease, width 0.12s ease, height 0.12s ease, opacity 0.15s ease",
     };
   })();
@@ -326,7 +325,7 @@ export function ServiceBlock({ service, slotHeight, startHour, teamId, onClick, 
         onMouseEnter={(e) => { setHovered(true); if (!isDragging && lanes === 1) setTooltip({ x: e.clientX, y: e.clientY }); }}
         onMouseLeave={() => { setHovered(false); setTooltip(null); }}
         onMouseMove={(e) => !isDragging && lanes === 1 && setTooltip({ x: e.clientX, y: e.clientY })}
-        className="rounded overflow-hidden select-none focus:outline-none focus:ring-1 focus:ring-[var(--color-primary)] hover:brightness-95 hover:shadow-md"
+        className="rounded-lg overflow-hidden select-none focus:outline-none focus:ring-1 focus:ring-[var(--color-primary)]"
         style={overlayStyle}
         {...(isOverlay ? {} : { ...listeners, ...attributes })}
       >
@@ -373,35 +372,45 @@ export function ServiceBlock({ service, slotHeight, startHour, teamId, onClick, 
                 {PAYMENT_BADGE[service.payment_status ?? ""]!.label}
               </span>
             )}
-            <span className="text-[11px] font-semibold leading-tight truncate" style={{ color: CARD_TEXT_COLOR }}>
+            <span className="text-xs font-semibold leading-tight truncate" style={{ color: CARD_TEXT_MAIN }}>
               {service.client_name}
             </span>
           </span>
           {/* 2.º Zona/localidade */}
-          <span className="text-[10px] font-medium leading-tight truncate pr-4" style={{ color: CARD_TEXT_COLOR, opacity: 0.8 }}>
+          <span className="text-[10px] leading-tight truncate pr-4" style={{ color: CARD_TEXT_MUTED }}>
             {extractCity(service.location_address) || service.location_name}
           </span>
           {/* 3.º Horário */}
-          <span className="text-[10px] font-semibold leading-tight tabular-nums" style={{ color: CARD_TEXT_COLOR, opacity: 0.9 }}>
+          <span className="text-[10px] font-semibold leading-tight tabular-nums" style={{ color: CARD_TEXT_SUB }}>
             {format(start, "HH:mm")}–{format(end, "HH:mm")}
           </span>
           {(isMedium || isLarge) && noteText && (
-            <span className="text-[10px] leading-tight truncate" style={{ color: CARD_TEXT_COLOR, opacity: 0.72 }}>
+            <span className="text-[10px] leading-tight truncate" style={{ color: CARD_TEXT_MUTED }}>
               Obs: {noteText}
             </span>
           )}
+          {/* Equipa em etiqueta com a cor da equipa — como nos cartões de Prédios. */}
           {!isShort && (service.team_name || hasAccess) && (
-            <span className="text-[10px] leading-tight truncate" style={{ color: CARD_TEXT_COLOR, opacity: 0.6 }}>
-              {service.team_name}
+            <span className="flex items-center gap-1 mt-0.5 min-w-0 pr-4">
+              {service.team_name && (
+                <span
+                  className="px-1.5 py-0.5 rounded-md text-[10px] font-semibold text-white leading-none truncate"
+                  style={{ backgroundColor: borderColor }}
+                >
+                  {service.team_name}
+                </span>
+              )}
               {hasAccess && (
-                <span className="inline-flex items-center gap-0.5 ml-1 align-middle">
+                <span className="inline-flex items-center gap-0.5 shrink-0" style={{ color: CARD_TEXT_MUTED }}>
                   {service.location_has_key && <Key className="inline w-2.5 h-2.5" />}
                   {service.location_has_access_code && <Lock className="inline w-2.5 h-2.5" />}
                 </span>
               )}
-              {isLarge && (
-                <span className="ml-1">{STATUS_LABEL[service.status] ?? service.status}</span>
-              )}
+            </span>
+          )}
+          {isLarge && (
+            <span className="text-[10px] leading-tight truncate mt-0.5" style={{ color: CARD_TEXT_MUTED }}>
+              {STATUS_LABEL[service.status] ?? service.status}
             </span>
           )}
         </div>
