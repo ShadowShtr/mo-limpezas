@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { AlertTriangle, CalendarClock, X } from "lucide-react";
+import { AlertTriangle, CalendarClock, CheckCircle2, Loader2, X } from "lucide-react";
 import { getAvisosVencimento } from "@/app/actions/avisos";
 import { agruparPorUrgencia } from "@/domain/avisos/classify";
 import {
@@ -11,6 +11,7 @@ import {
   type AvisoItem,
   type AvisoUrgencia,
 } from "@/domain/avisos/types";
+import { definirContagemAvisos, registarAbridorAvisos } from "./avisos-store";
 
 // ============================================================================
 // O MODAL — uma vez por sessão da aba, e só a ler
@@ -82,6 +83,35 @@ const COR: Record<AvisoUrgencia, string> = {
 export function AvisosVencimentoModal({ inicial }: { inicial: AvisoItem[] }) {
   const [avisos, setAvisos] = useState<AvisoItem[]>(inicial);
   const [aberto, setAberto] = useState(false);
+  const [aConsultar, setAConsultar] = useState(false);
+
+  // O número do botão «!»: atrasados e de hoje. «Amanhã» não acende vermelho.
+  useEffect(() => {
+    definirContagemAvisos(avisos.length, avisos.filter((a) => a.urgencia !== "amanha").length);
+  }, [avisos]);
+
+  /**
+   * Abrir a pedido, pelo «!» do cabeçalho.
+   *
+   * Ao contrário do aviso automático, abre MESMO sem nada pendente — quem
+   * carregou quer saber, e «nada pendente» é uma resposta. A lista é
+   * reconsultada no clique, para não mostrar a de quando a aba abriu.
+   * Conta como «mostrado»: o automático não aparece depois por cima.
+   */
+  const abrirAPedido = useCallback(() => {
+    setAberto(true);
+    setAConsultar(true);
+    marcarMostrado();
+    void getAvisosVencimento()
+      .then((lista) => setAvisos(lista))
+      .catch(() => {
+        // A action já devolve [] nos seus erros; uma falha de transporte deixa
+        // a última lista conhecida no ecrã, em vez de a apagar.
+      })
+      .finally(() => setAConsultar(false));
+  }, []);
+
+  useEffect(() => registarAbridorAvisos(abrirAPedido), [abrirAPedido]);
 
   /**
    * 🔴 Só se marca «mostrado» depois de o modal ter MESMO sido apresentado.
@@ -141,7 +171,7 @@ export function AvisosVencimentoModal({ inicial }: { inicial: AvisoItem[] }) {
     return () => document.removeEventListener("visibilitychange", aoVoltar);
   }, [talvezMostrar]);
 
-  if (!aberto || avisos.length === 0) return null;
+  if (!aberto) return null;
 
   const grupos = agruparPorUrgencia(avisos);
 
@@ -159,7 +189,9 @@ export function AvisosVencimentoModal({ inicial }: { inicial: AvisoItem[] }) {
               Prazos a vencer
             </h2>
             <p className="text-xs text-[var(--color-text-sub)] mt-0.5">
-              {avisos.length === 1 ? "1 assunto precisa de atenção" : `${avisos.length} assuntos precisam de atenção`}
+              {avisos.length === 0
+                ? "Nada pendente"
+                : avisos.length === 1 ? "1 assunto precisa de atenção" : `${avisos.length} assuntos precisam de atenção`}
             </p>
           </div>
           <button
@@ -173,6 +205,13 @@ export function AvisosVencimentoModal({ inicial }: { inicial: AvisoItem[] }) {
         </div>
 
         <div className="overflow-y-auto p-4 space-y-5">
+          {avisos.length === 0 && (
+            <p className="flex items-center gap-2 text-sm text-[var(--color-text-sub)]">
+              {aConsultar
+                ? <><Loader2 className="w-4 h-4 animate-spin" /> A verificar…</>
+                : <><CheckCircle2 className="w-4 h-4 text-emerald-600" /> Nada atrasado, nem para hoje ou amanhã.</>}
+            </p>
+          )}
           {URGENCIA_ORDEM.map((urgencia) => {
             const itens = grupos[urgencia];
             if (itens.length === 0) return null;
