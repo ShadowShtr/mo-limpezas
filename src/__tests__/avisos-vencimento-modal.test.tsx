@@ -305,3 +305,24 @@ describe("botão «!» ao lado do sino", () => {
     expect(container.textContent).toContain("Seguro da carrinha");
   });
 });
+
+describe("botão «!» — ciclo de vida", () => {
+  it("em StrictMode (montar, desmontar, montar) o botão continua a abrir", async () => {
+    const { StrictMode } = await import("react");
+    window.sessionStorage.setItem(CHAVE, "1");
+    act(() => {
+      root.render(<StrictMode><AvisosButton /><AvisosVencimentoModal inicial={[aviso({ urgencia: "atrasado" })]} /></StrictMode>);
+    });
+    expect(botao()?.textContent).toBe("1");
+    getAvisosVencimento.mockResolvedValue([aviso({ urgencia: "atrasado" })]);
+    act(() => { botao()?.click(); });
+    expect(estaAberto()).toBe(true);
+  });
+
+  it("se o modal sair, o botão sai com ele — nunca fica a apontar para nada", () => {
+    montarComBotao([aviso()]);
+    expect(botao()).not.toBeNull();
+    act(() => { root.render(<AvisosButton />); });
+    expect(botao()).toBeNull();
+  });
+});

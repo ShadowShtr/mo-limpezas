@@ -4494,7 +4494,7 @@
       "sideEffects": [],
       "risks": [],
       "signals": {
-        "dynamicImport": 3
+        "dynamicImport": 4
       },
       "action": "nenhuma",
       "reason": "suite de testes — corre por convenção do vitest",
