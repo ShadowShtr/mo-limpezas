@@ -26895,7 +26895,7 @@
       ],
       "signals": {
         "serviceRole": 8,
-        "sqlWrite": 21
+        "sqlWrite": 22
       },
       "action": "nenhuma",
       "reason": "migration versionada — histórico do schema, nunca se apaga",
