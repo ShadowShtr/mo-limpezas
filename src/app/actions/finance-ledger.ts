@@ -152,5 +152,41 @@ export async function getFinanceLedger(
   };
 
   const resultado = await loadFinanceLedger(source, { year, month });
-  return resultado.ok ? { ...resultado, companyId } : resultado;
+  if (!resultado.ok) return resultado;
+
+  // ── Recorrência dos fixos (107) — fail-open, de propósito ─────────────────
+  //
+  // 🔴 Leitura à parte, e não uma coluna a mais em PAYMENT_COLUMNS. Se a 107
+  //    ainda não estiver aplicada, `recurrence_id` não existe e a consulta
+  //    principal falharia — e com ela a página inteira, que fica em modo só
+  //    leitura. Aqui uma falha só deixa as linhas sem badge «Repete».
+  const fixos = resultado.rows
+    .filter((r) => r.row_kind === "payment" && r.origin === "fixo" && r.payment_id)
+    .map((r) => r.payment_id as string);
+  if (fixos.length > 0) {
+    const { data, error } = await admin
+      .from("fixed_variable_payments")
+      .select("id, recurrence_id, payment_recurrences(interval_months, active)")
+      .eq("company_id", companyId)
+      .in("id", fixos);
+    if (error) {
+      console.warn("[getFinanceLedger] recorrência indisponível; linhas sem badge", error.message);
+    } else {
+      const porId = new Map<string, { interval_months: number; active: boolean }>();
+      for (const value of data ?? []) {
+        const row = value as unknown as {
+          id: string;
+          recurrence_id: string | null;
+          payment_recurrences?: { interval_months: number; active: boolean } | { interval_months: number; active: boolean }[] | null;
+        };
+        const rec = Array.isArray(row.payment_recurrences) ? row.payment_recurrences[0] : row.payment_recurrences;
+        if (row.recurrence_id && rec) porId.set(row.id, { interval_months: Number(rec.interval_months), active: Boolean(rec.active) });
+      }
+      for (const r of resultado.rows) {
+        if (r.payment_id && r.origin === "fixo") r.recurrence = porId.get(r.payment_id) ?? null;
+      }
+    }
+  }
+
+  return { ...resultado, companyId };
 }

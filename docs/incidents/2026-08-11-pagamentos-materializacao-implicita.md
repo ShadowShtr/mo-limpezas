@@ -5,7 +5,7 @@
 - **Estado:** `INCIDENT_CAUSE_CONFIRMED`
 - **Contenção:** PR C — `fix/payments-stop-implicit-materialization`
 - **Reparação de Agosto:** `AUGUST_REPAIR = PENDING_READ_ONLY_MANIFEST`
-- **Correção do modelo:** por fazer — ver §6
+- **Correção do modelo:** migration 107 (2026-10-01) — ver §8
 
 > Este documento não contém identificadores reais, valores, nomes de
 > fornecedores nem credenciais. Descreve o mecanismo, não os dados.
@@ -207,3 +207,36 @@ conciliação bancária. Não é capacidade nova; era capacidade invisível.
 | — | Manifesto de reparação de Agosto (só leitura) |
 | — | Reparação de Agosto, com autorização separada |
 | — | `recurrence_interval_months` / `recurrence_anchor_date` |
+
+---
+
+## 8. A correção do modelo — migration 107 (2026-10-01)
+
+A recorrência voltou, cumprindo as condições do §6, com uma diferença de
+desenho em relação à proposta:
+
+- **O molde é uma tabela própria** (`payment_recurrences`), e não duas colunas
+  na linha. Copiar «a linha do mês anterior» era o defeito de fundo da versão em
+  quarentena — um trimestral não tem linha no mês anterior, e uma conta de luz
+  arrastaria um valor que só vale para um mês. O molde guarda descrição, valor
+  (ou nenhum), categoria, dia de vencimento e periodicidade.
+- **Ler continua a não escrever.** A geração é a RPC
+  `generate_recurring_payments_atomic`, chamada por um cron diário e pelas
+  acções explícitas «Novo fixo» (com periodicidade) e «Repetir…». Nenhuma
+  leitura lhe chega — os testes deste incidente continuam de pé.
+- **Quatro meses à frente, nunca o mês corrente, nunca antes de 2026-11.** O
+  piso vive na base. Outubro de 2026 estava a ser lançado à mão e ficou como
+  estava, por decisão do dono.
+- **`LEGACY_RECURRENCE_UNKNOWN` foi respeitado:** nenhum fixo antigo ganhou
+  periodicidade por inferência. A semente inicial foi uma lista revista com o
+  dono, linha a linha, fora do repositório (tem valores reais).
+- **Idempotência por índice único** `(recurrence_id, period_year, period_month)`
+  e por `generated_through`, que só avança: uma linha gerada e apagada não
+  reaparece.
+- **Anexos:** as linhas geradas nascem sem anexo, e «parar de repetir» nunca
+  apaga uma ocorrência com anexo (coluna da 052 ou tabela da 074), paga, ou com
+  movimento de caixa.
+
+`payments-month-materialization.ts` continua em quarentena e continua sem ser
+importado. Não é a base da 107.
+

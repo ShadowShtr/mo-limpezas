@@ -159,10 +159,17 @@ const CAPABILITY_CEILING: Record<string, string[]> = {
   //
   //    Fixado em `src/__tests__/finance-ledger-unified-ui.test.ts` (P25):
   //    nenhuma mutação financeira directa pode regressar às actions.
+  //
+  // 2026-10-01 (107): `makePaymentRecurring` e `stopPaymentRecurrence` entram
+  // DE PROPÓSITO — «Repetir…» e «Parar de repetir» no menu de um fixo. São
+  // cliques explícitos, nunca render, e as duas passam por RPCs da 107
+  // (`make_payment_recurring_atomic`, `stop_payment_recurrence_atomic`). A
+  // geração diária é do cron, fora desta vista.
   "src/app/(dashboard)/dashboard/financeiro/pagamentos/_components/unified-payments-client.tsx": [
     "createCashFlowEntry", "createPayment",
     "deleteCashFlowEntry", "deletePayment",
-    "setPaymentStatus", "updateCashFlowEntry", "updatePayment",
+    "makePaymentRecurring", "setPaymentStatus", "stopPaymentRecurrence",
+    "updateCashFlowEntry", "updatePayment",
   ],
   // `pagamentos/page.tsx` desapareceu deste inventário por não lhe restar
   // nenhuma capacidade de escrita — só chama `getPayments`.

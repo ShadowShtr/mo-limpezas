@@ -265,9 +265,20 @@ export type Database = {
         Relationships: [];
       };
       fixed_variable_payments: {
-        Row: { id: string; company_id: string; kind: "fixo" | "variavel"; description: string; amount: number | null; due_date: string | null; direct_debit: boolean | null; status: "pago" | "pendente"; recurring: boolean; period_year: number; period_month: number; paid_at: string | null; notes: string | null; sort_order: number; source_id: string | null; created_by: string | null; created_at: string; updated_at: string; expense_category_id: string | null; attachment_url: string | null; attachment_name: string | null; attachment_size: number | null; attachment_mime: string | null };
+        Row: { id: string; company_id: string; kind: "fixo" | "variavel"; description: string; amount: number | null; due_date: string | null; direct_debit: boolean | null; status: "pago" | "pendente"; recurring: boolean; period_year: number; period_month: number; paid_at: string | null; notes: string | null; sort_order: number; source_id: string | null; created_by: string | null; created_at: string; updated_at: string; expense_category_id: string | null; attachment_url: string | null; attachment_name: string | null; attachment_size: number | null; attachment_mime: string | null; recurrence_id: string | null };
         Insert: { company_id: string; kind: "fixo" | "variavel"; description: string; amount?: number | null; due_date?: string | null; direct_debit?: boolean | null; status?: "pago" | "pendente"; recurring?: boolean; period_year: number; period_month: number; paid_at?: string | null; notes?: string | null; sort_order?: number; source_id?: string | null; expense_category_id?: string | null; created_by?: string | null };
         Update: { description?: string; amount?: number | null; due_date?: string | null; direct_debit?: boolean | null; status?: "pago" | "pendente"; recurring?: boolean; notes?: string | null; sort_order?: number; paid_at?: string | null; period_year?: number; period_month?: number; updated_at?: string; expense_category_id?: string | null; attachment_url?: string | null; attachment_name?: string | null; attachment_size?: number | null; attachment_mime?: string | null };
+        Relationships: [
+          { foreignKeyName: "fixed_variable_payments_recurrence_id_fkey"; columns: ["recurrence_id"]; isOneToOne: false; referencedRelation: "payment_recurrences"; referencedColumns: ["id"] },
+        ];
+      };
+      // ── Recorrência dos fixos (migration 107) ────────────────────────────────
+      // `Insert`/`Update` a `never`: escreve-se SÓ pelas RPCs da 107, que tratam
+      // dos locks de período e da idempotência.
+      payment_recurrences: {
+        Row: { id: string; company_id: string; description: string; amount: number | null; expense_category_id: string | null; direct_debit: boolean; notes: string | null; sort_order: number; interval_months: number; due_day: number | null; generated_through: number; active: boolean; ended_at: string | null; source_payment_id: string | null; created_by: string | null; created_at: string; updated_at: string };
+        Insert: never;
+        Update: never;
         Relationships: [];
       };
       collaborator_documents: {
