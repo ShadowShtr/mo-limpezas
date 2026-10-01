@@ -36,6 +36,11 @@
 //   de render;
 // - as linhas existentes sem periodicidade conhecida tratadas como
 //   `LEGACY_RECURRENCE_UNKNOWN` — perguntadas, não adivinhadas.
+//
+// 2026-10-01: a recorrência voltou pela migration 107 (`payment_recurrences`,
+// `generate_recurring_payments_atomic`, `src/lib/payment-recurrence-generation.ts`),
+// que cumpre as três condições acima. Este módulo NÃO é a base dela e continua
+// sem ser importado.
 // ============================================================================
 
 import type { createAdminClient } from "@/lib/supabase/admin";

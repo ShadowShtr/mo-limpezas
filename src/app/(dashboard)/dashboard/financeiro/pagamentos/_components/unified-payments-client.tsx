@@ -37,7 +37,15 @@ import {
   categoryKey,
   sortFinanceLedgerForView,
 } from "@/domain/finance/ledger-presentation";
-import { createPayment, deletePayment, setPaymentStatus, updatePayment } from "@/app/actions/payments";
+import {
+  createPayment,
+  deletePayment,
+  makePaymentRecurring,
+  setPaymentStatus,
+  stopPaymentRecurrence,
+  updatePayment,
+} from "@/app/actions/payments";
+import { INTERVALOS_RECORRENCIA, ROTULO_INTERVALO, isIntervaloRecorrencia } from "@/domain/finance/payment-recurrence";
 import { createCashFlowEntry, deleteCashFlowEntry, updateCashFlowEntry } from "@/app/actions/cash-flow";
 import { AttachmentsField } from "@/components/attachments/attachments-field";
 import { RowMenu } from "@/components/financeiro/v2/primitives";
@@ -78,6 +86,8 @@ interface FormState {
   cashStatus: "pendente" | "confirmado";
   directDebit: "" | "sim" | "nao";
   notes: string;
+  /** Só num fixo novo: "" não repete; "1", "3"… meses entre ocorrências. */
+  recurrence: string;
 }
 
 const PAGE_SIZE = 15;
@@ -105,6 +115,7 @@ function emptyForm(type: EntryType): FormState {
     cashStatus: "confirmado",
     directDebit: "",
     notes: "",
+    recurrence: "1",
   };
 }
 
@@ -136,6 +147,8 @@ export function UnifiedPaymentsClient({ rows, error: initialError, categories, c
   const [form, setForm] = useState<FormState | null>(null);
   const [formError, setFormError] = useState("");
   const [error, setError] = useState(initialError);
+  const [notice, setNotice] = useState("");
+  const [repeatRow, setRepeatRow] = useState<FinanceLedgerRow | null>(null);
   const today = todayInLisbon();
   const specializedMode = filter === "fixos" || filter === "variaveis";
 
@@ -252,6 +265,7 @@ export function UnifiedPaymentsClient({ rows, error: initialError, categories, c
           notes,
           year,
           month,
+          recurrence_interval_months: form.kind === "fixo" && form.recurrence !== "" ? Number(form.recurrence) : null,
         }), true);
       }
       return;
@@ -278,6 +292,25 @@ export function UnifiedPaymentsClient({ rows, error: initialError, categories, c
         expenseCategoryId: categoryId,
       }), true);
     }
+  }
+
+  // ── Recorrência (107) ────────────────────────────────────────────────────
+  function stopRepeating(row: FinanceLedgerRow) {
+    if (!row.payment_id) return;
+    if (!confirm(`Deixar de repetir "${row.description}"?
+
+Este mês fica como está. Dos meses seguintes, saem só os que ainda estão por pagar e sem anexo.`)) return;
+    setError("");
+    setNotice("");
+    startTransition(async () => {
+      const result = await stopPaymentRecurrence(row.payment_id!);
+      if (!result.ok) { setError(result.error ?? "Não foi possível parar a repetição."); return; }
+      const mantidos = result.mantidos ?? 0;
+      setNotice(mantidos > 0
+        ? `Deixou de repetir. ${mantidos} mês(es) seguinte(s) ficaram por terem anexo, pagamento ou movimento de caixa.`
+        : "Deixou de repetir.");
+      router.refresh();
+    });
   }
 
   function remove(row: FinanceLedgerRow) {
@@ -350,6 +383,12 @@ export function UnifiedPaymentsClient({ rows, error: initialError, categories, c
               haja nada a pagar — quer dizer que ainda não foi lançado.
             </p>
           </div>
+        </div>
+      )}
+
+      {notice && (
+        <div role="status" className="flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">
+          <Repeat className="h-4 w-4 shrink-0" /> {notice}
         </div>
       )}
 
@@ -433,6 +472,12 @@ export function UnifiedPaymentsClient({ rows, error: initialError, categories, c
                   <td className="px-3 py-3 tabular-nums">{date(row.date)}</td>
                   <td className="max-w-[260px] px-3 py-3 font-medium text-[var(--color-text-main)]">
                     {row.description}
+                    {row.recurrence && isIntervaloRecorrencia(row.recurrence.interval_months) && (
+                      <span className="mt-1 flex items-center gap-1 text-xs font-normal text-[var(--color-text-muted)]">
+                        <Repeat className="h-3 w-3 shrink-0" aria-hidden="true" />
+                        {row.recurrence.active ? `Repete · ${ROTULO_INTERVALO[row.recurrence.interval_months].toLowerCase()}` : "Deixou de repetir"}
+                      </span>
+                    )}
                     {anomalia && (
                       <span className="mt-1 flex items-start gap-1.5 text-xs font-normal text-amber-800">
                         <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
@@ -450,6 +495,15 @@ export function UnifiedPaymentsClient({ rows, error: initialError, categories, c
                     <RowMenu label={`Ações de ${row.description}`} actions={[
                       { label: !podeAlterar ? "Verificar inconsistência" : row.is_manual || row.row_kind === "payment" ? "Editar" : "Gerido na origem", icon: <Pencil className="h-3.5 w-3.5" />, onSelect: () => !podeAlterar ? bloqueado() : row.is_manual || row.row_kind === "payment" ? setForm(formFromRow(row)) : setError("Este movimento deve ser alterado na área que o criou.") },
                       ...(row.row_kind === "payment" && row.payment_id ? [{ label: !podeAlterar ? "Estado bloqueado" : row.payment_status === "pago" ? "Marcar por pagar" : "Marcar como pago", icon: <Check className="h-3.5 w-3.5" />, onSelect: () => !podeAlterar ? bloqueado() : mutate(() => setPaymentStatus(row.payment_id!, row.payment_status === "pago" ? "pendente" : "pago")) }] : []),
+                      // `recurrence === undefined` é «não se sabe» (107 por aplicar, ou
+                      // leitura falhada): nesse caso o menu não oferece nada.
+                      ...(row.row_kind === "payment" && row.origin === "fixo" && row.payment_id && row.recurrence !== undefined
+                        ? row.recurrence?.active
+                          ? [{ label: "Parar de repetir", icon: <Repeat className="h-3.5 w-3.5" />, onSelect: () => stopRepeating(row) }]
+                          : row.recurrence === null
+                            ? [{ label: "Repetir…", icon: <Repeat className="h-3.5 w-3.5" />, onSelect: () => setRepeatRow(row) }]
+                            : []
+                        : []),
                       { label: !podeAlterar ? "Não pode eliminar" : row.is_manual || (row.row_kind === "payment" && row.payment_status === "pendente" && !row.is_linked) ? "Eliminar" : "Não pode eliminar", icon: <Trash2 className="h-3.5 w-3.5" />, onSelect: () => !podeAlterar ? bloqueado() : remove(row), danger: true },
                     ]} />
                   </td>
@@ -470,6 +524,18 @@ export function UnifiedPaymentsClient({ rows, error: initialError, categories, c
       </section>
 
       {form && <EntryModal form={form} setForm={setForm} categories={categories} pending={pending} error={formError} onSubmit={submit} />}
+      {repeatRow && (
+        <RepeatModal
+          row={repeatRow}
+          pending={pending}
+          onClose={() => setRepeatRow(null)}
+          onConfirm={(intervalo) => {
+            const alvo = repeatRow;
+            setRepeatRow(null);
+            mutate(() => makePaymentRecurring(alvo.payment_id!, intervalo));
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -502,6 +568,35 @@ function CategoryChart({ slices, total }: { slices: ReturnType<typeof categorySl
   </div>;
 }
 
+/**
+ * «Repetir…» num fixo que já existe. O molde é a própria linha: descrição,
+ * valor, categoria e o dia do vencimento. Os meses seguintes aparecem logo,
+ * até quatro meses à frente — nunca o mês corrente, nunca antes de Novembro.
+ */
+function RepeatModal({ row, pending, onClose, onConfirm }: { row: FinanceLedgerRow; pending: boolean; onClose: () => void; onConfirm: (intervalo: number) => void }) {
+  const [intervalo, setIntervalo] = useState<number>(1);
+  return <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
+    <button aria-label="Fechar" className="absolute inset-0 bg-black/40" onClick={onClose} />
+    <div className="relative z-10 w-full max-w-sm rounded-lg border border-[var(--color-border)] bg-white p-5 shadow-xl">
+      <h2 className="text-base font-semibold">Repetir «{row.description}»</h2>
+      <p className="mt-1 text-sm text-[var(--color-text-muted)]">
+        Passa a aparecer sozinho nos meses seguintes, com o mesmo valor, categoria e dia de vencimento. Os anexos não são copiados.
+      </p>
+      <div className="mt-4">
+        <Field label="Repete">
+          <select value={intervalo} onChange={(event) => setIntervalo(Number(event.target.value))} className={inputClass}>
+            {INTERVALOS_RECORRENCIA.map((n) => <option key={n} value={n}>{ROTULO_INTERVALO[n]}</option>)}
+          </select>
+        </Field>
+      </div>
+      <div className="mt-5 flex justify-end gap-2">
+        <button type="button" onClick={onClose} className="rounded-lg border border-[var(--color-border)] px-3 py-2 text-sm">Cancelar</button>
+        <button type="button" disabled={pending} onClick={() => onConfirm(intervalo)} className="rounded-lg bg-[var(--finance-primary)] px-3 py-2 text-sm font-semibold text-white disabled:opacity-60">Repetir</button>
+      </div>
+    </div>
+  </div>;
+}
+
 function EntryModal({ form, setForm, categories, pending, error, onSubmit }: { form: FormState; setForm: (value: FormState | null) => void; categories: LedgerCategoryOption[]; pending: boolean; error: string; onSubmit: (event: React.FormEvent) => void }) {
   const update = (patch: Partial<FormState>) => setForm({ ...form, ...patch });
   const paid = form.row?.payment_status === "pago";
@@ -512,6 +607,7 @@ function EntryModal({ form, setForm, categories, pending, error, onSubmit }: { f
       <form onSubmit={onSubmit} className="space-y-4 p-5">
         <Field label="Tipo *"><select disabled={Boolean(form.row)} value={form.type} onChange={(event) => update({ type: event.target.value as EntryType })} className={inputClass}><option value="payment">Conta a pagar</option><option value="manual_output">Saída manual</option><option value="manual_input">Entrada manual</option></select></Field>
         {form.type === "payment" && <Field label="Natureza"><select disabled={Boolean(form.row)} value={form.kind} onChange={(event) => update({ kind: event.target.value as FormState["kind"] })} className={`${inputClass} ${form.row ? "bg-slate-50 opacity-70" : ""}`}><option value="variavel">Variável</option><option value="fixo">Fixo</option></select></Field>}
+        {form.type === "payment" && form.kind === "fixo" && !form.row && <Field label="Repete"><select value={form.recurrence} onChange={(event) => update({ recurrence: event.target.value })} className={inputClass}><option value="">Não repete</option>{INTERVALOS_RECORRENCIA.map((n) => <option key={n} value={String(n)}>{ROTULO_INTERVALO[n]}</option>)}</select><p className="mt-1 text-xs text-[var(--color-text-muted)]">Os meses seguintes aparecem sozinhos, até quatro meses à frente. Os anexos não são copiados.</p></Field>}
         <Field label="Descrição *"><input autoFocus value={form.description} onChange={(event) => update({ description: event.target.value })} className={inputClass} /></Field>
         <div className="grid grid-cols-2 gap-3">
           <Field label={form.type === "payment" ? "Valor (€)" : "Valor (€) *"}><input inputMode="decimal" disabled={paid} value={form.amount} onChange={(event) => update({ amount: event.target.value })} className={`${inputClass} ${paid ? "bg-slate-50 opacity-70" : ""}`} />{paid && <p className="mt-1 text-xs text-[var(--color-text-muted)]">Reverta o pagamento antes de alterar o valor.</p>}</Field>

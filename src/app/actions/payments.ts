@@ -27,6 +27,8 @@ import {
   buildPaymentAttachmentPath,
   isPaymentAttachmentPathInCompany,
 } from "@/lib/payment-attachments";
+import { gerarFixosRecorrentes } from "@/lib/payment-recurrence-generation";
+import { chaveCorrente, isIntervaloRecorrencia } from "@/domain/finance/payment-recurrence";
 
 type AdminClient = ReturnType<typeof createAdminClient>;
 
@@ -219,6 +221,11 @@ export interface PaymentInput {
   notes: string | null;
   year: number;
   month: number;
+  /**
+   * Só para fixos. 1, 2, 3, 6 ou 12 meses — o fixo passa a repetir-se sozinho
+   * (107). `null` ou ausente: não se repete.
+   */
+  recurrence_interval_months?: number | null;
 }
 
 export async function createPayment(input: PaymentInput): Promise<{ ok: boolean; error?: string }> {
@@ -286,6 +293,38 @@ export async function createPayment(input: PaymentInput): Promise<{ ok: boolean;
     dueDate,
     fallback: { year: input.year, month: input.month },
   });
+
+  // ── Fixo recorrente: linha e molde numa só transacção (107) ───────────────
+  const intervalo = input.recurrence_interval_months ?? null;
+  if (intervalo !== null) {
+    if (input.kind !== "fixo") return { ok: false, error: "Só um pagamento fixo se pode repetir." };
+    if (!isIntervaloRecorrencia(intervalo)) return { ok: false, error: "Periodicidade inválida." };
+
+    const { data, error } = await admin.rpc("create_recurring_payment_atomic", {
+      p_company_id: profile.company_id,
+      p_description: input.description.trim(),
+      p_amount: input.amount,
+      p_due_date: dueDate,
+      p_period_year: competencia.year,
+      p_period_month: competencia.month,
+      p_interval_months: intervalo,
+      p_expense_category_id: input.expense_category_id,
+      p_direct_debit: input.direct_debit ?? false,
+      p_notes: input.notes,
+      p_actor: profile.id,
+    });
+    if (error) return { ok: false, error: mensagemDeRecorrencia(error.message) };
+
+    // Os meses seguintes já, em vez de esperar pelo cron. Uma falha aqui não
+    // desfaz o fixo criado: o cron de amanhã gera o que faltar.
+    const recurrenceId = (Array.isArray(data) ? data[0] : data)?.recurrence_id ?? null;
+    if (recurrenceId) {
+      const gerado = await gerarFixosRecorrentes(admin, profile.company_id, todayInLisbon(), recurrenceId);
+      if (!gerado.ok) console.error("[createPayment] geração imediata falhou; o cron recupera", gerado.error);
+    }
+    revalidate();
+    return { ok: true };
+  }
 
   const { error } = await admin.rpc("create_payment_atomic", {
     p_company_id: profile.company_id,
@@ -637,6 +676,84 @@ export async function deletePayment(id: string): Promise<{ ok: boolean; error?: 
   if (error) return { ok: false, error: mensagemDeEliminacao(error.message) };
   revalidate();
   return { ok: true };
+}
+
+// ─── Recorrência dos fixos (107) ──────────────────────────────────────────────
+//
+// Ver `supabase/migrations/107_payment_recurrences.sql`. As duas acções abaixo
+// são cliques explícitos; a geração diária é do cron. Nenhuma leitura gera.
+
+function mensagemDeRecorrencia(erro: string): string {
+  if (erro.includes("FINANCIAL_PERIOD_CLOSED")) return "Um dos meses envolvidos está fechado. Nada foi alterado.";
+  if (erro.includes("PAYMENT_ALREADY_RECURRING")) return "Este fixo já se repete.";
+  if (erro.includes("PAYMENT_RECURRENCE_ONLY_FIXED")) return "Só um pagamento fixo se pode repetir.";
+  if (erro.includes("PAYMENT_NOT_FOUND")) return "Pagamento não encontrado.";
+  if (erro.includes("PAYMENT_RECURRENCE_NOT_FOUND")) return "Este fixo já não se repete.";
+  if (erro.includes("PAYMENT_DESCRIPTION_REQUIRED")) return "Descrição obrigatória.";
+  if (erro.includes("PAYMENT_AMOUNT_INVALID")) return "Valor inválido.";
+  return "Não foi possível alterar a repetição. Nada foi alterado.";
+}
+
+/** «Repetir…» — um fixo que já existe passa a repetir-se a partir do seu mês. */
+export async function makePaymentRecurring(
+  paymentId: string,
+  intervalMonths: number,
+): Promise<{ ok: boolean; error?: string }> {
+  const guard = await requireProfile({ roles: ["admin", "gestor"] });
+  if (!guard.ok) return { ok: false, error: guard.error };
+  const { admin, profile } = guard;
+  if (!isIntervaloRecorrencia(intervalMonths)) return { ok: false, error: "Periodicidade inválida." };
+
+  const { data, error } = await admin.rpc("make_payment_recurring_atomic", {
+    p_company_id: profile.company_id,
+    p_payment_id: paymentId,
+    p_interval_months: intervalMonths,
+    p_actor: profile.id,
+  });
+  if (error) return { ok: false, error: mensagemDeRecorrencia(error.message) };
+
+  const recurrenceId = (Array.isArray(data) ? data[0] : data)?.recurrence_id ?? null;
+  if (recurrenceId) {
+    const gerado = await gerarFixosRecorrentes(admin, profile.company_id, todayInLisbon(), recurrenceId);
+    if (!gerado.ok) console.error("[makePaymentRecurring] geração imediata falhou; o cron recupera", gerado.error);
+  }
+  revalidate();
+  return { ok: true };
+}
+
+/**
+ * «Parar de repetir». O mês corrente e os anteriores ficam sempre. Dos meses
+ * seguintes, a 107 só apaga o que está pendente e sem nada — anexo, pagamento
+ * ou movimento de caixa mantêm a linha, e a resposta diz quantas ficaram.
+ */
+export async function stopPaymentRecurrence(
+  paymentId: string,
+): Promise<{ ok: boolean; error?: string; apagados?: number; mantidos?: number }> {
+  const guard = await requireProfile({ roles: ["admin", "gestor"] });
+  if (!guard.ok) return { ok: false, error: guard.error };
+  const { admin, profile } = guard;
+
+  const { data: pag, error: erroLeitura } = await admin
+    .from("fixed_variable_payments")
+    .select("recurrence_id")
+    .eq("id", paymentId)
+    .eq("company_id", profile.company_id)
+    .maybeSingle();
+  if (erroLeitura) return { ok: false, error: "Não foi possível ler o pagamento. Nada foi alterado." };
+  if (!pag) return { ok: false, error: "Pagamento não encontrado." };
+  if (!pag.recurrence_id) return { ok: false, error: "Este fixo não se repete." };
+
+  const { data, error } = await admin.rpc("stop_payment_recurrence_atomic", {
+    p_company_id: profile.company_id,
+    p_recurrence_id: pag.recurrence_id,
+    p_after_key: chaveCorrente(todayInLisbon()),
+    p_actor: profile.id,
+  });
+  if (error) return { ok: false, error: mensagemDeRecorrencia(error.message) };
+
+  const r = (Array.isArray(data) ? data[0] : data) as { apagados?: number; mantidos?: number } | null;
+  revalidate();
+  return { ok: true, apagados: Number(r?.apagados ?? 0), mantidos: Number(r?.mantidos ?? 0) };
 }
 
 // ─── Anexo (fatura/recibo) ────────────────────────────────────────────────────

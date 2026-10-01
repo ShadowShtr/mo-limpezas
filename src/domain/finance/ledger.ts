@@ -98,6 +98,12 @@ export interface FinanceLedgerRow {
     | "orphan_payment_reference"
     | "duplicate_payment_link"
     | null;
+  /**
+   * Recorrência do fixo (107), quando é conhecida. Opcional e apensa DEPOIS da
+   * construção do razão: é informação de apresentação, e a sua ausência —
+   * migration por aplicar, leitura falhada — só esconde o badge e o menu.
+   */
+  recurrence?: { interval_months: number; active: boolean } | null;
 }
 
 export interface BuildFinanceLedgerInput {
