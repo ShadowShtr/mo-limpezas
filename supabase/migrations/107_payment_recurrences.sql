@@ -41,6 +41,15 @@
 -- nenhum anexo — nem as colunas `attachment_*` da 052, nem a tabela
 -- `attachments` da 074, nem o storage. As linhas geradas nascem SEM anexo: o
 -- comprovativo é de um mês, não do molde.
+--
+-- ---------------------------------------------------------------------------
+-- 🔴 Sem `SELECT ... INTO` em lado nenhum
+-- ---------------------------------------------------------------------------
+--
+-- O SQL Editor do Supabase lê `SELECT ... INTO x` como «criar a tabela x» e
+-- injecta `ALTER TABLE x ENABLE ROW LEVEL SECURITY` a seguir — a meio do corpo
+-- da função, que deixa de compilar (visto a 2026-10-01 ao aplicar esta
+-- migration). Por isso as atribuições são todas `x := (SELECT ...)`.
 -- ============================================================================
 
 -- ─── 0. Precondições ────────────────────────────────────────────────────────
@@ -48,14 +57,14 @@ DO $precondicoes$
 DECLARE
   v_faltam text;
 BEGIN
-  SELECT string_agg(f, ', ') INTO v_faltam
+  v_faltam := (SELECT string_agg(f, ', ')
     FROM unnest(ARRAY[
       'public.lock_financial_periods_many(uuid,integer[])',
       'public.is_financial_period_open(uuid,integer,integer)',
       'public.financial_period_lock_key(integer,integer)',
       'public.create_payment_atomic(uuid,text,text,numeric,date,integer,integer,uuid,boolean,text,uuid)'
     ]) AS f
-   WHERE to_regprocedure(f) IS NULL;
+   WHERE to_regprocedure(f) IS NULL);
 
   IF v_faltam IS NOT NULL THEN
     RAISE EXCEPTION 'PAYMENT_RECURRENCES_107_PRECONDITION_FAILED: em falta %', v_faltam;
@@ -235,9 +244,10 @@ BEGIN
   -- 2) Períodos, todos de uma vez; 3) só depois as perguntas.
   IF cardinality(v_alvos) > 0 THEN
     PERFORM public.lock_financial_periods_many(p_company_id, v_alvos);
-    SELECT COALESCE(array_agg(k), ARRAY[]::integer[]) INTO v_fechados
-      FROM (SELECT DISTINCT unnest(v_alvos) AS k) s
-     WHERE NOT public.is_financial_period_open(p_company_id, k / 100, k % 100);
+    v_fechados := ARRAY(
+      SELECT k FROM (SELECT DISTINCT unnest(v_alvos) AS k) s
+       WHERE NOT public.is_financial_period_open(p_company_id, k / 100, k % 100)
+    );
   END IF;
 
   -- 4) Escrita.
@@ -304,12 +314,13 @@ BEGIN
     RAISE EXCEPTION 'PAYMENT_RECURRENCE_INVALID_ARGS' USING ERRCODE = 'check_violation';
   END IF;
 
-  SELECT * INTO v_pag
-    FROM public.fixed_variable_payments
-   WHERE id = p_payment_id AND company_id = p_company_id
-   FOR UPDATE;
+  v_pag := (
+    SELECT p FROM public.fixed_variable_payments p
+     WHERE p.id = p_payment_id AND p.company_id = p_company_id
+     FOR UPDATE
+  );
 
-  IF NOT FOUND THEN
+  IF v_pag.id IS NULL THEN
     RAISE EXCEPTION 'PAYMENT_NOT_FOUND' USING ERRCODE = 'no_data_found';
   END IF;
   IF v_pag.kind <> 'fixo' THEN
@@ -370,15 +381,18 @@ DECLARE
   v_pag uuid;
   v_rec uuid;
 BEGIN
-  SELECT c.payment_id INTO v_pag
-    FROM public.create_payment_atomic(
+  v_pag := (
+    SELECT c.payment_id FROM public.create_payment_atomic(
       p_company_id, 'fixo', p_description, p_amount, p_due_date,
       p_period_year, p_period_month, p_expense_category_id, p_direct_debit,
       p_notes, p_actor
-    ) AS c;
+    ) AS c
+  );
 
-  SELECT m.recurrence_id INTO v_rec
-    FROM public.make_payment_recurring_atomic(p_company_id, v_pag, p_interval_months, p_actor) AS m;
+  v_rec := (
+    SELECT m.recurrence_id
+      FROM public.make_payment_recurring_atomic(p_company_id, v_pag, p_interval_months, p_actor) AS m
+  );
 
   RETURN QUERY SELECT v_pag, v_rec;
 END;
@@ -435,17 +449,15 @@ BEGIN
      SET active = false, ended_at = COALESCE(ended_at, now()), updated_at = now()
    WHERE id = p_recurrence_id;
 
-  SELECT count(*) INTO v_futuros
-    FROM public.fixed_variable_payments p
-   WHERE p.company_id = p_company_id
-     AND p.recurrence_id = p_recurrence_id
-     AND public.financial_period_lock_key(p.period_year, p.period_month) > p_after_key;
+  v_futuros := (
+    SELECT count(*) FROM public.fixed_variable_payments p
+     WHERE p.company_id = p_company_id
+       AND p.recurrence_id = p_recurrence_id
+       AND public.financial_period_lock_key(p.period_year, p.period_month) > p_after_key
+  );
 
-  SELECT COALESCE(array_agg(p.id ORDER BY p.id), ARRAY[]::uuid[]),
-         COALESCE(array_agg(DISTINCT public.financial_period_lock_key(p.period_year, p.period_month)), ARRAY[]::integer[])
-    INTO v_ids, v_chaves
-    FROM (
-      SELECT p.* FROM public.fixed_variable_payments p
+  v_ids := ARRAY(
+      SELECT p.id FROM public.fixed_variable_payments p
        WHERE p.company_id = p_company_id
          AND p.recurrence_id = p_recurrence_id
          AND public.financial_period_lock_key(p.period_year, p.period_month) > p_after_key
@@ -463,7 +475,12 @@ BEGIN
                           WHERE v.payment_id = p.id)
        ORDER BY p.id
        FOR UPDATE
-    ) p;
+  );
+  v_chaves := ARRAY(
+    SELECT DISTINCT public.financial_period_lock_key(p.period_year, p.period_month)
+      FROM public.fixed_variable_payments p
+     WHERE p.id = ANY (v_ids)
+  );
 
   IF cardinality(v_ids) > 0 THEN
     -- Períodos depois, e todos abertos — ou nada é apagado.
