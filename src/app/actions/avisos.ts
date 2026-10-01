@@ -11,40 +11,46 @@
 
 import { requireProfile } from "@/lib/auth-guard";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { carregarAvisos } from "@/lib/avisos/load-avisos";
+import { carregarQuadroAvisos, type QuadroAvisos } from "@/lib/avisos/load-avisos";
 import { todayInLisbon } from "@/lib/lisbon-time";
-import type { AvisoItem } from "@/domain/avisos/types";
+import { JANELA_QUADRO } from "@/domain/avisos/types";
 
 /**
- * Os avisos de hoje para quem gere a empresa.
+ * O quadro de pendentes de quem gere a empresa.
  *
- * 🔴 NUNCA lança, e devolve `[]` em qualquer falha — mesmo parcial.
+ * Janela do quadro (2026-10-01, decisão do dono): atrasados até 15 dias para
+ * trás, próximos até 15 dias à frente, oito fontes internas. O sino continua
+ * com a sua própria janela — ver `JANELA_SINO` e o cron.
  *
- *    O molde é o de `getPendingNotices`: esta camada não é essencial ao
- *    dashboard, e derrubá-lo por causa de lembretes seria trocar um
- *    inconveniente por uma avaria. O erro é registado; mascará-lo sem log
- *    deixaria o defeito invisível.
+ * 🔴 NUNCA lança. Esta camada não é essencial ao dashboard, e derrubá-lo por
+ *    causa de lembretes seria trocar um inconveniente por uma avaria.
  *
- *    O `carregarAvisos` lança se UMA das quatro fontes falhar, e é isso que se
- *    quer: devolver três como se a quarta estivesse vazia afirmaria «não há
- *    nada» quando o que se sabe é «não consegui perguntar».
+ * 🔴 Mas também não mente sobre o que não leu. Cada fonte falha sozinha e
+ *    volta pelo nome em `fontesEmFalha`; uma falha geral volta com TODAS as
+ *    fontes lá. O quadro diz «não consegui verificar», nunca «nada pendente»
+ *    quando não perguntou.
  *
  * 🔴 Colaboradora não chega aqui por dois caminhos independentes: o guard de
  *    papéis, e o `redirect("/app")` do layout do dashboard. Um esconde, o
  *    outro autoriza — e é o segundo que conta.
+ *
+ *    O tipo `QuadroAvisos` vive em `load-avisos.ts` e não é reexportado daqui:
+ *    num ficheiro "use server", até uma reexportação de tipo parte o grafo de
+ *    Server Actions no Turbopack.
  */
-export async function getAvisosVencimento(): Promise<AvisoItem[]> {
+export async function getAvisosVencimento(): Promise<QuadroAvisos> {
   try {
     const guard = await requireProfile({ roles: ["admin", "gestor"] });
-    if (!guard.ok) return [];
+    if (!guard.ok) return { itens: [], fontesEmFalha: [] };
 
-    return await carregarAvisos(
+    return await carregarQuadroAvisos(
       createAdminClient(),
       guard.profile.company_id,
       todayInLisbon(),
+      JANELA_QUADRO,
     );
   } catch (e) {
     console.error("[avisos] getAvisosVencimento falhou:", e);
-    return [];
+    return { itens: [], fontesEmFalha: [...JANELA_QUADRO.fontes] };
   }
 }

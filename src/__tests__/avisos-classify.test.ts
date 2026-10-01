@@ -134,9 +134,9 @@ describe("F — a ordem é previsível e total", () => {
 });
 
 describe("agrupamento e identidade", () => {
-  it("devolve os três grupos, mesmo vazios", () => {
+  it("devolve os quatro grupos, mesmo vazios", () => {
     const g = agruparPorUrgencia([item({ urgencia: "hoje" })]);
-    expect(Object.keys(g).sort()).toEqual(["amanha", "atrasado", "hoje"]);
+    expect(Object.keys(g).sort()).toEqual(["amanha", "atrasado", "hoje", "proximos"]);
     expect(g.atrasado).toEqual([]);
     expect(g.hoje).toHaveLength(1);
   });
@@ -174,5 +174,42 @@ describe("chave de dedupe", () => {
   it("separa fontes e itens", () => {
     expect(dedupeKey(HOJE, "pagamento", "x")).not.toBe(dedupeKey(HOJE, "tarefa", "x"));
     expect(dedupeKey(HOJE, "tarefa", "x")).not.toBe(dedupeKey(HOJE, "tarefa", "y"));
+  });
+});
+
+// ============================================================================
+// A janela do quadro (2026-10-01): 15 dias para trás, 15 para a frente
+// ============================================================================
+
+describe("classificar com limites — a janela do quadro", () => {
+  const HOJE = "2026-10-01";
+  const AMANHA = "2026-10-02";
+  const lim = { desde: "2026-09-16", ate: "2026-10-16" };
+
+  it("sem limites é exactamente o sino de antes: nada para além de amanhã", () => {
+    expect(classificar("2026-10-03", HOJE, AMANHA)).toBeNull();
+    expect(classificar("2025-01-01", HOJE, AMANHA)).toBe("atrasado");
+  });
+
+  it("atrasado até 15 dias para trás, inclusive; mais antigo não entra", () => {
+    expect(classificar("2026-09-16", HOJE, AMANHA, lim)).toBe("atrasado");
+    expect(classificar("2026-09-15", HOJE, AMANHA, lim)).toBeNull();
+  });
+
+  it("hoje e amanhã continuam com o seu grupo", () => {
+    expect(classificar(HOJE, HOJE, AMANHA, lim)).toBe("hoje");
+    expect(classificar(AMANHA, HOJE, AMANHA, lim)).toBe("amanha");
+  });
+
+  it("de depois de amanhã até +15 é «próximos»; +16 não entra", () => {
+    expect(classificar("2026-10-03", HOJE, AMANHA, lim)).toBe("proximos");
+    expect(classificar("2026-10-16", HOJE, AMANHA, lim)).toBe("proximos");
+    expect(classificar("2026-10-17", HOJE, AMANHA, lim)).toBeNull();
+  });
+
+  it("a janela atravessa a mudança de mês e de ano por texto", () => {
+    const l = { desde: "2026-12-17", ate: "2027-01-16" };
+    expect(classificar("2027-01-16", "2027-01-01", "2027-01-02", l)).toBe("proximos");
+    expect(classificar("2026-12-17", "2027-01-01", "2027-01-02", l)).toBe("atrasado");
   });
 });

@@ -8,6 +8,7 @@ import { estadoAutoriza } from "@/domain/collaborators/status";
 import {
   dedupeKey,
   NOTIFICATION_TYPE,
+  eFonteSino,
   URGENCIA_LABEL,
   type AvisoItem,
 } from "@/domain/avisos/types";
@@ -147,6 +148,10 @@ export async function GET(req: NextRequest) {
         const existentes = jaEnviadas.get(pessoa.id) ?? new Set<string>();
 
         for (const item of avisos) {
+          // Só as quatro fontes do sino. `carregarAvisos` sem janela já só as
+          // traz; isto impede que uma fonte do quadro chegue aqui por engano e
+          // crie uma notificação de tipo que o sino não sabe nomear.
+          if (!eFonteSino(item.source)) continue;
           const chave = dedupeKey(today, item.source, item.itemId);
           if (existentes.has(chave)) { saltados += 1; continue; }
 

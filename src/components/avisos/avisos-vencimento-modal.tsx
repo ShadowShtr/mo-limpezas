@@ -2,15 +2,22 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { AlertTriangle, CalendarClock, CheckCircle2, Loader2, X } from "lucide-react";
+import { AlertTriangle, CalendarClock, CalendarDays, CheckCircle2, Loader2, X } from "lucide-react";
 import { getAvisosVencimento } from "@/app/actions/avisos";
 import { agruparPorUrgencia } from "@/domain/avisos/classify";
 import {
+  AREA_DA_FONTE,
+  AREA_LABEL,
+  AREA_ORDEM,
+  FONTE_LABEL,
   URGENCIA_LABEL,
   URGENCIA_ORDEM,
+  eUrgente,
+  type AvisoArea,
   type AvisoItem,
   type AvisoUrgencia,
 } from "@/domain/avisos/types";
+import type { QuadroAvisos } from "@/lib/avisos/load-avisos";
 import { definirContagemAvisos, registarAbridorAvisos } from "./avisos-store";
 
 // ============================================================================
@@ -72,22 +79,39 @@ const ICONE: Record<AvisoUrgencia, typeof AlertTriangle> = {
   atrasado: AlertTriangle,
   hoje: CalendarClock,
   amanha: CalendarClock,
+  proximos: CalendarDays,
 };
 
 const COR: Record<AvisoUrgencia, string> = {
   atrasado: "text-red-600 dark:text-red-400",
   hoje: "text-amber-600 dark:text-amber-400",
   amanha: "text-[var(--color-text-sub)]",
+  proximos: "text-[var(--color-text-muted)]",
 };
 
-export function AvisosVencimentoModal({ inicial }: { inicial: AvisoItem[] }) {
-  const [avisos, setAvisos] = useState<AvisoItem[]>(inicial);
+/** Merece abrir sozinho ao entrar: atrasado, hoje ou amanhã. Os «próximos» não. */
+const pedeAtencao = (i: AvisoItem) => i.urgencia !== "proximos";
+
+/**
+ * A aba que abre primeiro: a primeira área com algo urgente, senão a primeira
+ * com alguma coisa, senão a primeira de todas.
+ */
+function abaInicial(itens: readonly AvisoItem[]): AvisoArea {
+  return AREA_ORDEM.find((a) => itens.some((i) => AREA_DA_FONTE[i.source] === a && eUrgente(i.urgencia)))
+    ?? AREA_ORDEM.find((a) => itens.some((i) => AREA_DA_FONTE[i.source] === a))
+    ?? AREA_ORDEM[0];
+}
+
+export function AvisosVencimentoModal({ inicial }: { inicial: QuadroAvisos }) {
+  const [quadro, setQuadro] = useState<QuadroAvisos>(inicial);
   const [aberto, setAberto] = useState(false);
   const [aConsultar, setAConsultar] = useState(false);
+  const [aba, setAba] = useState<AvisoArea>(() => abaInicial(inicial.itens));
+  const avisos = quadro.itens;
 
-  // O número do botão «!»: atrasados e de hoje. «Amanhã» não acende vermelho.
+  // O número do botão «!»: atrasados e de hoje. Amanhã e próximos não acendem.
   useEffect(() => {
-    definirContagemAvisos(avisos.length, avisos.filter((a) => a.urgencia !== "amanha").length);
+    definirContagemAvisos(avisos.length, avisos.filter((a) => eUrgente(a.urgencia)).length);
   }, [avisos]);
 
   /**
@@ -103,10 +127,13 @@ export function AvisosVencimentoModal({ inicial }: { inicial: AvisoItem[] }) {
     setAConsultar(true);
     marcarMostrado();
     void getAvisosVencimento()
-      .then((lista) => setAvisos(lista))
+      .then((novo) => {
+        setQuadro(novo);
+        setAba(abaInicial(novo.itens));
+      })
       .catch(() => {
-        // A action já devolve [] nos seus erros; uma falha de transporte deixa
-        // a última lista conhecida no ecrã, em vez de a apagar.
+        // Falha de transporte da própria Server Action: fica a última lista
+        // conhecida no ecrã, em vez de a apagar.
       })
       .finally(() => setAConsultar(false));
   }, []);
@@ -121,11 +148,17 @@ export function AvisosVencimentoModal({ inicial }: { inicial: AvisoItem[] }) {
    *    11h vence um pagamento — e nunca seria avisada, porque a sessão já
    *    estaria carimbada como vista. É o caso que a reavaliação abaixo existe
    *    para apanhar, e carimbar cedo anulá-lo-ia.
+   *
+   * 🔴 Só abre sozinho por atrasado, hoje ou amanhã — o que já abria antes da
+   *    janela de 15 dias. Com os «próximos» a contar, o quadro saltaria em
+   *    praticamente todas as sessões, e um aviso que aparece sempre aprende-se
+   *    a fechar sem ler. Os próximos ficam a um clique, no «!».
    */
-  const talvezMostrar = useCallback((lista: AvisoItem[]) => {
-    if (lista.length === 0) return;
+  const talvezMostrar = useCallback((novo: QuadroAvisos) => {
+    if (!novo.itens.some(pedeAtencao)) return;
     if (jaMostradoNestaSessao()) return;
-    setAvisos(lista);
+    setQuadro(novo);
+    setAba(abaInicial(novo.itens));
     setAberto(true);
     marcarMostrado();
   }, []);
@@ -162,9 +195,9 @@ export function AvisosVencimentoModal({ inicial }: { inicial: AvisoItem[] }) {
       if (document.visibilityState !== "visible") return;
       if (jaMostradoNestaSessao()) return;
       void getAvisosVencimento().then(talvezMostrar).catch(() => {
-        // A action já engole os seus erros e devolve []. Este catch cobre a
-        // falha de transporte da própria Server Action — e não fazer nada é a
-        // resposta certa: tenta-se outra vez no próximo regresso à aba.
+        // A action nunca lança; este catch cobre a falha de transporte da
+        // própria Server Action — e não fazer nada é a resposta certa: tenta-se
+        // outra vez no próximo regresso à aba.
       });
     }
     document.addEventListener("visibilitychange", aoVoltar);
@@ -173,7 +206,14 @@ export function AvisosVencimentoModal({ inicial }: { inicial: AvisoItem[] }) {
 
   if (!aberto) return null;
 
-  const grupos = agruparPorUrgencia(avisos);
+  const falhas = quadro.fontesEmFalha;
+  const daAba = avisos.filter((i) => AREA_DA_FONTE[i.source] === aba);
+  const grupos = agruparPorUrgencia(daAba);
+  const falhasDaAba = falhas.filter((f) => AREA_DA_FONTE[f] === aba);
+
+  const subtitulo = avisos.length > 0
+    ? (avisos.length === 1 ? "1 assunto em aberto" : `${avisos.length} assuntos em aberto`)
+    : falhas.length > 0 ? "Não foi possível verificar tudo" : "Nada pendente";
 
   return (
     <div
@@ -183,15 +223,13 @@ export function AvisosVencimentoModal({ inicial }: { inicial: AvisoItem[] }) {
       className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-black/50 p-0 sm:p-4"
     >
       <div className="w-full sm:max-w-lg max-h-[85vh] flex flex-col rounded-t-2xl sm:rounded-2xl bg-[var(--color-surface)] shadow-xl">
-        <div className="flex items-start justify-between gap-3 p-4 border-b border-[var(--color-border)]">
+        <div className="flex items-start justify-between gap-3 p-4 pb-3">
           <div>
             <h2 id="avisos-vencimento-titulo" className="text-base font-semibold text-[var(--color-text-main)]">
-              Prazos a vencer
+              Prazos e pendentes
             </h2>
             <p className="text-xs text-[var(--color-text-sub)] mt-0.5">
-              {avisos.length === 0
-                ? "Nada pendente"
-                : avisos.length === 1 ? "1 assunto precisa de atenção" : `${avisos.length} assuntos precisam de atenção`}
+              {subtitulo} · atrasados até 15 dias e próximos 15 dias
             </p>
           </div>
           <button
@@ -204,12 +242,44 @@ export function AvisosVencimentoModal({ inicial }: { inicial: AvisoItem[] }) {
           </button>
         </div>
 
+        <div role="tablist" aria-label="Áreas" className="flex gap-1 overflow-x-auto px-4 border-b border-[var(--color-border)]">
+          {AREA_ORDEM.map((area) => {
+            const daArea = avisos.filter((i) => AREA_DA_FONTE[i.source] === area);
+            const urgentes = daArea.filter((i) => eUrgente(i.urgencia)).length;
+            const ativa = area === aba;
+            return (
+              <button
+                key={area}
+                type="button"
+                role="tab"
+                aria-selected={ativa}
+                onClick={() => setAba(area)}
+                className={`shrink-0 -mb-px flex items-center gap-1.5 border-b-2 px-2.5 py-2 text-xs font-medium ${ativa ? "border-[var(--color-primary)] text-[var(--color-text-main)]" : "border-transparent text-[var(--color-text-sub)] hover:text-[var(--color-text-main)]"}`}
+              >
+                {AREA_LABEL[area]}
+                <span className={`min-w-[18px] rounded-full px-1.5 text-[10px] leading-[18px] ${urgentes > 0 ? "bg-red-500 text-white" : "bg-[var(--color-background)] text-[var(--color-text-sub)]"}`}>
+                  {daArea.length}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+
         <div className="overflow-y-auto p-4 space-y-5">
-          {avisos.length === 0 && (
+          {falhasDaAba.length > 0 && (
+            <p role="alert" className="flex items-start gap-2 rounded-lg border border-amber-300 bg-amber-50 p-2.5 text-xs text-amber-900">
+              <AlertTriangle className="w-4 h-4 shrink-0 mt-px" />
+              <span>
+                Não foi possível verificar: {falhasDaAba.map((f) => FONTE_LABEL[f]).join(", ")}.
+                Esta lista pode estar incompleta — tente de novo mais tarde.
+              </span>
+            </p>
+          )}
+          {daAba.length === 0 && falhasDaAba.length === 0 && (
             <p className="flex items-center gap-2 text-sm text-[var(--color-text-sub)]">
               {aConsultar
                 ? <><Loader2 className="w-4 h-4 animate-spin" /> A verificar…</>
-                : <><CheckCircle2 className="w-4 h-4 text-emerald-600" /> Nada atrasado, nem para hoje ou amanhã.</>}
+                : <><CheckCircle2 className="w-4 h-4 text-emerald-600" /> Nada pendente em {AREA_LABEL[aba]}.</>}
             </p>
           )}
           {URGENCIA_ORDEM.map((urgencia) => {

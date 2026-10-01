@@ -14,7 +14,10 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import type { AvisoItem } from "@/domain/avisos/types";
+import type { AvisoItem, AvisoSource } from "@/domain/avisos/types";
+
+/** O formato que a action devolve: os itens e as fontes que não se leram. */
+const q = (itens: AvisoItem[], fontesEmFalha: AvisoSource[] = []) => ({ itens, fontesEmFalha });
 
 const getAvisosVencimento = vi.fn();
 
@@ -48,14 +51,16 @@ let container: HTMLDivElement;
 let root: Root;
 
 function montar(inicial: AvisoItem[]) {
-  act(() => { root.render(<AvisosVencimentoModal inicial={inicial} />); });
+  act(() => { root.render(<AvisosVencimentoModal inicial={q(inicial)} />); });
 }
 
 const estaAberto = () => container.querySelector('[role="dialog"]') !== null;
+const aba = (nome: string) => [...container.querySelectorAll<HTMLButtonElement>('[role="tab"]')]
+  .find((b) => b.textContent?.startsWith(nome));
 
 beforeEach(() => {
   vi.clearAllMocks();
-  getAvisosVencimento.mockResolvedValue([]);
+  getAvisosVencimento.mockResolvedValue(q([]));
   window.sessionStorage.clear();
   container = document.createElement("div");
   document.body.appendChild(container);
@@ -96,9 +101,12 @@ describe("abrir e não abrir", () => {
       aviso({ key: "pagamento:p1", urgencia: "atrasado", date: "2026-09-20" }),
       aviso({ key: "tarefa:t1", source: "tarefa", itemId: "t1", urgencia: "amanha", title: "Recibos" }),
     ]);
+    // Abre na aba com o urgente (Financeiro); a tarefa de amanhã está noutra.
     expect(container.textContent).toContain("Atrasados");
-    expect(container.textContent).toContain("Amanhã");
     expect(container.textContent).not.toContain("Hoje (");
+    act(() => { aba("Tarefas")?.click(); });
+    expect(container.textContent).toContain("Amanhã");
+    expect(container.textContent).toContain("Recibos");
   });
 });
 
@@ -151,7 +159,7 @@ describe("reavaliação ao voltar à aba", () => {
     montar([]);
     expect(estaAberto()).toBe(false);
 
-    getAvisosVencimento.mockResolvedValue([aviso({ title: "Água" })]);
+    getAvisosVencimento.mockResolvedValue(q([aviso({ title: "Água" })]));
     await voltarAAba();
 
     expect(getAvisosVencimento).toHaveBeenCalled();
@@ -235,7 +243,7 @@ const { AvisosButton } = await import("@/components/avisos/avisos-button");
 
 function montarComBotao(inicial: AvisoItem[]) {
   act(() => {
-    root.render(<><AvisosButton /><AvisosVencimentoModal inicial={inicial} /></>);
+    root.render(<><AvisosButton /><AvisosVencimentoModal inicial={q(inicial)} /></>);
   });
 }
 
@@ -270,7 +278,7 @@ describe("botão «!» ao lado do sino", () => {
     act(() => { container.querySelector<HTMLButtonElement>('[aria-label="Fechar avisos"]')?.click(); });
     expect(estaAberto()).toBe(false);
 
-    getAvisosVencimento.mockResolvedValue([aviso({ key: "novo", title: "Renda de Novembro" })]);
+    getAvisosVencimento.mockResolvedValue(q([aviso({ key: "novo", title: "Renda de Novembro" })]));
     act(() => { botao()?.click(); });
     expect(estaAberto()).toBe(true);
     await esperarPromessas();
@@ -311,10 +319,10 @@ describe("botão «!» — ciclo de vida", () => {
     const { StrictMode } = await import("react");
     window.sessionStorage.setItem(CHAVE, "1");
     act(() => {
-      root.render(<StrictMode><AvisosButton /><AvisosVencimentoModal inicial={[aviso({ urgencia: "atrasado" })]} /></StrictMode>);
+      root.render(<StrictMode><AvisosButton /><AvisosVencimentoModal inicial={q([aviso({ urgencia: "atrasado" })])} /></StrictMode>);
     });
     expect(botao()?.textContent).toBe("1");
-    getAvisosVencimento.mockResolvedValue([aviso({ urgencia: "atrasado" })]);
+    getAvisosVencimento.mockResolvedValue(q([aviso({ urgencia: "atrasado" })]));
     act(() => { botao()?.click(); });
     expect(estaAberto()).toBe(true);
   });
@@ -324,5 +332,64 @@ describe("botão «!» — ciclo de vida", () => {
     expect(botao()).not.toBeNull();
     act(() => { root.render(<AvisosButton />); });
     expect(botao()).toBeNull();
+  });
+});
+
+describe("abas e janela de 15 dias", () => {
+  it("as quatro abas existem, cada uma com a sua contagem", () => {
+    montar([
+      aviso({ key: "pagamento:p1", urgencia: "hoje" }),
+      aviso({ key: "cobranca:c1", source: "cobranca", itemId: "c1", urgencia: "proximos" }),
+      aviso({ key: "tarefa:t1", source: "tarefa", itemId: "t1", urgencia: "atrasado" }),
+    ]);
+    expect(aba("Financeiro")?.textContent).toBe("Financeiro2");
+    expect(aba("Tarefas")?.textContent).toBe("Tarefas1");
+    expect(aba("Comercial")?.textContent).toBe("Comercial0");
+    expect(aba("Equipa")?.textContent).toBe("Equipa0");
+  });
+
+  it("abre na primeira área com algo urgente", () => {
+    montar([
+      aviso({ key: "pagamento:p1", urgencia: "amanha" }),
+      aviso({ key: "tarefa:t1", source: "tarefa", itemId: "t1", urgencia: "atrasado", title: "Recibos" }),
+    ]);
+    expect(aba("Tarefas")?.getAttribute("aria-selected")).toBe("true");
+    expect(container.textContent).toContain("Recibos");
+  });
+
+  it("🔴 só «próximos» NÃO abre sozinho — fica a um clique no «!»", () => {
+    montar([aviso({ urgencia: "proximos", date: "2026-10-10" })]);
+    expect(estaAberto()).toBe(false);
+    expect(window.sessionStorage.getItem(CHAVE)).toBeNull();
+  });
+
+  it("os próximos aparecem no seu grupo quando se abre", async () => {
+    getAvisosVencimento.mockResolvedValue(q([aviso({ urgencia: "proximos", title: "Renda de Outubro" })]));
+    montarComBotao([]);
+    act(() => { botao()?.click(); });
+    await esperarPromessas();
+    expect(container.textContent).toContain("Próximos 15 dias (1)");
+    expect(container.textContent).toContain("Renda de Outubro");
+  });
+
+  it("🔴 fonte em falha: diz que não verificou, nunca «nada pendente» nessa área", async () => {
+    getAvisosVencimento.mockResolvedValue(q([], ["cobranca"]));
+    montarComBotao([]);
+    act(() => { botao()?.click(); });
+    await esperarPromessas();
+    expect(container.textContent).toContain("Não foi possível verificar: Cobranças");
+    expect(container.textContent).not.toContain("Nada pendente em Financeiro");
+    act(() => { aba("Tarefas")?.click(); });
+    expect(container.textContent).toContain("Nada pendente em Tarefas");
+  });
+
+  it("o número vermelho não conta amanhã nem próximos", () => {
+    window.sessionStorage.setItem(CHAVE, "1");
+    montarComBotao([
+      aviso({ key: "a", urgencia: "hoje" }),
+      aviso({ key: "b", urgencia: "amanha" }),
+      aviso({ key: "c", urgencia: "proximos" }),
+    ]);
+    expect(botao()?.textContent).toBe("1");
   });
 });
