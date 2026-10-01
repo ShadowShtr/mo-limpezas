@@ -2,7 +2,9 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { AlertTriangle, CalendarClock, CalendarDays, CheckCircle2, Loader2, X } from "lucide-react";
+import {
+  AlertTriangle, CalendarClock, CalendarDays, CheckCircle2, ChevronRight, Loader2, X,
+} from "lucide-react";
 import { getAvisosVencimento } from "@/app/actions/avisos";
 import { agruparPorUrgencia } from "@/domain/avisos/classify";
 import {
@@ -18,6 +20,7 @@ import {
   type AvisoUrgencia,
 } from "@/domain/avisos/types";
 import type { QuadroAvisos } from "@/lib/avisos/load-avisos";
+import { todayInLisbon } from "@/lib/lisbon-time";
 import { definirContagemAvisos, registarAbridorAvisos } from "./avisos-store";
 
 // ============================================================================
@@ -88,6 +91,20 @@ const COR: Record<AvisoUrgencia, string> = {
   amanha: "text-[var(--color-text-sub)]",
   proximos: "text-[var(--color-text-muted)]",
 };
+
+/** A barra de cor à esquerda de cada linha — lê-se a urgência sem ler o texto. */
+const BARRA: Record<AvisoUrgencia, string> = {
+  atrasado: "bg-red-500",
+  hoje: "bg-amber-500",
+  amanha: "bg-sky-500",
+  proximos: "bg-slate-300",
+};
+
+/** `2026-10-01` → `01/10`. O ano só aparece quando não é o de hoje. */
+function dataCurta(data: string, hoje: string): string {
+  const [a, m, d] = data.split("-");
+  return a === hoje.slice(0, 4) ? `${d}/${m}` : `${d}/${m}/${a.slice(2)}`;
+}
 
 /** Merece abrir sozinho ao entrar: atrasado, hoje ou amanhã. Os «próximos» não. */
 const pedeAtencao = (i: AvisoItem) => i.urgencia !== "proximos";
@@ -211,9 +228,11 @@ export function AvisosVencimentoModal({ inicial }: { inicial: QuadroAvisos }) {
   const grupos = agruparPorUrgencia(daAba);
   const falhasDaAba = falhas.filter((f) => AREA_DA_FONTE[f] === aba);
 
+  const urgentesTotal = avisos.filter((i) => eUrgente(i.urgencia)).length;
   const subtitulo = avisos.length > 0
-    ? (avisos.length === 1 ? "1 assunto em aberto" : `${avisos.length} assuntos em aberto`)
+    ? `${avisos.length === 1 ? "1 assunto em aberto" : `${avisos.length} em aberto`}${urgentesTotal > 0 ? ` · ${urgentesTotal} para hoje ou atrasados` : ""}`
     : falhas.length > 0 ? "Não foi possível verificar tudo" : "Nada pendente";
+  const hoje = todayInLisbon();
 
   return (
     <div
@@ -222,50 +241,58 @@ export function AvisosVencimentoModal({ inicial }: { inicial: QuadroAvisos }) {
       aria-labelledby="avisos-vencimento-titulo"
       className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-black/50 p-0 sm:p-4"
     >
-      <div className="w-full sm:max-w-lg max-h-[85vh] flex flex-col rounded-t-2xl sm:rounded-2xl bg-[var(--color-surface)] shadow-xl">
-        <div className="flex items-start justify-between gap-3 p-4 pb-3">
-          <div>
-            <h2 id="avisos-vencimento-titulo" className="text-base font-semibold text-[var(--color-text-main)]">
+      <div className="w-full sm:max-w-lg max-h-[88vh] flex flex-col rounded-t-2xl sm:rounded-2xl bg-[var(--color-surface)] shadow-xl">
+        <div className="flex items-start justify-between gap-3 px-5 pt-5 pb-3">
+          <div className="min-w-0">
+            <h2 id="avisos-vencimento-titulo" className="text-lg font-semibold text-[var(--color-text-main)] leading-tight">
               Prazos e pendentes
             </h2>
-            <p className="text-xs text-[var(--color-text-sub)] mt-0.5">
-              {subtitulo} · atrasados até 15 dias e próximos 15 dias
-            </p>
+            <p className="text-sm text-[var(--color-text-sub)] mt-1">{subtitulo}</p>
           </div>
           <button
             type="button"
             onClick={() => setAberto(false)}
             aria-label="Fechar avisos"
-            className="shrink-0 p-1.5 rounded-lg hover:bg-[var(--color-surface-hover)] text-[var(--color-text-sub)]"
+            className="shrink-0 -mr-1 p-2 rounded-lg hover:bg-[var(--color-surface-hover)] text-[var(--color-text-sub)]"
           >
-            <X className="w-4 h-4" />
+            <X className="w-5 h-5" />
           </button>
         </div>
 
-        <div role="tablist" aria-label="Áreas" className="flex gap-1 overflow-x-auto px-4 border-b border-[var(--color-border)]">
-          {AREA_ORDEM.map((area) => {
-            const daArea = avisos.filter((i) => AREA_DA_FONTE[i.source] === area);
-            const urgentes = daArea.filter((i) => eUrgente(i.urgencia)).length;
-            const ativa = area === aba;
-            return (
-              <button
-                key={area}
-                type="button"
-                role="tab"
-                aria-selected={ativa}
-                onClick={() => setAba(area)}
-                className={`shrink-0 -mb-px flex items-center gap-1.5 border-b-2 px-2.5 py-2 text-xs font-medium ${ativa ? "border-[var(--color-primary)] text-[var(--color-text-main)]" : "border-transparent text-[var(--color-text-sub)] hover:text-[var(--color-text-main)]"}`}
-              >
-                {AREA_LABEL[area]}
-                <span className={`min-w-[18px] rounded-full px-1.5 text-[10px] leading-[18px] ${urgentes > 0 ? "bg-red-500 text-white" : "bg-[var(--color-background)] text-[var(--color-text-sub)]"}`}>
-                  {daArea.length}
-                </span>
-              </button>
-            );
-          })}
+        {/*
+          Abas como controlo segmentado: as quatro cabem sempre na largura,
+          sem scroll lateral, e cada uma é um alvo de toque grande. Sem ícones:
+          com eles, «Financeiro» e «Comercial» ficavam cortados. No telemóvel o
+          número fica por baixo do nome, pela mesma razão.
+        */}
+        <div className="px-5 pb-3">
+          <div role="tablist" aria-label="Áreas" className="grid grid-cols-4 gap-1 rounded-xl bg-[var(--color-background)] p-1">
+            {AREA_ORDEM.map((area) => {
+              const daArea = avisos.filter((i) => AREA_DA_FONTE[i.source] === area);
+              const urgentes = daArea.filter((i) => eUrgente(i.urgencia)).length;
+              const ativa = area === aba;
+              return (
+                <button
+                  key={area}
+                  type="button"
+                  role="tab"
+                  aria-selected={ativa}
+                  onClick={() => setAba(area)}
+                  className={`flex min-w-0 flex-col sm:flex-row items-center justify-center gap-1 sm:gap-1.5 rounded-lg px-1 py-1.5 sm:py-2 text-xs sm:text-[13px] font-medium transition-colors ${ativa ? "bg-[var(--color-surface)] text-[var(--color-text-main)] shadow-sm" : "text-[var(--color-text-sub)] hover:text-[var(--color-text-main)]"}`}
+                >
+                  <span className="truncate">{AREA_LABEL[area]}</span>
+                  <span className={`shrink-0 min-w-[20px] rounded-full px-1.5 text-[11px] font-semibold leading-5 ${urgentes > 0 ? "bg-red-500 text-white" : daArea.length > 0 ? "bg-slate-200 text-slate-700" : "text-[var(--color-text-muted)]"}`}>
+                    {daArea.length}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
         </div>
 
-        <div className="overflow-y-auto p-4 space-y-5">
+        <div className="h-px bg-[var(--color-border)]" />
+
+        <div className="overflow-y-auto px-5 py-4 space-y-5">
           {falhasDaAba.length > 0 && (
             <p role="alert" className="flex items-start gap-2 rounded-lg border border-amber-300 bg-amber-50 p-2.5 text-xs text-amber-900">
               <AlertTriangle className="w-4 h-4 shrink-0 mt-px" />
@@ -292,20 +319,29 @@ export function AvisosVencimentoModal({ inicial }: { inicial: QuadroAvisos }) {
                   <Icone className="w-3.5 h-3.5 shrink-0" />
                   {URGENCIA_LABEL[urgencia]} ({itens.length})
                 </h3>
-                <ul className="space-y-1.5">
+                <ul className="space-y-2">
                   {itens.map((item) => (
                     <li key={item.key}>
                       <Link
                         href={item.href}
                         onClick={() => setAberto(false)}
-                        className="block rounded-lg border border-[var(--color-border)] px-3 py-2 hover:bg-[var(--color-surface-hover)]"
+                        className="group flex items-stretch overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] hover:border-slate-300 hover:bg-[var(--color-surface-hover)] transition-colors"
                       >
-                        <p className="text-sm font-medium text-[var(--color-text-main)] leading-snug">
-                          {item.title}
-                        </p>
-                        <p className="text-xs text-[var(--color-text-sub)] mt-0.5">
-                          {item.detail} · {item.date.split("-").reverse().join("/")}
-                        </p>
+                        <span className={`w-1 shrink-0 ${BARRA[urgencia]}`} aria-hidden="true" />
+                        <span className="flex min-w-0 flex-1 items-center gap-3 px-3 py-2.5">
+                          <span className="min-w-0 flex-1">
+                            <span className="block truncate text-sm font-medium text-[var(--color-text-main)]">
+                              {item.title}
+                            </span>
+                            <span className="block truncate text-xs text-[var(--color-text-sub)] mt-0.5">
+                              {item.detail}
+                            </span>
+                          </span>
+                          <span className={`shrink-0 text-xs font-semibold tabular-nums ${COR[urgencia]}`}>
+                            {dataCurta(item.date, hoje)}
+                          </span>
+                          <ChevronRight className="w-4 h-4 shrink-0 text-[var(--color-text-muted)] group-hover:text-[var(--color-text-sub)]" aria-hidden="true" />
+                        </span>
                       </Link>
                     </li>
                   ))}
@@ -315,14 +351,17 @@ export function AvisosVencimentoModal({ inicial }: { inicial: QuadroAvisos }) {
           })}
         </div>
 
-        <div className="p-4 border-t border-[var(--color-border)]">
+        <div className="px-5 py-4 border-t border-[var(--color-border)]">
           <button
             type="button"
             onClick={() => setAberto(false)}
-            className="w-full rounded-lg bg-[var(--color-primary)] px-4 py-2 text-sm font-medium text-white hover:opacity-90"
+            className="w-full rounded-xl bg-[var(--color-primary)] px-4 py-2.5 text-sm font-semibold text-white hover:opacity-90"
           >
             Entendido
           </button>
+          <p className="mt-2 text-center text-[11px] text-[var(--color-text-muted)]">
+            Atrasados até 15 dias · próximos 15 dias
+          </p>
         </div>
       </div>
     </div>

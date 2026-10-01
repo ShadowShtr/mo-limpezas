@@ -18108,6 +18108,7 @@
       "risks": [],
       "signals": {
         "clientComponent": 1,
+        "sqlWrite": 3,
         "eslintDisable": 1
       },
       "action": "nenhuma",
@@ -22227,7 +22228,7 @@
       "category": "lib",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 50,
+      "consumers": 51,
       "consumerSample": [
         "src/__tests__/crm-quote-sheet.test.tsx",
         "src/__tests__/lisbon-time.test.ts",
@@ -22241,7 +22242,7 @@
       "risks": [],
       "signals": {},
       "action": "nenhuma",
-      "reason": "em uso: 50 consumidor(es)",
+      "reason": "em uso: 51 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
