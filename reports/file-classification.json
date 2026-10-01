@@ -1,8 +1,8 @@
 {
   "generatedBy": "scripts/audit-file-inventory.mjs",
-  "totalFiles": 1035,
+  "totalFiles": 1036,
   "byStatus": {
-    "MANTER": 1011,
+    "MANTER": 1012,
     "STANDBY": 24
   },
   "byCategory": {
@@ -12,7 +12,7 @@
     "lib": 82,
     "script": 63,
     "domain": 59,
-    "src-other": 58,
+    "src-other": 59,
     "server-action": 50,
     "doc": 47,
     "component": 36,
@@ -29,7 +29,7 @@
     "supabase-other": 2
   },
   "byConfidence": {
-    "alta": 1012,
+    "alta": 1013,
     "média": 17,
     "baixa": 6
   },
@@ -19082,11 +19082,11 @@
       "category": "domain",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 7,
+      "consumers": 8,
       "consumerSample": [
         "src/__tests__/avisos-classify.test.ts",
-        "src/__tests__/avisos-vencimento-modal.test.tsx",
-        "src/app/actions/avisos.ts"
+        "src/__tests__/avisos-fontes.test.ts",
+        "src/__tests__/avisos-vencimento-modal.test.tsx"
       ],
       "autoLoaded": false,
       "referencedBy": [
@@ -19097,7 +19097,7 @@
       "risks": [],
       "signals": {},
       "action": "nenhuma",
-      "reason": "em uso: 7 consumidor(es), configuração",
+      "reason": "em uso: 8 consumidor(es), configuração",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -20672,7 +20672,7 @@
       "category": "domain",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 64,
+      "consumers": 65,
       "consumerSample": [
         "src/__tests__/update-notice-modal.test.tsx",
         "src/__tests__/update-notices-eligibility.test.ts",
@@ -20687,7 +20687,7 @@
       "risks": [],
       "signals": {},
       "action": "nenhuma",
-      "reason": "em uso: 64 consumidor(es), configuração",
+      "reason": "em uso: 65 consumidor(es), configuração",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -20984,7 +20984,7 @@
       "category": "lib",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 3,
+      "consumers": 4,
       "consumerSample": [
         "src/__tests__/avisos-fontes.test.ts",
         "src/app/actions/avisos.ts",
@@ -21002,10 +21002,12 @@
       "signals": {
         "supabase": 2,
         "env": 1,
-        "fallbackArray": 4
+        "unknownCast": 1,
+        "consoleErr": 1,
+        "fallbackArray": 9
       },
       "action": "nenhuma",
-      "reason": "em uso: 3 consumidor(es)",
+      "reason": "em uso: 4 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -24602,6 +24604,32 @@
     },
     {
       "path": "src/release-notes/2026-10-01-fixos-repetem-sozinhos.ts",
+      "category": "src-other",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 1,
+      "consumerSample": [
+        "src/release-notes/index.ts"
+      ],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "sqlWrite": 1
+      },
+      "action": "nenhuma",
+      "reason": "em uso: 1 consumidor(es)",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/release-notes/2026-10-01-quadro-pendentes-abas.ts",
       "category": "src-other",
       "status": "MANTER",
       "confidence": "alta",

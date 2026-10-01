@@ -3,7 +3,8 @@
 // ============================================================================
 
 import { describe, expect, it, vi } from "vitest";
-import { carregarAvisos, AvisosSourceError } from "@/lib/avisos/load-avisos";
+import { carregarAvisos, carregarQuadroAvisos, AvisosSourceError } from "@/lib/avisos/load-avisos";
+import { JANELA_QUADRO } from "@/domain/avisos/types";
 
 const HOJE = "2026-09-26";       // sábado
 const AMANHA = "2026-09-27";
@@ -63,6 +64,11 @@ function fakeAdmin(linhas: Linhas, falhas: Falhas = {}) {
       gte(col: string, val: string) {
         filtros.push(`gte:${col}`);
         dados = dados.filter((r) => String(r[col]) >= val);
+        return api;
+      },
+      in(col: string, vals: unknown[]) {
+        filtros.push(`in:${col}`);
+        dados = dados.filter((r) => vals.includes(r[col]));
         return api;
       },
       lt(col: string, val: string) {
@@ -324,7 +330,7 @@ describe("FALHA — erro de leitura não é ausência de avisos", () => {
     });
   }
 
-  it("a action engole a falha e devolve lista vazia", async () => {
+  it("a action nunca lança e diz QUAL fonte falhou, sem apagar as outras", async () => {
     vi.resetModules();
     vi.doMock("@/lib/auth-guard", () => ({
       requireProfile: async () => ({
@@ -336,7 +342,7 @@ describe("FALHA — erro de leitura não é ausência de avisos", () => {
     }));
     const { getAvisosVencimento } = await import("@/app/actions/avisos");
     const erro = vi.spyOn(console, "error").mockImplementation(() => {});
-    await expect(getAvisosVencimento()).resolves.toEqual([]);
+    await expect(getAvisosVencimento()).resolves.toEqual({ itens: [], fontesEmFalha: ["visita"] });
     expect(erro).toHaveBeenCalled();
     erro.mockRestore();
     vi.doUnmock("@/lib/auth-guard");
@@ -358,5 +364,161 @@ describe("as quatro fontes convergem numa lista ordenada", () => {
       "visita:v1",      // hoje
       "lead:l1",        // hoje
     ]);
+  });
+});
+
+// ============================================================================
+// O QUADRO (2026-10-01) — 15 dias para cada lado, oito fontes, falha por fonte
+// ============================================================================
+
+const HOJE_Q = "2026-10-01";
+const quadro = (linhas: Linhas, falhas: Falhas = {}) =>
+  carregarQuadroAvisos(fakeAdmin(linhas, falhas).admin, EMPRESA, HOJE_Q, JANELA_QUADRO);
+
+describe("QUADRO — a janela de 15 dias", () => {
+  it("atrasado até 15 dias entra; com 16 já não", async () => {
+    const r = await quadro({ fixed_variable_payments: [
+      pagamento({ id: "a", due_date: "2026-09-16" }),
+      pagamento({ id: "b", due_date: "2026-09-15" }),
+    ] });
+    expect(r.itens.map((i) => i.itemId)).toEqual(["a"]);
+  });
+
+  it("próximos até +15 entram como «proximos»; +16 não", async () => {
+    const r = await quadro({ fixed_variable_payments: [
+      pagamento({ id: "a", due_date: "2026-10-16" }),
+      pagamento({ id: "b", due_date: "2026-10-17" }),
+    ] });
+    expect(r.itens.map((i) => [i.itemId, i.urgencia])).toEqual([["a", "proximos"]]);
+  });
+
+  it("sem data de vencimento não entra (decisão do dono)", async () => {
+    const r = await quadro({ fixed_variable_payments: [pagamento({ due_date: null })] });
+    expect(r.itens).toEqual([]);
+  });
+
+  it("o recorte dos 15 dias é feito na BASE, com gte e lte", async () => {
+    const f = fakeAdmin({ fixed_variable_payments: [] });
+    await carregarQuadroAvisos(f.admin, EMPRESA, HOJE_Q, JANELA_QUADRO);
+    const c = f.consultas.find((x) => x.tabela === "fixed_variable_payments")!;
+    expect(c.filtros).toEqual(expect.arrayContaining(["gte:due_date", "lte:due_date"]));
+  });
+
+  it("visitas continuam sem atrasadas, mas vão até +15", async () => {
+    const r = await quadro({ crm_visits: [
+      visita({ id: "v-ontem", scheduled_start: "2026-09-30T11:00:00Z" }),
+      visita({ id: "v-10", scheduled_start: "2026-10-10T11:00:00Z" }),
+    ] });
+    expect(r.itens.map((i) => [i.itemId, i.urgencia])).toEqual([["v-10", "proximos"]]);
+  });
+});
+
+describe("SINO — continua exactamente como antes", () => {
+  it("sem janela: nada para além de amanhã e nenhuma fonte nova", async () => {
+    const r = await carregarAvisos(fakeAdmin({
+      fixed_variable_payments: [pagamento({ due_date: "2026-09-30" })],
+      invoices: [{ id: "i1", company_id: EMPRESA, status: "pendente", due_date: "2026-09-26", client_id: "c1", total: 10 }],
+      vacation_requests: [{ id: "v1", company_id: EMPRESA, status: "pendente", starts_on: "2026-09-26", collaborator_id: "p1" }],
+    }).admin, EMPRESA, HOJE);
+    expect(r).toEqual([]);
+  });
+
+  it("atrasados antigos continuam a contar no sino (sem limite)", async () => {
+    const r = await carregarAvisos(fakeAdmin({
+      fixed_variable_payments: [pagamento({ due_date: "2025-01-01" })],
+    }).admin, EMPRESA, HOJE);
+    expect(r.map((i) => i.urgencia)).toEqual(["atrasado"]);
+  });
+});
+
+describe("QUADRO — fontes novas", () => {
+  const cliente = { id: "c1", company_id: EMPRESA, name: "Condomínio Sol" };
+
+  it("cobranças: só pendente/vencido; rascunho e paga ficam de fora; nome do cliente", async () => {
+    const r = await quadro({
+      invoices: [
+        { id: "i1", company_id: EMPRESA, status: "pendente", due_date: "2026-10-05", client_id: "c1", invoice_number: "F2026/050", total: 123 },
+        { id: "i2", company_id: EMPRESA, status: "vencido", due_date: "2026-09-20", client_id: "c1", invoice_number: "F2026/040", total: 50 },
+        { id: "i3", company_id: EMPRESA, status: "rascunho", due_date: "2026-10-05", client_id: "c1", total: 1 },
+        { id: "i4", company_id: EMPRESA, status: "pago", due_date: "2026-10-05", client_id: "c1", total: 1 },
+      ],
+      clients: [cliente],
+    });
+    expect(r.itens.map((i) => i.itemId).sort()).toEqual(["i1", "i2"]);
+    const i1 = r.itens.find((i) => i.itemId === "i1")!;
+    expect(i1.title).toBe("Condomínio Sol · F2026/050");
+    expect(i1.detail).toBe("Cobrança a receber · 123,00 €");
+    expect(i1.href).toBe("/dashboard/cobrancas");
+  });
+
+  it("cobranças avulsas: anuladas e pagas ficam de fora; sinal mostra o que falta", async () => {
+    const base = { company_id: EMPRESA, client_id: "c1", description: "Limpeza pós-obra", charge_date: "2026-09-28", amount: 200, paid_amount: null, voided_at: null };
+    const r = await quadro({
+      manual_charges: [
+        { ...base, id: "m1", payment_status: "nao_informado" },
+        { ...base, id: "m2", payment_status: "sinal_50", paid_amount: 100 },
+        { ...base, id: "m3", payment_status: "pago_total" },
+        { ...base, id: "m4", payment_status: "nao_informado", voided_at: "2026-09-29T10:00:00Z" },
+      ],
+      clients: [cliente],
+    });
+    expect(r.itens.map((i) => i.itemId).sort()).toEqual(["m1", "m2"]);
+    expect(r.itens.find((i) => i.itemId === "m2")!.detail).toBe("Sinal recebido, falta o resto · 100,00 €");
+  });
+
+  it("caixa: só manuais pendentes — os ligados a uma origem não se repetem", async () => {
+    const r = await quadro({ cash_flow_entries: [
+      { id: "x1", company_id: EMPRESA, type: "saida", amount: 30, description: "Material", date: "2026-10-03", status: "pendente", reference_type: null },
+      { id: "x2", company_id: EMPRESA, type: "saida", amount: 30, description: "Pago", date: "2026-10-03", status: "pendente", reference_type: "fixed_variable_payment" },
+      { id: "x3", company_id: EMPRESA, type: "entrada", amount: 30, description: "Ok", date: "2026-10-03", status: "confirmado", reference_type: null },
+    ] });
+    expect(r.itens.map((i) => [i.itemId, i.detail])).toEqual([["x1", "Saída por confirmar · 30,00 €"]]);
+  });
+
+  it("férias: só pedidos pendentes, com o nome de quem pediu", async () => {
+    const r = await quadro({
+      vacation_requests: [
+        { id: "f1", company_id: EMPRESA, status: "pendente", starts_on: "2026-10-12", ends_on: "2026-10-16", collaborator_id: "p1" },
+        { id: "f2", company_id: EMPRESA, status: "aprovado", starts_on: "2026-10-12", ends_on: "2026-10-16", collaborator_id: "p1" },
+      ],
+      profiles: [{ id: "p1", company_id: EMPRESA, full_name: "Ana Silva" }],
+    });
+    expect(r.itens.map((i) => [i.itemId, i.title, i.detail])).toEqual([
+      ["f1", "Ana Silva", "Férias por aprovar · 12/10 a 16/10"],
+    ]);
+  });
+
+  it("outra empresa nunca entra, em nenhuma fonte nova", async () => {
+    const r = await quadro({
+      invoices: [{ id: "i1", company_id: OUTRA, status: "pendente", due_date: "2026-10-05", client_id: "c1", total: 1 }],
+      manual_charges: [{ id: "m1", company_id: OUTRA, client_id: "c1", charge_date: "2026-10-01", amount: 1, payment_status: "nao_informado", voided_at: null }],
+      cash_flow_entries: [{ id: "x1", company_id: OUTRA, type: "saida", amount: 1, date: "2026-10-01", status: "pendente", reference_type: null }],
+      vacation_requests: [{ id: "f1", company_id: OUTRA, status: "pendente", starts_on: "2026-10-01", collaborator_id: "p1" }],
+    });
+    expect(r.itens).toEqual([]);
+  });
+});
+
+describe("QUADRO — uma fonte em falha não apaga as outras", () => {
+  it("devolve o que leu e nomeia o que falhou", async () => {
+    const erro = vi.spyOn(console, "error").mockImplementation(() => {});
+    const r = await quadro(
+      { fixed_variable_payments: [pagamento({ due_date: HOJE_Q })] },
+      { invoices: "sem ligação" },
+    );
+    expect(r.itens.map((i) => i.source)).toEqual(["pagamento"]);
+    expect(r.fontesEmFalha).toEqual(["cobranca"]);
+    erro.mockRestore();
+  });
+
+  it("se o nome do cliente não se ler, a fonte falha inteira (não inventa «Cliente»)", async () => {
+    const erro = vi.spyOn(console, "error").mockImplementation(() => {});
+    const r = await quadro(
+      { invoices: [{ id: "i1", company_id: EMPRESA, status: "pendente", due_date: "2026-10-05", client_id: "c1", total: 1 }] },
+      { clients: "sem ligação" },
+    );
+    expect(r.itens).toEqual([]);
+    expect(r.fontesEmFalha).toEqual(["cobranca"]);
+    erro.mockRestore();
   });
 });

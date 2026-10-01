@@ -29,18 +29,26 @@ import {
 /**
  * A que grupo pertence uma data.
  *
- * `null` quer dizer «não entra» — e é devolvido para o futuro para além de
- * amanhã. Não é erro: é a janela a fazer o seu trabalho. Um aviso que mostrasse
- * tudo o que aí vem deixaria de ser um aviso e passava a ser uma agenda.
+ * `null` quer dizer «não entra» — fora da janela de quem chama. Não é erro: é
+ * a janela a fazer o seu trabalho.
+ *
+ * Sem `limites`, a janela é a do sino: atrasados sem limite e nada para além
+ * de amanhã. Com `limites`, `desde` corta os atrasados mais antigos e `ate`
+ * estende o futuro (o grupo `proximos`). Ambos são datas civis inclusivas.
  */
 export function classificar(
   date: string,
   today: string,
   tomorrow: string,
+  limites?: { desde?: string | null; ate?: string },
 ): AvisoUrgencia | null {
-  if (date < today) return "atrasado";
+  if (date < today) {
+    if (limites?.desde && date < limites.desde) return null;
+    return "atrasado";
+  }
   if (date === today) return "hoje";
   if (date === tomorrow) return "amanha";
+  if (limites?.ate && date <= limites.ate) return "proximos";
   return null;
 }
 
@@ -52,9 +60,13 @@ const PESO_URGENCIA: Record<AvisoUrgencia, number> =
 // espera. Os outros três são compromissos internos.
 const PESO_SOURCE: Record<AvisoSource, number> = {
   pagamento: 0,
-  tarefa: 1,
-  visita: 2,
-  lead: 3,
+  cobranca: 1,
+  cobranca_avulsa: 2,
+  caixa: 3,
+  tarefa: 4,
+  ferias: 5,
+  visita: 6,
+  lead: 7,
 };
 
 /**
@@ -90,6 +102,7 @@ export function agruparPorUrgencia(
     atrasado: ordenados.filter((i) => i.urgencia === "atrasado"),
     hoje: ordenados.filter((i) => i.urgencia === "hoje"),
     amanha: ordenados.filter((i) => i.urgencia === "amanha"),
+    proximos: ordenados.filter((i) => i.urgencia === "proximos"),
   };
 }
 
