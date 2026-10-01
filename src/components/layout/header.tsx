@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ChevronLeft } from "lucide-react";
 import { NotificationsBell } from "./notifications-bell";
+import { AvisosButton } from "@/components/avisos/avisos-button";
 
 interface HeaderProps {
   title: string;
@@ -45,6 +46,7 @@ export function Header({ title, subtitle, actions, backHref }: HeaderProps) {
       </div>
       <div className="flex items-center gap-2">
         {actions}
+        <AvisosButton />
         <NotificationsBell />
       </div>
     </header>

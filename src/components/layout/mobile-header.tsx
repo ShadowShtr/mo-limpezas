@@ -4,6 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { Menu } from "lucide-react";
 import { NotificationsBell } from "./notifications-bell";
+import { AvisosButton } from "@/components/avisos/avisos-button";
 
 interface Props {
   userName: string;
@@ -37,6 +38,7 @@ export function MobileHeader({ userName, avatarUrl, onMenuClick }: Props) {
       </Link>
 
       <div className="flex items-center gap-2">
+        <AvisosButton />
         <NotificationsBell />
         <div className="relative w-8 h-8 rounded-full bg-[var(--color-primary-muted)] flex items-center justify-center shrink-0 overflow-hidden">
           {avatarUrl ? (

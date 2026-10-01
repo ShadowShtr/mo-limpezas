@@ -226,3 +226,82 @@ describe("o modal não escreve", () => {
     expect(fonte).toContain("getAvisosVencimento");
   });
 });
+
+// ============================================================================
+// O botão «!» do cabeçalho — reabrir quando se quiser
+// ============================================================================
+
+const { AvisosButton } = await import("@/components/avisos/avisos-button");
+
+function montarComBotao(inicial: AvisoItem[]) {
+  act(() => {
+    root.render(<><AvisosButton /><AvisosVencimentoModal inicial={inicial} /></>);
+  });
+}
+
+const botao = () => container.querySelector<HTMLButtonElement>('button[title="Prazos pendentes"]');
+const esperarPromessas = () => act(async () => { await Promise.resolve(); await Promise.resolve(); });
+
+describe("botão «!» ao lado do sino", () => {
+  it("sem modal montado, o botão não aparece", () => {
+    act(() => { root.render(<AvisosButton />); });
+    expect(botao()).toBeNull();
+  });
+
+  it("com o modal, aparece; o número conta atrasados e hoje, não amanhã", () => {
+    window.sessionStorage.setItem(CHAVE, "1"); // o automático já foi visto
+    montarComBotao([
+      aviso({ key: "a", urgencia: "atrasado" }),
+      aviso({ key: "b", urgencia: "hoje" }),
+      aviso({ key: "c", urgencia: "amanha" }),
+    ]);
+    expect(botao()).not.toBeNull();
+    expect(botao()?.textContent).toBe("2");
+  });
+
+  it("sem nada urgente, aparece sem número", () => {
+    montarComBotao([]);
+    expect(botao()).not.toBeNull();
+    expect(botao()?.textContent).toBe("");
+  });
+
+  it("🔴 depois de fechado, o «!» reabre — com a lista reconsultada", async () => {
+    montarComBotao([aviso({ key: "velho", title: "Antigo" })]);
+    act(() => { container.querySelector<HTMLButtonElement>('[aria-label="Fechar avisos"]')?.click(); });
+    expect(estaAberto()).toBe(false);
+
+    getAvisosVencimento.mockResolvedValue([aviso({ key: "novo", title: "Renda de Novembro" })]);
+    act(() => { botao()?.click(); });
+    expect(estaAberto()).toBe(true);
+    await esperarPromessas();
+
+    expect(getAvisosVencimento).toHaveBeenCalledTimes(1);
+    expect(container.textContent).toContain("Renda de Novembro");
+    expect(container.textContent).not.toContain("Antigo");
+  });
+
+  it("abre mesmo sem nada pendente, e di-lo", async () => {
+    montarComBotao([]);
+    expect(estaAberto()).toBe(false);
+    act(() => { botao()?.click(); });
+    expect(estaAberto()).toBe(true);
+    await esperarPromessas();
+    expect(container.textContent).toContain("Nada pendente");
+  });
+
+  it("abrir a pedido conta como visto: o automático não aparece depois por cima", () => {
+    montarComBotao([]);
+    act(() => { botao()?.click(); });
+    expect(window.sessionStorage.getItem(CHAVE)).toBe("1");
+  });
+
+  it("se a reconsulta falhar, fica a lista que havia", async () => {
+    window.sessionStorage.setItem(CHAVE, "1");
+    montarComBotao([aviso({ title: "Seguro da carrinha" })]);
+    getAvisosVencimento.mockRejectedValue(new Error("rede"));
+    act(() => { botao()?.click(); });
+    await esperarPromessas();
+    expect(estaAberto()).toBe(true);
+    expect(container.textContent).toContain("Seguro da carrinha");
+  });
+});
