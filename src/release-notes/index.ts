@@ -70,6 +70,7 @@ import { nota as calendarioContornoCorDaEquipa } from "./2026-09-29-calendario-c
 import { nota as fixosRepetemSozinhos } from "./2026-10-01-fixos-repetem-sozinhos";
 import { nota as botaoPrazosPendentes } from "./2026-10-01-botao-prazos-pendentes";
 import { nota as quadroPendentesAbas } from "./2026-10-01-quadro-pendentes-abas";
+import { nota as quadroPendentesVisual } from "./2026-10-01-quadro-pendentes-visual";
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   financeiroEAnexos,
@@ -127,6 +128,7 @@ export const RELEASE_NOTES: ReleaseNote[] = [
   fixosRepetemSozinhos,
   botaoPrazosPendentes,
   quadroPendentesAbas,
+  quadroPendentesVisual,
 ];
 
 /** As chaves têm de ser únicas — duas notas com a mesma key partilhariam a leitura. */

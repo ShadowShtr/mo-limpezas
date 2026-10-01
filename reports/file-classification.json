@@ -1,8 +1,8 @@
 {
   "generatedBy": "scripts/audit-file-inventory.mjs",
-  "totalFiles": 1036,
+  "totalFiles": 1037,
   "byStatus": {
-    "MANTER": 1012,
+    "MANTER": 1013,
     "STANDBY": 24
   },
   "byCategory": {
@@ -11,8 +11,8 @@
     "migration": 148,
     "lib": 82,
     "script": 63,
+    "src-other": 60,
     "domain": 59,
-    "src-other": 59,
     "server-action": 50,
     "doc": 47,
     "component": 36,
@@ -29,7 +29,7 @@
     "supabase-other": 2
   },
   "byConfidence": {
-    "alta": 1013,
+    "alta": 1014,
     "média": 17,
     "baixa": 6
   },
@@ -18108,6 +18108,7 @@
       "risks": [],
       "signals": {
         "clientComponent": 1,
+        "sqlWrite": 3,
         "eslintDisable": 1
       },
       "action": "nenhuma",
@@ -20672,7 +20673,7 @@
       "category": "domain",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 65,
+      "consumers": 66,
       "consumerSample": [
         "src/__tests__/update-notice-modal.test.tsx",
         "src/__tests__/update-notices-eligibility.test.ts",
@@ -20687,7 +20688,7 @@
       "risks": [],
       "signals": {},
       "action": "nenhuma",
-      "reason": "em uso: 65 consumidor(es), configuração",
+      "reason": "em uso: 66 consumidor(es), configuração",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -22227,7 +22228,7 @@
       "category": "lib",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 50,
+      "consumers": 51,
       "consumerSample": [
         "src/__tests__/crm-quote-sheet.test.tsx",
         "src/__tests__/lisbon-time.test.ts",
@@ -22241,7 +22242,7 @@
       "risks": [],
       "signals": {},
       "action": "nenhuma",
-      "reason": "em uso: 50 consumidor(es)",
+      "reason": "em uso: 51 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -24630,6 +24631,32 @@
     },
     {
       "path": "src/release-notes/2026-10-01-quadro-pendentes-abas.ts",
+      "category": "src-other",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 1,
+      "consumerSample": [
+        "src/release-notes/index.ts"
+      ],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "sqlWrite": 1
+      },
+      "action": "nenhuma",
+      "reason": "em uso: 1 consumidor(es)",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/release-notes/2026-10-01-quadro-pendentes-visual.ts",
       "category": "src-other",
       "status": "MANTER",
       "confidence": "alta",
