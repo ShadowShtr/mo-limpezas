@@ -27,6 +27,10 @@ export const viewport: Viewport = {
   initialScale: 1,
   maximumScale: 1,
   userScalable: false,
+  // Sem `viewport-fit=cover` o iOS resolve `env(safe-area-inset-*)` sempre a
+  // 0px, e a barra inferior (`.safe-area-pb` em bottom-nav) acaba debaixo da
+  // home indicator / barra do Safari - invisivel ou intocavel no telemovel.
+  viewportFit: "cover",
 };
 
 export default function RootLayout({
