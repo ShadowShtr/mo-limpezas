@@ -595,13 +595,13 @@ export function CalendarView({
       <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
 
         {/* ── Barra de navegação semanal ─────────────────────────────────── */}
-        <div className="flex items-center gap-2 px-6 py-3 bg-white border-b border-[var(--color-border)] shrink-0 flex-wrap">
+        <div className="flex items-center gap-2 px-3 sm:px-6 py-3 bg-white border-b border-[var(--color-border)] shrink-0 scroll-x-touch sm:overflow-visible sm:flex-wrap">
           <button onClick={() => navigateWeek(-1)} title="Semana anterior"
-            className="p-1.5 rounded-lg border border-[var(--color-border)] text-[var(--color-text-sub)] hover:bg-[var(--color-background)] transition-colors">
+            className="p-1.5 rounded-lg border border-[var(--color-border)] text-[var(--color-text-sub)] hover:bg-[var(--color-background)] transition-colors shrink-0">
             <ChevronLeft className="w-4 h-4" />
           </button>
 
-          <div className="flex gap-1">
+          <div className="flex gap-1 shrink-0">
             {weekDays.map((day, i) => {
               const isSel  = isSameDay(day, selectedDate);
               const isTody = today !== null && isSameDay(day, today);
@@ -623,12 +623,12 @@ export function CalendarView({
           </div>
 
           <button onClick={() => navigateWeek(1)} title="Próxima semana"
-            className="p-1.5 rounded-lg border border-[var(--color-border)] text-[var(--color-text-sub)] hover:bg-[var(--color-background)] transition-colors">
+            className="p-1.5 rounded-lg border border-[var(--color-border)] text-[var(--color-text-sub)] hover:bg-[var(--color-background)] transition-colors shrink-0">
             <ChevronRight className="w-4 h-4" />
           </button>
 
           <button onClick={() => router.push("/dashboard/calendario")}
-            className="px-3 py-1.5 text-xs font-medium rounded-lg border border-[var(--color-border)] text-[var(--color-text-sub)] hover:bg-[var(--color-background)] transition-colors">
+            className="px-3 py-1.5 text-xs font-medium rounded-lg border border-[var(--color-border)] text-[var(--color-text-sub)] hover:bg-[var(--color-background)] transition-colors shrink-0">
             Hoje
           </button>
 
@@ -638,7 +638,7 @@ export function CalendarView({
             onSelect={(d) => router.push(`/dashboard/calendario?date=${format(d, "yyyy-MM-dd")}`)}
           />
 
-          <div className="ml-auto flex items-center gap-2">
+          <div className="sm:ml-auto flex items-center gap-2 shrink-0">
             <span className="text-xs text-[var(--color-text-muted)] hidden md:block mr-1">{weekRange}</span>
 
             <div className="flex rounded-lg border border-[var(--color-border)] overflow-hidden">
@@ -688,9 +688,9 @@ export function CalendarView({
 
         {/* ── Filtro de equipas — só aparece quando há mais de 1 equipa ──── */}
         {columns.length > 1 && (
-          <div className="flex items-center gap-2 px-6 py-2 bg-[var(--color-background)] border-b border-[var(--color-border)] shrink-0">
+          <div className="flex items-center gap-2 px-3 sm:px-6 py-2 bg-[var(--color-background)] border-b border-[var(--color-border)] shrink-0">
             <span className="text-[11px] font-medium text-[var(--color-text-muted)] shrink-0">Equipas:</span>
-            <div className="flex items-center gap-1.5 flex-wrap flex-1 min-w-0">
+            <div className="flex items-center gap-1.5 flex-1 min-w-0 scroll-x-touch sm:overflow-visible sm:flex-wrap">
               {columns.map((col) => {
                 const hidden = hiddenTeamIds.has(col.id);
                 return (
@@ -698,7 +698,7 @@ export function CalendarView({
                     key={col.key}
                     onClick={() => toggleTeam(col.id)}
                     title={hidden ? `Mostrar ${col.name}` : `Ocultar ${col.name}`}
-                    className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold border transition-all select-none ${
+                    className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold border transition-all select-none shrink-0 whitespace-nowrap ${
                       hidden
                         ? "border-[var(--color-border)] text-[var(--color-text-muted)] bg-white"
                         : "border-transparent text-white"
@@ -715,7 +715,7 @@ export function CalendarView({
               })}
               {hiddenTeamIds.size > 0 && (
                 <button onClick={showAllTeams}
-                  className="text-[11px] text-[var(--color-primary)] hover:underline font-medium ml-1">
+                  className="text-[11px] text-[var(--color-primary)] hover:underline font-medium ml-1 shrink-0 whitespace-nowrap">
                   Mostrar todas
                 </button>
               )}

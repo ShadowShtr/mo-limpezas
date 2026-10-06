@@ -21,12 +21,38 @@ export function MonthDatePicker({ selectedDate, today, onSelect }: Props) {
   const [open, setOpen] = useState(false);
   const [viewMonth, setViewMonth] = useState<Date>(() => startOfMonth(selectedDate));
   const ref = useRef<HTMLDivElement>(null);
+  const btnRef = useRef<HTMLButtonElement>(null);
+  // O popover e `fixed` (nao `absolute`) porque a barra do calendario passou a
+  // ter `overflow-x: auto` no telemovel: um filho `absolute` seria recortado
+  // pelo scroll container. `fixed` escapa ao recorte; a posicao vem do rect do
+  // botao e e limitada para nao sair do ecra em telas estreitas.
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
 
   // Ao abrir, posiciona o calendário no mês da data selecionada
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     if (open) setViewMonth(startOfMonth(selectedDate));
   }, [open, selectedDate]);
+
+  // Posiciona o popover sob o botao; recalcula em scroll/resize enquanto aberto.
+  useEffect(() => {
+    if (!open) return;
+    const PANEL_W = 320;
+    const MARGIN = 8;
+    function place() {
+      const r = btnRef.current?.getBoundingClientRect();
+      if (!r) return;
+      const maxLeft = Math.max(MARGIN, window.innerWidth - PANEL_W - MARGIN);
+      setPos({ top: r.bottom + MARGIN, left: Math.min(Math.max(MARGIN, r.left), maxLeft) });
+    }
+    place();
+    window.addEventListener("resize", place);
+    window.addEventListener("scroll", place, true);
+    return () => {
+      window.removeEventListener("resize", place);
+      window.removeEventListener("scroll", place, true);
+    };
+  }, [open]);
 
   // Fechar ao clicar fora ou com Esc
   useEffect(() => {
@@ -55,18 +81,22 @@ export function MonthDatePicker({ selectedDate, today, onSelect }: Props) {
   }
 
   return (
-    <div className="relative" ref={ref}>
+    <div className="relative shrink-0" ref={ref}>
       <button
+        ref={btnRef}
         onClick={() => setOpen((o) => !o)}
         title="Escolher data"
-        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[var(--color-border)] text-sm font-medium text-[var(--color-text-main)] hover:bg-[var(--color-background)] transition-colors"
+        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[var(--color-border)] text-sm font-medium text-[var(--color-text-main)] hover:bg-[var(--color-background)] transition-colors whitespace-nowrap"
       >
         <CalendarDays className="w-4 h-4 text-[var(--color-text-sub)]" />
         {format(selectedDate, "dd/MM/yyyy")}
       </button>
 
-      {open && (
-        <div className="absolute left-0 mt-2 z-50 w-[320px] bg-white rounded-xl shadow-2xl border border-[var(--color-border)] p-4">
+      {open && pos && (
+        <div
+          className="fixed z-50 w-[320px] bg-white rounded-xl shadow-2xl border border-[var(--color-border)] p-4"
+          style={{ top: pos.top, left: pos.left }}
+        >
           {/* Cabeçalho do mês */}
           <div className="flex items-center justify-between mb-3">
             <button
