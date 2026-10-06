@@ -27,7 +27,7 @@
 //    em que houver uma vista de histórico. Não há nenhuma neste ciclo.
 // ============================================================================
 
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { FilePlus2, TriangleAlert } from "lucide-react";
@@ -35,6 +35,8 @@ import { FilePlus2, TriangleAlert } from "lucide-react";
 import { useToast } from "@/components/ui/toast";
 import { usePagination, Pagination } from "@/components/ui/pagination";
 import {
+  canConvertQuote,
+  isConvertedLeadQuote,
   isQuoteStatus,
   QUOTE_STATUSES,
   QUOTE_STATUS_LABELS,
@@ -55,6 +57,8 @@ interface Props {
   visitas: VisitRow[];
   empresaNome: string;
   vatRate: number | null;
+  /** Lead largada em «Ganho» no quadro: abre-se o orçamento que a converte. */
+  converterLeadId?: string | null;
 }
 
 const CORES: Record<QuoteStatus, string> = {
@@ -73,6 +77,41 @@ const fmtDate = (iso: string): string =>
   new Intl.DateTimeFormat("pt-PT", { dateStyle: "short", timeZone: "Europe/Lisbon" })
     .format(new Date(`${iso}T12:00:00Z`));
 
+/**
+ * O que fazer quando se chega do quadro com uma lead largada em «Ganho».
+ *
+ * Ganhar só acontece pela conversão do orçamento aceite (104); isto encontra
+ * esse orçamento entre as revisões vivas, ou diz o que falta para lá chegar.
+ */
+function resolverConversao(
+  leadId: string | null,
+  orcamentos: QuoteRow[] | null,
+): { quote: QuoteRow | null; mensagem: string; tipo: "info" | "error" } | null {
+  if (!leadId || !orcamentos) return null;
+  const daLead = orcamentos.filter((q) => q.source_lead_id === leadId);
+
+  const convertivel = daLead.find((q) => canConvertQuote(q));
+  if (convertivel) {
+    return {
+      quote: convertivel,
+      mensagem: "Confirme «Converter em cliente» para dar a lead como ganha.",
+      tipo: "info",
+    };
+  }
+  const convertido = daLead.find((q) => isConvertedLeadQuote(q));
+  if (convertido) {
+    return { quote: convertido, mensagem: "Esta lead já foi convertida em cliente.", tipo: "info" };
+  }
+  return {
+    quote: null,
+    mensagem:
+      daLead.length === 0
+        ? "Esta lead ainda não tem orçamento. Para a dar como ganha, crie um orçamento e marque-o como aceite."
+        : "Esta lead não tem nenhum orçamento aceite. Marque o orçamento como aceite e depois converta-a em cliente.",
+    tipo: "error",
+  };
+}
+
 export function QuotesClient({
   orcamentos,
   erro,
@@ -81,6 +120,7 @@ export function QuotesClient({
   visitas,
   empresaNome,
   vatRate,
+  converterLeadId = null,
 }: Props) {
   const router = useRouter();
   const { toast } = useToast();
@@ -88,7 +128,10 @@ export function QuotesClient({
 
   const [filtroEstado, setFiltroEstado] = useState<string>("");
   const [aCriar, setACriar] = useState(false);
-  const [aVer, setAVer] = useState<QuoteRow | null>(null);
+  // Vindo do quadro com `?converter=<leadId>`: abre-se logo o orçamento aceite
+  // dessa lead (onde está «Converter em cliente»), ou explica-se porque não há.
+  const [vindoDoQuadro] = useState(() => resolverConversao(converterLeadId, orcamentos));
+  const [aVer, setAVer] = useState<QuoteRow | null>(vindoDoQuadro?.quote ?? null);
   /** A versão a partir da qual se está a criar uma revisão. */
   const [aRevir, setARevir] = useState<QuoteWithItems | null>(null);
   /**
@@ -103,6 +146,15 @@ export function QuotesClient({
    *    sai o `updated_at` que serve de token de concorrência.
    */
   const [aEditar, setAEditar] = useState<QuoteWithItems | null>(null);
+
+  // Uma vez só — o ref impede o StrictMode de mostrar o toast em duplicado.
+  const converterTratado = useRef(false);
+  useEffect(() => {
+    if (!converterLeadId || converterTratado.current) return;
+    converterTratado.current = true;
+    router.replace("/dashboard/crm/orcamentos", { scroll: false });
+    if (vindoDoQuadro) toast(vindoDoQuadro.mensagem, vindoDoQuadro.tipo);
+  }, [converterLeadId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // 🔴 `orcamentos ?? []` DENTRO do `useMemo`, e não numa const acima: um
   //    literal novo a cada render invalidaria a memoização em todos eles.
