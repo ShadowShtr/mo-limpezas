@@ -24,7 +24,13 @@ import { QuotesClient } from "./_components/quotes-client";
  *    a 104-A, cada uma com a sua autorização. Este ciclo fecha o documento —
  *    criar, ver, imprimir, marcar o estado e revir.
  */
-export default async function OrcamentosPage() {
+export default async function OrcamentosPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ converter?: string }>;
+}) {
+  // `?converter=<leadId>` chega do quadro quando se larga um cartão em «Ganho».
+  const { converter } = await searchParams;
   const supabase = await createClient();
   const {
     data: { user },
@@ -87,6 +93,7 @@ export default async function OrcamentosPage() {
             visitas={visitsRes.ok ? visitsRes.data : []}
             empresaNome={empresa?.name ?? "Mó Limpezas"}
             vatRate={settings?.vat_rate ?? null}
+            converterLeadId={typeof converter === "string" ? converter : null}
           />
         </div>
       </div>

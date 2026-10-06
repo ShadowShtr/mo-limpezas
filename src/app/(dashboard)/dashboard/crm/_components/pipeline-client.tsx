@@ -136,6 +136,13 @@ export function PipelineClient({ leads, erro, membros }: Props) {
       const dy = e.clientY - d.startY;
       const ativo = d.ativo || Math.sqrt(dx * dx + dy * dy) > 8;
 
+      // Arrastar não é selecionar: sem isto, o browser pinta de azul todo o
+      // texto por onde o ponteiro passa enquanto o cartão anda.
+      if (ativo && !d.ativo) {
+        document.body.style.userSelect = "none";
+        window.getSelection()?.removeAllRanges();
+      }
+
       let sobre: LeadStage | null = null;
       if (ativo) {
         for (const [stage, el] of colunasRef.current) {
@@ -158,6 +165,7 @@ export function PipelineClient({ leads, erro, membros }: Props) {
     function handleUp() {
       const d = dragRef.current;
       const destino = alvoRef.current;
+      document.body.style.userSelect = "";
       dragRef.current = null;
       alvoRef.current = null;
       setDrag(null);
@@ -178,6 +186,15 @@ export function PipelineClient({ leads, erro, membros }: Props) {
         return;
       }
 
+      // 🔴 Ganhar NÃO é arrastar: só a conversão do orçamento aceite cria o
+      //    cliente (104), e `moveLeadStage` recusa `ganho` de propósito. Em
+      //    vez de mover e mostrar o erro, leva-se quem arrastou ao sítio onde
+      //    a conversão se faz — o orçamento aceite desta lead, já aberto.
+      if (destino === "ganho") {
+        router.push(`/dashboard/crm/orcamentos?converter=${lead.id}`);
+        return;
+      }
+
       // Perder exige motivo, e a base recusa sem ele. Perguntar antes de
       // gravar evita mostrar um erro técnico a quem só arrastou um cartão.
       if (destino === "perdido") {
@@ -195,6 +212,7 @@ export function PipelineClient({ leads, erro, membros }: Props) {
       window.removeEventListener("pointermove", handleMove);
       window.removeEventListener("pointerup", handleUp);
       window.removeEventListener("pointercancel", handleUp);
+      document.body.style.userSelect = "";
     };
     // `lista` entra porque o handler procura a lead nela.
   }, [lista]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -473,7 +491,7 @@ function LeadCard({
     <div
       onPointerDown={onPointerDown}
       onClick={onAbrir}
-      className={`cursor-grab rounded-lg border bg-white p-2.5 transition-all active:cursor-grabbing ${
+      className={`cursor-grab select-none rounded-lg border bg-white p-2.5 transition-all active:cursor-grabbing ${
         aArrastar ? "scale-95 opacity-40" : "hover:shadow-md"
       }`}
       style={{ borderColor: atrasada ? "#F59E0B" : "var(--color-border)" }}
