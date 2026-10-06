@@ -71,6 +71,7 @@ import { nota as fixosRepetemSozinhos } from "./2026-10-01-fixos-repetem-sozinho
 import { nota as botaoPrazosPendentes } from "./2026-10-01-botao-prazos-pendentes";
 import { nota as quadroPendentesAbas } from "./2026-10-01-quadro-pendentes-abas";
 import { nota as quadroPendentesVisual } from "./2026-10-01-quadro-pendentes-visual";
+import { nota as crmGanhoPeloQuadro } from "./2026-10-06-crm-ganho-pelo-quadro";
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   financeiroEAnexos,
@@ -129,6 +130,7 @@ export const RELEASE_NOTES: ReleaseNote[] = [
   botaoPrazosPendentes,
   quadroPendentesAbas,
   quadroPendentesVisual,
+  crmGanhoPeloQuadro,
 ];
 
 /** As chaves têm de ser únicas — duas notas com a mesma key partilhariam a leitura. */
