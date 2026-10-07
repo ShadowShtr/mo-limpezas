@@ -96,7 +96,8 @@ function resolverConversao(
   if (convertivel) {
     return {
       quote: convertivel,
-      mensagem: "Confirme «Converter em cliente» para dar a lead como ganha.",
+      mensagem:
+        "Confirme «Converter em cliente» para dar a lead como ganha — ou «Já é cliente? Associar», se ela já estiver nos clientes.",
       tipo: "info",
     };
   }
@@ -373,6 +374,7 @@ export function QuotesClient({
       {aVer && (
         <QuoteDetailSheet
           orcamento={aVer}
+          clientes={clientes}
           empresaNome={empresaNome}
           onClose={() => setAVer(null)}
           onChanged={() => {
