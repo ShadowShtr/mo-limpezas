@@ -22,7 +22,7 @@
 import { useEffect, useState, useTransition } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
-import { Download, FileClock, Pencil, TriangleAlert, UserPlus, X } from "lucide-react";
+import { Download, FileClock, Link2, Pencil, TriangleAlert, UserPlus, X } from "lucide-react";
 
 import { useToast } from "@/components/ui/toast";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
@@ -50,9 +50,16 @@ import {
 import { convertAcceptedQuote } from "@/app/actions/crm-conversao";
 
 import { downloadQuotePdf } from "./quote-pdf";
+import { AssociarClienteDialog } from "./associar-cliente-dialog";
+import type { DestinatarioOpcao } from "@/components/crm/pesquisa-destinatario";
 
 interface Props {
   orcamento: QuoteRow;
+  /**
+   * Para «Associar a cliente existente» (108): a lead que já era cliente
+   * fecha-se ligada a ele, em vez de nascer um cliente duplicado.
+   */
+  clientes?: DestinatarioOpcao[];
   empresaNome: string;
   onClose: () => void;
   /** Mudou o estado ou nasceu uma revisão: a lista tem de recarregar. */
@@ -86,6 +93,7 @@ const ACCAO: Record<QuoteStatus, string> = {
 
 export function QuoteDetailSheet({
   orcamento,
+  clientes = [],
   empresaNome,
   onClose,
   onChanged,
@@ -123,6 +131,7 @@ export function QuoteDetailSheet({
   const [erro, setErro] = useState<string | null>(null);
   const [aRecusar, setARecusar] = useState(false);
   const [motivo, setMotivo] = useState("");
+  const [aAssociar, setAAssociar] = useState(false);
 
   // As linhas não viajam na lista — seriam N× mais dados para mostrar cinco
   // colunas. Carregam-se ao abrir o detalhe, que é quando alguém as quer ver.
@@ -141,11 +150,12 @@ export function QuoteDetailSheet({
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && !busy) onClose();
+      // Com o diálogo de associação aberto, o Escape é dele — não fecha o painel.
+      if (e.key === "Escape" && !busy && !aAssociar) onClose();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [onClose, busy]);
+  }, [onClose, busy, aAssociar]);
 
   const q = dados?.quote ?? orcamento;
   const estado: QuoteStatus | null = isQuoteStatus(q.status) ? q.status : null;
@@ -549,6 +559,22 @@ export function QuoteDetailSheet({
             />
           )}
 
+          {/*
+            A mesma condição de «Converter em cliente»: as duas portas fecham a
+            mesma lead, e a RPC de cada uma recusa o que a outra já fez.
+          */}
+          {canConvertQuote(q) && (
+            <button
+              onClick={() => setAAssociar(true)}
+              disabled={busy}
+              className="flex items-center gap-1.5 rounded-lg border px-3 py-2 text-[13px] font-medium disabled:opacity-50"
+              style={{ borderColor: "var(--color-border)" }}
+            >
+              <Link2 className="h-4 w-4" />
+              Já é cliente? Associar
+            </button>
+          )}
+
           {isConvertedLeadQuote(q) && q.client_id && (
             <a
               href={`/dashboard/clientes/${q.client_id}`}
@@ -583,6 +609,26 @@ export function QuoteDetailSheet({
           </div>
         </div>
       </div>
+
+      {aAssociar && (
+        <AssociarClienteDialog
+          quoteId={q.id}
+          leadName={q.target_name}
+          clientes={clientes}
+          onClose={() => setAAssociar(false)}
+          onDone={(clientId, alreadyConverted) => {
+            setAAssociar(false);
+            toast(
+              alreadyConverted
+                ? "A lead já estava associada a este cliente. A abrir o cliente."
+                : "Lead ganha e associada ao cliente existente.",
+              "success",
+            );
+            onClose();
+            router.push(`/dashboard/clientes/${clientId}`);
+          }}
+        />
+      )}
     </div>,
     document.body,
   );

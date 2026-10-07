@@ -74,6 +74,7 @@ import { nota as quadroPendentesVisual } from "./2026-10-01-quadro-pendentes-vis
 import { nota as telemovelMenuECalendario } from "./2026-10-05-telemovel-menu-e-calendario";
 import { nota as crmGanhoPeloQuadro } from "./2026-10-06-crm-ganho-pelo-quadro";
 import { nota as crmPesquisaCliente } from "./2026-10-07-crm-pesquisa-cliente";
+import { nota as crmGanhoClienteExistente } from "./2026-10-07-crm-ganho-cliente-existente";
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   financeiroEAnexos,
@@ -135,6 +136,7 @@ export const RELEASE_NOTES: ReleaseNote[] = [
   telemovelMenuECalendario,
   crmGanhoPeloQuadro,
   crmPesquisaCliente,
+  crmGanhoClienteExistente,
 ];
 
 /** As chaves têm de ser únicas — duas notas com a mesma key partilhariam a leitura. */

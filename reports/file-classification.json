@@ -1,19 +1,19 @@
 {
   "generatedBy": "scripts/audit-file-inventory.mjs",
-  "totalFiles": 1043,
+  "totalFiles": 1050,
   "byStatus": {
-    "MANTER": 1019,
+    "MANTER": 1026,
     "STANDBY": 24
   },
   "byCategory": {
-    "test": 260,
-    "route-ui": 162,
-    "migration": 148,
+    "test": 262,
+    "route-ui": 163,
+    "migration": 150,
     "lib": 82,
+    "src-other": 64,
     "script": 63,
-    "src-other": 63,
     "domain": 59,
-    "server-action": 50,
+    "server-action": 51,
     "doc": 47,
     "component": 37,
     "api-route": 18,
@@ -29,7 +29,7 @@
     "supabase-other": 2
   },
   "byConfidence": {
-    "alta": 1020,
+    "alta": 1027,
     "média": 17,
     "baixa": 6
   },
@@ -5545,6 +5545,36 @@
       }
     },
     {
+      "path": "src/__tests__/crm-108-associar-cliente.pg.test.ts",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [
+        "write"
+      ],
+      "risks": [
+        "service-role"
+      ],
+      "signals": {
+        "serviceRole": 8,
+        "write": 1,
+        "sqlWrite": 30
+      },
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
       "path": "src/__tests__/crm-actions-guard.test.ts",
       "category": "test",
       "status": "MANTER",
@@ -5562,6 +5592,34 @@
         "write": 3,
         "sqlWrite": 13,
         "revalidatePath": 1
+      },
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/__tests__/crm-associar-cliente.test.tsx",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [
+        "write"
+      ],
+      "risks": [],
+      "signals": {
+        "write": 2,
+        "sqlWrite": 5,
+        "dynamicImport": 1
       },
       "action": "nenhuma",
       "reason": "suite de testes — corre por convenção do vitest",
@@ -7735,7 +7793,7 @@
       "category": "test",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 12,
+      "consumers": 13,
       "consumerSample": [
         "scripts/audit-identity-drift-manifest.ts",
         "src/__tests__/canonical-path-101b.pg.test.ts",
@@ -7767,7 +7825,7 @@
       "category": "test",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 27,
+      "consumers": 28,
       "consumerSample": [
         "scripts/audit-identity-drift-manifest.ts",
         "src/__tests__/bank-reconciliation-period-atomic.pg.test.ts",
@@ -7793,7 +7851,7 @@
       "category": "test",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 18,
+      "consumers": 19,
       "consumerSample": [
         "scripts/audit-identity-drift-manifest.ts",
         "src/__tests__/canonical-path-101b.pg.test.ts",
@@ -13745,6 +13803,33 @@
       }
     },
     {
+      "path": "src/app/(dashboard)/dashboard/crm/orcamentos/_components/associar-cliente-dialog.tsx",
+      "category": "route-ui",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 2,
+      "consumerSample": [
+        "src/__tests__/crm-associar-cliente.test.tsx",
+        "src/app/(dashboard)/dashboard/crm/orcamentos/_components/quote-detail-sheet.tsx"
+      ],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "clientComponent": 1
+      },
+      "action": "nenhuma",
+      "reason": "em uso: 2 consumidor(es)",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
       "path": "src/app/(dashboard)/dashboard/crm/orcamentos/_components/quote-detail-sheet.tsx",
       "category": "route-ui",
       "status": "MANTER",
@@ -15996,6 +16081,37 @@
       }
     },
     {
+      "path": "src/app/actions/crm-associar-cliente.ts",
+      "category": "server-action",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 1,
+      "consumerSample": [
+        "src/app/(dashboard)/dashboard/crm/orcamentos/_components/associar-cliente-dialog.tsx"
+      ],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [
+        "any(1)"
+      ],
+      "signals": {
+        "serverAction": 1,
+        "eslintDisable": 1,
+        "anyType": 1,
+        "fallbackArray": 1
+      },
+      "action": "nenhuma",
+      "reason": "em uso: 1 consumidor(es)",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
       "path": "src/app/actions/crm-conversao.ts",
       "category": "server-action",
       "status": "MANTER",
@@ -18208,7 +18324,7 @@
       "category": "component",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 5,
+      "consumers": 7,
       "consumerSample": [
         "src/__tests__/crm-pesquisa-destinatario.test.tsx",
         "src/app/(dashboard)/dashboard/crm/_components/lead-sheet.tsx",
@@ -18223,7 +18339,7 @@
         "sqlWrite": 2
       },
       "action": "nenhuma",
-      "reason": "em uso: 5 consumidor(es)",
+      "reason": "em uso: 7 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -19054,7 +19170,7 @@
       "category": "component",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 13,
+      "consumers": 14,
       "consumerSample": [
         "src/app/(dashboard)/dashboard/crm/[leadId]/_components/lead-detail.tsx",
         "src/app/(dashboard)/dashboard/crm/_components/lead-sheet.tsx",
@@ -19070,7 +19186,7 @@
         "clientComponent": 1
       },
       "action": "nenhuma",
-      "reason": "em uso: 13 consumidor(es)",
+      "reason": "em uso: 14 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -20756,7 +20872,7 @@
       "category": "domain",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 69,
+      "consumers": 70,
       "consumerSample": [
         "src/__tests__/update-notice-modal.test.tsx",
         "src/__tests__/update-notices-eligibility.test.ts",
@@ -20771,7 +20887,7 @@
       "risks": [],
       "signals": {},
       "action": "nenhuma",
-      "reason": "em uso: 69 consumidor(es), configuração",
+      "reason": "em uso: 70 consumidor(es), configuração",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -20815,11 +20931,11 @@
       "category": "lib",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 7,
+      "consumers": 8,
       "consumerSample": [
         "src/__tests__/action-result.test.ts",
         "src/app/(dashboard)/dashboard/crm/[leadId]/page.tsx",
-        "src/app/actions/crm-conversao.ts"
+        "src/app/actions/crm-associar-cliente.ts"
       ],
       "autoLoaded": false,
       "referencedBy": [
@@ -20831,7 +20947,7 @@
         "consoleErr": 1
       },
       "action": "nenhuma",
-      "reason": "em uso: 7 consumidor(es)",
+      "reason": "em uso: 8 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -20901,7 +21017,7 @@
       "category": "lib",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 24,
+      "consumers": 25,
       "consumerSample": [
         "src/__tests__/audit.test.ts",
         "src/app/(dashboard)/dashboard/calendario/_actions/reschedule.ts",
@@ -20929,7 +21045,7 @@
         "consoleErr": 2
       },
       "action": "nenhuma",
-      "reason": "em uso: 24 consumidor(es), script npm, CI, configuração",
+      "reason": "em uso: 25 consumidor(es), script npm, CI, configuração",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -20943,7 +21059,7 @@
       "category": "lib",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 34,
+      "consumers": 35,
       "consumerSample": [
         "src/__tests__/auth-revalidation-central.test.ts",
         "src/__tests__/colaborador-saida-runtime.test.ts",
@@ -20961,7 +21077,7 @@
         "supabase": 7
       },
       "action": "nenhuma",
-      "reason": "em uso: 34 consumidor(es)",
+      "reason": "em uso: 35 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -22769,7 +22885,7 @@
       "category": "lib",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 32,
+      "consumers": 33,
       "consumerSample": [
         "src/__tests__/query-error.test.ts",
         "src/app/(dashboard)/dashboard/calendario/_actions/create-service.ts",
@@ -22785,7 +22901,7 @@
         "consoleErr": 1
       },
       "action": "nenhuma",
-      "reason": "em uso: 32 consumidor(es)",
+      "reason": "em uso: 33 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -22833,7 +22949,7 @@
       "category": "lib",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 10,
+      "consumers": 11,
       "consumerSample": [
         "src/__tests__/auth-revalidation-central.test.ts",
         "src/__tests__/invalidate-business-state.test.ts",
@@ -22852,7 +22968,7 @@
         "revalidatePath": 11
       },
       "action": "nenhuma",
-      "reason": "em uso: 10 consumidor(es)",
+      "reason": "em uso: 11 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -24792,6 +24908,32 @@
     },
     {
       "path": "src/release-notes/2026-10-06-crm-ganho-pelo-quadro.ts",
+      "category": "src-other",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 1,
+      "consumerSample": [
+        "src/release-notes/index.ts"
+      ],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "sqlWrite": 1
+      },
+      "action": "nenhuma",
+      "reason": "em uso: 1 consumidor(es)",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/release-notes/2026-10-07-crm-ganho-cliente-existente.ts",
       "category": "src-other",
       "status": "MANTER",
       "confidence": "alta",
@@ -27202,6 +27344,27 @@
       "manualDecision": false
     },
     {
+      "path": "supabase/migrations/108_crm_associar_cliente_existente.sql",
+      "category": "migration",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [
+        "service-role"
+      ],
+      "signals": {
+        "serviceRole": 4,
+        "sqlWrite": 8
+      },
+      "action": "nenhuma",
+      "reason": "migration versionada — histórico do schema, nunca se apaga",
+      "manualDecision": false
+    },
+    {
       "path": "supabase/migrations/20260608_new_features.sql",
       "category": "migration",
       "status": "MANTER",
@@ -27952,6 +28115,24 @@
       "risks": [],
       "signals": {
         "sqlWrite": 10
+      },
+      "action": "nenhuma",
+      "reason": "migration versionada — histórico do schema, nunca se apaga",
+      "manualDecision": false
+    },
+    {
+      "path": "supabase/migrations/rollback/108_crm_associar_cliente_existente.down.sql",
+      "category": "migration",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "sqlWrite": 4
       },
       "action": "nenhuma",
       "reason": "migration versionada — histórico do schema, nunca se apaga",
