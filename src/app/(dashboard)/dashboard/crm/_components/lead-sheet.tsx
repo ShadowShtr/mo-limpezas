@@ -12,12 +12,17 @@
 // que se apanha o nome e mais nada. Um formulário que exigisse email ou
 // telefone deixaria essas de fora do sistema — que é o problema que este
 // módulo existe para resolver.
+//
+// Criar começa por PESQUISAR. Quem já é cliente não entra no funil como lead
+// nova: a conversão criaria um segundo cliente com o mesmo nome. Para esses,
+// a proposta de serviço novo faz-se por visita ou orçamento ao cliente — que
+// a 102 e a 103 já aceitam. Uma lead que já existe abre-se, não se repete.
 // ============================================================================
 
 import { useEffect, useState, useTransition } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
-import { X } from "lucide-react";
+import { CalendarPlus, FileText, User, X } from "lucide-react";
 
 import { useToast } from "@/components/ui/toast";
 import {
@@ -27,6 +32,11 @@ import {
   LEAD_VALUE_KIND_LABELS,
 } from "@/lib/crm/sources";
 import { createLead, updateLead, type LeadRow } from "@/app/actions/crm-leads";
+import {
+  PesquisaDestinatario,
+  type Destinatario,
+  type DestinatarioOpcao,
+} from "@/components/crm/pesquisa-destinatario";
 
 import type { Membro } from "./pipeline-client";
 
@@ -48,16 +58,30 @@ interface Props {
   /** `null` cria; uma lead edita. */
   lead: LeadRow | null;
   membros: Membro[];
+  /**
+   * Para a pesquisa antes de criar. Sem eles (editar, ou a ficha da lead) o
+   * formulário abre directamente.
+   */
+  leads?: DestinatarioOpcao[];
+  clientes?: DestinatarioOpcao[];
+  /** Nome já escrito noutro sítio (`?nova=`): salta a pesquisa. */
+  nomeInicial?: string;
   onClose: () => void;
 }
 
-export function LeadSheet({ lead, membros, onClose }: Props) {
+export function LeadSheet({ lead, membros, leads, clientes, nomeInicial, onClose }: Props) {
   const router = useRouter();
   const { toast } = useToast();
   const [pending, startTransition] = useTransition();
   const [erros, setErros] = useState<Record<string, string[]>>({});
 
-  const [name, setName] = useState(lead?.name ?? "");
+  const comPesquisa = !lead && !nomeInicial && Boolean(leads || clientes);
+  const [fase, setFase] = useState<"pesquisa" | "formulario">(
+    comPesquisa ? "pesquisa" : "formulario",
+  );
+  const [encontrado, setEncontrado] = useState<Destinatario | null>(null);
+
+  const [name, setName] = useState(lead?.name ?? nomeInicial ?? "");
   const [leadType, setLeadType] = useState<"individual" | "empresa">(lead?.lead_type ?? "empresa");
   const [contactName, setContactName] = useState(lead?.contact_name ?? "");
   const [email, setEmail] = useState(lead?.email ?? "");
@@ -146,7 +170,7 @@ export function LeadSheet({ lead, membros, onClose }: Props) {
           style={{ borderColor: "var(--color-border)" }}
         >
           <h2 id="titulo-lead" className="text-[15px] font-semibold">
-            {lead ? "Editar lead" : "Nova lead"}
+            {lead ? "Editar lead" : fase === "pesquisa" ? "Cliente ou lead" : "Nova lead"}
           </h2>
           <button
             type="button"
@@ -159,6 +183,72 @@ export function LeadSheet({ lead, membros, onClose }: Props) {
           </button>
         </div>
 
+        {fase === "pesquisa" ? (
+          <div className="flex-1 space-y-4 overflow-y-auto px-5 py-4">
+            <div className="block text-[12.5px] font-medium">
+              Procure primeiro — pode já existir
+              <PesquisaDestinatario
+                leads={leads ?? []}
+                clientes={clientes ?? []}
+                valor={encontrado}
+                onEscolher={(d) => {
+                  // Uma lead que já existe abre-se na ficha dela.
+                  if (d?.tipo === "lead") {
+                    onClose();
+                    router.push(`/dashboard/crm/${d.id}`);
+                    return;
+                  }
+                  setEncontrado(d);
+                }}
+                onCriarNovo={(texto) => {
+                  setName(texto);
+                  setFase("formulario");
+                }}
+                placeholder="Nome, email, telefone ou NIF…"
+                autoFocus
+              />
+            </div>
+
+            {encontrado?.tipo === "cliente" ? (
+              <div
+                className="rounded-lg border p-3"
+                style={{ borderColor: "var(--color-border)", background: "var(--color-background)" }}
+              >
+                <p className="text-[12.5px]">
+                  <strong>{encontrado.name}</strong> já é cliente. Para lhe propor serviço novo,
+                  marque uma visita ou faça um orçamento ao cliente — sem criar uma lead nova.
+                </p>
+                <div className="mt-3 flex flex-col gap-2">
+                  {(
+                    [
+                      [`/dashboard/crm/visitas?cliente=${encontrado.id}`, CalendarPlus, "Marcar visita"],
+                      [`/dashboard/crm/orcamentos?cliente=${encontrado.id}`, FileText, "Novo orçamento"],
+                      [`/dashboard/clientes/${encontrado.id}`, User, "Abrir ficha do cliente"],
+                    ] as const
+                  ).map(([href, Icone, etiqueta]) => (
+                    <button
+                      key={href}
+                      type="button"
+                      onClick={() => {
+                        onClose();
+                        router.push(href);
+                      }}
+                      className="flex items-center gap-2 rounded-lg border bg-white px-3 py-2 text-left text-[13px] font-medium"
+                      style={{ borderColor: "var(--color-border)" }}
+                    >
+                      <Icone className="h-4 w-4" style={{ color: "#16A34A" }} />
+                      {etiqueta}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <p className="text-[11.5px]" style={{ color: "var(--color-text-muted)" }}>
+                Se não aparecer ninguém, escolha «Criar nova lead» no fim da lista.
+              </p>
+            )}
+          </div>
+        ) : (
         <div className="flex-1 space-y-4 overflow-y-auto px-5 py-4">
           <Campo label="Empresa / Nome" obrigatorio erro={erro("name")}>
             <input
@@ -334,6 +424,7 @@ export function LeadSheet({ lead, membros, onClose }: Props) {
             />
           </Campo>
         </div>
+        )}
 
         <div
           className="flex justify-end gap-2 border-t px-5 py-4"
@@ -348,6 +439,7 @@ export function LeadSheet({ lead, membros, onClose }: Props) {
           >
             Cancelar
           </button>
+          {fase === "formulario" && (
           <button
             type="submit"
             disabled={pending || !name.trim()}
@@ -356,6 +448,7 @@ export function LeadSheet({ lead, membros, onClose }: Props) {
           >
             {pending ? "A guardar…" : lead ? "Guardar" : "Criar lead"}
           </button>
+          )}
         </div>
       </form>
 

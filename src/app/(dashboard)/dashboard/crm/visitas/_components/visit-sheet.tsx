@@ -12,6 +12,7 @@
 
 import { useEffect, useState, useTransition } from "react";
 import { createPortal } from "react-dom";
+import { useRouter } from "next/navigation";
 import { X } from "lucide-react";
 
 import { useToast } from "@/components/ui/toast";
@@ -19,14 +20,16 @@ import { toLisbonTimestamp, todayInLisbon } from "@/lib/lisbon-time";
 import { VISIT_DEFAULT_DURATION_MIN } from "@/lib/crm/visits";
 import { scheduleVisit } from "@/app/actions/crm-visitas";
 import type { LeadRow } from "@/app/actions/crm-leads";
+import {
+  PesquisaDestinatario,
+  type Destinatario,
+  type DestinatarioOpcao,
+} from "@/components/crm/pesquisa-destinatario";
 
 const CAMPO =
   "mt-1 w-full rounded-lg border px-3 py-2 text-[13px] font-normal bg-white border-[var(--color-border)]";
 
-export interface ClienteOpcao {
-  id: string;
-  name: string;
-}
+export type ClienteOpcao = DestinatarioOpcao;
 
 interface Props {
   leads: LeadRow[];
@@ -40,6 +43,8 @@ interface Props {
   membros: { id: string; full_name: string }[];
   /** Quando a visita nasce da ficha de uma lead, já vem escolhida. */
   leadFixa?: LeadRow;
+  /** Vindo de `?cliente=<id>` (pesquisa da lead nova): o cliente já escolhido. */
+  clienteInicial?: string | null;
   onClose: () => void;
   onDone: () => void;
 }
@@ -56,16 +61,29 @@ function somarMinutos(hora: string, minutos: number): string {
   return `${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}`;
 }
 
-export function VisitSheet({ leads, clientes, membros, leadFixa, onClose, onDone }: Props) {
+export function VisitSheet({
+  leads,
+  clientes,
+  membros,
+  leadFixa,
+  clienteInicial,
+  onClose,
+  onDone,
+}: Props) {
+  const router = useRouter();
   const { toast } = useToast();
   const [pending, startTransition] = useTransition();
   const [erros, setErros] = useState<Record<string, string[]>>({});
 
   // Com a lead já escolhida (visita nascida da ficha dela), o tipo fica fixo e
   // o selector de cliente nem aparece — não há nada a decidir.
-  const [alvoTipo, setAlvoTipo] = useState<AlvoTipo>("lead");
+  const clienteDoUrl =
+    !leadFixa && clienteInicial && clientes.some((c) => c.id === clienteInicial)
+      ? clienteInicial
+      : "";
+  const [alvoTipo, setAlvoTipo] = useState<AlvoTipo>(clienteDoUrl ? "cliente" : "lead");
   const [leadId, setLeadId] = useState(leadFixa?.id ?? "");
-  const [clientId, setClientId] = useState("");
+  const [clientId, setClientId] = useState(clienteDoUrl);
   const [data, setData] = useState(todayInLisbon());
   const [hora, setHora] = useState("10:00");
   const [duracao, setDuracao] = useState(String(VISIT_DEFAULT_DURATION_MIN));
@@ -99,6 +117,30 @@ export function VisitSheet({ leads, clientes, membros, leadFixa, onClose, onDone
   }
 
   const alvoEscolhido = alvoTipo === "lead" ? leadId : clientId;
+
+  // As convertidas já aparecem como cliente — listá-las duplicava.
+  const leadsPesquisa = leads.filter((l) => !l.converted_client_id);
+
+  const escolhido: Destinatario | null = !alvoEscolhido
+    ? null
+    : alvoTipo === "lead"
+      ? {
+          tipo: "lead",
+          id: leadId,
+          name: leadFixa?.id === leadId ? leadFixa.name : (leads.find((l) => l.id === leadId)?.name ?? ""),
+        }
+      : { tipo: "cliente", id: clientId, name: clientes.find((c) => c.id === clientId)?.name ?? "" };
+
+  function escolherDestinatario(d: Destinatario | null) {
+    if (!d) {
+      setLeadId("");
+      setClientId("");
+      return;
+    }
+    escolherTipo(d.tipo);
+    if (d.tipo === "lead") escolherLead(d.id);
+    else escolherCliente(d.id);
+  }
 
   function submeter(e: React.FormEvent) {
     e.preventDefault();
@@ -151,72 +193,31 @@ export function VisitSheet({ leads, clientes, membros, leadFixa, onClose, onDone
         </div>
 
         <div className="flex-1 space-y-4 overflow-y-auto px-5 py-4">
-          {/* Com a lead fixa não há escolha a fazer: é a ela que se vai. */}
-          {!leadFixa && (
-            <fieldset>
-              <legend className="text-[12.5px] font-medium">A quem se vai</legend>
-              <div className="mt-2 flex gap-4">
-                {([
-                  ["lead", "Uma lead"],
-                  ["cliente", "Um cliente"],
-                ] as const).map(([valor, etiqueta]) => (
-                  <label key={valor} className="flex items-center gap-2 text-[13px] font-normal">
-                    <input
-                      type="radio"
-                      name="alvo"
-                      value={valor}
-                      checked={alvoTipo === valor}
-                      onChange={() => escolherTipo(valor)}
-                    />
-                    {etiqueta}
-                  </label>
-                ))}
-              </div>
-            </fieldset>
-          )}
-
-          {alvoTipo === "lead" ? (
-            <label className="block text-[12.5px] font-medium">
-              Lead<span className="ml-0.5 text-red-500">*</span>
-              <select
-                value={leadId}
-                onChange={(e) => escolherLead(e.target.value)}
-                disabled={Boolean(leadFixa)}
-                required
-                className={CAMPO}
-              >
-                <option value="">Escolha a lead…</option>
-                {leads.map((l) => (
-                  <option key={l.id} value={l.id}>{l.name}</option>
-                ))}
-              </select>
-              {erros.leadId?.[0] && (
-                <span className="mt-0.5 block text-[11.5px] font-normal text-red-600">
-                  {erros.leadId[0]}
-                </span>
-              )}
-            </label>
-          ) : (
-            <label className="block text-[12.5px] font-medium">
-              Cliente<span className="ml-0.5 text-red-500">*</span>
-              <select
-                value={clientId}
-                onChange={(e) => escolherCliente(e.target.value)}
-                required
-                className={CAMPO}
-              >
-                <option value="">Escolha o cliente…</option>
-                {clientes.map((c) => (
-                  <option key={c.id} value={c.id}>{c.name}</option>
-                ))}
-              </select>
-              {erros.clientId?.[0] && (
-                <span className="mt-0.5 block text-[11.5px] font-normal text-red-600">
-                  {erros.clientId[0]}
-                </span>
-              )}
-            </label>
-          )}
+          {/*
+            Uma só caixa de pesquisa para leads e clientes. Com a lead fixa
+            (visita nascida da ficha dela) mostra-se sem se poder trocar.
+          */}
+          <div className="block text-[12.5px] font-medium">
+            A quem se vai<span className="ml-0.5 text-red-500">*</span>
+            <PesquisaDestinatario
+              leads={leadsPesquisa}
+              clientes={clientes}
+              valor={escolhido}
+              onEscolher={escolherDestinatario}
+              onCriarNovo={(texto) => {
+                // Uma lead nova cria-se no funil; a visita marca-se a seguir.
+                onClose();
+                router.push(`/dashboard/crm?nova=${encodeURIComponent(texto)}`);
+              }}
+              disabled={Boolean(leadFixa)}
+              autoFocus={!leadFixa && !clienteInicial}
+            />
+            {(erros.leadId?.[0] ?? erros.clientId?.[0]) && (
+              <span className="mt-0.5 block text-[11.5px] font-normal text-red-600">
+                {erros.leadId?.[0] ?? erros.clientId?.[0]}
+              </span>
+            )}
+          </div>
 
           <div className="grid grid-cols-3 gap-3">
             <label className="block text-[12.5px] font-medium">

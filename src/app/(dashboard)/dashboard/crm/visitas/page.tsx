@@ -16,7 +16,13 @@ import { VisitsClient } from "./_components/visits-client";
  *    agenda do trabalho executado; esta é a agenda de quem vai ver e orçar.
  *    A migration 102 explica por extenso porque é que as duas não se misturam.
  */
-export default async function VisitasPage() {
+export default async function VisitasPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ cliente?: string }>;
+}) {
+  // `?cliente=<id>` chega da pesquisa da lead nova, quando a pessoa já é cliente.
+  const { cliente } = await searchParams;
   const supabase = await createClient();
   const {
     data: { user },
@@ -50,7 +56,7 @@ export default async function VisitasPage() {
     //    Mesmo padrão company-scoped do resto do sistema (ver contratos).
     admin
       .from("clients")
-      .select("id, name")
+      .select("id, name, nif, email, phone")
       .eq("company_id", profile.company_id)
       .eq("status", "ativo")
       .order("name"),
@@ -68,6 +74,7 @@ export default async function VisitasPage() {
             leads={leadsRes.ok ? leadsRes.data : []}
             clientes={clientes ?? []}
             membros={membros ?? []}
+            clienteInicial={typeof cliente === "string" ? cliente : null}
           />
         </div>
       </div>

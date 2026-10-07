@@ -1,21 +1,21 @@
 {
   "generatedBy": "scripts/audit-file-inventory.mjs",
-  "totalFiles": 1039,
+  "totalFiles": 1043,
   "byStatus": {
-    "MANTER": 1015,
+    "MANTER": 1019,
     "STANDBY": 24
   },
   "byCategory": {
-    "test": 258,
+    "test": 260,
     "route-ui": 162,
     "migration": 148,
     "lib": 82,
     "script": 63,
-    "src-other": 62,
+    "src-other": 63,
     "domain": 59,
     "server-action": 50,
     "doc": 47,
-    "component": 36,
+    "component": 37,
     "api-route": 18,
     "doc-historico": 16,
     "config": 12,
@@ -29,7 +29,7 @@
     "supabase-other": 2
   },
   "byConfidence": {
-    "alta": 1016,
+    "alta": 1020,
     "média": 17,
     "baixa": 6
   },
@@ -5724,6 +5724,56 @@
         "sqlWrite": 20,
         "revalidatePath": 1,
         "dynamicImport": 2
+      },
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/__tests__/crm-pesquisa-destinatario.test.tsx",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {},
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/__tests__/crm-pesquisa-fluxos.test.tsx",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [
+        "any(2)"
+      ],
+      "signals": {
+        "eslintDisable": 1,
+        "anyType": 2,
+        "dynamicImport": 3
       },
       "action": "nenhuma",
       "reason": "suite de testes — corre por convenção do vitest",
@@ -13551,8 +13601,9 @@
       "category": "route-ui",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 2,
+      "consumers": 3,
       "consumerSample": [
+        "src/__tests__/crm-pesquisa-fluxos.test.tsx",
         "src/app/(dashboard)/dashboard/crm/[leadId]/_components/lead-detail.tsx",
         "src/app/(dashboard)/dashboard/crm/_components/pipeline-client.tsx"
       ],
@@ -13561,10 +13612,11 @@
       "sideEffects": [],
       "risks": [],
       "signals": {
-        "clientComponent": 1
+        "clientComponent": 1,
+        "fallbackArray": 2
       },
       "action": "nenhuma",
-      "reason": "em uso: 2 consumidor(es)",
+      "reason": "em uso: 3 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -13759,11 +13811,11 @@
       "category": "route-ui",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 3,
+      "consumers": 4,
       "consumerSample": [
         "src/__tests__/crm-edit-draft-sheet.test.tsx",
-        "src/__tests__/crm-quote-sheet.test.tsx",
-        "src/app/(dashboard)/dashboard/crm/orcamentos/_components/quotes-client.tsx"
+        "src/__tests__/crm-pesquisa-fluxos.test.tsx",
+        "src/__tests__/crm-quote-sheet.test.tsx"
       ],
       "autoLoaded": false,
       "referencedBy": [],
@@ -13774,7 +13826,7 @@
         "fallbackZero": 1
       },
       "action": "nenhuma",
-      "reason": "em uso: 3 consumidor(es)",
+      "reason": "em uso: 4 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -13863,7 +13915,7 @@
       "signals": {
         "supabase": 5,
         "ignoredError": 1,
-        "fallbackArray": 1
+        "fallbackArray": 2
       },
       "action": "nenhuma",
       "reason": "em uso: convenção do Next",
@@ -13906,8 +13958,9 @@
       "category": "route-ui",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 1,
+      "consumers": 2,
       "consumerSample": [
+        "src/__tests__/crm-pesquisa-fluxos.test.tsx",
         "src/app/(dashboard)/dashboard/crm/visitas/_components/visits-client.tsx"
       ],
       "autoLoaded": false,
@@ -13918,7 +13971,7 @@
         "clientComponent": 1
       },
       "action": "nenhuma",
-      "reason": "em uso: 1 consumidor(es)",
+      "reason": "em uso: 2 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -18151,6 +18204,35 @@
       }
     },
     {
+      "path": "src/components/crm/pesquisa-destinatario.tsx",
+      "category": "component",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 5,
+      "consumerSample": [
+        "src/__tests__/crm-pesquisa-destinatario.test.tsx",
+        "src/app/(dashboard)/dashboard/crm/_components/lead-sheet.tsx",
+        "src/app/(dashboard)/dashboard/crm/_components/pipeline-client.tsx"
+      ],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "clientComponent": 1,
+        "sqlWrite": 2
+      },
+      "action": "nenhuma",
+      "reason": "em uso: 5 consumidor(es)",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
       "path": "src/components/financeiro/finance-nav.tsx",
       "category": "component",
       "status": "MANTER",
@@ -20674,7 +20756,7 @@
       "category": "domain",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 68,
+      "consumers": 69,
       "consumerSample": [
         "src/__tests__/update-notice-modal.test.tsx",
         "src/__tests__/update-notices-eligibility.test.ts",
@@ -20689,7 +20771,7 @@
       "risks": [],
       "signals": {},
       "action": "nenhuma",
-      "reason": "em uso: 68 consumidor(es), configuração",
+      "reason": "em uso: 69 consumidor(es), configuração",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -24710,6 +24792,32 @@
     },
     {
       "path": "src/release-notes/2026-10-06-crm-ganho-pelo-quadro.ts",
+      "category": "src-other",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 1,
+      "consumerSample": [
+        "src/release-notes/index.ts"
+      ],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "sqlWrite": 1
+      },
+      "action": "nenhuma",
+      "reason": "em uso: 1 consumidor(es)",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/release-notes/2026-10-07-crm-pesquisa-cliente.ts",
       "category": "src-other",
       "status": "MANTER",
       "confidence": "alta",

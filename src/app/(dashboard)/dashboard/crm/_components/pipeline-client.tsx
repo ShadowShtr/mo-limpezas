@@ -31,6 +31,7 @@ import { moveLeadStage, reorderLeads, type LeadRow } from "@/app/actions/crm-lea
 import { todayInLisbon } from "@/lib/lisbon-time";
 
 import { LeadSheet } from "./lead-sheet";
+import type { DestinatarioOpcao } from "@/components/crm/pesquisa-destinatario";
 import { LostReasonDialog } from "./lost-reason-dialog";
 
 export interface Membro {
@@ -43,6 +44,10 @@ interface Props {
   leads: LeadRow[] | null;
   erro: string | null;
   membros: Membro[];
+  /** Para a pesquisa antes de criar uma lead. */
+  clientes: DestinatarioOpcao[];
+  /** Vindo de `?nova=<nome>`: abre logo a lead nova com o nome escrito. */
+  novaInicial?: string | null;
 }
 
 /** Cores de coluna, em Tailwind, por nome de cor do domínio. */
@@ -79,7 +84,7 @@ type DragState = {
   ativo: boolean;
 };
 
-export function PipelineClient({ leads, erro, membros }: Props) {
+export function PipelineClient({ leads, erro, membros, clientes, novaInicial = null }: Props) {
   const router = useRouter();
   const { toast } = useToast();
   const [, startTransition] = useTransition();
@@ -104,7 +109,9 @@ export function PipelineClient({ leads, erro, membros }: Props) {
     { lead: LeadRow; destino: LeadStage; origem: LeadStage } | null
   >(null);
   const [aEditar, setAEditar] = useState<LeadRow | null>(null);
-  const [aCriar, setACriar] = useState(false);
+  const [aCriar, setACriar] = useState(novaInicial !== null);
+  // Só vale para a primeira abertura: a «Nova lead» seguinte começa na pesquisa.
+  const [nomeVindo, setNomeVindo] = useState(novaInicial);
   const [filtroDono, setFiltroDono] = useState<string>("");
 
   const dragRef = useRef<DragState | null>(null);
@@ -456,7 +463,12 @@ export function PipelineClient({ leads, erro, membros }: Props) {
         <LeadSheet
           lead={aEditar}
           membros={membros}
+          // As convertidas já aparecem como cliente — listá-las duplicava.
+          leads={lista.filter((l) => !l.converted_client_id)}
+          clientes={clientes}
+          nomeInicial={nomeVindo || undefined}
           onClose={() => {
+            setNomeVindo(null);
             setACriar(false);
             setAEditar(null);
           }}

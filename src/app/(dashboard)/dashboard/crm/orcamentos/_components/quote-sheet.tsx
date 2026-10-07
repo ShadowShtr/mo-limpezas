@@ -57,6 +57,7 @@
 
 import { useEffect, useMemo, useState, useTransition } from "react";
 import { createPortal } from "react-dom";
+import { useRouter } from "next/navigation";
 import { Plus, Trash2, X } from "lucide-react";
 
 import { useToast } from "@/components/ui/toast";
@@ -86,14 +87,16 @@ import {
 } from "@/app/actions/crm-orcamentos";
 import type { VisitRow } from "@/app/actions/crm-visitas";
 import type { LeadRow } from "@/app/actions/crm-leads";
+import {
+  PesquisaDestinatario,
+  type Destinatario,
+  type DestinatarioOpcao,
+} from "@/components/crm/pesquisa-destinatario";
 
 const CAMPO =
   "mt-1 w-full rounded-lg border px-3 py-2 text-[13px] font-normal bg-white border-[var(--color-border)]";
 
-export interface ClienteOpcao {
-  id: string;
-  name: string;
-}
+export type ClienteOpcao = DestinatarioOpcao;
 
 interface PropsComuns {
   leads: LeadRow[];
@@ -106,6 +109,8 @@ interface PropsComuns {
    * 🔴 No modo `edit-draft` esta taxa NÃO é usada: ver `taxaDaPrevisao`.
    */
   vatRate: number | null;
+  /** Vindo de `?cliente=<id>` (pesquisa da lead nova): o cliente já escolhido. */
+  clienteInicial?: string | null;
   onClose: () => void;
   onDone: (numero: string) => void;
 }
@@ -146,9 +151,11 @@ export function QuoteSheet({
   vatRate,
   mode,
   base,
+  clienteInicial,
   onClose,
   onDone,
 }: Props) {
+  const router = useRouter();
   const { toast } = useToast();
   const [pending, startTransition] = useTransition();
   const [erros, setErros] = useState<Record<string, string[]>>({});
@@ -161,11 +168,17 @@ export function QuoteSheet({
   //    estado na mesma porque é ele que filtra as visitas compatíveis — o
   //    selector de visita continua a ser editável, e uma visita de outro
   //    destinatário é recusada pela RPC com `QUOTE_VISIT_MISMATCH`.
+  const clienteDoUrl =
+    mode === "create" && clienteInicial && clientes.some((c) => c.id === clienteInicial)
+      ? clienteInicial
+      : "";
   const [alvoTipo, setAlvoTipo] = useState<AlvoTipo>(
-    eEdicao && base?.quote.client_id ? "cliente" : "lead",
+    (eEdicao && base?.quote.client_id) || clienteDoUrl ? "cliente" : "lead",
   );
   const [leadId, setLeadId] = useState(eEdicao ? (base?.quote.lead_id ?? "") : "");
-  const [clientId, setClientId] = useState(eEdicao ? (base?.quote.client_id ?? "") : "");
+  const [clientId, setClientId] = useState(
+    eEdicao ? (base?.quote.client_id ?? "") : clienteDoUrl,
+  );
   const [visitId, setVisitId] = useState(eEdicao ? (base?.quote.visit_id ?? "") : "");
 
   // 🔴 As datas de uma revisão são de HOJE, e não as herdadas da versão
@@ -362,6 +375,28 @@ export function QuoteSheet({
 
   const alvoEscolhido = alvoTipo === "lead" ? leadId : clientId;
 
+  // As convertidas já aparecem como cliente — listá-las duplicava.
+  const leadsPesquisa = leads.filter((l) => !l.converted_client_id);
+
+  const escolhido: Destinatario | null = !alvoEscolhido
+    ? null
+    : alvoTipo === "lead"
+      ? { tipo: "lead", id: leadId, name: leads.find((l) => l.id === leadId)?.name ?? "" }
+      : { tipo: "cliente", id: clientId, name: clientes.find((c) => c.id === clientId)?.name ?? "" };
+
+  /** Escolher ou trocar limpa a visita, que era do destinatário anterior. */
+  function escolherDestinatario(d: Destinatario | null) {
+    setVisitId("");
+    if (!d) {
+      setLeadId("");
+      setClientId("");
+      return;
+    }
+    escolherTipo(d.tipo);
+    if (d.tipo === "lead") setLeadId(d.id);
+    else setClientId(d.id);
+  }
+
   function submeter(e: React.FormEvent) {
     e.preventDefault();
     setErros({});
@@ -535,74 +570,27 @@ export function QuoteSheet({
                 </>
               ) : (
                 <>
-              <fieldset>
-                <legend className="text-[12.5px] font-medium">Para quem</legend>
-                <div className="mt-2 flex gap-4">
-                  {([
-                    ["lead", "Uma lead"],
-                    ["cliente", "Um cliente"],
-                  ] as const).map(([valor, etiqueta]) => (
-                    <label key={valor} className="flex items-center gap-2 text-[13px] font-normal">
-                      <input
-                        type="radio"
-                        name="alvo-orcamento"
-                        value={valor}
-                        checked={alvoTipo === valor}
-                        onChange={() => escolherTipo(valor)}
-                      />
-                      {etiqueta}
-                    </label>
-                  ))}
-                </div>
-              </fieldset>
-
-              {alvoTipo === "lead" ? (
-                <label className="block text-[12.5px] font-medium">
-                  Lead<span className="ml-0.5 text-red-500">*</span>
-                  <select
-                    value={leadId}
-                    onChange={(e) => {
-                      setLeadId(e.target.value);
-                      setVisitId("");
-                    }}
-                    required
-                    className={CAMPO}
-                  >
-                    <option value="">Escolha a lead…</option>
-                    {leads.map((l) => (
-                      <option key={l.id} value={l.id}>{l.name}</option>
-                    ))}
-                  </select>
-                  {erros.leadId?.[0] && (
-                    <span className="mt-0.5 block text-[11.5px] font-normal text-red-600">
-                      {erros.leadId[0]}
-                    </span>
-                  )}
-                </label>
-              ) : (
-                <label className="block text-[12.5px] font-medium">
-                  Cliente<span className="ml-0.5 text-red-500">*</span>
-                  <select
-                    value={clientId}
-                    onChange={(e) => {
-                      setClientId(e.target.value);
-                      setVisitId("");
-                    }}
-                    required
-                    className={CAMPO}
-                  >
-                    <option value="">Escolha o cliente…</option>
-                    {clientes.map((c) => (
-                      <option key={c.id} value={c.id}>{c.name}</option>
-                    ))}
-                  </select>
-                  {erros.clientId?.[0] && (
-                    <span className="mt-0.5 block text-[11.5px] font-normal text-red-600">
-                      {erros.clientId[0]}
-                    </span>
-                  )}
-                </label>
-              )}
+              {/* Uma só caixa de pesquisa para leads e clientes. */}
+              <div className="block text-[12.5px] font-medium">
+                Para quem<span className="ml-0.5 text-red-500">*</span>
+                <PesquisaDestinatario
+                  leads={leadsPesquisa}
+                  clientes={clientes}
+                  valor={escolhido}
+                  onEscolher={escolherDestinatario}
+                  onCriarNovo={(texto) => {
+                    // Uma lead nova cria-se no funil; o orçamento faz-se a seguir.
+                    onClose();
+                    router.push(`/dashboard/crm?nova=${encodeURIComponent(texto)}`);
+                  }}
+                  autoFocus={!clienteInicial}
+                />
+                {(erros.leadId?.[0] ?? erros.clientId?.[0]) && (
+                  <span className="mt-0.5 block text-[11.5px] font-normal text-red-600">
+                    {erros.leadId?.[0] ?? erros.clientId?.[0]}
+                  </span>
+                )}
+              </div>
                 </>
               )}
 
