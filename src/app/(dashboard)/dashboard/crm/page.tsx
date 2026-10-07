@@ -16,7 +16,14 @@ import { PipelineClient } from "./_components/pipeline-client";
  *    `revalidatePath` chamada durante o render de um Server Component). Aqui
  *    não há nada a criar: se não houver leads, mostra-se o vazio.
  */
-export default async function CrmPage() {
+export default async function CrmPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ nova?: string }>;
+}) {
+  // `?nova=<nome>` chega da pesquisa das visitas e dos orçamentos, quando
+  // ninguém corresponde: abre a lead nova já com o nome escrito.
+  const { nova } = await searchParams;
   const supabase = await createClient();
   const {
     data: { user },
@@ -34,7 +41,7 @@ export default async function CrmPage() {
   // O funil é de quem gere. A app das colaboradoras vive noutro sítio.
   if (!["admin", "gestor"].includes(profile.role)) redirect("/app");
 
-  const [leadsRes, { data: membros }] = await Promise.all([
+  const [leadsRes, { data: membros }, { data: clientes }] = await Promise.all([
     getLeads(),
     admin
       .from("profiles")
@@ -43,6 +50,14 @@ export default async function CrmPage() {
       .in("role", ["admin", "gestor"])
       .eq("status", "ativo")
       .order("full_name"),
+    // Para a pesquisa ao criar: quem já é cliente não entra como lead nova.
+    // Email, telefone e NIF vêm para se poder procurar por eles também.
+    admin
+      .from("clients")
+      .select("id, name, nif, email, phone")
+      .eq("company_id", profile.company_id)
+      .eq("status", "ativo")
+      .order("name"),
   ]);
 
   // Uma falha de leitura não é uma lista vazia. Mostrar zero leads quando a
@@ -62,6 +77,8 @@ export default async function CrmPage() {
             leads={leads}
             erro={leadsRes.ok ? null : leadsRes.error.message}
             membros={membros ?? []}
+            clientes={clientes ?? []}
+            novaInicial={typeof nova === "string" ? nova.trim() : null}
           />
         </div>
       </div>

@@ -36,6 +36,8 @@ interface Props {
   leads: LeadRow[];
   clientes: ClienteOpcao[];
   membros: { id: string; full_name: string }[];
+  /** Vindo de `?cliente=<id>`: abre logo a marcação para esse cliente. */
+  clienteInicial?: string | null;
 }
 
 const CORES: Record<VisitStatus, string> = {
@@ -54,13 +56,20 @@ function fmtQuando(iso: string): string {
   }).format(new Date(iso));
 }
 
-export function VisitsClient({ visitas, erro, leads, clientes, membros }: Props) {
+export function VisitsClient({
+  visitas,
+  erro,
+  leads,
+  clientes,
+  membros,
+  clienteInicial = null,
+}: Props) {
   const router = useRouter();
   const { toast } = useToast();
   const [, startTransition] = useTransition();
 
   const [filtroEstado, setFiltroEstado] = useState<string>("agendada");
-  const [aMarcar, setAMarcar] = useState(false);
+  const [aMarcar, setAMarcar] = useState(Boolean(clienteInicial));
   const [aFechar, setAFechar] = useState<VisitRow | null>(null);
 
   const lista = visitas ?? [];
@@ -235,6 +244,7 @@ export function VisitsClient({ visitas, erro, leads, clientes, membros }: Props)
           leads={leads}
           clientes={clientes}
           membros={membros}
+          clienteInicial={clienteInicial}
           onClose={() => setAMarcar(false)}
           onDone={() => {
             setAMarcar(false);

@@ -27,10 +27,11 @@ import { QuotesClient } from "./_components/quotes-client";
 export default async function OrcamentosPage({
   searchParams,
 }: {
-  searchParams: Promise<{ converter?: string }>;
+  searchParams: Promise<{ converter?: string; cliente?: string }>;
 }) {
   // `?converter=<leadId>` chega do quadro quando se larga um cartão em «Ganho».
-  const { converter } = await searchParams;
+  // `?cliente=<id>` chega da pesquisa da lead nova, quando a pessoa já é cliente.
+  const { converter, cliente } = await searchParams;
   const supabase = await createClient();
   const {
     data: { user },
@@ -64,7 +65,7 @@ export default async function OrcamentosPage({
     getVisits({ desde: desdeUmAno }),
     admin
       .from("clients")
-      .select("id, name")
+      .select("id, name, nif, email, phone")
       .eq("company_id", profile.company_id)
       .eq("status", "ativo")
       .order("name"),
@@ -94,6 +95,7 @@ export default async function OrcamentosPage({
             empresaNome={empresa?.name ?? "Mó Limpezas"}
             vatRate={settings?.vat_rate ?? null}
             converterLeadId={typeof converter === "string" ? converter : null}
+            clienteInicial={typeof cliente === "string" ? cliente : null}
           />
         </div>
       </div>

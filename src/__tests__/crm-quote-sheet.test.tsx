@@ -35,6 +35,7 @@ vi.mock("@/app/actions/crm-orcamentos", () => ({
 vi.mock("@/components/ui/toast", () => ({
   useToast: () => ({ toast: vi.fn() }),
 }));
+vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn() }) }));
 
 const { QuoteSheet } = await import(
   "@/app/(dashboard)/dashboard/crm/orcamentos/_components/quote-sheet"

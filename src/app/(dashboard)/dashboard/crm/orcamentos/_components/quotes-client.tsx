@@ -59,6 +59,8 @@ interface Props {
   vatRate: number | null;
   /** Lead largada em «Ganho» no quadro: abre-se o orçamento que a converte. */
   converterLeadId?: string | null;
+  /** Vindo de `?cliente=<id>`: abre logo um orçamento novo para esse cliente. */
+  clienteInicial?: string | null;
 }
 
 const CORES: Record<QuoteStatus, string> = {
@@ -121,13 +123,14 @@ export function QuotesClient({
   empresaNome,
   vatRate,
   converterLeadId = null,
+  clienteInicial = null,
 }: Props) {
   const router = useRouter();
   const { toast } = useToast();
   const [, startTransition] = useTransition();
 
   const [filtroEstado, setFiltroEstado] = useState<string>("");
-  const [aCriar, setACriar] = useState(false);
+  const [aCriar, setACriar] = useState(Boolean(clienteInicial) && !converterLeadId);
   // Vindo do quadro com `?converter=<leadId>`: abre-se logo o orçamento aceite
   // dessa lead (onde está «Converter em cliente»), ou explica-se porque não há.
   const [vindoDoQuadro] = useState(() => resolverConversao(converterLeadId, orcamentos));
@@ -317,6 +320,7 @@ export function QuotesClient({
           visitas={visitas}
           vatRate={vatRate}
           mode="create"
+          clienteInicial={clienteInicial}
           onClose={() => setACriar(false)}
           onDone={(numero) => {
             setACriar(false);
