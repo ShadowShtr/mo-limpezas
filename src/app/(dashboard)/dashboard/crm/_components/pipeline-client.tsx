@@ -20,6 +20,7 @@ import Link from "next/link";
 import { CircleAlert, Plus, TriangleAlert, User } from "lucide-react";
 
 import { useToast } from "@/components/ui/toast";
+import { ExcluirRegistoButton } from "@/components/crm/excluir-registo-button";
 import {
   LEAD_STAGES,
   LEAD_STAGE_LABELS,
@@ -574,6 +575,9 @@ function LeadCard({
         >
           Abrir
         </Link>
+      </div>
+      <div className="mt-1 text-right">
+        <ExcluirRegistoButton tipo="lead" id={lead.id} nome={lead.name} />
       </div>
     </div>
   );

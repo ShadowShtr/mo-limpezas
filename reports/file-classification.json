@@ -1,21 +1,21 @@
 {
   "generatedBy": "scripts/audit-file-inventory.mjs",
-  "totalFiles": 1043,
+  "totalFiles": 1049,
   "byStatus": {
-    "MANTER": 1019,
+    "MANTER": 1025,
     "STANDBY": 24
   },
   "byCategory": {
-    "test": 260,
+    "test": 263,
     "route-ui": 162,
     "migration": 148,
     "lib": 82,
+    "src-other": 64,
     "script": 63,
-    "src-other": 63,
     "domain": 59,
-    "server-action": 50,
+    "server-action": 51,
     "doc": 47,
-    "component": 37,
+    "component": 38,
     "api-route": 18,
     "doc-historico": 16,
     "config": 12,
@@ -29,7 +29,7 @@
     "supabase-other": 2
   },
   "byConfidence": {
-    "alta": 1020,
+    "alta": 1026,
     "média": 17,
     "baixa": 6
   },
@@ -5706,6 +5706,85 @@
       }
     },
     {
+      "path": "src/__tests__/crm-excluir-actions.test.ts",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [
+        "ts-ignore(1)"
+      ],
+      "signals": {
+        "sqlWrite": 2,
+        "tsIgnore": 1
+      },
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/__tests__/crm-excluir-button.test.tsx",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {},
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/__tests__/crm-excluir-local-db.test.ts",
+      "category": "test",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [
+        "write"
+      ],
+      "risks": [
+        "service-role"
+      ],
+      "signals": {
+        "serviceRole": 1,
+        "write": 1,
+        "sqlWrite": 18
+      },
+      "action": "nenhuma",
+      "reason": "suite de testes — corre por convenção do vitest",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
       "path": "src/__tests__/crm-orcamentos-guard.test.ts",
       "category": "test",
       "status": "MANTER",
@@ -7793,7 +7872,7 @@
       "category": "test",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 18,
+      "consumers": 19,
       "consumerSample": [
         "scripts/audit-identity-drift-manifest.ts",
         "src/__tests__/canonical-path-101b.pg.test.ts",
@@ -13656,11 +13735,11 @@
       "category": "route-ui",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 3,
+      "consumers": 4,
       "consumerSample": [
+        "src/__tests__/crm-excluir-button.test.tsx",
         "src/app/(dashboard)/dashboard/crm/[leadId]/_components/lead-detail.tsx",
-        "src/app/(dashboard)/dashboard/crm/_components/lead-sheet.tsx",
-        "src/app/(dashboard)/dashboard/crm/page.tsx"
+        "src/app/(dashboard)/dashboard/crm/_components/lead-sheet.tsx"
       ],
       "autoLoaded": false,
       "referencedBy": [],
@@ -13677,7 +13756,7 @@
         "fallbackArray": 2
       },
       "action": "nenhuma",
-      "reason": "em uso: 3 consumidor(es)",
+      "reason": "em uso: 4 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -16028,15 +16107,46 @@
       }
     },
     {
+      "path": "src/app/actions/crm-excluir.ts",
+      "category": "server-action",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 2,
+      "consumerSample": [
+        "src/__tests__/crm-excluir-actions.test.ts",
+        "src/components/crm/excluir-registo-button.tsx"
+      ],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [
+        "write"
+      ],
+      "risks": [],
+      "signals": {
+        "serverAction": 1,
+        "write": 1,
+        "sqlWrite": 1
+      },
+      "action": "auditar atomicidade (T12/T13)",
+      "reason": "em uso: 2 consumidor(es)",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
       "path": "src/app/actions/crm-leads.ts",
       "category": "server-action",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 11,
+      "consumers": 12,
       "consumerSample": [
+        "src/__tests__/crm-excluir-button.test.tsx",
         "src/app/(dashboard)/dashboard/crm/[leadId]/_components/lead-detail.tsx",
-        "src/app/(dashboard)/dashboard/crm/[leadId]/page.tsx",
-        "src/app/(dashboard)/dashboard/crm/_components/lead-sheet.tsx"
+        "src/app/(dashboard)/dashboard/crm/[leadId]/page.tsx"
       ],
       "autoLoaded": false,
       "referencedBy": [],
@@ -16058,7 +16168,7 @@
         "fallbackArray": 5
       },
       "action": "auditar atomicidade (T12/T13)",
-      "reason": "em uso: 11 consumidor(es)",
+      "reason": "em uso: 12 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -18204,6 +18314,34 @@
       }
     },
     {
+      "path": "src/components/crm/excluir-registo-button.tsx",
+      "category": "component",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 6,
+      "consumerSample": [
+        "src/__tests__/crm-excluir-button.test.tsx",
+        "src/app/(dashboard)/dashboard/crm/[leadId]/_components/lead-detail.tsx",
+        "src/app/(dashboard)/dashboard/crm/_components/lead-sheet.tsx"
+      ],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "clientComponent": 1
+      },
+      "action": "nenhuma",
+      "reason": "em uso: 6 consumidor(es)",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
       "path": "src/components/crm/pesquisa-destinatario.tsx",
       "category": "component",
       "status": "MANTER",
@@ -18964,7 +19102,7 @@
       "category": "component",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 4,
+      "consumers": 5,
       "consumerSample": [
         "src/app/(dashboard)/dashboard/calendario/_components/buildings-column.tsx",
         "src/app/(dashboard)/dashboard/clientes/_components/predios-table.tsx",
@@ -18980,7 +19118,7 @@
         "clientComponent": 1
       },
       "action": "nenhuma",
-      "reason": "em uso: 4 consumidor(es)",
+      "reason": "em uso: 5 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -19054,7 +19192,7 @@
       "category": "component",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 13,
+      "consumers": 14,
       "consumerSample": [
         "src/app/(dashboard)/dashboard/crm/[leadId]/_components/lead-detail.tsx",
         "src/app/(dashboard)/dashboard/crm/_components/lead-sheet.tsx",
@@ -19070,7 +19208,7 @@
         "clientComponent": 1
       },
       "action": "nenhuma",
-      "reason": "em uso: 13 consumidor(es)",
+      "reason": "em uso: 14 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -20756,7 +20894,7 @@
       "category": "domain",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 69,
+      "consumers": 70,
       "consumerSample": [
         "src/__tests__/update-notice-modal.test.tsx",
         "src/__tests__/update-notices-eligibility.test.ts",
@@ -20771,7 +20909,7 @@
       "risks": [],
       "signals": {},
       "action": "nenhuma",
-      "reason": "em uso: 69 consumidor(es), configuração",
+      "reason": "em uso: 70 consumidor(es), configuração",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -20815,7 +20953,7 @@
       "category": "lib",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 7,
+      "consumers": 8,
       "consumerSample": [
         "src/__tests__/action-result.test.ts",
         "src/app/(dashboard)/dashboard/crm/[leadId]/page.tsx",
@@ -20831,7 +20969,7 @@
         "consoleErr": 1
       },
       "action": "nenhuma",
-      "reason": "em uso: 7 consumidor(es)",
+      "reason": "em uso: 8 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -20901,7 +21039,7 @@
       "category": "lib",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 24,
+      "consumers": 25,
       "consumerSample": [
         "src/__tests__/audit.test.ts",
         "src/app/(dashboard)/dashboard/calendario/_actions/reschedule.ts",
@@ -20929,7 +21067,7 @@
         "consoleErr": 2
       },
       "action": "nenhuma",
-      "reason": "em uso: 24 consumidor(es), script npm, CI, configuração",
+      "reason": "em uso: 25 consumidor(es), script npm, CI, configuração",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -20943,7 +21081,7 @@
       "category": "lib",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 34,
+      "consumers": 35,
       "consumerSample": [
         "src/__tests__/auth-revalidation-central.test.ts",
         "src/__tests__/colaborador-saida-runtime.test.ts",
@@ -20961,7 +21099,7 @@
         "supabase": 7
       },
       "action": "nenhuma",
-      "reason": "em uso: 34 consumidor(es)",
+      "reason": "em uso: 35 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -22833,7 +22971,7 @@
       "category": "lib",
       "status": "MANTER",
       "confidence": "alta",
-      "consumers": 10,
+      "consumers": 11,
       "consumerSample": [
         "src/__tests__/auth-revalidation-central.test.ts",
         "src/__tests__/invalidate-business-state.test.ts",
@@ -22844,15 +22982,15 @@
         "docs"
       ],
       "sideEffects": [
-        "revalidatePath(11)"
+        "revalidatePath(13)"
       ],
       "risks": [],
       "signals": {
         "fallbackArray": 1,
-        "revalidatePath": 11
+        "revalidatePath": 13
       },
       "action": "nenhuma",
-      "reason": "em uso: 10 consumidor(es)",
+      "reason": "em uso: 11 consumidor(es)",
       "manualDecision": false,
       "deadCodeDoors": {
         "frameworkConvention": false,
@@ -24818,6 +24956,32 @@
     },
     {
       "path": "src/release-notes/2026-10-07-crm-pesquisa-cliente.ts",
+      "category": "src-other",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 1,
+      "consumerSample": [
+        "src/release-notes/index.ts"
+      ],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [],
+      "signals": {
+        "sqlWrite": 1
+      },
+      "action": "nenhuma",
+      "reason": "em uso: 1 consumidor(es)",
+      "manualDecision": false,
+      "deadCodeDoors": {
+        "frameworkConvention": false,
+        "cliEntrypoint": false,
+        "dynamicImport": true,
+        "allClosed": false
+      }
+    },
+    {
+      "path": "src/release-notes/2026-10-09-crm-excluir-registos.ts",
       "category": "src-other",
       "status": "MANTER",
       "confidence": "alta",

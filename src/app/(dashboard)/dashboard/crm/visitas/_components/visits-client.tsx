@@ -17,6 +17,7 @@ import Link from "next/link";
 import { CalendarPlus, MapPin, TriangleAlert, User } from "lucide-react";
 
 import { useToast } from "@/components/ui/toast";
+import { ExcluirRegistoButton } from "@/components/crm/excluir-registo-button";
 import { usePagination, Pagination } from "@/components/ui/pagination";
 import {
   VISIT_STATUSES,
@@ -227,6 +228,8 @@ export function VisitsClient({
                             Ver
                           </button>
                         )}
+                        <ExcluirRegistoButton tipo="visita" id={v.id}
+                          nome={`visita de ${v.target_name}`} />
                       </td>
                     </tr>
                   );

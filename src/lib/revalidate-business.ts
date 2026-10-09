@@ -45,6 +45,8 @@ export function revalidateBusinessPaths(opts: {
   if (scopes.includes("crm")) {
     revalidatePath("/dashboard/crm");
     revalidatePath("/dashboard/crm/[leadId]", "page");
+    revalidatePath("/dashboard/crm/visitas");
+    revalidatePath("/dashboard/crm/orcamentos");
   }
 }
 

@@ -27,6 +27,7 @@ import {
 } from "lucide-react";
 
 import { useToast } from "@/components/ui/toast";
+import { ExcluirRegistoButton } from "@/components/crm/excluir-registo-button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import {
   LEAD_INTERACTION_KIND_LABELS,
@@ -140,7 +141,7 @@ export function LeadDetail({ lead, interactions, membros }: Props) {
               </p>
             )}
           </div>
-          <div className="flex shrink-0 gap-1.5">
+          <div className="flex flex-wrap justify-end gap-1.5">
             <button
               onClick={() => setAEditar(true)}
               className="flex items-center gap-1 rounded-lg border px-2.5 py-1.5 text-[12.5px] font-medium"
@@ -164,6 +165,8 @@ export function LeadDetail({ lead, interactions, membros }: Props) {
               confirmLabel="Arquivar"
               onConfirm={arquivar}
             />
+            <ExcluirRegistoButton tipo="lead" id={lead.id} nome={lead.name}
+              onDeleted={() => router.push("/dashboard/crm")} />
           </div>
         </div>
 
