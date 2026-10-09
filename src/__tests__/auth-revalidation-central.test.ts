@@ -363,6 +363,7 @@ describe("nenhuma outra action foi migrada nesta PR", () => {
     const NASCIDAS_NO_FORMATO = [
       "crm-leads.ts", "crm-visitas.ts", "crm-orcamentos.ts", "crm-conversao.ts",
       "crm-excluir.ts",
+      "crm-colunas.ts",
     ];
     const PILOTO = ["settings.ts"];
 

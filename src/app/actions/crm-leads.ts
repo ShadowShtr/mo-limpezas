@@ -58,6 +58,7 @@ export interface LeadRow {
   address: string | null;
   stage: string;
   board_order: number;
+  extra_column_id?: string | null;
   source: string | null;
   source_detail: string | null;
   owner_id: string | null;
@@ -93,7 +94,7 @@ export interface LeadInteractionRow {
  */
 const LEAD_SELECT = `
   id, name, lead_type, contact_name, email, phone, nif, address,
-  stage, board_order, source, source_detail, owner_id,
+  stage, board_order, extra_column_id, source, source_detail, owner_id,
   estimated_value, estimated_value_kind,
   next_action_at, next_action_note,
   service_type, frequency_hint, notes,
