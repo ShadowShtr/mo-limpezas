@@ -362,6 +362,7 @@ describe("nenhuma outra action foi migrada nesta PR", () => {
     // arrasto, escondidas numa PR que muda comportamento.
     const NASCIDAS_NO_FORMATO = [
       "crm-leads.ts", "crm-visitas.ts", "crm-orcamentos.ts", "crm-conversao.ts",
+      "crm-excluir.ts",
     ];
     const PILOTO = ["settings.ts"];
 

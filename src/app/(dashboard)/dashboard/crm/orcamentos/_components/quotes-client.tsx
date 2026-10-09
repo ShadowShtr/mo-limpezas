@@ -33,6 +33,7 @@ import Link from "next/link";
 import { FilePlus2, TriangleAlert } from "lucide-react";
 
 import { useToast } from "@/components/ui/toast";
+import { ExcluirRegistoButton } from "@/components/crm/excluir-registo-button";
 import { usePagination, Pagination } from "@/components/ui/pagination";
 import {
   canConvertQuote,
@@ -301,6 +302,8 @@ export function QuotesClient({
                         >
                           Abrir
                         </button>
+                        <ExcluirRegistoButton tipo="orcamento" id={q.id}
+                          nome={`orçamento ${q.quote_number}`} />
                       </td>
                     </tr>
                   );
