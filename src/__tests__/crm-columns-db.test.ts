@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { ACTOR, ACTOR_OUTRA, EMPRESA, OUTRA, CLIENTE_A, LOCAL_A, montarPalcoCrm, novaLead } from "./helpers/crm-pg-harness";
 import { LEAD_STAGES } from "@/lib/crm/stages";
 
-const MIGRATION = "supabase/migrations/20261009142848_crm_extra_columns.sql";
+const MIGRATION = "supabase/migrations/108_crm_extra_columns.sql";
 const SIGNATURE = "public.move_crm_lead_board_atomic(uuid,uuid,uuid,text,uuid,uuid,text,text,text)";
 let db: PGlite;
 let adapter: pg.Pool;
@@ -92,7 +92,7 @@ describe("colunas livres no banco", () => {
   it("rollback remove apenas a organização extra", async () => {
     const id = await novaLead(adapter);
     await move(id,"novo",null,colA);
-    await db.exec(readFileSync("supabase/migrations/rollback/20261009142848_crm_extra_columns.down.sql","utf8"));
+    await db.exec(readFileSync("supabase/migrations/rollback/108_crm_extra_columns.down.sql","utf8"));
     expect((await db.query("SELECT stage FROM crm_leads WHERE id=$1", [id])).rows[0]).toEqual({ stage: "novo" });
     expect((await db.query<{ name: string | null }>("SELECT to_regclass('public.crm_board_columns')::text name")).rows[0].name).toBeNull();
   });

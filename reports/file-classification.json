@@ -27553,6 +27553,27 @@
       "manualDecision": false
     },
     {
+      "path": "supabase/migrations/108_crm_extra_columns.sql",
+      "category": "migration",
+      "status": "MANTER",
+      "confidence": "alta",
+      "consumers": 0,
+      "consumerSample": [],
+      "autoLoaded": false,
+      "referencedBy": [],
+      "sideEffects": [],
+      "risks": [
+        "service-role"
+      ],
+      "signals": {
+        "serviceRole": 2,
+        "sqlWrite": 12
+      },
+      "action": "nenhuma",
+      "reason": "migration versionada — histórico do schema, nunca se apaga",
+      "manualDecision": false
+    },
+    {
       "path": "supabase/migrations/20260608_new_features.sql",
       "category": "migration",
       "status": "MANTER",
@@ -27627,27 +27648,6 @@
       "risks": [],
       "signals": {
         "sqlWrite": 1
-      },
-      "action": "nenhuma",
-      "reason": "migration versionada — histórico do schema, nunca se apaga",
-      "manualDecision": false
-    },
-    {
-      "path": "supabase/migrations/20261009142848_crm_extra_columns.sql",
-      "category": "migration",
-      "status": "MANTER",
-      "confidence": "alta",
-      "consumers": 0,
-      "consumerSample": [],
-      "autoLoaded": false,
-      "referencedBy": [],
-      "sideEffects": [],
-      "risks": [
-        "service-role"
-      ],
-      "signals": {
-        "serviceRole": 2,
-        "sqlWrite": 12
       },
       "action": "nenhuma",
       "reason": "migration versionada — histórico do schema, nunca se apaga",
@@ -28330,7 +28330,7 @@
       "manualDecision": false
     },
     {
-      "path": "supabase/migrations/rollback/20261009142848_crm_extra_columns.down.sql",
+      "path": "supabase/migrations/rollback/108_crm_extra_columns.down.sql",
       "category": "migration",
       "status": "MANTER",
       "confidence": "alta",
