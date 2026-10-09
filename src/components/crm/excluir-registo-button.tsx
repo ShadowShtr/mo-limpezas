@@ -25,7 +25,7 @@ export function ExcluirRegistoButton({ tipo, id, nome, onDeleted }: {
         }
         title={`Excluir ${nome}?`}
         description={tipo === "lead"
-          ? "A lead, os contactos, as visitas e os orçamentos associados serão excluídos. Esta ação não pode ser desfeita aqui."
+          ? "A lead, os contactos, as visitas e os orçamentos associados serão excluídos. O cliente e os locais mantêm-se. Esta ação não pode ser desfeita aqui."
           : "Este registo será excluído. Esta ação não pode ser desfeita aqui. O cliente mantém-se."}
         confirmLabel="Excluir"
         onConfirm={async () => {

@@ -576,11 +576,9 @@ function LeadCard({
           Abrir
         </Link>
       </div>
-      {!lead.converted_client_id && lead.stage !== "ganho" && (
-        <div className="mt-1 text-right">
-          <ExcluirRegistoButton tipo="lead" id={lead.id} nome={lead.name} />
-        </div>
-      )}
+      <div className="mt-1 text-right">
+        <ExcluirRegistoButton tipo="lead" id={lead.id} nome={lead.name} />
+      </div>
     </div>
   );
 }

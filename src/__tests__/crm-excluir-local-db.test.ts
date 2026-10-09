@@ -4,7 +4,7 @@ import { PGlite } from "@electric-sql/pglite";
 import { expect, it } from "vitest";
 import { baselineCompleto } from "./helpers/production-baseline";
 
-it("a cascata real remove a lead e dependentes; uma visita usada por orçamento recusa a exclusão", async () => {
+it.each([false, true])("exclui lead e dependentes preservando clientes e locais (convertida=%s)", async (convertida) => {
   const db = new PGlite();
   try {
     await db.exec(baselineCompleto());
@@ -38,15 +38,28 @@ it("a cascata real remove a lead e dependentes; uma visita usada por orçamento 
       'pontual',0,false,0,NULL,NULL,NULL,NULL,NULL,$4,$5::jsonb)`,
     [company, lead, visit, actor, JSON.stringify([{ description: "Teste", quantity: 1, unit: "unidade", unit_price: 10 }])]);
 
+    const quote = (await db.query<{ id: string }>("SELECT id FROM crm_quotes WHERE source_lead_id=$1", [lead])).rows[0].id;
+    await db.query("UPDATE crm_quotes SET status='enviado',sent_at=now() WHERE id=$1", [quote]);
+    await db.query(`SELECT * FROM revise_crm_quote($1,$2,$3,CURRENT_DATE,CURRENT_DATE+30,0,false,0,NULL,$4::jsonb)`,
+      [company, quote, actor, JSON.stringify([{ description: "Revisão", quantity: 1, unit: "unidade", unit_price: 12 }])]);
+    expect((await db.query("SELECT id FROM crm_quotes WHERE source_lead_id=$1", [lead])).rows).toHaveLength(2);
+
     await expect(db.query("DELETE FROM crm_visits WHERE id=$1 AND company_id=$2", [visit, company])).rejects.toMatchObject({ code: "23503" });
     expect((await db.query("SELECT id FROM crm_visits WHERE id=$1", [visit])).rows).toHaveLength(1);
+    const client = (await db.query<{ id: string }>("INSERT INTO clients(company_id,name) VALUES ($1,'Cliente') RETURNING id", [company])).rows[0].id;
+    const location = (await db.query<{ id: string }>("INSERT INTO locations(company_id,client_id,name,address) VALUES ($1,$2,'Local','Morada') RETURNING id", [company, client])).rows[0].id;
+    if (convertida) {
+      await db.query("UPDATE crm_leads SET stage='ganho', won_at=now(), converted_client_id=$2, converted_location_id=$3 WHERE id=$1", [lead, client, location]);
+      await db.query("UPDATE crm_quotes SET lead_id=NULL,client_id=$2 WHERE source_lead_id=$1", [lead, client]);
+    }
     // O filtro de empresa usado pela action recusa ids de outra empresa.
     expect((await db.query("DELETE FROM crm_leads WHERE id=$1 AND company_id=$2 RETURNING id", [lead, actor])).rows).toHaveLength(0);
-    expect((await db.query(`DELETE FROM crm_leads WHERE id=$1 AND company_id=$2
-      AND converted_client_id IS NULL AND stage <> 'ganho' RETURNING id`, [lead, company])).rows).toHaveLength(1);
+    expect((await db.query("DELETE FROM crm_leads WHERE id=$1 AND company_id=$2 RETURNING id", [lead, company])).rows).toHaveLength(1);
     for (const table of ["crm_leads", "crm_visits", "crm_quotes", "crm_quote_items", "crm_lead_interactions"]) {
       expect((await db.query(`SELECT id FROM ${table}`)).rows, table).toHaveLength(0);
     }
+    expect((await db.query("SELECT id FROM clients WHERE id=$1", [client])).rows).toHaveLength(1);
+    expect((await db.query("SELECT id FROM locations WHERE id=$1", [location])).rows).toHaveLength(1);
   } finally {
     await db.close();
   }

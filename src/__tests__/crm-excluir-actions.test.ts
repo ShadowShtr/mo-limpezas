@@ -44,11 +44,17 @@ describe("exclusão CRM", () => {
     expect(invalidateBusinessState).toHaveBeenCalledWith({ domains: ["leads"] });
   });
 
-  it("protege uma lead convertida mesmo que a conversão ocorra após abrir a confirmação", async () => {
+  it("não restringe a exclusão pelo estado ou conversão da lead", async () => {
+    const { query } = setup();
+    expect(await excluirRegistoCrm("lead", ID)).toMatchObject({ ok: true });
+    expect(query.is).not.toHaveBeenCalled();
+    expect(query.neq).not.toHaveBeenCalled();
+  });
+
+  it("um id inexistente ou de outra empresa não anuncia a exclusão", async () => {
     const { query } = setup(null);
     const result = await excluirRegistoCrm("lead", ID);
-    expect(query.is).toHaveBeenCalledWith("converted_client_id", null);
-    expect(query.neq).toHaveBeenCalledWith("stage", "ganho");
+    expect(query.eq).toHaveBeenCalledWith("company_id", COMPANY);
     expect(result).toMatchObject({ ok: false, error: { code: "NOT_FOUND" } });
     expect(auditLog).not.toHaveBeenCalled();
     expect(invalidateBusinessState).not.toHaveBeenCalled();

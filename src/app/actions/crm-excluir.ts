@@ -35,13 +35,9 @@ export async function excluirRegistoCrm(
   if (!parsed.success) return validationFailure(parsed.error);
 
   const { admin, profile } = guard;
-  // A condição faz parte do DELETE: uma conversão concorrente também protege a lead.
-  const query = parsed.data.tipo === "lead"
-    ? admin.from("crm_leads").delete()
-      .eq("company_id", profile.company_id).eq("id", parsed.data.id)
-      .is("converted_client_id", null).neq("stage", "ganho")
-    : admin.from(tabelas[parsed.data.tipo]).delete()
-      .eq("company_id", profile.company_id).eq("id", parsed.data.id);
+  // Excluir o cartão não exclui o cliente/local para os quais ele foi convertido.
+  const query = admin.from(tabelas[parsed.data.tipo]).delete()
+    .eq("company_id", profile.company_id).eq("id", parsed.data.id);
   const { data, error } = await query.select("id").maybeSingle();
   if (error) {
     if (error.code === "23503") {
@@ -53,10 +49,7 @@ export async function excluirRegistoCrm(
     return internalFailure("excluirRegistoCrm", error, ACTION_ERROR_CODES.PERSISTENCE);
   }
   if (!data) {
-    return actionFailure(ACTION_ERROR_CODES.NOT_FOUND,
-      tipo === "lead"
-        ? "Lead não encontrada ou já convertida em cliente."
-        : "Registo não encontrado ou já excluído.");
+    return actionFailure(ACTION_ERROR_CODES.NOT_FOUND, "Registo não encontrado ou já excluído.");
   }
   await auditLog({
     companyId: profile.company_id, actorId: profile.id,

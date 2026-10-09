@@ -165,10 +165,8 @@ export function LeadDetail({ lead, interactions, membros }: Props) {
               confirmLabel="Arquivar"
               onConfirm={arquivar}
             />
-            {!lead.converted_client_id && lead.stage !== "ganho" && (
-              <ExcluirRegistoButton tipo="lead" id={lead.id} nome={lead.name}
-                onDeleted={() => router.push("/dashboard/crm")} />
-            )}
+            <ExcluirRegistoButton tipo="lead" id={lead.id} nome={lead.name}
+              onDeleted={() => router.push("/dashboard/crm")} />
           </div>
         </div>
 

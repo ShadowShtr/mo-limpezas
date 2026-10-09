@@ -22,6 +22,7 @@
 import { useEffect, useState, useTransition } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
+import { ExcluirRegistoButton } from "@/components/crm/excluir-registo-button";
 import { CalendarPlus, FileText, User, X } from "lucide-react";
 
 import { useToast } from "@/components/ui/toast";
@@ -172,6 +173,11 @@ export function LeadSheet({ lead, membros, leads, clientes, nomeInicial, onClose
           <h2 id="titulo-lead" className="text-[15px] font-semibold">
             {lead ? "Editar lead" : fase === "pesquisa" ? "Cliente ou lead" : "Nova lead"}
           </h2>
+          {lead && !pending && (
+            <div className="ml-auto">
+              <ExcluirRegistoButton tipo="lead" id={lead.id} nome={lead.name} onDeleted={onClose} />
+            </div>
+          )}
           <button
             type="button"
             onClick={onClose}
