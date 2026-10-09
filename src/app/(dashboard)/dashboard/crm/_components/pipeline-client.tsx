@@ -17,21 +17,26 @@
 import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { CircleAlert, Plus, TriangleAlert, User } from "lucide-react";
+import { CircleAlert, Pencil, Plus, Trash2, TriangleAlert, User } from "lucide-react";
 
 import { useToast } from "@/components/ui/toast";
 import { ExcluirRegistoButton } from "@/components/crm/excluir-registo-button";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { deleteCrmColumn, moveLeadBoard } from "@/app/actions/crm-colunas";
+import { extraColumnId, extraColumnKey, type CrmColumn } from "@/lib/crm/columns";
 import {
   LEAD_STAGES,
   LEAD_STAGE_LABELS,
   canTransition,
+  isLeadStage,
   type LeadStage,
 } from "@/lib/crm/stages";
 import { LEAD_SOURCE_LABELS, type LeadSource } from "@/lib/crm/sources";
-import { moveLeadStage, reorderLeads, type LeadRow } from "@/app/actions/crm-leads";
+import { reorderLeads, type LeadRow } from "@/app/actions/crm-leads";
 import { todayInLisbon } from "@/lib/lisbon-time";
 
 import { LeadSheet } from "./lead-sheet";
+import { ColumnSheet } from "./column-sheet";
 import type { DestinatarioOpcao } from "@/components/crm/pesquisa-destinatario";
 import { LostReasonDialog } from "./lost-reason-dialog";
 
@@ -45,6 +50,7 @@ interface Props {
   leads: LeadRow[] | null;
   erro: string | null;
   membros: Membro[];
+  colunasExtras?: CrmColumn[];
   /** Para a pesquisa antes de criar uma lead. */
   clientes: DestinatarioOpcao[];
   /** Vindo de `?nova=<nome>`: abre logo a lead nova com o nome escrito. */
@@ -77,7 +83,7 @@ function fmtEur(v: number | null): string {
 
 type DragState = {
   leadId: string;
-  origem: LeadStage;
+  origem: string;
   startX: number;
   startY: number;
   x: number;
@@ -85,10 +91,10 @@ type DragState = {
   ativo: boolean;
 };
 
-export function PipelineClient({ leads, erro, membros, clientes, novaInicial = null }: Props) {
+export function PipelineClient({ leads, erro, membros, clientes, colunasExtras = [], novaInicial = null }: Props) {
   const router = useRouter();
   const { toast } = useToast();
-  const [, startTransition] = useTransition();
+  const [pending, startTransition] = useTransition();
 
   // Cópia local para mover o cartão sem esperar pelo servidor. O servidor
   // continua a ser a autoridade: em erro, repõe-se a lista que veio dele.
@@ -105,7 +111,8 @@ export function PipelineClient({ leads, erro, membros, clientes, novaInicial = n
   }
 
   const [drag, setDrag] = useState<DragState | null>(null);
-  const [alvo, setAlvo] = useState<LeadStage | null>(null);
+  const [alvo, setAlvo] = useState<string | null>(null);
+  const [colunaForm, setColunaForm] = useState<CrmColumn | "nova" | null>(null);
   const [aPerder, setAPerder] = useState<
     { lead: LeadRow; destino: LeadStage; origem: LeadStage } | null
   >(null);
@@ -116,7 +123,7 @@ export function PipelineClient({ leads, erro, membros, clientes, novaInicial = n
   const [filtroDono, setFiltroDono] = useState<string>("");
 
   const dragRef = useRef<DragState | null>(null);
-  const alvoRef = useRef<LeadStage | null>(null);
+  const alvoRef = useRef<string | null>(null);
   const arrastouRef = useRef(false);
   const colunasRef = useRef<Map<string, HTMLDivElement>>(new Map());
 
@@ -126,9 +133,11 @@ export function PipelineClient({ leads, erro, membros, clientes, novaInicial = n
     ? lista.filter((l) => (filtroDono === "sem" ? !l.owner_id : l.owner_id === filtroDono))
     : lista;
 
-  function porEstado(stage: LeadStage): LeadRow[] {
+  function porColuna(key: string): LeadRow[] {
+    const extraId = extraColumnId(key);
     return visiveis
-      .filter((l) => l.stage === stage)
+      .filter((l) => extraId ? l.extra_column_id === extraId
+        : l.stage === key && (!l.extra_column_id || !colunasExtras.some((c) => c.id === l.extra_column_id)))
       .sort((a, b) => a.board_order - b.board_order
         || b.created_at.localeCompare(a.created_at));
   }
@@ -151,12 +160,12 @@ export function PipelineClient({ leads, erro, membros, clientes, novaInicial = n
         window.getSelection()?.removeAllRanges();
       }
 
-      let sobre: LeadStage | null = null;
+      let sobre: string | null = null;
       if (ativo) {
         for (const [stage, el] of colunasRef.current) {
           const r = el.getBoundingClientRect();
           if (e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom) {
-            sobre = stage as LeadStage;
+            sobre = stage;
             break;
           }
         }
@@ -183,12 +192,16 @@ export function PipelineClient({ leads, erro, membros, clientes, novaInicial = n
 
       const lead = lista.find((l) => l.id === d.leadId);
       if (!lead) return;
+      const extraId = extraColumnId(destino);
+      if (extraId) { organizar(lead, extraId); return; }
+      if (!isLeadStage(destino) || !isLeadStage(lead.stage)) return;
+      if (lead.extra_column_id && destino === lead.stage) { organizar(lead, null); return; }
 
-      if (!canTransition(d.origem, destino)) {
+      if (!canTransition(lead.stage, destino)) {
         toast(
-          d.origem === "ganho"
+          lead.stage === "ganho"
             ? "Esta lead já foi convertida em cliente e não volta ao funil."
-            : `Não é possível passar de ${LEAD_STAGE_LABELS[d.origem]} para ${LEAD_STAGE_LABELS[destino]}.`,
+            : `Não é possível passar de ${LEAD_STAGE_LABELS[lead.stage]} para ${LEAD_STAGE_LABELS[destino]}.`,
           "error",
         );
         return;
@@ -206,11 +219,11 @@ export function PipelineClient({ leads, erro, membros, clientes, novaInicial = n
       // Perder exige motivo, e a base recusa sem ele. Perguntar antes de
       // gravar evita mostrar um erro técnico a quem só arrastou um cartão.
       if (destino === "perdido") {
-        setAPerder({ lead, destino, origem: d.origem });
+        setAPerder({ lead, destino, origem: lead.stage });
         return;
       }
 
-      aplicarMudanca(lead, destino, d.origem);
+      aplicarMudanca(lead, destino, lead.stage);
     }
 
     window.addEventListener("pointermove", handleMove);
@@ -223,7 +236,21 @@ export function PipelineClient({ leads, erro, membros, clientes, novaInicial = n
       document.body.style.userSelect = "";
     };
     // `lista` entra porque o handler procura a lead nela.
-  }, [lista]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [lista, colunasExtras]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  function organizar(lead: LeadRow, extraId: string | null) {
+    if (!isLeadStage(lead.stage)) return;
+    const antes = lista;
+    setLista((rows) => rows.map((l) => l.id === lead.id ? { ...l, extra_column_id: extraId } : l));
+    startTransition(async () => {
+      const res = await moveLeadBoard({ leadId: lead.id, expectedStage: lead.stage as LeadStage,
+        expectedExtraColumnId: lead.extra_column_id ?? null, extraColumnId: extraId,
+        stage: lead.stage as LeadStage });
+      if (!res.ok) { setLista(antes); toast(res.error.message, "error"); }
+      else toast("Cartão organizado.", "success");
+      router.refresh();
+    });
+  }
 
   function aplicarMudanca(
     lead: LeadRow,
@@ -233,11 +260,14 @@ export function PipelineClient({ leads, erro, membros, clientes, novaInicial = n
   ) {
     const antes = lista;
     setLista((atual) =>
-      atual.map((l) => (l.id === lead.id ? { ...l, stage: destino } : l)),
+      atual.map((l) => (l.id === lead.id ? { ...l, stage: destino, extra_column_id: null } : l)),
     );
 
     startTransition(async () => {
-      const res = await moveLeadStage(lead.id, {
+      const res = await moveLeadBoard({
+        leadId: lead.id,
+        extraColumnId: null,
+        expectedExtraColumnId: lead.extra_column_id ?? null,
         stage: destino,
         // 🔴 De onde o cartão veio, na leitura de quem o arrastou. É o que
         //    permite à base recusar quando outra pessoa já o moveu, em vez de
@@ -305,6 +335,11 @@ export function PipelineClient({ leads, erro, membros, clientes, novaInicial = n
           <Plus className="h-4 w-4" />
           Nova lead
         </button>
+        <button type="button" onClick={() => setColunaForm("nova")}
+          className="flex items-center gap-1.5 rounded-lg border px-3 py-2 text-[13px] font-medium"
+          style={{ borderColor: "var(--color-border)" }}>
+          <Plus className="h-4 w-4" />Nova coluna
+        </button>
 
         <select
           value={filtroDono}
@@ -327,10 +362,14 @@ export function PipelineClient({ leads, erro, membros, clientes, novaInicial = n
 
       {/* ── O quadro ── */}
       <div className="flex gap-3 overflow-x-auto pb-4">
-        {LEAD_STAGES.map((stage) => {
-          const cor = CORES[COR_POR_ESTADO[stage]];
-          const cartoes = porEstado(stage);
-          const podeReceber = drag ? canTransition(drag.origem, stage) : true;
+        {[...LEAD_STAGES.map((s) => ({ key: s, name: LEAD_STAGE_LABELS[s], color: COR_POR_ESTADO[s], extra: null as CrmColumn | null })),
+          ...colunasExtras.map((c) => ({ key: extraColumnKey(c.id), name: c.name, color: c.color, extra: c }))].map((column) => {
+          const stage = column.key;
+          const cor = CORES[column.color] ?? CORES.blue;
+          const cartoes = porColuna(stage);
+          const arrastada = drag ? lista.find((l) => l.id === drag.leadId) : null;
+          const podeReceber = column.extra || !arrastada || (isLeadStage(arrastada.stage) && isLeadStage(stage)
+            && (arrastada.stage === stage || canTransition(arrastada.stage, stage)));
           const emAlvo = alvo === stage && podeReceber && drag?.origem !== stage;
 
           const total = cartoes.reduce((s, l) => s + (l.estimated_value ?? 0), 0);
@@ -338,6 +377,7 @@ export function PipelineClient({ leads, erro, membros, clientes, novaInicial = n
           return (
             <div
               key={stage}
+              data-column-key={stage}
               ref={(el) => {
                 if (el) colunasRef.current.set(stage, el);
                 else colunasRef.current.delete(stage);
@@ -356,13 +396,30 @@ export function PipelineClient({ leads, erro, membros, clientes, novaInicial = n
               >
                 <span className={`h-4 w-1 rounded-full ${cor.barra}`} aria-hidden />
                 <span className="flex-1 truncate text-[13px] font-semibold">
-                  {LEAD_STAGE_LABELS[stage]}
+                  {column.name}
                 </span>
                 <span
                   className={`rounded-full px-1.5 py-0.5 text-[11px] font-semibold ${cor.fundo} ${cor.texto}`}
                 >
                   {cartoes.length}
                 </span>
+                {column.extra && (
+                  <>
+                    <button type="button" aria-label={`Editar coluna ${column.name}`}
+                      onClick={() => setColunaForm(column.extra)} className="rounded p-1 text-slate-500 hover:bg-slate-100">
+                      <Pencil className="h-3.5 w-3.5" />
+                    </button>
+                    <ConfirmDialog title={`Apagar coluna ${column.name}?`}
+                      description="Os cartões voltam ao funil, no seu estado comercial. Nenhum cartão é excluído."
+                      confirmLabel="Apagar coluna"
+                      trigger={<button type="button" aria-label={`Apagar coluna ${column.name}`} className="rounded p-1 text-red-600 hover:bg-red-50"><Trash2 className="h-3.5 w-3.5" /></button>}
+                      onConfirm={async () => {
+                        const res = await deleteCrmColumn(column.extra!.id);
+                        if (!res.ok) toast(res.error.message, "error");
+                        else { toast("Coluna apagada. Os cartões voltaram ao funil.", "success"); router.refresh(); }
+                      }} />
+                  </>
+                )}
               </div>
 
               {total > 0 && (
@@ -390,6 +447,7 @@ export function PipelineClient({ leads, erro, membros, clientes, novaInicial = n
                       hoje={hoje}
                       aArrastar={drag?.ativo === true && drag.leadId === lead.id}
                       onPointerDown={(e) => {
+                        if (pending) return;
                         arrastouRef.current = false;
                         const d: DragState = {
                           leadId: lead.id,
@@ -409,7 +467,7 @@ export function PipelineClient({ leads, erro, membros, clientes, novaInicial = n
                         setAEditar(lead);
                       }}
                       onSubir={
-                        i === 0
+                        i === 0 || column.extra
                           ? undefined
                           : () => {
                               const ids = cartoes.map((c) => c.id);
@@ -420,9 +478,12 @@ export function PipelineClient({ leads, erro, membros, clientes, novaInicial = n
                                   return pos === -1 ? l : { ...l, board_order: pos };
                                 }),
                               );
-                              guardarOrdem(stage, ids);
+                              guardarOrdem(stage as LeadStage, ids);
                             }
                       }
+                      colunasExtras={colunasExtras}
+                      pending={pending}
+                      onOrganizar={(id) => organizar(lead, id)}
                     />
                   ))
                 )}
@@ -431,6 +492,8 @@ export function PipelineClient({ leads, erro, membros, clientes, novaInicial = n
           );
         })}
       </div>
+
+      {colunaForm && <ColumnSheet column={colunaForm === "nova" ? null : colunaForm} onClose={() => setColunaForm(null)} />}
 
       {/* ── Cartão a acompanhar o dedo ── */}
       {drag?.ativo && (
@@ -488,6 +551,9 @@ function LeadCard({
   onPointerDown,
   onAbrir,
   onSubir,
+  colunasExtras,
+  onOrganizar,
+  pending,
 }: {
   lead: LeadRow;
   hoje: string;
@@ -495,6 +561,9 @@ function LeadCard({
   onPointerDown: (e: React.PointerEvent) => void;
   onAbrir: () => void;
   onSubir?: () => void;
+  colunasExtras: CrmColumn[];
+  onOrganizar: (id: string | null) => void;
+  pending: boolean;
 }) {
   // Uma próxima acção com data passada é uma lead esquecida. É o único aviso
   // do cartão, e é por isso que se vê de longe.
@@ -579,6 +648,15 @@ function LeadCard({
       <div className="mt-1 text-right">
         <ExcluirRegistoButton tipo="lead" id={lead.id} nome={lead.name} />
       </div>
+      {colunasExtras.length > 0 && (
+        <select aria-label={`Organizar ${lead.name}`} value={lead.extra_column_id ?? ""} disabled={pending}
+          onPointerDown={(e) => e.stopPropagation()} onClick={(e) => e.stopPropagation()}
+          onChange={(e) => onOrganizar(e.target.value || null)}
+          className="mt-2 w-full rounded-lg border bg-white px-2 py-1 text-[11.5px]">
+          <option value="">Funil: {isLeadStage(lead.stage) ? LEAD_STAGE_LABELS[lead.stage] : lead.stage}</option>
+          {colunasExtras.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+        </select>
+      )}
     </div>
   );
 }

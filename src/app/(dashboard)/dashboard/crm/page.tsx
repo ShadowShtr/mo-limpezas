@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { Header } from "@/components/layout/header";
 import { CrmNav } from "@/components/crm/crm-nav";
 import { getLeads } from "@/app/actions/crm-leads";
+import { getCrmColumns } from "@/app/actions/crm-colunas";
 
 import { PipelineClient } from "./_components/pipeline-client";
 
@@ -41,8 +42,9 @@ export default async function CrmPage({
   // O funil é de quem gere. A app das colaboradoras vive noutro sítio.
   if (!["admin", "gestor"].includes(profile.role)) redirect("/app");
 
-  const [leadsRes, { data: membros }, { data: clientes }] = await Promise.all([
+  const [leadsRes, columnsRes, { data: membros }, { data: clientes }] = await Promise.all([
     getLeads(),
+    getCrmColumns(),
     admin
       .from("profiles")
       .select("id, full_name")
@@ -75,7 +77,8 @@ export default async function CrmPage({
         <div className="mt-5">
           <PipelineClient
             leads={leads}
-            erro={leadsRes.ok ? null : leadsRes.error.message}
+            erro={!leadsRes.ok ? leadsRes.error.message : !columnsRes.ok ? columnsRes.error.message : null}
+            colunasExtras={columnsRes.ok ? columnsRes.data : []}
             membros={membros ?? []}
             clientes={clientes ?? []}
             novaInicial={typeof nova === "string" ? nova.trim() : null}

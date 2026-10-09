@@ -15,6 +15,7 @@
 // ============================================================================
 
 import type { ReleaseNote } from "@/domain/update-notices/types";
+import { nota as crmColunasExtras } from "./2026-10-09-crm-colunas-extras";
 import { nota as crmExcluirRegistos } from "./2026-10-09-crm-excluir-registos";
 import { nota as financeiroEAnexos } from "./2026-08-19-financeiro-e-anexos";
 import { nota as avisosDeAtualizacao } from "./2026-08-20-avisos-de-atualizacao";
@@ -77,6 +78,7 @@ import { nota as crmGanhoPeloQuadro } from "./2026-10-06-crm-ganho-pelo-quadro";
 import { nota as crmPesquisaCliente } from "./2026-10-07-crm-pesquisa-cliente";
 
 export const RELEASE_NOTES: ReleaseNote[] = [
+  crmColunasExtras,
   crmExcluirRegistos,
   financeiroEAnexos,
   avisosDeAtualizacao,
